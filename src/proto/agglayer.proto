@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package agglayer;
+
+message ZKP {
+  bytes newStateRoot = 1; 
+  bytes newLocalExitRoot = 2; 
+  bytes proof = 3; 
+}
+ 
+message ProofManifest {
+  uint32 rollupID = 1;
+  uint64 lastVerifiedBatch = 2;
+  uint64 newVerifiedBatch = 3;
+  ZKP zkp = 4;
+}
+
+message SignedProof {
+  ProofManifest manifest = 1;
+  bytes signature = 2; 
+}
+
+message SubmitProofResponse {
+  string txHash = 1; 
+}
+
+service Agglayer {
+  rpc SubmitProof(SignedProof) returns (SubmitProofResponse);
+}
