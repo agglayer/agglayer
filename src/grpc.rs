@@ -134,10 +134,14 @@ where
         )?;
 
         // Settle the proof on-chain and return the transaction hash.
-        let reply = SubmitProofResponse {
-            tx_hash: "Hello world!".to_string(),
-        };
+        let receipt = self
+            .kernel
+            .settle(&proof)
+            .await
+            .map_err(|e| Status::aborted(e.to_string()))?;
 
-        Ok(Response::new(reply))
+        Ok(Response::new(SubmitProofResponse {
+            tx_hash: receipt.transaction_hash.to_string(),
+        }))
     }
 }

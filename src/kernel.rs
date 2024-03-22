@@ -145,6 +145,21 @@ where
     ContractError(#[from] ContractError<RpcProvider>),
 }
 
+/// Errors related to settlement process.
+#[derive(Error, Debug)]
+pub(crate) enum SettlementError<RpcProvider>
+where
+    RpcProvider: Middleware,
+{
+    /// The transaction receipt is missing.
+    #[error("no receipt")]
+    NoReceipt,
+    #[error("provider error: {0}")]
+    ProviderError(ProviderError),
+    #[error("contract error: {0}")]
+    ContractError(ContractError<RpcProvider>),
+}
+
 impl<RpcProvider> Kernel<RpcProvider>
 where
     RpcProvider: Middleware + 'static,
@@ -285,5 +300,28 @@ where
         f.call().await?;
 
         Ok(())
+    }
+
+    /// Settle the given [`SignedProof`] to the rollup manager.
+    #[instrument(skip(self), level = "debug")]
+    pub(crate) async fn settle(
+        &self,
+        signed_proof: &SignedProof,
+    ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
+        let f = self
+            .build_verify_batches_trusted_aggregator_call(signed_proof)
+            .await
+            .map_err(SettlementError::ContractError)?;
+
+        let tx = f
+            .send()
+            .await
+            .map_err(SettlementError::ContractError)?
+            .await
+            .map_err(SettlementError::ProviderError)?
+            // If the result is `None`, it means the transaction is no longer in the mempool.
+            .ok_or(SettlementError::NoReceipt)?;
+
+        Ok(tx)
     }
 }
