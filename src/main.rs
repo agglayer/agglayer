@@ -4,17 +4,17 @@ use clap::Parser;
 use cli::Cli;
 use config::Config;
 use ethers::prelude::*;
-use grpc::{proto::agglayer_server::AgglayerServer, AgglayerImpl};
+use jsonrpsee::server::Server;
 use kernel::{Kernel, KernelArgs};
-use tonic::transport::Server;
+use rpc::{AgglayerImpl, AgglayerServer};
 use tracing::info;
 
 mod cli;
 mod config;
 mod contracts;
-mod grpc;
 mod init;
 mod kernel;
+mod rpc;
 mod signed_proof;
 mod zkevm_node_client;
 
@@ -39,9 +39,12 @@ async fn main() -> anyhow::Result<()> {
 
     let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?;
     let core = Kernel::new(KernelArgs { rpc, config });
-    let service = AgglayerServer::new(AgglayerImpl::new(core));
+    let service = AgglayerImpl::new(core).into_rpc();
 
     info!("Listening on {addr}");
-    Server::builder().add_service(service).serve(addr).await?;
+    let server = Server::builder().build(addr).await?;
+    let handle = server.start(service);
+    handle.stopped().await;
+
     Ok(())
 }

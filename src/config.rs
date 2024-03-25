@@ -23,8 +23,8 @@ pub(crate) struct Config {
     #[allow(dead_code)]
     pub(crate) full_node_rpcs: HashMap<u32, Url>,
     /// The local gRPC server configuration.
-    #[serde(rename = "GRPC")]
-    pub(crate) grpc: GrpcConfig,
+    #[serde(rename = "RPC")]
+    pub(crate) grpc: RpcConfig,
     /// The L1 configuration.
     #[serde(rename = "L1")]
     pub(crate) l1: L1,
@@ -33,7 +33,7 @@ pub(crate) struct Config {
 /// The local gRPC server configuration.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-pub(crate) struct GrpcConfig {
+pub(crate) struct RpcConfig {
     pub(crate) port: u16,
     pub(crate) host: Ipv4Addr,
 }

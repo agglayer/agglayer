@@ -10,8 +10,6 @@ tokio = { version = "1.36.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 clap = { version = "4.4.6", features = ["derive", "env"] }
-tonic = "0.11.0"
-prost = "0.12.3"
 anyhow = "1.0.81"
 dotenvy = "0.15.7"
 ethers = "2.0.14"
@@ -20,7 +18,4 @@ serde = { version = "1.0.197", features = ["derive"] }
 url = { version = "2.5.0", features = ["serde"] }
 thiserror = "1.0.58"
 futures = "0.3.30"
-jsonrpsee = { version = "0.22.3", features = ["client", "macros"] }
-
-[build-dependencies]
-tonic-build = "0.11.0"
+jsonrpsee = { version = "0.22.3", features = ["full"] }

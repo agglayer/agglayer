@@ -1,7 +1,7 @@
 [FullNodeRPCs]
 1 = "http://zkevm-node:8123"
 
-[GRPC]
+[RPC]
 Host = "0.0.0.0"
 Port = 9090
 

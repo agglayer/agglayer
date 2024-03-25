@@ -25,11 +25,6 @@ jobs:
     timeout-minutes: 30
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
-      - name: Install Protobuf
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-
       - name: Checkout sources
         uses: actions/checkout@v4
 
@@ -50,11 +45,6 @@ jobs:
     timeout-minutes: 10
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
-      - name: Install Protobuf
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-
       - name: Checkout sources
         uses: actions/checkout@v4
 

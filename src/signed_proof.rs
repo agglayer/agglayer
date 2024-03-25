@@ -3,6 +3,7 @@
 //! Systems that wish to submit proofs to the agglayer must produce a
 //! [`SignedProof`] conforming to the type definitions specified herein.
 use ethers::{prelude::*, utils::keccak256};
+use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 
 const HASH_LENGTH: usize = 32;
@@ -58,8 +59,17 @@ impl Proof {
     }
 }
 
+impl<'de> Deserialize<'de> for Proof {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Proof::try_from_slice(&Bytes::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
 /// The zero-knowledge proof.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct Zkp {
     pub(crate) new_state_root: H256,
     pub(crate) new_local_exit_root: H256,
@@ -67,7 +77,7 @@ pub(crate) struct Zkp {
 }
 
 /// Proof metadata along with its zero-knowledge proof.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct ProofManifest {
     pub(crate) rollup_id: u32,
     pub(crate) last_verified_batch: u64,
@@ -79,7 +89,7 @@ pub(crate) struct ProofManifest {
 ///
 /// Systems that wish to submit proofs to the agglayer must produce a
 /// [`SignedProof`] conforming to the type definitions specified herein.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct SignedProof {
     pub(crate) manifest: ProofManifest,
     pub(crate) signature: Signature,
