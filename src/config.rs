@@ -3,13 +3,17 @@
 //! The agglayer is configured via its TOML configuration file, `agglayer.toml`
 //! by default, which is deserialized into the [`Config`] struct.
 
-use std::{collections::HashMap, net::Ipv4Addr};
+use std::{collections::HashMap, net::Ipv4Addr, path::PathBuf};
 
-use ethers::types::Address;
+use ethers::{
+    signers::{LocalWallet, WalletError},
+    types::Address,
+};
 use serde::{
     de::{MapAccess, Visitor},
     Deserialize, Deserializer,
 };
+use thiserror::Error;
 use url::Url;
 
 /// The Agglayer configuration.
@@ -28,6 +32,33 @@ pub(crate) struct Config {
     /// The L1 configuration.
     #[serde(rename = "L1")]
     pub(crate) l1: L1,
+    /// The transaction management configuration.
+    #[serde(rename = "EthTxManager")]
+    pub(crate) eth_tx_manager: EthTxManager,
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum ConfigError {
+    #[error("no private keys specified in the configuration")]
+    NoPk,
+    #[error("keystore error: {0}")]
+    WalletError(#[from] WalletError),
+}
+
+impl Config {
+    /// Get the first local private key specified in the configuration.
+    fn local_pk(&self) -> Result<&PrivateKey, ConfigError> {
+        self.eth_tx_manager
+            .private_keys
+            .first()
+            .ok_or(ConfigError::NoPk)
+    }
+
+    /// Decrypt the first local keystore specified in the configuration.
+    pub(crate) fn local_wallet(&self) -> Result<LocalWallet, ConfigError> {
+        let pk = self.local_pk()?;
+        Ok(LocalWallet::decrypt_keystore(&pk.path, &pk.password)?)
+    }
 }
 
 /// The local gRPC server configuration.
@@ -48,6 +79,22 @@ pub(crate) struct L1 {
     pub(crate) node_url: Url,
     #[serde(rename = "RollupManagerContract")]
     pub(crate) rollup_manager_contract: Address,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct PrivateKey {
+    pub(crate) path: PathBuf,
+    pub(crate) password: String,
+}
+
+/// The transaction management configuration.
+///
+/// Generally allows specification of transaction signing behavior.
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct EthTxManager {
+    pub(crate) private_keys: Vec<PrivateKey>,
 }
 
 /// Deserialize a map of RPCs from a TOML file, where the keys are integers and
