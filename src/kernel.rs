@@ -11,7 +11,7 @@ use crate::{
         polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
         polygon_zk_evm::PolygonZkEvm,
     },
-    signed_proof::SignedProof,
+    signed_tx::SignedTx,
     zkevm_node_client::ZkevmNodeClient,
 };
 
@@ -87,23 +87,23 @@ impl<RpcProvider> Kernel<RpcProvider> {
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn verify_proof_zkevm_node(
         &self,
-        signed_proof: &SignedProof,
+        signed_tx: &SignedTx,
     ) -> Result<(), ZkevmNodeVerificationError> {
-        let client = self.get_zkevm_node_client_for_rollup(signed_proof.manifest.rollup_id)?;
+        let client = self.get_zkevm_node_client_for_rollup(signed_tx.tx.rollup_id)?;
         let batch = client
-            .batch_by_number(signed_proof.manifest.rollup_id as u64)
+            .batch_by_number(signed_tx.tx.rollup_id as u64)
             .await?;
 
-        if batch.state_root != signed_proof.manifest.zkp.new_state_root {
+        if batch.state_root != signed_tx.tx.zkp.new_state_root {
             return Err(ZkevmNodeVerificationError::InvalidStateRoot {
-                expected: signed_proof.manifest.zkp.new_state_root,
+                expected: signed_tx.tx.zkp.new_state_root,
                 got: batch.state_root,
             });
         }
 
-        if batch.local_exit_root != signed_proof.manifest.zkp.new_local_exit_root {
+        if batch.local_exit_root != signed_tx.tx.zkp.new_local_exit_root {
             return Err(ZkevmNodeVerificationError::InvalidExitRoot {
-                expected: signed_proof.manifest.zkp.new_local_exit_root,
+                expected: signed_tx.tx.zkp.new_local_exit_root,
                 got: batch.local_exit_root,
             });
         }
@@ -233,10 +233,10 @@ where
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn build_verify_batches_trusted_aggregator_call(
         &self,
-        signed_proof: &SignedProof,
+        signed_tx: &SignedTx,
     ) -> Result<ContractCall<RpcProvider, ()>, ContractError<RpcProvider>> {
         let sequencer_address = self
-            .get_trusted_sequencer_address(signed_proof.manifest.rollup_id)
+            .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
 
         // TODO: pending state num is not yet supported
@@ -245,18 +245,14 @@ where
         let call = self
             .get_rollup_manager_contract()
             .verify_batches_trusted_aggregator(
-                signed_proof.manifest.rollup_id,
+                signed_tx.tx.rollup_id,
                 PENDING_STATE_NUM,
-                signed_proof.manifest.last_verified_batch,
-                signed_proof.manifest.new_verified_batch,
-                signed_proof
-                    .manifest
-                    .zkp
-                    .new_local_exit_root
-                    .to_fixed_bytes(),
-                signed_proof.manifest.zkp.new_state_root.to_fixed_bytes(),
+                signed_tx.tx.last_verified_batch,
+                signed_tx.tx.new_verified_batch,
+                signed_tx.tx.zkp.new_local_exit_root.to_fixed_bytes(),
+                signed_tx.tx.zkp.new_state_root.to_fixed_bytes(),
                 sequencer_address,
-                signed_proof.manifest.zkp.proof.to_fixed_bytes(),
+                signed_tx.tx.zkp.proof.to_fixed_bytes(),
             );
 
         Ok(call)
@@ -267,12 +263,12 @@ where
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn verify_signature(
         &self,
-        signed_proof: &SignedProof,
+        signed_tx: &SignedTx,
     ) -> Result<(), SignatureVerificationError<RpcProvider>> {
         let sequencer_address = self
-            .get_trusted_sequencer_address(signed_proof.manifest.rollup_id)
+            .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
-        let signer = signed_proof
+        let signer = signed_tx
             .signer()
             .map_err(|_| SignatureVerificationError::InvalidSignature)?;
 
@@ -292,10 +288,10 @@ where
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn verify_proof_eth_call(
         &self,
-        signed_proof: &SignedProof,
+        signed_tx: &SignedTx,
     ) -> Result<(), ContractError<RpcProvider>> {
         let f = self
-            .build_verify_batches_trusted_aggregator_call(signed_proof)
+            .build_verify_batches_trusted_aggregator_call(signed_tx)
             .await?;
         f.call().await?;
 
@@ -306,10 +302,10 @@ where
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn settle(
         &self,
-        signed_proof: &SignedProof,
+        signed_tx: &SignedTx,
     ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
         let f = self
-            .build_verify_batches_trusted_aggregator_call(signed_proof)
+            .build_verify_batches_trusted_aggregator_call(signed_tx)
             .await
             .map_err(SettlementError::ContractError)?;
 

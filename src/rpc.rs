@@ -10,12 +10,12 @@ use jsonrpsee::{
 };
 use tokio::try_join;
 
-use crate::{kernel::Kernel, signed_proof::SignedProof};
+use crate::{kernel::Kernel, signed_tx::SignedTx};
 
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
     #[method(name = "sendTx")]
-    async fn send_tx(&self, proof: SignedProof) -> RpcResult<H256>;
+    async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256>;
 }
 
 /// The gRPC agglayer service implementation.
@@ -45,24 +45,24 @@ impl<Rpc> AgglayerServer for AgglayerImpl<Rpc>
 where
     Rpc: Middleware + 'static,
 {
-    async fn send_tx(&self, proof: SignedProof) -> RpcResult<H256> {
+    async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
         // Run all the verification checks in parallel.
         try_join!(
             self.kernel
-                .verify_signature(&proof)
+                .verify_signature(&tx)
                 .map_err(|e| invalid_params_error(e.to_string())),
             self.kernel
-                .verify_proof_eth_call(&proof)
+                .verify_proof_eth_call(&tx)
                 .map_err(|e| invalid_params_error(e.to_string())),
             self.kernel
-                .verify_proof_zkevm_node(&proof)
+                .verify_proof_zkevm_node(&tx)
                 .map_err(|e| invalid_params_error(e.to_string())),
         )?;
 
         // Settle the proof on-chain and return the transaction hash.
         let receipt = self
             .kernel
-            .settle(&proof)
+            .settle(&tx)
             .await
             .map_err(|e| internal_error(e.to_string()))?;
 

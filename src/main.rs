@@ -15,7 +15,7 @@ mod contracts;
 mod init;
 mod kernel;
 mod rpc;
-mod signed_proof;
+mod signed_tx;
 mod zkevm_node_client;
 
 #[tokio::main]

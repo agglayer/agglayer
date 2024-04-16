@@ -70,6 +70,7 @@ impl<'de> Deserialize<'de> for Proof {
 
 /// The zero-knowledge proof.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct Zkp {
     pub(crate) new_state_root: H256,
     pub(crate) new_local_exit_root: H256,
@@ -78,32 +79,35 @@ pub(crate) struct Zkp {
 
 /// Proof metadata along with its zero-knowledge proof.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ProofManifest {
+    #[serde(rename = "RollupId")]
     pub(crate) rollup_id: u32,
     pub(crate) last_verified_batch: u64,
     pub(crate) new_verified_batch: u64,
+    #[serde(rename = "ZKP")]
     pub(crate) zkp: Zkp,
 }
 
-/// A [`SignedProof`] is the core input type of the agglayer.
+/// A [`SignedTx`] is the core input type of the agglayer.
 ///
 /// Systems that wish to submit proofs to the agglayer must produce a
-/// [`SignedProof`] conforming to the type definitions specified herein.
+/// [`SignedTx`] conforming to the type definitions specified herein.
 #[derive(Debug, Deserialize)]
-pub(crate) struct SignedProof {
-    pub(crate) manifest: ProofManifest,
+pub(crate) struct SignedTx {
+    pub(crate) tx: ProofManifest,
     pub(crate) signature: Signature,
 }
 
-impl SignedProof {
+impl SignedTx {
     /// Generate a hash that uniquely identifies this proof.
     pub(crate) fn hash(&self) -> H256 {
         let data = [
-            &self.manifest.last_verified_batch.to_be_bytes(),
-            &self.manifest.new_verified_batch.to_be_bytes(),
-            &self.manifest.zkp.new_state_root[..],
-            &self.manifest.zkp.new_local_exit_root[..],
-            &self.manifest.zkp.proof.as_bytes(),
+            &self.tx.last_verified_batch.to_be_bytes(),
+            &self.tx.new_verified_batch.to_be_bytes(),
+            &self.tx.zkp.new_state_root[..],
+            &self.tx.zkp.new_local_exit_root[..],
+            &self.tx.zkp.proof.as_bytes(),
         ]
         .concat();
 
