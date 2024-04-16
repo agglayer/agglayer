@@ -18,7 +18,7 @@ use serde::{
     de::{MapAccess, Visitor},
     Deserialize, Deserializer,
 };
-use serde_with::serde_as;
+use serde_with::{serde_as, NoneAsEmptyString};
 use thiserror::Error;
 use tracing::debug;
 use url::Url;
@@ -286,9 +286,9 @@ pub(crate) struct PrivateKey {
 ///   pick up credentials.
 /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment is set, attempt to
 ///   load a service account JSON from this path.
+#[serde_as]
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-#[serde_as]
 pub(crate) struct EthTxManager {
     pub(crate) private_keys: Vec<PrivateKey>,
     #[serde(rename = "KMSProjectId")]
