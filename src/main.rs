@@ -38,16 +38,12 @@ async fn main() -> anyhow::Result<()> {
     let addr = SocketAddr::from((config.grpc.host, port));
 
     // Attempt to decrypt the first local wallet in the configuration.
-    let wallet = config.local_wallet()?;
     // Create a new L1 RPC provider.
-    let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?;
+    let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
+        .with_signer(config.get_configured_signer().await?);
     // Link the wallet to the provider for automatic transaction signing.
-    let signer_middleware = SignerMiddleware::new(rpc, wallet);
     // Construct the core.
-    let core = Kernel::new(KernelArgs {
-        rpc: signer_middleware,
-        config,
-    });
+    let core = Kernel::new(KernelArgs { rpc, config });
     // Bind the core to the RPC server.
     let service = AgglayerImpl::new(core).into_rpc();
 

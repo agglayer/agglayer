@@ -19,3 +19,6 @@ url = { version = "2.5.0", features = ["serde"] }
 thiserror = "1.0.58"
 futures = "0.3.30"
 jsonrpsee = { version = "0.22.3", features = ["full"] }
+ethers-gcp-kms-signer = "0.1.5"
+serde_with = "3.7.0"
+async-trait = "0.1.80"

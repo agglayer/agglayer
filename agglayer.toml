@@ -12,3 +12,7 @@ RollupManagerContract = "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff"
 
 [EthTxManager]
 PrivateKeys = [{ Path = "/pk/agglayer.keystore", Password = "testonly" }]
+KMSProjectId = ""
+KMSLocation = ""
+KMSKeyring = ""
+KMSKeyName = ""
