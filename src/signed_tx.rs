@@ -4,6 +4,7 @@
 //! [`SignedProof`] conforming to the type definitions specified herein.
 use ethers::{prelude::*, utils::keccak256};
 use serde::{Deserialize, Deserializer};
+use serde_with::{serde_as, DisplayFromStr};
 use thiserror::Error;
 
 const HASH_LENGTH: usize = 32;
@@ -93,9 +94,11 @@ pub(crate) struct ProofManifest {
 ///
 /// Systems that wish to submit proofs to the agglayer must produce a
 /// [`SignedTx`] conforming to the type definitions specified herein.
+#[serde_as]
 #[derive(Debug, Deserialize)]
 pub(crate) struct SignedTx {
     pub(crate) tx: ProofManifest,
+    #[serde_as(as = "DisplayFromStr")]
     pub(crate) signature: Signature,
 }
 
