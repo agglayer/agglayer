@@ -83,8 +83,8 @@ pub(crate) struct Zkp {
 pub(crate) struct ProofManifest {
     #[serde(rename = "RollupId")]
     pub(crate) rollup_id: u32,
-    pub(crate) last_verified_batch: u64,
-    pub(crate) new_verified_batch: u64,
+    pub(crate) last_verified_batch: U64,
+    pub(crate) new_verified_batch: U64,
     #[serde(rename = "ZKP")]
     pub(crate) zkp: Zkp,
 }
@@ -103,8 +103,8 @@ impl SignedTx {
     /// Generate a hash that uniquely identifies this proof.
     pub(crate) fn hash(&self) -> H256 {
         let data = [
-            &self.tx.last_verified_batch.to_be_bytes(),
-            &self.tx.new_verified_batch.to_be_bytes(),
+            &self.tx.last_verified_batch.as_u64().to_be_bytes(),
+            &self.tx.new_verified_batch.as_u64().to_be_bytes(),
             &self.tx.zkp.new_state_root[..],
             &self.tx.zkp.new_local_exit_root[..],
             &self.tx.zkp.proof.as_bytes(),

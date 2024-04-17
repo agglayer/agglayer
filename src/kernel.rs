@@ -247,8 +247,8 @@ where
             .verify_batches_trusted_aggregator(
                 signed_tx.tx.rollup_id,
                 PENDING_STATE_NUM,
-                signed_tx.tx.last_verified_batch,
-                signed_tx.tx.new_verified_batch,
+                signed_tx.tx.last_verified_batch.as_u64(),
+                signed_tx.tx.new_verified_batch.as_u64(),
                 signed_tx.tx.zkp.new_local_exit_root.to_fixed_bytes(),
                 signed_tx.tx.zkp.new_state_root.to_fixed_bytes(),
                 sequencer_address,
