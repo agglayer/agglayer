@@ -293,15 +293,19 @@ pub(crate) struct EthTxManager {
     pub(crate) private_keys: Vec<PrivateKey>,
     #[serde(rename = "KMSProjectId")]
     #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub(crate) kms_project_id: Option<String>,
     #[serde(rename = "KMSLocation")]
     #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub(crate) kms_location: Option<String>,
     #[serde(rename = "KMSKeyring")]
     #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub(crate) kms_keyring: Option<String>,
     #[serde(rename = "KMSKeyName")]
     #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub(crate) kms_key_name: Option<String>,
 }
 
