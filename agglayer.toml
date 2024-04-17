@@ -5,6 +5,10 @@
 Host = "0.0.0.0"
 Port = 9090
 
+[Log]
+Level = "info"
+Outputs = ["stderr"]
+
 [L1]
 ChainID = 1337
 NodeURL = "https://rpc-cdk-validium-cardona-03-zkevm.polygondev.tools"
