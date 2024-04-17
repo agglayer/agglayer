@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 use clap::Parser;
 use cli::Cli;
@@ -18,18 +18,8 @@ mod rpc;
 mod signed_tx;
 mod zkevm_node_client;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
-    init::tracing();
-
-    let cli = Cli::parse();
-    let config: Config = toml::from_str(&std::fs::read_to_string(cli.config_path)?)?;
+async fn run(cfg: PathBuf) -> anyhow::Result<()> {
+    let config: Config = toml::from_str(&std::fs::read_to_string(cfg)?)?;
 
     let port = std::env::var("PORT")
         .ok()
@@ -51,6 +41,25 @@ async fn main() -> anyhow::Result<()> {
     let server = Server::builder().build(addr).await?;
     let handle = server.start(service);
     handle.stopped().await;
+
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    dotenvy::dotenv().ok();
+
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
+
+    init::tracing();
+
+    let cli = Cli::parse();
+
+    match cli.cmd {
+        cli::Commands::Run { cfg } => run(cfg).await?,
+    }
 
     Ok(())
 }
