@@ -81,7 +81,7 @@ pub(crate) struct Zkp {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ProofManifest {
-    #[serde(rename = "RollupId")]
+    #[serde(rename = "RollupID")]
     pub(crate) rollup_id: u32,
     pub(crate) last_verified_batch: U64,
     pub(crate) new_verified_batch: U64,
