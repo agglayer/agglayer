@@ -105,12 +105,16 @@ pub(crate) struct SignedTx {
 impl SignedTx {
     /// Generate a hash that uniquely identifies this proof.
     pub(crate) fn hash(&self) -> H256 {
+        let last_verified_batch_hex = format!("0x{:x}", self.tx.last_verified_batch.as_u64());
+        let new_verified_batch_hex = format!("0x{:x}", self.tx.new_verified_batch.as_u64());
+        let proof_hex = format!("0x{}", hex::encode(self.tx.zkp.proof.as_bytes()));
+
         let data = [
-            &self.tx.last_verified_batch.as_u64().to_be_bytes(),
-            &self.tx.new_verified_batch.as_u64().to_be_bytes(),
+            last_verified_batch_hex.as_bytes(),
+            new_verified_batch_hex.as_bytes(),
             &self.tx.zkp.new_state_root[..],
             &self.tx.zkp.new_local_exit_root[..],
-            &self.tx.zkp.proof.as_bytes(),
+            proof_hex.as_bytes(),
         ]
         .concat();
 

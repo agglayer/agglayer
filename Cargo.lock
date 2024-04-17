@@ -49,6 +49,7 @@ dependencies = [
  "ethers",
  "ethers-gcp-kms-signer",
  "futures",
+ "hex",
  "jsonrpsee",
  "serde",
  "serde_with",

@@ -23,3 +23,4 @@ jsonrpsee = { version = "0.22.3", features = ["full"] }
 ethers-gcp-kms-signer = "0.1.5"
 serde_with = "3.7.0"
 async-trait = "0.1.80"
+hex = "0.4.3"
