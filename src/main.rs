@@ -21,7 +21,7 @@ mod zkevm_node_client;
 async fn run(cfg: PathBuf) -> anyhow::Result<()> {
     let config: Config = toml::from_str(&std::fs::read_to_string(cfg)?)?;
     config.set_log_env();
-    logging::tracing(config.log.clone());
+    logging::tracing(&config.log);
 
     let port = std::env::var("PORT")
         .ok()
