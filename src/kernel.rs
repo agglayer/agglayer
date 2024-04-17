@@ -135,10 +135,18 @@ pub(crate) enum SignatureVerificationError<RpcProvider>
 where
     RpcProvider: Middleware,
 {
+    /// The signer could not be recovered from the signature.
+    #[error("could not recover signer: {0}")]
+    CouldNotRecoverSigner(SignatureError),
     /// The signer of the proof is not the trusted sequencer for the given
-    /// rollup id or the signer could not be recovered from the signature.
-    #[error("invalid signature")]
-    InvalidSignature,
+    /// rollup id.
+    #[error("invalid signer: expected {trusted_sequencer}, got {signer}")]
+    InvalidSigner {
+        /// The recovered signer address.
+        signer: Address,
+        /// The trusted sequencer address.
+        trusted_sequencer: Address,
+    },
     /// Generic network error when attempting to retrieve the trusted sequencer
     /// address from the rollup contract.
     #[error("contract error: {0}")]
@@ -270,10 +278,13 @@ where
             .await?;
         let signer = signed_tx
             .signer()
-            .map_err(|_| SignatureVerificationError::InvalidSignature)?;
+            .map_err(|e| SignatureVerificationError::CouldNotRecoverSigner(e))?;
 
         if signer != sequencer_address {
-            return Err(SignatureVerificationError::InvalidSignature);
+            return Err(SignatureVerificationError::InvalidSigner {
+                signer,
+                trusted_sequencer: sequencer_address,
+            });
         }
 
         Ok(())
