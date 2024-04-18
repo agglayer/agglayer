@@ -1,0 +1,2 @@
+# Configure this lint to not trigger on sol macro
+too-many-arguments-threshold = 11
