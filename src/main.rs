@@ -29,11 +29,9 @@ async fn run(cfg: PathBuf) -> anyhow::Result<()> {
         .unwrap_or(config.grpc.port);
     let addr = SocketAddr::from((config.grpc.host, port));
 
-    // Attempt to decrypt the first local wallet in the configuration.
-    // Create a new L1 RPC provider.
+    // Create a new L1 RPC provider with the configured signer.
     let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
         .with_signer(config.get_configured_signer().await?);
-    // Link the wallet to the provider for automatic transaction signing.
     // Construct the core.
     let core = Kernel::new(KernelArgs { rpc, config });
     // Bind the core to the RPC server.
