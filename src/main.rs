@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::path::PathBuf;
 
 use clap::Parser;
 use cli::Cli;
@@ -23,11 +23,7 @@ async fn run(cfg: PathBuf) -> anyhow::Result<()> {
     config.set_log_env();
     logging::tracing(&config.log);
 
-    let port = std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(config.grpc.port);
-    let addr = SocketAddr::from((config.grpc.host, port));
+    let addr = config.grpc_addr();
 
     // Create a new L1 RPC provider with the configured signer.
     let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?

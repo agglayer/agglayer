@@ -256,6 +256,22 @@ impl Signer for ConfiguredSigner {
 }
 
 impl Config {
+    /// Get the port from the environment variable, or the configuration file.
+    ///
+    /// If the `PORT` environment variable is set, it will take precedence over
+    /// the configuration file.
+    pub(crate) fn port(&self) -> u16 {
+        std::env::var("PORT")
+            .ok()
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(self.grpc.port)
+    }
+
+    /// Get the target gRPC socket address from the configuration.
+    pub(crate) fn grpc_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.grpc.host, self.port()))
+    }
+
     /// Get the first local private key specified in the configuration.
     fn local_pk(&self) -> Result<&PrivateKey, ConfigError> {
         self.eth_tx_manager
