@@ -9,6 +9,7 @@ use jsonrpsee::{
     },
 };
 use tokio::try_join;
+use tracing::{error, info};
 
 use crate::{kernel::Kernel, signed_tx::SignedTx};
 
@@ -48,23 +49,27 @@ where
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
         // Run all the verification checks in parallel.
         try_join!(
-            self.kernel
-                .verify_signature(&tx)
-                .map_err(|e| invalid_params_error(e.to_string())),
-            self.kernel
-                .verify_proof_eth_call(&tx)
-                .map_err(|e| invalid_params_error(e.to_string())),
-            self.kernel
-                .verify_proof_zkevm_node(&tx)
-                .map_err(|e| invalid_params_error(e.to_string())),
+            self.kernel.verify_signature(&tx).map_err(|e| {
+                error!("failed to verify signature: {e}");
+                invalid_params_error(e.to_string())
+            }),
+            self.kernel.verify_proof_eth_call(&tx).map_err(|e| {
+                error!("failed to verify proof eth_call: {e}");
+                invalid_params_error(e.to_string())
+            }),
+            self.kernel.verify_proof_zkevm_node(&tx).map_err(|e| {
+                error!("failed to verify proof zkevm_node: {e}");
+                invalid_params_error(e.to_string())
+            }),
         )?;
 
         // Settle the proof on-chain and return the transaction hash.
-        let receipt = self
-            .kernel
-            .settle(&tx)
-            .await
-            .map_err(|e| internal_error(e.to_string()))?;
+        let receipt = self.kernel.settle(&tx).await.map_err(|e| {
+            error!("failed to settle transaction: {e}");
+            internal_error(e.to_string())
+        })?;
+
+        info!("transaction settled: {receipt:?}");
 
         Ok(receipt.transaction_hash)
     }
