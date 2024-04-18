@@ -283,7 +283,7 @@ impl Config {
     /// Decrypt the first local keystore specified in the configuration.
     pub(crate) fn local_wallet(&self) -> Result<LocalWallet, ConfigError> {
         let pk = self.local_pk()?;
-        Ok(LocalWallet::decrypt_keystore(&pk.path, &pk.password)?)
+        Ok(LocalWallet::decrypt_keystore(&pk.path, &pk.password)?.with_chain_id(self.l1.chain_id))
     }
 
     /// Create a GCP KMS signer from the configuration.
