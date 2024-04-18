@@ -1,4 +1,4 @@
-name: Continuous Integration
+name: Quality
 
 on:
   push:
@@ -19,28 +19,8 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Run tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Set up rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-            cache-on-failure: true
-
-      - name: Test
-        run: cargo test
-
-  lints:
-    name: Formatting and Clippy
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
@@ -51,15 +31,34 @@ jobs:
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
-            components: rustfmt, clippy
+          components: clippy
 
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
-            cache-on-failure: true
-
-      - name: Run cargo fmt
-        run: cargo fmt --all --check
+          cache-on-failure: true
 
       - name: Run cargo clippy
         run: cargo clippy --all-targets -- -D warnings
+  
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Run cargo fmt
+        run: cargo fmt --all --check
