@@ -91,7 +91,7 @@ impl<RpcProvider> Kernel<RpcProvider> {
     ) -> Result<(), ZkevmNodeVerificationError> {
         let client = self.get_zkevm_node_client_for_rollup(signed_tx.tx.rollup_id)?;
         let batch = client
-            .batch_by_number(signed_tx.tx.rollup_id as u64)
+            .batch_by_number(signed_tx.tx.new_verified_batch.as_u64())
             .await?;
 
         if batch.state_root != signed_tx.tx.zkp.new_state_root {
