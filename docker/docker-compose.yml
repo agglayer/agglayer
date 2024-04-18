@@ -1,0 +1,30 @@
+version: '3.9'
+
+services:
+  zkevm-mock-l1-network:
+    container_name: zkevm-mock-l1-network
+    image: hermeznetwork/geth-cdk-validium-contracts:v0.0.4
+    command: [
+      "--http",
+      "--http.api", "admin,eth,debug,miner,net,txpool,personal,web3",
+      "--http.addr", "0.0.0.0",
+      "--http.corsdomain", "*",
+      "--http.vhosts", "*",
+      "--ws",
+      "--ws.origins", "*",
+      "--ws.addr", "0.0.0.0",
+      "--dev",
+      "--dev.period", "1",
+      "--datadir", "/geth_data",
+      "--syncmode", "full",
+      "--rpc.allow-unprotected-txs"
+    ]
+    ports:
+      - '8545:8545'
+      - '8546:8546'
+    networks:
+      - agglayer-localnet
+
+networks:
+  agglayer-localnet:
+    driver: bridge

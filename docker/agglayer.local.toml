@@ -12,8 +12,7 @@ Outputs = ["stderr"]
 [L1]
 ChainID = 1
 NodeURL = "http://localhost:8545"
-# RollupManagerContract = "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff"
-RollupManagerContract = "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
+RollupManagerContract = "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff"
 
 [EthTxManager]
 PrivateKeys = [{ Path = "./docker/key.keystore", Password = "test" }]
