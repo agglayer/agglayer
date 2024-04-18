@@ -1,4 +1,5 @@
-use ethers::{providers::Middleware, types::H256};
+use alloy::primitives::B256;
+use alloy::providers::Provider;
 use futures::TryFutureExt;
 use jsonrpsee::{
     core::{async_trait, RpcResult},
@@ -15,17 +16,17 @@ use crate::{kernel::Kernel, signed_tx::SignedTx};
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
     #[method(name = "sendTx")]
-    async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256>;
+    async fn send_tx(&self, tx: SignedTx) -> RpcResult<B256>;
 }
 
 /// The gRPC agglayer service implementation.
-pub(crate) struct AgglayerImpl<Rpc> {
-    kernel: Kernel<Rpc>,
+pub(crate) struct AgglayerImpl<RpcProvider> {
+    kernel: Kernel<RpcProvider>,
 }
 
-impl<Rpc> AgglayerImpl<Rpc> {
+impl<RpcProvider> AgglayerImpl<RpcProvider> {
     /// Create an instance of the gRPC agglayer service.
-    pub(crate) fn new(kernel: Kernel<Rpc>) -> Self {
+    pub(crate) fn new(kernel: Kernel<RpcProvider>) -> Self {
         Self { kernel }
     }
 }
@@ -41,11 +42,11 @@ fn internal_error(msg: impl Into<String>) -> ErrorObjectOwned {
 }
 
 #[async_trait]
-impl<Rpc> AgglayerServer for AgglayerImpl<Rpc>
+impl<RpcProvider> AgglayerServer for AgglayerImpl<RpcProvider>
 where
-    Rpc: Middleware + 'static,
+    RpcProvider: Provider + 'static,
 {
-    async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
+    async fn send_tx(&self, tx: SignedTx) -> RpcResult<B256> {
         // Run all the verification checks in parallel.
         try_join!(
             self.kernel
@@ -66,6 +67,6 @@ where
             .await
             .map_err(|e| internal_error(e.to_string()))?;
 
-        Ok(receipt.transaction_hash)
+        Ok(receipt)
     }
 }

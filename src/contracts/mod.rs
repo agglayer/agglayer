@@ -1,16 +1,21 @@
 //! Agglayer smart-contract bindings.
 
 pub(crate) mod polygon_rollup_manager {
-    use ethers::contract::abigen;
+    use alloy::sol;
 
-    abigen!(
+    sol!(
+        #[sol(rpc, rename_all = "pascalcase")]
         PolygonRollupManager,
-        "./src/contracts/polygonrollupmanager.json",
+        "./src/contracts/polygonrollupmanager.json"
     );
 }
 
 pub(crate) mod polygon_zk_evm {
-    use ethers::contract::abigen;
+    use alloy::sol;
 
-    abigen!(PolygonZkEvm, "./src/contracts/polygonzkevm.json",);
+    sol!(
+        #[sol(rpc)]
+        PolygonZkEvm,
+        "./src/contracts/polygonzkevm.json"
+    );
 }

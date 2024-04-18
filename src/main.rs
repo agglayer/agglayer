@@ -1,13 +1,13 @@
 use std::{net::SocketAddr, path::PathBuf};
 
+use alloy::{providers::ProviderBuilder, rpc::client::ClientBuilder};
 use clap::Parser;
 use cli::Cli;
 use config::Config;
-use ethers::prelude::*;
 use jsonrpsee::server::Server;
-use kernel::{Kernel, KernelArgs};
+use kernel::Kernel;
 use rpc::{AgglayerImpl, AgglayerServer};
-use tracing::info;
+use tracing::{debug, info};
 
 mod cli;
 mod config;
@@ -29,13 +29,25 @@ async fn run(cfg: PathBuf) -> anyhow::Result<()> {
         .unwrap_or(config.grpc.port);
     let addr = SocketAddr::from((config.grpc.host, port));
 
-    // Attempt to decrypt the first local wallet in the configuration.
-    // Create a new L1 RPC provider.
-    let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
-        .with_signer(config.get_configured_signer().await?);
-    // Link the wallet to the provider for automatic transaction signing.
+    // Create the signer based on the configuration.
+    let signer = config.get_configured_signer().await?;
+    debug!("Signer successfully created");
+
+    // Create the client for the L1 that the RPC provider will use.
+    let client = ClientBuilder::default().http(config.l1.node_url.clone());
+
+    // Create the provider with the signer and client.
+    // The provider is using recommanded fillers for the moment.
+    // Which include a set of layers to handle gas estimation, nonce
+    // management, and chain-id fetching.
+    let provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .signer(signer)
+        .on_client(client.boxed());
+
+    debug!("Provider successfully created");
     // Construct the core.
-    let core = Kernel::new(KernelArgs { rpc, config });
+    let core = Kernel::new(provider, config);
     // Bind the core to the RPC server.
     let service = AgglayerImpl::new(core).into_rpc();
 

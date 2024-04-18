@@ -5,15 +5,13 @@
 
 use std::{collections::HashMap, net::Ipv4Addr, path::PathBuf};
 
-use async_trait::async_trait;
-use ethers::{
-    signers::{LocalWallet, Signer, WalletError},
-    types::{
-        transaction::{eip2718::TypedTransaction, eip712::Eip712},
-        Address, Signature,
-    },
+use alloy::network::EthereumSigner;
+use alloy::primitives::Address;
+use alloy::signers::gcp::{GcpKeyRingRef, GcpSigner, KeySpecifier};
+use alloy::signers::wallet::{LocalWallet, Wallet, WalletError};
+use gcloud_sdk::{
+    google::cloud::kms::v1::key_management_service_client::KeyManagementServiceClient, GoogleApi,
 };
-use ethers_gcp_kms_signer::{CKMSError, GcpKeyRingRef, GcpKmsProvider, GcpKmsSigner};
 use serde::{
     de::{MapAccess, Visitor},
     Deserialize, Deserializer,
@@ -140,119 +138,9 @@ pub(crate) enum ConfigError {
     #[error("keystore error: {0}")]
     Wallet(#[from] WalletError),
     #[error("KMS Provider error: {0}")]
-    KmsProvider(#[from] CKMSError),
+    KmsProvider(#[from] gcloud_sdk::error::Error),
     #[error("KMS configuration error: missing key or env {0}")]
     KmsConfig(String),
-}
-
-/// A an ethers [`Signer`] that can house either a local keystore or a GCP KMS
-/// signer.
-///
-/// An ethers [`Provider`][ethers::prelude::Provider] using a
-/// [`SignerMiddleware`][ethers::prelude::SignerMiddleware] must have its
-/// [`Signer`] type specified at compile time, and the Signer type is not object
-/// safe, so we cannot use a `Box<dyn Signer>`. As such, we define this enum to
-/// accommodate a runtime configured signer.
-#[derive(Debug)]
-pub(crate) enum ConfiguredSigner {
-    Local(LocalWallet),
-    GcpKms(GcpKmsSigner),
-}
-
-/// Errors that can occur when using a [`ConfiguredSigner`].
-///
-/// This is simply a union of either a [`WalletError`] or a [`CKMSError`].
-#[derive(Debug, Error)]
-pub(crate) enum ConfiguredSignerError {
-    #[error("wallet error: {0}")]
-    Wallet(WalletError),
-    #[error("KMS error: {0}")]
-    Kms(CKMSError),
-}
-
-/// [`Signer`] implementation for [`ConfiguredSigner`].
-///
-/// This implementation simply delegates to the underlying signer.
-#[async_trait]
-impl Signer for ConfiguredSigner {
-    type Error = ConfiguredSignerError;
-
-    async fn sign_message<S: Send + Sync + AsRef<[u8]>>(
-        &self,
-        message: S,
-    ) -> Result<Signature, Self::Error> {
-        match self {
-            ConfiguredSigner::Local(wallet) => wallet
-                .sign_message(message)
-                .await
-                .map_err(ConfiguredSignerError::Wallet),
-            ConfiguredSigner::GcpKms(signer) => signer
-                .sign_message(message)
-                .await
-                .map_err(ConfiguredSignerError::Kms),
-        }
-    }
-
-    /// Signs the transaction
-    async fn sign_transaction(&self, message: &TypedTransaction) -> Result<Signature, Self::Error> {
-        match self {
-            ConfiguredSigner::Local(wallet) => wallet
-                .sign_transaction(message)
-                .await
-                .map_err(ConfiguredSignerError::Wallet),
-            ConfiguredSigner::GcpKms(signer) => signer
-                .sign_transaction(message)
-                .await
-                .map_err(ConfiguredSignerError::Kms),
-        }
-    }
-
-    /// Encodes and signs the typed data according EIP-712.
-    /// Payload must implement Eip712 trait.
-    async fn sign_typed_data<T: Eip712 + Send + Sync>(
-        &self,
-        payload: &T,
-    ) -> Result<Signature, Self::Error> {
-        match self {
-            ConfiguredSigner::Local(wallet) => wallet
-                .sign_typed_data(payload)
-                .await
-                .map_err(ConfiguredSignerError::Wallet),
-            ConfiguredSigner::GcpKms(signer) => signer
-                .sign_typed_data(payload)
-                .await
-                .map_err(ConfiguredSignerError::Kms),
-        }
-    }
-
-    /// Returns the signer's Ethereum Address
-    fn address(&self) -> Address {
-        match self {
-            ConfiguredSigner::Local(wallet) => wallet.address(),
-            ConfiguredSigner::GcpKms(signer) => signer.address(),
-        }
-    }
-
-    /// Returns the signer's chain id
-    fn chain_id(&self) -> u64 {
-        match self {
-            ConfiguredSigner::Local(wallet) => wallet.chain_id(),
-            ConfiguredSigner::GcpKms(signer) => signer.chain_id(),
-        }
-    }
-
-    /// Sets the signer's chain id
-    #[must_use]
-    fn with_chain_id<T: Into<u64>>(self, chain_id: T) -> Self {
-        match self {
-            ConfiguredSigner::Local(wallet) => {
-                ConfiguredSigner::Local(wallet.with_chain_id(chain_id))
-            }
-            ConfiguredSigner::GcpKms(signer) => {
-                ConfiguredSigner::GcpKms(signer.with_chain_id(chain_id))
-            }
-        }
-    }
 }
 
 impl Config {
@@ -267,7 +155,7 @@ impl Config {
     /// Decrypt the first local keystore specified in the configuration.
     pub(crate) fn local_wallet(&self) -> Result<LocalWallet, ConfigError> {
         let pk = self.local_pk()?;
-        Ok(LocalWallet::decrypt_keystore(&pk.path, &pk.password)?)
+        Ok(Wallet::decrypt_keystore(&pk.path, &pk.password)?)
     }
 
     /// Create a GCP KMS signer from the configuration.
@@ -282,7 +170,7 @@ impl Config {
     ///   automatically pick up credentials.
     /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment is set, attempt to
     ///   load a service account JSON from this path.
-    pub(crate) async fn gcp_kms_signer(&self) -> Result<GcpKmsSigner, ConfigError> {
+    pub(crate) async fn gcp_kms_signer(&self) -> Result<GcpSigner, ConfigError> {
         let project_id = std::env::var("GOOGLE_PROJECT_ID").or_else(|_| {
             self.eth_tx_manager
                 .kms_project_id
@@ -295,7 +183,7 @@ impl Config {
                 .clone()
                 .ok_or(ConfigError::KmsConfig("GOOGLE_LOCATION".to_string()))
         })?;
-        let keyring = std::env::var("GOOGLE_KEYRING").or_else(|_| {
+        let keyring_name = std::env::var("GOOGLE_KEYRING").or_else(|_| {
             self.eth_tx_manager
                 .kms_keyring
                 .clone()
@@ -307,10 +195,37 @@ impl Config {
                 .clone()
                 .ok_or(ConfigError::KmsConfig("GOOGLE_KEY_NAME".to_string()))
         })?;
+        let key_version: u64 = std::env::var("GOOGLE_KEY_VERSION").map_or_else(
+            |_| {
+                self.eth_tx_manager
+                    .kms_key_version
+                    .ok_or(ConfigError::KmsConfig("GOOGLE_KEY_VERSION".to_string()))
+            },
+            |v| {
+                v.parse().map_err(|_| {
+                    ConfigError::KmsConfig("Unable to parse GOOGLE_KEY_VERSION to u64".to_string())
+                })
+            },
+        )?;
 
-        let keyring = GcpKeyRingRef::new(&project_id, &location, &keyring);
-        let provider = GcpKmsProvider::new(keyring).await?;
-        Ok(GcpKmsSigner::new(provider, key_name.to_string(), 1, self.l1.chain_id).await?)
+        let google_cloud_api: String = std::env::var("GOOGLE_CLOUD_API")
+            .or_else(|_| Ok::<_, ConfigError>(self.eth_tx_manager.google_cloud_api.clone()))?;
+
+        // Create a GCP KMS keyring reference base on the configured values.
+        let keyring = GcpKeyRingRef::new(&project_id, &location, &keyring_name);
+
+        // Create a GCP KMS client (without prefix metadata)
+        let client =
+            GoogleApi::from_function(KeyManagementServiceClient::new, google_cloud_api, None)
+                .await?;
+
+        // Target the right key in the keyring by specifying the key name and version.
+        let key_specifier = KeySpecifier::new(keyring, &key_name, key_version);
+
+        // Create the GcpSigner using both the client and the key specifier.
+        GcpSigner::new(client, key_specifier, Some(self.l1.chain_id))
+            .await
+            .map_err(|_| ConfigError::KmsConfig("Unable to create GcpSigner".to_string()))
     }
 
     /// Get either a local wallet or GCP KMS signer based on the configuration.
@@ -321,13 +236,14 @@ impl Config {
     /// 2. Otherwise, attempt use the local wallet.
     ///
     /// This logic is ported directly from the original agglayer Go codebase.
-    pub(crate) async fn get_configured_signer(&self) -> Result<ConfiguredSigner, ConfigError> {
+    pub(crate) async fn get_configured_signer(&self) -> Result<EthereumSigner, ConfigError> {
         if self.eth_tx_manager.kms_key_name.is_some() {
             debug!("Using GCP KMS signer");
-            Ok(ConfiguredSigner::GcpKms(self.gcp_kms_signer().await?))
+            Ok(EthereumSigner::from(self.gcp_kms_signer().await?))
         } else {
             debug!("Using local wallet signer");
-            Ok(ConfiguredSigner::Local(self.local_wallet()?))
+            let signer = self.local_wallet()?;
+            Ok(EthereumSigner::from(signer))
         }
     }
 
@@ -407,6 +323,15 @@ pub(crate) struct EthTxManager {
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub(crate) kms_key_name: Option<String>,
+    #[serde(rename = "KMSKeyVersion")]
+    pub(crate) kms_key_version: Option<u64>,
+    #[serde(rename = "KMSGoogleCloudAPI", default = "default_google_cloud_api")]
+    pub(crate) google_cloud_api: String,
+}
+
+/// The default Google Cloud KMS API entrypoint.
+fn default_google_cloud_api() -> String {
+    "https://cloudkms.googleapis.com".to_string()
 }
 
 /// Deserialize a map of RPCs from a TOML file, where the keys are integers and

@@ -2,7 +2,7 @@
 //!
 //! Systems that wish to submit proofs to the agglayer must produce a
 //! [`SignedProof`] conforming to the type definitions specified herein.
-use ethers::{prelude::*, utils::keccak256};
+use alloy::primitives::{keccak256, Address, Bytes, Signature, SignatureError, B256, U64};
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr};
 use thiserror::Error;
@@ -15,7 +15,7 @@ const PROOF_LENGTH: usize = 24;
 /// This is a fixed-size array of fixed-size arrays, where each inner array is a
 /// 32-byte hash.
 #[derive(Debug)]
-pub(crate) struct Proof([[u8; HASH_LENGTH]; PROOF_LENGTH]);
+pub(crate) struct Proof([B256; PROOF_LENGTH]);
 
 #[derive(Error, Debug)]
 pub(crate) enum ProofEncodingError {
@@ -36,7 +36,7 @@ impl Proof {
     }
 
     /// Convert the proof into a fixed-size array of byte arrays.
-    pub(crate) fn to_fixed_bytes(&self) -> [[u8; HASH_LENGTH]; PROOF_LENGTH] {
+    pub(crate) fn to_fixed_bytes(&self) -> [B256; PROOF_LENGTH] {
         self.0
     }
 
@@ -49,7 +49,7 @@ impl Proof {
             });
         }
 
-        let mut proof = [[0; HASH_LENGTH]; PROOF_LENGTH];
+        let mut proof = [B256::ZERO; PROOF_LENGTH];
         for (i, hash) in slice.chunks_exact(HASH_LENGTH).enumerate() {
             proof[i] = hash
                 .try_into()
@@ -73,8 +73,8 @@ impl<'de> Deserialize<'de> for Proof {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Zkp {
-    pub(crate) new_state_root: H256,
-    pub(crate) new_local_exit_root: H256,
+    pub(crate) new_state_root: B256,
+    pub(crate) new_local_exit_root: B256,
     pub(crate) proof: Proof,
 }
 
@@ -104,9 +104,9 @@ pub(crate) struct SignedTx {
 
 impl SignedTx {
     /// Generate a hash that uniquely identifies this proof.
-    pub(crate) fn hash(&self) -> H256 {
-        let last_verified_batch_hex = format!("0x{:x}", self.tx.last_verified_batch.as_u64());
-        let new_verified_batch_hex = format!("0x{:x}", self.tx.new_verified_batch.as_u64());
+    pub(crate) fn hash(&self) -> B256 {
+        let last_verified_batch_hex = format!("0x{:x}", self.tx.last_verified_batch);
+        let new_verified_batch_hex = format!("0x{:x}", self.tx.new_verified_batch);
         let proof_hex = format!("0x{}", hex::encode(self.tx.zkp.proof.as_bytes()));
 
         let data = [
@@ -118,11 +118,11 @@ impl SignedTx {
         ]
         .concat();
 
-        keccak256(data).into()
+        keccak256(data)
     }
 
     /// Attempt to recover the address of the signer.
     pub(crate) fn signer(&self) -> Result<Address, SignatureError> {
-        self.signature.recover(self.hash())
+        self.signature.recover_address_from_prehash(&self.hash())
     }
 }

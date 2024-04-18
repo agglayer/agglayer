@@ -1,0 +1,23 @@
+[FullNodeRPCs]
+1 = "http://zkevm-node:8123"
+
+[RPC]
+Host = "0.0.0.0"
+Port = 9090
+
+[Log]
+Level = "debug"
+Outputs = ["stderr"]
+
+[L1]
+ChainID = 1
+NodeURL = "http://localhost:8545"
+# RollupManagerContract = "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff"
+RollupManagerContract = "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
+
+[EthTxManager]
+PrivateKeys = [{ Path = "./docker/key.keystore", Password = "test" }]
+KMSProjectId = ""
+KMSLocation = ""
+KMSKeyring = ""
+KMSKeyName = ""
