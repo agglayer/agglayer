@@ -51,9 +51,10 @@ async fn run(cfg: PathBuf) -> anyhow::Result<()> {
     // Bind the core to the RPC server.
     let service = AgglayerImpl::new(core).into_rpc();
 
-    info!("Listening on {addr}");
     let server = Server::builder().build(addr).await?;
     let handle = server.start(service);
+
+    info!("Agglayer started and listening on {addr}");
     handle.stopped().await;
 
     Ok(())
