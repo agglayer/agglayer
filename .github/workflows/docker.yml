@@ -2,7 +2,7 @@ name: Docker
 
 on:
   push:
-    branches: [main]
+    branches: [main, fix/run-kurtosis-cdk]
   pull_request:
     branches: [main]
   release:
@@ -16,3 +16,5 @@ jobs:
   docker:
     uses: ./.github/workflows/util:docker.yml
     secrets: inherit
+    with:
+      push: true
