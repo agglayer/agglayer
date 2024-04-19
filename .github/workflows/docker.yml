@@ -2,7 +2,7 @@ name: Docker
 
 on:
   push:
-    branches: [main, fix/run-kurtosis-cdk]
+    branches: [main, ci/run-kurtosis-cdk]
   pull_request:
     branches: [main]
   release:
