@@ -67,6 +67,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: ${{ inputs.push == true && 'type=image' || format('type=docker,dest={0}/{1}.tar', inputs.local-artifact-dir, inputs.local-artifact-name) }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Upload artifact
         if: inputs.push == false
