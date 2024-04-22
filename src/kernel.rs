@@ -60,6 +60,7 @@ impl<RpcProvider> Kernel<RpcProvider> {
         }
     }
 
+    /// Check if the given rollup id is registered in the configuration.
     pub(crate) fn check_rollup_registered(&self, rollup_id: u32) -> bool {
         self.config.full_node_rpcs.contains_key(&rollup_id)
     }
