@@ -24,6 +24,12 @@ use tracing::debug;
 use tracing_subscriber::fmt::writer::BoxMakeWriter;
 use url::Url;
 
+use self::telemetry::TelemetryConfig;
+
+pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
+
+pub(crate) mod telemetry;
+
 /// The Agglayer configuration.
 #[derive(Deserialize, Debug)]
 pub(crate) struct Config {
@@ -45,6 +51,10 @@ pub(crate) struct Config {
     /// The transaction management configuration.
     #[serde(rename = "EthTxManager")]
     pub(crate) eth_tx_manager: EthTxManager,
+
+    /// Telemetry configuration.
+    #[serde(rename = "Telemetry")]
+    pub(crate) telemetry: TelemetryConfig,
 }
 
 /// The log level.

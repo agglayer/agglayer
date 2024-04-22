@@ -60,6 +60,10 @@ impl<RpcProvider> Kernel<RpcProvider> {
         }
     }
 
+    pub(crate) fn check_rollup_registered(&self, rollup_id: u32) -> bool {
+        self.config.full_node_rpcs.contains_key(&rollup_id)
+    }
+
     /// Get a [`ZkevmNodeClient`] instance for the given rollup id.
     #[instrument(skip(self), level = "debug")]
     fn get_zkevm_node_client_for_rollup(
