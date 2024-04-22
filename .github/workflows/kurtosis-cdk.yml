@@ -35,8 +35,41 @@ jobs:
         with:
           name: "docker-image"
           path: "/tmp"
+
       - name: Load image
         run: |
           echo ${{ needs.docker.outputs.tags }}
           docker load --input /tmp/docker-image.tar
-          docker image ls -a 
+          docker image ls -a
+
+      - name: Checkout agglayer-rs
+        uses: actions/checkout@v4
+
+      - name: Checkout kurtosis-cdk
+        uses: actions/checkout@v4
+        with:
+          repository: 0xpolygon/kurtosis-cdk
+          ref: main'
+          path: kurtosis-cdk
+
+      - name: Use local agglayer-rs docker img
+        working-directory: kurtosis-cdk
+        run: |
+          file="params.yml"
+          key="zkevm_agglayer_image"
+          new_value="${{ needs.docker.outputs.tags }}"
+
+          # Escape special characters in the new value
+          escaped_new_value=$(sed 's/[\/&]/\\&/g' <<< "$new_value")
+
+          sed -i "s/^\($key\s*=\s*\).*$/\1$escaped_new_value/" "$file"
+
+          # Debug
+          cat params.yml
+
+      - name: Install kurtosis
+        run: |
+          echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
+          sudo apt update
+          sudo apt install kurtosis-cli
+          kurtosis analytics disable
