@@ -4,7 +4,7 @@ use jsonrpsee::{
     core::client::{error::Error, ClientT},
     rpc_params,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// The ZkEVM node JSON RPC client.
 ///
@@ -21,7 +21,7 @@ impl<C> ZkevmNodeClient<C> {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BatchByNumberResponse {
     pub(crate) state_root: H256,

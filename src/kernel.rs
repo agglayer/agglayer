@@ -54,11 +54,6 @@ impl<RpcProvider> Kernel<RpcProvider> {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn get_provider(&self) -> Arc<RpcProvider> {
-        self.rpc.clone()
-    }
-
     /// Check if the given rollup id is registered in the configuration.
     pub(crate) fn check_rollup_registered(&self, rollup_id: u32) -> bool {
         self.config.full_node_rpcs.contains_key(&rollup_id)
@@ -339,78 +334,38 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ethers::middleware::{
-        gas_escalator::{Frequency, GeometricGasPrice},
-        gas_oracle::GasNow,
-    };
+    use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
 
-    use crate::signed_tx::{Proof, HASH_LENGTH, PROOF_LENGTH};
+    use crate::{
+        signed_tx::{Proof, HASH_LENGTH, PROOF_LENGTH},
+        zkevm_node_client::BatchByNumberResponse,
+    };
 
     use super::*;
 
     #[tokio::test]
-    async fn verify_zkp() {
+    async fn interop_executor_check_tx() {
         let mut config = Config::default();
-        config
-            .full_node_rpcs
-            .insert(1, "http://localhost:8545".parse().unwrap());
-        let signer = LocalWallet::new(&mut rand::thread_rng());
-        let address = signer.address();
-        let escalator = GeometricGasPrice::new(1.125, 60u64, None::<u64>);
-        let (provider, mock) = providers::Provider::mocked();
-        let provider = provider
-            .wrap_into(|p| GasEscalatorMiddleware::new(p, escalator, Frequency::PerBlock))
-            .wrap_into(|p| gas_oracle::GasOracleMiddleware::new(p, GasNow::new()))
-            .wrap_into(|p| SignerMiddleware::new(p, signer))
-            .wrap_into(|p| NonceManagerMiddleware::new(p, address));
+        let response = BatchByNumberResponse {
+            state_root: TxHash::from_slice(&[0; 32]),
+            local_exit_root: TxHash::zero(),
+        };
+        let response = ok_response(serde_json::to_value(response).unwrap(), Id::Num(0_u64));
+
+        let server_addr =
+            jsonrpsee_test_utils::helpers::http_server_with_hardcoded_response(response)
+                .with_default_timeout()
+                .await
+                .unwrap();
+
+        let uri = format!("http://{server_addr}");
+        config.full_node_rpcs.insert(1, uri.parse().unwrap());
+
+        let (provider, _mock) = providers::Provider::mocked();
+
         let kernel = Kernel::new(provider, config);
 
-        // interopAdminAddr := common.HexToAddress("0x1234567890abcdef")
-        // tnx := tx.Tx{
-        // 	LastVerifiedBatch: 0,
-        // 	NewVerifiedBatch:  1,
-        // 	ZKP: tx.ZKP{
-        // 		Proof: []byte("sampleProof"),
-        // 	},
-        // 	RollupID: 1,
-        // }
-
-        // etherman.On(
-        // 	"BuildTrustedVerifyBatchesTxData",
-        // 	uint64(tnx.LastVerifiedBatch),
-        // 	uint64(tnx.NewVerifiedBatch),
-        // 	mock.Anything,
-        // 	uint32(1),
-        // ).Return(
-        // 	[]byte{},
-        // 	nil,
-        // ).Once()
-        //
-        // etherman.On(
-        // 	"CallContract",
-        // 	mock.Anything,
-        // 	mock.Anything,
-        // 	mock.Anything,
-        // ).Return(
-        // 	[]byte{},
-        // 	nil,
-        // ).Once()
-        //
-        // executor := New(nil, cfg, interopAdminAddr, etherman, ethTxManager)
-        //
-        // // Create a sample signed transaction for testing
-        // signedTx := tx.SignedTx{
-        // 	Tx: tnx,
-        // }
-
-        // 	LastVerifiedBatch: 0,
-        // 	NewVerifiedBatch:  1,
-        // 	ZKP: tx.ZKP{
-        // 		Proof: []byte("sampleProof"),
-        // 	},
-        // 	RollupID: 1,
-        // }
-        let signed_tx = SignedTx {
+        let mut signed_tx = SignedTx {
             tx: crate::signed_tx::ProofManifest {
                 rollup_id: 1,
                 last_verified_batch: 0.into(),
@@ -428,12 +383,14 @@ mod tests {
             },
         };
 
-        mock.push(U64::from(12u64)).unwrap();
-        _ = kernel.verify_proof_zkevm_node(&signed_tx).await.unwrap();
+        assert!(kernel.verify_proof_zkevm_node(&signed_tx).await.is_ok());
 
-        mock.assert_request("zkevm_getBatchByNumber", ()).unwrap();
-        // err := executor.verifyZKP(context.Background(), signedTx)
-        // assert.NoError(t, err)
-        // etherman.AssertExpectations(t)
+        // Assigned an unknown rollup id
+        signed_tx.tx.rollup_id = 2;
+
+        assert!(matches!(
+            kernel.verify_proof_zkevm_node(&signed_tx).await,
+            Err(ZkevmNodeVerificationError::InvalidRollupId(2))
+        ));
     }
 }
