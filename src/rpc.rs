@@ -22,13 +22,13 @@ trait Agglayer {
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256>;
 }
 
-/// The gRPC agglayer service implementation.
+/// The RPC agglayer service implementation.
 pub(crate) struct AgglayerImpl<Rpc> {
     kernel: Kernel<Rpc>,
 }
 
 impl<Rpc> AgglayerImpl<Rpc> {
-    /// Create an instance of the gRPC agglayer service.
+    /// Create an instance of the RPC agglayer service.
     pub(crate) fn new(kernel: Kernel<Rpc>) -> Self {
         Self { kernel }
     }

@@ -44,7 +44,7 @@ pub(crate) struct Config {
     /// The log configuration.
     #[serde(rename = "Log")]
     pub(crate) log: Log,
-    /// The local gRPC server configuration.
+    /// The local RPC server configuration.
     #[serde(rename = "RPC")]
     pub(crate) rpc: RpcConfig,
     /// The L1 configuration.

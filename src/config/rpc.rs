@@ -9,7 +9,7 @@ use url::Url;
 /// The default port for the local RPC server.
 const DEFAULT_PORT: u16 = 9090;
 
-/// The local gRPC server configuration.
+/// The local RPC server configuration.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct RpcConfig {
