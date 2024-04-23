@@ -9,7 +9,9 @@ pub(crate) fn tracing(config: &crate::config::Log) {
             tracing_subscriber::fmt::layer()
                 .pretty()
                 .with_writer(writer.as_make_writer())
-                .with_filter(EnvFilter::from_default_env()),
+                .with_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into()),
+                ),
         )
         .init();
 }

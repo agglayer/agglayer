@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::Ipv4Addr};
+use std::{collections::HashMap, net::Ipv4Addr, str::FromStr};
 
 use serde::{
     de::{MapAccess, Visitor},
@@ -6,22 +6,39 @@ use serde::{
 };
 use url::Url;
 
-/// The local gRPC server configuration.
+/// The default port for the local RPC server.
+const DEFAULT_PORT: u16 = 9090;
+
+/// The local RPC server configuration.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct RpcConfig {
-    #[serde(default = "default_port")]
+    /// If the `PORT` environment variable is set, it will take precedence over
+    /// the configuration file.
+    #[serde(default = "default_port", deserialize_with = "deserialize_port")]
     pub(crate) port: u16,
     #[serde(default = "default_host")]
     pub(crate) host: Ipv4Addr,
 }
 
-const fn default_port() -> u16 {
-    9090
+/// The default port for the local RPC server.
+/// If the `PORT` environment variable is set, it will take precedence over
+fn default_port() -> u16 {
+    from_env_or_default("PORT", DEFAULT_PORT)
 }
 
+/// The default host for the local RPC server.
 const fn default_host() -> Ipv4Addr {
     Ipv4Addr::new(0, 0, 0, 0)
+}
+
+fn deserialize_port<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let port = u16::deserialize(deserializer)?;
+
+    Ok(from_env_or_default("PORT", port))
 }
 
 /// Deserialize a map of RPCs from a TOML file, where the keys are integers and
@@ -54,4 +71,12 @@ where
     }
 
     deserializer.deserialize_map(RpcMapVisitor)
+}
+
+/// Get an environment variable or a default value if it is not set.
+fn from_env_or_default<T: FromStr>(key: &str, default: T) -> T {
+    std::env::var(key)
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(default)
 }

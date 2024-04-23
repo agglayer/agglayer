@@ -44,9 +44,9 @@ pub(crate) struct Config {
     /// The log configuration.
     #[serde(rename = "Log")]
     pub(crate) log: Log,
-    /// The local gRPC server configuration.
+    /// The local RPC server configuration.
     #[serde(rename = "RPC")]
-    pub(crate) grpc: RpcConfig,
+    pub(crate) rpc: RpcConfig,
     /// The L1 configuration.
     #[serde(rename = "L1")]
     pub(crate) l1: L1,
@@ -60,20 +60,9 @@ pub(crate) struct Config {
 }
 
 impl Config {
-    /// Get the port from the environment variable, or the configuration file.
-    ///
-    /// If the `PORT` environment variable is set, it will take precedence over
-    /// the configuration file.
-    pub(crate) fn port(&self) -> u16 {
-        std::env::var("PORT")
-            .ok()
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(self.grpc.port)
-    }
-
-    /// Get the target gRPC socket address from the configuration.
-    pub(crate) fn grpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.grpc.host, self.port()))
+    /// Get the target RPC socket address from the configuration.
+    pub(crate) fn rpc_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.port))
     }
 
     /// Get the first local private key specified in the configuration.
@@ -91,7 +80,6 @@ impl Config {
     }
 
     /// Create a GCP KMS signer from the configuration.
-    ///
     /// This will first attempt to use the environment variables, and if they
     /// are not set, it will fall back to the values specified configuration
     /// file.
@@ -148,17 +136,6 @@ impl Config {
         } else {
             debug!("Using local wallet signer");
             Ok(ConfiguredSigner::Local(self.local_wallet()?))
-        }
-    }
-
-    /// Set the `RUST_LOG` environment variable relative to the configuration,
-    /// if not already set.
-    ///
-    /// The `RUST_LOG` environment variable will take precedence over the
-    /// configuration file.
-    pub(crate) fn set_log_env(&self) {
-        if std::env::var("RUST_LOG").is_err() {
-            std::env::set_var("RUST_LOG", self.log.level.as_str());
         }
     }
 }

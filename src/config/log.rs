@@ -1,12 +1,14 @@
-use std::path::PathBuf;
+use std::{fmt::Display, path::PathBuf};
 
 use serde::{Deserialize, Deserializer};
-use tracing_subscriber::fmt::writer::BoxMakeWriter;
+use tracing_subscriber::{fmt::writer::BoxMakeWriter, EnvFilter};
 
 /// The log configuration.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct Log {
+    /// The `RUST_LOG` environment variable will take precedence over the
+    /// configuration log level.
     #[serde(default)]
     pub(crate) level: LogLevel,
     pub(crate) outputs: Vec<LogOutput>,
@@ -25,19 +27,24 @@ pub(crate) enum LogLevel {
     Fatal,
 }
 
-impl LogLevel {
-    /// Get the log level as a string.
-    ///
-    /// This is used to set the `RUST_LOG` environment variable.
-    pub(crate) fn as_str(&self) -> &str {
-        match self {
+impl Display for LogLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let level = match self {
             LogLevel::Trace => "trace",
             LogLevel::Debug => "debug",
             LogLevel::Info => "info",
             LogLevel::Warn => "warn",
             LogLevel::Error => "error",
             LogLevel::Fatal => "fatal",
-        }
+        };
+
+        write!(f, "{}", level)
+    }
+}
+
+impl From<LogLevel> for EnvFilter {
+    fn from(value: LogLevel) -> Self {
+        EnvFilter::new(format!("warn,agglayer={}", value))
     }
 }
 
