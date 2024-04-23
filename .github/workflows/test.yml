@@ -18,6 +18,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # FIXME: Use proper release when available, or main when stable
+  KURTOSIS_CDK_GIT_REF: a40ddbf348caf2285da54d3cddbaa3bc04930ebd
 
 jobs:
   unit:
@@ -73,7 +75,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 0xpolygon/kurtosis-cdk
-          ref: main
+          ref: ${{ env.KURTOSIS_CDK_GIT_REF }}
           path: kurtosis-cdk
 
       - name: Replace param with local agglayer-rs docker img
