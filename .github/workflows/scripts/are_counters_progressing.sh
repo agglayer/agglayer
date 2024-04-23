@@ -1,6 +1,20 @@
 #!/bin/bash
 
-# Usage: ./monitor_command.sh <command> <increment_timeout> <check_interval>
+# This script verifies whether multiple counters output by an input command all progress
+# over time (exit code 0) or not (exit code 1). The script ends when either of the following
+# is reached first: all counters have been incremented at least once or the script has
+# timed out.
+# ---
+# It expects a command that outputs any number of counters as hex strings, e.g.:
+# ```
+# "0x1"
+# "0x2"
+# "0x3"
+# ```
+# , a timeout in seconds, and an interval in seconds.
+# The input command is executed at every interval to retrieve the latest counter values.
+# ---
+# Usage: ./are_counters_progressing.sh <command> <increment_timeout> <check_interval>
 
 # Input parameters
 command_to_run="$1"         # Command to execute
