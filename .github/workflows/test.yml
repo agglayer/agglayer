@@ -62,7 +62,7 @@ jobs:
 
       - name: Load image
         run: |
-          echo ${{ needs.docker.outputs.tags }}
+          echo ${{ needs.pre-e2e.outputs.tags }}
           docker load --input /tmp/docker-image.tar
           docker image ls -a
 
@@ -79,7 +79,7 @@ jobs:
       - name: Replace param with local agglayer-rs docker img
         run: |
           cd kurtosis-cdk
-          new_value="${{ needs.docker.outputs.tags }}"
+          new_value="${{ needs.pre-e2e.outputs.tags }}"
 
           # Escape special characters in the new value
           escaped_new_value=$(sed 's/[\/&]/\\&/g' <<< "$new_value")
