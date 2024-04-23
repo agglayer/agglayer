@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - ci/run-kurtosis-cdk # TODO: remove
   pull_request:
     branches:
       - "**"
