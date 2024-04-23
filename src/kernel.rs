@@ -28,12 +28,6 @@ pub(crate) struct Kernel<RpcProvider> {
     config: Config,
 }
 
-/// Kernel constructor arguments.
-pub(crate) struct KernelArgs<RpcProvider> {
-    pub(crate) rpc: RpcProvider,
-    pub(crate) config: Config,
-}
-
 /// Errors related to the ZkEVM node proof verification process.
 #[derive(Error, Debug)]
 pub(crate) enum ZkevmNodeVerificationError {
@@ -53,7 +47,7 @@ pub(crate) enum ZkevmNodeVerificationError {
 }
 
 impl<RpcProvider> Kernel<RpcProvider> {
-    pub(crate) fn new(KernelArgs { rpc, config }: KernelArgs<RpcProvider>) -> Self {
+    pub(crate) fn new(rpc: RpcProvider, config: Config) -> Self {
         Self {
             rpc: Arc::new(rpc),
             config,
