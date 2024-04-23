@@ -5,7 +5,7 @@ use serde::Deserialize;
 use super::DEFAULT_IP;
 
 #[derive(Deserialize, Debug, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "PascalCase")]
 pub(crate) struct TelemetryConfig {
     #[serde(rename = "PrometheusAddr", default = "default_metrics_api_addr")]
     pub(crate) addr: SocketAddr,
