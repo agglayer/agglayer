@@ -72,7 +72,22 @@ jobs:
           sudo apt install kurtosis-cli
           kurtosis analytics disable
 
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Run kurtosis
         run: |
           cd kurtosis-cdk
           kurtosis run --enclave cdk-v1 --args-file params.yml --image-download always .
+
+      - name: Expose RPC URL
+        run: echo "ETH_RPC_URL=$(kurtosis port print cdk-v1 zkevm-node-rpc-001 http-rpc)" >> $GITHUB_ENV
+
+      - name: Check that batches are progressing (5s interval, 60s timeout)
+        env:
+          ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
+        run: >
+          ./.github/workflows/scripts/are_counters-progressing.sh
+          "cast rpc zkevm_batchNumber && cast rpc zkevm_virtualBatchNumber && cast rpc zkevm_verifiedBatchNumber"
+          60
+          5
