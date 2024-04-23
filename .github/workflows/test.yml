@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - ci/run-kurtosis-cdk
+      - ci/run-kurtosis-cdk # TODO: remove
   pull_request:
     branches:
       - "**"
@@ -40,9 +40,9 @@ jobs:
       - name: Test
         run: cargo test
 
-  pre-e2e-docker:
+  pre-e2e:
+    name: E2E Tests | Docker Build
     uses: ./.github/workflows/util:docker.yml
-    needs: unit
     secrets: inherit
     with:
       push: false
@@ -50,9 +50,9 @@ jobs:
       local-artifact-dir: "/tmp"
 
   e2e-kurtosis-cdk:
-    name: E2E Tests - Kurtosis-CDK
+    name: E2E Tests | Kurtosis-CDK
     runs-on: ubuntu-latest
-    needs: pre-e2e-docker
+    needs: pre-e2e
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
