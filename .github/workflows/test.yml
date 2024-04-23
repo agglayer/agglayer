@@ -41,7 +41,7 @@ jobs:
         run: cargo test
 
   pre-e2e:
-    name: E2E Tests | Docker Build
+    name: E2E Tests | Docker
     uses: ./.github/workflows/util:docker.yml
     secrets: inherit
     with:
