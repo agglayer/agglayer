@@ -83,11 +83,14 @@ jobs:
       - name: Expose RPC URL
         run: echo "ETH_RPC_URL=$(kurtosis port print cdk-v1 zkevm-node-rpc-001 http-rpc)" >> $GITHUB_ENV
 
-      - name: Check that batches are progressing (5s interval, 60s timeout)
+      - name: Check that batches are progressing
         env:
+          COMMAND: "cast rpc zkevm_batchNumber && cast rpc zkevm_virtualBatchNumber && cast rpc zkevm_verifiedBatchNumber"
           ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
+          INTERVAL_SECONDS: 5
+          TIMEOUT_SECONDS: 60
         run: >
-          ./.github/workflows/scripts/are_counters-progressing.sh
-          "cast rpc zkevm_batchNumber && cast rpc zkevm_virtualBatchNumber && cast rpc zkevm_verifiedBatchNumber"
-          60
-          5
+          ./.github/workflows/scripts/are_counters_progressing.sh
+          $COMMAND
+          $TIMEOUT_SECONDS
+          $INTERVAL_SECONDS
