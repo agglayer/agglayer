@@ -91,6 +91,6 @@ jobs:
           TIMEOUT_SECONDS: 60
         run: >
           ./.github/workflows/scripts/are_counters_progressing.sh
-          $COMMAND
-          $TIMEOUT_SECONDS
-          $INTERVAL_SECONDS
+          "$COMMAND"
+          "$TIMEOUT_SECONDS"
+          "$INTERVAL_SECONDS"
