@@ -24,10 +24,9 @@ use telemetry::ServerBuilder as MetricsBuilder;
 
 async fn run(cfg: PathBuf) -> anyhow::Result<()> {
     let config: Config = toml::from_str(&std::fs::read_to_string(cfg)?)?;
-    config.set_log_env();
     logging::tracing(&config.log);
 
-    let addr = config.grpc_addr();
+    let addr = config.rpc_addr();
     let telemetry_addr = config.telemetry.addr;
 
     // Create a new L1 RPC provider with the configured signer.
