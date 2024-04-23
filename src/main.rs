@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{future::IntoFuture, path::PathBuf};
 
 use clap::Parser;
 use cli::Cli;
@@ -7,7 +7,8 @@ use ethers::prelude::*;
 use jsonrpsee::server::Server;
 use kernel::{Kernel, KernelArgs};
 use rpc::{AgglayerImpl, AgglayerServer};
-use tracing::info;
+use tokio::spawn;
+use tracing::{info, Instrument as _};
 
 mod cli;
 mod config;
@@ -16,7 +17,10 @@ mod kernel;
 mod logging;
 mod rpc;
 mod signed_tx;
+mod telemetry;
 mod zkevm_node_client;
+
+use telemetry::ServerBuilder as MetricsBuilder;
 
 async fn run(cfg: PathBuf) -> anyhow::Result<()> {
     let config: Config = toml::from_str(&std::fs::read_to_string(cfg)?)?;
@@ -24,6 +28,7 @@ async fn run(cfg: PathBuf) -> anyhow::Result<()> {
     logging::tracing(&config.log);
 
     let addr = config.grpc_addr();
+    let telemetry_addr = config.telemetry.addr;
 
     // Create a new L1 RPC provider with the configured signer.
     let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
@@ -32,6 +37,15 @@ async fn run(cfg: PathBuf) -> anyhow::Result<()> {
     let core = Kernel::new(KernelArgs { rpc, config });
     // Bind the core to the RPC server.
     let service = AgglayerImpl::new(core).into_rpc();
+
+    info!("Serving metrics on {}", telemetry_addr);
+    let metrics_server = MetricsBuilder::default()
+        .serve_addr(Some(telemetry_addr))
+        .build()
+        .in_current_span()
+        .await?;
+
+    let _metrics_handler = spawn(metrics_server.into_future());
 
     info!("Listening on {addr}");
     let server = Server::builder().build(addr).await?;

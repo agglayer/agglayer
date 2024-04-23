@@ -20,3 +20,5 @@ KMSProjectId = ""
 KMSLocation = ""
 KMSKeyring = ""
 KMSKeyName = ""
+
+[Telemetry]
