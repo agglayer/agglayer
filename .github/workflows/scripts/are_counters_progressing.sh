@@ -13,21 +13,54 @@ extract_decimal() {
     printf "%d" "$without_quotes"
 }
 
-# Set initial value
-prev_output=$(eval "$command_to_run" | tr -d '\r' | tr -d '\n') # Remove carriage return and newline characters
+# Execute the command once to get the initial outputs
+initial_outputs=($(eval "$command_to_run" | tr -d '\r'))
 
-# Parse the decimal value from the output
-prev_output_decimal=$(extract_decimal "$prev_output")
+# Loop through the initial outputs to initialize prev_outputs and incremented_flags
+declare -a prev_outputs
+declare -a incremented_flags
+for output in "${initial_outputs[@]}"; do
+    prev_outputs+=("$output")
+    incremented_flags+=("false")
+done
 
-# Loop until timeout
-while sleep "$check_interval"; do
-    current_output=$(eval "$command_to_run" | tr -d '\r' | tr -d '\n')
-    current_output_decimal=$(extract_decimal "$current_output")
+# Loop until all outputs have been incremented at least once within all iterations or timeout is reached
+while true; do
+    # Execute the command and get the current outputs
+    current_outputs=($(eval "$command_to_run" | tr -d '\r'))
 
-    # Check if the output has incremented
-    echo $current_output $current_output_decimal
-    if [ "$current_output_decimal" -gt "$prev_output_decimal" ]; then
-        echo "Output incremented: $prev_output -> $current_output"
+    # Check if all outputs have been incremented at least once
+    all_incremented=true
+    for ((i=0; i<${#current_outputs[@]}; i++)); do
+        prev_output_decimal=$(extract_decimal "${prev_outputs[$i]}")
+        current_output_decimal=$(extract_decimal "${current_outputs[$i]}")
+        if [ "$current_output_decimal" -gt "$prev_output_decimal" ]; then
+            incremented_flags[$i]="true"
+        elif [ "${incremented_flags[$i]}" == "false" ]; then
+            all_incremented=false
+        fi
+    done
+
+    # Print current outputs with flags indicating whether they have been incremented
+    for ((i=0; i<${#current_outputs[@]}; i++)); do
+        if [ "${incremented_flags[$i]}" == "true" ]; then
+            echo "${current_outputs[$i]} (✅Incremented)"
+        else
+            echo "${current_outputs[$i]}"
+        fi
+    done
+
+    echo -e "\n"
+
+    # Update prev_outputs with current_outputs for the next iteration
+    prev_outputs=("${current_outputs[@]}")
+
+    # Sleep for check_interval seconds
+    sleep "$check_interval"
+
+    # Check if all outputs have been incremented at least once and exit the loop
+    if $all_incremented; then
+        echo "All outputs incremented at least once"
         exit 0
     fi
 
@@ -36,6 +69,4 @@ while sleep "$check_interval"; do
         echo "No increment within $increment_timeout seconds"
         exit 1
     fi
-
-    prev_output_decimal="$current_output_decimal"
 done
