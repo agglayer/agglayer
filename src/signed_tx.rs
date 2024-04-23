@@ -7,8 +7,8 @@ use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr};
 use thiserror::Error;
 
-const HASH_LENGTH: usize = 32;
-const PROOF_LENGTH: usize = 24;
+pub(crate) const HASH_LENGTH: usize = 32;
+pub(crate) const PROOF_LENGTH: usize = 24;
 
 /// Raw proof bytes.
 ///

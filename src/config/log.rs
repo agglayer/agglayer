@@ -4,7 +4,7 @@ use serde::{Deserialize, Deserializer};
 use tracing_subscriber::{fmt::writer::BoxMakeWriter, EnvFilter};
 
 /// The log configuration.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct Log {
     /// The `RUST_LOG` environment variable will take precedence over the
