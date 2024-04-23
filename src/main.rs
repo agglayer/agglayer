@@ -5,7 +5,7 @@ use cli::Cli;
 use config::Config;
 use ethers::prelude::*;
 use jsonrpsee::server::Server;
-use kernel::{Kernel, KernelArgs};
+use kernel::Kernel;
 use rpc::{AgglayerImpl, AgglayerServer};
 use tokio::spawn;
 use tracing::{info, Instrument as _};
@@ -34,7 +34,7 @@ async fn run(cfg: PathBuf) -> anyhow::Result<()> {
     let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
         .with_signer(config.get_configured_signer().await?);
     // Construct the core.
-    let core = Kernel::new(KernelArgs { rpc, config });
+    let core = Kernel::new(rpc, config);
     // Bind the core to the RPC server.
     let service = AgglayerImpl::new(core).into_rpc();
 
