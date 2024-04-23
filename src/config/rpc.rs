@@ -10,8 +10,18 @@ use url::Url;
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct RpcConfig {
+    #[serde(default = "default_port")]
     pub(crate) port: u16,
+    #[serde(default = "default_host")]
     pub(crate) host: Ipv4Addr,
+}
+
+const fn default_port() -> u16 {
+    9090
+}
+
+const fn default_host() -> Ipv4Addr {
+    Ipv4Addr::new(0, 0, 0, 0)
 }
 
 /// Deserialize a map of RPCs from a TOML file, where the keys are integers and
