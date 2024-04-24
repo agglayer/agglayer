@@ -34,6 +34,7 @@ pub(crate) use rpc::RpcConfig;
 
 /// The Agglayer configuration.
 #[derive(Deserialize, Debug)]
+#[cfg_attr(test, derive(Default))]
 pub(crate) struct Config {
     /// A map of Zkevm node RPC endpoints for each rollup.
     ///

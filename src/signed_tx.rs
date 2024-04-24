@@ -7,8 +7,8 @@ use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr};
 use thiserror::Error;
 
-const HASH_LENGTH: usize = 32;
-const PROOF_LENGTH: usize = 24;
+pub(crate) const HASH_LENGTH: usize = 32;
+pub(crate) const PROOF_LENGTH: usize = 24;
 
 /// Raw proof bytes.
 ///
@@ -124,5 +124,15 @@ impl SignedTx {
     /// Attempt to recover the address of the signer.
     pub(crate) fn signer(&self) -> Result<Address, SignatureError> {
         self.signature.recover(self.hash())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn sign(
+        &mut self,
+        signer: &Wallet<k256::ecdsa::SigningKey>,
+    ) -> Result<(), SignatureError> {
+        self.signature = signer.sign_hash(self.hash()).unwrap();
+
+        Ok(())
     }
 }

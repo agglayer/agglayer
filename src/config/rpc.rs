@@ -21,6 +21,15 @@ pub(crate) struct RpcConfig {
     pub(crate) host: Ipv4Addr,
 }
 
+impl Default for RpcConfig {
+    fn default() -> Self {
+        Self {
+            port: default_port(),
+            host: default_host(),
+        }
+    }
+}
+
 /// The default port for the local RPC server.
 /// If the `PORT` environment variable is set, it will take precedence over
 fn default_port() -> u16 {

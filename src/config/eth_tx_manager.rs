@@ -21,6 +21,7 @@ use serde_with::{serde_as, NoneAsEmptyString};
 ///   load a service account JSON from this path.
 #[serde_as]
 #[derive(Deserialize, Debug)]
+#[cfg_attr(test, derive(Default))]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct EthTxManager {
     pub(crate) private_keys: Vec<PrivateKey>,
