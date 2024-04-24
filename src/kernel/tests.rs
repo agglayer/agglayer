@@ -12,6 +12,7 @@ use crate::{
     zkevm_node_client::BatchByNumberResponse,
 };
 
+/// Test that check if the rollup_id is registered
 #[tokio::test]
 async fn interop_executor_check_tx() {
     let mut config = Config::default();
@@ -51,13 +52,17 @@ async fn interop_executor_check_tx() {
         },
     };
 
-    assert!(kernel.verify_proof_zkevm_node(&signed_tx).await.is_ok());
+    assert!(kernel.check_rollup_registered(signed_tx.tx.rollup_id));
+    assert!(kernel
+        .get_zkevm_node_client_for_rollup(signed_tx.tx.rollup_id)
+        .is_ok());
 
     // Assigned an unknown rollup id
     signed_tx.tx.rollup_id = 2;
 
+    assert!(!kernel.check_rollup_registered(signed_tx.tx.rollup_id));
     assert!(matches!(
-        kernel.verify_proof_zkevm_node(&signed_tx).await,
+        kernel.get_zkevm_node_client_for_rollup(signed_tx.tx.rollup_id),
         Err(ZkevmNodeVerificationError::InvalidRollupId(2))
     ));
 }
