@@ -2,10 +2,23 @@ name: Util | Docker
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ${{ github.repository }}  
 
 on:
   workflow_call:
+    inputs:
+      push:
+        description: "Push the docker image to the registry"
+        default: false
+        type: boolean
+      local-artifact-name:
+        description: "Name of the artifact used for local builds only"
+        default: "docker-image"
+        type: string
+      local-artifact-dir:
+        description: "Directory of the artifact used for local builds only"
+        default: "/tmp"
+        type: string
     outputs:
       tags:
         description: "Docker tags"
@@ -13,7 +26,7 @@ on:
 
 jobs:
   docker:
-    name: Build-Push
+    name: Build${{ inputs.push == true && '-Push' || '' }}
     runs-on: ubuntu-latest
     outputs:
       tags: ${{ steps.meta.outputs.tags }}
@@ -36,7 +49,7 @@ jobs:
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -45,11 +58,21 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Push to GitHub Container Registry
+      - name: Build${{ inputs.push == true && '-Push' || '' }}
         uses: docker/build-push-action@v5
         with:
           context: .
           # platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ inputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          outputs: ${{ inputs.push == true && 'type=image' || format('type=docker,dest={0}/{1}.tar', inputs.local-artifact-dir, inputs.local-artifact-name) }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Upload artifact
+        if: inputs.push == false
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.local-artifact-name }}
+          path: ${{ inputs.local-artifact-dir }}/${{ inputs.local-artifact-name }}.tar

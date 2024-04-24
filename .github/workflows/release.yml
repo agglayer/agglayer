@@ -1,10 +1,6 @@
-name: Docker
+name: Release
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   release:
     types: [created]
 
@@ -16,3 +12,5 @@ jobs:
   docker:
     uses: ./.github/workflows/util:docker.yml
     secrets: inherit
+    with:
+      push: true
