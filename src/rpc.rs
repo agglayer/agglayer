@@ -86,7 +86,7 @@ where
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
-                    crate::telemetry::EXECUTE
+                    crate::telemetry::VERIFY_ZKP
                         .with_label_values(&[&rollup_id_str])
                         .inc();
                 }),
@@ -97,7 +97,7 @@ where
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
-                    crate::telemetry::VERIFY_ZKP
+                    crate::telemetry::EXECUTE
                         .with_label_values(&[&rollup_id_str])
                         .inc();
                 })

@@ -3,7 +3,7 @@ use serde::Deserialize;
 use url::Url;
 
 /// The L1 configuration.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub(crate) struct L1 {
     #[serde(rename = "ChainID")]
     pub(crate) chain_id: u64,

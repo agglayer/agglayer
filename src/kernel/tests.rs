@@ -1,10 +1,22 @@
+use std::time::Duration;
+
+use ethers::core::utils;
 use ethers::prelude::*;
+use ethers::types::transaction::eip2718::TypedTransaction;
+use ethers::types::transaction::eip2930::AccessList;
+use ethers::utils::Anvil;
 use ethers::{
+    abi::AbiEncode,
     providers,
     types::{Signature, H256, U256},
 };
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
+use serde_json::json;
 
+use crate::contracts::polygon_rollup_manager::{
+    PolygonRollupManager, RollupIDToRollupDataCall, RollupIDToRollupDataReturn,
+};
+use crate::contracts::polygon_zk_evm::{PolygonZkEvm, TrustedSequencerReturn};
 use crate::{
     config::Config,
     kernel::{Kernel, ZkevmNodeVerificationError},
@@ -65,4 +77,70 @@ async fn interop_executor_check_tx() {
         kernel.get_zkevm_node_client_for_rollup(signed_tx.tx.rollup_id),
         Err(ZkevmNodeVerificationError::InvalidRollupId(2))
     ));
+}
+
+/// Test that check if the rollup_id is registered
+#[tokio::test]
+async fn interop_executor_verify_zkp() {
+    let mut config = Config::default();
+
+    let (provider, mock) = providers::Provider::mocked();
+
+    let l1 = config.l1.clone();
+    let kernel = Kernel::new(provider, config);
+
+    let mut signed_tx = SignedTx {
+        tx: crate::signed_tx::ProofManifest {
+            rollup_id: 1,
+            last_verified_batch: 0.into(),
+            new_verified_batch: 1.into(),
+            zkp: crate::signed_tx::Zkp {
+                new_state_root: H256::zero(),
+                new_local_exit_root: H256::zero(),
+                proof: Proof::try_from_slice(&[0; HASH_LENGTH * PROOF_LENGTH]).unwrap(),
+            },
+        },
+        signature: Signature {
+            r: U256::zero(),
+            s: U256::zero(),
+            v: 0,
+        },
+    };
+
+    let response = RollupIDToRollupDataReturn {
+        chain_id: 1,
+        rollup_contract: l1.rollup_manager_contract,
+        verifier: H160::random(),
+        fork_id: 0,
+        last_local_exit_root: [0; 32],
+        last_batch_sequenced: 0,
+        last_verified_batch: 0,
+        last_pending_state: 0,
+        last_pending_state_consolidated: 0,
+        last_verified_batch_before_upgrade: 0,
+        rollup_type_id: 1,
+        rollup_compatibility_id: 0,
+    }
+    .encode_hex();
+
+    mock.push_response(MockResponse::Value(
+        serde_json::Value::String(String::new()),
+    ));
+    mock.push_response(MockResponse::Value(serde_json::Value::String(
+        TrustedSequencerReturn(Address::random()).encode_hex(),
+    )));
+
+    mock.push_response(MockResponse::Value(serde_json::Value::String(response)));
+    assert!(kernel.verify_proof_eth_call(&signed_tx).await.is_ok());
+    kernel.verify_proof_eth_call(&signed_tx).await;
+
+    let tx = utils::serialize(&TypedTransaction::Eip1559(
+        Eip1559TransactionRequest::new()
+            .to(l1.rollup_manager_contract)
+            .data(RollupIDToRollupDataCall { rollup_id: 1 }.encode()),
+    ));
+
+    let block = utils::serialize(&(BlockNumber::Latest));
+
+    mock.assert_request("eth_call", [tx, block]).unwrap();
 }
