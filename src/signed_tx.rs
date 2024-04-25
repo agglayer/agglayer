@@ -125,4 +125,14 @@ impl SignedTx {
     pub(crate) fn signer(&self) -> Result<Address, SignatureError> {
         self.signature.recover(self.hash())
     }
+
+    #[cfg(test)]
+    pub(crate) fn sign(
+        &mut self,
+        signer: &Wallet<k256::ecdsa::SigningKey>,
+    ) -> Result<(), SignatureError> {
+        self.signature = signer.sign_hash(self.hash()).unwrap();
+
+        Ok(())
+    }
 }

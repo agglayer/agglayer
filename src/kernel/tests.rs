@@ -1,5 +1,6 @@
 use ethers::core::utils;
 use ethers::prelude::*;
+use ethers::signers::LocalWallet;
 use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::{
     abi::AbiEncode,
@@ -170,5 +171,113 @@ async fn interop_executor_verify_zkp() {
     mock.assert_request("eth_call", [tx_trusted_sequencer, block.clone()])
         .unwrap();
     mock.assert_request("eth_call", [tx_verify_batch, block])
+        .unwrap();
+}
+
+/// Test that check if the verify_signature method
+#[tokio::test]
+async fn interop_executor_verify_signature() {
+    let config = Config::default();
+
+    let (provider, mock) = providers::Provider::mocked();
+
+    let l1 = config.l1.clone();
+    let kernel = Kernel::new(provider, config);
+
+    let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
+    let sequencer_address = sequencer_wallet.address();
+
+    let mut signed_tx = SignedTx {
+        tx: crate::signed_tx::ProofManifest {
+            rollup_id: 1,
+            last_verified_batch: 0.into(),
+            new_verified_batch: 1.into(),
+            zkp: crate::signed_tx::Zkp {
+                new_state_root: H256::zero(),
+                new_local_exit_root: H256::zero(),
+                proof: Proof::try_from_slice(&[0; HASH_LENGTH * PROOF_LENGTH]).unwrap(),
+            },
+        },
+        signature: Signature {
+            r: U256::zero(),
+            s: U256::zero(),
+            v: 0,
+        },
+    };
+
+    let response = RollupIDToRollupDataReturn {
+        chain_id: 1,
+        rollup_contract: l1.rollup_manager_contract,
+        verifier: H160::random(),
+        fork_id: 0,
+        last_local_exit_root: [0; 32],
+        last_batch_sequenced: 0,
+        last_verified_batch: 0,
+        last_pending_state: 0,
+        last_pending_state_consolidated: 0,
+        last_verified_batch_before_upgrade: 0,
+        rollup_type_id: 1,
+        rollup_compatibility_id: 0,
+    }
+    .encode_hex();
+
+    let _ = signed_tx.sign(&sequencer_wallet);
+
+    // valid signature with valid sequencer_address
+    {
+        mock.push_response(MockResponse::Value(serde_json::Value::String(
+            TrustedSequencerReturn(sequencer_address).encode_hex(),
+        )));
+
+        mock.push_response(MockResponse::Value(serde_json::Value::String(
+            response.clone(),
+        )));
+
+        assert!(kernel.verify_signature(&signed_tx).await.is_ok());
+    }
+
+    // Wrong signature with different sequencer_address
+    {
+        mock.push_response(MockResponse::Value(serde_json::Value::String(
+            TrustedSequencerReturn(H160::zero()).encode_hex(),
+        )));
+
+        mock.push_response(MockResponse::Value(serde_json::Value::String(response)));
+
+        assert!(matches!(
+            kernel.verify_signature(&signed_tx).await,
+            Err(crate::kernel::SignatureVerificationError::InvalidSigner { signer, trusted_sequencer })
+            if signer == sequencer_address && trusted_sequencer == H160::zero()
+        ));
+    }
+
+    // Correct signature with configured proof signer for rollup
+    {
+        // TODO: to be implemented
+    }
+
+    // Wrong signature with configured proof signer for rollup
+    {
+        // TODO: to be implemented
+    }
+
+    let tx_rollup_data = utils::serialize(&TypedTransaction::Eip1559(
+        Eip1559TransactionRequest::new()
+            .to(l1.rollup_manager_contract)
+            .data(RollupIDToRollupDataCall { rollup_id: 1 }.encode()),
+    ));
+
+    let tx_trusted_sequencer = utils::serialize(&TypedTransaction::Eip1559(
+        Eip1559TransactionRequest::new()
+            .to(l1.rollup_manager_contract)
+            .data(TrustedSequencerCall {}.encode()),
+    ));
+
+    let block = utils::serialize(&(BlockNumber::Latest));
+
+    // Check if the calls are made
+    mock.assert_request("eth_call", [tx_rollup_data, block.clone()])
+        .unwrap();
+    mock.assert_request("eth_call", [tx_trusted_sequencer, block.clone()])
         .unwrap();
 }
