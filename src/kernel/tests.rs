@@ -1,22 +1,17 @@
-use std::time::Duration;
-
 use ethers::core::utils;
 use ethers::prelude::*;
 use ethers::types::transaction::eip2718::TypedTransaction;
-use ethers::types::transaction::eip2930::AccessList;
-use ethers::utils::Anvil;
 use ethers::{
     abi::AbiEncode,
     providers,
     types::{Signature, H256, U256},
 };
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
-use serde_json::json;
 
 use crate::contracts::polygon_rollup_manager::{
-    PolygonRollupManager, RollupIDToRollupDataCall, RollupIDToRollupDataReturn,
+    RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
 };
-use crate::contracts::polygon_zk_evm::{PolygonZkEvm, TrustedSequencerReturn};
+use crate::contracts::polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn};
 use crate::{
     config::Config,
     kernel::{Kernel, ZkevmNodeVerificationError},
@@ -79,17 +74,17 @@ async fn interop_executor_check_tx() {
     ));
 }
 
-/// Test that check if the rollup_id is registered
+/// Test that check if the verify_zkp method
 #[tokio::test]
 async fn interop_executor_verify_zkp() {
-    let mut config = Config::default();
+    let config = Config::default();
 
     let (provider, mock) = providers::Provider::mocked();
 
     let l1 = config.l1.clone();
     let kernel = Kernel::new(provider, config);
 
-    let mut signed_tx = SignedTx {
+    let signed_tx = SignedTx {
         tx: crate::signed_tx::ProofManifest {
             rollup_id: 1,
             last_verified_batch: 0.into(),
@@ -126,21 +121,54 @@ async fn interop_executor_verify_zkp() {
     mock.push_response(MockResponse::Value(
         serde_json::Value::String(String::new()),
     ));
+
+    let sequencer_address = Address::random();
+
     mock.push_response(MockResponse::Value(serde_json::Value::String(
-        TrustedSequencerReturn(Address::random()).encode_hex(),
+        TrustedSequencerReturn(sequencer_address).encode_hex(),
     )));
 
     mock.push_response(MockResponse::Value(serde_json::Value::String(response)));
-    assert!(kernel.verify_proof_eth_call(&signed_tx).await.is_ok());
-    kernel.verify_proof_eth_call(&signed_tx).await;
 
-    let tx = utils::serialize(&TypedTransaction::Eip1559(
+    assert!(kernel.verify_proof_eth_call(&signed_tx).await.is_ok());
+
+    let tx_rollup_data = utils::serialize(&TypedTransaction::Eip1559(
         Eip1559TransactionRequest::new()
             .to(l1.rollup_manager_contract)
             .data(RollupIDToRollupDataCall { rollup_id: 1 }.encode()),
     ));
 
+    let tx_trusted_sequencer = utils::serialize(&TypedTransaction::Eip1559(
+        Eip1559TransactionRequest::new()
+            .to(l1.rollup_manager_contract)
+            .data(TrustedSequencerCall {}.encode()),
+    ));
+
+    let tx_verify_batch = utils::serialize(&TypedTransaction::Eip1559(
+        Eip1559TransactionRequest::new()
+            .to(l1.rollup_manager_contract)
+            .data(
+                VerifyBatchesTrustedAggregatorCall {
+                    rollup_id: 1,
+                    pending_state_num: 0,
+                    init_num_batch: signed_tx.tx.last_verified_batch.as_u64(),
+                    final_new_batch: signed_tx.tx.new_verified_batch.as_u64(),
+                    new_local_exit_root: signed_tx.tx.zkp.new_local_exit_root.to_fixed_bytes(),
+                    new_state_root: signed_tx.tx.zkp.new_state_root.to_fixed_bytes(),
+                    beneficiary: sequencer_address,
+                    proof: signed_tx.tx.zkp.proof.to_fixed_bytes(),
+                }
+                .encode(),
+            ),
+    ));
+
     let block = utils::serialize(&(BlockNumber::Latest));
 
-    mock.assert_request("eth_call", [tx, block]).unwrap();
+    // Check if the calls are made
+    mock.assert_request("eth_call", [tx_rollup_data, block.clone()])
+        .unwrap();
+    mock.assert_request("eth_call", [tx_trusted_sequencer, block.clone()])
+        .unwrap();
+    mock.assert_request("eth_call", [tx_verify_batch, block])
+        .unwrap();
 }
