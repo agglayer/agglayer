@@ -79,7 +79,7 @@ async fn interop_executor_check_tx() {
     ));
 }
 
-/// Test that check if the verify_zkp method
+/// Test that check the verify_zkp method
 #[tokio::test]
 async fn interop_executor_verify_zkp() {
     let config = Config::default();
@@ -154,7 +154,7 @@ async fn interop_executor_verify_signature() {
 
     let response = rollup_data(&l1).encode_hex();
 
-    let _ = signed_tx.sign(&sequencer_wallet).unwrap();
+    signed_tx.sign(&sequencer_wallet).unwrap();
 
     // valid signature with valid sequencer_address
     {
@@ -205,6 +205,133 @@ async fn interop_executor_verify_signature() {
         .unwrap();
 }
 
+mod interop_executor_execute {
+    use super::*;
+
+    #[tokio::test]
+    async fn batch_not_nil_root_match() {
+        let mut config = Config::default();
+        let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
+        let mut signed_tx = signed_tx();
+        let _ = signed_tx.sign(&sequencer_wallet);
+
+        let response = BatchByNumberResponse {
+            state_root: signed_tx.tx.zkp.new_state_root,
+            local_exit_root: signed_tx.tx.zkp.new_local_exit_root,
+        };
+        let response = ok_response(serde_json::to_value(response).unwrap(), Id::Num(0_u64));
+
+        let server_addr =
+            jsonrpsee_test_utils::helpers::http_server_with_hardcoded_response(response)
+                .with_default_timeout()
+                .await
+                .unwrap();
+
+        let uri = format!("http://{server_addr}");
+        config.full_node_rpcs.insert(1, uri.parse().unwrap());
+
+        let (provider, _mock) = providers::Provider::mocked();
+
+        let kernel = Kernel::new(provider, config);
+
+        assert!(kernel.verify_proof_zkevm_node(&signed_tx).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn return_error_when_response_is_null() {
+        let mut config = Config::default();
+        let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
+        let mut signed_tx = signed_tx();
+        let _ = signed_tx.sign(&sequencer_wallet);
+
+        let response = ok_response(serde_json::Value::Null, Id::Num(0_u64));
+
+        let server_addr =
+            jsonrpsee_test_utils::helpers::http_server_with_hardcoded_response(response)
+                .with_default_timeout()
+                .await
+                .unwrap();
+
+        let uri = format!("http://{server_addr}");
+        config.full_node_rpcs.insert(1, uri.parse().unwrap());
+
+        let (provider, _mock) = providers::Provider::mocked();
+
+        let kernel = Kernel::new(provider, config);
+
+        assert!(matches!(
+            kernel.verify_proof_zkevm_node(&signed_tx).await,
+            Err(ZkevmNodeVerificationError::RpcError(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn return_error_when_state_root_differ() {
+        let mut config = Config::default();
+        let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
+        let mut signed_tx = signed_tx();
+        let _ = signed_tx.sign(&sequencer_wallet);
+
+        let response = BatchByNumberResponse {
+            state_root: H256::zero(),
+            local_exit_root: signed_tx.tx.zkp.new_local_exit_root,
+        };
+        let response = ok_response(serde_json::to_value(response).unwrap(), Id::Num(0_u64));
+
+        let server_addr =
+            jsonrpsee_test_utils::helpers::http_server_with_hardcoded_response(response)
+                .with_default_timeout()
+                .await
+                .unwrap();
+
+        let uri = format!("http://{server_addr}");
+        config.full_node_rpcs.insert(1, uri.parse().unwrap());
+
+        let (provider, _mock) = providers::Provider::mocked();
+
+        let kernel = Kernel::new(provider, config);
+
+        assert!(matches!(
+            kernel.verify_proof_zkevm_node(&signed_tx).await,
+            Err(ZkevmNodeVerificationError::InvalidStateRoot { expected, got })
+            if expected == signed_tx.tx.zkp.new_state_root && got == H256::zero()
+        ));
+    }
+
+    #[tokio::test]
+    async fn return_error_when_exit_root_differ() {
+        let mut config = Config::default();
+        let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
+        let mut signed_tx = signed_tx();
+        let _ = signed_tx.sign(&sequencer_wallet);
+
+        let response = BatchByNumberResponse {
+            state_root: signed_tx.tx.zkp.new_state_root,
+            local_exit_root: H256::zero(),
+        };
+        let response = ok_response(serde_json::to_value(response).unwrap(), Id::Num(0_u64));
+
+        let server_addr =
+            jsonrpsee_test_utils::helpers::http_server_with_hardcoded_response(response)
+                .with_default_timeout()
+                .await
+                .unwrap();
+
+        let uri = format!("http://{server_addr}");
+        config.full_node_rpcs.insert(1, uri.parse().unwrap());
+
+        let (provider, _mock) = providers::Provider::mocked();
+
+        let kernel = Kernel::new(provider, config);
+
+        assert!(matches!(
+            kernel.verify_proof_zkevm_node(&signed_tx).await,
+            Err(ZkevmNodeVerificationError::InvalidExitRoot { expected, got })
+            if expected == signed_tx.tx.zkp.new_local_exit_root && got == H256::zero()
+        ));
+    }
+}
+
 fn signed_tx() -> SignedTx {
     SignedTx {
         tx: crate::signed_tx::ProofManifest {
@@ -212,8 +339,8 @@ fn signed_tx() -> SignedTx {
             last_verified_batch: 0.into(),
             new_verified_batch: 1.into(),
             zkp: crate::signed_tx::Zkp {
-                new_state_root: H256::zero(),
-                new_local_exit_root: H256::zero(),
+                new_state_root: H256::random(),
+                new_local_exit_root: H256::random(),
                 proof: Proof::try_from_slice(&[0; HASH_LENGTH * PROOF_LENGTH]).unwrap(),
             },
         },
