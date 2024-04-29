@@ -40,7 +40,7 @@ macro_rules! transaction_request {
     };
 }
 
-/// Test that check if the rollup_id is registered
+/// Test to check if the rollup_id is registered
 #[tokio::test]
 async fn interop_executor_check_tx() {
     let mut config = Config::default();
@@ -79,7 +79,7 @@ async fn interop_executor_check_tx() {
     ));
 }
 
-/// Test that check the verify_zkp method
+/// Test the verify_zkp method
 #[tokio::test]
 async fn interop_executor_verify_zkp() {
     let config = Config::default();
