@@ -1,0 +1,60 @@
+name: Coverage
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    name: SonarCloud and Linter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.77.1
+          components: clippy rustfmt llvm-tools-preview
+
+      - uses: taiki-e/install-action@grcov
+
+      - name: Install cargo-sonar and run Clippy
+        run: |
+            cargo install cargo-sonar
+            cargo clippy --message-format json > clippy-report.json
+            cargo sonar --clippy --clippy-path clippy-report.json
+
+      - name: Build with coverage
+        env:
+          RUST_LOG: info
+          RUSTFLAGS: "-Cinstrument-coverage"
+          RUSTDOCFLAGS: "-Cinstrument-coverage"
+          LLVM_PROFILE_FILE: "llvm_profile-instrumentation-%p-%m.profraw"
+        run: cargo test --all
+
+      - name: Run grcov
+        run: |
+          grcov . --binary-path target/debug/ -s . \
+            -t lcov \
+            --branch \
+            --ignore-not-existing \
+            --ignore '../**' \
+            --ignore '/*' \
+            -o coverage.lcov
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.externalIssuesReportPaths=sonar-issues.json
+            -Dcommunity.rust.lcov.reportPaths=coverage.lcov
