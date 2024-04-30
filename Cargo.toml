@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.36.0", features = ["full"] }
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 tracing-appender = "0.2.3"
 clap = { version = "4.4.6", features = ["derive", "env"] }
 anyhow = "1.0.81"
