@@ -52,9 +52,11 @@ dependencies = [
  "futures",
  "hex",
  "jsonrpsee",
+ "jsonrpsee-test-utils",
  "lazy_static",
  "prometheus",
  "serde",
+ "serde_json",
  "serde_with",
  "thiserror",
  "tokio",
@@ -2279,6 +2281,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-test-utils"
+version = "0.22.3"
+source = "git+https://github.com/paritytech/jsonrpsee.git?tag=v0.22.3#8c73cc6a4e101540f4cf25ca7103f3cc2100d740"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "hyper 0.14.28",
+ "serde",
+ "serde_json",
+ "soketto",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "jsonrpsee-types"
 version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3665,9 +3683,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.114"
+version = "1.0.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5f09b1bd632ef549eaa9f60a1f8de742bdbc698e6cee2095fc84dde5f549ae0"
+checksum = "3e17db7126d17feb94eb3fad46bf1a96b034e8aacbc2e775fe81505f8b0b2813"
 dependencies = [
  "itoa",
  "ryu",

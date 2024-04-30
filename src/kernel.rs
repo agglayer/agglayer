@@ -15,6 +15,9 @@ use crate::{
     zkevm_node_client::ZkevmNodeClient,
 };
 
+#[cfg(test)]
+mod tests;
+
 /// The core logic of the agglayer.
 ///
 /// Currently, it provides functionality for interacting with the various rollup
