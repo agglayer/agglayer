@@ -6,20 +6,20 @@ use tracing_subscriber::{fmt::writer::BoxMakeWriter, EnvFilter};
 /// The log configuration.
 #[derive(Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "PascalCase")]
-pub(crate) struct Log {
+pub struct Log {
     /// The `RUST_LOG` environment variable will take precedence over the
     /// configuration log level.
     #[serde(default)]
-    pub(crate) level: LogLevel,
-    pub(crate) outputs: Vec<LogOutput>,
+    pub level: LogLevel,
+    pub outputs: Vec<LogOutput>,
     #[serde(default)]
-    pub(crate) format: LogFormat,
+    pub format: LogFormat,
 }
 
 /// The log format.
 #[derive(Deserialize, Debug, Default, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum LogFormat {
+pub enum LogFormat {
     #[default]
     Pretty,
     Json,
@@ -28,7 +28,7 @@ pub(crate) enum LogFormat {
 /// The log level.
 #[derive(Deserialize, Debug, Default, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum LogLevel {
+pub enum LogLevel {
     Trace,
     Debug,
     #[default]
@@ -68,7 +68,7 @@ impl From<LogLevel> for EnvFilter {
 /// appropriate enum variant. If the string is not recognized to be either
 /// `stdout` or `stderr`, it is assumed to be a file path.
 #[derive(Debug, Clone, Default)]
-pub(crate) enum LogOutput {
+pub enum LogOutput {
     #[default]
     Stdout,
     Stderr,
@@ -95,7 +95,7 @@ impl LogOutput {
     /// Get a [`BoxMakeWriter`] for the log output.
     ///
     /// This can be used to plug the log output into the tracing subscriber.
-    pub(crate) fn as_make_writer(&self) -> BoxMakeWriter {
+    pub fn as_make_writer(&self) -> BoxMakeWriter {
         match self {
             LogOutput::Stdout => BoxMakeWriter::new(std::io::stdout),
             LogOutput::Stderr => BoxMakeWriter::new(std::io::stderr),

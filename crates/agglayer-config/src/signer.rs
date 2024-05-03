@@ -20,7 +20,7 @@ use super::error::ConfiguredSignerError;
 /// safe, so we cannot use a `Box<dyn Signer>`. As such, we define this enum to
 /// accommodate a runtime configured signer.
 #[derive(Debug)]
-pub(crate) enum ConfiguredSigner {
+pub enum ConfiguredSigner {
     Local(LocalWallet),
     GcpKms(GcpKmsSigner),
 }

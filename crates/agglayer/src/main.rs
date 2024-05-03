@@ -1,8 +1,8 @@
 use std::{future::IntoFuture, path::PathBuf};
 
+use agglayer_config::Config;
 use clap::Parser;
 use cli::Cli;
-use config::Config;
 use ethers::prelude::*;
 use jsonrpsee::server::Server;
 use kernel::Kernel;
@@ -11,7 +11,6 @@ use tokio::spawn;
 use tracing::{info, Instrument as _};
 
 mod cli;
-mod config;
 mod contracts;
 mod kernel;
 mod logging;

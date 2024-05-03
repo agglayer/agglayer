@@ -1,16 +1,12 @@
-[workspace]
-resolver = "2"
-default-members = ["crates/agglayer"]
-members = ["crates/*"]
+[package]
+name = "agglayer-config"
+version.workspace = true
+edition.workspace = true
 
-[workspace.package]
-version = "0.1.0"
-edition = "2021"
-
-[workspace.dependencies]
+[dependencies]
 tokio = { version = "1.36.0", features = ["full"] }
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tracing-appender = "0.2.3"
 clap = { version = "4.4.6", features = ["derive", "env"] }
 anyhow = "1.0.81"
@@ -33,6 +29,6 @@ opentelemetry_sdk = "0.22.1"
 opentelemetry-prometheus = "0.15.0"
 opentelemetry = "0.22.0"
 
-# [dev-dependencies]
-# jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.22.3" }
-# serde_json = "1.0.116"
+[features]
+default = []
+testutils = []

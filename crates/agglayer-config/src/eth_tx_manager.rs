@@ -21,31 +21,31 @@ use serde_with::{serde_as, NoneAsEmptyString};
 ///   load a service account JSON from this path.
 #[serde_as]
 #[derive(Deserialize, Debug)]
-#[cfg_attr(test, derive(Default))]
+#[cfg_attr(any(test, feature = "testutils"), derive(Default))]
 #[serde(rename_all = "PascalCase")]
-pub(crate) struct EthTxManager {
-    pub(crate) private_keys: Vec<PrivateKey>,
+pub struct EthTxManager {
+    pub private_keys: Vec<PrivateKey>,
     #[serde(rename = "KMSProjectId")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
-    pub(crate) kms_project_id: Option<String>,
+    pub kms_project_id: Option<String>,
     #[serde(rename = "KMSLocation")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
-    pub(crate) kms_location: Option<String>,
+    pub kms_location: Option<String>,
     #[serde(rename = "KMSKeyring")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
-    pub(crate) kms_keyring: Option<String>,
+    pub kms_keyring: Option<String>,
     #[serde(rename = "KMSKeyName")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
-    pub(crate) kms_key_name: Option<String>,
+    pub kms_key_name: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-pub(crate) struct PrivateKey {
-    pub(crate) path: PathBuf,
-    pub(crate) password: String,
+pub struct PrivateKey {
+    pub path: PathBuf,
+    pub password: String,
 }
