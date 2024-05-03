@@ -12,6 +12,7 @@ pub(crate) struct Log {
     #[serde(default)]
     pub(crate) level: LogLevel,
     pub(crate) outputs: Vec<LogOutput>,
+    #[serde(default)]
     pub(crate) format: LogFormat,
 }
 
