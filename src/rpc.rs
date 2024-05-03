@@ -71,7 +71,7 @@ where
             self.kernel
                 .verify_signature(&tx)
                 .map_err(|e| {
-                    error!(tx_hash, "failed to verify signature: {e}");
+                    error!(tx_hash, "Failed to verify the signature of transaction {tx_hash}: {e}");
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
@@ -80,7 +80,7 @@ where
             self.kernel
                 .verify_proof_eth_call(&tx)
                 .map_err(|e| {
-                    error!(tx_hash, "failed to verify proof eth_call: {e}");
+                    error!(tx_hash, "Failed to dry-run the verify_batches_trusted_aggregator for transaction {tx_hash}: {e}");
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
@@ -89,7 +89,7 @@ where
             self.kernel
                 .verify_proof_zkevm_node(&tx)
                 .map_err(|e| {
-                    error!(tx_hash, "failed to verify proof zkevm_node: {e}");
+                    error!(tx_hash, "Failed to verify the batch local_exit_root and state_root of transaction {tx_hash}: {e}");
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
@@ -99,7 +99,7 @@ where
 
         // Settle the proof on-chain and return the transaction hash.
         let receipt = self.kernel.settle(&tx).await.map_err(|e| {
-            error!(tx_hash, "Failed to settle transaction {tx_hash}: {e}");
+            error!(tx_hash, "Failed to settle transaction {tx_hash} on L1: {e}");
             internal_error(e.to_string())
         })?;
 
