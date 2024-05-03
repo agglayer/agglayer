@@ -27,6 +27,9 @@ hex = "0.4.3"
 axum = "0.7.5"
 prometheus = "0.13.3"
 lazy_static = "1.4.0"
+opentelemetry_sdk = "0.22.1"
+opentelemetry-prometheus = "0.15.0"
+opentelemetry = "0.22.0"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.22.3" }
