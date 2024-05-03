@@ -12,6 +12,17 @@ pub(crate) struct Log {
     #[serde(default)]
     pub(crate) level: LogLevel,
     pub(crate) outputs: Vec<LogOutput>,
+    #[serde(default)]
+    pub(crate) format: LogFormat,
+}
+
+/// The log format.
+#[derive(Deserialize, Debug, Default, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum LogFormat {
+    #[default]
+    Pretty,
+    Json,
 }
 
 /// The log level.

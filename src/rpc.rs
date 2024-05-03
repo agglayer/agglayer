@@ -51,6 +51,7 @@ where
     Rpc: Middleware + 'static,
 {
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
+        let tx_hash = tx.hash().to_string();
         let rollup_id_str = tx.tx.rollup_id.to_string();
         let metrics_attrs = &[KeyValue::new("rollup_id", rollup_id_str)];
 
@@ -70,7 +71,7 @@ where
             self.kernel
                 .verify_signature(&tx)
                 .map_err(|e| {
-                    error!("failed to verify signature: {e}");
+                    error!(tx_hash, "Failed to verify the signature of transaction {tx_hash}: {e}");
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
@@ -79,7 +80,7 @@ where
             self.kernel
                 .verify_proof_eth_call(&tx)
                 .map_err(|e| {
-                    error!("failed to verify proof eth_call: {e}");
+                    error!(tx_hash, "Failed to dry-run the verify_batches_trusted_aggregator for transaction {tx_hash}: {e}");
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
@@ -88,7 +89,7 @@ where
             self.kernel
                 .verify_proof_zkevm_node(&tx)
                 .map_err(|e| {
-                    error!("failed to verify proof zkevm_node: {e}");
+                    error!(tx_hash, "Failed to verify the batch local_exit_root and state_root of transaction {tx_hash}: {e}");
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
@@ -98,13 +99,13 @@ where
 
         // Settle the proof on-chain and return the transaction hash.
         let receipt = self.kernel.settle(&tx).await.map_err(|e| {
-            error!("failed to settle transaction: {e}");
+            error!(tx_hash, "Failed to settle transaction {tx_hash} on L1: {e}");
             internal_error(e.to_string())
         })?;
 
         crate::telemetry::SETTLE.add(1, metrics_attrs);
 
-        info!("transaction settled: {receipt:?}");
+        info!("Successfully settled transaction {tx_hash} => receipt {receipt:?}");
 
         Ok(receipt.transaction_hash)
     }
