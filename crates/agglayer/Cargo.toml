@@ -4,34 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-tokio = { version = "1.36.0", features = ["full"] }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
-tracing-appender = "0.2.3"
-clap = { version = "4.4.6", features = ["derive", "env"] }
-anyhow = "1.0.81"
-dotenvy = "0.15.7"
-ethers = "2.0.14"
-toml = "0.8.12"
-serde = { version = "1.0.197", features = ["derive"] }
-url = { version = "2.5.0", features = ["serde"] }
-thiserror = "1.0.58"
-futures = "0.3.30"
-jsonrpsee = { version = "0.22.3", features = ["full"] }
-ethers-gcp-kms-signer = "0.1.5"
-serde_with = "3.7.0"
-async-trait = "0.1.80"
-hex = "0.4.3"
-axum = "0.7.5"
-prometheus = "0.13.3"
-lazy_static = "1.4.0"
-opentelemetry_sdk = "0.22.1"
-opentelemetry-prometheus = "0.15.0"
-opentelemetry = "0.22.0"
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive", "env"] }
+dotenvy.workspace = true
+tokio = { workspace = true, features = ["full"] }
 
-agglayer-config = { path = "../agglayer-config" }
-
-[dev-dependencies]
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.22.3" }
-serde_json = "1.0.116"
-agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
+agglayer-node = { path = "../agglayer-node" }

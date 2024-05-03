@@ -1,8 +1,31 @@
 [package]
 name = "agglayer-node"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+axum.workspace = true
+ethers.workspace = true
+futures.workspace = true
+hex.workspace = true
+jsonrpsee = { workspace = true, features = ["full"] }
+lazy_static.workspace = true
+opentelemetry-prometheus.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+prometheus.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_with.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+toml.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing.workspace = true
+
+agglayer-config = { path = "../agglayer-config" }
+
+[dev-dependencies]
+jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.22.3" }
+serde_json = "1.0.116"
+agglayer-config = { path = "../agglayer-config", features = ["testutils"] }

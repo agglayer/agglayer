@@ -42,14 +42,37 @@ dependencies = [
 name = "agglayer"
 version = "0.1.0"
 dependencies = [
- "agglayer-config",
+ "agglayer-node",
  "anyhow",
- "async-trait",
- "axum 0.7.5",
  "clap",
  "dotenvy",
+ "tokio",
+]
+
+[[package]]
+name = "agglayer-config"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
  "ethers",
  "ethers-gcp-kms-signer",
+ "serde",
+ "serde_with",
+ "thiserror",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "agglayer-node"
+version = "0.1.0"
+dependencies = [
+ "agglayer-config",
+ "anyhow",
+ "axum 0.7.5",
+ "ethers",
  "futures",
  "hex",
  "jsonrpsee",
@@ -66,44 +89,8 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "tracing-appender",
  "tracing-subscriber",
- "url",
 ]
-
-[[package]]
-name = "agglayer-config"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum 0.7.5",
- "clap",
- "dotenvy",
- "ethers",
- "ethers-gcp-kms-signer",
- "futures",
- "hex",
- "jsonrpsee",
- "lazy_static",
- "opentelemetry",
- "opentelemetry-prometheus",
- "opentelemetry_sdk",
- "prometheus",
- "serde",
- "serde_with",
- "thiserror",
- "tokio",
- "toml",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "agglayer-node"
-version = "0.1.0"
 
 [[package]]
 name = "aho-corasick"
