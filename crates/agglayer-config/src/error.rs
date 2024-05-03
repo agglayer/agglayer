@@ -13,14 +13,3 @@ pub enum ConfigError {
     #[error("KMS configuration error: missing key or env {0}")]
     KmsConfig(String),
 }
-
-/// Errors that can occur when using a [`ConfiguredSigner`].
-///
-/// This is simply a union of either a [`WalletError`] or a [`CKMSError`].
-#[derive(Debug, Error)]
-pub enum ConfiguredSignerError {
-    #[error("wallet error: {0}")]
-    Wallet(WalletError),
-    #[error("KMS error: {0}")]
-    Kms(CKMSError),
-}

@@ -53,7 +53,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "agglayer-signer",
  "ethers",
  "ethers-gcp-kms-signer",
  "serde",
@@ -90,6 +90,16 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "agglayer-signer"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "ethers",
+ "ethers-gcp-kms-signer",
+ "thiserror",
 ]
 
 [[package]]

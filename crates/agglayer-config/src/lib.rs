@@ -5,16 +5,14 @@
 
 use std::collections::HashMap;
 
+use agglayer_signer::ConfiguredSigner;
 use ethers::signers::{LocalWallet, Signer};
 use ethers_gcp_kms_signer::{GcpKeyRingRef, GcpKmsProvider, GcpKmsSigner};
 use serde::Deserialize;
 use tracing::debug;
 use url::Url;
 
-use self::{
-    eth_tx_manager::PrivateKey, rpc::deserialize_rpc_map, signer::ConfiguredSigner,
-    telemetry::TelemetryConfig,
-};
+use self::{eth_tx_manager::PrivateKey, rpc::deserialize_rpc_map, telemetry::TelemetryConfig};
 
 pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
 
@@ -23,7 +21,6 @@ pub(crate) mod eth_tx_manager;
 pub(crate) mod l1;
 pub mod log;
 pub(crate) mod rpc;
-pub(crate) mod signer;
 pub(crate) mod telemetry;
 
 pub use error::ConfigError;

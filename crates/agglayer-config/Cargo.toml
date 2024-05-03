@@ -4,7 +4,6 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-async-trait.workspace = true
 ethers-gcp-kms-signer.workspace = true
 ethers.workspace = true
 serde = { workspace = true, features = ["derive"] }
@@ -14,6 +13,8 @@ tracing-appender.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing.workspace = true
 url = { workspace = true, features = ["serde"] }
+
+agglayer-signer = { path = "../agglayer-signer" }
 
 [features]
 default = []

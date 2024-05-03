@@ -1,15 +1,25 @@
 use async_trait::async_trait;
 use ethers::{
     abi::Address,
-    signers::{LocalWallet, Signer},
+    signers::{LocalWallet, Signer, WalletError},
     types::{
         transaction::{eip2718::TypedTransaction, eip712::Eip712},
         Signature,
     },
 };
-use ethers_gcp_kms_signer::GcpKmsSigner;
+use ethers_gcp_kms_signer::{CKMSError, GcpKmsSigner};
+use thiserror::Error;
 
-use super::error::ConfiguredSignerError;
+/// Errors that can occur when using a [`ConfiguredSigner`].
+///
+/// This is simply a union of either a [`WalletError`] or a [`CKMSError`].
+#[derive(Debug, Error)]
+pub enum ConfiguredSignerError {
+    #[error("wallet error: {0}")]
+    Wallet(WalletError),
+    #[error("KMS error: {0}")]
+    Kms(CKMSError),
+}
 
 /// A an ethers [`Signer`] that can house either a local keystore or a GCP KMS
 /// signer.
