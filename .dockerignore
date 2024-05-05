@@ -1,0 +1,11 @@
+# Ignore everything
+**
+
+# Allow Rust source code
+!src
+!crates
+!tests
+!Cargo.*
+!.git
+
+!LICENSE
