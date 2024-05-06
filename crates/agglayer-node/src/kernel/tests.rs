@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use agglayer_config::Config;
 use agglayer_config::L1;
 use ethers::core::utils;
@@ -60,7 +62,7 @@ async fn interop_executor_check_tx() {
 
     let (provider, _mock) = providers::Provider::mocked();
 
-    let kernel = Kernel::new(provider, config);
+    let kernel = Kernel::new(provider, Arc::new(config));
 
     let mut signed_tx = signed_tx();
 
@@ -82,7 +84,7 @@ async fn interop_executor_check_tx() {
 /// Test the verify_zkp method
 #[tokio::test]
 async fn interop_executor_verify_zkp() {
-    let config = Config::default();
+    let config = Arc::new(Config::default());
 
     let (provider, mock) = providers::Provider::mocked();
 
@@ -140,7 +142,7 @@ async fn interop_executor_verify_zkp() {
 /// Test that check if the verify_signature method
 #[tokio::test]
 async fn interop_executor_verify_signature() {
-    let config = Config::default();
+    let config = Arc::new(Config::default());
 
     let (provider, mock) = providers::Provider::mocked();
 
@@ -206,6 +208,8 @@ async fn interop_executor_verify_signature() {
 }
 
 mod interop_executor_execute {
+    use std::sync::Arc;
+
     use super::*;
 
     #[tokio::test]
@@ -232,7 +236,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, config);
+        let kernel = Kernel::new(provider, Arc::new(config));
 
         assert!(kernel.verify_proof_zkevm_node(&signed_tx).await.is_ok());
     }
@@ -257,7 +261,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, config);
+        let kernel = Kernel::new(provider, Arc::new(config));
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -289,7 +293,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, config);
+        let kernel = Kernel::new(provider, Arc::new(config));
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -322,7 +326,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, config);
+        let kernel = Kernel::new(provider, Arc::new(config));
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,

@@ -1,5 +1,6 @@
-use std::{collections::HashMap, net::Ipv4Addr, str::FromStr};
+use std::{collections::HashMap, net::Ipv4Addr, str::FromStr, time::Duration};
 
+use jsonrpsee::core::TEN_MB_SIZE_BYTES;
 use serde::{
     de::{MapAccess, Visitor},
     Deserialize, Deserializer,
@@ -19,6 +20,25 @@ pub struct RpcConfig {
     pub port: u16,
     #[serde(default = "default_host")]
     pub host: Ipv4Addr,
+
+    // Skip serialization of these fields as we don't need to expose them in the
+    // configuration yet.
+    /// The maximum size of the request body in bytes.
+    #[serde(skip, default = "default_body_size")]
+    pub max_request_body_size: u32,
+    /// The maximum size of the response body in bytes.
+    #[serde(skip, default = "default_body_size")]
+    pub max_response_body_size: u32,
+    /// The maximum number of connections.
+    #[serde(skip, default = "default_max_connections")]
+    pub max_connections: u32,
+    /// The maximum number of requests in a batch request. If `None`, the
+    /// batch request limit is unlimited.
+    #[serde(skip)]
+    pub batch_request_limit: Option<u32>,
+    /// The interval at which to send ping messages
+    #[serde(skip)]
+    pub ping_interval: Option<Duration>,
 }
 
 impl Default for RpcConfig {
@@ -26,8 +46,23 @@ impl Default for RpcConfig {
         Self {
             port: default_port(),
             host: default_host(),
+            max_request_body_size: default_body_size(),
+            max_response_body_size: default_body_size(),
+            max_connections: default_max_connections(),
+            batch_request_limit: None,
+            ping_interval: None,
         }
     }
+}
+
+/// The default maximum number of connections.
+fn default_max_connections() -> u32 {
+    100
+}
+
+/// The default size of the request and response bodies in bytes.
+fn default_body_size() -> u32 {
+    TEN_MB_SIZE_BYTES
 }
 
 /// The default port for the local RPC server.
