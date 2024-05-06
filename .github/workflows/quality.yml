@@ -19,6 +19,23 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
+
+  readme:
+    name: Readme - checking readme compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo readme
+        run: cargo install cargo-readme
+
+      - name: checking readme
+        run: ./scripts/quality/check_readme.sh
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
