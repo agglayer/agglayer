@@ -12,13 +12,13 @@ const DEFAULT_PORT: u16 = 9090;
 /// The local RPC server configuration.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-pub(crate) struct RpcConfig {
+pub struct RpcConfig {
     /// If the `PORT` environment variable is set, it will take precedence over
     /// the configuration file.
     #[serde(default = "default_port", deserialize_with = "deserialize_port")]
-    pub(crate) port: u16,
+    pub port: u16,
     #[serde(default = "default_host")]
-    pub(crate) host: Ipv4Addr,
+    pub host: Ipv4Addr,
 }
 
 impl Default for RpcConfig {

@@ -1,11 +1,13 @@
-[package]
-name = "agglayer"
+[workspace]
+resolver = "2"
+default-members = ["crates/agglayer"]
+members = ["crates/*"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+[workspace.dependencies]
 tokio = { version = "1.36.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
@@ -30,7 +32,3 @@ lazy_static = "1.4.0"
 opentelemetry_sdk = "0.22.1"
 opentelemetry-prometheus = "0.15.0"
 opentelemetry = "0.22.0"
-
-[dev-dependencies]
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.22.3" }
-serde_json = "1.0.116"

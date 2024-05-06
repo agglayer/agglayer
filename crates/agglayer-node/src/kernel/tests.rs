@@ -1,3 +1,5 @@
+use agglayer_config::Config;
+use agglayer_config::L1;
 use ethers::core::utils;
 use ethers::prelude::*;
 use ethers::signers::LocalWallet;
@@ -9,13 +11,11 @@ use ethers::{
 };
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
 
-use crate::config::L1;
 use crate::contracts::polygon_rollup_manager::{
     RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
 };
 use crate::contracts::polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn};
 use crate::{
-    config::Config,
     kernel::{Kernel, ZkevmNodeVerificationError},
     signed_tx::{Proof, SignedTx, HASH_LENGTH, PROOF_LENGTH},
     zkevm_node_client::BatchByNumberResponse,

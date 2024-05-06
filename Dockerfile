@@ -1,19 +1,31 @@
-FROM rust:slim-bullseye as builder
+FROM rust:slim-bullseye AS chef
+USER root
+RUN cargo install cargo-chef
+WORKDIR /app
 
-RUN mkdir -p src && echo "fn main() {}" > src/main.rs
+FROM chef AS planner
 
-COPY Cargo.toml .
-COPY Cargo.lock .
+COPY --link crates crates
+COPY --link Cargo.toml Cargo.toml
+COPY --link Cargo.lock Cargo.lock
 
-RUN cargo build --release
+RUN cargo chef prepare --recipe-path recipe.json
 
-COPY src ./src
-RUN touch src/main.rs
+FROM chef AS builder
 
-RUN cargo build --release
+COPY --from=planner /app/recipe.json recipe.json
+# Notice that we are specifying the --target flag!
+RUN cargo chef cook --release --recipe-path recipe.json
+
+COPY --link crates crates
+COPY --link Cargo.toml Cargo.toml
+COPY --link Cargo.lock Cargo.lock
+
+RUN cargo build --release --bin agglayer
 
 FROM debian:bullseye-slim
-RUN apt-get update && apt-get install -y ca-certificates
-COPY --from=builder ./target/release/agglayer /usr/local/bin/agglayer
 
-CMD ["agglayer"]
+RUN apt-get update && apt-get install -y ca-certificates
+COPY --from=builder /app/target/release/agglayer /usr/local/bin/
+
+CMD ["/usr/local/bin/agglayer"]

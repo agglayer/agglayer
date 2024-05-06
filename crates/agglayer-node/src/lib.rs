@@ -1,8 +1,6 @@
 use std::{future::IntoFuture, path::PathBuf};
 
-use clap::Parser;
-use cli::Cli;
-use config::Config;
+use agglayer_config::Config;
 use ethers::prelude::*;
 use jsonrpsee::server::Server;
 use kernel::Kernel;
@@ -10,8 +8,6 @@ use rpc::{AgglayerImpl, AgglayerServer};
 use tokio::spawn;
 use tracing::{info, Instrument as _};
 
-mod cli;
-mod config;
 mod contracts;
 mod kernel;
 mod logging;
@@ -22,7 +18,7 @@ mod zkevm_node_client;
 
 use telemetry::ServerBuilder as MetricsBuilder;
 
-async fn run(cfg: PathBuf) -> anyhow::Result<()> {
+pub async fn run(cfg: PathBuf) -> anyhow::Result<()> {
     let config: Config = toml::from_str(&std::fs::read_to_string(cfg)?)?;
     logging::tracing(&config.log);
 
@@ -50,19 +46,6 @@ async fn run(cfg: PathBuf) -> anyhow::Result<()> {
     let server = Server::builder().build(addr).await?;
     let handle = server.start(service);
     handle.stopped().await;
-
-    Ok(())
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-
-    let cli = Cli::parse();
-
-    match cli.cmd {
-        cli::Commands::Run { cfg } => run(cfg).await?,
-    }
 
     Ok(())
 }

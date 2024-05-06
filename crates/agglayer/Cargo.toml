@@ -1,0 +1,12 @@
+[package]
+name = "agglayer"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive", "env"] }
+dotenvy.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+agglayer-node = { path = "../agglayer-node" }

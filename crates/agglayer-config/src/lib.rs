@@ -5,64 +5,61 @@
 
 use std::collections::HashMap;
 
+use agglayer_signer::ConfiguredSigner;
 use ethers::signers::{LocalWallet, Signer};
 use ethers_gcp_kms_signer::{GcpKeyRingRef, GcpKmsProvider, GcpKmsSigner};
 use serde::Deserialize;
 use tracing::debug;
 use url::Url;
 
-use self::{
-    eth_tx_manager::PrivateKey, rpc::deserialize_rpc_map, signer::ConfiguredSigner,
-    telemetry::TelemetryConfig,
-};
+use self::{eth_tx_manager::PrivateKey, rpc::deserialize_rpc_map, telemetry::TelemetryConfig};
 
 pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
 
 pub(crate) mod error;
 pub(crate) mod eth_tx_manager;
 pub(crate) mod l1;
-pub(crate) mod log;
+pub mod log;
 pub(crate) mod rpc;
-pub(crate) mod signer;
 pub(crate) mod telemetry;
 
-pub(crate) use error::ConfigError;
-pub(crate) use eth_tx_manager::EthTxManager;
-pub(crate) use l1::L1;
-pub(crate) use log::Log;
-pub(crate) use rpc::RpcConfig;
+pub use error::ConfigError;
+pub use eth_tx_manager::EthTxManager;
+pub use l1::L1;
+pub use log::Log;
+pub use rpc::RpcConfig;
 
 /// The Agglayer configuration.
 #[derive(Deserialize, Debug)]
-#[cfg_attr(test, derive(Default))]
-pub(crate) struct Config {
+#[cfg_attr(any(test, feature = "testutils"), derive(Default))]
+pub struct Config {
     /// A map of Zkevm node RPC endpoints for each rollup.
     ///
     /// The key is the rollup ID, and the value is the URL of the associated RPC
     /// endpoint.
     #[serde(rename = "FullNodeRPCs", deserialize_with = "deserialize_rpc_map")]
-    pub(crate) full_node_rpcs: HashMap<u32, Url>,
+    pub full_node_rpcs: HashMap<u32, Url>,
     /// The log configuration.
     #[serde(rename = "Log")]
-    pub(crate) log: Log,
+    pub log: Log,
     /// The local RPC server configuration.
     #[serde(rename = "RPC")]
-    pub(crate) rpc: RpcConfig,
+    pub rpc: RpcConfig,
     /// The L1 configuration.
     #[serde(rename = "L1")]
-    pub(crate) l1: L1,
+    pub l1: L1,
     /// The transaction management configuration.
     #[serde(rename = "EthTxManager")]
-    pub(crate) eth_tx_manager: EthTxManager,
+    pub eth_tx_manager: EthTxManager,
 
     /// Telemetry configuration.
     #[serde(rename = "Telemetry")]
-    pub(crate) telemetry: TelemetryConfig,
+    pub telemetry: TelemetryConfig,
 }
 
 impl Config {
     /// Get the target RPC socket address from the configuration.
-    pub(crate) fn rpc_addr(&self) -> std::net::SocketAddr {
+    pub fn rpc_addr(&self) -> std::net::SocketAddr {
         std::net::SocketAddr::from((self.rpc.host, self.rpc.port))
     }
 
@@ -130,7 +127,7 @@ impl Config {
     /// 2. Otherwise, attempt use the local wallet.
     ///
     /// This logic is ported directly from the original agglayer Go codebase.
-    pub(crate) async fn get_configured_signer(&self) -> Result<ConfiguredSigner, ConfigError> {
+    pub async fn get_configured_signer(&self) -> Result<ConfiguredSigner, ConfigError> {
         if self.eth_tx_manager.kms_key_name.is_some() {
             debug!("Using GCP KMS signer");
             Ok(ConfiguredSigner::GcpKms(self.gcp_kms_signer().await?))

@@ -1,12 +1,12 @@
 //! The core logic of the agglayer.
 use std::sync::Arc;
 
+use agglayer_config::Config;
 use ethers::prelude::*;
 use thiserror::Error;
 use tracing::instrument;
 
 use crate::{
-    config::Config,
     contracts::{
         polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
         polygon_zk_evm::PolygonZkEvm,
