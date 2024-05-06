@@ -55,10 +55,12 @@ impl Default for RpcConfig {
     }
 }
 
+/// The default maximum number of connections.
 fn default_max_connections() -> u32 {
     100
 }
 
+/// The default size of the request and response bodies in bytes.
 fn default_body_size() -> u32 {
     TEN_MB_SIZE_BYTES
 }

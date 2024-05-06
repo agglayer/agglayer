@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
+use agglayer_config::Config;
 use ethers::{providers::Middleware, types::H256};
 use futures::TryFutureExt;
 use jsonrpsee::{
     core::{async_trait, RpcResult},
     proc_macros::rpc,
+    server::{middleware::http::ProxyGetRequestLayer, PingConfig, ServerBuilder, ServerHandle},
     types::{
         error::{INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, INVALID_PARAMS_CODE, INVALID_PARAMS_MSG},
         ErrorObject, ErrorObjectOwned,
@@ -10,12 +14,16 @@ use jsonrpsee::{
 };
 use opentelemetry::KeyValue;
 use tokio::try_join;
+use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
 use crate::{
     kernel::{Kernel, ZkevmNodeVerificationError},
     signed_tx::SignedTx,
 };
+
+#[cfg(test)]
+mod tests;
 
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
@@ -32,6 +40,70 @@ impl<Rpc> AgglayerImpl<Rpc> {
     /// Create an instance of the RPC agglayer service.
     pub(crate) fn new(kernel: Kernel<Rpc>) -> Self {
         Self { kernel }
+    }
+}
+impl<Rpc> AgglayerImpl<Rpc>
+where
+    Rpc: Middleware + 'static,
+{
+    pub(crate) async fn start(self, config: Arc<Config>) -> anyhow::Result<ServerHandle> {
+        // Create the RPC service
+        let mut service = self.into_rpc();
+
+        // Register the system_health method to serve health checks.
+        service.register_method("system_health", |_, _| {
+            println!("system_health");
+            serde_json::json!({ "health": true })
+        })?;
+
+        // Create the RPC server.
+        let mut server_builder = ServerBuilder::new()
+            // Set the maximum request body size. The default is 10MB.
+            .max_request_body_size(config.rpc.max_request_body_size)
+            // Set the maximum response body size. The default is 10MB.
+            .max_response_body_size(config.rpc.max_response_body_size)
+            // Set the maximum number of connections. The default is 100.
+            .max_connections(config.rpc.max_connections)
+            // Set the batch request limit. The default is unlimited.
+            .set_batch_request_config(match config.rpc.batch_request_limit {
+                None => jsonrpsee::server::BatchRequestConfig::Unlimited,
+                Some(0) => jsonrpsee::server::BatchRequestConfig::Disabled,
+                Some(n) => jsonrpsee::server::BatchRequestConfig::Limit(n),
+            });
+
+        // Enable WebSocket ping/pong with the configured interval.
+        // By default, pings are disabled.
+        if let Some(duration) = config.rpc.ping_interval {
+            server_builder =
+                server_builder.enable_ws_ping(PingConfig::default().ping_interval(duration));
+        }
+
+        // Create a CORS middleware to allow cross-origin requests.
+        let cors = CorsLayer::new()
+            .allow_methods([
+                hyper::Method::POST,
+                hyper::Method::GET,
+                hyper::Method::OPTIONS,
+            ])
+            .allow_origin(tower_http::cors::Any)
+            .allow_headers([hyper::header::CONTENT_TYPE]);
+
+        // Create a middleware stack with the CORS middleware and a proxy layer for
+        // health checks.
+        let middleware = tower::ServiceBuilder::new()
+            .layer(ProxyGetRequestLayer::new("/health", "system_health")?)
+            .layer(cors);
+
+        let addr = config.rpc_addr();
+
+        let server = server_builder
+            .set_http_middleware(middleware)
+            .build(addr)
+            .await?;
+
+        info!("Listening on {addr}");
+
+        Ok(server.start(service))
     }
 }
 
