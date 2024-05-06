@@ -9,6 +9,8 @@ axum.workspace = true
 ethers.workspace = true
 futures.workspace = true
 hex.workspace = true
+# Fixed until jsonrpsee update to hyper 1.0
+hyper = "0.14.20"
 jsonrpsee = { workspace = true, features = ["full"] }
 lazy_static.workspace = true
 opentelemetry-prometheus.workspace = true
@@ -16,11 +18,15 @@ opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 prometheus.workspace = true
 serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 serde_with.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 toml.workspace = true
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
+# Fixed until jsonrpsee update to hyper 1.0
+tower-http = { version = "0.4.0", features = ["full"] }
+tower.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 tracing.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }

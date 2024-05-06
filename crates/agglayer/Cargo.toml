@@ -10,3 +10,4 @@ dotenvy.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
 agglayer-node = { path = "../agglayer-node" }
+tower = { workspace = true, features = ["full"] }

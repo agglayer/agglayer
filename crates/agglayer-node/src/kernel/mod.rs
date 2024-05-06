@@ -28,7 +28,7 @@ mod tests;
 #[derive(Debug)]
 pub(crate) struct Kernel<RpcProvider> {
     rpc: Arc<RpcProvider>,
-    config: Config,
+    config: Arc<Config>,
 }
 
 /// Errors related to the ZkEVM node proof verification process.
@@ -50,7 +50,7 @@ pub(crate) enum ZkevmNodeVerificationError {
 }
 
 impl<RpcProvider> Kernel<RpcProvider> {
-    pub(crate) fn new(rpc: RpcProvider, config: Config) -> Self {
+    pub(crate) fn new(rpc: RpcProvider, config: Arc<Config>) -> Self {
         Self {
             rpc: Arc::new(rpc),
             config,

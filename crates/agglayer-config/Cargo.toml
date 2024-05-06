@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 ethers-gcp-kms-signer.workspace = true
 ethers.workspace = true
+jsonrpsee.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
 thiserror.workspace = true

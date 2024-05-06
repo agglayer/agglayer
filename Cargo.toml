@@ -8,27 +8,29 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-tokio = { version = "1.36.0", features = ["full"] }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
-tracing-appender = "0.2.3"
-clap = { version = "4.4.6", features = ["derive", "env"] }
 anyhow = "1.0.81"
+async-trait = "0.1.80"
+axum = "0.7.5"
+clap = { version = "4.4.6", features = ["derive", "env"] }
 dotenvy = "0.15.7"
 ethers = "2.0.14"
-toml = "0.8.12"
-serde = { version = "1.0.197", features = ["derive"] }
-url = { version = "2.5.0", features = ["serde"] }
-thiserror = "1.0.58"
-futures = "0.3.30"
-jsonrpsee = { version = "0.22.3", features = ["full"] }
 ethers-gcp-kms-signer = "0.1.5"
-serde_with = "3.7.0"
-async-trait = "0.1.80"
+futures = "0.3.30"
 hex = "0.4.3"
-axum = "0.7.5"
-prometheus = "0.13.3"
+jsonrpsee = { version = "0.22.5", features = ["full"] }
 lazy_static = "1.4.0"
-opentelemetry_sdk = "0.22.1"
-opentelemetry-prometheus = "0.15.0"
 opentelemetry = "0.22.0"
+opentelemetry-prometheus = "0.15.0"
+opentelemetry_sdk = "0.22.1"
+prometheus = "0.13.3"
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.116"
+serde_with = "3.7.0"
+thiserror = "1.0.58"
+tokio = { version = "1.36.0", features = ["full"] }
+toml = "0.8.12"
+tower = "0.4.13"
+tracing = "0.1.40"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+url = { version = "2.5.0", features = ["serde"] }
