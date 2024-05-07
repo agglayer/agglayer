@@ -28,8 +28,8 @@ jobs:
       - name: Install cargo-sonar and run Clippy
         run: |
             cargo install cargo-sonar
-            cargo clippy --message-format json > clippy-report.json
-            cargo sonar --clippy --clippy-path clippy-report.json
+            cargo clippy --all-features --all-targets --message-format=json > clippy.json
+            cargo sonar --clippy
 
       - name: Build with coverage
         env:
