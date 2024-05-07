@@ -57,5 +57,3 @@ jobs:
         with:
           args: >
             -Dsonar.externalIssuesReportPaths=sonar-issues.json
-            -Dcommunity.rust.lcov.reportPaths=coverage.lcov
-            -Dsonar.scm.exclusions.disabled=true
