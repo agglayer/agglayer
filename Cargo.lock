@@ -51,6 +51,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-clock"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
@@ -71,6 +81,7 @@ dependencies = [
 name = "agglayer-node"
 version = "0.1.0"
 dependencies = [
+ "agglayer-clock",
  "agglayer-config",
  "anyhow",
  "axum 0.7.5",
