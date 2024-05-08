@@ -37,6 +37,7 @@ pub fn main(cfg: PathBuf) -> Result<()> {
 
     let metrics_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("metrics-runtime")
+        .worker_threads(2)
         .enable_all()
         .build()?;
 
