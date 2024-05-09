@@ -7,10 +7,15 @@ use ethers::{
     middleware::MiddlewareBuilder as _,
     providers::{Http, Provider},
 };
+use tokio::{join, task::JoinHandle};
+use tokio_util::sync::CancellationToken;
+use tracing::debug;
 
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
-pub(crate) struct Node {}
+pub(crate) struct Node {
+    rpc_handle: JoinHandle<()>,
+}
 
 #[buildstructor::buildstructor]
 impl Node {
@@ -49,7 +54,10 @@ impl Node {
     /// - The RPC server failed to start.
     /// - The [`TimeClock`] failed to start.
     #[builder(entry = "builder", exit = "start", visibility = "pub(crate)")]
-    pub(crate) async fn start(config: Arc<Config>) -> Result<()> {
+    pub(crate) async fn start(
+        config: Arc<Config>,
+        cancellation_token: CancellationToken,
+    ) -> Result<Self> {
         // Create a new L1 RPC provider with the configured signer.
         let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
             .with_signer(config.get_configured_signer().await?);
@@ -76,8 +84,22 @@ impl Node {
         // Bind the core to the RPC server.
         let server_handle = AgglayerImpl::new(core).start(config).await?;
 
-        server_handle.stopped().await;
+        let rpc_handle = tokio::spawn(async move {
+            tokio::select! {
+                _ = server_handle.stopped() => {},
+                _ = cancellation_token.cancelled() => {
+                    debug!("Node shutdown requested.");
+                }
+            }
+        });
 
-        Ok(())
+        let node = Self { rpc_handle };
+
+        Ok(node)
+    }
+
+    pub(crate) async fn await_shutdown(self) {
+        _ = join!(self.rpc_handle);
+        debug!("Node shutdown complete.");
     }
 }

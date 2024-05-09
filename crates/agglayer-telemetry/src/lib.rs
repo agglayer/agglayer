@@ -4,14 +4,15 @@ use axum::{
     extract::State,
     http::{Response, StatusCode},
     routing::get,
-    serve::Serve,
+    serve::WithGracefulShutdown,
     Router,
 };
 use lazy_static::lazy_static;
 use opentelemetry::global;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::{Encoder as _, Registry, TextEncoder};
-use tracing::info;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, info};
 
 use crate::{
     constant::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_NAME},
@@ -103,7 +104,15 @@ impl ServerBuilder {
     pub async fn serve(
         addr: SocketAddr,
         registry: Option<Registry>,
-    ) -> Result<Serve<axum::routing::IntoMakeService<Router>, axum::Router>, Error> {
+        cancellation_token: CancellationToken,
+    ) -> Result<
+        WithGracefulShutdown<
+            axum::routing::IntoMakeService<Router>,
+            axum::Router,
+            impl futures::Future<Output = ()>,
+        >,
+        Error,
+    > {
         let registry = registry.unwrap_or_default();
         let _ = Self::init_meter_provider(&registry);
 
@@ -125,7 +134,9 @@ impl ServerBuilder {
         info!("Starting metrics server on {}", addr);
 
         let listener = tokio::net::TcpListener::bind(addr).await?;
-        Ok(axum::serve(listener, app.into_make_service()))
+
+        Ok(axum::serve(listener, app.into_make_service())
+            .with_graceful_shutdown(shutdown_signal(cancellation_token)))
     }
 
     fn init_meter_provider(registry: &Registry) -> Result<(), MetricsError> {
@@ -149,5 +160,13 @@ impl ServerBuilder {
         encoder.encode(&metric_families, &mut result)?;
 
         Ok(String::from_utf8(result)?)
+    }
+}
+
+async fn shutdown_signal(cancelation: CancellationToken) {
+    tokio::select! {
+        _ = cancelation.cancelled() => {
+            debug!("Shutting down metrics server...");
+        },
     }
 }
