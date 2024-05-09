@@ -1,7 +1,7 @@
 //! This crate is responsible for managing the clock pace.
 //!
-//! The Clock is responsible of giving informations about Epoch timing by
-//! exposing reference to the data and by broadcasting `EpochChange` events.
+//! The Clock is responsible for providing information about Epoch timing by
+//! exposing references to the data and by broadcasting `EpochChange` events.
 
 use std::sync::{atomic::AtomicU64, Arc};
 

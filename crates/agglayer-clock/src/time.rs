@@ -1,4 +1,5 @@
 use std::{
+    num::NonZeroU64,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -21,7 +22,7 @@ use crate::{Clock, ClockRef, Error, Event, BROADCAST_CHANNEL_SIZE};
 pub struct TimeClock {
     genesis: DateTime<Utc>,
     current_block: Arc<AtomicU64>,
-    epoch_duration: u64,
+    epoch_duration: NonZeroU64,
     current_epoch: Arc<AtomicU64>,
 }
 
@@ -60,13 +61,13 @@ impl Clock for TimeClock {
 impl TimeClock {
     /// Create a new TimeClock instance based on the current datetime and an
     /// epoch.
-    pub fn new_now(epoch_duration: u64) -> Self {
+    pub fn new_now(epoch_duration: NonZeroU64) -> Self {
         Self::new(Utc::now(), epoch_duration)
     }
 
-    /// Create a new TimeClock instance based on a genesis datatime and an epoch
+    /// Create a new TimeClock instance based on a genesis datetime and an epoch
     /// duration.
-    pub fn new(genesis: DateTime<Utc>, epoch_duration: u64) -> Self {
+    pub fn new(genesis: DateTime<Utc>, epoch_duration: NonZeroU64) -> Self {
         let mut clock = Self {
             genesis,
             current_block: Arc::new(AtomicU64::new(0)),
@@ -133,6 +134,8 @@ impl TimeClock {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU64;
+
     use chrono::{Duration, Utc};
 
     use crate::{Clock, Event, TimeClock};
@@ -143,7 +146,7 @@ mod tests {
             .checked_sub_signed(Duration::seconds(30))
             .unwrap();
 
-        let clock = TimeClock::new(genesis, 5);
+        let clock = TimeClock::new(genesis, NonZeroU64::new(5).unwrap());
         let current_block = clock.block_ref();
         let current_epoch = clock.epoch_ref();
 
@@ -161,7 +164,7 @@ mod tests {
             .checked_sub_signed(Duration::seconds(30))
             .unwrap();
 
-        let clock = TimeClock::new(genesis, 2);
+        let clock = TimeClock::new(genesis, NonZeroU64::new(2).unwrap());
         let current_block = clock.block_ref();
         let current_epoch = clock.epoch_ref();
 

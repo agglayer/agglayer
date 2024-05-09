@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{num::NonZeroU64, sync::Arc};
 
 use agglayer_clock::{Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
@@ -60,7 +60,12 @@ impl Node {
         // Spawn the time clock.
         let (_clock_ref, _epoch_ref) = match &config.epoch {
             Epoch::TimeClock(cfg) => {
-                let clock = TimeClock::new_now(cfg.epoch_duration.as_secs());
+                let duration =
+                    NonZeroU64::new(cfg.epoch_duration.as_secs()).ok_or(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "EpochDuration is invalid",
+                    ))?;
+                let clock = TimeClock::new_now(duration);
 
                 let epoch_ref = clock.epoch_ref();
 
