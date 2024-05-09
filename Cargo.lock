@@ -54,6 +54,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
+ "agglayer-gcp-kms",
  "agglayer-signer",
  "ethers",
  "ethers-gcp-kms-signer",
@@ -65,6 +66,17 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "agglayer-gcp-kms"
+version = "0.1.0"
+dependencies = [
+ "ethers",
+ "ethers-gcp-kms-signer",
+ "serde",
+ "serde_with",
+ "thiserror",
 ]
 
 [[package]]
@@ -101,6 +113,7 @@ dependencies = [
 name = "agglayer-signer"
 version = "0.1.0"
 dependencies = [
+ "agglayer-gcp-kms",
  "async-trait",
  "ethers",
  "ethers-gcp-kms-signer",

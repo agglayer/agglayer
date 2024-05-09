@@ -14,11 +14,14 @@ ChainID = 1337
 NodeURL = "https://rpc-cdk-validium-cardona-03-zkevm.polygondev.tools"
 RollupManagerContract = "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff"
 
-[EthTxManager]
+[Local]
 PrivateKeys = [{ Path = "/pk/agglayer.keystore", Password = "testonly" }]
-KMSProjectId = ""
-KMSLocation = ""
-KMSKeyring = ""
-KMSKeyName = ""
+
+[KMS]
+Provider = ""
+ProjectId = ""
+Location = ""
+Keyring = ""
+KeyName = ""
 
 [Telemetry]

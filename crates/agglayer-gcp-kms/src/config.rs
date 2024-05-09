@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
 
@@ -7,7 +5,7 @@ use serde_with::{serde_as, NoneAsEmptyString};
 ///
 /// Generally allows specification of transaction signing behavior.
 ///
-/// If a KMS key name is specified, the program will attempt to use a GCP KMS
+/// If a KMS Provider is gcp, the program will attempt to use a GCP KMS
 /// signer. Otherwise, the program will attempt to use a local keystore signer.
 /// The program will first attempt to populate the KMS specific configuration
 /// values from the canonical environment variables, and if they are not set, it
@@ -20,32 +18,27 @@ use serde_with::{serde_as, NoneAsEmptyString};
 /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment is set, attempt to
 ///   load a service account JSON from this path.
 #[serde_as]
-#[derive(Deserialize, Debug)]
-#[cfg_attr(any(test, feature = "testutils"), derive(Default))]
+#[derive(Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "PascalCase")]
-pub struct EthTxManager {
-    pub private_keys: Vec<PrivateKey>,
-    #[serde(rename = "KMSProjectId")]
+pub struct KmsConfig {
+    #[serde(rename = "Provider")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
-    pub kms_project_id: Option<String>,
-    #[serde(rename = "KMSLocation")]
+    pub provider: Option<String>,
+    #[serde(rename = "ProjectId")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
-    pub kms_location: Option<String>,
-    #[serde(rename = "KMSKeyring")]
+    pub project_id: Option<String>,
+    #[serde(rename = "Location")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
-    pub kms_keyring: Option<String>,
-    #[serde(rename = "KMSKeyName")]
+    pub location: Option<String>,
+    #[serde(rename = "Keyring")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
-    pub kms_key_name: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct PrivateKey {
-    pub path: PathBuf,
-    pub password: String,
+    pub keyring: Option<String>,
+    #[serde(rename = "KeyName")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
+    pub key_name: Option<String>,
 }

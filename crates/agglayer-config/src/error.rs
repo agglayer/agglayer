@@ -1,5 +1,5 @@
+use agglayer_gcp_kms::KmsError;
 use ethers::signers::WalletError;
-use ethers_gcp_kms_signer::CKMSError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -8,8 +8,6 @@ pub enum ConfigError {
     NoPk,
     #[error("keystore error: {0}")]
     Wallet(#[from] WalletError),
-    #[error("KMS Provider error: {0}")]
-    KmsProvider(#[from] CKMSError),
-    #[error("KMS configuration error: missing key or env {0}")]
-    KmsConfig(String),
+    #[error("KMS error: {0}")]
+    Kms(#[from] KmsError),
 }

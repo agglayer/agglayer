@@ -1,8 +1,9 @@
 //! This crate provides a [`Signer`](trait@ethers::signers::Signer)
-//! implementation that can house either a local keystore or a GCP KMS signer.
+//! implementation that can house either a local keystore or a KMS signer.
 //! (more signers can be added in the future)
 //!
 //! See: [`ConfiguredSigner`](enum@ConfiguredSigner)
+use agglayer_gcp_kms::{KmsError, KmsSigner};
 use async_trait::async_trait;
 use ethers::{
     abi::Address,
@@ -12,21 +13,20 @@ use ethers::{
         Signature,
     },
 };
-use ethers_gcp_kms_signer::{CKMSError, GcpKmsSigner};
 use thiserror::Error;
 
 /// Errors that can occur when using a [`ConfiguredSigner`].
 ///
-/// This is simply a union of either a [`WalletError`] or a [`CKMSError`].
+/// This is simply a union of either a [`WalletError`] or a [`KmsError`].
 #[derive(Debug, Error)]
 pub enum ConfiguredSignerError {
     #[error("wallet error: {0}")]
     Wallet(WalletError),
     #[error("KMS error: {0}")]
-    Kms(CKMSError),
+    Kms(KmsError),
 }
 
-/// A an ethers [`Signer`] that can house either a local keystore or a GCP KMS
+/// A an ethers [`Signer`] that can house either a local keystore or a KMS
 /// signer.
 ///
 /// An ethers [`Provider`][ethers::prelude::Provider] using a
@@ -37,7 +37,7 @@ pub enum ConfiguredSignerError {
 #[derive(Debug)]
 pub enum ConfiguredSigner {
     Local(LocalWallet),
-    GcpKms(GcpKmsSigner),
+    Kms(KmsSigner),
 }
 
 /// [`Signer`] implementation for [`ConfiguredSigner`].
@@ -56,10 +56,10 @@ impl Signer for ConfiguredSigner {
                 .sign_message(message)
                 .await
                 .map_err(ConfiguredSignerError::Wallet),
-            ConfiguredSigner::GcpKms(signer) => signer
+            ConfiguredSigner::Kms(signer) => signer
                 .sign_message(message)
                 .await
-                .map_err(ConfiguredSignerError::Kms),
+                .map_err(|err| ConfiguredSignerError::Kms(err)),
         }
     }
 
@@ -70,10 +70,10 @@ impl Signer for ConfiguredSigner {
                 .sign_transaction(message)
                 .await
                 .map_err(ConfiguredSignerError::Wallet),
-            ConfiguredSigner::GcpKms(signer) => signer
+            ConfiguredSigner::Kms(signer) => signer
                 .sign_transaction(message)
                 .await
-                .map_err(ConfiguredSignerError::Kms),
+                .map_err(|err| ConfiguredSignerError::Kms(err)),
         }
     }
 
@@ -88,10 +88,10 @@ impl Signer for ConfiguredSigner {
                 .sign_typed_data(payload)
                 .await
                 .map_err(ConfiguredSignerError::Wallet),
-            ConfiguredSigner::GcpKms(signer) => signer
+            ConfiguredSigner::Kms(signer) => signer
                 .sign_typed_data(payload)
                 .await
-                .map_err(ConfiguredSignerError::Kms),
+                .map_err(|err| ConfiguredSignerError::Kms(err)),
         }
     }
 
@@ -99,7 +99,7 @@ impl Signer for ConfiguredSigner {
     fn address(&self) -> Address {
         match self {
             ConfiguredSigner::Local(wallet) => wallet.address(),
-            ConfiguredSigner::GcpKms(signer) => signer.address(),
+            ConfiguredSigner::Kms(signer) => signer.address(),
         }
     }
 
@@ -107,7 +107,7 @@ impl Signer for ConfiguredSigner {
     fn chain_id(&self) -> u64 {
         match self {
             ConfiguredSigner::Local(wallet) => wallet.chain_id(),
-            ConfiguredSigner::GcpKms(signer) => signer.chain_id(),
+            ConfiguredSigner::Kms(signer) => signer.chain_id(),
         }
     }
 
@@ -118,9 +118,7 @@ impl Signer for ConfiguredSigner {
             ConfiguredSigner::Local(wallet) => {
                 ConfiguredSigner::Local(wallet.with_chain_id(chain_id))
             }
-            ConfiguredSigner::GcpKms(signer) => {
-                ConfiguredSigner::GcpKms(signer.with_chain_id(chain_id))
-            }
+            ConfiguredSigner::Kms(signer) => ConfiguredSigner::Kms(signer.with_chain_id(chain_id)),
         }
     }
 }
