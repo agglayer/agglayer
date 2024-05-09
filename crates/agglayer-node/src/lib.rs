@@ -1,11 +1,8 @@
 use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 
 use agglayer_config::Config;
-use ethers::prelude::*;
-use kernel::Kernel;
-use rpc::AgglayerImpl;
-use tokio::spawn;
-use tracing::{info, Instrument as _};
+use anyhow::Result;
+use node::Node;
 
 mod contracts;
 mod kernel;
@@ -15,34 +12,48 @@ mod signed_tx;
 mod telemetry;
 mod zkevm_node_client;
 
+mod node;
+
 use telemetry::ServerBuilder as MetricsBuilder;
 
-pub async fn run(cfg: PathBuf) -> anyhow::Result<()> {
+/// This is the main node entrypoint.
+///
+/// This function starts everything needed to run an Agglayer node.
+/// Starting by a Tokio runtime which can be used by the different components.
+/// The configuration file is parsed and used to configure the node.
+///
+/// This function returns on fatal error or after graceful shutdown has
+/// completed.
+pub fn main(cfg: PathBuf) -> Result<()> {
+    // Load the configuration file
     let config: Arc<Config> = Arc::new(toml::from_str(&std::fs::read_to_string(cfg)?)?);
+
+    // Initialize the logger
     logging::tracing(&config.log);
 
-    let telemetry_addr = config.telemetry.addr;
+    let node_runtime = tokio::runtime::Builder::new_multi_thread()
+        .thread_name("agglayer-node-runtime")
+        .enable_all()
+        .build()?;
 
-    // Create a new L1 RPC provider with the configured signer.
-    let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
-        .with_signer(config.get_configured_signer().await?);
+    let metrics_runtime = tokio::runtime::Builder::new_multi_thread()
+        .thread_name("metrics-runtime")
+        .enable_all()
+        .build()?;
 
-    // Construct the core.
-    let core = Kernel::new(rpc, config.clone());
+    // Spawn the metrics server
+    metrics_runtime.spawn(
+        metrics_runtime
+            .block_on(
+                MetricsBuilder::builder()
+                    .addr(config.telemetry.addr)
+                    .build(),
+            )?
+            .into_future(),
+    );
 
-    info!("Serving metrics on {}", telemetry_addr);
-    let metrics_server = MetricsBuilder::default()
-        .serve_addr(Some(telemetry_addr))
-        .build()
-        .in_current_span()
-        .await?;
-
-    let _metrics_handler = spawn(metrics_server.into_future());
-
-    // Bind the core to the RPC server.
-    let server_handle = AgglayerImpl::new(core).start(config).await?;
-
-    server_handle.stopped().await;
+    // Spawn the node
+    node_runtime.block_on(Node::builder().config(config).start())?;
 
     Ok(())
 }
