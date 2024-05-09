@@ -19,13 +19,13 @@ const BROADCAST_CHANNEL_SIZE: usize = 100;
 pub trait Clock {
     /// Compute Epoch/Block numbers and spawn the clock task.
     async fn spawn(self) -> Result<ClockRef, Error>;
-    /// Return a reference to the current block number
+    /// Return a reference to the current block number.
     fn block_ref(&self) -> Arc<AtomicU64>;
-    /// Return a reference to the current epoch number
+    /// Return a reference to the current epoch number.
     fn epoch_ref(&self) -> Arc<AtomicU64>;
 }
 
-/// The ClockRef is a reference to the Clock instance
+/// The ClockRef is a reference to the Clock instance.
 pub struct ClockRef {
     pub(crate) sender: broadcast::Sender<Event>,
 }
@@ -42,13 +42,13 @@ impl ClockRef {
     }
 }
 
-/// Events broadcasted by the Clock
+/// Events broadcasted by the Clock.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
-    /// Notify an Epoch change with the associated epoch_number
+    /// Notify an Epoch change with the associated epoch_number.
     EpochChange(u64),
 }
 
-/// Errors that can be returned by the Clock
+/// Errors that can be returned by the Clock.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {}

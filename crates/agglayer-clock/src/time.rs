@@ -59,7 +59,7 @@ impl Clock for TimeClock {
 
 impl TimeClock {
     /// Create a new TimeClock instance based on the current datetime and an
-    /// epoch
+    /// epoch.
     pub fn new_now(epoch_duration: u64) -> Self {
         Self::new(Utc::now(), epoch_duration)
     }
