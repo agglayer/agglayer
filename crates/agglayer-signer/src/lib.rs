@@ -59,7 +59,7 @@ impl Signer for ConfiguredSigner {
             ConfiguredSigner::Kms(signer) => signer
                 .sign_message(message)
                 .await
-                .map_err(|err| ConfiguredSignerError::Kms(err)),
+                .map_err(ConfiguredSignerError::Kms),
         }
     }
 
@@ -73,7 +73,7 @@ impl Signer for ConfiguredSigner {
             ConfiguredSigner::Kms(signer) => signer
                 .sign_transaction(message)
                 .await
-                .map_err(|err| ConfiguredSignerError::Kms(err)),
+                .map_err(ConfiguredSignerError::Kms),
         }
     }
 
@@ -91,7 +91,7 @@ impl Signer for ConfiguredSigner {
             ConfiguredSigner::Kms(signer) => signer
                 .sign_typed_data(payload)
                 .await
-                .map_err(|err| ConfiguredSignerError::Kms(err)),
+                .map_err(ConfiguredSignerError::Kms),
         }
     }
 
