@@ -45,6 +45,7 @@ pub fn main(cfg: PathBuf) -> Result<()> {
         .enable_all()
         .build()?;
 
+    // Create the metrics server.
     let metric_server = metrics_runtime.block_on(
         MetricsBuilder::builder()
             .addr(config.telemetry.addr)
@@ -52,13 +53,18 @@ pub fn main(cfg: PathBuf) -> Result<()> {
             .build(),
     )?;
 
+    // Spawn the metrics server into the metrics runtime.
     let metrics_handle = {
+        // This guard is used to ensure that the metrics runtime is entered
+        // before the server is spawned. This is necessary because the `into_future`
+        // of `WithGracefulShutdown` is spawning various tasks before returning the
+        // actual server instance to spawn.
         let _guard = metrics_runtime.enter();
         // Spawn the metrics server
         metrics_runtime.spawn(metric_server.into_future())
     };
 
-    // Spawn the node
+    // Spawn the node.
     let node = node_runtime.block_on(
         Node::builder()
             .config(config)
@@ -73,8 +79,11 @@ pub fn main(cfg: PathBuf) -> Result<()> {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
                     info!("Received SIGINT (ctrl-c), shutting down...");
+                    // Cancel the global cancellation token to start the shutdown process.
                     global_cancellation_token.cancel();
+                    // Wait for the node to shutdown.
                     node.await_shutdown().await;
+                    // Wait for the metrics server to shutdown.
                     _ = metrics_handle.await;
                 }
             }
