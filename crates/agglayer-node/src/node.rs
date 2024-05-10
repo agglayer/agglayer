@@ -47,7 +47,7 @@ impl Node {
     /// - The L1 node URL is invalid.
     /// - The configured signer is invalid.
     /// - The RPC server failed to start.
-    /// - The time clock failed to start.
+    /// - The [`TimeClock`] failed to start.
     #[builder(entry = "builder", exit = "start", visibility = "pub(crate)")]
     pub(crate) async fn start(config: Arc<Config>) -> Result<()> {
         // Create a new L1 RPC provider with the configured signer.
@@ -57,7 +57,7 @@ impl Node {
         // Construct the core.
         let core = Kernel::new(rpc, config.clone());
 
-        // Spawn the time clock.
+        // Spawn the TimeClock.
         let (_clock_ref, _epoch_ref) = match &config.epoch {
             Epoch::TimeClock(cfg) => {
                 let duration =

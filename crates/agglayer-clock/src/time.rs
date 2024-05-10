@@ -15,10 +15,10 @@ use tokio::{
 
 use crate::{Clock, ClockRef, Error, Event, BROADCAST_CHANNEL_SIZE};
 
-/// Time based clock implementation.
+/// Time based [`Clock`] implementation.
 ///
 /// Simulate blockchain block production by increasing block number by 1 every
-/// second. Epoch duration can be configured when creating the clock.
+/// second. Epoch duration can be configured when creating the Clock.
 pub struct TimeClock {
     genesis: DateTime<Utc>,
     current_block: Arc<AtomicU64>,
@@ -28,12 +28,6 @@ pub struct TimeClock {
 
 #[async_trait::async_trait]
 impl Clock for TimeClock {
-    /// Spawn the clock task.
-    ///
-    /// # Errors
-    ///
-    /// This function can't fail but return a Result for convenience and future
-    /// evolution.
     async fn spawn(mut self) -> Result<ClockRef, Error> {
         let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
 
@@ -60,12 +54,12 @@ impl Clock for TimeClock {
 
 impl TimeClock {
     /// Create a new TimeClock instance based on the current datetime and an
-    /// epoch.
+    /// Epoch.
     pub fn new_now(epoch_duration: NonZeroU64) -> Self {
         Self::new(Utc::now(), epoch_duration)
     }
 
-    /// Create a new TimeClock instance based on a genesis datetime and an epoch
+    /// Create a new TimeClock instance based on a genesis datetime and an Epoch
     /// duration.
     pub fn new(genesis: DateTime<Utc>, epoch_duration: NonZeroU64) -> Self {
         let mut clock = Self {
@@ -81,7 +75,7 @@ impl TimeClock {
         clock
     }
 
-    /// Run the clock task.
+    /// Run the Clock task.
     async fn run(&mut self, sender: broadcast::Sender<Event>) {
         let mut interval = interval_at(Instant::now(), Duration::from_secs(1));
 
@@ -117,13 +111,13 @@ impl TimeClock {
         self.current_block.store(blocks, Ordering::Relaxed);
     }
 
-    /// Computes the current epoch of this [`TimeClock`].
+    /// Computes the current Epoch of this [`TimeClock`].
     ///
-    /// This method is used to compute the current epoch number based on the
-    /// current block number and the epoch duration.
+    /// This method is used to compute the current Epoch number based on the
+    /// current block number and the Epoch duration.
     ///
-    /// To define the current epoch number, the current block number is divided
-    /// by the epoch duration.
+    /// To define the current Epoch number, the current block number is divided
+    /// by the Epoch duration.
     fn compute_epoch(&mut self) {
         self.current_epoch.store(
             self.current_block.load(Ordering::Relaxed) / self.epoch_duration,

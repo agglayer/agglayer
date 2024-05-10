@@ -24,7 +24,7 @@ mod tests;
 /// network components in a simplified manner.
 ///
 /// In the future, it may provide functionality for proof aggregation,
-/// batching, epoch management, among other things.
+/// batching, Epoch management, among other things.
 #[derive(Debug)]
 pub(crate) struct Kernel<RpcProvider> {
     rpc: Arc<RpcProvider>,

@@ -1,4 +1,4 @@
-//! This crate is responsible for managing the clock pace.
+//! This crate is responsible for managing the Clock pace.
 //!
 //! The Clock is responsible for providing information about Epoch timing by
 //! exposing references to the data and by broadcasting `EpochChange` events.
@@ -14,14 +14,14 @@ pub use time::TimeClock;
 const BROADCAST_CHANNEL_SIZE: usize = 100;
 
 /// The Clock trait is responsible for exposing methods to access relevant
-/// information regarding the current block and epoch numbers.
+/// information regarding the current block and Epoch numbers.
 #[async_trait::async_trait]
 pub trait Clock {
-    /// Compute Epoch/Block numbers and spawn the clock task.
+    /// Compute Epoch/Block numbers and spawn the Clock task.
     async fn spawn(self) -> Result<ClockRef, Error>;
     /// Return a reference to the current block number.
     fn block_ref(&self) -> Arc<AtomicU64>;
-    /// Return a reference to the current epoch number.
+    /// Return a reference to the current Epoch number.
     fn epoch_ref(&self) -> Arc<AtomicU64>;
 }
 
@@ -35,7 +35,7 @@ impl ClockRef {
     ///
     /// # Errors
     ///
-    /// This function can't fail but return a Result for convenience and future
+    /// This function can't fail but returns a Result for convenience and future
     /// evolution.
     pub fn subscribe(&self) -> Result<broadcast::Receiver<Event>, Error> {
         Ok(self.sender.subscribe())

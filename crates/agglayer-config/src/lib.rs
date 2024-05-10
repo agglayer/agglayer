@@ -58,7 +58,7 @@ pub struct Config {
     #[serde(rename = "Telemetry")]
     pub telemetry: TelemetryConfig,
 
-    /// The epoch configuration.
+    /// The Epoch configuration.
     #[serde(rename = "Epoch", default = "Epoch::default")]
     pub epoch: Epoch,
 }
