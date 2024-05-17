@@ -1,5 +1,6 @@
 use std::{num::NonZeroU64, sync::Arc};
 
+use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
 use agglayer_signer::ConfiguredSigner;
@@ -8,14 +9,19 @@ use ethers::{
     middleware::MiddlewareBuilder as _,
     providers::{Http, Provider},
 };
-use tokio::{join, task::JoinHandle};
+use tokio::{join, sync::mpsc, task::JoinHandle};
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
+use self::notifier::AggregatorNotifier;
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
+
+mod notifier;
 
 pub(crate) struct Node {
     rpc_handle: JoinHandle<()>,
+    certificate_orchestrator_handle: JoinHandle<()>,
 }
 
 #[buildstructor::buildstructor]
@@ -69,7 +75,7 @@ impl Node {
         let core = Kernel::new(rpc, config.clone());
 
         // Spawn the TimeClock.
-        let _clock_ref = match &config.epoch {
+        let clock_ref = match &config.epoch {
             Epoch::TimeClock(cfg) => {
                 let duration =
                     NonZeroU64::new(cfg.epoch_duration.as_secs()).ok_or(std::io::Error::new(
@@ -82,6 +88,25 @@ impl Node {
             }
         };
 
+        let aggregator_task = AggregatorNotifier::new();
+        let clock_subscription =
+            tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
+                .filter_map(|value| value.ok());
+
+        let (_data_sender, data_receiver) = mpsc::channel(
+            config
+                .certificate_orchestrator
+                .input_backpressure_buffer_size,
+        );
+
+        let certificate_orchestrator_handle = CertificateOrchestrator::builder()
+            .clock(clock_subscription)
+            .data_receiver(data_receiver)
+            .cancellation_token(cancellation_token.clone())
+            .epoch_packing_task_builder(aggregator_task)
+            .start()
+            .await?;
+
         // Bind the core to the RPC server.
         let server_handle = AgglayerImpl::new(core).start(config).await?;
 
@@ -89,18 +114,22 @@ impl Node {
             tokio::select! {
                 _ = server_handle.stopped() => {},
                 _ = cancellation_token.cancelled() => {
-                    debug!("Node shutdown requested.");
+                    debug!("Node RPC shutdown requested.");
                 }
             }
         });
 
-        let node = Self { rpc_handle };
+        let node = Self {
+            rpc_handle,
+            certificate_orchestrator_handle,
+        };
 
         Ok(node)
     }
 
     pub(crate) async fn await_shutdown(self) {
-        _ = join!(self.rpc_handle);
-        debug!("Node shutdown complete.");
+        debug!("Node shutdown started.");
+        _ = join!(self.rpc_handle, self.certificate_orchestrator_handle);
+        debug!("Node shutdown completed.");
     }
 }

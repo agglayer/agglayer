@@ -16,6 +16,7 @@ use self::{rpc::deserialize_rpc_map, telemetry::TelemetryConfig};
 pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
 
 pub(crate) mod auth;
+pub(crate) mod certificate_orchestrator;
 pub(crate) mod epoch;
 pub(crate) mod l1;
 pub mod log;
@@ -66,6 +67,10 @@ pub struct Config {
     /// The list of configuration options used during shutdown.
     #[serde(default)]
     pub shutdown: ShutdownConfig,
+
+    /// The certificate orchestrator configuration.
+    #[serde(rename = "CertificateOrchestrator", default)]
+    pub certificate_orchestrator: certificate_orchestrator::CertificateOrchestrator,
 }
 
 impl Config {
