@@ -2,7 +2,9 @@ use std::net::SocketAddr;
 
 use serde::Deserialize;
 
-use super::DEFAULT_IP;
+pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
+pub(crate) const AGGLAYER_RPC_OTEL_SCOPE_NAME: &str = "rpc";
+pub(crate) const AGGLAYER_KERNEL_OTEL_SCOPE_NAME: &str = "kernel";
 
 #[derive(Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "PascalCase")]

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_telemetry::KeyValue;
 use ethers::{providers::Middleware, types::H256};
 use futures::TryFutureExt;
 use jsonrpsee::{
@@ -12,7 +13,6 @@ use jsonrpsee::{
         ErrorObject, ErrorObjectOwned,
     },
 };
-use opentelemetry::KeyValue;
 use tokio::try_join;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
@@ -127,7 +127,7 @@ where
         let rollup_id_str = tx.tx.rollup_id.to_string();
         let metrics_attrs = &[KeyValue::new("rollup_id", rollup_id_str)];
 
-        crate::telemetry::SEND_TX.add(1, metrics_attrs);
+        agglayer_telemetry::SEND_TX.add(1, metrics_attrs);
 
         if !self.kernel.check_rollup_registered(tx.tx.rollup_id) {
             // Return an invalid params error if the rollup is not registered.
@@ -136,7 +136,7 @@ where
             ));
         }
 
-        crate::telemetry::CHECK_TX.add(1, metrics_attrs);
+        agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
 
         // Run all the verification checks in parallel.
         try_join!(
@@ -147,7 +147,7 @@ where
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
-                    crate::telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
+                    agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
                 }),
             self.kernel
                 .verify_proof_eth_call(&tx)
@@ -156,7 +156,7 @@ where
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
-                    crate::telemetry::EXECUTE.add(1, metrics_attrs);
+                    agglayer_telemetry::EXECUTE.add(1, metrics_attrs);
                 }),
             self.kernel
                 .verify_proof_zkevm_node(&tx)
@@ -165,7 +165,7 @@ where
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
-                    crate::telemetry::VERIFY_ZKP.add(1, metrics_attrs);
+                    agglayer_telemetry::VERIFY_ZKP.add(1, metrics_attrs);
                 })
         )?;
 
@@ -175,7 +175,7 @@ where
             internal_error(e.to_string())
         })?;
 
-        crate::telemetry::SETTLE.add(1, metrics_attrs);
+        agglayer_telemetry::SETTLE.add(1, metrics_attrs);
 
         info!("Successfully settled transaction {tx_hash} => receipt {receipt:?}");
 

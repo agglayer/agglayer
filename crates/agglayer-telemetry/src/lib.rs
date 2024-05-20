@@ -13,8 +13,15 @@ use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::{Encoder as _, Registry, TextEncoder};
 use tracing::info;
 
-pub(crate) const AGGLAYER_RPC_OTEL_SCOPE_NAME: &str = "rpc";
-pub(crate) const AGGLAYER_KERNEL_OTEL_SCOPE_NAME: &str = "kernel";
+mod config;
+mod error;
+
+pub use config::TelemetryConfig;
+pub use error::TelemetryError;
+pub use opentelemetry::KeyValue;
+
+use crate::config::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_NAME};
+use crate::error::MetricsError;
 
 lazy_static! {
     // Backward compatibility with the old metrics from agglayer go implementation
@@ -48,24 +55,6 @@ lazy_static! {
         .u64_counter("settle")
         .with_description("Number of transactions settled")
         .init();
-}
-
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum Error {
-    #[error("Unable to bind metrics server: {0}")]
-    UnableToBindMetricsServer(#[from] std::io::Error),
-}
-
-#[derive(Debug, thiserror::Error)]
-enum MetricsError {
-    #[error("Error gathering metrics: {0}")]
-    GatheringMetrics(#[from] prometheus::Error),
-
-    #[error("Error formatting metrics: {0}")]
-    FormattingMetrics(#[from] std::string::FromUtf8Error),
-
-    #[error("Error exporting metrics: {0}")]
-    OpenTelemetry(#[from] opentelemetry::metrics::MetricsError),
 }
 
 pub struct ServerBuilder {}
@@ -109,11 +98,11 @@ impl ServerBuilder {
     /// # Errors
     ///
     /// This function will return an error if the provided addr is invalid
-    #[builder(entry = "builder", exit = "build", visibility = "pub(crate)")]
+    #[builder(entry = "builder", exit = "build", visibility = "pub")]
     pub async fn serve(
         addr: SocketAddr,
         registry: Option<Registry>,
-    ) -> Result<Serve<axum::routing::IntoMakeService<Router>, axum::Router>, Error> {
+    ) -> Result<Serve<axum::routing::IntoMakeService<Router>, axum::Router>, TelemetryError> {
         let registry = registry.unwrap_or_default();
         let _ = Self::init_meter_provider(&registry);
 
