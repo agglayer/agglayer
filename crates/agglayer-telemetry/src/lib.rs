@@ -4,17 +4,26 @@ use axum::{
     extract::State,
     http::{Response, StatusCode},
     routing::get,
-    serve::Serve,
+    serve::WithGracefulShutdown,
     Router,
 };
 use lazy_static::lazy_static;
 use opentelemetry::global;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
-use prometheus::{Encoder as _, TextEncoder};
-use tracing::info;
+use prometheus::{Encoder as _, Registry, TextEncoder};
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, info};
 
-pub(crate) const AGGLAYER_RPC_OTEL_SCOPE_NAME: &str = "rpc";
-pub(crate) const AGGLAYER_KERNEL_OTEL_SCOPE_NAME: &str = "kernel";
+use crate::{
+    constant::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_NAME},
+    error::MetricsError,
+};
+
+mod constant;
+mod error;
+
+pub use error::Error;
+pub use opentelemetry::KeyValue;
 
 lazy_static! {
     // Backward compatibility with the old metrics from agglayer go implementation
@@ -50,49 +59,63 @@ lazy_static! {
         .init();
 }
 
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum Error {
-    #[error("Unable to bind metrics server: {0}")]
-    UnableToBindMetricsServer(#[from] std::io::Error),
+pub struct ServerBuilder {}
 
-    #[error("Metrics server address is not set")]
-    MetricsServerAddressNotSet,
-}
-
-#[derive(Debug, thiserror::Error)]
-enum MetricsError {
-    #[error("Error gathering metrics: {0}")]
-    GatheringMetrics(#[from] prometheus::Error),
-
-    #[error("Error formatting metrics: {0}")]
-    FormattingMetrics(#[from] std::string::FromUtf8Error),
-
-    #[error("Error exporting metrics: {0}")]
-    OpenTelemetry(#[from] opentelemetry::metrics::MetricsError),
-}
-
-#[derive(Default, Clone)]
-pub struct ServerBuilder {
-    serve_addr: Option<SocketAddr>,
-    registry: prometheus::Registry,
-}
-
+#[buildstructor::buildstructor]
 impl ServerBuilder {
-    pub fn serve_addr(mut self, addr: Option<SocketAddr>) -> Self {
-        self.serve_addr = addr;
-
-        self
-    }
-
-    pub async fn build(
-        mut self,
-    ) -> Result<Serve<axum::routing::IntoMakeService<Router>, axum::Router>, Error> {
-        let _ = self.init_meter_provider();
-
-        let serve_addr = self
-            .serve_addr
-            .take()
-            .ok_or(Error::MetricsServerAddressNotSet)?;
+    /// Function that builds a new Metrics server and returns a [`Serve`]
+    /// instance ready to be spawn.
+    ///
+    /// The available methods are:
+    ///
+    /// - `builder`: Creates a new builder instance.
+    /// - `addr`: Sets the [`SocketAddr`] to bind the metrics server to.
+    /// - `registry`: Sets the [`Registry`] to use for metrics. (optional)
+    /// - `build`: Builds the metrics server and returns a [`Serve`] instance.
+    ///
+    /// # Examples
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use agglayer_telemetry::ServerBuilder;
+    /// # use agglayer_telemetry::Error;
+    /// # use tokio_util::sync::CancellationToken;
+    /// # use std::net::SocketAddr;
+    /// #
+    ///
+    /// async fn build_metrics() -> Result<(), Error> {
+    ///     ServerBuilder::builder()
+    ///         .addr("127.0.0.1".parse::<SocketAddr>().unwrap())
+    ///         .cancellation_token(CancellationToken::new())
+    ///         .build()
+    ///         .await?;
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics on failure of the gather_metrics internal methods (unlikely)
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the provided addr is invalid
+    #[builder(entry = "builder", exit = "build", visibility = "pub")]
+    pub async fn serve(
+        addr: SocketAddr,
+        registry: Option<Registry>,
+        cancellation_token: CancellationToken,
+    ) -> Result<
+        WithGracefulShutdown<
+            axum::routing::IntoMakeService<Router>,
+            axum::Router,
+            impl futures::Future<Output = ()>,
+        >,
+        Error,
+    > {
+        let registry = registry.unwrap_or_default();
+        let _ = Self::init_meter_provider(&registry);
 
         let app = Router::new()
             .route(
@@ -107,18 +130,20 @@ impl ServerBuilder {
                     }
                 }),
             )
-            .with_state(self.registry);
+            .with_state(registry);
 
-        info!("Starting metrics server on {}", serve_addr);
+        info!("Starting metrics server on {}", addr);
 
-        let listener = tokio::net::TcpListener::bind(serve_addr).await?;
-        Ok(axum::serve(listener, app.into_make_service()))
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+
+        Ok(axum::serve(listener, app.into_make_service())
+            .with_graceful_shutdown(shutdown_signal(cancellation_token)))
     }
 
-    fn init_meter_provider(&mut self) -> Result<(), MetricsError> {
+    fn init_meter_provider(registry: &Registry) -> Result<(), MetricsError> {
         // configure OpenTelemetry to use the registry
         let exporter = opentelemetry_prometheus::exporter()
-            .with_registry(self.registry.clone())
+            .with_registry(registry.clone())
             .build()?;
 
         // set up a meter meter to create instruments
@@ -136,5 +161,13 @@ impl ServerBuilder {
         encoder.encode(&metric_families, &mut result)?;
 
         Ok(String::from_utf8(result)?)
+    }
+}
+
+async fn shutdown_signal(cancellation: CancellationToken) {
+    tokio::select! {
+        _ = cancellation.cancelled() => {
+            debug!("Shutting down metrics server...");
+        },
     }
 }

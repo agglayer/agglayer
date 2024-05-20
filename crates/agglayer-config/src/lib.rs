@@ -16,6 +16,7 @@ use self::{local::PrivateKey, rpc::deserialize_rpc_map, telemetry::TelemetryConf
 
 pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
 
+pub(crate) mod epoch;
 pub(crate) mod error;
 pub(crate) mod l1;
 pub(crate) mod local;
@@ -23,6 +24,7 @@ pub mod log;
 pub(crate) mod rpc;
 pub(crate) mod telemetry;
 
+pub use epoch::Epoch;
 pub use error::ConfigError;
 pub use l1::L1;
 pub use local::Local;
@@ -57,6 +59,10 @@ pub struct Config {
     /// Telemetry configuration.
     #[serde(rename = "Telemetry")]
     pub telemetry: TelemetryConfig,
+
+    /// The Epoch configuration.
+    #[serde(rename = "Epoch", default = "Epoch::default")]
+    pub epoch: Epoch,
 }
 
 impl Config {

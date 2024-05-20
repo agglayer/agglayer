@@ -1,0 +1,19 @@
+[package]
+name = "agglayer-telemetry"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum = "0.7.5"
+buildstructor.workspace = true
+futures.workspace = true
+lazy_static.workspace = true
+opentelemetry = "0.22.0"
+opentelemetry-prometheus = "0.15.0"
+opentelemetry_sdk = "0.22.1"
+prometheus = "0.13.3"
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-util = "0.7.11"
+tracing.workspace = true

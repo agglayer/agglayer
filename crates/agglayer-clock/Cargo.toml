@@ -1,0 +1,10 @@
+[package]
+name = "agglayer-clock"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tokio.workspace = true
+thiserror.workspace = true
