@@ -3,7 +3,10 @@
 //! The Clock is responsible for providing information about Epoch timing by
 //! exposing references to the data and by broadcasting `EpochChange` events.
 
-use std::sync::{atomic::AtomicU64, Arc};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 
 use tokio::sync::broadcast;
 
@@ -14,20 +17,22 @@ pub use time::TimeClock;
 const BROADCAST_CHANNEL_SIZE: usize = 100;
 
 /// The Clock trait is responsible for exposing methods to access relevant
-/// information regarding the current block and Epoch numbers.
+/// information regarding the Block height and Epoch numbers.
 #[async_trait::async_trait]
 pub trait Clock {
-    /// Compute Epoch/Block numbers and spawn the Clock task.
+    /// Spawn the Clock task and return a [`ClockRef`] to interact with it.
     async fn spawn(self) -> Result<ClockRef, Error>;
-    /// Return a reference to the current block number.
-    fn block_ref(&self) -> Arc<AtomicU64>;
-    /// Return a reference to the current Epoch number.
-    fn epoch_ref(&self) -> Arc<AtomicU64>;
 }
 
 /// The ClockRef is a reference to the Clock instance.
 pub struct ClockRef {
     pub(crate) sender: broadcast::Sender<Event>,
+    /// The current Epoch number.
+    /// This value is updated by the Clock task.
+    pub(crate) current_epoch: Arc<AtomicU64>,
+    /// The current Block height.
+    /// This value is updated by the Clock task.
+    pub(crate) current_block_height: Arc<AtomicU64>,
 }
 
 impl ClockRef {
@@ -40,13 +45,21 @@ impl ClockRef {
     pub fn subscribe(&self) -> Result<broadcast::Receiver<Event>, Error> {
         Ok(self.sender.subscribe())
     }
+
+    pub fn current_epoch(&self) -> u64 {
+        self.current_epoch.load(Ordering::Acquire)
+    }
+
+    pub fn current_block_height(&self) -> u64 {
+        self.current_block_height.load(Ordering::Acquire)
+    }
 }
 
 /// Events broadcasted by the Clock.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
     /// Notify an Epoch change with the associated epoch_number.
-    EpochChange(u64),
+    EpochEnded(u64),
 }
 
 /// Errors that can be returned by the Clock.
