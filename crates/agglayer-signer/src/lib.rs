@@ -69,8 +69,8 @@ impl ConfiguredSigner {
                 match kms.gcp_kms_signer().await {
                     Ok(signer) => Ok(Self::Kms(signer)),
                     Err(e) => Err(ConfigError::Kms(e)), /* Ensure KmsError can be
-                                                                * converted into
-                                                                * ConfigError<KmsError> */
+                                                         * converted into
+                                                         * ConfigError<KmsError> */
                 }
             }
             AuthConfig::Local(ref local) => {
