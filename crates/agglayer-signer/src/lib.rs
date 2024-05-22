@@ -68,7 +68,7 @@ impl ConfiguredSigner {
                 let kms = KMS::new(config.l1.chain_id, kms.clone());
                 match kms.gcp_kms_signer().await {
                     Ok(signer) => Ok(Self::Kms(signer)),
-                    Err(e) => Err(ConfigError::Kms(e.into())), /* Ensure KmsError can be
+                    Err(e) => Err(ConfigError::Kms(e)), /* Ensure KmsError can be
                                                                 * converted into
                                                                 * ConfigError<KmsError> */
                 }
