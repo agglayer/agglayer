@@ -9,12 +9,11 @@ mod kernel;
 mod logging;
 mod rpc;
 mod signed_tx;
-mod telemetry;
 mod zkevm_node_client;
 
 mod node;
 
-use telemetry::ServerBuilder as MetricsBuilder;
+use agglayer_telemetry::ServerBuilder as MetricsBuilder;
 
 /// This is the main node entrypoint.
 ///

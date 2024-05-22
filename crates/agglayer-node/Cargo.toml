@@ -5,7 +5,6 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-axum.workspace = true
 buildstructor.workspace = true
 ethers.workspace = true
 futures.workspace = true
@@ -14,10 +13,6 @@ hex.workspace = true
 hyper = "0.14.20"
 jsonrpsee = { workspace = true, features = ["full"] }
 lazy_static.workspace = true
-opentelemetry-prometheus.workspace = true
-opentelemetry.workspace = true
-opentelemetry_sdk.workspace = true
-prometheus.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with.workspace = true
@@ -32,6 +27,7 @@ tracing.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
 agglayer-clock = { path = "../agglayer-clock" }
+agglayer-telemetry = { path = "../agglayer-telemetry" }
 
 [dev-dependencies]
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.22.3" }

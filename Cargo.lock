@@ -83,8 +83,8 @@ version = "0.1.0"
 dependencies = [
  "agglayer-clock",
  "agglayer-config",
+ "agglayer-telemetry",
  "anyhow",
- "axum 0.7.5",
  "buildstructor",
  "ethers",
  "futures",
@@ -93,10 +93,6 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-test-utils",
  "lazy_static",
- "opentelemetry",
- "opentelemetry-prometheus",
- "opentelemetry_sdk",
- "prometheus",
  "serde",
  "serde_json",
  "serde_with",
@@ -117,6 +113,23 @@ dependencies = [
  "ethers",
  "ethers-gcp-kms-signer",
  "thiserror",
+]
+
+[[package]]
+name = "agglayer-telemetry"
+version = "0.1.0"
+dependencies = [
+ "axum 0.7.5",
+ "buildstructor",
+ "lazy_static",
+ "opentelemetry",
+ "opentelemetry-prometheus",
+ "opentelemetry_sdk",
+ "prometheus",
+ "serde",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
