@@ -163,9 +163,9 @@ impl ServerBuilder {
     }
 }
 
-async fn shutdown_signal(cancelation: CancellationToken) {
+async fn shutdown_signal(cancellation: CancellationToken) {
     tokio::select! {
-        _ = cancelation.cancelled() => {
+        _ = cancellation.cancelled() => {
             debug!("Shutting down metrics server...");
         },
     }

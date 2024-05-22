@@ -122,6 +122,7 @@ version = "0.1.0"
 dependencies = [
  "axum 0.7.5",
  "buildstructor",
+ "futures",
  "lazy_static",
  "opentelemetry",
  "opentelemetry-prometheus",
@@ -130,6 +131,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 
