@@ -1,5 +1,5 @@
 //! This crate provides a [`Signer`](trait@ethers::signers::Signer)
-//! implementation that can house either a local keystore or a KMS signer.
+//! implementation that can house either a local keystore or a GCP KMS signer.
 //! (more signers can be added in the future)
 //!
 //! See: [`ConfiguredSigner`](enum@ConfiguredSigner)
@@ -65,7 +65,6 @@ impl ConfiguredSigner {
     pub async fn new(config: Arc<Config>) -> Result<Self, ConfigError<KmsError>> {
         match &config.auth {
             AuthConfig::Kms(ref kms) => {
-                // debug!("Using GCP KMS signer");
                 let kms = KMS::new(config.l1.chain_id, kms.clone());
                 match kms.gcp_kms_signer().await {
                     Ok(signer) => Ok(Self::Kms(signer)),
@@ -75,7 +74,6 @@ impl ConfiguredSigner {
                 }
             }
             AuthConfig::Local(ref local) => {
-                // debug!("Using local wallet signer");
                 Ok(Self::Local(Self::local_wallet(config.l1.chain_id, local)?))
             }
         }
