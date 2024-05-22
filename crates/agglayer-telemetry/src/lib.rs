@@ -13,15 +13,16 @@ use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::{Encoder as _, Registry, TextEncoder};
 use tracing::info;
 
-mod config;
+use crate::{
+    constant::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_NAME},
+    error::MetricsError,
+};
+
+mod constant;
 mod error;
 
-pub use config::TelemetryConfig;
-pub use error::TelemetryError;
+pub use error::Error;
 pub use opentelemetry::KeyValue;
-
-use crate::config::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_NAME};
-use crate::error::MetricsError;
 
 lazy_static! {
     // Backward compatibility with the old metrics from agglayer go implementation
@@ -102,7 +103,7 @@ impl ServerBuilder {
     pub async fn serve(
         addr: SocketAddr,
         registry: Option<Registry>,
-    ) -> Result<Serve<axum::routing::IntoMakeService<Router>, axum::Router>, TelemetryError> {
+    ) -> Result<Serve<axum::routing::IntoMakeService<Router>, axum::Router>, Error> {
         let registry = registry.unwrap_or_default();
         let _ = Self::init_meter_provider(&registry);
 

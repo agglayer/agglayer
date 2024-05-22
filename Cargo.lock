@@ -65,7 +65,6 @@ name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
  "agglayer-signer",
- "agglayer-telemetry",
  "ethers",
  "ethers-gcp-kms-signer",
  "jsonrpsee",

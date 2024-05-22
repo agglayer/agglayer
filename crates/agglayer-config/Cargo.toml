@@ -16,7 +16,6 @@ tracing.workspace = true
 url = { workspace = true, features = ["serde"] }
 
 agglayer-signer = { path = "../agglayer-signer" }
-agglayer-telemetry = { path = "../agglayer-telemetry" }
 
 [features]
 default = []

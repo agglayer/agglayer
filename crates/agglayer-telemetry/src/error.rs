@@ -1,5 +1,5 @@
 #[derive(Debug, thiserror::Error)]
-pub enum TelemetryError {
+pub enum Error {
     #[error("Unable to bind metrics server: {0}")]
     UnableToBindMetricsServer(#[from] std::io::Error),
 }
