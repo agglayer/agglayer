@@ -46,10 +46,12 @@ impl ClockRef {
         Ok(self.sender.subscribe())
     }
 
+    /// Returns the current Epoch.
     pub fn current_epoch(&self) -> u64 {
         self.current_epoch.load(Ordering::Acquire)
     }
 
+    /// Returns the current Block height.
     pub fn current_block_height(&self) -> u64 {
         self.current_block_height.load(Ordering::Acquire)
     }
@@ -58,7 +60,7 @@ impl ClockRef {
 /// Events broadcasted by the Clock.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
-    /// Notify an Epoch change with the associated epoch_number.
+    /// Notify that an Epoch just ended with the associated Epoch number.
     EpochEnded(u64),
 }
 
