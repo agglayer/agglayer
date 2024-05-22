@@ -18,7 +18,6 @@ RollupManagerContract = "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff"
 PrivateKeys = [{ Path = "/pk/agglayer.keystore", Password = "testonly" }]
 
 [KMS]
-Provider = ""
 ProjectId = ""
 Location = ""
 Keyring = ""

@@ -29,6 +29,7 @@ tracing.workspace = true
 agglayer-config = { path = "../agglayer-config" }
 agglayer-clock = { path = "../agglayer-clock" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
+agglayer-signer = { path = "../agglayer-signer" }
 
 [dev-dependencies]
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.22.3" }

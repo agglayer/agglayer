@@ -10,6 +10,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
 thiserror.workspace = true
 
+agglayer-config = { path = "../agglayer-config" }
+
 [features]
 default = []
 testutils = []

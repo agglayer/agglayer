@@ -3,14 +3,13 @@
 //! The agglayer is configured via its TOML configuration file, `agglayer.toml`
 //! by default, which is deserialized into the [`Config`] struct.
 
+use agglayer_config::KmsConfig;
 use ethers_gcp_kms_signer::{GcpKeyRingRef, GcpKmsProvider, GcpKmsSigner};
 use serde::Deserialize;
 
-pub(crate) mod config;
 pub(crate) mod error;
 pub(crate) mod signer;
 
-pub use config::KmsConfig;
 pub use error::KmsError;
 pub use signer::KmsSigner;
 

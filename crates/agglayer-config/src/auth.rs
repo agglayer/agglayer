@@ -1,5 +1,47 @@
+use std::path::PathBuf;
+
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthConfig {
+    Local(LocalConfig),
+    Kms(KmsConfig),
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        AuthConfig::Local(LocalConfig::default())
+    }
+}
+
+/// Local configuration.
+///
+/// It includes private keys for a local wallet if no kms configuration is
+/// provided.
+#[serde_as]
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct LocalConfig {
+    pub private_keys: Vec<PrivateKey>,
+}
+
+impl Default for LocalConfig {
+    fn default() -> Self {
+        LocalConfig {
+            private_keys: vec![],
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[cfg_attr(any(test, feature = "testutils"), derive(Default))]
+#[serde(rename_all = "PascalCase")]
+pub struct PrivateKey {
+    pub path: PathBuf,
+    pub password: String,
+}
 
 /// The transaction management configuration.
 ///
@@ -18,7 +60,8 @@ use serde_with::{serde_as, NoneAsEmptyString};
 /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment is set, attempt to
 ///   load a service account JSON from this path.
 #[serde_as]
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Deserialize, Debug, Clone)]
+#[cfg_attr(any(test, feature = "testutils"), derive(Default))]
 #[serde(rename_all = "PascalCase")]
 pub struct KmsConfig {
     #[serde(rename = "Provider")]

@@ -15,9 +15,6 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing.workspace = true
 url = { workspace = true, features = ["serde"] }
 
-agglayer-signer = { path = "../agglayer-signer" }
-agglayer-gcp-kms = { path = "../agglayer-gcp-kms" }
-
 [features]
 default = []
 testutils = []
