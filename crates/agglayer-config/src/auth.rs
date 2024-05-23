@@ -23,7 +23,7 @@ use serde_with::{serde_as, NoneAsEmptyString};
 #[serde(rename_all = "lowercase")]
 pub enum AuthConfig {
     Local(LocalConfig),
-    Kms(KmsConfig),
+    GcpKms(GcpKmsConfig),
 }
 
 impl Default for AuthConfig {
@@ -57,11 +57,7 @@ pub struct PrivateKey {
 #[derive(Deserialize, Debug, Clone)]
 #[cfg_attr(any(test, feature = "testutils"), derive(Default))]
 #[serde(rename_all = "PascalCase")]
-pub struct KmsConfig {
-    #[serde(rename = "Provider")]
-    #[serde_as(as = "NoneAsEmptyString")]
-    #[serde(default)]
-    pub provider: Option<String>,
+pub struct GcpKmsConfig {
     #[serde(rename = "ProjectId")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]

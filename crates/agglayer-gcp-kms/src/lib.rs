@@ -3,7 +3,7 @@
 //! The agglayer is configured via its TOML configuration file, `agglayer.toml`
 //! by default, which is deserialized into the [`Config`] struct.
 
-use agglayer_config::KmsConfig;
+use agglayer_config::GcpKmsConfig;
 use ethers_gcp_kms_signer::{GcpKeyRingRef, GcpKmsProvider, GcpKmsSigner};
 use serde::Deserialize;
 
@@ -20,11 +20,11 @@ pub struct KMS {
     /// The L1 chain id.
     pub chain_id: u64,
     /// The kms configuration.
-    pub config: KmsConfig,
+    pub config: GcpKmsConfig,
 }
 
 impl KMS {
-    pub fn new(chain_id: u64, config: KmsConfig) -> Self {
+    pub fn new(chain_id: u64, config: GcpKmsConfig) -> Self {
         Self { chain_id, config }
     }
     /// Create a GCP KMS signer from the configuration.

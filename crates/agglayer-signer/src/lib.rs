@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use agglayer_config::{AuthConfig, Config, ConfigError, LocalConfig};
+use agglayer_config::{AuthConfig, Config, LocalConfig};
 use agglayer_gcp_kms::{KmsError, KmsSigner, KMS};
 use async_trait::async_trait;
 use ethers::{
@@ -24,10 +24,12 @@ use thiserror::Error;
 /// This is simply a union of either a [`WalletError`] or a [`KmsError`].
 #[derive(Debug, Error)]
 pub enum ConfiguredSignerError {
+    #[error("no private keys specified in the configuration")]
+    NoPk,
     #[error("wallet error: {0}")]
-    Wallet(WalletError),
+    Wallet(#[from] WalletError),
     #[error("KMS error: {0}")]
-    Kms(KmsError),
+    Kms(#[from] KmsError),
 }
 
 /// A an ethers [`Signer`] that can house either a local keystore or a KMS
@@ -49,8 +51,11 @@ impl ConfiguredSigner {
     pub(crate) fn local_wallet(
         chain_id: u64,
         local: &LocalConfig,
-    ) -> Result<LocalWallet, ConfigError<KmsError>> {
-        let pk = local.private_keys.first().ok_or(ConfigError::NoPk)?;
+    ) -> Result<LocalWallet, ConfiguredSignerError> {
+        let pk = local
+            .private_keys
+            .first()
+            .ok_or(ConfiguredSignerError::NoPk)?;
         Ok(LocalWallet::decrypt_keystore(&pk.path, &pk.password)?.with_chain_id(chain_id))
     }
 
@@ -62,16 +67,11 @@ impl ConfiguredSigner {
     /// 2. Otherwise, attempt use the local wallet.
     ///
     /// This logic is ported directly from the original agglayer Go codebase.
-    pub async fn new(config: Arc<Config>) -> Result<Self, ConfigError<KmsError>> {
+    pub async fn new(config: Arc<Config>) -> Result<Self, ConfiguredSignerError> {
         match &config.auth {
-            AuthConfig::Kms(ref kms) => {
+            AuthConfig::GcpKms(ref kms) => {
                 let kms = KMS::new(config.l1.chain_id, kms.clone());
-                match kms.gcp_kms_signer().await {
-                    Ok(signer) => Ok(Self::Kms(signer)),
-                    Err(e) => Err(ConfigError::Kms(e)), /* Ensure KmsError can be
-                                                         * converted into
-                                                         * ConfigError<KmsError> */
-                }
+                Ok(Self::Kms(kms.gcp_kms_signer().await?))
             }
             AuthConfig::Local(ref local) => {
                 Ok(Self::Local(Self::local_wallet(config.l1.chain_id, local)?))

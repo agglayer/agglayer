@@ -14,15 +14,13 @@ pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 
 
 pub(crate) mod auth;
 pub(crate) mod epoch;
-pub(crate) mod error;
 pub(crate) mod l1;
 pub mod log;
 pub(crate) mod rpc;
 pub(crate) mod telemetry;
 
-pub use auth::{AuthConfig, KmsConfig, LocalConfig, PrivateKey};
+pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
 pub use epoch::Epoch;
-pub use error::ConfigError;
 pub use l1::L1;
 pub use log::Log;
 pub use rpc::RpcConfig;
