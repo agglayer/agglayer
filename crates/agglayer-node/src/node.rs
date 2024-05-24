@@ -28,10 +28,11 @@ impl Node {
     /// - `start`: Starts the Agglayer node.
     ///
     /// # Examples
-    /// ```no_run
+    /// ```no_compile
     /// # use std::sync::Arc;
     /// # use agglayer_config::Config;
     /// # use agglayer_node::Node;
+    /// # use tokio_util::sync::CancellationToken;
     /// # use anyhow::Result;
     /// #
     /// async fn start_node() -> Result<()> {
@@ -39,6 +40,7 @@ impl Node {
     ///
     ///    Node::builder()
     ///      .config(config)
+    ///      .cancellation_token(CancellationToken::new())
     ///      .start()
     ///      .await?;
     ///

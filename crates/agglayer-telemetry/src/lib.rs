@@ -74,17 +74,18 @@ impl ServerBuilder {
     /// - `build`: Builds the metrics server and returns a [`Serve`] instance.
     ///
     /// # Examples
-    /// ```no_run
+    /// ```
     /// # use std::sync::Arc;
-    /// # use agglayer_config::Config;
-    /// # use agglayer_node::Node;
-    /// # use anyhow::Result;
+    /// # use agglayer_telemetry::ServerBuilder;
+    /// # use agglayer_telemetry::Error;
+    /// # use tokio_util::sync::CancellationToken;
+    /// # use std::net::SocketAddr;
     /// #
-    /// use axum::serve::Serve;
     ///
-    /// async fn build_metrics() -> Result<Serve, Error> {
+    /// async fn build_metrics() -> Result<(), Error> {
     ///    ServerBuilder::builder()
-    ///      .addr("127.0.0.1".parse().unwrap())
+    ///      .addr("127.0.0.1".parse::<SocketAddr>().unwrap())
+    ///      .cancellation_token(CancellationToken::new())
     ///      .build()
     ///      .await?;
     ///
