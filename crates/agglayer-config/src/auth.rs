@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use serde::de::{self, Deserializer};
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
 
@@ -72,4 +73,33 @@ pub struct GcpKmsConfig {
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub key_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct IntermediateAuthConfig {
+    #[serde(default)]
+    local: Option<LocalConfig>,
+    #[serde(default)]
+    gcpkms: Option<GcpKmsConfig>,
+    #[serde(rename = "EthTxManager")]
+    eth_tx_manager: Option<LocalConfig>,
+}
+
+pub(crate) fn deserialize_auth<'de, D>(deserializer: D) -> Result<AuthConfig, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let intermediate = IntermediateAuthConfig::deserialize(deserializer)?;
+
+    if let Some(local) = intermediate.local {
+        Ok(AuthConfig::Local(local))
+    } else if let Some(gcpkms) = intermediate.gcpkms {
+        Ok(AuthConfig::GcpKms(gcpkms))
+    } else if let Some(eth_tx_manager) = intermediate.eth_tx_manager {
+        Ok(AuthConfig::Local(LocalConfig {
+            private_keys: eth_tx_manager.private_keys,
+        }))
+    } else {
+        Err(de::Error::custom("Invalid auth configuration"))
+    }
 }
