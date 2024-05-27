@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use agglayer_config::{AuthConfig, Config, LocalConfig};
-use agglayer_gcp_kms::{KmsError, KmsSigner, KMS};
+use agglayer_gcp_kms::{Error as KmsError, KmsSigner, KMS};
 use async_trait::async_trait;
 use ethers::{
     abi::Address,
@@ -60,13 +60,6 @@ impl ConfiguredSigner {
     }
 
     /// Get either a local wallet or GCP KMS signer based on the configuration.
-    ///
-    /// The logic here that determines which signer to use is as follows:
-    /// 1. If a GCP KMS key name is specified, attempt to use the GCP KMS
-    ///    signer.
-    /// 2. Otherwise, attempt use the local wallet.
-    ///
-    /// This logic is ported directly from the original agglayer Go codebase.
     pub async fn new(config: Arc<Config>) -> Result<Self, ConfiguredSignerError> {
         match &config.auth {
             AuthConfig::GcpKms(ref kms) => {

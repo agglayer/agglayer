@@ -7,8 +7,6 @@ use serde_with::{serde_as, NoneAsEmptyString};
 ///
 /// Generally allows specification of transaction signing behavior.
 ///
-/// If a KMS Provider is gcp, the program will attempt to use a GCP KMS
-/// signer. Otherwise, the program will attempt to use a local keystore signer.
 /// The program will first attempt to populate the KMS specific configuration
 /// values from the canonical environment variables, and if they are not set, it
 /// will fall back to the values specified configuration file.
@@ -50,7 +48,7 @@ pub struct PrivateKey {
     pub password: String,
 }
 
-/// KMS configuration.
+/// GCP KMS configuration.
 ///
 /// It includes kms config.
 #[serde_as]

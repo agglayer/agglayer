@@ -44,8 +44,7 @@ pub struct Config {
     /// The L1 configuration.
     #[serde(rename = "L1")]
     pub l1: L1,
-    /// The authentication configuration, which can be either Local or KMS.
-    #[serde(flatten)]
+    /// The authentication configuration.
     pub auth: AuthConfig,
     /// Telemetry configuration.
     #[serde(rename = "Telemetry")]

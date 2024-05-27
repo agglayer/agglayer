@@ -7,7 +7,7 @@ use ethers::{
 };
 use ethers_gcp_kms_signer::GcpKmsSigner;
 
-use crate::KmsError;
+use crate::Error;
 
 #[derive(Debug)]
 pub struct KmsSigner {
@@ -22,28 +22,22 @@ impl KmsSigner {
     pub async fn sign_message<S: Send + Sync + AsRef<[u8]>>(
         &self,
         message: S,
-    ) -> Result<Signature, KmsError> {
-        self.signer
-            .sign_message(message)
-            .await
-            .map_err(KmsError::Gcp)
+    ) -> Result<Signature, Error> {
+        self.signer.sign_message(message).await.map_err(Error::Gcp)
     }
 
-    pub async fn sign_transaction(&self, tx: &TypedTransaction) -> Result<Signature, KmsError> {
-        self.signer
-            .sign_transaction(tx)
-            .await
-            .map_err(KmsError::Gcp)
+    pub async fn sign_transaction(&self, tx: &TypedTransaction) -> Result<Signature, Error> {
+        self.signer.sign_transaction(tx).await.map_err(Error::Gcp)
     }
 
     pub async fn sign_typed_data<T: Eip712 + Send + Sync>(
         &self,
         payload: &T,
-    ) -> Result<Signature, KmsError> {
+    ) -> Result<Signature, Error> {
         self.signer
             .sign_typed_data(payload)
             .await
-            .map_err(KmsError::Gcp)
+            .map_err(Error::Gcp)
     }
 
     pub fn address(&self) -> Address {
