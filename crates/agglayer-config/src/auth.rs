@@ -19,7 +19,7 @@ use serde_with::{serde_as, NoneAsEmptyString};
 /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment is set, attempt to
 ///   load a service account JSON from this path.
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
+#[serde(untagged, rename_all = "lowercase")]
 pub enum AuthConfig {
     Local(LocalConfig),
     GcpKms(GcpKmsConfig),
@@ -75,14 +75,16 @@ pub struct GcpKmsConfig {
     pub key_name: Option<String>,
 }
 
+// This is a workaround to support [EthTxManager] for PrivateKeys as it is used
+// by kurtosis.
 #[derive(Deserialize)]
 struct IntermediateAuthConfig {
     #[serde(default)]
     local: Option<LocalConfig>,
     #[serde(default)]
     gcpkms: Option<GcpKmsConfig>,
-    #[serde(rename = "EthTxManager")]
-    eth_tx_manager: Option<LocalConfig>,
+    #[serde(default, rename = "PrivateKeys")]
+    private_keys: Option<Vec<PrivateKey>>,
 }
 
 pub(crate) fn deserialize_auth<'de, D>(deserializer: D) -> Result<AuthConfig, D::Error>
@@ -95,10 +97,8 @@ where
         Ok(AuthConfig::Local(local))
     } else if let Some(gcpkms) = intermediate.gcpkms {
         Ok(AuthConfig::GcpKms(gcpkms))
-    } else if let Some(eth_tx_manager) = intermediate.eth_tx_manager {
-        Ok(AuthConfig::Local(LocalConfig {
-            private_keys: eth_tx_manager.private_keys,
-        }))
+    } else if let Some(private_keys) = intermediate.private_keys {
+        Ok(AuthConfig::Local(LocalConfig { private_keys }))
     } else {
         Err(de::Error::custom("Invalid auth configuration"))
     }

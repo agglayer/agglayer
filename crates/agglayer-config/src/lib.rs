@@ -46,7 +46,7 @@ pub struct Config {
     #[serde(rename = "L1")]
     pub l1: L1,
     /// The authentication configuration.
-    #[serde(deserialize_with = "deserialize_auth")]
+    #[serde(alias = "EthTxManager", default, deserialize_with = "deserialize_auth")]
     pub auth: AuthConfig,
     /// Telemetry configuration.
     #[serde(rename = "Telemetry")]
