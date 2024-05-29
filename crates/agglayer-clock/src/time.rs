@@ -48,14 +48,14 @@ impl Clock for TimeClock {
 }
 
 impl TimeClock {
-    /// Create a new TimeClock instance based on the current datetime and an
+    /// Create a new [`TimeClock`] instance based on the current datetime and an
     /// Epoch.
     pub fn new_now(epoch_duration: NonZeroU64) -> Self {
         Self::new(Utc::now(), epoch_duration)
     }
 
-    /// Create a new TimeClock instance based on a genesis datetime and an Epoch
-    /// duration.
+    /// Create a new [`TimeClock`] instance based on a genesis datetime and an
+    /// Epoch duration.
     pub fn new(genesis: DateTime<Utc>, epoch_duration: NonZeroU64) -> Self {
         Self {
             genesis,
@@ -70,7 +70,7 @@ impl TimeClock {
         let mut interval = interval_at(Instant::now(), Duration::from_secs(1));
 
         // Compute the current Block height and Epoch number
-        let current_block = self.compute_block_height();
+        let current_block = self.update_block_height();
         let current_epoch = self.calculate_epoch_number(current_block);
 
         // Store the current Epoch number
@@ -88,18 +88,18 @@ impl TimeClock {
                 .checked_add(1)
             {
                 // If the current Block height is a multiple of the Epoch duration,
-                // the current Epoch has ended. In this case, we need to compute the
+                // the current Epoch has ended. In this case, we need to update the
                 // new Epoch number and send an `EpochEnded` event to the subscribers.
                 if current_block % self.epoch_duration == 0 {
-                    match self.compute_epoch_number() {
+                    match self.update_epoch_number() {
                         Ok(epoch_ended) => {
                             _ = sender.send(Event::EpochEnded(epoch_ended));
                         }
-                        Err(current_epoch) => {
+                        Err((current_epoch, expected)) => {
                             error!(
                                 "Unexpected error computing the current Epoch: current_epoch={}, \
-                                 current_block={}",
-                                current_epoch, current_block
+                                 expected_epoch={}, current_block={}",
+                                current_epoch, expected, current_block
                             );
                         }
                     }
@@ -123,13 +123,13 @@ impl TimeClock {
         }
     }
 
-    /// Computes the Block height of this [`TimeClock`].
+    /// Updates the Block height of this [`TimeClock`].
     ///
-    /// This method is used to compute the Block height based on the
+    /// This method is used to update the Block height based on the
     /// genesis datetime and the current datetime.
     ///
     /// The Block height is the number of seconds since the genesis datetime.
-    fn compute_block_height(&mut self) -> u64 {
+    fn update_block_height(&mut self) -> u64 {
         let block_height = self.calculate_block_height();
 
         self.current_block.store(block_height, Ordering::Release);
@@ -137,24 +137,28 @@ impl TimeClock {
         block_height
     }
 
-    /// Computes the current Epoch of this [`TimeClock`].
+    /// Updates the current Epoch of this [`TimeClock`].
     ///
-    /// This method is used to compute the current Epoch number based on the
+    /// This method is used to update the current Epoch number based on the
     /// Block height and the Epoch duration.
     ///
-    /// To define the current Epoch number, the Block height is divided
-    /// by the Epoch duration.
-    fn compute_epoch_number(&mut self) -> Result<u64, u64> {
+    /// To define the current Epoch number, the Epoch duration divides the Block
+    /// height.
+    fn update_epoch_number(&mut self) -> Result<u64, (u64, u64)> {
         let current_block = self.current_block.load(Ordering::Acquire);
 
         let current_epoch = self.calculate_epoch_number(current_block);
+        let expected_epoch = current_epoch.saturating_sub(1);
 
-        self.current_epoch.compare_exchange(
-            current_epoch.saturating_sub(1),
+        match self.current_epoch.compare_exchange(
+            expected_epoch,
             current_epoch,
             Ordering::Acquire,
             Ordering::Relaxed,
-        )
+        ) {
+            Ok(previous) => Ok(previous),
+            Err(stored) => Err((stored, expected_epoch)),
+        }
     }
 
     /// Calculate an Epoch number based on a Block number.
