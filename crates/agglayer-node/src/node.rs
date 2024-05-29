@@ -69,7 +69,7 @@ impl Node {
         let core = Kernel::new(rpc, config.clone());
 
         // Spawn the TimeClock.
-        let (_clock_ref, _epoch_ref) = match &config.epoch {
+        let _clock_ref = match &config.epoch {
             Epoch::TimeClock(cfg) => {
                 let duration =
                     NonZeroU64::new(cfg.epoch_duration.as_secs()).ok_or(std::io::Error::new(
@@ -78,9 +78,7 @@ impl Node {
                     ))?;
                 let clock = TimeClock::new_now(duration);
 
-                let epoch_ref = clock.epoch_ref();
-
-                (clock.spawn().await?, epoch_ref)
+                clock.spawn().await?
             }
         };
 

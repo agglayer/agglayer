@@ -53,3 +53,28 @@ where
 
     Ok(Duration::from_secs(seconds))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialize_epoch() {
+        let epoch = Epoch::TimeClock(TimeClockConfig::default());
+        let serialized = serde_json::to_string(&epoch).unwrap();
+
+        assert_eq!(serialized, r#"{"TimeClock":{"EpochDuration":5}}"#);
+    }
+
+    #[test]
+    fn deserialize_epoch() {
+        let config = r#"{"TimeClock":{"EpochDuration":3600}}"#;
+
+        let expected_duration = Duration::from_secs(3600);
+        let epoch: Epoch = serde_json::from_str(config).unwrap();
+
+        assert!(
+            matches!(epoch, Epoch::TimeClock(TimeClockConfig { epoch_duration }) if epoch_duration == expected_duration)
+        );
+    }
+}

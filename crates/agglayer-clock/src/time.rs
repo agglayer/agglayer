@@ -12,12 +12,13 @@ use tokio::{
     sync::broadcast,
     time::{interval_at, Instant},
 };
+use tracing::error;
 
 use crate::{Clock, ClockRef, Error, Event, BROADCAST_CHANNEL_SIZE};
 
 /// Time based [`Clock`] implementation.
 ///
-/// Simulate blockchain block production by increasing block number by 1 every
+/// Simulate blockchain block production by increasing Block height by 1 every
 /// second. Epoch duration can be configured when creating the Clock.
 pub struct TimeClock {
     genesis: DateTime<Utc>,
@@ -33,96 +34,147 @@ impl Clock for TimeClock {
 
         let clock_ref = ClockRef {
             sender: sender.clone(),
+            current_epoch: self.current_epoch.clone(),
+            current_block_height: self.current_block.clone(),
         };
-        self.compute_block();
-        self.compute_epoch();
 
+        // Spawn the Clock task directly
         tokio::spawn(async move {
             self.run(sender).await;
         });
 
         Ok(clock_ref)
     }
-
-    fn block_ref(&self) -> Arc<AtomicU64> {
-        self.current_block.clone()
-    }
-    fn epoch_ref(&self) -> Arc<AtomicU64> {
-        self.current_epoch.clone()
-    }
 }
 
 impl TimeClock {
-    /// Create a new TimeClock instance based on the current datetime and an
+    /// Create a new [`TimeClock`] instance based on the current datetime and an
     /// Epoch.
     pub fn new_now(epoch_duration: NonZeroU64) -> Self {
         Self::new(Utc::now(), epoch_duration)
     }
 
-    /// Create a new TimeClock instance based on a genesis datetime and an Epoch
-    /// duration.
+    /// Create a new [`TimeClock`] instance based on a genesis datetime and an
+    /// Epoch duration.
     pub fn new(genesis: DateTime<Utc>, epoch_duration: NonZeroU64) -> Self {
-        let mut clock = Self {
+        Self {
             genesis,
             current_block: Arc::new(AtomicU64::new(0)),
             epoch_duration,
             current_epoch: Arc::new(AtomicU64::new(0)),
-        };
-
-        clock.compute_block();
-        clock.compute_epoch();
-
-        clock
+        }
     }
 
     /// Run the Clock task.
     async fn run(&mut self, sender: broadcast::Sender<Event>) {
         let mut interval = interval_at(Instant::now(), Duration::from_secs(1));
 
+        // Compute the current Block height and Epoch number
+        let current_block = self.update_block_height();
+        let current_epoch = self.calculate_epoch_number(current_block);
+
+        // Store the current Epoch number
+        self.current_epoch.store(current_epoch, Ordering::Relaxed);
+
         loop {
             interval.tick().await;
 
-            let _previous_block = self.current_block.fetch_add(1, Ordering::Relaxed);
+            // Increase the Block height by 1.
+            // The `fetch_add` method returns the previous value, so we need to add 1 to it
+            // to get the current Block height.
+            if let Some(current_block) = self
+                .current_block
+                .fetch_add(1, Ordering::Release)
+                .checked_add(1)
+            {
+                // If the current Block height is a multiple of the Epoch duration,
+                // the current Epoch has ended. In this case, we need to update the
+                // new Epoch number and send an `EpochEnded` event to the subscribers.
+                if current_block % self.epoch_duration == 0 {
+                    match self.update_epoch_number() {
+                        Ok(epoch_ended) => {
+                            _ = sender.send(Event::EpochEnded(epoch_ended));
+                        }
+                        Err((current_epoch, expected)) => {
+                            error!(
+                                "Unexpected error computing the current Epoch: current_epoch={}, \
+                                 expected_epoch={}, current_block={}",
+                                current_epoch, expected, current_block
+                            );
+                        }
+                    }
+                }
+            } else {
+                // TODO: This panic should be replaced by a more graceful shutdown mechanism.
+                let error_message = "Block height overflowed the u64 limit. \
+                                     This is an unexpected situation and could lead to unexpected behavior. \
+                                     Please report this issue to the developers. https://github.com/0xPolygonZero/agglayer-rs/issues/new \
+                                     The node will now kill itself to prevent further damage.";
 
-            if self.current_block.load(Ordering::Relaxed) % self.epoch_duration == 0 {
-                self.compute_epoch();
-                _ = sender.send(Event::EpochChange(
-                    self.current_epoch.load(Ordering::Relaxed),
-                ));
+                #[cfg(not(test))]
+                {
+                    error!("{}", error_message);
+                    std::process::exit(1);
+                }
+
+                #[cfg(test)]
+                panic!("{}", error_message);
             }
         }
     }
 
-    /// Computes the current block of this [`TimeClock`].
+    /// Updates the Block height of this [`TimeClock`].
     ///
-    /// This method is used to compute the current block number based on the
+    /// This method is used to update the Block height based on the
     /// genesis datetime and the current datetime.
     ///
-    /// The block number is the number of seconds since the genesis datetime.
-    fn compute_block(&mut self) {
-        let blocks = std::cmp::max(
+    /// The Block height is the number of seconds since the genesis datetime.
+    fn update_block_height(&mut self) -> u64 {
+        let block_height = self.calculate_block_height();
+
+        self.current_block.store(block_height, Ordering::Release);
+
+        block_height
+    }
+
+    /// Updates the current Epoch of this [`TimeClock`].
+    ///
+    /// This method is used to update the current Epoch number based on the
+    /// Block height and the Epoch duration.
+    ///
+    /// To define the current Epoch number, the Epoch duration divides the Block
+    /// height.
+    fn update_epoch_number(&mut self) -> Result<u64, (u64, u64)> {
+        let current_block = self.current_block.load(Ordering::Acquire);
+
+        let current_epoch = self.calculate_epoch_number(current_block);
+        let expected_epoch = current_epoch.saturating_sub(1);
+
+        match self.current_epoch.compare_exchange(
+            expected_epoch,
+            current_epoch,
+            Ordering::Acquire,
+            Ordering::Relaxed,
+        ) {
+            Ok(previous) => Ok(previous),
+            Err(stored) => Err((stored, expected_epoch)),
+        }
+    }
+
+    /// Calculate an Epoch number based on a Block number.
+    fn calculate_epoch_number(&self, from_block: u64) -> u64 {
+        from_block / self.epoch_duration
+    }
+
+    /// Calculate the Block height.
+    fn calculate_block_height(&self) -> u64 {
+        std::cmp::max(
             Utc::now()
                 .naive_utc()
                 .signed_duration_since(self.genesis.naive_utc())
                 .num_seconds(),
             0,
-        ) as u64;
-
-        self.current_block.store(blocks, Ordering::Relaxed);
-    }
-
-    /// Computes the current Epoch of this [`TimeClock`].
-    ///
-    /// This method is used to compute the current Epoch number based on the
-    /// current block number and the Epoch duration.
-    ///
-    /// To define the current Epoch number, the current block number is divided
-    /// by the Epoch duration.
-    fn compute_epoch(&mut self) {
-        self.current_epoch.store(
-            self.current_block.load(Ordering::Relaxed) / self.epoch_duration,
-            Ordering::Relaxed,
-        );
+        ) as u64
     }
 }
 
@@ -131,8 +183,9 @@ mod tests {
     use std::num::NonZeroU64;
 
     use chrono::{Duration, Utc};
+    use tokio::sync::broadcast;
 
-    use crate::{Clock, Event, TimeClock};
+    use crate::{Clock, ClockRef, Event, TimeClock, BROADCAST_CHANNEL_SIZE};
 
     #[tokio::test]
     async fn test_time_clock() {
@@ -141,15 +194,14 @@ mod tests {
             .unwrap();
 
         let clock = TimeClock::new(genesis, NonZeroU64::new(5).unwrap());
-        let current_block = clock.block_ref();
-        let current_epoch = clock.epoch_ref();
 
         let clock_ref = clock.spawn().await.unwrap();
 
         let mut recv = clock_ref.subscribe().unwrap();
-        assert_eq!(recv.recv().await, Ok(Event::EpochChange(7)));
-        assert_eq!(current_epoch.load(std::sync::atomic::Ordering::Relaxed), 7);
-        assert!(current_block.load(std::sync::atomic::Ordering::Relaxed) >= 30);
+
+        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(6)));
+        assert_eq!(clock_ref.current_epoch(), 7);
+        assert!(clock_ref.current_block_height() >= 30);
     }
 
     #[tokio::test]
@@ -159,22 +211,53 @@ mod tests {
             .unwrap();
 
         let clock = TimeClock::new(genesis, NonZeroU64::new(2).unwrap());
-        let current_block = clock.block_ref();
-        let current_epoch = clock.epoch_ref();
 
         let clock_ref = clock.spawn().await.unwrap();
 
         let mut recv = clock_ref.subscribe().unwrap();
-        assert_eq!(recv.recv().await, Ok(Event::EpochChange(16)));
+        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(15)));
         assert!(recv.try_recv().is_err());
-        assert_eq!(current_epoch.load(std::sync::atomic::Ordering::Relaxed), 16);
-        assert!(current_block.load(std::sync::atomic::Ordering::Relaxed) >= 30);
+        assert_eq!(clock_ref.current_epoch(), 16);
+        assert!(clock_ref.current_block_height() >= 30);
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
-        assert_eq!(recv.recv().await, Ok(Event::EpochChange(17)));
-        assert_eq!(recv.recv().await, Ok(Event::EpochChange(18)));
+        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(16)));
+        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(17)));
 
-        assert_eq!(current_epoch.load(std::sync::atomic::Ordering::Relaxed), 18);
-        assert!(current_block.load(std::sync::atomic::Ordering::Relaxed) >= 35);
+        assert_eq!(clock_ref.current_epoch(), 18);
+        assert!(clock_ref.current_block_height() >= 35);
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_time_clock_overflow() {
+        let genesis = Utc::now()
+            .checked_sub_signed(Duration::seconds(30))
+            .unwrap();
+
+        let mut clock = TimeClock::new(genesis, NonZeroU64::new(2).unwrap());
+        let blocks = clock.current_block.clone();
+        let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
+
+        let clock_ref = ClockRef {
+            sender: sender.clone(),
+            current_epoch: clock.current_epoch.clone(),
+            current_block_height: clock.current_block.clone(),
+        };
+
+        let mut fut = Box::pin(clock.run(sender));
+        let mut recv = clock_ref.subscribe().unwrap();
+
+        _ = futures::poll!(&mut fut);
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+        _ = futures::poll!(&mut fut);
+        assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(15)));
+
+        // Overflow the block height on next poll
+        blocks.store(u64::MAX - 1, std::sync::atomic::Ordering::SeqCst);
+
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        _ = futures::poll!(&mut fut);
     }
 }

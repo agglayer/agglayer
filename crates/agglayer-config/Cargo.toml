@@ -15,6 +15,9 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing.workspace = true
 url = { workspace = true, features = ["serde"] }
 
+[dev-dependencies]
+serde_json = { workspace = true }
+
 [features]
 default = []
 testutils = []

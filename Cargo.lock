@@ -56,8 +56,10 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "futures",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -68,6 +70,7 @@ dependencies = [
  "ethers-gcp-kms-signer",
  "jsonrpsee",
  "serde",
+ "serde_json",
  "serde_with",
  "thiserror",
  "tracing",
