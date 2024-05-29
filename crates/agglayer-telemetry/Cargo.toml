@@ -15,5 +15,5 @@ prometheus = "0.13.3"
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tokio-util = "0.7.11"
+tokio-util = { workspace = true }
 tracing.workspace = true

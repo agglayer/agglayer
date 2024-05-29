@@ -59,6 +59,7 @@ dependencies = [
  "futures",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 
