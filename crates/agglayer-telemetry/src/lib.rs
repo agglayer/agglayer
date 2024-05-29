@@ -83,13 +83,13 @@ impl ServerBuilder {
     /// #
     ///
     /// async fn build_metrics() -> Result<(), Error> {
-    ///    ServerBuilder::builder()
-    ///      .addr("127.0.0.1".parse::<SocketAddr>().unwrap())
-    ///      .cancellation_token(CancellationToken::new())
-    ///      .build()
-    ///      .await?;
+    ///     ServerBuilder::builder()
+    ///         .addr("127.0.0.1".parse::<SocketAddr>().unwrap())
+    ///         .cancellation_token(CancellationToken::new())
+    ///         .build()
+    ///         .await?;
     ///
-    ///    Ok(())
+    ///     Ok(())
     /// }
     /// ```
     ///
