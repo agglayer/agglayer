@@ -64,7 +64,6 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
- "agglayer-signer",
  "ethers",
  "ethers-gcp-kms-signer",
  "jsonrpsee",
@@ -78,11 +77,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-gcp-kms"
+version = "0.1.0"
+dependencies = [
+ "agglayer-config",
+ "ethers",
+ "ethers-gcp-kms-signer",
+ "serde",
+ "serde_with",
+ "thiserror",
+]
+
+[[package]]
 name = "agglayer-node"
 version = "0.1.0"
 dependencies = [
  "agglayer-clock",
  "agglayer-config",
+ "agglayer-signer",
  "agglayer-telemetry",
  "anyhow",
  "buildstructor",
@@ -110,6 +122,8 @@ dependencies = [
 name = "agglayer-signer"
 version = "0.1.0"
 dependencies = [
+ "agglayer-config",
+ "agglayer-gcp-kms",
  "async-trait",
  "ethers",
  "ethers-gcp-kms-signer",

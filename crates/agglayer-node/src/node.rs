@@ -2,6 +2,7 @@ use std::{num::NonZeroU64, sync::Arc};
 
 use agglayer_clock::{Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
+use agglayer_signer::ConfiguredSigner;
 use anyhow::Result;
 use ethers::{
     middleware::MiddlewareBuilder as _,
@@ -62,7 +63,7 @@ impl Node {
     ) -> Result<Self> {
         // Create a new L1 RPC provider with the configured signer.
         let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
-            .with_signer(config.get_configured_signer().await?);
+            .with_signer(ConfiguredSigner::new(config.clone()).await?);
 
         // Construct the core.
         let core = Kernel::new(rpc, config.clone());

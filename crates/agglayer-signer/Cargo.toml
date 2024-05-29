@@ -8,3 +8,6 @@ async-trait.workspace = true
 ethers-gcp-kms-signer.workspace = true
 ethers.workspace = true
 thiserror.workspace = true
+
+agglayer-config = { path = "../agglayer-config" }
+agglayer-gcp-kms = { path = "../agglayer-gcp-kms" }
