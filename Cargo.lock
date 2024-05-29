@@ -56,6 +56,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "ethers",
  "futures",
  "thiserror",
  "tokio",
@@ -1448,6 +1449,7 @@ dependencies = [
  "const-hex",
  "enr",
  "ethers-core",
+ "futures-channel",
  "futures-core",
  "futures-timer",
  "futures-util",

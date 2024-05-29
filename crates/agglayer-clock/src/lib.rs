@@ -10,8 +10,10 @@ use std::sync::{
 
 use tokio::sync::broadcast;
 
+mod block;
 mod time;
 
+pub use block::BlockClock;
 pub use time::TimeClock;
 use tokio_util::sync::CancellationToken;
 
