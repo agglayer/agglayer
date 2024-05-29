@@ -75,7 +75,7 @@ pub struct GcpKmsConfig {
     pub key_name: Option<String>,
 }
 
-// This is a workaround to support [EthTxManager] for PrivateKeys as it is used
+// This is a workaround to support `EthTxManager` for PrivateKeys as it is used
 // by kurtosis.
 #[derive(Deserialize)]
 struct IntermediateAuthConfig {
