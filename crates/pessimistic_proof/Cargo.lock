@@ -1372,6 +1372,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "sp1-derive",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?branch=patch-v2.0.2)",
 ]
 
@@ -1955,6 +1956,16 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 dependencies = [
  "arbitrary",
  "serde",
+]
+
+[[package]]
+name = "sp1-derive"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.2-testnet#60ce6ad149ca432a402c725f24d548931947464f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
