@@ -7,30 +7,20 @@
 use std::sync::Arc;
 
 use agglayer_config::{AuthConfig, Config, LocalConfig};
-use agglayer_gcp_kms::{Error as KmsError, KmsSigner, KMS};
+use agglayer_gcp_kms::{KmsSigner, KMS};
 use async_trait::async_trait;
 use ethers::{
     abi::Address,
-    signers::{LocalWallet, Signer, WalletError},
+    signers::{LocalWallet, Signer},
     types::{
         transaction::{eip2718::TypedTransaction, eip712::Eip712},
         Signature,
     },
 };
-use thiserror::Error;
 
-/// Errors that can occur when using a [`ConfiguredSigner`].
-///
-/// This is simply a union of either a [`WalletError`] or a [`KmsError`].
-#[derive(Debug, Error)]
-pub enum ConfiguredSignerError {
-    #[error("no private keys specified in the configuration")]
-    NoPk,
-    #[error("wallet error: {0}")]
-    Wallet(#[from] WalletError),
-    #[error("KMS error: {0}")]
-    Kms(#[from] KmsError),
-}
+mod error;
+
+pub use error::Error;
 
 /// A an ethers [`Signer`] that can house either a local keystore or a KMS
 /// signer.
@@ -48,19 +38,13 @@ pub enum ConfiguredSigner {
 
 impl ConfiguredSigner {
     /// Decrypt the first local keystore specified in the configuration.
-    pub(crate) fn local_wallet(
-        chain_id: u64,
-        local: &LocalConfig,
-    ) -> Result<LocalWallet, ConfiguredSignerError> {
-        let pk = local
-            .private_keys
-            .first()
-            .ok_or(ConfiguredSignerError::NoPk)?;
+    pub(crate) fn local_wallet(chain_id: u64, local: &LocalConfig) -> Result<LocalWallet, Error> {
+        let pk = local.private_keys.first().ok_or(Error::NoPk)?;
         Ok(LocalWallet::decrypt_keystore(&pk.path, &pk.password)?.with_chain_id(chain_id))
     }
 
     /// Get either a local wallet or GCP KMS signer based on the configuration.
-    pub async fn new(config: Arc<Config>) -> Result<Self, ConfiguredSignerError> {
+    pub async fn new(config: Arc<Config>) -> Result<Self, Error> {
         match &config.auth {
             AuthConfig::GcpKms(ref kms) => {
                 let kms = KMS::new(config.l1.chain_id, kms.clone());
@@ -78,36 +62,24 @@ impl ConfiguredSigner {
 /// This implementation simply delegates to the underlying signer.
 #[async_trait]
 impl Signer for ConfiguredSigner {
-    type Error = ConfiguredSignerError;
+    type Error = Error;
 
     async fn sign_message<S: Send + Sync + AsRef<[u8]>>(
         &self,
         message: S,
     ) -> Result<Signature, Self::Error> {
-        match self {
-            ConfiguredSigner::Local(wallet) => wallet
-                .sign_message(message)
-                .await
-                .map_err(ConfiguredSignerError::Wallet),
-            ConfiguredSigner::Kms(signer) => signer
-                .sign_message(message)
-                .await
-                .map_err(ConfiguredSignerError::Kms),
-        }
+        Ok(match self {
+            ConfiguredSigner::Local(wallet) => wallet.sign_message(message).await?,
+            ConfiguredSigner::Kms(signer) => signer.sign_message(message).await?,
+        })
     }
 
     /// Signs the transaction
     async fn sign_transaction(&self, message: &TypedTransaction) -> Result<Signature, Self::Error> {
-        match self {
-            ConfiguredSigner::Local(wallet) => wallet
-                .sign_transaction(message)
-                .await
-                .map_err(ConfiguredSignerError::Wallet),
-            ConfiguredSigner::Kms(signer) => signer
-                .sign_transaction(message)
-                .await
-                .map_err(ConfiguredSignerError::Kms),
-        }
+        Ok(match self {
+            ConfiguredSigner::Local(wallet) => wallet.sign_transaction(message).await?,
+            ConfiguredSigner::Kms(signer) => signer.sign_transaction(message).await?,
+        })
     }
 
     /// Encodes and signs the typed data according EIP-712.
@@ -116,16 +88,10 @@ impl Signer for ConfiguredSigner {
         &self,
         payload: &T,
     ) -> Result<Signature, Self::Error> {
-        match self {
-            ConfiguredSigner::Local(wallet) => wallet
-                .sign_typed_data(payload)
-                .await
-                .map_err(ConfiguredSignerError::Wallet),
-            ConfiguredSigner::Kms(signer) => signer
-                .sign_typed_data(payload)
-                .await
-                .map_err(ConfiguredSignerError::Kms),
-        }
+        Ok(match self {
+            ConfiguredSigner::Local(wallet) => wallet.sign_typed_data(payload).await?,
+            ConfiguredSigner::Kms(signer) => signer.sign_typed_data(payload).await?,
+        })
     }
 
     /// Returns the signer's Ethereum Address

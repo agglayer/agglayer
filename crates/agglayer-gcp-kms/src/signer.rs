@@ -23,21 +23,18 @@ impl KmsSigner {
         &self,
         message: S,
     ) -> Result<Signature, Error> {
-        self.signer.sign_message(message).await.map_err(Error::Gcp)
+        Ok(self.signer.sign_message(message).await?)
     }
 
     pub async fn sign_transaction(&self, tx: &TypedTransaction) -> Result<Signature, Error> {
-        self.signer.sign_transaction(tx).await.map_err(Error::Gcp)
+        Ok(self.signer.sign_transaction(tx).await?)
     }
 
     pub async fn sign_typed_data<T: Eip712 + Send + Sync>(
         &self,
         payload: &T,
     ) -> Result<Signature, Error> {
-        self.signer
-            .sign_typed_data(payload)
-            .await
-            .map_err(Error::Gcp)
+        Ok(self.signer.sign_typed_data(payload).await?)
     }
 
     pub fn address(&self) -> Address {

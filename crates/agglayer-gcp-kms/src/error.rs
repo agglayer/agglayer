@@ -7,6 +7,4 @@ pub enum Error {
     KmsProvider(#[from] CKMSError),
     #[error("KMS configuration error: missing key or env {0}")]
     KmsConfig(String),
-    #[error("KMS error: {0}")]
-    Gcp(CKMSError),
 }
