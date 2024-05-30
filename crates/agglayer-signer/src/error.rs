@@ -1,4 +1,4 @@
-use agglayer_gcp_kms::Error as KmsError;
+use agglayer_gcp_kms::Error as GcpKmsError;
 use ethers::signers::WalletError;
 use thiserror::Error;
 
@@ -11,6 +11,6 @@ pub enum Error {
     NoPk,
     #[error("wallet error: {0}")]
     Wallet(#[from] WalletError),
-    #[error("KMS error: {0}")]
-    Kms(#[from] KmsError),
+    #[error("GcpKMS error: {0}")]
+    GcpKms(#[from] GcpKmsError),
 }
