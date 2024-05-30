@@ -73,8 +73,23 @@ impl TimeClock {
         let current_block = self.update_block_height();
         let current_epoch = self.calculate_epoch_number(current_block);
 
-        // Store the current Epoch number
-        self.current_epoch.store(current_epoch, Ordering::Relaxed);
+        // Use compare_exchange to ensure the initial current_epoch is 0
+        if self
+            .current_epoch
+            .compare_exchange(0, current_epoch, Ordering::AcqRel, Ordering::Relaxed)
+            .is_err()
+        {
+            let error_message =
+                "The current_epoch has already been modified. Shutting down the Clock task.";
+            #[cfg(not(test))]
+            {
+                error!("{}", error_message);
+                std::process::exit(1);
+            }
+
+            #[cfg(test)]
+            panic!("{}", error_message);
+        }
 
         loop {
             interval.tick().await;
@@ -180,7 +195,7 @@ impl TimeClock {
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZeroU64;
+    use std::{num::NonZeroU64, sync::atomic::Ordering};
 
     use chrono::{Duration, Utc};
     use tokio::sync::broadcast;
@@ -259,5 +274,20 @@ mod tests {
 
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         _ = futures::poll!(&mut fut);
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_initial_epoch_update_error() {
+        let genesis = Utc::now()
+            .checked_sub_signed(Duration::seconds(30))
+            .unwrap();
+
+        let mut clock = TimeClock::new(genesis, NonZeroU64::new(5).unwrap());
+        clock.current_epoch.store(1, Ordering::Relaxed);
+
+        let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
+
+        let _ = clock.run(sender).await;
     }
 }
