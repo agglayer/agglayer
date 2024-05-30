@@ -4,7 +4,7 @@ use thiserror::Error;
 
 /// Errors that can occur when using a [`ConfiguredSigner`].
 ///
-/// This is simply a union of either a [`WalletError`] or a [`KmsError`].
+/// This is simply a union of either a [`WalletError`] or a [`GcpKmsError`].
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("no private keys specified in the configuration")]
