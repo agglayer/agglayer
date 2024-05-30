@@ -23,19 +23,6 @@ pub struct KMS {
 
 impl KMS {
     /// Creates a new KMS instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `chain_id` - The L1 chain id.
-    /// * `config` - The GCP KMS configuration.
-    ///
-    /// # Returns
-    ///
-    /// * `Self` - A new instance of KMS
-    ///
-    /// # Returns
-    ///
-    /// * `Self` - A new instance of KMS.
     pub fn new(chain_id: u64, config: GcpKmsConfig) -> Self {
         Self { chain_id, config }
     }
@@ -44,7 +31,7 @@ impl KMS {
     ///
     /// This method will first attempt to use the environment variables, and if
     /// they are not set, it will fall back to the values specified in the
-    /// configuration file.
+    /// configuration.
     ///
     /// The `ethers_gcp_kms_signer` library will attempt to load credentials in
     /// the typical fashion for GCP:
@@ -68,25 +55,25 @@ impl KMS {
             self.config
                 .project_id
                 .clone()
-                .ok_or(Error::KmsConfig("GOOGLE_PROJECT_ID".to_string()))
+                .ok_or(Error::KmsConfig("GOOGLE_PROJECT_ID"))
         })?;
         let location = std::env::var("GOOGLE_LOCATION").or_else(|_| {
             self.config
                 .location
                 .clone()
-                .ok_or(Error::KmsConfig("GOOGLE_LOCATION".to_string()))
+                .ok_or(Error::KmsConfig("GOOGLE_LOCATION"))
         })?;
         let keyring = std::env::var("GOOGLE_KEYRING").or_else(|_| {
             self.config
                 .keyring
                 .clone()
-                .ok_or(Error::KmsConfig("GOOGLE_KEYRING".to_string()))
+                .ok_or(Error::KmsConfig("GOOGLE_KEYRING"))
         })?;
         let key_name = std::env::var("GOOGLE_KEY_NAME").or_else(|_| {
             self.config
                 .key_name
                 .clone()
-                .ok_or(Error::KmsConfig("GOOGLE_KEY_NAME".to_string()))
+                .ok_or(Error::KmsConfig("GOOGLE_KEY_NAME"))
         })?;
 
         let keyring = GcpKeyRingRef::new(&project_id, &location, &keyring);

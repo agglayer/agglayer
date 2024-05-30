@@ -9,8 +9,8 @@ use thiserror::Error;
 pub enum Error {
     /// An error occurred with the KMS provider.
     ///
-    /// This variant wraps the underlying error from the `ethers_gcp_kms_signer`
-    /// library.
+    /// This variant wraps the underlying [`CKMSerror`] from the
+    /// `ethers_gcp_kms_signer` library.
     #[error("KMS Provider error: {0}")]
     KmsProvider(#[from] CKMSError),
 
@@ -19,5 +19,5 @@ pub enum Error {
     /// This variant is used when a required key or environment variable is
     /// missing.
     #[error("KMS configuration error: missing key or env {0}")]
-    KmsConfig(String),
+    KmsConfig(&'static str),
 }
