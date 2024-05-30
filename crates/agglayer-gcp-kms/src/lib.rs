@@ -1,3 +1,7 @@
+//! The [`KMS`] struct provides functionality to create a GCP KMS signer from a
+//! configuration. This struct is used to initialize and configure a Google
+//! Cloud KMS signer.
+
 use agglayer_config::GcpKmsConfig;
 use ethers_gcp_kms_signer::{GcpKeyRingRef, GcpKmsProvider, GcpKmsSigner};
 use serde::Deserialize;
@@ -13,25 +17,52 @@ pub use signer::KmsSigner;
 pub struct KMS {
     /// The L1 chain id.
     chain_id: u64,
-    /// The kms configuration.
+    /// The GCP KMS configuration.
     config: GcpKmsConfig,
 }
 
 impl KMS {
+    /// Creates a new KMS instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `chain_id` - The L1 chain id.
+    /// * `config` - The GCP KMS configuration.
+    ///
+    /// # Returns
+    ///
+    /// * `Self` - A new instance of KMS
+    ///
+    /// # Returns
+    ///
+    /// * `Self` - A new instance of KMS.
     pub fn new(chain_id: u64, config: GcpKmsConfig) -> Self {
         Self { chain_id, config }
     }
-    /// Create a GCP KMS signer from the configuration.
-    /// This will first attempt to use the environment variables, and if they
-    /// are not set, it will fall back to the values specified configuration
-    /// file.
+
+    /// Creates a GCP KMS signer from the configuration.
+    ///
+    /// This method will first attempt to use the environment variables, and if
+    /// they are not set, it will fall back to the values specified in the
+    /// configuration file.
     ///
     /// The `ethers_gcp_kms_signer` library will attempt to load credentials in
     /// the typical fashion for GCP:
-    /// - If the application is running in a k8s cluster, it should
+    /// - If the application is running in a Kubernetes cluster, it should
     ///   automatically pick up credentials.
-    /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment is set, attempt to
-    ///   load a service account JSON from this path.
+    /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment variable is set,
+    ///   it will attempt to load a service account JSON from this path.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<KmsSigner, Error>` - A result containing the KmsSigner on
+    ///   success, or an Error on failure.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if it fails to retrieve the required
+    /// environment variables or if there is an issue creating the GCP KMS
+    /// signer.
     pub async fn gcp_kms_signer(&self) -> Result<KmsSigner, Error> {
         let project_id = std::env::var("GOOGLE_PROJECT_ID").or_else(|_| {
             self.config
