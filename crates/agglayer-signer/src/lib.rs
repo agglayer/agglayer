@@ -66,7 +66,7 @@ impl Signer for ConfiguredSigner {
 
     async fn sign_message<S: Send + Sync + AsRef<[u8]>>(
         &self,
-        mut message: S,
+        message: S,
     ) -> Result<Signature, Self::Error> {
         Ok(match self {
             ConfiguredSigner::Local(wallet) => wallet.sign_message(message).await?,
