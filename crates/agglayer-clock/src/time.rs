@@ -74,21 +74,28 @@ impl TimeClock {
         let current_epoch = self.calculate_epoch_number(current_block);
 
         // Use compare_exchange to ensure the initial current_epoch is 0
-        if self
-            .current_epoch
-            .compare_exchange(0, current_epoch, Ordering::AcqRel, Ordering::Relaxed)
-            .is_err()
-        {
-            let error_message =
-                "The current_epoch has already been modified. Shutting down the Clock task.";
-            #[cfg(not(test))]
-            {
-                error!("{}", error_message);
-                std::process::exit(1);
-            }
+        match self.current_epoch.compare_exchange(
+            0,
+            current_epoch,
+            Ordering::AcqRel,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => (),
+            Err(stored_value) => {
+                let error_message = format!(
+                    "The current_epoch has already been modified. Shutting down the Clock task. \
+                     Stored value: {}",
+                    stored_value
+                );
+                #[cfg(not(test))]
+                {
+                    error!("{}", error_message);
+                    std::process::exit(1);
+                }
 
-            #[cfg(test)]
-            panic!("{}", error_message);
+                #[cfg(test)]
+                panic!("{}", error_message);
+            }
         }
 
         loop {
