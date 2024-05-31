@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 
 use auth::deserialize_auth;
+use outbound::OutboundConfig;
 use serde::Deserialize;
 use url::Url;
 
@@ -17,6 +18,7 @@ pub(crate) mod auth;
 pub(crate) mod epoch;
 pub(crate) mod l1;
 pub mod log;
+pub(crate) mod outbound;
 pub(crate) mod rpc;
 pub(crate) mod telemetry;
 
@@ -42,6 +44,9 @@ pub struct Config {
     /// The local RPC server configuration.
     #[serde(rename = "RPC")]
     pub rpc: RpcConfig,
+    /// The configuration for every outbound network component.
+    #[serde(default)]
+    pub outbound: OutboundConfig,
     /// The L1 configuration.
     #[serde(rename = "L1")]
     pub l1: L1,

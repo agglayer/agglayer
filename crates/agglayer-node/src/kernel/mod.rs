@@ -326,6 +326,9 @@ where
             .send()
             .await
             .map_err(SettlementError::ContractError)?
+            .interval(self.config.outbound.rpc.settle.retry_interval)
+            .retries(self.config.outbound.rpc.settle.max_retries)
+            .confirmations(self.config.outbound.rpc.settle.confirmations)
             .await
             .map_err(SettlementError::ProviderError)?
             // If the result is `None`, it means the transaction is no longer in the mempool.
