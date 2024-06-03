@@ -15,3 +15,16 @@ WARNING: This is a work in progress, and as such, all APIs and configuration are
 # Prerequisites
 
 * For each CDK chain it's necessary to configure its corresponding RPC node, synced with the target CDK. This node will be used for checking the state root after executions of L2 batches.
+
+  
+# License
+Copyright (c) 2024 PT Services DMCC
+
+Licensed under either of
+
+* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+* MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option. 
+
+The SPDX license identifier for this project is `MIT OR Apache-2.0`.
