@@ -13,6 +13,7 @@ use tokio::sync::broadcast;
 mod time;
 
 pub use time::TimeClock;
+use tokio_util::sync::CancellationToken;
 
 const BROADCAST_CHANNEL_SIZE: usize = 100;
 
@@ -21,7 +22,7 @@ const BROADCAST_CHANNEL_SIZE: usize = 100;
 #[async_trait::async_trait]
 pub trait Clock {
     /// Spawn the Clock task and return a [`ClockRef`] to interact with it.
-    async fn spawn(self) -> Result<ClockRef, Error>;
+    async fn spawn(self, cancellation_token: CancellationToken) -> Result<ClockRef, Error>;
 }
 
 /// The ClockRef is a reference to the Clock instance.

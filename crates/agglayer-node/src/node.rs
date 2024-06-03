@@ -78,7 +78,7 @@ impl Node {
                     ))?;
                 let clock = TimeClock::new_now(duration);
 
-                clock.spawn().await?
+                clock.spawn(cancellation_token.clone()).await?
             }
         };
 

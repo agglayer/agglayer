@@ -12,7 +12,8 @@ use tokio::{
     sync::broadcast,
     time::{interval_at, Instant},
 };
-use tracing::error;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, error};
 
 use crate::{Clock, ClockRef, Error, Event, BROADCAST_CHANNEL_SIZE};
 
@@ -29,7 +30,7 @@ pub struct TimeClock {
 
 #[async_trait::async_trait]
 impl Clock for TimeClock {
-    async fn spawn(mut self) -> Result<ClockRef, Error> {
+    async fn spawn(mut self, cancellation_token: CancellationToken) -> Result<ClockRef, Error> {
         let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
 
         let clock_ref = ClockRef {
@@ -40,7 +41,7 @@ impl Clock for TimeClock {
 
         // Spawn the Clock task directly
         tokio::spawn(async move {
-            self.run(sender).await;
+            self.run(sender, cancellation_token).await;
         });
 
         Ok(clock_ref)
@@ -66,7 +67,11 @@ impl TimeClock {
     }
 
     /// Run the Clock task.
-    async fn run(&mut self, sender: broadcast::Sender<Event>) {
+    async fn run(
+        &mut self,
+        sender: broadcast::Sender<Event>,
+        cancellation_token: CancellationToken,
+    ) {
         let mut interval = interval_at(Instant::now(), Duration::from_secs(1));
 
         // Compute the current Block height and Epoch number
@@ -95,48 +100,48 @@ impl TimeClock {
         }
 
         loop {
-            interval.tick().await;
+            tokio::select! {
+                _ = cancellation_token.cancelled() => {
+                    debug!("Clock task cancelled");
+                    break;
+                }
+                _ = interval.tick() => {
 
-            // Increase the Block height by 1.
-            // The `fetch_add` method returns the previous value, so we need to add 1 to it
-            // to get the current Block height.
-            if let Some(current_block) = self
-                .current_block
-                .fetch_add(1, Ordering::Release)
-                .checked_add(1)
-            {
-                // If the current Block height is a multiple of the Epoch duration,
-                // the current Epoch has ended. In this case, we need to update the
-                // new Epoch number and send an `EpochEnded` event to the subscribers.
-                if current_block % self.epoch_duration == 0 {
-                    match self.update_epoch_number() {
-                        Ok(epoch_ended) => {
-                            _ = sender.send(Event::EpochEnded(epoch_ended));
+                    // Increase the Block height by 1.
+                    // The `fetch_add` method returns the previous value, so we need to add 1 to it
+                    // to get the current Block height.
+                    if let Some(current_block) = self
+                        .current_block
+                            .fetch_add(1, Ordering::Release)
+                            .checked_add(1)
+                    {
+                        // If the current Block height is a multiple of the Epoch duration,
+                        // the current Epoch has ended. In this case, we need to update the
+                        // new Epoch number and send an `EpochEnded` event to the subscribers.
+                        if current_block % self.epoch_duration == 0 {
+                            match self.update_epoch_number() {
+                                Ok(epoch_ended) => {
+                                    _ = sender.send(Event::EpochEnded(epoch_ended));
+                                }
+                                Err((current_epoch, expected)) => {
+                                    error!(
+                                        "Unexpected error computing the current Epoch: current_epoch={}, \
+                                        expected_epoch={}, current_block={}",
+                                        current_epoch, expected, current_block
+                                    );
+                                    cancellation_token.cancel();
+                                }
+                            }
                         }
-                        Err((current_epoch, expected)) => {
-                            error!(
-                                "Unexpected error computing the current Epoch: current_epoch={}, \
-                                 expected_epoch={}, current_block={}",
-                                current_epoch, expected, current_block
-                            );
-                        }
+                    } else {
+                       error!("Block height overflowed the u64 limit. \
+                           This is an unexpected situation and could lead to unexpected behavior. \
+                           Please report this issue to the developers. https://github.com/AggLayer/agglayer-rs/issues/new \
+                           The node will now kill itself to prevent further damage.");
+
+                        cancellation_token.cancel();
                     }
                 }
-            } else {
-                // TODO: This panic should be replaced by a more graceful shutdown mechanism.
-                let error_message = "Block height overflowed the u64 limit. \
-                                     This is an unexpected situation and could lead to unexpected behavior. \
-                                     Please report this issue to the developers. https://github.com/0xPolygonZero/agglayer-rs/issues/new \
-                                     The node will now kill itself to prevent further damage.";
-
-                #[cfg(not(test))]
-                {
-                    error!("{}", error_message);
-                    std::process::exit(1);
-                }
-
-                #[cfg(test)]
-                panic!("{}", error_message);
             }
         }
     }
@@ -202,6 +207,7 @@ mod tests {
 
     use chrono::{Duration, Utc};
     use tokio::sync::broadcast;
+    use tokio_util::sync::CancellationToken;
 
     use crate::{Clock, ClockRef, Event, TimeClock, BROADCAST_CHANNEL_SIZE};
 
@@ -213,7 +219,8 @@ mod tests {
 
         let clock = TimeClock::new(genesis, NonZeroU64::new(5).unwrap());
 
-        let clock_ref = clock.spawn().await.unwrap();
+        let token = CancellationToken::new();
+        let clock_ref = clock.spawn(token.clone()).await.unwrap();
 
         let mut recv = clock_ref.subscribe().unwrap();
 
@@ -230,7 +237,8 @@ mod tests {
 
         let clock = TimeClock::new(genesis, NonZeroU64::new(2).unwrap());
 
-        let clock_ref = clock.spawn().await.unwrap();
+        let token = CancellationToken::new();
+        let clock_ref = clock.spawn(token.clone()).await.unwrap();
 
         let mut recv = clock_ref.subscribe().unwrap();
         assert_eq!(recv.recv().await, Ok(Event::EpochEnded(15)));
@@ -247,7 +255,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic]
     async fn test_time_clock_overflow() {
         let genesis = Utc::now()
             .checked_sub_signed(Duration::seconds(30))
@@ -263,7 +270,8 @@ mod tests {
             current_block_height: clock.current_block.clone(),
         };
 
-        let mut fut = Box::pin(clock.run(sender));
+        let token = CancellationToken::new();
+        let mut fut = Box::pin(clock.run(sender, token.clone()));
         let mut recv = clock_ref.subscribe().unwrap();
 
         _ = futures::poll!(&mut fut);
@@ -277,6 +285,8 @@ mod tests {
 
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         _ = futures::poll!(&mut fut);
+
+        assert!(token.is_cancelled());
     }
 
     #[tokio::test]
@@ -291,6 +301,7 @@ mod tests {
 
         let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
 
-        let _ = clock.run(sender).await;
+        let token = CancellationToken::new();
+        let _ = clock.run(sender, token).await;
     }
 }
