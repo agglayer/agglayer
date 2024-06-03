@@ -93,7 +93,7 @@ impl Node {
             tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
                 .filter_map(|value| value.ok());
 
-        let (_data_sender, data_receiver) = mpsc::channel(
+        let (data_sender, data_receiver) = mpsc::channel(
             config
                 .certificate_orchestrator
                 .input_backpressure_buffer_size,
@@ -108,7 +108,7 @@ impl Node {
             .await?;
 
         // Bind the core to the RPC server.
-        let server_handle = AgglayerImpl::new(core).start(config).await?;
+        let server_handle = AgglayerImpl::new(core, data_sender).start(config).await?;
 
         let rpc_handle = tokio::spawn(async move {
             tokio::select! {

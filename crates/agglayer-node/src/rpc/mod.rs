@@ -16,7 +16,7 @@ use jsonrpsee::{
         ErrorObject, ErrorObjectOwned,
     },
 };
-use tokio::try_join;
+use tokio::{sync::mpsc, try_join};
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument};
 
@@ -35,17 +35,24 @@ trait Agglayer {
 
     #[method(name = "getTxStatus")]
     async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus>;
+
+    #[method(name = "sendCertificate")]
+    async fn send_certificate(&self, certificate: ()) -> RpcResult<()>;
 }
 
 /// The RPC agglayer service implementation.
 pub(crate) struct AgglayerImpl<Rpc> {
     kernel: Kernel<Rpc>,
+    certificate_sender: mpsc::Sender<()>,
 }
 
 impl<Rpc> AgglayerImpl<Rpc> {
     /// Create an instance of the RPC agglayer service.
-    pub(crate) fn new(kernel: Kernel<Rpc>) -> Self {
-        Self { kernel }
+    pub(crate) fn new(kernel: Kernel<Rpc>, certificate_sender: mpsc::Sender<()>) -> Self {
+        Self {
+            kernel,
+            certificate_sender,
+        }
     }
 }
 impl<Rpc> AgglayerImpl<Rpc>
@@ -240,6 +247,16 @@ where
                     Some(format!("tx not found for hash: {}", hash)),
                 )
             })
+    }
+
+    async fn send_certificate(&self, certificate: ()) -> RpcResult<()> {
+        if let Err(error) = self.certificate_sender.send(certificate).await {
+            error!("Failed to send certificate: {error}");
+
+            return Err(internal_error("Unable to send certificate to collector"));
+        }
+
+        Ok(())
     }
 }
 
