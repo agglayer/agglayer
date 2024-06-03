@@ -336,7 +336,7 @@ mod interop_executor_execute {
     }
 }
 
-fn signed_tx() -> SignedTx {
+pub(crate) fn signed_tx() -> SignedTx {
     SignedTx {
         tx: crate::signed_tx::ProofManifest {
             rollup_id: 1,

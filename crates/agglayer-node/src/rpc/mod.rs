@@ -9,10 +9,14 @@ use jsonrpsee::{
     proc_macros::rpc,
     server::{middleware::http::ProxyGetRequestLayer, PingConfig, ServerBuilder, ServerHandle},
     types::{
-        error::{INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, INVALID_PARAMS_CODE, INVALID_PARAMS_MSG},
+        error::{
+            CALL_EXECUTION_FAILED_CODE, INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG,
+            INVALID_PARAMS_CODE, INVALID_PARAMS_MSG,
+        },
         ErrorObject, ErrorObjectOwned,
     },
 };
+use serde::{Deserialize, Serialize};
 use tokio::try_join;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
@@ -29,6 +33,9 @@ mod tests;
 trait Agglayer {
     #[method(name = "sendTx")]
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256>;
+
+    #[method(name = "getTxStatus")]
+    async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus>;
 }
 
 /// The RPC agglayer service implementation.
@@ -192,4 +199,51 @@ where
 
         Ok(receipt.transaction_hash)
     }
+
+    async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus> {
+        let recipt = self.kernel.check_tx_status(hash).await.map_err(|e| {
+            error!("Failed to get transaction status for hash {hash}: {e}");
+
+            ErrorObject::owned(
+                CALL_EXECUTION_FAILED_CODE,
+                INTERNAL_ERROR_MSG,
+                Some(format!("failed to get tx, error: {}", e)),
+            )
+        })?;
+
+        let current_block = self.kernel.current_l1_block_height().await.map_err(|e| {
+            error!("Failed to get current L1 block: {e}");
+
+            ErrorObject::owned(
+                CALL_EXECUTION_FAILED_CODE,
+                INTERNAL_ERROR_MSG,
+                Some(format!("failed to get current L1 block, error: {}", e)),
+            )
+        })?;
+
+        recipt
+            .map(|recipt| match recipt.block_number {
+                Some(block_number) if block_number < current_block => TxStatus {
+                    status: "done".to_string(),
+                },
+                Some(_) => TxStatus {
+                    status: "pending".to_string(),
+                },
+                None => TxStatus {
+                    status: "not found".to_string(),
+                },
+            })
+            .ok_or_else(|| {
+                ErrorObject::owned(
+                    CALL_EXECUTION_FAILED_CODE,
+                    INTERNAL_ERROR_MSG,
+                    Some(format!("tx not found for hash: {}", hash)),
+                )
+            })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct TxStatus {
+    pub status: String,
 }
