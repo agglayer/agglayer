@@ -38,6 +38,9 @@ jobs:
         with:
             cache-on-failure: true
 
+      - name: Install Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Test
         run: cargo test
 
