@@ -27,6 +27,7 @@ tracing.workspace = true
 agglayer-config = { path = "../agglayer-config" }
 agglayer-clock = { path = "../agglayer-clock" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
+agglayer-storage = { path = "../agglayer-storage" }
 agglayer-signer = { path = "../agglayer-signer" }
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
 pessimistic-proof = { path = "../pessimistic-proof" }

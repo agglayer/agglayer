@@ -44,26 +44,19 @@ pub struct AggregatorNotifier<I> {
     /// The prover that will be used to generate the proof
     prover: Arc<dyn AggregatorProver<I>>,
 }
-
-impl<I> TryFrom<ProverConfig> for AggregatorNotifier<I>
+impl<I> AggregatorNotifier<I>
 where
     I: Serialize,
 {
-    type Error = NotifierError;
-
-    #[cfg_attr(feature = "coverage", coverage(off))]
-    fn try_from(config: ProverConfig) -> Result<Self, Self::Error> {
-        match config {
-            ProverConfig::SP1Network {} => Ok(Self {
-                prover: Arc::new(SP1::new(NetworkProver::new(), ELF)),
-            }),
-            ProverConfig::SP1Local {} => Ok(Self {
-                prover: Arc::new(SP1::new(LocalProver::new(), ELF)),
-            }),
-            ProverConfig::SP1Mock {} => Ok(Self {
-                prover: Arc::new(SP1::new(MockProver::new(), ELF)),
-            }),
-        }
+    /// Try to create a new notifier using the given configuration
+    pub fn try_new(config: &ProverConfig) -> Result<Self, NotifierError> {
+        Ok(Self {
+            prover: match config {
+                ProverConfig::SP1Network {} => Arc::new(SP1::new(NetworkProver::new(), ELF)),
+                ProverConfig::SP1Local {} => Arc::new(SP1::new(LocalProver::new(), ELF)),
+                ProverConfig::SP1Mock {} => Arc::new(SP1::new(MockProver::new(), ELF)),
+            },
+        })
     }
 }
 
@@ -97,6 +90,7 @@ impl Certifier for AggregatorNotifier<MultiBatchHeader<Keccak256Hasher>> {
                 Err(Error::ProofVerificationFailed)
             } else {
                 info!("Successfully generated and verified the p-proof!");
+
                 Ok(CertifierOutput {
                     proof,
                     new_state: state,

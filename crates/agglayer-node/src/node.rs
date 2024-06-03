@@ -5,6 +5,10 @@ use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
 use agglayer_signer::ConfiguredSigner;
+use agglayer_storage::{
+    storage::DB,
+    stores::{metadata::MetadataStore, pending::PendingStore, state::StateStore},
+};
 use anyhow::Result;
 use ethers::{
     middleware::MiddlewareBuilder,
@@ -66,15 +70,23 @@ impl Node {
         config: Arc<Config>,
         cancellation_token: CancellationToken,
     ) -> Result<Self> {
-        let signer = ConfiguredSigner::new(config.clone()).await?;
-        let address = signer.address();
-        // Create a new L1 RPC provider with the configured signer.
-        let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
-            .with_signer(signer)
-            .nonce_manager(address);
+        // Initializing storage
+        let metadata_db = Arc::new(DB::open_cf(
+            &config.storage.metadata_path,
+            agglayer_storage::storage::metadata_db_cf_definitions(),
+        )?);
+        let pending_db = Arc::new(DB::open_cf(
+            &config.storage.pending_path,
+            agglayer_storage::storage::pending_db_cf_definitions(),
+        )?);
+        let state_db = Arc::new(DB::open_cf(
+            &config.storage.state_path,
+            agglayer_storage::storage::state_db_cf_definitions(),
+        )?);
 
-        // Construct the core.
-        let core = Kernel::new(rpc, config.clone());
+        let _metadata_store = Arc::new(MetadataStore::new(metadata_db));
+        let _state_store = Arc::new(StateStore::new(state_db));
+        let _pending_store = Arc::new(PendingStore::new(pending_db));
 
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
@@ -90,10 +102,20 @@ impl Node {
             }
         };
 
+        let signer = ConfiguredSigner::new(config.clone()).await?;
+        let address = signer.address();
+        // Create a new L1 RPC provider with the configured signer.
+        let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
+            .with_signer(signer)
+            .nonce_manager(address);
+
+        // Construct the core.
+        let core = Kernel::new(rpc, config.clone());
+
         let certifier_aggregator_task: AggregatorNotifier<_> =
-            config.certificate_orchestrator.prover.clone().try_into()?;
+            AggregatorNotifier::try_new(&config.certificate_orchestrator.prover)?;
         let epoch_packing_aggregator_task: AggregatorNotifier<_> =
-            config.certificate_orchestrator.prover.clone().try_into()?;
+            AggregatorNotifier::try_new(&config.certificate_orchestrator.prover)?;
         let clock_subscription =
             tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
                 .filter_map(|value| value.ok());

@@ -1,7 +1,6 @@
 ---
 source: crates/agglayer/tests/config.rs
-assertion_line: 12
-expression: result
+expression: sanitize_config_folder_path(result)
 ---
 [full-node-rpcs]
 
@@ -42,3 +41,9 @@ runtime-timeout = 5
 input-backpressure-buffer-size = 1000
 
 [certificate-orchestrator.prover.sp1-local]
+
+[storage]
+metadata-path = "/tmp/agglayer-test/storage/metadata"
+pending-path = "/tmp/agglayer-test/storage/pending"
+state-path = "/tmp/agglayer-test/storage/state"
+epochs-path = "/tmp/agglayer-test/storage/epochs"

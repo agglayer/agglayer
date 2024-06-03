@@ -12,7 +12,8 @@ mod sp1 {
     #[case(ProverConfig::SP1Local {})]
     #[case(ProverConfig::SP1Mock {})]
     async fn aggregator_notifier_can_be_implemented(#[case] config: ProverConfig) {
-        let notifier = AggregatorNotifier::<()>::try_from(config);
+        let notifier = AggregatorNotifier::<()>::try_new(&config);
+
         assert!(notifier.is_ok());
 
         let notifier = notifier.unwrap();

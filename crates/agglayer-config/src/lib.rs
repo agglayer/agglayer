@@ -27,6 +27,7 @@ pub(crate) mod outbound;
 pub mod proof_signers;
 pub(crate) mod rpc;
 pub mod shutdown;
+pub mod storage;
 pub(crate) mod telemetry;
 
 pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
@@ -81,6 +82,10 @@ pub struct Config {
     /// The certificate orchestrator configuration.
     #[serde(alias = "CertificateOrchestrator", default)]
     pub certificate_orchestrator: certificate_orchestrator::CertificateOrchestrator,
+
+    /// The storage configuration.
+    #[serde(default)]
+    pub storage: storage::StorageConfig,
 }
 
 impl Config {

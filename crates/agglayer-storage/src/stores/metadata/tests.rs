@@ -1,0 +1,44 @@
+use std::sync::Arc;
+
+use crate::{
+    columns::metadata::MetadataColumn,
+    storage::{metadata_db_cf_definitions, DB},
+    stores::{metadata::MetadataStore, MetadataReader as _, MetadataWriter as _},
+    tests::TempDBDir,
+    types::{MetadataKey, MetadataValue},
+};
+
+#[test]
+fn can_retrieve_the_last_settled_epoch() {
+    let tmp = TempDBDir::new();
+    let db = Arc::new(DB::open_cf(tmp.path.as_path(), metadata_db_cf_definitions()).unwrap());
+
+    let store = MetadataStore::new(db.clone());
+    assert!(store.get_latest_settled_epoch().unwrap().is_none());
+
+    db.put::<MetadataColumn>(
+        &MetadataKey::LastestSettledEpoch,
+        &MetadataValue::LastestSettledEpoch(1),
+    )
+    .expect("Unable to put lastest settled epoch into storage");
+
+    assert!(matches!(store.get_latest_settled_epoch().unwrap(), Some(1)));
+}
+
+#[test]
+fn can_set_the_latest_epoch_settled() {
+    let tmp = TempDBDir::new();
+    let db = Arc::new(DB::open_cf(tmp.path.as_path(), metadata_db_cf_definitions()).unwrap());
+
+    let store = MetadataStore::new(db.clone());
+    assert!(store.get_latest_settled_epoch().unwrap().is_none());
+
+    store
+        .set_latest_settled_epoch(2)
+        .expect("Unable to set latest settled epoch");
+
+    assert!(matches!(
+        db.get::<MetadataColumn>(&MetadataKey::LastestSettledEpoch),
+        Ok(Some(MetadataValue::LastestSettledEpoch(2)))
+    ));
+}

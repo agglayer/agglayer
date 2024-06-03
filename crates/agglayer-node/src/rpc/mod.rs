@@ -67,6 +67,7 @@ impl<Rpc> AgglayerImpl<Rpc> {
         }
     }
 }
+
 impl<Rpc> AgglayerImpl<Rpc>
 where
     Rpc: Middleware + 'static,
