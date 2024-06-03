@@ -29,3 +29,6 @@ KeyName = ""
 max_retries = 10
 retry_interval = 1
 confirmations = 3
+
+[shutdown]
+runtime_timeout = 5

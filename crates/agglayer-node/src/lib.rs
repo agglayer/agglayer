@@ -1,4 +1,4 @@
-use std::{future::IntoFuture, path::PathBuf, sync::Arc, time::Duration};
+use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 
 use agglayer_config::Config;
 use anyhow::Result;
@@ -67,7 +67,7 @@ pub fn main(cfg: PathBuf) -> Result<()> {
     // Spawn the node.
     let node = node_runtime.block_on(
         Node::builder()
-            .config(config)
+            .config(config.clone())
             .cancellation_token(global_cancellation_token.clone())
             .start(),
     )?;
@@ -89,8 +89,8 @@ pub fn main(cfg: PathBuf) -> Result<()> {
             }
         });
 
-    node_runtime.shutdown_timeout(Duration::from_secs(5));
-    metrics_runtime.shutdown_timeout(Duration::from_secs(5));
+    node_runtime.shutdown_timeout(config.shutdown.runtime_timeout);
+    metrics_runtime.shutdown_timeout(config.shutdown.runtime_timeout);
 
     Ok(())
 }
