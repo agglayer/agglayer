@@ -9,7 +9,7 @@ use thiserror::Error;
 pub enum Error {
     /// An error occurred with the KMS provider.
     ///
-    /// This variant wraps the underlying [`CKMSerror`] from the
+    /// This variant wraps the underlying [`CKMSError`] from the
     /// `ethers_gcp_kms_signer` library.
     #[error("KMS Provider error: {0}")]
     KmsProvider(#[from] CKMSError),
