@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use auth::deserialize_auth;
 use outbound::OutboundConfig;
 use serde::Deserialize;
+use shutdown::ShutdownConfig;
 use url::Url;
 
 use self::{rpc::deserialize_rpc_map, telemetry::TelemetryConfig};
@@ -20,6 +21,7 @@ pub(crate) mod l1;
 pub mod log;
 pub(crate) mod outbound;
 pub(crate) mod rpc;
+pub mod shutdown;
 pub(crate) mod telemetry;
 
 pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
@@ -60,6 +62,10 @@ pub struct Config {
     /// The Epoch configuration.
     #[serde(rename = "Epoch", default = "Epoch::default")]
     pub epoch: Epoch,
+
+    /// The list of configuration options used during shutdown.
+    #[serde(default)]
+    pub shutdown: ShutdownConfig,
 }
 
 impl Config {
