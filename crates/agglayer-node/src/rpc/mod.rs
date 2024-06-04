@@ -16,10 +16,9 @@ use jsonrpsee::{
         ErrorObject, ErrorObjectOwned,
     },
 };
-use serde::{Deserialize, Serialize};
 use tokio::try_join;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tracing::{debug, error, info, instrument};
 
 use crate::{
     kernel::{Kernel, ZkevmNodeVerificationError},
@@ -129,8 +128,13 @@ impl<Rpc> AgglayerServer for AgglayerImpl<Rpc>
 where
     Rpc: Middleware + 'static,
 {
+    #[instrument(skip(self, tx), fields(hash = tx.hash().to_string(), rollup_id = tx.tx.rollup_id), level = "debug")]
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
         let tx_hash = tx.hash().to_string();
+        debug!(
+            "Received transaction {tx_hash} for rollup {}",
+            tx.tx.rollup_id
+        );
         let rollup_id_str = tx.tx.rollup_id.to_string();
         let metrics_attrs = &[KeyValue::new("rollup_id", rollup_id_str)];
 
@@ -200,7 +204,9 @@ where
         Ok(receipt.transaction_hash)
     }
 
+    #[instrument(skip(self), fields(hash = hash.to_string()), level = "debug")]
     async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus> {
+        debug!("Received request to get transaction status for hash {hash}");
         let recipt = self.kernel.check_tx_status(hash).await.map_err(|e| {
             error!("Failed to get transaction status for hash {hash}: {e}");
 
@@ -223,15 +229,9 @@ where
 
         recipt
             .map(|recipt| match recipt.block_number {
-                Some(block_number) if block_number < current_block => TxStatus {
-                    status: "done".to_string(),
-                },
-                Some(_) => TxStatus {
-                    status: "pending".to_string(),
-                },
-                None => TxStatus {
-                    status: "not found".to_string(),
-                },
+                Some(block_number) if block_number < current_block => "done".to_string(),
+                Some(_) => "pending".to_string(),
+                None => "not found".to_string(),
             })
             .ok_or_else(|| {
                 ErrorObject::owned(
@@ -243,7 +243,4 @@ where
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub(crate) struct TxStatus {
-    pub status: String,
-}
+type TxStatus = String;

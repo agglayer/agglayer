@@ -94,7 +94,7 @@ async fn check_tx_status() {
         .unwrap();
 
     // The transaction is not yet mined, so we should get a pending status
-    assert_eq!(res.status, "pending");
+    assert_eq!(res, "pending");
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -103,7 +103,7 @@ async fn check_tx_status() {
         .await
         .unwrap();
 
-    assert_eq!(res.status, "done");
+    assert_eq!(res, "done");
 }
 
 fn next_available_addr() -> std::net::SocketAddr {
