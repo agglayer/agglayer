@@ -16,6 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  REGISTRY: ghcr.io
   CARGO_TERM_COLOR: always
   # FIXME: Use proper release when available, or main when stable
   KURTOSIS_CDK_GIT_REF: a40ddbf348caf2285da54d3cddbaa3bc04930ebd
@@ -126,3 +127,38 @@ jobs:
           "$COMMAND"
           "$TIMEOUT_SECONDS"
           "$INTERVAL_SECONDS"
+
+  pushing-docker-image:
+    name: Docker | Publish image to registry
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    needs: 
+      - pre-e2e
+      - e2e-kurtosis-cdk
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: "docker-image"
+          path: "/tmp"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load image
+        run: |
+          echo ${{ needs.pre-e2e.outputs.tags }}
+          docker load --input /tmp/docker-image.tar
+          docker image ls -a
+
+      - name: Publishing image
+        env:
+          DOCKER_IMAGE: ${{ needs.pre-e2e.outputs.tags }}
+        run: docker push ${{ env.DOCKER_IMAGE }}
+
+
