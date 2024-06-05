@@ -8,6 +8,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
+permissions:
+  packages: write
+
 jobs:
   docker:
     uses: ./.github/workflows/util:docker.yml
