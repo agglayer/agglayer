@@ -36,6 +36,27 @@ jobs:
       - name: checking readme
         run: ./scripts/quality/check_readme.sh
 
+  audit:
+    name: Audit - crate security vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Cargo audit
+        run: cargo audit
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

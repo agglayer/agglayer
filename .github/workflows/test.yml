@@ -16,6 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  REGISTRY: ghcr.io
   CARGO_TERM_COLOR: always
   KURTOSIS_CDK_GIT_REF: main
 
@@ -32,6 +33,13 @@ jobs:
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@nextest
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
@@ -41,7 +49,7 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Test
-        run: cargo test
+        run: cargo nextest run --workspace
 
   pre-e2e:
     name: E2E Tests | Docker
@@ -122,3 +130,38 @@ jobs:
           "$COMMAND"
           "$TIMEOUT_SECONDS"
           "$INTERVAL_SECONDS"
+
+  pushing-docker-image:
+    name: Docker | Publish image to registry
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    needs: 
+      - pre-e2e
+      - e2e-kurtosis-cdk
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: "docker-image"
+          path: "/tmp"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load image
+        run: |
+          echo ${{ needs.pre-e2e.outputs.tags }}
+          docker load --input /tmp/docker-image.tar
+          docker image ls -a
+
+      - name: Publishing image
+        env:
+          DOCKER_IMAGE: ${{ needs.pre-e2e.outputs.tags }}
+        run: docker push ${{ env.DOCKER_IMAGE }}
+
+

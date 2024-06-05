@@ -63,15 +63,16 @@ pub struct ServerBuilder {}
 
 #[buildstructor::buildstructor]
 impl ServerBuilder {
-    /// Function that builds a new Metrics server and returns a [`Serve`]
-    /// instance ready to be spawn.
+    /// Function that builds a new Metrics server and returns a
+    /// [`WithGracefulShutdown`] instance ready to be spawn.
     ///
     /// The available methods are:
     ///
     /// - `builder`: Creates a new builder instance.
     /// - `addr`: Sets the [`SocketAddr`] to bind the metrics server to.
     /// - `registry`: Sets the [`Registry`] to use for metrics. (optional)
-    /// - `build`: Builds the metrics server and returns a [`Serve`] instance.
+    /// - `build`: Builds the metrics server and returns a
+    ///   [`WithGracefulShutdown`] instance.
     ///
     /// # Examples
     /// ```
