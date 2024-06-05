@@ -9,13 +9,16 @@ use jsonrpsee::{
     proc_macros::rpc,
     server::{middleware::http::ProxyGetRequestLayer, PingConfig, ServerBuilder, ServerHandle},
     types::{
-        error::{INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, INVALID_PARAMS_CODE, INVALID_PARAMS_MSG},
+        error::{
+            CALL_EXECUTION_FAILED_CODE, INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG,
+            INVALID_PARAMS_CODE, INVALID_PARAMS_MSG,
+        },
         ErrorObject, ErrorObjectOwned,
     },
 };
 use tokio::try_join;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tracing::{debug, error, info, instrument};
 
 use crate::{
     kernel::{Kernel, ZkevmNodeVerificationError},
@@ -29,6 +32,9 @@ mod tests;
 trait Agglayer {
     #[method(name = "sendTx")]
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256>;
+
+    #[method(name = "getTxStatus")]
+    async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus>;
 }
 
 /// The RPC agglayer service implementation.
@@ -122,8 +128,13 @@ impl<Rpc> AgglayerServer for AgglayerImpl<Rpc>
 where
     Rpc: Middleware + 'static,
 {
+    #[instrument(skip(self, tx), fields(hash = tx.hash().to_string(), rollup_id = tx.tx.rollup_id), level = "debug")]
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
         let tx_hash = tx.hash().to_string();
+        debug!(
+            "Received transaction {tx_hash} for rollup {}",
+            tx.tx.rollup_id
+        );
         let rollup_id_str = tx.tx.rollup_id.to_string();
         let metrics_attrs = &[KeyValue::new("rollup_id", rollup_id_str)];
 
@@ -192,4 +203,44 @@ where
 
         Ok(receipt.transaction_hash)
     }
+
+    #[instrument(skip(self), fields(hash = hash.to_string()), level = "debug")]
+    async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus> {
+        debug!("Received request to get transaction status for hash {hash}");
+        let recipt = self.kernel.check_tx_status(hash).await.map_err(|e| {
+            error!("Failed to get transaction status for hash {hash}: {e}");
+
+            ErrorObject::owned(
+                CALL_EXECUTION_FAILED_CODE,
+                INTERNAL_ERROR_MSG,
+                Some(format!("failed to get tx, error: {}", e)),
+            )
+        })?;
+
+        let current_block = self.kernel.current_l1_block_height().await.map_err(|e| {
+            error!("Failed to get current L1 block: {e}");
+
+            ErrorObject::owned(
+                CALL_EXECUTION_FAILED_CODE,
+                INTERNAL_ERROR_MSG,
+                Some(format!("failed to get current L1 block, error: {}", e)),
+            )
+        })?;
+
+        recipt
+            .map(|recipt| match recipt.block_number {
+                Some(block_number) if block_number < current_block => "done".to_string(),
+                Some(_) => "pending".to_string(),
+                None => "not found".to_string(),
+            })
+            .ok_or_else(|| {
+                ErrorObject::owned(
+                    CALL_EXECUTION_FAILED_CODE,
+                    INTERNAL_ERROR_MSG,
+                    Some(format!("tx not found for hash: {}", hash)),
+                )
+            })
+    }
 }
+
+type TxStatus = String;

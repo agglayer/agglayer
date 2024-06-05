@@ -17,8 +17,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # FIXME: Use proper release when available, or main when stable
-  KURTOSIS_CDK_GIT_REF: a40ddbf348caf2285da54d3cddbaa3bc04930ebd
+  KURTOSIS_CDK_GIT_REF: main
 
 jobs:
   unit:
@@ -37,6 +36,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
             cache-on-failure: true
+
+      - name: Install Anvil
+        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Test
         run: cargo test
@@ -94,7 +96,8 @@ jobs:
         run: |
           echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
           sudo apt update
-          sudo apt install kurtosis-cli=0.88.19
+          # sudo apt install kurtosis-cli=0.88.19
+          sudo apt install kurtosis-cli
           kurtosis analytics disable
 
       - name: Install Foundry
@@ -112,8 +115,8 @@ jobs:
         env:
           COMMAND: "cast rpc zkevm_batchNumber && cast rpc zkevm_virtualBatchNumber && cast rpc zkevm_verifiedBatchNumber"
           ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
-          INTERVAL_SECONDS: 5
-          TIMEOUT_SECONDS: 60
+          INTERVAL_SECONDS: 10
+          TIMEOUT_SECONDS: 300
         run: >
           ./.github/workflows/scripts/are_counters_progressing.sh
           "$COMMAND"

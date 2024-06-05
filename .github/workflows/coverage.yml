@@ -37,6 +37,9 @@ jobs:
 
       - uses: taiki-e/install-action@nextest
 
+      - name: Install Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Build with coverage
         env:
           RUST_LOG: info

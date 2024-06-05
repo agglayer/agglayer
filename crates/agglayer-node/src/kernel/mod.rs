@@ -16,7 +16,7 @@ use crate::{
 };
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 /// The core logic of the agglayer.
 ///
@@ -168,6 +168,12 @@ where
     ProviderError(ProviderError),
     #[error("contract error: {0}")]
     ContractError(ContractError<RpcProvider>),
+}
+
+#[derive(Error, Debug)]
+pub(crate) enum CheckTxStatusError<RpcProvider: Middleware> {
+    #[error("middleware error: {0}")]
+    ProviderError(RpcProvider::Error),
 }
 
 impl<RpcProvider> Kernel<RpcProvider>
@@ -335,5 +341,33 @@ where
             .ok_or(SettlementError::NoReceipt)?;
 
         Ok(tx)
+    }
+}
+
+impl<RpcProvider> Kernel<RpcProvider>
+where
+    RpcProvider: Middleware + 'static,
+{
+    /// Check the status of the given hash.
+    #[instrument(skip(self), level = "debug")]
+    pub(crate) async fn check_tx_status(
+        &self,
+        hash: H256,
+    ) -> Result<Option<TransactionReceipt>, CheckTxStatusError<RpcProvider>> {
+        self.rpc
+            .get_transaction_receipt(hash)
+            .await
+            .map_err(CheckTxStatusError::ProviderError)
+    }
+
+    /// Get the current L1 block height.
+    #[instrument(skip(self), level = "debug")]
+    pub(crate) async fn current_l1_block_height(
+        &self,
+    ) -> Result<U64, CheckTxStatusError<RpcProvider>> {
+        self.rpc
+            .get_block_number()
+            .await
+            .map_err(CheckTxStatusError::ProviderError)
     }
 }
