@@ -36,7 +36,7 @@ impl Clock for TimeClock {
         let clock_ref = ClockRef {
             sender: sender.clone(),
             current_epoch: self.current_epoch.clone(),
-            current_block_height: self.current_block.clone(),
+            block_height: self.current_block.clone(),
         };
 
         // Spawn the Clock task directly
@@ -267,7 +267,7 @@ mod tests {
         let clock_ref = ClockRef {
             sender: sender.clone(),
             current_epoch: clock.current_epoch.clone(),
-            current_block_height: clock.current_block.clone(),
+            block_height: clock.current_block.clone(),
         };
 
         let token = CancellationToken::new();
