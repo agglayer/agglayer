@@ -1,4 +1,4 @@
-FROM rust:slim-bullseye AS chef
+FROM --platform=${BUILDPLATFORM} rust:slim-bullseye AS chef
 USER root
 RUN cargo install cargo-chef
 WORKDIR /app
@@ -23,7 +23,7 @@ COPY --link Cargo.lock Cargo.lock
 
 RUN cargo build --release --bin agglayer
 
-FROM debian:bullseye-slim
+FROM --platform=${BUILDPLATFORM} debian:bullseye-slim
 
 RUN apt-get update && apt-get install -y ca-certificates
 COPY --from=builder /app/target/release/agglayer /usr/local/bin/
