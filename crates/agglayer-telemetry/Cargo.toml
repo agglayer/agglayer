@@ -10,7 +10,7 @@ futures.workspace = true
 lazy_static.workspace = true
 opentelemetry = "0.22.0"
 opentelemetry-prometheus = "0.15.0"
-opentelemetry_sdk = "0.22.1"
+opentelemetry_sdk = "0.23.0"
 prometheus = "0.13.3"
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
