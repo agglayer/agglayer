@@ -1,4 +1,35 @@
-# `agglayer-rs`
+<div id="top"></div>
+<!-- PROJECT LOGO -->
+<br />
+<div align="center">
+
+  <img src="./.github/assets/agglayer-logo.png#gh-light-mode-only" alt="Logo" width="100">
+  <img src="./.github/assets/agglayer-logo.png#gh-dark-mode-only" alt="Logo" width="100">
+
+<br />
+
+<h1>Agglayer</h1>
+
+<p align="center">
+The <b>Agglayer</b> (<i>Aggregation layer</i>) provides a common language for secure, atomic, interoperability among heterogeneous chains. (WIP)
+</p>
+</div>
+
+<br />
+
+<div align="center">
+
+[![Test workflow](https://github.com/AggLayer/agglayer-rs/actions/workflows/test.yml/badge.svg)](https://github.com/AggLayer/agglayer-rs/actions/workflows/test.yml)
+[![Quality workflow](https://github.com/AggLayer/agglayer-rs/actions/workflows/quality.yml/badge.svg)](https://github.com/AggLayer/agglayer-rs/actions/workflows/quality.yml)
+[![codecov](https://codecov.io/gh/AggLayer/agglayer-rs/graph/badge.svg?token=5TOBZRZ7Q8)](https://codecov.io/gh/AggLayer/agglayer-rs)
+
+<hr />
+
+<img src="./.github/assets/agglayer.png" alt="Logo">
+
+</div>
+
+## Getting Started
 
 Rust implementation of the Agglayer.
 
@@ -8,16 +39,22 @@ To find out more about Polygon, visit the [official website](https://docs.polygo
 
 WARNING: This is a work in progress, and as such, all APIs and configuration are subject to change. The code is still being audited, so please contact the Polygon team if you would like to use it in production.
 
-- [`agglayer-rs`](#agglayer-rs)
-- [Prerequisites](#prerequisites)
 
-
-# Prerequisites
+### Prerequisites
 
 * For each CDK chain it's necessary to configure its corresponding RPC node, synced with the target CDK. This node will be used for checking the state root after executions of L2 batches.
 
+## Development
+
+Contributions are very welcomed, the guidelines are currently not available (WIP)
+
+## Support
+
+Feel free to [open an issue](https://github.com/Agglayer/agglayer-rs/issues/new) if you have any feature request or bug report.<br />
+
+## Resources
   
-# License
+## License
 Copyright (c) 2024 PT Services DMCC
 
 Licensed under either of
