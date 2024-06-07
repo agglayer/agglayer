@@ -10,7 +10,7 @@ ethers.workspace = true
 futures.workspace = true
 hex.workspace = true
 # Fixed until jsonrpsee update to hyper 1.0
-hyper = "0.14.20"
+hyper = "1.3.1"
 jsonrpsee = { workspace = true, features = ["full"] }
 lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
