@@ -17,6 +17,7 @@ use crate::contracts::polygon_rollup_manager::{
     RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
 };
 use crate::contracts::polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn};
+use crate::signed_tx::AuthMethod;
 use crate::{
     kernel::{Kernel, ZkevmNodeVerificationError},
     signed_tx::{Proof, SignedTx, HASH_LENGTH, PROOF_LENGTH},
@@ -348,11 +349,13 @@ pub(crate) fn signed_tx() -> SignedTx {
                 proof: Proof::try_from_slice(&[0; HASH_LENGTH * PROOF_LENGTH]).unwrap(),
             },
         },
-        signature: Signature {
+        auth_method: AuthMethod::Signature,
+        signature: Some(Signature {
             r: U256::zero(),
             s: U256::zero(),
             v: 0,
-        },
+        }),
+        proof_of_consensus: None,
     }
 }
 

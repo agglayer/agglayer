@@ -2,9 +2,10 @@
 //!
 //! Systems that wish to submit proofs to the agglayer must produce a
 //! [`SignedProof`] conforming to the type definitions specified herein.
-use ethers::{prelude::*, utils::keccak256};
-use serde::{Deserialize, Deserializer};
-use serde_with::{serde_as, DisplayFromStr};
+use std::{collections::HashSet, str::FromStr};
+
+use ethers::{prelude::*, types::Signature, utils::keccak256};
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 pub(crate) const HASH_LENGTH: usize = 32;
@@ -90,16 +91,72 @@ pub(crate) struct ProofManifest {
     pub(crate) zkp: Zkp,
 }
 
+use std::fmt;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SignedHeader {
+    pub header: String,
+    pub commit: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Set {
+    pub validators: HashSet<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Id {
+    pub id: String,
+}
+
+// Proof Of Consensus Data
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProofOfConsensusData {
+    pub signed_header: SignedHeader,
+    pub validators: Set,
+    pub next_validators: Set,
+    pub provider: Id,
+}
+
+/// All supported authentication methods.
+#[derive(Error, Debug, Deserialize)]
+pub(crate) enum AuthMethod {
+    Signature,
+    ProofOfConsensus,
+}
+
+impl fmt::Display for AuthMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 /// A [`SignedTx`] is the core input type of the agglayer.
 ///
 /// Systems that wish to submit proofs to the agglayer must produce a
 /// [`SignedTx`] conforming to the type definitions specified herein.
-#[serde_as]
 #[derive(Debug, Deserialize)]
 pub(crate) struct SignedTx {
     pub(crate) tx: ProofManifest,
-    #[serde_as(as = "DisplayFromStr")]
-    pub(crate) signature: Signature,
+    pub(crate) auth_method: AuthMethod,
+    // Fields for auth methods
+    #[serde(deserialize_with = "deserialize_option_signature")]
+    pub(crate) signature: Option<Signature>,
+    pub(crate) proof_of_consensus: Option<ProofOfConsensusData>,
+}
+
+fn deserialize_option_signature<'de, D>(deserializer: D) -> Result<Option<Signature>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    if let Some(sig_str) = opt {
+        Signature::from_str(&sig_str)
+            .map(Some)
+            .map_err(serde::de::Error::custom)
+    } else {
+        Ok(None)
+    }
 }
 
 impl SignedTx {
@@ -123,7 +180,7 @@ impl SignedTx {
 
     /// Attempt to recover the address of the signer.
     pub(crate) fn signer(&self) -> Result<Address, SignatureError> {
-        self.signature.recover(self.hash())
+        self.signature.unwrap().recover(self.hash())
     }
 
     #[cfg(test)]
@@ -131,7 +188,7 @@ impl SignedTx {
         &mut self,
         signer: &Wallet<k256::ecdsa::SigningKey>,
     ) -> Result<(), SignatureError> {
-        self.signature = signer.sign_hash(self.hash()).unwrap();
+        self.signature = Some(signer.sign_hash(self.hash()).unwrap());
 
         Ok(())
     }

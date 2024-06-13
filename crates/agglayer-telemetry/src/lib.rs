@@ -38,9 +38,9 @@ lazy_static! {
         .with_description("Number of ZKP verifications")
         .init();
 
-    pub static ref VERIFY_SIGNATURE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
-        .u64_counter("verify_signature")
-        .with_description("Number of signature verifications")
+    pub static ref VERIFY_FINALITY: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
+        .u64_counter("verify_finality")
+        .with_description("Number of finality verifications")
         .init();
 
     pub static ref CHECK_TX: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)

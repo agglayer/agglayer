@@ -1,5 +1,5 @@
 //! The core logic of the agglayer.
-use std::sync::Arc;
+use std::{panic, sync::Arc};
 
 use agglayer_config::Config;
 use ethers::prelude::*;
@@ -11,7 +11,7 @@ use crate::{
         polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
         polygon_zk_evm::PolygonZkEvm,
     },
-    signed_tx::SignedTx,
+    signed_tx::{AuthMethod, SignedTx},
     zkevm_node_client::ZkevmNodeClient,
 };
 
@@ -155,6 +155,25 @@ where
     ContractError(#[from] ContractError<RpcProvider>),
 }
 
+#[derive(Error, Debug)]
+pub(crate) enum ProofOfConsensusVerificationError {
+    #[error("invalid proof")]
+    InvalidProof,
+}
+
+// Define a common VerificationError to encapsulate all specific verification
+// errors
+#[derive(Error, Debug)]
+pub(crate) enum VerificationError<RpcProvider>
+where
+    RpcProvider: Middleware,
+{
+    #[error("signature verification error: {0}")]
+    SignatureVerificationError(#[from] SignatureVerificationError<RpcProvider>),
+    #[error("proof of consensus verification error: {0}")]
+    ProofOfConsensusVerificationError(#[from] ProofOfConsensusVerificationError),
+}
+
 /// Errors related to settlement process.
 #[derive(Error, Debug)]
 pub(crate) enum SettlementError<RpcProvider>
@@ -274,10 +293,24 @@ where
         Ok(call)
     }
 
+    #[instrument(skip(self), level = "debug")]
+    pub(crate) async fn verify_finality(
+        &self,
+        signed_tx: &SignedTx,
+    ) -> Result<(), VerificationError<RpcProvider>> {
+        match signed_tx.auth_method {
+            AuthMethod::Signature => self.verify_signature(signed_tx).await.map_err(|e| e.into()),
+            AuthMethod::ProofOfConsensus => self
+                .verify_proof_of_consensus(signed_tx)
+                .await
+                .map_err(|e| e.into()),
+        }
+    }
+
     /// Verify that the signer of the given [`SignedProof`] is the trusted
     /// sequencer for the rollup id specified in the proof.
     #[instrument(skip(self), level = "debug")]
-    pub(crate) async fn verify_signature(
+    async fn verify_signature(
         &self,
         signed_tx: &SignedTx,
     ) -> Result<(), SignatureVerificationError<RpcProvider>> {
@@ -296,6 +329,14 @@ where
         }
 
         Ok(())
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    async fn verify_proof_of_consensus(
+        &self,
+        signed_tx: &SignedTx,
+    ) -> Result<(), ProofOfConsensusVerificationError> {
+        panic!("Proof of consensus verification not yet implemented");
     }
 
     /// Verify that the given [`SignedProof`] does not error during eth_call

@@ -152,16 +152,16 @@ where
         // Run all the verification checks in parallel.
         try_join!(
             self.kernel
-                .verify_signature(&tx)
+                .verify_finality(&tx)
                 .map_err(|e| {
                     error!(
                         tx_hash,
-                        "Failed to verify the signature of transaction {tx_hash}: {e}"
+                        "Failed to verify the finality of transaction {tx_hash}: {e}"
                     );
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
-                    agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
+                    agglayer_telemetry::VERIFY_FINALITY.add(1, metrics_attrs);
                 }),
             self.kernel
                 .verify_proof_eth_call(&tx)
