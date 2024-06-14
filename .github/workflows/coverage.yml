@@ -27,7 +27,17 @@ jobs:
           toolchain: 1.77.1
           components: clippy rustfmt llvm-tools-preview
 
+      - name: Install Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+
       - uses: taiki-e/install-action@grcov
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+            cache-on-failure: true
 
       - name: Install cargo-sonar and run Clippy
         run: |
@@ -35,10 +45,6 @@ jobs:
             cargo clippy --all-features --all-targets --message-format=json > clippy.json
             cargo sonar --clippy
 
-      - uses: taiki-e/install-action@nextest
-
-      - name: Install Anvil
-        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Build with coverage
         env:

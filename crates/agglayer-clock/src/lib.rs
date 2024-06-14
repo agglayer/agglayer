@@ -10,8 +10,10 @@ use std::sync::{
 
 use tokio::sync::broadcast;
 
+mod block;
 mod time;
 
+pub use block::BlockClock;
 pub use time::TimeClock;
 use tokio_util::sync::CancellationToken;
 
@@ -31,9 +33,9 @@ pub struct ClockRef {
     /// The current Epoch number.
     /// This value is updated by the Clock task.
     pub(crate) current_epoch: Arc<AtomicU64>,
-    /// The current Block height.
+    /// The Block height.
     /// This value is updated by the Clock task.
-    pub(crate) current_block_height: Arc<AtomicU64>,
+    pub(crate) block_height: Arc<AtomicU64>,
 }
 
 impl ClockRef {
@@ -54,7 +56,7 @@ impl ClockRef {
 
     /// Returns the current Block height.
     pub fn current_block_height(&self) -> u64 {
-        self.current_block_height.load(Ordering::Acquire)
+        self.block_height.load(Ordering::Acquire)
     }
 }
 
