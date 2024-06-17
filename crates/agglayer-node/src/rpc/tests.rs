@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -5,8 +6,9 @@ use agglayer_config::Config;
 use ethers::providers::{self, Http, Middleware, Provider, ProviderExt as _};
 use ethers::types::TransactionRequest;
 use ethers::utils::Anvil;
+use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::{core::client::ClientT, rpc_params};
+use jsonrpsee::rpc_params;
 
 use crate::rpc::TxStatus;
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
@@ -21,10 +23,11 @@ async fn healthcheck_method_can_be_called() {
 
     let config = Arc::new(Config::default());
     let (provider, _mock) = providers::Provider::mocked();
+    let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
 
     let kernel = Kernel::new(provider, config.clone());
 
-    let _server_handle = AgglayerImpl::new(kernel)
+    let _server_handle = AgglayerImpl::new(kernel, certificate_sender)
         .start(config.clone())
         .await
         .unwrap();
@@ -80,7 +83,8 @@ async fn check_tx_status() {
 
     let kernel = Kernel::new(client, config.clone());
 
-    let _server_handle = AgglayerImpl::new(kernel)
+    let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
+    let _server_handle = AgglayerImpl::new(kernel, certificate_sender)
         .start(config.clone())
         .await
         .unwrap();
@@ -104,6 +108,70 @@ async fn check_tx_status() {
         .unwrap();
 
     assert_eq!(res, "done");
+}
+
+#[tokio::test]
+async fn send_certificate_method_can_be_called() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
+
+    let config = Arc::new(Config::default());
+    let (provider, _mock) = providers::Provider::mocked();
+    let (certificate_sender, mut certificate_receiver) = tokio::sync::mpsc::channel(1);
+
+    let kernel = Kernel::new(provider, config.clone());
+
+    let _server_handle = AgglayerImpl::new(kernel, certificate_sender)
+        .start(config.clone())
+        .await
+        .unwrap();
+
+    let url = format!("http://{}/", config.rpc_addr());
+    let client = HttpClientBuilder::default().build(url).unwrap();
+
+    let _: () = client
+        .request("interop_sendCertificate", rpc_params![()])
+        .await
+        .unwrap();
+
+    assert!(certificate_receiver.try_recv().is_ok());
+}
+
+#[tokio::test]
+async fn send_certificate_method_can_be_called_and_fail() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
+
+    let mut config = Config::default();
+    let addr = next_available_addr();
+    if let IpAddr::V4(ip) = addr.ip() {
+        config.rpc.host = ip;
+    }
+    config.rpc.port = addr.port();
+
+    let config = Arc::new(config);
+
+    let (provider, _mock) = providers::Provider::mocked();
+    let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
+
+    let kernel = Kernel::new(provider, config.clone());
+
+    let _server_handle = AgglayerImpl::new(kernel, certificate_sender)
+        .start(config.clone())
+        .await
+        .unwrap();
+
+    let url = format!("http://{}/", config.rpc_addr());
+    let client = HttpClientBuilder::default().build(url).unwrap();
+
+    drop(certificate_receiver);
+    let res: Result<(), _> = client
+        .request("interop_sendCertificate", rpc_params![()])
+        .await;
+
+    assert!(res.is_err());
 }
 
 fn next_available_addr() -> std::net::SocketAddr {
