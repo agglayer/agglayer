@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, VecDeque},
     future::Future,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -26,7 +27,7 @@ pub struct CertificateOrchestrator<C, A, I> {
     /// Epoch packing task resolver.
     epoch_packing_tasks: JoinSet<Result<(), Error>>,
     /// Epoch packing task builder.
-    epoch_packing_task_builder: A,
+    epoch_packing_task_builder: Arc<A>,
     /// Clock stream to receive EpochEnded events.
     clock: C,
     /// Certificates received from CDKs.
@@ -50,7 +51,7 @@ impl<C, A, I> CertificateOrchestrator<C, A, I> {
         Self {
             epoch_packing_tasks: JoinSet::new(),
             clock,
-            epoch_packing_task_builder,
+            epoch_packing_task_builder: Arc::new(epoch_packing_task_builder),
             data_receiver,
             received_certificates: VecDeque::new(),
             to_pack: BTreeMap::default(),
@@ -64,7 +65,7 @@ impl<C, A, I> CertificateOrchestrator<C, A, I>
 where
     I: Send + Unpin + 'static,
     C: Stream<Item = Event> + Unpin + Send + 'static,
-    A: EpochPacker<Item = I> + Send,
+    A: EpochPacker<Item = I> + Send + Sync,
 {
     /// Function that setups and starts the CertificateOrchestrator.
     ///
@@ -154,7 +155,7 @@ impl<C, A, I> Future for CertificateOrchestrator<C, A, I>
 where
     I: Send + Unpin + 'static,
     C: Stream<Item = Event> + Send + Unpin + 'static,
-    A: EpochPacker<Item = I> + Send,
+    A: EpochPacker<Item = I> + Send + Sync,
 {
     type Output = ();
 
@@ -220,4 +221,6 @@ pub trait EpochPacker: Clone + Unpin + Send + 'static {
 }
 
 #[derive(Debug)]
-pub enum Error {}
+pub enum Error {
+    ProofVerificationFailed,
+}
