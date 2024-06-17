@@ -1,5 +1,6 @@
 use std::{num::NonZeroU64, sync::Arc};
 
+use agglayer_aggregator_notifier::AggregatorNotifier;
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
@@ -14,10 +15,7 @@ use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
-use self::notifier::AggregatorNotifier;
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
-
-mod notifier;
 
 pub(crate) struct Node {
     rpc_handle: JoinHandle<()>,
@@ -88,7 +86,8 @@ impl Node {
             }
         };
 
-        let aggregator_task = AggregatorNotifier::new();
+        let aggregator_task: AggregatorNotifier<_> =
+            config.certificate_orchestrator.prover.clone().try_into()?;
         let clock_subscription =
             tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
                 .filter_map(|value| value.ok());
