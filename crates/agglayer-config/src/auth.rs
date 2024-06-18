@@ -73,6 +73,9 @@ pub struct GcpKmsConfig {
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub key_name: Option<String>,
+    #[serde(rename = "KeyVersion")]
+    #[serde(default)]
+    pub key_version: Option<u64>,
 }
 
 // This is a workaround to support `EthTxManager` for PrivateKeys as it is used
@@ -85,6 +88,8 @@ struct IntermediateAuthConfig {
     gcpkms: Option<GcpKmsConfig>,
     #[serde(default, rename = "PrivateKeys")]
     private_keys: Option<Vec<PrivateKey>>,
+    #[serde(flatten)]
+    kms: Option<GcpKmsConfig>,
 }
 
 pub(crate) fn deserialize_auth<'de, D>(deserializer: D) -> Result<AuthConfig, D::Error>
@@ -99,6 +104,8 @@ where
         Ok(AuthConfig::GcpKms(gcpkms))
     } else if let Some(private_keys) = intermediate.private_keys {
         Ok(AuthConfig::Local(LocalConfig { private_keys }))
+    } else if let Some(kms) = intermediate.kms {
+        Ok(AuthConfig::GcpKms(kms))
     } else {
         Err(de::Error::custom("Invalid auth configuration"))
     }
