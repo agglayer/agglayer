@@ -75,11 +75,16 @@ impl KMS {
                 .clone()
                 .ok_or(Error::KmsConfig("GOOGLE_KEY_NAME"))
         })?;
+        let key_version: u64 = std::env::var("GOOGLE_KEY_VERSION")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .or(self.config.key_version)
+            .ok_or(Error::KmsConfig("GOOGLE_KEY_VERSION"))?;
 
         let keyring = GcpKeyRingRef::new(&project_id, &location, &keyring);
         let provider = GcpKmsProvider::new(keyring).await?;
         let gcp_signer =
-            GcpKmsSigner::new(provider, key_name.to_string(), 1, self.chain_id).await?;
+            GcpKmsSigner::new(provider, key_name.to_string(), key_version, self.chain_id).await?;
         Ok(KmsSigner::new(gcp_signer))
     }
 }
