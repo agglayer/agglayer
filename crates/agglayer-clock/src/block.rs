@@ -239,12 +239,11 @@ mod tests {
         providers::{Provider, Ws},
         utils::Anvil,
     };
+    use fail::FailScenario;
     use tokio::sync::broadcast;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{
-        block::BlockClockError, BlockClock, Clock, ClockRef, Event, BROADCAST_CHANNEL_SIZE,
-    };
+    use crate::{block::BlockClockError, BlockClock, Clock, Event, BROADCAST_CHANNEL_SIZE};
 
     #[test]
     fn test_block_calculation() {
@@ -327,6 +326,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_block_clock_overflow() {
+        let scenario = FailScenario::setup();
         let anvil = Anvil::new().block_time(1u64).spawn();
         let client = Provider::<Ws>::connect(anvil.ws_endpoint()).await.unwrap();
 
@@ -356,11 +356,14 @@ mod tests {
             res,
             Err(BlockClockError::SetBlockHeight(height)) if height == u64::MAX - 1
         ));
+        scenario.teardown();
     }
 
     #[tokio::test]
     async fn test_block_clock_overflow_epoch() {
+        let scenario = FailScenario::setup();
         let anvil = Anvil::new().block_time(1u64).spawn();
+
         let client = Provider::<Ws>::connect(anvil.ws_endpoint()).await.unwrap();
 
         let mut clock = BlockClock::new(client, 0, NonZeroU64::new(3).unwrap());
@@ -388,5 +391,6 @@ mod tests {
             res,
             Err(BlockClockError::SetEpochNumber(u64::MAX, 0))
         ));
+        scenario.teardown();
     }
 }
