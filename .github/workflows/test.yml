@@ -52,7 +52,7 @@ jobs:
             cache-on-failure: true
 
       - name: Test
-        run: cargo nextest run --workspace
+        run: cargo nextest run --workspace && cargo test --doc --workspace
 
   pre-e2e:
     name: E2E Tests | Docker

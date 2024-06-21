@@ -85,6 +85,7 @@ where
     /// # use tokio_stream::wrappers::BroadcastStream;
     /// # use tokio_util::sync::CancellationToken;
     /// # use futures_util::future::BoxFuture;
+    /// # use tokio_stream::StreamExt;
     ///
     /// ##[derive(Clone)]
     /// pub struct AggregatorNotifier {}
@@ -105,7 +106,7 @@ where
     ///
     /// async fn start() -> Result<(), ()> {
     ///    let (sender, receiver) = tokio::sync::broadcast::channel(1);
-    ///    let clock_stream = BroadcastStream::new(sender.subscribe());
+    ///    let clock_stream = BroadcastStream::new(sender.subscribe()).filter_map(|value| value.ok());
     ///    let notifier = AggregatorNotifier::new();
     ///    let data_receiver = tokio::sync::mpsc::channel(1).1;
     ///
@@ -113,7 +114,7 @@ where
     ///      .clock(clock_stream)
     ///      .data_receiver(data_receiver)
     ///      .cancellation_token(CancellationToken::new())
-    ///      .notification_task_builder(notifier)
+    ///      .epoch_packing_task_builder(notifier)
     ///      .start()
     ///      .await
     ///      .unwrap();
