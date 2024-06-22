@@ -34,6 +34,6 @@ agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrat
 tokio-stream = "0.1.15"
 
 [dev-dependencies]
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.22.3" }
+jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.23.1" }
 serde_json = "1.0.116"
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
