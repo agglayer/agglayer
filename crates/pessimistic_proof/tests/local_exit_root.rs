@@ -1,4 +1,4 @@
-use poly_pessimistic_proof::{
+use pessimistic_proof::{
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     test_utils::{parse_json_file, BridgeEvent, EventData},
     Withdrawal,

@@ -1,4 +1,4 @@
-use poly_pessimistic_proof::{
+use pessimistic_proof::{
     batch::Batch,
     generate_full_proof,
     local_balance_tree::{Balance, BalanceTree, Deposit},
