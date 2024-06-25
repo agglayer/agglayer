@@ -33,9 +33,6 @@ jobs:
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@nextest
-
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
