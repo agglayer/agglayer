@@ -1,0 +1,21 @@
+[package]
+name = "pessimistic-proof"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+base64 = "0.22.0"
+reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+serde_with = { version = "3" }
+tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "patch-v2.0.2", features = [
+    "keccak",
+] }
+sp1-derive = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.2-testnet" }
+
+[dev-dependencies]
+hex = "0.4.3"
+rs_merkle = { version = "1.4", default-features = false }
