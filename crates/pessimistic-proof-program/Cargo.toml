@@ -1,0 +1,10 @@
+[package]
+name = "pessimistic-proof-program"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pessimistic-proof = { path = "../pessimistic-proof" }
+sp1-zkvm = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
+sp1-derive = { git = "https://github.com/succinctlabs/sp1.git", tag = "v1.0.8-testnet" }
