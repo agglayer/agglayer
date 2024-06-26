@@ -14,7 +14,7 @@ serde_with = { version = "3" }
 tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "patch-v2.0.2", features = [
     "keccak",
 ] }
-sp1-derive = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.2-testnet" }
+sp1-derive = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
 
 [dev-dependencies]
 hex = "0.4.3"

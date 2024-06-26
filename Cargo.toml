@@ -1,7 +1,8 @@
 [workspace]
 resolver = "2"
 default-members = ["crates/agglayer"]
-members = ["crates/*"]
+members = ["crates/*", "xtask"]
+exclude = ["crates/pessimistic-proof-program"]
 
 [workspace.package]
 version = "0.1.0"
