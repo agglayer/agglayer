@@ -6,6 +6,9 @@ use agglayer_config::Config;
 use ethers::providers::{self, Http, Middleware, Provider, ProviderExt as _};
 use ethers::types::TransactionRequest;
 use ethers::utils::Anvil;
+use http_body_util::Empty;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
@@ -15,7 +18,7 @@ use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
 #[tokio::test]
 async fn healthcheck_method_can_be_called() {
-    use hyper::{Body, Client, Request};
+    use hyper::Request;
 
     let _ = tracing_subscriber::FmtSubscriber::builder()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -32,20 +35,22 @@ async fn healthcheck_method_can_be_called() {
         .await
         .unwrap();
 
-    let http_client = Client::new();
+    let http_client = Client::builder(TokioExecutor::new()).build_http();
     let uri = format!("http://{}/health", config.rpc_addr());
 
     let req = Request::builder()
         .method("GET")
         .uri(&uri)
-        .body(Body::empty())
+        .body(Empty::<hyper::body::Bytes>::new())
         .expect("request builder");
     let res = http_client.request(req).await.unwrap();
 
     assert!(res.status().is_success());
 
-    let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-    let out = String::from_utf8(bytes.to_vec()).unwrap();
+    let bytes = http_body_util::BodyExt::collect(res.into_body())
+        .await
+        .unwrap();
+    let out = String::from_utf8(bytes.to_bytes().to_vec()).unwrap();
     assert_eq!(out.as_str(), "{\"health\":true}");
 }
 

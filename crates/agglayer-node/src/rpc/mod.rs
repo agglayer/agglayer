@@ -64,7 +64,7 @@ where
         let mut service = self.into_rpc();
 
         // Register the system_health method to serve health checks.
-        service.register_method("system_health", |_, _| {
+        service.register_method("system_health", |_, _, _| {
             println!("system_health");
             serde_json::json!({ "health": true })
         })?;
