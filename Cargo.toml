@@ -20,7 +20,7 @@ ethers-gcp-kms-signer = "0.1.5"
 fail = "0.5.1"
 futures = "0.3.30"
 hex = "0.4.3"
-jsonrpsee = { version = "0.22.5", features = ["full"] }
+jsonrpsee = { version = "0.23.2", features = ["full"] }
 lazy_static = "1.5.0"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.116"
