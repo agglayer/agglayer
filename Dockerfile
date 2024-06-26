@@ -6,10 +6,11 @@ WORKDIR /app
 FROM chef AS planner
 
 COPY --link crates crates
+COPY --link xtask xtask
 COPY --link Cargo.toml Cargo.toml
 COPY --link Cargo.lock Cargo.lock
 
-RUN cargo chef prepare --recipe-path recipe.json
+RUN cargo chef prepare --recipe-path recipe.json --bin agglayer
 
 FROM chef AS builder
 
