@@ -4945,7 +4945,7 @@ dependencies = [
 [[package]]
 name = "sp1-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.2-testnet#60ce6ad149ca432a402c725f24d548931947464f"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.8-testnet#14eb569d41d24721ffbd407d6060e202482d659c"
 dependencies = [
  "proc-macro2",
  "quote",
