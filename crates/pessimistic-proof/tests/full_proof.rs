@@ -1,5 +1,5 @@
 use pessimistic_proof::{
-    batch::Batch,
+    certificate::Certificate,
     generate_full_proof,
     local_balance_tree::{Balance, BalanceTree, Deposit},
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
@@ -52,15 +52,15 @@ fn test_full_proof() {
         let initial_0 = BalanceTree::from(vec![deposit_eth(10), deposit_usdc(10)]);
         let initial_1 = BalanceTree::from(vec![deposit_eth(1), deposit_usdc(200)]);
 
-        let batches = vec![
-            Batch::new(
+        let certificates = vec![
+            Certificate::new(
                 0.into(),
                 dummy.clone(),
                 dummy_root.clone(),
                 initial_0,
                 withdraw_0_to_1.clone(),
             ),
-            Batch::new(
+            Certificate::new(
                 1.into(),
                 dummy.clone(),
                 dummy_root.clone(),
@@ -71,7 +71,7 @@ fn test_full_proof() {
 
         // Compute the full proof
         assert!(matches!(
-            generate_full_proof(&batches),
+            generate_full_proof(&certificates),
             Err(ProofError::NotEnoughBalance { .. })
         ));
     }
@@ -82,19 +82,19 @@ fn test_full_proof() {
         let initial_0 = BalanceTree::from(vec![deposit_eth(12), deposit_usdc(102)]);
         let initial_1 = BalanceTree::from(vec![deposit_eth(20), deposit_usdc(201)]);
 
-        let batches = vec![
-            Batch::new(
+        let certificates = vec![
+            Certificate::new(
                 0.into(),
                 dummy.clone(),
                 dummy_root.clone(),
                 initial_0,
                 withdraw_0_to_1.clone(),
             ),
-            Batch::new(1.into(), dummy, dummy_root, initial_1, withdraw_1_to_0.clone()),
+            Certificate::new(1.into(), dummy, dummy_root, initial_1, withdraw_1_to_0.clone()),
         ];
 
         // Compute the full proof
-        assert!(generate_full_proof(&batches).is_ok());
+        assert!(generate_full_proof(&certificates).is_ok());
     }
 }
 

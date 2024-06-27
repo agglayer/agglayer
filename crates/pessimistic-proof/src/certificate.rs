@@ -12,8 +12,8 @@ use crate::{
 
 /// Represents the required data from each CDK for the pessimistic proof.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Batch {
-    /// Origin network which emitted this batch
+pub struct Certificate {
+    /// Origin network which emitted this certificate
     pub origin_network: NetworkId,
     /// Initial local exit tree
     pub prev_local_exit_tree: LocalExitTree<Keccak256Hasher>,
@@ -25,8 +25,8 @@ pub struct Batch {
     pub withdrawals: Vec<Withdrawal>,
 }
 
-impl Batch {
-    /// Creates a new [`Batch`].
+impl Certificate {
+    /// Creates a new [`Certificate`].
     pub fn new(
         origin_network: NetworkId,
         prev_local_exit_tree: LocalExitTree<Keccak256Hasher>,
