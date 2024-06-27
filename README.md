@@ -19,9 +19,9 @@ The <b>Agglayer</b> (<i>Aggregation layer</i>) provides a common language for se
 
 <div align="center">
 
-[![Test workflow](https://github.com/AggLayer/agglayer-rs/actions/workflows/test.yml/badge.svg)](https://github.com/AggLayer/agglayer-rs/actions/workflows/test.yml)
-[![Quality workflow](https://github.com/AggLayer/agglayer-rs/actions/workflows/quality.yml/badge.svg)](https://github.com/AggLayer/agglayer-rs/actions/workflows/quality.yml)
-[![codecov](https://codecov.io/gh/AggLayer/agglayer-rs/graph/badge.svg?token=5TOBZRZ7Q8)](https://codecov.io/gh/AggLayer/agglayer-rs)
+[![Test workflow](https://github.com/agglayer/agglayer/actions/workflows/test.yml/badge.svg)](https://github.com/agglayer/agglayer/actions/workflows/test.yml)
+[![Quality workflow](https://github.com/agglayer/agglayer/actions/workflows/quality.yml/badge.svg)](https://github.com/agglayer/agglayer/actions/workflows/quality.yml)
+[![codecov](https://codecov.io/gh/agglayer/agglayer/graph/badge.svg?token=5TOBZRZ7Q8)](https://codecov.io/gh/agglayer/agglayer)
 
 <hr />
 
@@ -50,7 +50,7 @@ Contributions are very welcomed, the guidelines are currently not available (WIP
 
 ## Support
 
-Feel free to [open an issue](https://github.com/Agglayer/agglayer-rs/issues/new) if you have any feature request or bug report.<br />
+Feel free to [open an issue](https://github.com/agglayer/agglayer/issues/new) if you have any feature request or bug report.<br />
 
 ## Resources
   
