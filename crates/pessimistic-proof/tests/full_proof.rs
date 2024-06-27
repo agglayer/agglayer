@@ -3,12 +3,12 @@ use pessimistic_proof::{
     generate_full_proof,
     local_balance_tree::{Balance, BalanceTree, Deposit},
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    ProofError, TokenInfo, Withdrawal,
+    ProofError, TokenInfo, BridgeExit,
 };
 use reth_primitives::{address, U256};
 
-fn make_tx(_from: u32, to: u32, token: &TokenInfo, amount: u32) -> Withdrawal {
-    Withdrawal::new(
+fn make_tx(_from: u32, to: u32, token: &TokenInfo, amount: u32) -> BridgeExit {
+    BridgeExit::new(
         0,
         token.origin_network,
         token.origin_token_address,
@@ -35,9 +35,9 @@ fn test_full_proof() {
         LocalExitTree::from_leaves([[0_u8; 32], [1_u8; 32], [2_u8; 32]].into_iter());
     let dummy_root = dummy.get_root();
 
-    // Prepare the data fetched from the CDK: Withdrawals + LBT
+    // Prepare the data fetched from the CDK: BridgeExits + LBT
 
-    // Withdrawals
+    // BridgeExits
     let withdraw_0_to_1 = vec![make_tx(0, 1, &eth, 10), make_tx(0, 1, &usdc, 100)];
     let withdraw_1_to_0 = vec![make_tx(1, 0, &eth, 20), make_tx(1, 0, &usdc, 200)];
 

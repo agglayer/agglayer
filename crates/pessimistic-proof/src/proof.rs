@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
+    bridge_exit::NetworkId,
     certificate::Certificate,
     keccak::Digest,
     local_balance_tree::{merge_balance_trees, BalanceTreeByNetwork},
-    withdrawal::NetworkId,
 };
 
 /// Represents all errors that can occur while generating the proof.

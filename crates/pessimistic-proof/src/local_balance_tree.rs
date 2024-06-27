@@ -8,17 +8,17 @@ use serde::{Deserialize, Serialize};
 use tiny_keccak::{Hasher, Keccak};
 
 use crate::{
+    bridge_exit::{NetworkId, TokenInfo},
     keccak::Digest,
-    withdrawal::{NetworkId, TokenInfo},
-    Withdrawal,
+    BridgeExit,
 };
 
-/// Records all the deposits and withdrawals for each network.
+/// Records all the deposits and bridge exits for each network.
 ///
 /// Specifically, this records a map `network => (token_id => (deposit, withdraw))`: for each
 /// network, the amounts withdrawn and deposited for every token are recorded.
 ///
-/// Note: a "deposit" is the counterpart of a [`Withdrawal`]; a "withdrawal" from the source
+/// Note: a "deposit" is the counterpart of a [`BridgeExit`]; a "bridge exit" from the source
 /// network is a "deposit" in the destination network.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BalanceTreeByNetwork(BTreeMap<NetworkId, BalanceTree>);
@@ -29,19 +29,19 @@ impl BalanceTreeByNetwork {
         Self(BTreeMap::new())
     }
 
-    /// Updates the origin and destination network in the aggregate from a [`Withdrawal`].
-    pub fn insert(&mut self, origin_network: NetworkId, withdrawal: Withdrawal) {
+    /// Updates the origin and destination network in the aggregate from a [`BridgeExit`].
+    pub fn insert(&mut self, origin_network: NetworkId, bridge_exit: BridgeExit) {
         // Withdraw the origin network
         self.0
             .entry(origin_network)
             .or_default()
-            .withdraw(withdrawal.token_info.clone(), withdrawal.amount);
+            .withdraw(bridge_exit.token_info.clone(), bridge_exit.amount);
 
         // Deposit the destination network
         self.0
-            .entry(withdrawal.dest_network)
+            .entry(bridge_exit.dest_network)
             .or_default()
-            .deposit(withdrawal.token_info, withdrawal.amount);
+            .deposit(bridge_exit.token_info, bridge_exit.amount);
     }
 
     /// Merge two [`BalanceTreeByNetwork`].

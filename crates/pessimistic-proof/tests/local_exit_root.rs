@@ -1,7 +1,7 @@
 use pessimistic_proof::{
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     test_utils::{parse_json_file, BridgeEvent, EventData},
-    Withdrawal,
+    BridgeExit,
 };
 const JSON_FILE_PATH: &str = "tests/data/bridge_events_10k.json";
 
@@ -26,8 +26,8 @@ fn test_local_exit_root() {
                 assert_eq!(deposit_event_data.deposit_count, deposit_count);
                 deposit_count += 1;
 
-                let withdrawal: Withdrawal = deposit_event_data.into();
-                local_exit_tree.add_leaf(withdrawal.hash());
+                let bridge_exit: BridgeExit = deposit_event_data.into();
+                local_exit_tree.add_leaf(bridge_exit.hash());
             }
             EventData::Claim(_) => {
                 // do nothing

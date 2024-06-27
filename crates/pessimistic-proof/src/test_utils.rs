@@ -5,7 +5,7 @@ use reth_primitives::U256;
 use serde::{Deserialize, Deserializer};
 use serde_json::Number;
 
-use crate::{TokenInfo, Withdrawal};
+use crate::{BridgeExit, TokenInfo};
 
 pub fn parse_json_file<T>(json_file_path: &str) -> T
 where
@@ -58,7 +58,7 @@ pub struct DepositEventData {
     pub deposit_count: u32,
 }
 
-impl From<DepositEventData> for Withdrawal {
+impl From<DepositEventData> for BridgeExit {
     fn from(deposit_event_data: DepositEventData) -> Self {
         Self {
             leaf_type: deposit_event_data.leaf_type,

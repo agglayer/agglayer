@@ -3,11 +3,11 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    bridge_exit::NetworkId,
     keccak::Digest,
     local_balance_tree::{BalanceTree, BalanceTreeByNetwork},
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    withdrawal::NetworkId,
-    Withdrawal,
+    BridgeExit,
 };
 
 /// Represents the required data from each CDK for the pessimistic proof.
@@ -21,8 +21,8 @@ pub struct Certificate {
     pub prev_local_exit_root: Digest,
     /// Initial balance tree
     pub prev_local_balance_tree: BalanceTree,
-    /// Set of withdrawals
-    pub withdrawals: Vec<Withdrawal>,
+    /// Set of bridge exits
+    pub bridge_exits: Vec<BridgeExit>,
 }
 
 impl Certificate {
@@ -32,14 +32,14 @@ impl Certificate {
         prev_local_exit_tree: LocalExitTree<Keccak256Hasher>,
         prev_local_exit_root: Digest,
         prev_local_balance_tree: BalanceTree,
-        withdrawals: Vec<Withdrawal>,
+        bridge_exits: Vec<BridgeExit>,
     ) -> Self {
         Self {
             origin_network,
             prev_local_exit_tree,
             prev_local_exit_root,
             prev_local_balance_tree,
-            withdrawals,
+            bridge_exits,
         }
     }
 
@@ -47,8 +47,8 @@ impl Certificate {
     pub fn compute_new_exit_root(&self) -> Digest {
         let mut new_local_exit_tree = self.prev_local_exit_tree.clone();
 
-        for withdrawal in &self.withdrawals {
-            new_local_exit_tree.add_leaf(withdrawal.hash());
+        for bridge_exit in &self.bridge_exits {
+            new_local_exit_tree.add_leaf(bridge_exit.hash());
         }
 
         new_local_exit_tree.get_root()
@@ -62,8 +62,8 @@ impl Certificate {
             base.into()
         };
 
-        for withdrawal in &self.withdrawals {
-            aggregate.insert(self.origin_network, withdrawal.clone());
+        for bridge_exit in &self.bridge_exits {
+            aggregate.insert(self.origin_network, bridge_exit.clone());
         }
 
         aggregate
