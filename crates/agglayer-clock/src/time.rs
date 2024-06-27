@@ -136,7 +136,7 @@ impl TimeClock {
                     } else {
                        error!("Block height overflowed the u64 limit. \
                            This is an unexpected situation and could lead to unexpected behavior. \
-                           Please report this issue to the developers. https://github.com/AggLayer/agglayer-rs/issues/new \
+                           Please report this issue to the developers. https://github.com/agglayer/agglayer/issues/new \
                            The node will now kill itself to prevent further damage.");
 
                         cancellation_token.cancel();
