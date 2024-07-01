@@ -3,7 +3,7 @@ use pessimistic_proof::{
     generate_full_proof,
     local_balance_tree::{Balance, BalanceTree, Deposit},
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    ProofError, TokenInfo, BridgeExit,
+    BridgeExit, ProofError, TokenInfo,
 };
 use reth_primitives::{address, U256};
 
