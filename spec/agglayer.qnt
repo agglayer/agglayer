@@ -113,4 +113,13 @@ module agglayer {
             user_import_bridge_exit(origin, target, denom, amount),
         }
     }
+
+    ///
+    /// Invariant
+    ///
+    val BalanceNonNegative = NETWORKS.forall(network =>
+        TOKENS.forall(token =>
+            cdks_state.get(network).balance_tree.getBalance(token) >= 0
+        )
+    )
 }
