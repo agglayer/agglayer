@@ -103,6 +103,20 @@ module agglayer {
         }
     }
 
+    pure def isContainedIn(old: CDKState, new: CDKState): bool = all {
+        old.exit_tree.subseteq(new.exit_tree),
+        old.nullifier_tree.subseteq(new.nullifier_tree)
+    }
+
+    action cdk_submit_certificate(origin: CdkId): bool = {
+        val new_state = cdks_state.get(origin)
+        val settled_state = agg_l1_state.get(origin).last_cdk_state
+        all {
+            require(settled_state.isContainedIn(new_state)),
+            agg_l1_state' = agg_l1_state.set(origin, { last_cdk_state: new_state })
+        }
+    }
+
     action step: bool = {
         nondet origin = NETWORKS.oneOf()
         nondet target = NETWORKS.exclude(Set(origin)).oneOf()
