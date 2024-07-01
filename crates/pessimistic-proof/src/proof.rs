@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    batch::Batch,
+    bridge_exit::NetworkId,
+    certificate::Certificate,
     keccak::Digest,
     local_balance_tree::{merge_balance_trees, BalanceTreeByNetwork},
-    withdrawal::NetworkId,
 };
 
 /// Represents all errors that can occur while generating the proof.
@@ -19,29 +19,29 @@ pub type BalanceRoot = Digest;
 pub type FullProofOutput = (HashMap<NetworkId, ExitRoot>, HashMap<NetworkId, BalanceRoot>);
 
 /// Returns the updated local balance and exit roots for each network.
-pub fn generate_full_proof(batches: &[Batch]) -> Result<FullProofOutput, ProofError> {
+pub fn generate_full_proof(certificates: &[Certificate]) -> Result<FullProofOutput, ProofError> {
     // Check the validity of the provided exit roots
-    for batch in batches {
-        let computed_root = batch.prev_local_exit_tree.get_root();
+    for certificate in certificates {
+        let computed_root = certificate.prev_local_exit_tree.get_root();
 
-        if computed_root != batch.prev_local_exit_root {
+        if computed_root != certificate.prev_local_exit_root {
             return Err(ProofError::InvalidLocalExitRoot {
                 got: computed_root,
-                expected: batch.prev_local_exit_root,
+                expected: certificate.prev_local_exit_root,
             });
         }
     }
 
     // Compute the new exit root
-    let exit_roots: HashMap<NetworkId, ExitRoot> = batches
+    let exit_roots: HashMap<NetworkId, ExitRoot> = certificates
         .iter()
-        .map(|batch| (batch.origin_network, batch.compute_new_exit_root()))
+        .map(|certificate| (certificate.origin_network, certificate.compute_new_exit_root()))
         .collect();
 
     // Compute the new balance tree by network
-    let balance_trees: HashMap<NetworkId, BalanceTreeByNetwork> = batches
+    let balance_trees: HashMap<NetworkId, BalanceTreeByNetwork> = certificates
         .iter()
-        .map(|batch| (batch.origin_network, batch.compute_new_balance_tree()))
+        .map(|certificate| (certificate.origin_network, certificate.compute_new_balance_tree()))
         .collect();
 
     // Merge the balance tree by network

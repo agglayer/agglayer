@@ -24,9 +24,9 @@ impl TokenInfo {
     }
 }
 
-/// Represents a token withdrawal from the network.
+/// Represents a token bridge exit from the network.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Withdrawal {
+pub struct BridgeExit {
     pub leaf_type: u8,
 
     /// Unique ID for the token being transferred.
@@ -43,8 +43,8 @@ pub struct Withdrawal {
     pub metadata: Vec<u8>,
 }
 
-impl Withdrawal {
-    /// Creates a new [`Withdrawal`].
+impl BridgeExit {
+    /// Creates a new [`BridgeExit`].
     pub fn new(
         leaf_type: u8,
         origin_network: NetworkId,
@@ -67,7 +67,7 @@ impl Withdrawal {
         }
     }
 
-    /// Hashes the [`Withdrawal`] to be inserted in a [`crate::local_exit_tree::LocalExitTree`].
+    /// Hashes the [`BridgeExit`] to be inserted in a [`crate::local_exit_tree::LocalExitTree`].
     pub fn hash(&self) -> KeccakDigest {
         keccak256_combine([
             self.leaf_type.as_raw_slice(),
@@ -119,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_deposit_hash() {
-        let mut deposit = Withdrawal::new(
+        let mut deposit = BridgeExit::new(
             0,
             0.into(),
             Address::default(),

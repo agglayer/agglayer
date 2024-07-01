@@ -1,14 +1,14 @@
 use pessimistic_proof::{
-    batch::Batch,
+    certificate::Certificate,
     generate_full_proof,
     local_balance_tree::{Balance, BalanceTree, Deposit},
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    ProofError, TokenInfo, Withdrawal,
+    BridgeExit, ProofError, TokenInfo,
 };
 use reth_primitives::{address, U256};
 
-fn make_tx(_from: u32, to: u32, token: &TokenInfo, amount: u32) -> Withdrawal {
-    Withdrawal::new(
+fn make_tx(_from: u32, to: u32, token: &TokenInfo, amount: u32) -> BridgeExit {
+    BridgeExit::new(
         0,
         token.origin_network,
         token.origin_token_address,
@@ -35,9 +35,9 @@ fn test_full_proof() {
         LocalExitTree::from_leaves([[0_u8; 32], [1_u8; 32], [2_u8; 32]].into_iter());
     let dummy_root = dummy.get_root();
 
-    // Prepare the data fetched from the CDK: Withdrawals + LBT
+    // Prepare the data fetched from the CDK: BridgeExits + LBT
 
-    // Withdrawals
+    // BridgeExits
     let withdraw_0_to_1 = vec![make_tx(0, 1, &eth, 10), make_tx(0, 1, &usdc, 100)];
     let withdraw_1_to_0 = vec![make_tx(1, 0, &eth, 20), make_tx(1, 0, &usdc, 200)];
 
@@ -52,15 +52,15 @@ fn test_full_proof() {
         let initial_0 = BalanceTree::from(vec![deposit_eth(10), deposit_usdc(10)]);
         let initial_1 = BalanceTree::from(vec![deposit_eth(1), deposit_usdc(200)]);
 
-        let batches = vec![
-            Batch::new(
+        let certificates = vec![
+            Certificate::new(
                 0.into(),
                 dummy.clone(),
                 dummy_root.clone(),
                 initial_0,
                 withdraw_0_to_1.clone(),
             ),
-            Batch::new(
+            Certificate::new(
                 1.into(),
                 dummy.clone(),
                 dummy_root.clone(),
@@ -71,7 +71,7 @@ fn test_full_proof() {
 
         // Compute the full proof
         assert!(matches!(
-            generate_full_proof(&batches),
+            generate_full_proof(&certificates),
             Err(ProofError::NotEnoughBalance { .. })
         ));
     }
@@ -82,19 +82,19 @@ fn test_full_proof() {
         let initial_0 = BalanceTree::from(vec![deposit_eth(12), deposit_usdc(102)]);
         let initial_1 = BalanceTree::from(vec![deposit_eth(20), deposit_usdc(201)]);
 
-        let batches = vec![
-            Batch::new(
+        let certificates = vec![
+            Certificate::new(
                 0.into(),
                 dummy.clone(),
                 dummy_root.clone(),
                 initial_0,
                 withdraw_0_to_1.clone(),
             ),
-            Batch::new(1.into(), dummy, dummy_root, initial_1, withdraw_1_to_0.clone()),
+            Certificate::new(1.into(), dummy, dummy_root, initial_1, withdraw_1_to_0.clone()),
         ];
 
         // Compute the full proof
-        assert!(generate_full_proof(&batches).is_ok());
+        assert!(generate_full_proof(&certificates).is_ok());
     }
 }
 

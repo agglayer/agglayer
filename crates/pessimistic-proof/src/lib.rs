@@ -6,9 +6,9 @@ pub use proof::{generate_full_proof, ProofError};
 
 pub mod test_utils;
 
-mod withdrawal;
-pub use withdrawal::{NetworkId, TokenInfo, Withdrawal};
+mod bridge_exit;
+pub use bridge_exit::{BridgeExit, NetworkId, TokenInfo};
 
-pub mod batch;
+pub mod certificate;
 
 pub mod local_balance_tree;
