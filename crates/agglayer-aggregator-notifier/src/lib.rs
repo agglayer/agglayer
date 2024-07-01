@@ -8,11 +8,11 @@ use pessimistic_proof::certificate::Certificate;
 use sp1_sdk::{NetworkProver, Prover, SP1Proof, SP1ProvingKey, SP1Stdin, SP1VerifyingKey};
 use proof::Proof;
 use sp1::SP1;
-use sp1_sdk::{LocalProver, NetworkProver};
+use sp1_sdk::{LocalProver, MockProver, NetworkProver};
 use tracing::{debug, error, info};
 
 const ELF: &[u8] =
-    include_bytes!("../../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");
+    include_bytes!("../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");
 
 mod error;
 mod proof;
@@ -27,7 +27,7 @@ pub(crate) trait AggregatorProver: Send + Sync {
 }
 
 #[derive(Clone)]
-pub(crate) struct AggregatorNotifier {
+pub struct AggregatorNotifier {
     prover: Arc<dyn AggregatorProver>,
 }
 
@@ -42,7 +42,9 @@ impl TryFrom<ProverConfig> for AggregatorNotifier {
             ProverConfig::SP1Local {} => Ok(Self {
                 prover: Arc::new(SP1::new(LocalProver::new(), ELF)),
             }),
-            ProverConfig::SP1Mock {} => Err(NotifierError::UnableToBuildNotifier),
+            ProverConfig::SP1Mock {} => Ok(Self {
+                prover: Arc::new(SP1::new(MockProver::new(), ELF)),
+            }),
         }
     }
 }
@@ -53,7 +55,6 @@ impl EpochPacker for AggregatorNotifier {
         epoch: u64,
         to_pack: T,
     ) -> Result<BoxFuture<Result<(), Error>>, Error> {
-        // TODO: Implement the aggregator notifier.
         let to_pack = to_pack.into_iter().collect::<Vec<_>>();
 
         debug!(

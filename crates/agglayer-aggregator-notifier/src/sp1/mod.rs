@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use futures::{future::BoxFuture, FutureExt as _};
-use sp1_sdk::{LocalProver, NetworkProver, Prover as _, SP1ProvingKey, SP1Stdin, SP1VerifyingKey};
+use sp1_sdk::{
+    LocalProver, MockProver, NetworkProver, Prover as _, SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
+};
 use tokio::task::spawn_blocking;
 
 use super::Proof;
@@ -55,11 +57,44 @@ impl super::AggregatorProver for SP1<NetworkProver> {
         let proving_key = self.proving_key.clone();
         let prover = self.prover.clone();
 
-        async move { prover.prove(&proving_key.elf, stdin).await.map(Proof::SP1) }.boxed()
+        async move {
+            prover
+                .prove_async(
+                    &proving_key.elf,
+                    stdin,
+                    sp1_sdk::proto::network::ProofMode::Core,
+                )
+                .await
+                .map(Proof::SP1)
+        }
+        .boxed()
     }
 
     fn verify(&self, proof: &Proof) -> Result<(), anyhow::Error> {
         let Proof::SP1(proof) = proof;
+        Ok(self.prover.verify(proof, &self.verifying_key)?)
+    }
+}
+
+impl super::AggregatorProver for SP1<MockProver> {
+    fn prove(&self, to_pack: Vec<()>) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
+        let mut stdin = SP1Stdin::new();
+        stdin.write(&to_pack);
+
+        let proving_key = self.proving_key.clone();
+        let prover = self.prover.clone();
+
+        async move {
+            spawn_blocking(move || prover.prove(&proving_key, stdin))
+                .await?
+                .map(Proof::SP1)
+        }
+        .boxed()
+    }
+
+    fn verify(&self, proof: &Proof) -> Result<(), anyhow::Error> {
+        let Proof::SP1(proof) = proof;
+
         Ok(self.prover.verify(proof, &self.verifying_key)?)
     }
 }
