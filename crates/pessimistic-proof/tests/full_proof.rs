@@ -7,7 +7,6 @@ use pessimistic_proof::{
     BridgeExit, LocalNetworkState, NetworkId, ProofError, TokenInfo,
 };
 use reth_primitives::{address, U256};
-use rstest::rstest;
 
 lazy_static! {
     pub static ref NETWORK_A: NetworkId = 0.into();
@@ -65,7 +64,7 @@ fn initial_state(amount: Amounts) -> LocalNetworkState {
     }
 }
 
-#[rstest]
+#[test]
 fn should_succeed() {
     let state = initial_state(Amounts { eth: 10, usdc: 100 });
 
@@ -79,7 +78,7 @@ fn should_succeed() {
     assert!(generate_leaf_proof(state.clone(), cert).is_ok());
 }
 
-#[rstest]
+#[test]
 fn should_detect_debtor() {
     let state = initial_state(Amounts { eth: 10, usdc: 100 });
 
