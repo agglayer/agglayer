@@ -25,13 +25,13 @@ module agglayer {
     type BridgeExit = {
         origin: CdkId,
         target: CdkId,
-        denom: Denomination,
+        token: Denomination,
         amount: int
     }
 
-    type CDKCommitment = {
-        last_cdk_state: CDKState, // TODO: refer to roots
-    }
+    // type CDKCommitment = {
+    //     last_cdk_state: CDKState, // TODO: refer to roots
+    // }
 
     type CDKState = {
         exit_tree: Set[BridgeExit],
@@ -50,12 +50,14 @@ module agglayer {
     ///
     /// Global State
     ///
-    var agg_l1_state: CdkId -> CDKCommitment
+    var l1_state: CdkId -> CDKState // TODO: refer to commitment
     var cdks_state: CdkId -> CDKState
-    //var agglayer_state
+    var agglayer_state: CdkId -> CDKState // TODO: refer to commitment
+    var epoch: int
 
+    /// State initialization
     action init = all {
-        agg_l1_state' = Map(),
+        l1_state' = Map(),
         cdks_state' = NETWORKS.mapBy(network => {
             exit_tree: Set(),
             nullifier_tree: Set(),
@@ -63,17 +65,17 @@ module agglayer {
         })
     }
 
-    /// Send one bridge exit from one CDK to another
+    /// Upon submission of one bridge exit from one CDK to another
     /// Accumulates it in the source network Exit Tree and decrease the balance
-    action user_submit_bridge_exit(origin: CdkId, target: CdkId, denom: Denomination, amount: int): bool = {
+    action user_submit_bridge_exit(origin: CdkId, target: CdkId, token: Denomination, amount: int): bool = {
         val originState = cdks_state.get(origin)
-        val bridgeExit = { origin: origin, target: target, denom: denom, amount: amount }
+        val bridgeExit = { origin: origin, target: target, token: token, amount: amount }
         all {
             // Should send to your own network
             require(origin != target),
             // State transition
             val newExitTree = originState.exit_tree.union(Set({bridgeExit}))
-            val newBalanceTree = originState.balance_tree.put(denom, originState.balance_tree.getBalance(denom) - amount)
+            val newBalanceTree = originState.balance_tree.put(token, originState.balance_tree.getBalance(token) - amount)
             val newCdkState = originState.with("exit_tree", newExitTree)
                                          .with("balance_tree", newBalanceTree)
             // Write the source network state
@@ -81,7 +83,7 @@ module agglayer {
         }
     }
 
-    /// Import one bridge exit as target network
+    /// Upon import of one bridge exit as target network
     /// Accumulates it in the target network Nullifier Tree and increase the balance
     action user_import_bridge_exit(origin: CdkId, target: CdkId, denom: Denomination, amount: int): bool = {
         val targetState = cdks_state.get(target)
@@ -103,37 +105,65 @@ module agglayer {
         }
     }
 
-    pure def isContainedIn(old: CDKState, new: CDKState): bool = all {
+    pure def isSubset(old: CDKState, new: CDKState): bool = all {
         old.exit_tree.subseteq(new.exit_tree),
         old.nullifier_tree.subseteq(new.nullifier_tree)
     }
 
-    action cdk_submit_certificate(origin: CdkId): bool = {
-        val new_state = cdks_state.get(origin)
-        val settled_state = agg_l1_state.get(origin).last_cdk_state
+    /// Upon certificate submission from one origin network
+    action cdk_submit_certificate(): bool = {
+        nondet origin = NETWORKS.oneOf()
+        val state_on_cdk = cdks_state.get(origin)
+        val state_on_agglayer = agglayer_state.get(origin)
         all {
-            require(settled_state.isContainedIn(new_state)),
-            agg_l1_state' = agg_l1_state.set(origin, { last_cdk_state: new_state })
+            require(state_on_agglayer.isSubset(state_on_cdk)),
+            l1_state' = l1_state.set(origin, state_on_cdk)
         }
     }
 
+    /// Upon new epoch tick on the agglayer
+    /// Settlement on the L1 of the latest consistent AggLayer state
+    action agglayer_has_new_epoch(): bool = all {
+        l1_state' = l1_state.map((cdk_id, settled_state) => (cdk_id, agglayer_state.get(cdk_id))),
+        epoch' = epoch + 1
+    }
+
+    /// Defines what are all the possible step in the state machine
     action step: bool = {
         nondet origin = NETWORKS.oneOf()
         nondet target = NETWORKS.exclude(Set(origin)).oneOf()
         nondet amount = oneOf(1.to(10))
-        nondet denom = oneOf(TOKENS)
+        nondet token = oneOf(TOKENS)
         any {
-            user_submit_bridge_exit(origin, target, denom, amount),
-            user_import_bridge_exit(origin, target, denom, amount),
+            user_submit_bridge_exit(origin, target, token, amount),
+            user_import_bridge_exit(origin, target, token, amount),
+            cdk_submit_certificate(),
+            agglayer_has_new_epoch()
         }
     }
 
     ///
-    /// Invariant
+    /// Invariant and false invariants
     ///
-    val BalanceNonNegative = NETWORKS.forall(network =>
-        TOKENS.forall(token =>
-            cdks_state.get(network).balance_tree.getBalance(token) >= 0
-        )
-    )
+
+    // CDK can be negative, they just won't be able to validate on the agglayer
+    // pure def state_is_non_negative(state: CDKState): bool = {
+    //     NETWORKS.forall(network => TOKENS.forall(token =>
+    //         cdks_state.get(network).balance_tree.getBalance(token) >= 0
+    //     )
+    // }
+
+    // val CdkAlwaysNonNegative = NETWORKS.forall(network =>
+    //     TOKENS.forall(token =>
+    //         cdks_state.get(network).balance_tree.getBalance(token) >= 0
+    //     )
+    // )
+
+    // val NegativeCdkIsStuck = NETWORKS.forall(network =>
+    //     network.isNegative() implies not(enabled(cdk_submit_certificate(network)))
+    // )
+
+    // val AggLayerDontReorg = NETWORKS.forall(network =>
+    //     network.isNegative() implies not(enabled(cdk_submit_certificate(network)))
+    // )
 }
