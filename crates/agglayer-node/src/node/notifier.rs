@@ -1,5 +1,6 @@
 use agglayer_certificate_orchestrator::{EpochPacker, Error};
 use futures::future::BoxFuture;
+use pessimistic_proof::certificate::Certificate;
 use tracing::debug;
 
 #[derive(Clone)]
@@ -12,7 +13,8 @@ impl AggregatorNotifier {
 }
 
 impl EpochPacker for AggregatorNotifier {
-    fn pack<T: IntoIterator<Item = ()>>(
+    type Item = Certificate;
+    fn pack<T: IntoIterator<Item = Self::Item>>(
         &self,
         epoch: u64,
         to_pack: T,

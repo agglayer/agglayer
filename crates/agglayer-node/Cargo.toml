@@ -29,6 +29,7 @@ agglayer-clock = { path = "../agglayer-clock" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
 agglayer-signer = { path = "../agglayer-signer" }
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
+pessimistic-proof = { path = "../pessimistic-proof" }
 tokio-stream = "0.1.15"
 
 [dev-dependencies]

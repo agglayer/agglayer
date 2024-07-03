@@ -130,6 +130,7 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-test-utils",
  "lazy_static",
+ "pessimistic-proof",
  "serde",
  "serde_json",
  "serde_with",

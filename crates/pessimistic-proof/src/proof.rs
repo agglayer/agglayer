@@ -50,7 +50,7 @@ pub fn generate_full_proof(certificates: &[Certificate]) -> Result<FullProofOutp
     // Detect the debtors if any
     let debtors = balance_tree_by_network
         .iter()
-        .filter_map(|(network, balance_tree)| balance_tree.has_debt().then(|| *network))
+        .filter_map(|(network, balance_tree)| balance_tree.has_debt().then_some(*network))
         .collect::<Vec<_>>();
 
     if !debtors.is_empty() {
