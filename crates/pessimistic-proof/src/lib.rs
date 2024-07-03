@@ -12,5 +12,5 @@ pub mod local_balance_tree;
 mod bridge_exit;
 pub use bridge_exit::{BridgeExit, NetworkId, TokenInfo};
 
-pub mod global_state;
-pub use global_state::LocalNetworkState;
+pub mod local_state;
+pub use local_state::LocalNetworkState;

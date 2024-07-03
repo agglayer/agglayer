@@ -1,6 +1,6 @@
 use crate::{
-    bridge_exit::NetworkId, certificate::Certificate, global_state::LocalNetworkState,
-    keccak::Digest,
+    bridge_exit::NetworkId, certificate::Certificate, keccak::Digest,
+    local_state::LocalNetworkState,
 };
 
 /// Represents all errors that can occur while generating the proof.
