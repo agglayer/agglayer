@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -7,7 +5,7 @@ use crate::{
     local_balance_tree::BalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     proof::{BalanceRoot, ExitRoot},
-    BridgeExit, NetworkId, ProofError,
+    ProofError,
 };
 
 /// Local state of one network.
@@ -19,9 +17,6 @@ pub struct LocalNetworkState {
     pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// Commitment to the balance for each token.
     pub balance_tree: BalanceTree,
-    /// Commitment to the imported [`BridgeExit`].
-    #[allow(dead_code)]
-    pub nullifier_tree: BTreeMap<NetworkId, Vec<BridgeExit>>,
 }
 
 impl LocalNetworkState {

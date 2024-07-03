@@ -60,7 +60,6 @@ fn initial_state(amount: Amounts) -> LocalNetworkState {
     LocalNetworkState {
         exit_tree: DUMMY_LET.clone(),
         balance_tree: amount.into(),
-        nullifier_tree: Default::default(),
     }
 }
 
