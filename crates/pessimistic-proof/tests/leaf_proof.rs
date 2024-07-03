@@ -102,6 +102,6 @@ fn should_detect_debtor() {
 
 #[test]
 #[ignore = "not implemented yet"]
-fn test_full_proof_mainnet_data() {
+fn test_leaf_proof_mainnet_data() {
     // from data fetched from mainnet
 }
