@@ -22,8 +22,6 @@ pub struct Certificate {
     pub bridge_exits: Vec<BridgeExit>,
     /// The set of imported bridge exits for which the origin network is the target.
     pub imported_bridge_exits: Vec<BridgeExit>,
-    /// The signature that commits to the state transition.
-    pub signature: (),
 }
 
 impl Certificate {
@@ -38,7 +36,6 @@ impl Certificate {
             prev_local_exit_root,
             bridge_exits,
             imported_bridge_exits: Default::default(),
-            signature: (),
         }
     }
 }
