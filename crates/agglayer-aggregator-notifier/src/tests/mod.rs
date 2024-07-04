@@ -11,7 +11,7 @@ mod sp1 {
     #[cfg_attr(not(feature = "sp1-network"), ignore)]
     async fn aggregator_notifier_for_network() {
         let config = ProverConfig::SP1Network {};
-        let notifier = AggregatorNotifier::try_from(config);
+        let notifier = AggregatorNotifier::<()>::try_from(config);
         assert!(notifier.is_ok());
 
         let notifier = notifier.unwrap();
@@ -22,7 +22,7 @@ mod sp1 {
     #[tokio::test]
     async fn aggregator_notifier_for_local() {
         let config = ProverConfig::SP1Local {};
-        let notifier = AggregatorNotifier::try_from(config);
+        let notifier = AggregatorNotifier::<()>::try_from(config);
         assert!(notifier.is_ok());
 
         let notifier = notifier.unwrap();
@@ -33,7 +33,7 @@ mod sp1 {
     #[tokio::test]
     async fn aggregator_notifier_for_mock() {
         let config = ProverConfig::SP1Mock {};
-        let notifier = AggregatorNotifier::try_from(config);
+        let notifier = AggregatorNotifier::<()>::try_from(config);
         assert!(notifier.is_ok());
 
         let notifier = notifier.unwrap();

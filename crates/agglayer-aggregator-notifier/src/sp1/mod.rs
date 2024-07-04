@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use futures::{future::BoxFuture, FutureExt as _};
+use serde::Serialize;
 use sp1_sdk::{
     LocalProver, MockProver, NetworkProver, Prover as _, SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
 };
@@ -26,8 +27,11 @@ impl<P: sp1_sdk::Prover> SP1<P> {
     }
 }
 
-impl super::AggregatorProver for SP1<LocalProver> {
-    fn prove(&self, to_pack: Vec<()>) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
+impl<I> super::AggregatorProver<I> for SP1<LocalProver>
+where
+    I: Serialize,
+{
+    fn prove(&self, to_pack: Vec<I>) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
         let mut stdin = SP1Stdin::new();
         stdin.write(&to_pack);
 
@@ -49,8 +53,11 @@ impl super::AggregatorProver for SP1<LocalProver> {
     }
 }
 
-impl super::AggregatorProver for SP1<NetworkProver> {
-    fn prove(&self, to_pack: Vec<()>) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
+impl<I> super::AggregatorProver<I> for SP1<NetworkProver>
+where
+    I: Serialize,
+{
+    fn prove(&self, to_pack: Vec<I>) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
         let mut stdin = SP1Stdin::new();
         stdin.write(&to_pack);
 
@@ -76,8 +83,11 @@ impl super::AggregatorProver for SP1<NetworkProver> {
     }
 }
 
-impl super::AggregatorProver for SP1<MockProver> {
-    fn prove(&self, to_pack: Vec<()>) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
+impl<I> super::AggregatorProver<I> for SP1<MockProver>
+where
+    I: Serialize,
+{
+    fn prove(&self, to_pack: Vec<I>) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
         let mut stdin = SP1Stdin::new();
         stdin.write(&to_pack);
 

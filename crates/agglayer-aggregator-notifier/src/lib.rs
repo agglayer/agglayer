@@ -4,11 +4,11 @@ use agglayer_certificate_orchestrator::{EpochPacker, Error};
 use agglayer_config::certificate_orchestrator::prover::ProverConfig;
 use error::NotifierError;
 use futures::future::BoxFuture;
-use pessimistic_proof::certificate::Certificate;
-use sp1_sdk::{NetworkProver, Prover, SP1Proof, SP1ProvingKey, SP1Stdin, SP1VerifyingKey};
 use proof::Proof;
+use serde::Serialize;
 use sp1::SP1;
-use sp1_sdk::{LocalProver, MockProver, NetworkProver};
+use sp1_sdk::NetworkProver;
+use sp1_sdk::{LocalProver, MockProver};
 use tracing::{debug, error, info};
 
 const ELF: &[u8] =
@@ -20,18 +20,20 @@ mod sp1;
 #[cfg(test)]
 mod tests;
 
-
-pub(crate) trait AggregatorProver: Send + Sync {
-    fn prove(&self, to_pack: Vec<()>) -> BoxFuture<'_, Result<Proof, anyhow::Error>>;
+pub(crate) trait AggregatorProver<I>: Send + Sync {
+    fn prove(&self, to_pack: Vec<I>) -> BoxFuture<'_, Result<Proof, anyhow::Error>>;
     fn verify(&self, proof: &Proof) -> Result<(), anyhow::Error>;
 }
 
 #[derive(Clone)]
-pub struct AggregatorNotifier {
-    prover: Arc<dyn AggregatorProver>,
+pub struct AggregatorNotifier<I> {
+    prover: Arc<dyn AggregatorProver<I>>,
 }
 
-impl TryFrom<ProverConfig> for AggregatorNotifier {
+impl<I> TryFrom<ProverConfig> for AggregatorNotifier<I>
+where
+    I: Serialize,
+{
     type Error = NotifierError;
 
     fn try_from(config: ProverConfig) -> Result<Self, Self::Error> {
@@ -49,8 +51,12 @@ impl TryFrom<ProverConfig> for AggregatorNotifier {
     }
 }
 
-impl EpochPacker for AggregatorNotifier {
-    fn pack<T: IntoIterator<Item = ()>>(
+impl<I> EpochPacker for AggregatorNotifier<I>
+where
+    I: Clone + 'static,
+{
+    type Item = I;
+    fn pack<T: IntoIterator<Item = Self::Item>>(
         &self,
         epoch: u64,
         to_pack: T,
