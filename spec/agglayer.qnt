@@ -62,7 +62,7 @@ module agglayer {
         cdks_state' = NETWORKS.mapBy(network => {
             exit_tree: Set(),
             nullifier_tree: Set(),
-            balance_tree: Map(MATIC -> 100, USDC -> 100)
+            balance_tree: Map(MATIC -> 10, USDC -> 10)
         }),
         epoch' = 0,
     }
@@ -126,6 +126,7 @@ module agglayer {
         val state_on_agglayer = agglayer_state.get(origin)
         all {
             require(state_on_agglayer.isSubset(state_on_cdk)),
+            require(TOKENS.forall(token => state_on_cdk.balance_tree.getBalance(token) >= 0)),
             agglayer_state' = agglayer_state.set(origin, state_on_cdk),
             l1_state' = l1_state,
             cdks_state' = cdks_state,
@@ -136,8 +137,8 @@ module agglayer {
     /// Upon new epoch tick on the agglayer
     /// Settlement on the L1 of the latest consistent AggLayer state
     action agglayer_has_new_epoch(): bool = all {
-        agglayer_state' = agglayer_state,
         cdks_state' = cdks_state,
+        agglayer_state' = agglayer_state,
         l1_state' = l1_state.keys().mapBy(cdk_id => agglayer_state.get(cdk_id)),
         epoch' = epoch + 1
     }
@@ -146,7 +147,7 @@ module agglayer {
     action step: bool = {
         nondet origin = NETWORKS.oneOf()
         nondet target = NETWORKS.exclude(Set(origin)).oneOf()
-        nondet amount = oneOf(1.to(10))
+        nondet amount = oneOf(1.to(100))
         nondet token = oneOf(TOKENS)
         any {
             user_submit_bridge_exit(origin, target, token, amount),
@@ -155,4 +156,33 @@ module agglayer {
             agglayer_has_new_epoch
         }
     }
+
+    ///
+    /// Invariant and safety properties
+    ///
+
+    pure def state_is_non_negative(origin: CdkId, state: CdkId -> CDKState): bool = {
+        not(state_is_negative(origin, state))
+    }
+
+    pure def state_is_negative(origin: CdkId, state: CdkId -> CDKState): bool = {
+        TOKENS.forall(token => state.get(origin).balance_tree.getBalance(token) < 0)
+    }
+
+    // CDK can be negative, they just won't be able to validate on the agglayer
+    val bad_cdk_state_exists = NETWORKS.forall(network => state_is_non_negative(network, agglayer_state))
+
+    // CDK that are negative should not be able to submit Certificate
+    val bad_cdk_are_stuck = NETWORKS.forall(network => {
+        state_is_negative(network, cdks_state) implies not(enabled(cdk_submit_certificate(network)))
+    })
+
+    // AggLayer and L1 state should always be consistent with the invariant
+    val settled_state_is_non_negative = NETWORKS.forall(network => {
+        state_is_non_negative(network, l1_state) and state_is_non_negative(network, agglayer_state)
+    })
+
+    temporal agglayer_safe = always(settled_state_is_non_negative)
+    temporal bad_cdk_always_stuck = always(bad_cdk_are_stuck)
+    temporal cdk_can_become_byzantine = eventually(bad_cdk_state_exists)
 }
