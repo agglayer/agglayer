@@ -26,36 +26,27 @@ impl LocalNetworkState {
         &mut self,
         certificate: Certificate,
     ) -> Result<(ExitRoot, BalanceRoot), ProofError> {
-        // Apply on Exit Tree
-        {
-            let computed_root = self.exit_tree.get_root();
-            if computed_root != certificate.prev_local_exit_root {
-                return Err(ProofError::InvalidLocalExitRoot {
-                    got: computed_root,
-                    expected: certificate.prev_local_exit_root,
-                });
-            }
-
-            for bridge_exit in &certificate.bridge_exits {
-                self.exit_tree.add_leaf(bridge_exit.hash());
-            }
+        // Check the initial state
+        let computed_root = self.exit_tree.get_root();
+        if computed_root != certificate.prev_local_exit_root {
+            return Err(ProofError::InvalidLocalExitRoot {
+                got: computed_root,
+                expected: certificate.prev_local_exit_root,
+            });
         }
 
-        // Apply on Balance Tree
-        {
-            for bridge_exit in certificate.bridge_exits {
-                self.balance_tree.withdraw(bridge_exit.token_info, bridge_exit.amount);
-            }
+        // Apply the bridge exits
+        certificate.bridge_exits.iter().for_each(|bridge_exit| {
+            self.exit_tree.add_leaf(bridge_exit.hash());
+            self.balance_tree.withdraw(bridge_exit.token_info.clone(), bridge_exit.amount);
+        });
 
-            // Check whether the sender has some debt
-            if self.balance_tree.has_debt() {
-                return Err(ProofError::HasDebt {
-                    network: certificate.origin_network,
-                });
-            }
-        };
-
-        // TODO: Apply on the nullifier tree
+        // Check whether the origin network has some debt
+        if self.balance_tree.has_debt() {
+            return Err(ProofError::HasDebt {
+                network: certificate.origin_network,
+            });
+        }
 
         Ok((self.exit_tree.get_root(), self.balance_tree.hash()))
     }
