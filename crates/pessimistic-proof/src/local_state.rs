@@ -38,7 +38,7 @@ impl LocalNetworkState {
         // Apply the bridge exits
         certificate.bridge_exits.iter().for_each(|bridge_exit| {
             self.exit_tree.add_leaf(bridge_exit.hash());
-            self.balance_tree.withdraw(bridge_exit.token_info.clone(), bridge_exit.amount);
+            self.balance_tree.withdraw(bridge_exit.token_info, bridge_exit.amount);
         });
 
         // Check whether the origin network has some debt

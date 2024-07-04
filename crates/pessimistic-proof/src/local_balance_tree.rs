@@ -35,7 +35,7 @@ impl BalanceTreeByNetwork {
         self.0
             .entry(origin_network)
             .or_default()
-            .withdraw(bridge_exit.token_info.clone(), bridge_exit.amount);
+            .withdraw(bridge_exit.token_info, bridge_exit.amount);
 
         // Deposit the destination network
         self.0
@@ -165,8 +165,8 @@ impl BalanceTree {
     /// Merge with another [`BalanceTree`].
     pub fn merge(&mut self, other: &BalanceTree) {
         for (token, balance) in other.0.iter() {
-            self.deposit(token.clone(), balance.deposit);
-            self.withdraw(token.clone(), balance.withdraw)
+            self.deposit(*token, balance.deposit);
+            self.withdraw(*token, balance.withdraw)
         }
     }
 
