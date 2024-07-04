@@ -189,6 +189,11 @@ async fn send_certificate_method_can_be_called_and_fail() {
 fn next_available_addr() -> std::net::SocketAddr {
     use std::net::{TcpListener, TcpStream};
 
+    assert!(
+        std::env::var("NEXTEST").is_ok(),
+        "Due to concurrency issues, the rpc tests have to be run under `cargo nextest`",
+    );
+
     let host = "127.0.0.1";
     // Request a random available port from the OS
     let listener = TcpListener::bind((host, 0)).expect("Can't bind to an available port");
