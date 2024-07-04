@@ -68,13 +68,13 @@ fn should_succeed() {
     let state = initial_state(Amounts { eth: 10, usdc: 100 });
 
     let cert = state_transition(Amounts { eth: 10, usdc: 100 });
-    assert!(generate_leaf_proof(state.clone(), cert).is_ok());
+    assert!(generate_leaf_proof(state.clone(), &cert).is_ok());
 
     let cert = state_transition(Amounts { eth: 0, usdc: 0 });
-    assert!(generate_leaf_proof(state.clone(), cert).is_ok());
+    assert!(generate_leaf_proof(state.clone(), &cert).is_ok());
 
     let cert = state_transition(Amounts { eth: 10, usdc: 99 });
-    assert!(generate_leaf_proof(state.clone(), cert).is_ok());
+    assert!(generate_leaf_proof(state.clone(), &cert).is_ok());
 }
 
 #[test]
@@ -83,19 +83,19 @@ fn should_detect_debtor() {
 
     let cert = state_transition(Amounts { eth: 10, usdc: 101 });
     assert!(matches!(
-        generate_leaf_proof(state.clone(), cert),
+        generate_leaf_proof(state.clone(), &cert),
         Err(ProofError::HasDebt { .. })
     ));
 
     let cert = state_transition(Amounts { eth: 20, usdc: 200 });
     assert!(matches!(
-        generate_leaf_proof(state.clone(), cert),
+        generate_leaf_proof(state.clone(), &cert),
         Err(ProofError::HasDebt { .. })
     ));
 
     let cert = state_transition(Amounts { eth: 0, usdc: 200 });
     assert!(matches!(
-        generate_leaf_proof(state.clone(), cert),
+        generate_leaf_proof(state.clone(), &cert),
         Err(ProofError::HasDebt { .. })
     ));
 }

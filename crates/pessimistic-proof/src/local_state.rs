@@ -24,7 +24,7 @@ impl LocalNetworkState {
     /// Returns the commitment on the resulting state if successful.
     pub fn apply_certificate(
         &mut self,
-        certificate: Certificate,
+        certificate: &Certificate,
     ) -> Result<(ExitRoot, BalanceRoot), ProofError> {
         // Check the initial state
         let computed_root = self.exit_tree.get_root();

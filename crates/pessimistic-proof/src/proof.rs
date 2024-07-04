@@ -17,7 +17,7 @@ pub type LeafProofOutput = (ExitRoot, BalanceRoot);
 /// Proves that the given [`Certificate`] can be applied on the given [`LocalNetworkState`].
 pub fn generate_leaf_proof(
     initial_network_state: LocalNetworkState,
-    certificate: Certificate,
+    certificate: &Certificate,
 ) -> Result<LeafProofOutput, ProofError> {
     let mut network_state = initial_network_state;
 
