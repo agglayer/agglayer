@@ -1,0 +1,2 @@
+# Treat .qnt files as bluespec (similar to vim modeline)
+*.qnt linguist-language=Bluespec

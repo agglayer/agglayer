@@ -1,3 +1,5 @@
+// -*- mode: Bluespec; -*-
+
 /**
  * A specification for the centralized AggLayer
  */
