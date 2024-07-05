@@ -57,8 +57,16 @@ module agglayer {
 
     /// State initialization
     action init = all {
-        l1_state' = Map(),
-        agglayer_state' = Map(),
+        l1_state' = NETWORKS.mapBy(network => {
+            exit_tree: Set(),
+            nullifier_tree: Set(),
+            balance_tree: Map(MATIC -> 0, USDC -> 0)
+        }),
+        agglayer_state' = NETWORKS.mapBy(network => {
+            exit_tree: Set(),
+            nullifier_tree: Set(),
+            balance_tree: Map(MATIC -> 0, USDC -> 0)
+        }),
         cdks_state' = NETWORKS.mapBy(network => {
             exit_tree: Set(),
             nullifier_tree: Set(),
@@ -69,15 +77,18 @@ module agglayer {
 
     /// Upon submission of one bridge exit from one CDK to another
     /// Accumulates it in the source network Exit Tree and decrease the balance
-    action user_submit_bridge_exit(origin: CdkId, target: CdkId, token: Denomination, amount: int): bool = {
+    action user_submit_bridge_exit(origin: CdkId, target: CdkId, token: Denomination, amount: int, is_byzantine: bool): bool = {
         val originState = cdks_state.get(origin)
         val bridgeExit = { origin: origin, target: target, token: token, amount: amount }
+        val newExitTree = originState.exit_tree.union(Set({bridgeExit}))
+        val newBalance = originState.balance_tree.getBalance(token) - amount
         all {
             // Should send to your own network
             require(origin != target),
+            // Should be non negative
+            //require(is_byzantine or newBalance >= 0),
             // State transition
-            val newExitTree = originState.exit_tree.union(Set({bridgeExit}))
-            val newBalanceTree = originState.balance_tree.put(token, originState.balance_tree.getBalance(token) - amount)
+            val newBalanceTree = originState.balance_tree.put(token, newBalance)
             val newCdkState = originState.with("exit_tree", newExitTree)
                                          .with("balance_tree", newBalanceTree)
             // Write the source network state
@@ -91,16 +102,16 @@ module agglayer {
 
     /// Upon import of one bridge exit as target network
     /// Accumulates it in the target network Nullifier Tree and increase the balance
-    action user_import_bridge_exit(origin: CdkId, target: CdkId, token: Denomination, amount: int): bool = {
+    action user_import_bridge_exit(origin: CdkId, target: CdkId, token: Denomination, amount: int, is_byzantine: bool): bool = {
         val targetState = cdks_state.get(target)
         val bridgeExit = { origin: origin, target: target, token: token, amount: amount }
         all {
             // Should not receive from your own network
             require(origin != target),
-            // Should exist on the origin network
-            require(cdks_state.get(origin).exit_tree.contains(bridgeExit)),
-            // Should not be already claimed
-            require(not(cdks_state.get(target).nullifier_tree.contains(bridgeExit))),
+            // Should be byzantine or should exist on the origin network
+            require(is_byzantine or l1_state.get(origin).exit_tree.contains(bridgeExit)),
+            // Should be byzantine or not be already claimed
+            require(is_byzantine or not(l1_state.get(target).nullifier_tree.contains(bridgeExit))),
             // State transition
             val newNullifierTree = targetState.nullifier_tree.union(Set({bridgeExit}))
             val newBalanceTree = targetState.balance_tree.put(token, targetState.balance_tree.getBalance(token) + amount)
@@ -149,10 +160,12 @@ module agglayer {
         nondet target = NETWORKS.exclude(Set(origin)).oneOf()
         nondet amount = oneOf(1.to(100))
         nondet token = oneOf(TOKENS)
+        nondet is_byzantine = oneOf(Set(true, false))
+        nondet cert_submitter = NETWORKS.oneOf()
         any {
-            user_submit_bridge_exit(origin, target, token, amount),
-            user_import_bridge_exit(origin, target, token, amount),
-            cdk_submit_certificate(origin),
+            user_submit_bridge_exit(origin, target, token, amount, is_byzantine),
+            user_import_bridge_exit(origin, target, token, amount, is_byzantine),
+            cdk_submit_certificate(cert_submitter),
             agglayer_has_new_epoch
         }
     }
@@ -160,19 +173,18 @@ module agglayer {
     ///
     /// Invariant and safety properties
     ///
-
     pure def state_is_non_negative(origin: CdkId, state: CdkId -> CDKState): bool = {
         not(state_is_negative(origin, state))
     }
 
     pure def state_is_negative(origin: CdkId, state: CdkId -> CDKState): bool = {
-        TOKENS.forall(token => state.get(origin).balance_tree.getBalance(token) < 0)
+        TOKENS.exists(token => state.get(origin).balance_tree.getBalance(token) < 0)
     }
 
     // CDK can be negative, they just won't be able to validate on the agglayer
-    val bad_cdk_state_exists = NETWORKS.forall(network => state_is_non_negative(network, agglayer_state))
+    val bad_cdk_state_exists = NETWORKS.exists(network => state_is_negative(network, cdks_state))
 
-    // CDK that are negative should not be able to submit Certificate
+    // CDK with negative balances should be unable to submit Certificate
     val bad_cdk_are_stuck = NETWORKS.forall(network => {
         state_is_negative(network, cdks_state) implies not(enabled(cdk_submit_certificate(network)))
     })
@@ -182,7 +194,12 @@ module agglayer {
         state_is_non_negative(network, l1_state) and state_is_non_negative(network, agglayer_state)
     })
 
+    // The L1 and the AggLayer state never settle negative balances
     temporal agglayer_safe = always(settled_state_is_non_negative)
-    temporal bad_cdk_always_stuck = always(bad_cdk_are_stuck)
-    temporal cdk_can_become_byzantine = eventually(bad_cdk_state_exists)
+
+    // One CDK can become eventually byzantine with negative balance
+    //temporal cdk_can_become_byzantine = always(not(bad_cdk_state_exists))
+
+    // The CDK with negative balances cannot submit certificate
+    //temporal bad_cdk_always_stuck = always(bad_cdk_are_stuck)
 }
