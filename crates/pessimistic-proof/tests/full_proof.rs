@@ -56,14 +56,14 @@ fn test_full_proof() {
             Certificate::new(
                 0.into(),
                 dummy.clone(),
-                dummy_root.clone(),
+                dummy_root,
                 initial_0,
                 withdraw_0_to_1.clone(),
             ),
             Certificate::new(
                 1.into(),
                 dummy.clone(),
-                dummy_root.clone(),
+                dummy_root,
                 initial_1,
                 withdraw_1_to_0.clone(),
             ),
@@ -86,7 +86,7 @@ fn test_full_proof() {
             Certificate::new(
                 0.into(),
                 dummy.clone(),
-                dummy_root.clone(),
+                dummy_root,
                 initial_0,
                 withdraw_0_to_1.clone(),
             ),

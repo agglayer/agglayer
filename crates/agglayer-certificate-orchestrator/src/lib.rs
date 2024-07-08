@@ -22,7 +22,7 @@ const MAX_POLL_READS: usize = 1_000;
 /// Certificate orchestrator that receives certificates from CDKs.
 /// It collects certificates and sends them to the epoch packer when an epoch
 /// ends.
-pub struct CertificateOrchestrator<C, A> {
+pub struct CertificateOrchestrator<C, A, I> {
     /// Epoch packing task resolver.
     epoch_packing_tasks: JoinSet<Result<(), Error>>,
     /// Epoch packing task builder.
@@ -30,20 +30,20 @@ pub struct CertificateOrchestrator<C, A> {
     /// Clock stream to receive EpochEnded events.
     clock: C,
     /// Certificates received from CDKs.
-    received_certificates: VecDeque<()>,
+    received_certificates: VecDeque<I>,
     /// Certificates to pack for each epoch.
-    pub(crate) to_pack: BTreeMap<u64, VecDeque<()>>,
+    pub(crate) to_pack: BTreeMap<u64, VecDeque<I>>,
     /// Receiver for certificates coming from CDKs.
-    data_receiver: Receiver<()>,
+    data_receiver: Receiver<I>,
     /// Cancellation token for graceful shutdown.
     cancellation_token: Pin<Box<WaitForCancellationFutureOwned>>,
 }
 
-impl<C, A> CertificateOrchestrator<C, A> {
+impl<C, A, I> CertificateOrchestrator<C, A, I> {
     /// Creates a new CertificateOrchestrator instance.
     pub(crate) fn new(
         clock: C,
-        data_receiver: Receiver<()>,
+        data_receiver: Receiver<I>,
         cancellation_token: CancellationToken,
         epoch_packing_task_builder: A,
     ) -> Self {
@@ -60,10 +60,11 @@ impl<C, A> CertificateOrchestrator<C, A> {
 }
 
 #[buildstructor::buildstructor]
-impl<C, A> CertificateOrchestrator<C, A>
+impl<C, A, I> CertificateOrchestrator<C, A, I>
 where
+    I: Send + Unpin + 'static,
     C: Stream<Item = Event> + Unpin + Send + 'static,
-    A: EpochPacker + Send,
+    A: EpochPacker<Item = I> + Send,
 {
     /// Function that setups and starts the CertificateOrchestrator.
     ///
@@ -97,6 +98,7 @@ where
     /// }
     ///
     /// impl EpochPacker for AggregatorNotifier {
+    ///     type Item = ();
     ///     fn pack<T: IntoIterator<Item = ()>>(
     ///         &self,
     ///         epoch: u64,
@@ -131,7 +133,7 @@ where
     #[builder(entry = "builder", exit = "start", visibility = "pub")]
     pub async fn start(
         clock: C,
-        data_receiver: Receiver<()>,
+        data_receiver: Receiver<I>,
         cancellation_token: CancellationToken,
         epoch_packing_task_builder: A,
     ) -> anyhow::Result<JoinHandle<()>> {
@@ -148,10 +150,11 @@ where
     }
 }
 
-impl<C, A> Future for CertificateOrchestrator<C, A>
+impl<C, A, I> Future for CertificateOrchestrator<C, A, I>
 where
+    I: Send + Unpin + 'static,
     C: Stream<Item = Event> + Send + Unpin + 'static,
-    A: EpochPacker,
+    A: EpochPacker<Item = I> + Send,
 {
     type Output = ();
 
@@ -207,7 +210,9 @@ where
 }
 
 pub trait EpochPacker: Clone + Unpin + Send + 'static {
-    fn pack<T: IntoIterator<Item = ()>>(
+    type Item;
+
+    fn pack<T: IntoIterator<Item = Self::Item>>(
         &self,
         epoch: u64,
         to_pack: T,

@@ -1,4 +1,4 @@
-use std::task::Poll;
+use std::{marker::PhantomData, task::Poll};
 
 use futures_util::{future::BoxFuture, poll};
 use tokio::sync::{broadcast, mpsc};
@@ -17,7 +17,7 @@ async fn test_certificate_orchestrator_can_stop() {
     let cancellation_token = CancellationToken::new();
 
     let (check_sender, mut check_receiver) = mpsc::channel(1);
-    let checker = Check::builder().executed(check_sender).build();
+    let checker = Check::<()>::builder().executed(check_sender).build();
 
     let mut orchestrator =
         CertificateOrchestrator::new(clock, data_receiver, cancellation_token.clone(), checker);
@@ -95,7 +95,7 @@ async fn test_collect_certificates_when_empty() {
     let cancellation_token = CancellationToken::new();
 
     let (check_sender, mut check_receiver) = mpsc::channel(1);
-    let check = Check::builder()
+    let check = Check::<()>::builder()
         .executed(check_sender)
         .expected_epoch(1)
         .expected_certificates_len(0)
@@ -111,17 +111,39 @@ async fn test_collect_certificates_when_empty() {
     assert!(check_receiver.recv().await.is_some());
 }
 
-#[derive(buildstructor::Builder, Clone)]
-struct Check {
+#[derive(Clone)]
+struct Check<I> {
     executed: mpsc::Sender<()>,
     expected_epoch: Option<u64>,
     expected_certificates_len: Option<usize>,
+    _phantom_data: std::marker::PhantomData<I>,
 }
 
-impl EpochPacker for Check {
+#[buildstructor::buildstructor]
+impl<I> Check<I> {
+    #[builder]
+    fn new(
+        executed: mpsc::Sender<()>,
+        expected_epoch: Option<u64>,
+        expected_certificates_len: Option<usize>,
+    ) -> Self {
+        Self {
+            executed,
+            expected_epoch,
+            expected_certificates_len,
+            _phantom_data: PhantomData,
+        }
+    }
+}
+
+impl<I> EpochPacker for Check<I>
+where
+    I: Send + Unpin + Clone + 'static,
+{
+    type Item = I;
     fn pack<T>(&self, epoch: u64, to_pack: T) -> Result<BoxFuture<Result<(), Error>>, Error>
     where
-        T: IntoIterator<Item = ()>,
+        T: IntoIterator<Item = Self::Item>,
     {
         if let Some(expected_epoch) = self.expected_epoch {
             assert_eq!(epoch, expected_epoch);
