@@ -1,7 +1,7 @@
 //! The core input of the agglayer.
 //!
 //! Systems that wish to submit proofs to the agglayer must produce a
-//! [`SignedProof`] conforming to the type definitions specified herein.
+//! [`SignedTx`] conforming to the type definitions specified herein.
 use ethers::{prelude::*, utils::keccak256};
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr};

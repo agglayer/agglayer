@@ -80,8 +80,7 @@ impl<RpcProvider> Kernel<RpcProvider> {
         ))
     }
 
-    /// Verify that the given [`SignedProof`] is valid according to the ZkEVM
-    /// node.
+    /// Verify that the given [`SignedTx`] is valid according to the ZkEVM node.
     ///
     /// This involves an RPC call to the ZkEVM node to verify the state root and
     /// exit roots of the signed proof match that of the ZkEVM node's local
@@ -241,7 +240,7 @@ where
     }
 
     /// Construct a call to the `verifyBatchesTrustedAggregator` (`0x1489ed10`)
-    /// method on the rollup manager contract for a given [`SignedProof`].
+    /// method on the rollup manager contract for a given [`SignedTx`].
     ///
     /// Note that this does not actually invoke the function, but rather
     /// constructs a [`FunctionCall`] that can be used to create a dry-run
@@ -274,7 +273,7 @@ where
         Ok(call)
     }
 
-    /// Verify that the signer of the given [`SignedProof`] is the trusted
+    /// Verify that the signer of the given [`SignedTx`] is the trusted
     /// sequencer for the rollup id specified in the proof.
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn verify_signature(
@@ -298,8 +297,8 @@ where
         Ok(())
     }
 
-    /// Verify that the given [`SignedProof`] does not error during eth_call
-    /// dry run.
+    /// Verify that the given [`SignedTx`] does not error during eth_call dry
+    /// run.
     ///
     /// This involves a contract call to the rollup manager contract. In
     /// particular, it calls `verifyBatchesTrustedAggregator` (`0x1489ed10`) on
@@ -317,7 +316,7 @@ where
         Ok(())
     }
 
-    /// Settle the given [`SignedProof`] to the rollup manager.
+    /// Settle the given [`SignedTx`] to the rollup manager.
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn settle(
         &self,

@@ -69,7 +69,7 @@ impl<P> BlockClock<P> {
         }
     }
 
-    /// Updates the current Epoch of this [`TimeClock`].
+    /// Updates the current Epoch of this [`BlockClock`].
     ///
     /// This method is used to update the current Epoch number based on the
     /// Block height and the Epoch duration.
