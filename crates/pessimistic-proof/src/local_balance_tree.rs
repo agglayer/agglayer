@@ -145,9 +145,9 @@ impl Balance {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct BalanceTree(BTreeMap<TokenInfo, Balance>);
 
-impl From<Vec<(TokenInfo, Balance)>> for BalanceTree {
-    fn from(initial_balance: Vec<(TokenInfo, Balance)>) -> Self {
-        Self(initial_balance.into_iter().collect())
+impl From<BTreeMap<TokenInfo, Balance>> for BalanceTree {
+    fn from(initial_balance: BTreeMap<TokenInfo, Balance>) -> Self {
+        Self(initial_balance)
     }
 }
 

@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
+
 use lazy_static::lazy_static;
 use pessimistic_proof::{
     certificate::Certificate,
     generate_leaf_proof,
-    local_balance_tree::{BalanceTree, Deposit},
+    local_balance_tree::{Balance, BalanceTree, Deposit},
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     BridgeExit, LocalNetworkState, NetworkId, ProofError, TokenInfo,
 };
@@ -30,9 +32,11 @@ struct Amounts {
 
 impl From<Amounts> for BalanceTree {
     fn from(v: Amounts) -> Self {
-        let eth = (ETH.clone(), Deposit(U256::from(v.eth)).into());
-        let usdc = (USDC.clone(), Deposit(U256::from(v.usdc)).into());
-        BalanceTree::from(vec![eth, usdc])
+        BTreeMap::from([
+            (ETH.clone(), Balance::from(Deposit(U256::from(v.eth)))),
+            (USDC.clone(), Balance::from(Deposit(U256::from(v.usdc)))),
+        ])
+        .into()
     }
 }
 
