@@ -13,9 +13,6 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use pessimistic_proof::certificate::Certificate;
-use pessimistic_proof::local_balance_tree::BalanceTree;
-use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
-use pessimistic_proof::local_exit_tree::LocalExitTree;
 
 use crate::rpc::TxStatus;
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
@@ -147,7 +144,10 @@ async fn send_certificate_method_can_be_called() {
     let client = HttpClientBuilder::default().build(url).unwrap();
 
     let _: () = client
-        .request("interop_sendCertificate", rpc_params![empty_certificate()])
+        .request(
+            "interop_sendCertificate",
+            rpc_params![Certificate::default()],
+        )
         .await
         .unwrap();
 
@@ -185,22 +185,15 @@ async fn send_certificate_method_can_be_called_and_fail() {
     drop(certificate_receiver);
 
     let res: Result<(), _> = client
-        .request("interop_sendCertificate", rpc_params![empty_certificate()])
+        .request(
+            "interop_sendCertificate",
+            rpc_params![Certificate::default()],
+        )
         .await;
 
     assert!(res.is_err());
 }
 
-fn empty_certificate() -> Certificate {
-    let dummy: LocalExitTree<Keccak256Hasher> = LocalExitTree::from_leaves([].into_iter());
-    Certificate::new(
-        0.into(),
-        dummy.clone(),
-        dummy.get_root(),
-        BalanceTree::from(vec![]),
-        vec![],
-    )
-}
 fn next_available_addr() -> std::net::SocketAddr {
     use std::net::{TcpListener, TcpStream};
 

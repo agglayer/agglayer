@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::keccak::{keccak256, keccak256_combine, Digest as KeccakDigest};
 
 /// Encapsulates the information to uniquely identify a token on the origin network.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Copy)]
 pub struct TokenInfo {
     /// Network which the token originates from
     pub origin_network: NetworkId,

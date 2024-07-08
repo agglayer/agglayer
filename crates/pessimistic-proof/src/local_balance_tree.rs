@@ -35,7 +35,7 @@ impl BalanceTreeByNetwork {
         self.0
             .entry(origin_network)
             .or_default()
-            .withdraw(bridge_exit.token_info.clone(), bridge_exit.amount);
+            .withdraw(bridge_exit.token_info, bridge_exit.amount);
 
         // Deposit the destination network
         self.0
@@ -145,9 +145,9 @@ impl Balance {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct BalanceTree(BTreeMap<TokenInfo, Balance>);
 
-impl From<Vec<(TokenInfo, Balance)>> for BalanceTree {
-    fn from(initial_balance: Vec<(TokenInfo, Balance)>) -> Self {
-        Self(initial_balance.into_iter().collect())
+impl From<BTreeMap<TokenInfo, Balance>> for BalanceTree {
+    fn from(initial_balance: BTreeMap<TokenInfo, Balance>) -> Self {
+        Self(initial_balance)
     }
 }
 
@@ -165,8 +165,8 @@ impl BalanceTree {
     /// Merge with another [`BalanceTree`].
     pub fn merge(&mut self, other: &BalanceTree) {
         for (token, balance) in other.0.iter() {
-            self.deposit(token.clone(), balance.deposit);
-            self.withdraw(token.clone(), balance.withdraw)
+            self.deposit(*token, balance.deposit);
+            self.withdraw(*token, balance.withdraw)
         }
     }
 

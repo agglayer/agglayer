@@ -3646,6 +3646,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "hex",
+ "lazy_static",
  "reth-primitives",
  "rs_merkle",
  "serde",
