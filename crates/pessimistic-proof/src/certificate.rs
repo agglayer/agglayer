@@ -12,7 +12,7 @@ use crate::{bridge_exit::NetworkId, keccak::Digest, BridgeExit};
 ///
 /// The imported bridge exits refer to the [`BridgeExit`] received and imported
 /// by the origin network of the [`Certificate`].
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Certificate {
     /// The origin network which emitted this certificate.
     pub origin_network: NetworkId,
