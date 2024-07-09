@@ -1,4 +1,6 @@
-//! The [`Error`] enum represents errors that can occur in the KMS operations.
+//! The [`enum@Error`] enum represents errors that can occur in the KMS
+//! operations.
+//!
 //! It includes errors from the KMS provider and configuration errors.
 
 use ethers_gcp_kms_signer::CKMSError;
