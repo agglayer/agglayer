@@ -65,10 +65,10 @@ where
         let mut service = self.into_rpc();
 
         // Register the system_health method to serve health checks.
-        service.register_method("system_health", |_, _, _| {
-            println!("system_health");
-            serde_json::json!({ "health": true })
-        })?;
+        service.register_method(
+            "system_health",
+            |_, _, _| serde_json::json!({ "health": true }),
+        )?;
 
         // Create the RPC server.
         let mut server_builder = ServerBuilder::new()
@@ -136,12 +136,12 @@ impl<Rpc> AgglayerServer for AgglayerImpl<Rpc>
 where
     Rpc: Middleware + 'static,
 {
-    #[instrument(skip(self, tx), fields(hash = tx.hash().to_string(), rollup_id = tx.tx.rollup_id), level = "debug")]
+    #[instrument(skip(self, tx), fields(hash, rollup_id = tx.tx.rollup_id), level = "info")]
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
-        let tx_hash = tx.hash().to_string();
+        let hash = format!("{:?}", tx.hash());
         debug!(
-            "Received transaction {tx_hash} for rollup {}",
-            tx.tx.rollup_id
+            hash,
+            "Received transaction {hash} for rollup {}", tx.tx.rollup_id
         );
         let rollup_id_str = tx.tx.rollup_id.to_string();
         let metrics_attrs = &[KeyValue::new("rollup_id", rollup_id_str)];
@@ -163,8 +163,8 @@ where
                 .verify_signature(&tx)
                 .map_err(|e| {
                     error!(
-                        tx_hash,
-                        "Failed to verify the signature of transaction {tx_hash}: {e}"
+                        hash,
+                        "Failed to verify the signature of transaction {hash}: {e}"
                     );
                     invalid_params_error(e.to_string())
                 })
@@ -175,9 +175,9 @@ where
                 .verify_proof_eth_call(&tx)
                 .map_err(|e| {
                     error!(
-                        tx_hash,
+                        hash,
                         "Failed to dry-run the verify_batches_trusted_aggregator for transaction \
-                         {tx_hash}: {e}"
+                         {hash}: {e}"
                     );
                     invalid_params_error(e.to_string())
                 })
@@ -188,9 +188,9 @@ where
                 .verify_proof_zkevm_node(&tx)
                 .map_err(|e| {
                     error!(
-                        tx_hash,
+                        hash,
                         "Failed to verify the batch local_exit_root and state_root of transaction \
-                         {tx_hash}: {e}"
+                         {hash}: {e}"
                     );
                     invalid_params_error(e.to_string())
                 })
@@ -201,18 +201,18 @@ where
 
         // Settle the proof on-chain and return the transaction hash.
         let receipt = self.kernel.settle(&tx).await.map_err(|e| {
-            error!(tx_hash, "Failed to settle transaction {tx_hash} on L1: {e}");
+            error!(hash, "Failed to settle transaction {hash} on L1: {e}");
             internal_error(e.to_string())
         })?;
 
         agglayer_telemetry::SETTLE.add(1, metrics_attrs);
 
-        info!("Successfully settled transaction {tx_hash} => receipt {receipt:?}");
+        info!(hash, "Successfully settled transaction {hash}");
 
         Ok(receipt.transaction_hash)
     }
 
-    #[instrument(skip(self), fields(hash = hash.to_string()), level = "debug")]
+    #[instrument(skip(self), fields(hash = hash.to_string()), level = "info")]
     async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus> {
         debug!("Received request to get transaction status for hash {hash}");
         let recipt = self.kernel.check_tx_status(hash).await.map_err(|e| {
