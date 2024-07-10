@@ -69,7 +69,7 @@ jobs:
 
       - name: Run cargo clippy
         run: cargo clippy --all-targets -- -D warnings
-  
+
   fmt:
     name: Format
     runs-on: ubuntu-latest

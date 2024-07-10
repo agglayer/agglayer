@@ -15,6 +15,7 @@ concurrency:
 jobs:
   coverage:
     name: SonarCloud and Linter
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
