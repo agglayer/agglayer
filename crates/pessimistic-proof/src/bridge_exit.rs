@@ -24,7 +24,7 @@ impl TokenInfo {
     }
 }
 
-/// Represents a token bridge exit from the network.
+/// Represents a token bridge exit from the local network.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BridgeExit {
     pub leaf_type: u8,
@@ -32,7 +32,7 @@ pub struct BridgeExit {
     /// Unique ID for the token being transferred.
     pub token_info: TokenInfo,
 
-    /// Network which the token is transfered to
+    /// Network which the token is transferred to
     pub dest_network: NetworkId,
     /// Address which will own the received token
     pub dest_address: Address,
