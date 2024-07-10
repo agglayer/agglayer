@@ -8,13 +8,13 @@ use crate::{bridge_exit::NetworkId, keccak::Digest, BridgeExit};
 /// the state transition, resp. the amount that goes out and the amount that comes in.
 ///
 /// The bridge exits refer to the [`BridgeExit`]  emitted by
-/// the origin network of the [`Certificate`].
+/// the origin network of the [`BatchHeader`].
 ///
 /// The imported bridge exits refer to the [`BridgeExit`] received and imported
-/// by the origin network of the [`Certificate`].
+/// by the origin network of the [`BatchHeader].
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
-pub struct Certificate {
-    /// The origin network which emitted this certificate.
+pub struct BatchHeader {
+    /// The origin network which emitted this BatchHeader.
     pub origin_network: NetworkId,
     /// The initial local exit root.
     pub prev_local_exit_root: Digest,
@@ -24,8 +24,8 @@ pub struct Certificate {
     pub imported_bridge_exits: Vec<BridgeExit>,
 }
 
-impl Certificate {
-    /// Creates a new [`Certificate`].
+impl BatchHeader {
+    /// Creates a new [`BatchHeader`].
     pub fn new(
         origin_network: NetworkId,
         prev_local_exit_root: Digest,

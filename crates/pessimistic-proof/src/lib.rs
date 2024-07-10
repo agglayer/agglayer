@@ -6,7 +6,7 @@ pub use proof::{generate_leaf_proof, LeafProofOutput, ProofError};
 
 pub mod test_utils;
 
-pub mod certificate;
+pub mod batch_header;
 pub mod local_balance_tree;
 
 mod bridge_exit;
