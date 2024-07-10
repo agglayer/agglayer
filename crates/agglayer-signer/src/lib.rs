@@ -121,3 +121,6 @@ impl Signer for ConfiguredSigner {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
