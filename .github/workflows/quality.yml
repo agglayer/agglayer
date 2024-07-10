@@ -52,7 +52,6 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -74,7 +73,6 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
