@@ -20,7 +20,7 @@ pub struct LocalNetworkState {
 }
 
 impl LocalNetworkState {
-    /// Apply the [`Certificate`] on the current [`State`].
+    /// Apply the [`BatchHeader`] on the current [`State`].
     /// Returns the commitment on the resulting state if successful.
     pub fn apply_batch_header(
         &mut self,
@@ -40,6 +40,14 @@ impl LocalNetworkState {
             self.exit_tree.add_leaf(bridge_exit.hash());
             self.balance_tree.withdraw(bridge_exit.token_info, bridge_exit.amount);
         });
+
+        // Apply the imported bridge exits
+        // TODO: omitting two required checks: 1: that each imported bridge exit is valid according to the imported local exit roots, and that 2: each imported bridge exit has not been claimed in the nullifier set
+        if let Some(imported_bridge_exits) = &batch_header.imported_bridge_exits {
+            imported_bridge_exits.iter().for_each(|imported_bridge_exit| {
+                self.balance_tree.deposit(imported_bridge_exit.bridge_exit.token_info, imported_bridge_exit.bridge_exit.amount);
+            })
+        }
 
         // Check whether the origin network has some debt
         if self.balance_tree.has_debt() {
