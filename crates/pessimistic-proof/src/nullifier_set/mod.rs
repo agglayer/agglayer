@@ -7,8 +7,9 @@ pub struct NullifierSet(BTreeMap<NetworkId, NetworkNullifierSet>);
 
 // TODO: implement hashing for the nullifier set. Insert the root of each non-empty NetworkNullifierSet at the index in NullifierSet matching foreign_network_id
 
-/// The nullifier sets for each network. These can be represented as 0-initialized bit masks,
-/// where each index corresponds to an index in the network's local exit tree.
+/// The nullifier sets for each foreign network tracked by the local network.
+/// Each network nullifier set can be represented as 0-initialized bit masks,
+/// where each index corresponds to an index in the foreign network's local exit tree.
 /// The value at an index is 1 if the message has been claimed by the local network,
 /// and 0 if it has not.
 pub struct NetworkNullifierSet <const TREE_DEPTH: usize = 32> {
