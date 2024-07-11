@@ -62,7 +62,6 @@ fn state_transition(v: Amounts) -> BatchHeader {
         None,
         None,
         None,
-        None,
     )
 }
 
