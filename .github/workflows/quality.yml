@@ -39,6 +39,8 @@ jobs:
   audit:
     name: Audit - crate security vulnerabilities
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
     steps:
 
       - name: Checkout
