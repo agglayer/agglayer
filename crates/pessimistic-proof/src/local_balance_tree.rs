@@ -23,6 +23,7 @@ use crate::{
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BalanceTreeByNetwork(BTreeMap<NetworkId, BalanceTree>);
 
+// TODO: we should be able to remove all logic for maintaining a global balance tree, as this is no longer necessary.
 impl BalanceTreeByNetwork {
     /// Creates a new empty [`BalanceTreeByNetwork`].
     pub fn new() -> Self {

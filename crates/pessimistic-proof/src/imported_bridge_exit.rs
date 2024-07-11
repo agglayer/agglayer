@@ -52,7 +52,11 @@ impl ImportedBridgeExit {
         }
     }
 
-    // TODO: write method to verify inclusion proof in provided foreign LER
+    /// Verifies that the provided inclusion path is valid and consistent with the provided LER
+    /// TODO: write method to verify inclusion proof in provided foreign LER
+    pub fn verify_path(&mut self) -> bool {
+        return true;
+    }
 }
 
 

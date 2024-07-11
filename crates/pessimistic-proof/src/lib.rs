@@ -1,5 +1,6 @@
 pub mod keccak;
 pub mod local_exit_tree;
+pub mod nullifier_set;
 
 mod proof;
 pub use proof::{generate_leaf_proof, LeafProofOutput, ProofError};
@@ -16,4 +17,5 @@ pub mod imported_bridge_exit;
 pub use imported_bridge_exit::{ImportedBridgeExit};
 
 pub mod local_state;
+
 pub use local_state::LocalNetworkState;
