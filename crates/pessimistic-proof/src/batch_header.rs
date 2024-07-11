@@ -42,7 +42,7 @@ pub struct BatchHeader {
     pub imported_exits_root: Option<Digest>,
 
     /// A commitment to the set of imported local exit roots
-    pub imported_lers_root: Option<Digest>,
+    pub imported_lers: Option<Vec<(NetworkId, Digest)>>,
 
     /// An imported global exit root, used to process deposits from Ethereum
     pub imported_global_exit_root: Option<Digest>,
@@ -65,7 +65,7 @@ impl BatchHeader {
         bridge_exits: Vec<BridgeExit>,
         imported_bridge_exits: Option<Vec<ImportedBridgeExit>>,
         imported_exits_root: Option<Digest>,
-        imported_lers_root: Option<Digest>,
+        imported_lers: Option<Vec<(NetworkId, Digest)>>,
         imported_global_exit_root: Option<Digest>,
     ) -> Self {
         Self {
@@ -74,7 +74,7 @@ impl BatchHeader {
             bridge_exits,
             imported_bridge_exits,
             imported_exits_root,
-            imported_lers_root,
+            imported_lers,
             imported_global_exit_root,
         }
     }

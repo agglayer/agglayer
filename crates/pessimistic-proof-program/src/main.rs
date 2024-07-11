@@ -10,8 +10,10 @@ pub fn main() {
 
     let new_roots = generate_leaf_proof(initial_state, &batch_header).unwrap();
 
-    if let Some(imported_roots) = &batch_header.imported_lers_root {
-        sp1_zkvm::io::commit(imported_roots);
+    if let Some(imported_roots) = &batch_header.imported_lers {
+        imported_bridge_exits.iter().for_each(|imported_root| {
+            sp1_zkvm::io::commit(imported_root)
+        });
     }else {
         sp1_zkvm::io::commit(None);
     }
