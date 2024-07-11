@@ -48,6 +48,7 @@ impl LocalNetworkState {
         // 3: each imported_local_exit_root in an imported_bridge_exit is contained in the imported_lers set in the batch_header
         if let Some(imported_bridge_exits) = &batch_header.imported_bridge_exits {
             imported_bridge_exits.iter().for_each(|imported_bridge_exit| {
+                // TODO: check provided inclusion path in the imported_bridge_exit
                 // TODO: check that the LER for the imported bridge exit is contained in the batch header
                 // TODO: update nullifier set
                 self.balance_tree.deposit(imported_bridge_exit.bridge_exit.token_info, imported_bridge_exit.bridge_exit.amount);

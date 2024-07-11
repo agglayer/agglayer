@@ -24,6 +24,7 @@ use crate::{
 pub struct BalanceTreeByNetwork(BTreeMap<NetworkId, BalanceTree>);
 
 // TODO: we should be able to remove all logic for maintaining a global balance tree, as this is no longer necessary.
+// The only balance tree that we care about is the one for the current network!
 impl BalanceTreeByNetwork {
     /// Creates a new empty [`BalanceTreeByNetwork`].
     pub fn new() -> Self {
