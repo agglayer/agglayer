@@ -12,7 +12,7 @@ use hyper_util::rt::TokioExecutor;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
-use pessimistic_proof::certificate::Certificate;
+use pessimistic_proof::batch_header::BatchHeader;
 
 use crate::rpc::TxStatus;
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
@@ -146,7 +146,7 @@ async fn send_certificate_method_can_be_called() {
     let _: () = client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::default()],
+            rpc_params![BatchHeader::default()],
         )
         .await
         .unwrap();
@@ -187,7 +187,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
     let res: Result<(), _> = client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::default()],
+            rpc_params![BatchHeader::default()],
         )
         .await;
 

@@ -16,7 +16,7 @@ use jsonrpsee::{
         ErrorObject, ErrorObjectOwned,
     },
 };
-use pessimistic_proof::certificate::Certificate;
+use pessimistic_proof::batch_header::BatchHeader;
 use tokio::{sync::mpsc, try_join};
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument};
@@ -38,18 +38,18 @@ trait Agglayer {
     async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus>;
 
     #[method(name = "sendCertificate")]
-    async fn send_certificate(&self, certificate: Certificate) -> RpcResult<()>;
+    async fn send_certificate(&self, batch_header:BatchHeader) -> RpcResult<()>;
 }
 
 /// The RPC agglayer service implementation.
 pub(crate) struct AgglayerImpl<Rpc> {
     kernel: Kernel<Rpc>,
-    certificate_sender: mpsc::Sender<Certificate>,
+    certificate_sender: mpsc::Sender<BatchHeader>,
 }
 
 impl<Rpc> AgglayerImpl<Rpc> {
     /// Create an instance of the RPC agglayer service.
-    pub(crate) fn new(kernel: Kernel<Rpc>, certificate_sender: mpsc::Sender<Certificate>) -> Self {
+    pub(crate) fn new(kernel: Kernel<Rpc>, certificate_sender: mpsc::Sender<BatchHeader>) -> Self {
         Self {
             kernel,
             certificate_sender,
@@ -250,8 +250,8 @@ where
             })
     }
 
-    async fn send_certificate(&self, certificate: Certificate) -> RpcResult<()> {
-        if let Err(error) = self.certificate_sender.send(certificate).await {
+    async fn send_certificate(&self, batch_header:BatchHeader) -> RpcResult<()> {
+        if let Err(error) = self.certificate_sender.send(batch_header).await {
             error!("Failed to send certificate: {error}");
 
             return Err(internal_error("Unable to send certificate to collector"));

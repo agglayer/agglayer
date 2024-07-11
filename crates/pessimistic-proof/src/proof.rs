@@ -1,5 +1,5 @@
 use crate::{
-    bridge_exit::NetworkId, certificate::Certificate, keccak::Digest,
+    bridge_exit::NetworkId, batch_header::BatchHeader, keccak::Digest,
     local_state::LocalNetworkState,
 };
 
@@ -17,11 +17,11 @@ pub type LeafProofOutput = (ExitRoot, BalanceRoot);
 /// Proves that the given [`Certificate`] can be applied on the given [`LocalNetworkState`].
 pub fn generate_leaf_proof(
     initial_network_state: LocalNetworkState,
-    certificate: &Certificate,
+    batch_header: &BatchHeader,
 ) -> Result<LeafProofOutput, ProofError> {
     let mut network_state = initial_network_state;
 
-    let (new_exit_root, new_balance_root) = network_state.apply_certificate(certificate)?;
+    let (new_exit_root, new_balance_root) = network_state.apply_batch_header(batch_header)?;
 
     Ok((new_exit_root, new_balance_root))
 }

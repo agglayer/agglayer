@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use lazy_static::lazy_static;
 use pessimistic_proof::{
-    certificate::Certificate,
+    batch_header::BatchHeader,
     generate_leaf_proof,
     local_balance_tree::{Balance, BalanceTree, Deposit},
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
@@ -52,11 +52,16 @@ fn make_tx(_from: u32, to: u32, token: &TokenInfo, amount: u32) -> BridgeExit {
     )
 }
 
-fn state_transition(v: Amounts) -> Certificate {
-    Certificate::new(
+
+fn state_transition(v: Amounts) -> BatchHeader {
+    BatchHeader::new(
         *NETWORK_A,
         DUMMY_LET.get_root(),
         vec![make_tx(0, 1, &ETH, v.eth), make_tx(0, 1, &USDC, v.usdc)],
+        None,
+        None,
+        None,
+        None,
     )
 }
 

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{bridge_exit::NetworkId, keccak::Digest, BridgeExit};
+use crate::{bridge_exit::NetworkId, keccak::Digest, BridgeExit, ImportedBridgeExit};
 
 /// Represents the data submitted by the CDKs to the AggLayer.
 ///
@@ -15,19 +15,28 @@ use crate::{bridge_exit::NetworkId, keccak::Digest, BridgeExit};
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct BatchHeader {
     /// The origin network which emitted this BatchHeader.
+    /// TODO: we should clarify naming. We use origin to refer to the issuing network of a token. Could consider using "sending" or "local" to refer to the network that created a batch.
     pub origin_network: NetworkId,
 
-    /// The start slot height and end block height for the batch. Unsure if required
-    /// pub start_block_height: u32,
-    /// pub end_block_height u32,
+    // /// The start slot height and end block height for the batch. Unsure if required
+    // pub start_block_height: u32,
+    // pub end_block_height u32,
 
-    /// The state root produced by the current block
-    pub state_root: Option<Digest>,
+    // /// The state root produced by the current block
+    // TODO: Determine if this is necessary - I think that it is.
+    // pub state_root: Option<Digest>,
 
     /// The initial local exit root.
-    pub prev_local_exit_root: Option<Digest>,
-    /// The updated local exit root
-    pub local_exit_root: Digest,
+    /// TODO: should probably be optional
+    pub prev_local_exit_root: Digest,
+
+    /// The set of bridge exits created in this batch
+    /// TODO: move out of the header and into a separate struct
+    pub bridge_exits: Vec<BridgeExit>,
+
+    /// The set of imported bridge exits claimed in this batch
+    /// TODO: move out of the header and into a separate struct
+    pub imported_bridge_exits: Option<Vec<ImportedBridgeExit>>,
 
     /// A commitment to the set of imported bridge exits for which the origin network is the target.
     pub imported_exits_root: Option<Digest>,
@@ -38,32 +47,32 @@ pub struct BatchHeader {
     /// An imported global exit root, used to process deposits from Ethereum
     pub imported_global_exit_root: Option<Digest>,
 
-    /// A validity proof verifying transaction execution
-    ///pub validity_proof: Option<ValidityProof>,
+    // /// A validity proof verifying transaction execution
+    //pub validity_proof: Option<ValidityProof>,
 
-    /// A consensus proof for the latest block
-    ///pub consensus_proof: Option<ConsensusProof>,
+    // /// A consensus proof for the latest block
+    //pub consensus_proof: Option<ConsensusProof>,
 
-    /// The signature that commits to the state transition.
-    ///pub signature: (),
+    // /// The signature that commits to the state transition.
+    //pub signature: (),
 }
 
 impl BatchHeader {
     /// Creates a new [`BatchHeader`].
     pub fn new(
         origin_network: NetworkId,
-        state_root: Option<Digest>,
-        prev_local_exit_root: Option<Digest>,
-        local_exit_root: Digest,
+        prev_local_exit_root: Digest,
+        bridge_exits: Vec<BridgeExit>,
+        imported_bridge_exits: Option<Vec<ImportedBridgeExit>>,
         imported_exits_root: Option<Digest>,
         imported_lers_root: Option<Digest>,
         imported_global_exit_root: Option<Digest>,
     ) -> Self {
         Self {
             origin_network,
-            state_root,
             prev_local_exit_root,
-            local_exit_root,
+            bridge_exits,
+            imported_bridge_exits,
             imported_exits_root,
             imported_lers_root,
             imported_global_exit_root,

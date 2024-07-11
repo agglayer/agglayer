@@ -21,7 +21,7 @@ pub struct ImportedBridgeExit {
 
     /// The Network ID for the foreign network. May not be strictly
     /// necessary depending on the final structure of the Imprted Local Exit Root
-    pub origin_network_id:NetworkId,
+    pub sending_network:NetworkId,
 
     /// The Imported Local Exit Root for the Local Exit Tree containing this bridge exit.
     pub imported_local_exit_root:KeccakDigest,
@@ -32,6 +32,27 @@ pub struct ImportedBridgeExit {
     /// The inclusion proof of the imported bridge exit in the foreign local exit root
     /// TODO: create a type for the inclusion proof of a leaf in an LET
     pub inclusion_proof:Vec<KeccakDigest>
+}
+
+impl ImportedBridgeExit {
+    /// Creates a new [`ImportedBridgeExit`].
+    pub fn new(
+        bridge_exit: BridgeExit,
+        sending_network: NetworkId,
+        imported_local_exit_root:KeccakDigest,
+        leaf_index: u32,
+        inclusion_proof:Vec<KeccakDigest>,
+    ) -> Self {
+        Self {
+            bridge_exit,
+            sending_network,
+            imported_local_exit_root,
+            leaf_index,
+            inclusion_proof,
+        }
+    }
+
+    // TODO: write method to verify inclusion proof in provided foreign LER
 }
 
 

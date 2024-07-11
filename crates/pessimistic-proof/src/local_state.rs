@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    certificate::Certificate,
+    batch_header::BatchHeader,
     local_balance_tree::BalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     proof::{BalanceRoot, ExitRoot},
@@ -22,21 +22,21 @@ pub struct LocalNetworkState {
 impl LocalNetworkState {
     /// Apply the [`Certificate`] on the current [`State`].
     /// Returns the commitment on the resulting state if successful.
-    pub fn apply_certificate(
+    pub fn apply_batch_header(
         &mut self,
-        certificate: &Certificate,
+        batch_header: &BatchHeader,
     ) -> Result<(ExitRoot, BalanceRoot), ProofError> {
         // Check the initial state
         let computed_root = self.exit_tree.get_root();
-        if computed_root != certificate.prev_local_exit_root {
+        if computed_root != batch_header.prev_local_exit_root {
             return Err(ProofError::InvalidLocalExitRoot {
                 got: computed_root,
-                expected: certificate.prev_local_exit_root,
+                expected: batch_header.prev_local_exit_root,
             });
         }
 
         // Apply the bridge exits
-        certificate.bridge_exits.iter().for_each(|bridge_exit| {
+        batch_header.bridge_exits.iter().for_each(|bridge_exit| {
             self.exit_tree.add_leaf(bridge_exit.hash());
             self.balance_tree.withdraw(bridge_exit.token_info, bridge_exit.amount);
         });
@@ -44,7 +44,7 @@ impl LocalNetworkState {
         // Check whether the origin network has some debt
         if self.balance_tree.has_debt() {
             return Err(ProofError::HasDebt {
-                network: certificate.origin_network,
+                network: batch_header.origin_network,
             });
         }
 
