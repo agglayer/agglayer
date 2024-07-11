@@ -9,6 +9,7 @@ use pessimistic_proof::{
     BridgeExit, LocalNetworkState, NetworkId, ProofError, TokenInfo,
 };
 use reth_primitives::{address, U256};
+use pessimistic_proof::nullifier_set::NullifierSet;
 
 lazy_static! {
     pub static ref NETWORK_A: NetworkId = 0.into();
@@ -69,6 +70,7 @@ fn initial_state(amount: Amounts) -> LocalNetworkState {
     LocalNetworkState {
         exit_tree: DUMMY_LET.clone(),
         balance_tree: amount.into(),
+        nullifier_set: NullifierSet::new(),
     }
 }
 

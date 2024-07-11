@@ -4,6 +4,7 @@ use crate::{
     batch_header::BatchHeader,
     local_balance_tree::BalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
+    nullifier_set::{NullifierSet, NetworkNullifierSet},
     proof::{BalanceRoot, ExitRoot},
     ProofError,
 };
@@ -17,6 +18,8 @@ pub struct LocalNetworkState {
     pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// Commitment to the balance for each token.
     pub balance_tree: BalanceTree,
+    /// Commitment to the Nullifier Set for the local network, tracks claimed assets on foreign networks
+    pub nullifier_set: NullifierSet,
 }
 
 impl LocalNetworkState {
