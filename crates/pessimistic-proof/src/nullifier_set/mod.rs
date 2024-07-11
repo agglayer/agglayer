@@ -40,9 +40,8 @@ pub struct NetworkNullifierSet <const TREE_DEPTH: usize = 32> {
 impl<const TREE_DEPTH: usize> NetworkNullifierSet<TREE_DEPTH> {
 
     pub fn new() -> Self {
-        let mut claimed_indices = Vec::<u32>::new();
         NetworkNullifierSet {
-            claimed_indices
+            claimed_indices: Vec::<u32>::new()
         }
     }
 
