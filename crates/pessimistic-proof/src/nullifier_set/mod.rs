@@ -15,10 +15,11 @@ impl NullifierSet {
 
     /// Takes an imported bridge exit and updates the nullifier set to reflect that it's been claimed
     pub fn claim_bridge_exit(&mut self, network_id:NetworkId, leaf_index:u32) {
-        if !self.contains_key(network_id) {
-            self.insert(network_id, vec![leaf_index]);
+        if !self.0.contains_key(&network_id) {
+            let network_ns = NetworkNullifierSet::new_from_indices(vec![leaf_index]);
+            self.0.insert(network_id, network_ns);
         }else {
-            self[network_id].add_nullifier_for_imported_exit(leaf_index);
+            self.0.get_mut(&network_id).unwrap().add_nullifier_for_imported_exit(leaf_index);
         }
     }
 }
