@@ -10,8 +10,9 @@ pub fn main() {
 
     let new_roots = generate_leaf_proof(initial_state, &batch_header).unwrap();
 
+    //TODO: only necessary to expose a commitment to the imported_lers as a public input, though maybe SP1 does that for us
     if let Some(imported_roots) = &batch_header.imported_lers {
-        imported_bridge_exits.iter().for_each(|imported_root| {
+        imported_roots.iter().for_each(|imported_root| {
             sp1_zkvm::io::commit(imported_root)
         });
     }else {
