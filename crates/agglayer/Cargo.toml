@@ -8,6 +8,12 @@ anyhow.workspace = true
 clap = { workspace = true, features = ["derive", "env"] }
 dotenvy.workspace = true
 tokio = { workspace = true, features = ["full"] }
+toml.workspace = true
+tower = { workspace = true, features = ["full"] }
 
 agglayer-node = { path = "../agglayer-node" }
-tower = { workspace = true, features = ["full"] }
+agglayer-config = { path = "../agglayer-config" }
+
+[dev-dependencies]
+assert_cmd = "2.0.14"
+insta = { version = "1.39.0", features = ["toml", "yaml"] }

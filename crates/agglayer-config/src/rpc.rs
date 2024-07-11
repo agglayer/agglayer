@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::Ipv4Addr, str::FromStr, time::Duration};
 use jsonrpsee::core::TEN_MB_SIZE_BYTES;
 use serde::{
     de::{MapAccess, Visitor},
-    Deserialize, Deserializer,
+    Deserialize, Deserializer, Serialize,
 };
 use url::Url;
 
@@ -11,14 +11,18 @@ use url::Url;
 const DEFAULT_PORT: u16 = 9090;
 
 /// The local RPC server configuration.
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub struct RpcConfig {
     /// If the `PORT` environment variable is set, it will take precedence over
     /// the configuration file.
-    #[serde(default = "default_port", deserialize_with = "deserialize_port")]
+    #[serde(
+        alias = "Port",
+        default = "default_port",
+        deserialize_with = "deserialize_port"
+    )]
     pub port: u16,
-    #[serde(default = "default_host")]
+    #[serde(alias = "Host", default = "default_host")]
     pub host: Ipv4Addr,
 
     // Skip serialization of these fields as we don't need to expose them in the

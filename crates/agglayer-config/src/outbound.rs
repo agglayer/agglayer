@@ -1,20 +1,21 @@
 use std::time::Duration;
 
 use serde::Deserialize;
+use serde::Serialize;
 use serde_with::serde_as;
 use serde_with::DurationSeconds;
 
 /// Outbound configuration.
-#[derive(Default, Debug, Deserialize)]
-#[serde(rename = "outbound")]
+#[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename = "outbound", rename_all = "kebab-case")]
 pub struct OutboundConfig {
     pub rpc: OutboundRpcConfig,
 }
 
 /// Outbound RPC configuration that is used to configure the outbound RPC
 /// clients and their RPC calls.
-#[derive(Default, Debug, Deserialize)]
-#[serde(rename = "rpc")]
+#[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename = "rpc", rename_all = "kebab-case")]
 pub struct OutboundRpcConfig {
     /// Outbound configuration of the RPC settle function call.
     pub settle: OutboundRpcSettleConfig,
@@ -23,8 +24,8 @@ pub struct OutboundRpcConfig {
 /// Outbound RPC settle configuration that is used to configure the outbound
 /// RPC settle function call.
 #[serde_as]
-#[derive(Debug, Deserialize)]
-#[serde(rename = "settle")]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename = "settle", rename_all = "kebab-case")]
 pub struct OutboundRpcSettleConfig {
     /// Maximum number of retries for the transaction.
     #[serde(default = "default_rpc_retries")]
@@ -84,7 +85,7 @@ mod tests {
 
             let toml = r#"
                 [outbound.rpc.settle]
-                max_retries = 10
+                max-retries = 10
                 "#;
 
             let config = toml::from_str::<DummyContainer>(toml).unwrap();
@@ -113,8 +114,8 @@ mod tests {
                 #[test]
                 fn test_custom() {
                     let toml = r#"
-                        max_retries = 10
-                        retry_interval = 1
+                        max-retries = 10
+                        retry-interval = 1
                         confirmations = 5
                         "#;
 

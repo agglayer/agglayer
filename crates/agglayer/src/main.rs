@@ -10,6 +10,10 @@ fn main() -> anyhow::Result<()> {
 
     match cli.cmd {
         cli::Commands::Run { cfg } => agglayer_node::main(cfg)?,
+        cli::Commands::Config {} => println!(
+            "{}",
+            toml::to_string(&agglayer_config::Config::default()).unwrap()
+        ),
     }
 
     Ok(())

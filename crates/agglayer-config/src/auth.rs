@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use serde::de::{self, Deserializer};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
 
 /// The transaction management configuration.
@@ -18,8 +18,7 @@ use serde_with::{serde_as, NoneAsEmptyString};
 ///   pick up credentials.
 /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment is set, attempt to
 ///   load a service account JSON from this path.
-#[derive(Deserialize, Debug)]
-#[serde(untagged, rename_all = "lowercase")]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum AuthConfig {
     Local(LocalConfig),
     GcpKms(GcpKmsConfig),
@@ -35,17 +34,18 @@ impl Default for AuthConfig {
 ///
 /// It includes private keys for a local wallet.
 #[serde_as]
-#[derive(Deserialize, Debug, Default)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub struct LocalConfig {
     pub private_keys: Vec<PrivateKey>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[cfg_attr(any(test, feature = "testutils"), derive(Default))]
-#[serde(rename_all = "PascalCase")]
 pub struct PrivateKey {
+    #[serde(alias = "Path")]
     pub path: PathBuf,
+    #[serde(alias = "Password")]
     pub password: String,
 }
 
@@ -53,9 +53,9 @@ pub struct PrivateKey {
 ///
 /// It includes kms config.
 #[serde_as]
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(any(test, feature = "testutils"), derive(Default))]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "kebab-case")]
 pub struct GcpKmsConfig {
     #[serde(rename = "ProjectId")]
     #[serde_as(as = "NoneAsEmptyString")]

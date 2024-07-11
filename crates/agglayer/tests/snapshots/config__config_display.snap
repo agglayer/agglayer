@@ -1,0 +1,41 @@
+---
+source: crates/agglayer/tests/config.rs
+expression: result
+---
+[full-node-rpcs]
+
+[log]
+level = "info"
+outputs = []
+format = "pretty"
+
+[rpc]
+port = 9090
+host = "0.0.0.0"
+
+[outbound.rpc.settle]
+max-retries = 3
+retry-interval = 7
+confirmations = 1
+
+[l1]
+ChainID = 1337
+NodeURL = "http://zkevm-mock-l1-network:8545/"
+RollupManagerContract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
+
+[auth.Local]
+private-keys = []
+
+[telemetry]
+PrometheusAddr = "0.0.0.0:3000"
+
+[epoch.time-clock]
+epoch-duration = 5
+
+[shutdown]
+runtime-timeout = 5
+
+[certificate-orchestrator]
+input-backpressure-buffer-size = 1000
+
+[certificate-orchestrator.prover.sp1-local]
