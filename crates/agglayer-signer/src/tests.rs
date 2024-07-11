@@ -2,7 +2,14 @@ use ethers::types::{Eip1559TransactionRequest, H160};
 
 use super::*;
 
-async fn check_signer_works(signer: &ConfiguredSigner) {
+fn testing_local_wallet() -> ConfiguredSigner {
+    ConfiguredSigner::Local(LocalWallet::from_bytes([0x55; 32].as_slice()).unwrap())
+}
+
+#[rstest::rstest]
+#[case(testing_local_wallet())]
+#[tokio::test]
+async fn signer_works(#[case] signer: ConfiguredSigner) {
     let txn = Eip1559TransactionRequest {
         from: Some(signer.address()),
         to: Some(H160([0x11; 20]).into()),
@@ -34,10 +41,4 @@ async fn check_signer_works(signer: &ConfiguredSigner) {
     };
 
     assert!(signature.verify(txn.sighash(), signer.address()).is_err());
-}
-
-#[tokio::test]
-async fn wallet_signer_works() {
-    let signer = ConfiguredSigner::Local(LocalWallet::from_bytes([0x55; 32].as_slice()).unwrap());
-    check_signer_works(&signer).await;
 }

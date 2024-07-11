@@ -14,3 +14,4 @@ agglayer-gcp-kms = { path = "../agglayer-gcp-kms" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }
+rstest.workspace = true
