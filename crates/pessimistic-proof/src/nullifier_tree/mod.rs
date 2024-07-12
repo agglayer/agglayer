@@ -80,7 +80,7 @@ impl<H, const TREE_DEPTH: usize> NetworkNullifierTree<H, TREE_DEPTH> where
     }
 
     pub fn recompute_root(&mut self, claimed_paths:Vec<NetworkNullifierPath>) {
-        // TODO: verify that each network nullifier path is correct and consistent with the current NNS root. Verify that the value is set to zero at the leaf.
+        // TODO: verify that each path to a leaf/claim is correct and consistent with the current NNS root. Verify that the value is set to zero at the leaf.
 
         // TODO: recompute the root sequentially by flipping each leaf value to 1 and then rehashing.
     }

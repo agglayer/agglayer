@@ -51,14 +51,14 @@ pub struct BatchHeader {
     /// TODO: move out of the header and into a separate struct
     pub balance_tree_paths: Option<Vec<BalanceTreePath>>,
 
-    /// The previous Nullifier Set Root
+    /// The previous NullifierTree Root
     pub prev_nullifier_root: Digest,
 
-    /// Inclusion proofs for the previous state of each network nullifier set
+    /// Inclusion proofs for the previous state of each NetworkNullifierTree
     /// TODO: move out of the header and into a separate struct
     pub nullifier_paths: Option<Vec<NullifierPath>>,
 
-    /// Inclusion proofs within each network nullifier set for a given leaf_index
+    /// Inclusion proofs within each NetworkNullifierTree for a given leaf_index
     /// TODO: move out of the header and into a separate struct
     pub network_nullifier_paths: Option<Vec<NetworkNullifierPath>>,
 
