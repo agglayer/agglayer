@@ -1,6 +1,6 @@
 pub mod keccak;
 pub mod local_exit_tree;
-pub mod nullifier_set;
+pub mod nullifier_tree;
 
 mod proof;
 pub use proof::{generate_leaf_proof, LeafProofOutput, ProofError};

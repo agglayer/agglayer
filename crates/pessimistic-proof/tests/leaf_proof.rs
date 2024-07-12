@@ -9,7 +9,7 @@ use pessimistic_proof::{
     BridgeExit, LocalNetworkState, NetworkId, ProofError, TokenInfo,
 };
 use reth_primitives::{address, U256};
-use pessimistic_proof::nullifier_set::NullifierSet;
+use pessimistic_proof::nullifier_tree::NullifierTree;
 
 lazy_static! {
     pub static ref NETWORK_A: NetworkId = 0.into();
@@ -62,6 +62,11 @@ fn state_transition(v: Amounts) -> BatchHeader {
         None,
         None,
         None,
+        <Keccak256Hasher as pessimistic_proof::local_exit_tree::hasher::Hasher>::Digest::default(),
+        None,
+        <Keccak256Hasher as pessimistic_proof::local_exit_tree::hasher::Hasher>::Digest::default(),
+        None,
+        None,
     )
 }
 
@@ -69,7 +74,7 @@ fn initial_state(amount: Amounts) -> LocalNetworkState {
     LocalNetworkState {
         exit_tree: DUMMY_LET.clone(),
         balance_tree: amount.into(),
-        nullifier_set: NullifierSet::new(),
+        nullifier_set: NullifierTree::new(),
     }
 }
 

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{bridge_exit::NetworkId, keccak::Digest, BridgeExit, ImportedBridgeExit};
+use crate::{bridge_exit::NetworkId, keccak::Digest, BridgeExit, ImportedBridgeExit, local_balance_tree::BalanceTreePath};
+use crate::nullifier_tree::{NullifierPath, NetworkNullifierPath};
 
 /// Represents the data submitted by the CDKs to the AggLayer.
 ///
@@ -23,11 +24,10 @@ pub struct BatchHeader {
     // pub end_block_height u32,
 
     // /// The state root produced by the current block
-    // TODO: Determine if this is necessary - I think that it is.
+    // TODO: Determine if this is necessary
     // pub state_root: Option<Digest>,
 
     /// The initial local exit root.
-    /// TODO: should probably be optional
     pub prev_local_exit_root: Digest,
 
     /// The set of bridge exits created in this batch
@@ -42,7 +42,25 @@ pub struct BatchHeader {
     pub imported_exits_root: Option<Digest>,
 
     /// A commitment to the set of imported local exit roots
-    pub imported_lers: Option<Vec<(NetworkId, Digest)>>,
+    pub imported_local_exit_roots: Option<Vec<(NetworkId, Digest)>>,
+
+    /// The previous Local Balance Root
+    pub prev_balance_root: Digest,
+
+    /// LBT paths used to verify that token balances are non-zero
+    /// TODO: move out of the header and into a separate struct
+    pub balance_tree_paths: Option<Vec<BalanceTreePath>>,
+
+    /// The previous Nullifier Set Root
+    pub prev_nullifier_root: Digest,
+
+    /// Inclusion proofs for the previous state of each network nullifier set
+    /// TODO: move out of the header and into a separate struct
+    pub nullifier_paths: Option<Vec<NullifierPath>>,
+
+    /// Inclusion proofs within each network nullifier set for a given leaf_index
+    /// TODO: move out of the header and into a separate struct
+    pub network_nullifier_paths: Option<Vec<NetworkNullifierPath>>,
 
     // /// A validity proof verifying transaction execution
     //pub validity_proof: Option<ValidityProof>,
@@ -62,7 +80,13 @@ impl BatchHeader {
         bridge_exits: Vec<BridgeExit>,
         imported_bridge_exits: Option<Vec<ImportedBridgeExit>>,
         imported_exits_root: Option<Digest>,
-        imported_lers: Option<Vec<(NetworkId, Digest)>>,
+        imported_local_exit_roots: Option<Vec<(NetworkId, Digest)>>,
+        prev_balance_root: Digest,
+        balance_tree_paths: Option<Vec<BalanceTreePath>>,
+        prev_nullifier_root: Digest,
+        nullifier_paths: Option<Vec<NullifierPath>>,
+        network_nullifier_paths: Option<Vec<NetworkNullifierPath>>,
+
     ) -> Self {
         Self {
             origin_network,
@@ -70,7 +94,12 @@ impl BatchHeader {
             bridge_exits,
             imported_bridge_exits,
             imported_exits_root,
-            imported_lers,
+            imported_local_exit_roots,
+            prev_balance_root,
+            balance_tree_paths,
+            prev_nullifier_root,
+            nullifier_paths,
+            network_nullifier_paths
         }
     }
 }

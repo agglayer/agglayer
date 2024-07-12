@@ -4,7 +4,7 @@ use crate::{
     batch_header::BatchHeader,
     local_balance_tree::BalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    nullifier_set::{NullifierSet, NetworkNullifierSet},
+    nullifier_tree::{NullifierTree, NetworkNullifierTree},
     proof::{BalanceRoot, ExitRoot},
     ProofError,
 };
@@ -19,7 +19,7 @@ pub struct LocalNetworkState {
     /// Commitment to the balance for each token.
     pub balance_tree: BalanceTree,
     /// Commitment to the Nullifier Set for the local network, tracks claimed assets on foreign networks
-    pub nullifier_set: NullifierSet,
+    pub nullifier_set: NullifierTree<Keccak256Hasher>,
 }
 
 impl LocalNetworkState {
@@ -53,7 +53,8 @@ impl LocalNetworkState {
             imported_bridge_exits.iter().for_each(|imported_bridge_exit| {
                 // TODO: check provided inclusion path in the imported_bridge_exit
                 // TODO: check that the LER for the imported bridge exit is contained in the batch header
-                // TODO: update nullifier set
+                // TODO: recompute the nullifier tree root
+
                 self.balance_tree.deposit(imported_bridge_exit.bridge_exit.token_info, imported_bridge_exit.bridge_exit.amount);
             })
         }
