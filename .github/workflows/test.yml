@@ -25,7 +25,6 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -58,7 +57,65 @@ jobs:
       - name: Test
         run: cargo nextest run --workspace --nocapture && cargo test --doc --workspace
 
+  elf:
+    name: Check ELF compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            src:
+              - 'crates/pessimistic-proof/**'
+              - 'crates/pessimistic-proof-program/**'
+
+      - name: Install toolchain
+        if: steps.filter.outputs.src == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install SP1UP
+        if: steps.filter.outputs.src == 'true'
+        run: curl -L https://sp1.succinct.xyz | bash
+
+      - name: Install SP1 toolchain
+        if: steps.filter.outputs.src == 'true'
+        run: /home/runner/.config/.sp1/bin/sp1up
+        shell: bash
+
+      - name: Set up rust cache
+        if: steps.filter.outputs.src == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@nextest
+        if: steps.filter.outputs.src == 'true'
+
+      - name: Install Anvil
+        if: steps.filter.outputs.src == 'true'
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Set up rust cache
+        if: steps.filter.outputs.src == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+            cache-on-failure: true
+
+      - name: Regenerate ELF
+        if: steps.filter.outputs.src == 'true'
+        run: cargo xtask elf
+
+      - name: ELF is up to date
+        if: steps.filter.outputs.src == 'true'
+        run: git diff --exit-code crates/pessimistic-proof-program/elf
+
   pre-e2e:
+    needs:
+      - elf
+      - unit
     name: E2E Tests | Docker
     uses: ./.github/workflows/util:docker.yml
     secrets: inherit

@@ -54,7 +54,6 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -71,12 +70,11 @@ jobs:
 
       - name: Run cargo clippy
         run: cargo clippy --all-targets -- -D warnings
-  
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
