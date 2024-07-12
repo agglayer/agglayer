@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{bridge_exit::NetworkId, keccak::Digest, BridgeExit, ImportedBridgeExit, local_balance_tree::BalanceTreePath};
+use crate::{bridge_exit::NetworkId, keccak::Digest, BridgeExit, ImportedBridgeExit, local_balance_tree::BalancePath};
 use crate::nullifier_tree::{NullifierPath, NetworkNullifierPath};
 
 /// Represents the data submitted by the CDKs to the AggLayer.
@@ -49,7 +49,7 @@ pub struct BatchHeader {
 
     /// LBT paths used to verify that token balances are non-zero
     /// TODO: move out of the header and into a separate struct
-    pub balance_tree_paths: Option<Vec<BalanceTreePath>>,
+    pub balance_paths: Option<Vec<BalancePath>>,
 
     /// The previous NullifierTree Root
     pub prev_nullifier_root: Digest,
@@ -82,7 +82,7 @@ impl BatchHeader {
         imported_exits_root: Option<Digest>,
         imported_local_exit_roots: Option<Vec<(NetworkId, Digest)>>,
         prev_balance_root: Digest,
-        balance_tree_paths: Option<Vec<BalanceTreePath>>,
+        balance_paths: Option<Vec<BalancePath>>,
         prev_nullifier_root: Digest,
         nullifier_paths: Option<Vec<NullifierPath>>,
         network_nullifier_paths: Option<Vec<NetworkNullifierPath>>,
@@ -96,7 +96,7 @@ impl BatchHeader {
             imported_exits_root,
             imported_local_exit_roots,
             prev_balance_root,
-            balance_tree_paths,
+            balance_paths: balance_paths,
             prev_nullifier_root,
             nullifier_paths,
             network_nullifier_paths

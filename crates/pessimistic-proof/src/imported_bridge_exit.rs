@@ -20,7 +20,7 @@ pub struct ImportedBridgeExit {
     pub bridge_exit:BridgeExit,
 
     /// The Network ID for the foreign network. May not be strictly
-    /// necessary depending on the final structure of the Imprted Local Exit Root
+    /// necessary depending on the final structure of the Imported Local Exit Root
     pub sending_network:NetworkId,
 
     /// The Imported Local Exit Root for the Local Exit Tree containing this bridge exit.

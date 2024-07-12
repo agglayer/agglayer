@@ -195,4 +195,4 @@ impl BalanceTree {
 
 /// TODO: actually implement this. Should have preimage of current balance info and an inclusion proof in the previous LBT
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct BalanceTreePath(Vec<Digest>);
+pub struct BalancePath(Vec<Digest>);
