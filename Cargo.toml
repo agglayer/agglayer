@@ -40,3 +40,8 @@ tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = { version = "2.5.2", features = ["serde"] }
+
+sp1-core = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.5-testnet" }
+sp1-recursion-compiler = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.5-testnet" }
+sp1-recursion-core = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.5-testnet" }
+sp1-sdk = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.5-testnet" }
