@@ -51,10 +51,7 @@ where
     }
 
     /// Creates a new [`LocalExitTreeData`] and populates its leaves.
-    pub fn from_leaves(leaves: impl Iterator<Item = H::Digest>) -> Self
-    where
-        H::Digest: Debug,
-    {
+    pub fn from_leaves(leaves: impl Iterator<Item = H::Digest>) -> Self {
         let mut tree = Self::new();
 
         for leaf in leaves {
@@ -65,10 +62,7 @@ where
     }
 
     /// Appends a leaf to the tree.
-    pub fn add_leaf(&mut self, leaf: H::Digest) -> usize
-    where
-        H::Digest: Debug,
-    {
+    pub fn add_leaf(&mut self, leaf: H::Digest) -> usize {
         let leaf_index = self.layers[0].len();
         assert_eq!(leaf_index >> TREE_DEPTH, 0, "Too many leaves.");
         self.layers[0].push(leaf);
@@ -129,31 +123,33 @@ where
     }
 }
 
-// impl<H, const TREE_DEPTH: usize> Into<LocalExitTree<H, TREE_DEPTH>>
-//     for &LocalExitTreeData<H, TREE_DEPTH>
-// where
-//     H: Hasher,
-//     H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a>,
-// {
-//     fn into(self) -> LocalExitTree<H, TREE_DEPTH> {
-//         let mut frontier = [H::Digest::default(); TREE_DEPTH];
-//         for height in 0..TREE_DEPTH {
-//             if let Some(hash) = self.layers[height].last() {
-//                 frontier[height] = *hash;
-//             } else {
-//                 break;
-//             }
-//         }
-//
-//         LocalExitTree::from_parts(
-//             self.layers[0]
-//                 .len()
-//                 .try_into()
-//                 .expect("usize expected to be at least 32 bits"),
-//             frontier,
-//         )
-//     }
-// }
+impl<H, const TREE_DEPTH: usize> Into<LocalExitTree<H, TREE_DEPTH>>
+    for &LocalExitTreeData<H, TREE_DEPTH>
+where
+    H: Hasher,
+    H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a>,
+{
+    fn into(self) -> LocalExitTree<H, TREE_DEPTH> {
+        let leaf_count = self.layers[0].len();
+        let mut frontier = [H::Digest::default(); TREE_DEPTH];
+        let mut index = leaf_count;
+        let mut height = 0;
+        while index != 0 {
+            if index & 1 == 1 {
+                frontier[height] = self.layers[height][index ^ 1];
+            }
+            height += 1;
+            index >>= 1;
+        }
+
+        LocalExitTree::from_parts(
+            leaf_count
+                .try_into()
+                .expect("usize expected to be at least 32 bits"),
+            frontier,
+        )
+    }
+}
 
 impl<H, const TREE_DEPTH: usize> LETMerkleProof<H, TREE_DEPTH>
 where
@@ -206,14 +202,35 @@ mod tests {
     }
 
     #[test]
-    fn test_let_empty() {
+    fn test_data_vs_frontier_empty() {
         compare_let_data_let_frontier(0)
     }
 
     #[test]
-    fn test_let() {
+    fn test_data_vs_frontier_root() {
         let num_leaves = thread_rng().gen_range(1..100.min(1 << TREE_DEPTH));
         compare_let_data_let_frontier(num_leaves)
+    }
+
+    #[test]
+    fn test_data_vs_frontier_add_leaf() {
+        let num_leaves = thread_rng().gen_range(1usize..100.min(1 << TREE_DEPTH));
+        let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
+        let mut local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
+            LocalExitTreeData::from_leaves(leaves.into_iter());
+        let mut local_exit_tree_frontier: LocalExitTree<_, TREE_DEPTH> =
+            (&local_exit_tree_data).into();
+        assert_eq!(
+            local_exit_tree_data.get_root(),
+            local_exit_tree_frontier.get_root()
+        );
+        let leaf = random();
+        local_exit_tree_data.add_leaf(leaf);
+        local_exit_tree_frontier.add_leaf(leaf);
+        assert_eq!(
+            local_exit_tree_data.get_root(),
+            local_exit_tree_frontier.get_root()
+        );
     }
 
     #[test]
