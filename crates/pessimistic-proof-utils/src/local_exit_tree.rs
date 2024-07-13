@@ -75,11 +75,9 @@ where
         let mut index = leaf_index;
         let mut entry = leaf;
         for height in 0..TREE_DEPTH - 1 {
-            dbg!(leaf_index, height, index);
             let sibling = self.layers[height]
                 .get(index ^ 1)
                 .unwrap_or(&self.empty_hash_at_height[height]);
-            dbg!(height + 1, index, sibling, entry);
             entry = if index & 1 == 1 {
                 H::merge(&sibling, &entry)
             } else {
@@ -102,23 +100,12 @@ where
 
     /// Returns the root of the tree.
     pub fn get_root(&self) -> H::Digest {
-        // let frontier: LocalExitTree<_, TREE_DEPTH> = self.into();
-        // frontier.get_root()
         let get_last_layer = |i| {
             self.layers[TREE_DEPTH - 1]
                 .get(i)
                 .unwrap_or(&self.empty_hash_at_height[TREE_DEPTH - 1])
         };
         H::merge(get_last_layer(0), get_last_layer(1))
-        // if self.is_empty() {
-        //     (0..TREE_DEPTH).fold(H::Digest::default(), |acc, _|
-        // H::merge(&acc, &acc)) } else {
-        //     assert_eq!(self.layers[TREE_DEPTH - 1].len(), 2);
-        //     H::merge(
-        //         &self.layers[TREE_DEPTH - 1][0],
-        //         &self.layers[TREE_DEPTH - 1][1],
-        //     )
-        // }
     }
 
     pub fn get_proof(&self, leaf_index: usize) -> LETMerkleProof<H, TREE_DEPTH> {
@@ -174,7 +161,6 @@ where
     H::Digest: Eq + Copy + Default + Serialize + for<'a> Deserialize<'a>,
 {
     pub fn verify(&self, leaf: H::Digest, leaf_index: usize, root: H::Digest) -> bool {
-        dbg!(1);
         let mut entry = leaf;
         let mut index = leaf_index;
         for &sibling in &self.siblings {
@@ -185,11 +171,9 @@ where
             };
             index >>= 1;
         }
-        dbg!(3);
         if index != 0 {
             return false;
         }
-        dbg!(4);
         if entry != root {
             return false;
         }
@@ -211,16 +195,10 @@ mod tests {
 
     fn compare_let_data_let_frontier(num_leaves: usize) {
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
-        // let leaves = (0..num_leaves)
-        //     .map(|i| [(i + 1) as u8; 32])
-        //     .collect::<Vec<_>>();
         let local_exit_tree_frontier: LocalExitTree<H, TREE_DEPTH> =
             LocalExitTree::from_leaves(leaves.iter().cloned());
-        dbg!(leaves.len(), TREE_DEPTH);
         let local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
             LocalExitTreeData::from_leaves(leaves.into_iter());
-        dbg!(&local_exit_tree_data);
-        dbg!(&local_exit_tree_frontier);
         assert_eq!(
             local_exit_tree_frontier.get_root(),
             local_exit_tree_data.get_root()
@@ -235,28 +213,19 @@ mod tests {
     #[test]
     fn test_let() {
         let num_leaves = thread_rng().gen_range(1..100.min(1 << TREE_DEPTH));
-        dbg!(num_leaves);
         compare_let_data_let_frontier(num_leaves)
     }
 
     #[test]
     fn test_merkle_proofs() {
         let num_leaves = thread_rng().gen_range(1..=100.min(1 << TREE_DEPTH));
-        // let num_leaves = 3;
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
-        // let leaves = vec![[1; 32], [2; 32], [3; 32]];
         let leaf_index = thread_rng().gen_range(0..num_leaves);
-        // let leaf_index = 1;
         let leaf = leaves[leaf_index];
         let local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
             LocalExitTreeData::from_leaves(leaves.into_iter());
         let root = local_exit_tree_data.get_root();
         let proof = local_exit_tree_data.get_proof(leaf_index);
-        dbg!(&proof);
-        dbg!(&local_exit_tree_data);
-        // let frontier: LocalExitTree<Keccak256Hasher, TREE_DEPTH> =
-        // (&local_exit_tree_data).into(); dbg!(frontier);
-        dbg!(&root);
         assert!(proof.verify(leaf, leaf_index, root));
     }
 }
