@@ -55,6 +55,7 @@ where
 
     /// Appends a leaf to the tree.
     pub fn add_leaf(&mut self, leaf: H::Digest) {
+        assert!((self.leaf_count as usize) < (1usize << TREE_DEPTH) - 1, "Too many leaves.");
         // the index at which the new entry will be inserted
         let frontier_insertion_index: usize = {
             let leaf_count_after_insertion = self.leaf_count + 1;
