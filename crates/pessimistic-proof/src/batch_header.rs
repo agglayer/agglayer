@@ -41,7 +41,7 @@ pub struct BatchHeader {
     /// A commitment to the set of imported bridge exits for which the origin network is the target.
     pub imported_exits_root: Option<Digest>,
 
-    /// A commitment to the set of imported local exit roots
+    /// The set of imported local exit roots
     pub imported_local_exit_roots: Option<Vec<(NetworkId, Digest)>>,
 
     /// The previous Local Balance Root
