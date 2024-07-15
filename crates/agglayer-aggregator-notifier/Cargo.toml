@@ -18,8 +18,10 @@ pessimistic-proof = { path = "../pessimistic-proof" }
 
 sp1-sdk.workspace = true
 
+[dev-dependencies]
+rstest.workspace = true
+
 [features]
-sp1-tests = ["sp1-mock", "sp1-local", "sp1-network"]
-sp1-mock = []
-sp1-local = []
-sp1-network = []
+coverage = []
+sp1 = []
+testutils = []
