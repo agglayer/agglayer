@@ -5,6 +5,8 @@ use pessimistic_proof::local_exit_tree::LocalExitTree;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::utils::empty_hash_at_height;
+
 /// Represents a local exit tree as defined by the LxLy bridge.
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -37,13 +39,7 @@ where
 {
     /// Creates a new empty [`LocalExitTreeData`].
     pub fn new() -> Self {
-        let mut empty_hash_at_height = [H::Digest::default(); TREE_DEPTH];
-        for height in 1..TREE_DEPTH {
-            empty_hash_at_height[height] = H::merge(
-                &empty_hash_at_height[height - 1],
-                &empty_hash_at_height[height - 1],
-            );
-        }
+        let empty_hash_at_height = empty_hash_at_height::<H, TREE_DEPTH>();
         LocalExitTreeData {
             layers: std::array::from_fn(|_| Vec::new()),
             empty_hash_at_height,
