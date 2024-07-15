@@ -9,7 +9,7 @@ buildstructor.workspace = true
 ethers.workspace = true
 futures.workspace = true
 hex.workspace = true
-hyper = "1.4.0"
+hyper = "1.4.1"
 jsonrpsee = { workspace = true, features = ["full"] }
 lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
