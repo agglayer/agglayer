@@ -1,5 +1,3 @@
-use std::hash::Hash;
-
 use pessimistic_proof::local_exit_tree::hasher::Hasher;
 
 pub(crate) fn empty_hash_at_height<H, const DEPTH: usize>() -> [H::Digest; DEPTH]

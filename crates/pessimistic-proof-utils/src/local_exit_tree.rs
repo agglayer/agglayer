@@ -166,11 +166,8 @@ where
         if index != 0 {
             return false;
         }
-        if entry != root {
-            return false;
-        }
 
-        true
+        entry == root
     }
 }
 
