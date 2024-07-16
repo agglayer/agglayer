@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use pessimistic_proof::local_exit_tree::hasher::Hasher;
 use pessimistic_proof::local_exit_tree::LocalExitTree;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -13,10 +14,14 @@ use crate::utils::empty_hash_at_height;
 pub struct LocalExitTreeData<H, const TREE_DEPTH: usize = 32>
 where
     H: Hasher,
-    H::Digest: Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Serialize + DeserializeOwned,
 {
+    /// The layers of the Merkle tree from bottom to top (i.e., the leaves are
+    /// in `layers[0]`)
     #[serde_as(as = "[_; TREE_DEPTH]")]
     layers: [Vec<H::Digest>; TREE_DEPTH],
+    /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
+    /// `i`.
     #[serde_as(as = "[_; TREE_DEPTH]")]
     empty_hash_at_height: [H::Digest; TREE_DEPTH],
 }
@@ -26,7 +31,7 @@ where
 pub struct LETMerkleProof<H, const TREE_DEPTH: usize = 32>
 where
     H: Hasher,
-    H::Digest: Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Serialize + DeserializeOwned,
 {
     #[serde_as(as = "[_; TREE_DEPTH]")]
     siblings: [H::Digest; TREE_DEPTH],
@@ -35,7 +40,7 @@ where
 impl<H, const TREE_DEPTH: usize> LocalExitTreeData<H, TREE_DEPTH>
 where
     H: Hasher,
-    H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Copy + Default + Serialize + DeserializeOwned,
 {
     /// Creates a new empty [`LocalExitTreeData`].
     pub fn new() -> Self {
@@ -65,13 +70,11 @@ where
         let mut index = leaf_index;
         let mut entry = leaf;
         for height in 0..TREE_DEPTH - 1 {
-            let sibling = self.layers[height]
-                .get(index ^ 1)
-                .unwrap_or(&self.empty_hash_at_height[height]);
+            let sibling = self.get(height, index ^ 1);
             entry = if index & 1 == 1 {
                 H::merge(&sibling, &entry)
             } else {
-                H::merge(&entry, sibling)
+                H::merge(&entry, &sibling)
             };
             index >>= 1;
             if index < self.layers[height + 1].len() {
@@ -84,18 +87,20 @@ where
         leaf_index
     }
 
+    pub fn get(&self, height: usize, index: usize) -> H::Digest {
+        *self.layers[height]
+            .get(index)
+            .unwrap_or(&self.empty_hash_at_height[height])
+    }
+
     pub fn is_empty(&self) -> bool {
         self.layers[0].is_empty()
     }
 
     /// Returns the root of the tree.
     pub fn get_root(&self) -> H::Digest {
-        let get_last_layer = |i| {
-            self.layers[TREE_DEPTH - 1]
-                .get(i)
-                .unwrap_or(&self.empty_hash_at_height[TREE_DEPTH - 1])
-        };
-        H::merge(get_last_layer(0), get_last_layer(1))
+        let get_last_layer = |i| self.get(TREE_DEPTH - 1, i);
+        H::merge(&get_last_layer(0), &get_last_layer(1))
     }
 
     pub fn get_proof(&self, leaf_index: usize) -> LETMerkleProof<H, TREE_DEPTH> {
@@ -105,13 +110,9 @@ where
         );
         let mut siblings = [Default::default(); TREE_DEPTH];
         let mut index = leaf_index;
-        let mut empty_hash_at_height = H::Digest::default();
         for height in 0..TREE_DEPTH {
-            let sibling = *self.layers[height]
-                .get(index ^ 1)
-                .unwrap_or(&empty_hash_at_height);
+            let sibling = self.get(height, index ^ 1);
             siblings[height] = sibling;
-            empty_hash_at_height = H::merge(&empty_hash_at_height, &empty_hash_at_height);
             index >>= 1;
         }
 
@@ -123,7 +124,7 @@ impl<H, const TREE_DEPTH: usize> Into<LocalExitTree<H, TREE_DEPTH>>
     for &LocalExitTreeData<H, TREE_DEPTH>
 where
     H: Hasher,
-    H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Copy + Default + Serialize + DeserializeOwned,
 {
     fn into(self) -> LocalExitTree<H, TREE_DEPTH> {
         let leaf_count = self.layers[0].len();
@@ -150,7 +151,7 @@ where
 impl<H, const TREE_DEPTH: usize> LETMerkleProof<H, TREE_DEPTH>
 where
     H: Hasher,
-    H::Digest: Eq + Copy + Default + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Eq + Copy + Default + Serialize + DeserializeOwned,
 {
     pub fn verify(&self, leaf: H::Digest, leaf_index: usize, root: H::Digest) -> bool {
         let mut entry = leaf;
