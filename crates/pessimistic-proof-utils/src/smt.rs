@@ -23,6 +23,7 @@ pub(crate) enum SmtError {
     KeyPresent,
 }
 
+/// A node in an SMT
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Node<H>
@@ -66,6 +67,7 @@ where
     }
 }
 
+/// An SMT consistent with a zero-initialized Merkle tree
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Smt<H, const DEPTH: usize>
@@ -73,10 +75,14 @@ where
     H: Hasher,
     H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
+    /// The SMT root
     #[serde_as(as = "_")]
     root: H::Digest,
+    /// A map from node hash to node
     #[serde_as(as = "HashMap<_, _>")]
     tree: HashMap<H::Digest, Node<H>>,
+    /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
+    /// `i`.
     #[serde_as(as = "[_; DEPTH]")]
     empty_hash_at_height: [H::Digest; DEPTH],
 }
@@ -134,6 +140,7 @@ where
             empty_hash_at_height,
         }
     }
+
     pub fn is_empty(&self) -> bool {
         self.root
             == H::merge(

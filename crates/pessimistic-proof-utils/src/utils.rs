@@ -1,5 +1,7 @@
 use pessimistic_proof::local_exit_tree::hasher::Hasher;
 
+/// Returns an array whose `i`th element is the root of an empty Merkle tree of
+/// depth `i`.
 pub(crate) fn empty_hash_at_height<H, const DEPTH: usize>() -> [H::Digest; DEPTH]
 where
     H: Hasher,
