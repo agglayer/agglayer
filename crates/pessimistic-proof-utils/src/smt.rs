@@ -322,16 +322,42 @@ where
         entry == root
     }
 
-    /// Verify the non-inclusion proof and return the root of the SMT with the
-    /// key/value inserted.
+    /// Verify the non-inclusion proof (i.e. that `key` is not in the SMT) and
+    /// return the updated root of the SMT with `(key, value)` inserted.
     pub fn verify_and_update<K>(
         &self,
         key: K,
         value: H::Digest,
         root: H::Digest,
         empty_hash_at_height: &[H::Digest; DEPTH],
-    ) -> Result<H::Digest, SmtError> {
-        todo!()
+    ) -> Option<H::Digest>
+    where
+        K: Copy + ToBits<DEPTH>,
+    {
+        if !self.verify(key, root, empty_hash_at_height) {
+            return None;
+        }
+
+        let mut entry = value;
+        let bits = key.to_bits();
+        for i in (self.siblings.len()..DEPTH).rev() {
+            let sibling = empty_hash_at_height[DEPTH - i - 1];
+            entry = if bits[i] {
+                H::merge(&sibling, &entry)
+            } else {
+                H::merge(&entry, &sibling)
+            };
+        }
+        for i in (0..self.siblings.len()).rev() {
+            let sibling = self.siblings[i];
+            entry = if bits[i] {
+                H::merge(&sibling, &entry)
+            } else {
+                H::merge(&entry, &sibling)
+            };
+        }
+
+        Some(entry)
     }
 }
 
@@ -431,5 +457,37 @@ mod tests {
         let (key, _) = *kvs.choose(&mut rng).unwrap();
         let error = smt.get_non_inclusion_proof(key).unwrap_err();
         assert_eq!(error, SmtError::KeyPresent);
+    }
+
+    fn test_non_inclusion_proof_and_update(num_keys: usize) {
+        let mut smt = Smt::<H, DEPTH>::new();
+        let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
+        for (key, value) in kvs.iter() {
+            smt.insert(*key, *value).unwrap();
+        }
+        let key: u32 = random();
+        assert!(
+            kvs.iter().position(|(k, _)| k == &key).is_none(),
+            "Check your rng"
+        );
+        let proof = smt.get_non_inclusion_proof(key).unwrap();
+        assert!(proof.verify(key, smt.root, &smt.empty_hash_at_height));
+        let value = random();
+        let new_root = proof
+            .verify_and_update(key, value, smt.root, &smt.empty_hash_at_height)
+            .unwrap();
+        smt.insert(key, value).unwrap();
+        assert_eq!(smt.root, new_root);
+    }
+
+    #[test]
+    fn test_non_inclusion_proof_and_update_empty() {
+        test_non_inclusion_proof_and_update(0)
+    }
+
+    #[test]
+    fn test_non_inclusion_proof_and_update_nonempty() {
+        let num_keys = thread_rng().gen_range(1..100);
+        test_non_inclusion_proof_and_update(num_keys)
     }
 }
