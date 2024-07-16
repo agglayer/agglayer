@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use pessimistic_proof::local_exit_tree::hasher::Hasher;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
@@ -27,7 +28,7 @@ pub(crate) enum SmtError {
 pub struct Node<H>
 where
     H: Hasher,
-    H::Digest: Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Serialize + DeserializeOwned,
 {
     #[serde_as(as = "_")]
     left: H::Digest,
@@ -38,7 +39,7 @@ where
 impl<H> Clone for Node<H>
 where
     H: Hasher,
-    H::Digest: Copy + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Copy + Serialize + DeserializeOwned,
 {
     fn clone(&self) -> Self {
         Node {
@@ -51,14 +52,14 @@ where
 impl<H> Copy for Node<H>
 where
     H: Hasher,
-    H::Digest: Copy + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Copy + Serialize + DeserializeOwned,
 {
 }
 
 impl<H> Node<H>
 where
     H: Hasher,
-    H::Digest: Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Serialize + DeserializeOwned,
 {
     pub fn hash(&self) -> H::Digest {
         H::merge(&self.left, &self.right)
@@ -70,7 +71,7 @@ where
 pub struct Smt<H, const DEPTH: usize>
 where
     H: Hasher,
-    H::Digest: Copy + Eq + Hash + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
     #[serde_as(as = "_")]
     root: H::Digest,
@@ -85,7 +86,7 @@ where
 pub struct SmtMerkleProof<H, const DEPTH: usize>
 where
     H: Hasher,
-    H::Digest: Copy + Eq + Hash + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
     #[serde_as(as = "[_; DEPTH]")]
     siblings: [H::Digest; DEPTH],
@@ -96,7 +97,7 @@ where
 pub struct SmtNonInclusionProof<H, const DEPTH: usize>
 where
     H: Hasher,
-    H::Digest: Copy + Eq + Hash + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
     #[serde_as(as = "Vec<_>")]
     siblings: Vec<H::Digest>,
@@ -105,7 +106,7 @@ where
 impl<H, const DEPTH: usize> Default for Smt<H, DEPTH>
 where
     H: Hasher,
-    H::Digest: Copy + Eq + Hash + Serialize + for<'a> Deserialize<'a> + Default,
+    H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned + Default,
 {
     fn default() -> Self {
         Self::new()
@@ -115,7 +116,7 @@ where
 impl<H, const DEPTH: usize> Smt<H, DEPTH>
 where
     H: Hasher,
-    H::Digest: Copy + Eq + Hash + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
     pub fn new() -> Self
     where
@@ -264,7 +265,7 @@ where
 impl<H, const DEPTH: usize> SmtMerkleProof<H, DEPTH>
 where
     H: Hasher,
-    H::Digest: Copy + Eq + Hash + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
     pub fn verify<K>(&self, key: K, value: H::Digest, root: H::Digest) -> bool
     where
@@ -287,7 +288,7 @@ where
 impl<H, const DEPTH: usize> SmtNonInclusionProof<H, DEPTH>
 where
     H: Hasher,
-    H::Digest: Copy + Eq + Hash + Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
     pub fn verify<K>(
         &self,
