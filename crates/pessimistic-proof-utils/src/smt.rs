@@ -370,15 +370,67 @@ impl ToBits<32> for u32 {
 
 #[cfg(test)]
 mod tests {
+    use std::hash::Hash;
 
     use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
     use rand::prelude::SliceRandom;
     use rand::{random, thread_rng, Rng};
+    use rs_merkle::{Hasher as MerkleHasher, MerkleTree};
+    use tiny_keccak::{Hasher as _, Keccak};
 
-    use crate::smt::{Smt, SmtError};
+    use crate::smt::{Smt, SmtError, ToBits};
 
     const DEPTH: usize = 32;
     type H = Keccak256Hasher;
+
+    impl ToBits<8> for u8 {
+        fn to_bits(&self) -> [bool; 8] {
+            std::array::from_fn(|i| (self >> i) & 1 == 1)
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct TestKeccak256;
+
+    impl MerkleHasher for TestKeccak256 {
+        type Hash = [u8; 32];
+
+        fn hash(data: &[u8]) -> [u8; 32] {
+            let mut keccak256 = Keccak::v256();
+            keccak256.update(data);
+            let mut output = [0u8; 32];
+            keccak256.finalize(&mut output);
+            output
+        }
+    }
+
+    fn check_no_duplicates<A: Eq + Hash, B>(v: &[(A, B)]) {
+        let mut seen = std::collections::HashSet::new();
+        for (a, _) in v {
+            assert!(seen.insert(a), "Duplicate key. Check your rng.");
+        }
+    }
+
+    #[test]
+    fn test_compare_with_other_impl() {
+        const DEPTH: usize = 8;
+        let mut rng = thread_rng();
+        let num_keys = rng.gen_range(0..=1 << DEPTH);
+        let mut smt = Smt::<H, DEPTH>::new();
+        let mut kvs: Vec<_> = (0..u8::MAX).map(|i| (i, random())).collect();
+        kvs.shuffle(&mut rng);
+        for (key, value) in &kvs[..num_keys] {
+            smt.insert(*key, *value).unwrap();
+        }
+
+        let mut leaves = vec![[0_u8; 32]; 1 << DEPTH];
+        for (key, value) in &kvs[..num_keys] {
+            leaves[key.reverse_bits() as usize] = *value;
+        }
+        let mt: MerkleTree<TestKeccak256> = MerkleTree::from_leaves(&leaves);
+
+        assert_eq!(smt.root, mt.root().unwrap());
+    }
 
     #[test]
     fn test_order_consistency() {
@@ -386,6 +438,7 @@ mod tests {
         let num_keys = rng.gen_range(0..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let mut kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
+        check_no_duplicates(&kvs);
         for (key, value) in kvs.iter() {
             smt.insert(*key, *value).unwrap();
         }
@@ -404,6 +457,7 @@ mod tests {
         let num_keys = rng.gen_range(1..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
+        check_no_duplicates(&kvs);
         for (key, value) in kvs.iter() {
             smt.insert(*key, *value).unwrap();
         }
@@ -418,6 +472,7 @@ mod tests {
         let num_keys = rng.gen_range(1..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
+        check_no_duplicates(&kvs);
         for (key, value) in kvs.iter() {
             smt.insert(*key, *value).unwrap();
         }
@@ -434,6 +489,7 @@ mod tests {
         let num_keys = rng.gen_range(0..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
+        check_no_duplicates(&kvs);
         for (key, value) in kvs.iter() {
             smt.insert(*key, *value).unwrap();
         }
@@ -452,6 +508,7 @@ mod tests {
         let num_keys = rng.gen_range(1..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
+        check_no_duplicates(&kvs);
         for (key, value) in kvs.iter() {
             smt.insert(*key, *value).unwrap();
         }
@@ -463,6 +520,7 @@ mod tests {
     fn test_non_inclusion_proof_and_update(num_keys: usize) {
         let mut smt = Smt::<H, DEPTH>::new();
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
+        check_no_duplicates(&kvs);
         for (key, value) in kvs.iter() {
             smt.insert(*key, *value).unwrap();
         }

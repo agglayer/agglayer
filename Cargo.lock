@@ -4562,6 +4562,7 @@ dependencies = [
  "pessimistic-proof",
  "rand",
  "reth-primitives",
+ "rs_merkle",
  "serde",
  "serde_json",
  "serde_with",

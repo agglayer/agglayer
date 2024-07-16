@@ -18,3 +18,4 @@ thiserror = "1.0.61"
 
 [dev-dependencies]
 rand = "0.8.5"
+rs_merkle = { version = "1.4", default-features = false }
