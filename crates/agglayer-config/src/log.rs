@@ -1,23 +1,24 @@
 use std::{fmt::Display, path::PathBuf};
 
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use tracing_subscriber::{fmt::writer::BoxMakeWriter, EnvFilter};
 
 /// The log configuration.
-#[derive(Deserialize, Debug, Clone, Default)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub struct Log {
     /// The `RUST_LOG` environment variable will take precedence over the
     /// configuration log level.
-    #[serde(default)]
+    #[serde(default, alias = "Level")]
     pub level: LogLevel,
+    #[serde(alias = "Outputs")]
     pub outputs: Vec<LogOutput>,
-    #[serde(default)]
+    #[serde(default, alias = "Format")]
     pub format: LogFormat,
 }
 
 /// The log format.
-#[derive(Deserialize, Debug, Default, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum LogFormat {
     #[default]
@@ -26,7 +27,7 @@ pub enum LogFormat {
 }
 
 /// The log level.
-#[derive(Deserialize, Debug, Default, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Trace,
@@ -67,7 +68,7 @@ impl From<LogLevel> for EnvFilter {
 /// specify the output location as a string, which is then parsed into the
 /// appropriate enum variant. If the string is not recognized to be either
 /// `stdout` or `stderr`, it is assumed to be a file path.
-#[derive(Debug, Clone, Default)]
+#[derive(Serialize, Debug, Clone, Default, PartialEq, Eq)]
 pub enum LogOutput {
     #[default]
     Stdout,

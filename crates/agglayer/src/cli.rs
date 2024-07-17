@@ -17,4 +17,6 @@ pub(crate) enum Commands {
         #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
         cfg: PathBuf,
     },
+
+    Config {},
 }
