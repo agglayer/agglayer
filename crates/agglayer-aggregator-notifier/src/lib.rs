@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "coverage", feature(coverage_attribute))]
+
 use std::sync::Arc;
 
 use agglayer_certificate_orchestrator::{EpochPacker, Error};
@@ -41,6 +43,7 @@ where
 {
     type Error = NotifierError;
 
+    #[cfg_attr(feature = "coverage", coverage(off))]
     fn try_from(config: ProverConfig) -> Result<Self, Self::Error> {
         match config {
             ProverConfig::SP1Network {} => Ok(Self {

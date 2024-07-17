@@ -15,16 +15,16 @@ concurrency:
 jobs:
   coverage:
     name: SonarCloud and Linter
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.77.1
+          toolchain: nightly-2024-07-15
           components: clippy rustfmt llvm-tools-preview
 
       - name: Install SP1UP
@@ -52,18 +52,15 @@ jobs:
             cargo clippy --all-features --all-targets --message-format=json > clippy.json
             cargo sonar --clippy
 
-
       - name: Build with coverage
         env:
           RUST_LOG: info
-          RUSTFLAGS: "-Cinstrument-coverage"
-          RUSTDOCFLAGS: "-Cinstrument-coverage"
           LLVM_PROFILE_FILE: "llvm_profile-instrumentation-%p-%m.profraw"
-        run: cargo nextest run --workspace --nocapture
+        run: cargo nextest run --workspace --nocapture -F coverage --cargo-profile codecov -Z profile-rustflags
 
       - name: Run grcov
         run: |
-          grcov . --binary-path target/debug/ -s . \
+          grcov . --binary-path target/codecov/ -s . \
             -t lcov \
             --branch \
             --ignore-not-existing \
