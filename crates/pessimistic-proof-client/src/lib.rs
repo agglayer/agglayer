@@ -1,6 +1,5 @@
 pub use pessimistic_proof::{certificate::Certificate, LeafProofOutput, LocalNetworkState};
 pub use sp1_sdk::SP1Proof;
-
 use sp1_sdk::SP1Stdin;
 
 /// ELF bytecode binary of the pessimistic proof program
