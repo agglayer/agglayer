@@ -72,27 +72,15 @@ where
         let to_pack = to_pack.into_iter().collect::<Vec<_>>();
 
         debug!(
-            "Start packing epoch {} with {} certificates",
+            "Start the settlement for the epoch {} with {} p-proofs",
             epoch,
             to_pack.len()
         );
 
-        let proving_request = self.prover.prove(to_pack);
-
         Ok(Box::pin(async move {
-            let proof = proving_request.await.unwrap();
-
-            if let Err(error) = self.prover.verify(&proof) {
-                error!("failed to verify proof: {:?}", error);
-
-                Err(Error::ProofVerificationFailed)
-            } else {
-                info!(
-                    "successfully generated and verified proof for the
-            program!"
-                );
-                Ok(())
-            }
+            // TODO: Submit the settlement tx for each proof
+            // No aggregation for now, we settle each PP individually
+            Ok(())
         }))
     }
 }
