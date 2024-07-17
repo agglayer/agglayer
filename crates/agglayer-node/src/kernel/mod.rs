@@ -4,7 +4,7 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use ethers::prelude::*;
 use thiserror::Error;
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use crate::{
     contracts::{
@@ -126,6 +126,10 @@ where
     /// The rollup manager contract address is specified by the given
     /// configuration.
     fn get_rollup_manager_contract(&self) -> PolygonRollupManager<RpcProvider> {
+        info!(
+            "Rollup manager contract address is {}",
+            self.config.l1.rollup_manager_contract
+        );
         PolygonRollupManager::new(self.config.l1.rollup_manager_contract, self.rpc.clone())
     }
 }
@@ -218,6 +222,10 @@ where
         rollup_id: u32,
     ) -> Result<PolygonZkEvm<RpcProvider>, ContractError<RpcProvider>> {
         let rollup_metadata = self.get_rollup_metadata(rollup_id).await?;
+        info!(
+            "Rollup contract for rollup id {} is {}",
+            rollup_id, rollup_metadata.rollup_contract
+        );
         Ok(PolygonZkEvm::new(
             rollup_metadata.rollup_contract,
             self.rpc.clone(),
@@ -233,10 +241,14 @@ where
         &self,
         rollup_id: u32,
     ) -> Result<Address, ContractError<RpcProvider>> {
-        self.get_rollup_contract(rollup_id)
-            .await?
-            .trusted_sequencer()
-            .await
+        if let Some(addr) = self.config.proof_signers.get(&rollup_id) {
+            Ok(*addr)
+        } else {
+            self.get_rollup_contract(rollup_id)
+                .await?
+                .trusted_sequencer()
+                .await
+        }
     }
 
     /// Construct a call to the `verifyBatchesTrustedAggregator` (`0x1489ed10`)
@@ -283,6 +295,9 @@ where
         let sequencer_address = self
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
+
+        println!("sequencer_address: {:?}", sequencer_address);
+
         let signer = signed_tx
             .signer()
             .map_err(|e| SignatureVerificationError::CouldNotRecoverSigner(e))?;

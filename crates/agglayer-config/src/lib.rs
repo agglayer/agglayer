@@ -6,12 +6,15 @@
 use std::collections::HashMap;
 
 use auth::deserialize_auth;
+use ethers::types::Address;
 use outbound::OutboundConfig;
 use serde::{Deserialize, Serialize};
 use shutdown::ShutdownConfig;
 use url::Url;
 
-use self::{rpc::deserialize_rpc_map, telemetry::TelemetryConfig};
+use self::{
+    proof_signers::deserialize_signers_map, rpc::deserialize_rpc_map, telemetry::TelemetryConfig,
+};
 
 pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
 
@@ -21,6 +24,7 @@ pub mod epoch;
 pub(crate) mod l1;
 pub mod log;
 pub(crate) mod outbound;
+pub mod proof_signers;
 pub(crate) mod rpc;
 pub mod shutdown;
 pub(crate) mod telemetry;
@@ -41,6 +45,8 @@ pub struct Config {
     /// endpoint.
     #[serde(alias = "FullNodeRPCs", deserialize_with = "deserialize_rpc_map")]
     pub full_node_rpcs: HashMap<u32, Url>,
+    #[serde(rename = "ProofSigners", deserialize_with = "deserialize_signers_map")]
+    pub proof_signers: HashMap<u32, Address>,
     /// The log configuration.
     #[serde(alias = "Log")]
     pub log: Log,
