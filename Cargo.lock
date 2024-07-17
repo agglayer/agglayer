@@ -4877,6 +4877,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pessimistic-proof-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex-literal",
+ "pessimistic-proof",
+ "reth-primitives",
+ "rstest",
+ "sp1-sdk",
+ "tracing",
+]
+
+[[package]]
 name = "pest"
 version = "2.7.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
