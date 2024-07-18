@@ -11,7 +11,7 @@ use crate::{
 /// Local state of one network.
 /// The AggLayer tracks the [`LocalNetworkState`] for all networks.
 /// Eventually, this state will be entirely tracked by the networks themselves.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`].
     pub exit_tree: LocalExitTree<Keccak256Hasher>,

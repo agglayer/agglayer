@@ -2,15 +2,17 @@
 
 use std::sync::Arc;
 
-use agglayer_certificate_orchestrator::{EpochPacker, Error};
+use agglayer_certificate_orchestrator::{
+    CertificateInput, Certifier, CertifierOutput, EpochPacker, Error,
+};
 use agglayer_config::certificate_orchestrator::prover::ProverConfig;
 use error::NotifierError;
 use futures::future::BoxFuture;
+use pessimistic_proof::{certificate::Certificate, LocalNetworkState};
 use proof::Proof;
 use serde::Serialize;
 use sp1::SP1;
-use sp1_sdk::NetworkProver;
-use sp1_sdk::{LocalProver, MockProver};
+use sp1_sdk::{LocalProver, MockProver, NetworkProver};
 use tracing::{debug, error, info};
 
 /// ELF of the pessimistic proof program
@@ -25,7 +27,11 @@ mod tests;
 
 /// The trait that must be implemented by the prover
 pub(crate) trait AggregatorProver<I>: Send + Sync {
-    fn prove(&self, to_pack: Vec<I>) -> BoxFuture<'_, Result<Proof, anyhow::Error>>;
+    fn prove(
+        &self,
+        local_state: LocalNetworkState,
+        certificate: I,
+    ) -> BoxFuture<'_, Result<Proof, anyhow::Error>>;
     fn verify(&self, proof: &Proof) -> Result<(), anyhow::Error>;
 }
 
@@ -56,6 +62,45 @@ where
                 prover: Arc::new(SP1::new(MockProver::new(), ELF)),
             }),
         }
+    }
+}
+
+impl Certifier for AggregatorNotifier<Certificate> {
+    type Input = Certificate;
+    type Proof = Proof;
+
+    fn certify(
+        &self,
+        local_state: LocalNetworkState,
+        certificate: Certificate,
+    ) -> Result<BoxFuture<Result<CertifierOutput<Self::Proof>, Error>>, Error> {
+        let proving_request = self.prover.prove(local_state.clone(), certificate.clone());
+
+        let mut state = local_state.clone();
+        let _native_outputs = state
+            .apply_certificate(&certificate)
+            .map_err(|_| Error::NativeExecutionFailed)?;
+
+        Ok(Box::pin(async move {
+            let proof = proving_request
+                .await
+                .map_err(|_| Error::ProofExecutionFailed)?;
+
+            // TODO: Check outputs matches
+
+            if let Err(error) = self.prover.verify(&proof) {
+                error!("Failed to verify the p-proof: {:?}", error);
+
+                Err(Error::ProofVerificationFailed)
+            } else {
+                info!("Successfully generated and verified the p-proof!");
+                Ok(CertifierOutput {
+                    proof,
+                    new_state: state,
+                    network: certificate.network_id(),
+                })
+            }
+        }))
     }
 }
 
