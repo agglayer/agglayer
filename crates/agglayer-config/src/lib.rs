@@ -45,7 +45,11 @@ pub struct Config {
     /// endpoint.
     #[serde(alias = "FullNodeRPCs", deserialize_with = "deserialize_rpc_map")]
     pub full_node_rpcs: HashMap<u32, Url>,
-    #[serde(rename = "ProofSigners", deserialize_with = "deserialize_signers_map")]
+    #[serde(
+        alias = "ProofSigners",
+        deserialize_with = "deserialize_signers_map",
+        default
+    )]
     pub proof_signers: HashMap<u32, Address>,
     /// The log configuration.
     #[serde(alias = "Log")]

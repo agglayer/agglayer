@@ -19,6 +19,7 @@ use serde_with::{serde_as, NoneAsEmptyString};
 /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment is set, attempt to
 ///   load a service account JSON from this path.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub enum AuthConfig {
     Local(LocalConfig),
     GcpKms(GcpKmsConfig),

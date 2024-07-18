@@ -6,11 +6,11 @@ use url::Url;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct L1 {
-    #[serde(rename = "ChainID")]
+    #[serde(alias = "ChainID")]
     pub chain_id: u64,
-    #[serde(rename = "NodeURL")]
+    #[serde(alias = "NodeURL")]
     pub node_url: Url,
-    #[serde(rename = "RollupManagerContract")]
+    #[serde(alias = "RollupManagerContract")]
     pub rollup_manager_contract: Address,
 }
 

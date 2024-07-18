@@ -7,7 +7,11 @@ use super::DEFAULT_IP;
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct TelemetryConfig {
-    #[serde(rename = "PrometheusAddr", default = "default_metrics_api_addr")]
+    #[serde(
+        rename = "prometheus-addr",
+        alias = "PrometheusAddr",
+        default = "default_metrics_api_addr"
+    )]
     pub addr: SocketAddr,
 }
 
