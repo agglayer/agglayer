@@ -35,3 +35,6 @@ agglayer-signer = { path = "../agglayer-signer" }
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.22.3" }
 serde_json = "1.0.116"
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
+
+[build-dependencies]
+ethers-contract = "2.0.14"
