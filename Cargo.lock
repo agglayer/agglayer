@@ -151,6 +151,7 @@ dependencies = [
  "anyhow",
  "buildstructor",
  "ethers",
+ "ethers-contract",
  "futures",
  "hex",
  "http-body-util",
