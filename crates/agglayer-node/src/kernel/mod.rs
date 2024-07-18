@@ -297,8 +297,6 @@ where
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
 
-        println!("sequencer_address: {:?}", sequencer_address);
-
         let signer = signed_tx
             .signer()
             .map_err(|e| SignatureVerificationError::CouldNotRecoverSigner(e))?;
