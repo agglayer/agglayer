@@ -104,6 +104,7 @@ dependencies = [
  "anyhow",
  "buildstructor",
  "ethers",
+ "ethers-contract",
  "futures",
  "hex",
  "hyper 0.14.29",
