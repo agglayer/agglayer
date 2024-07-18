@@ -71,6 +71,7 @@ dependencies = [
  "agglayer-config",
  "anyhow",
  "futures",
+ "pessimistic-proof",
  "rstest",
  "serde",
  "sp1-sdk",
