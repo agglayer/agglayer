@@ -168,10 +168,7 @@ where
             self.kernel
                 .verify_signature(&tx)
                 .map_err(|e| {
-                    error!(
-                        hash,
-                        "Failed to verify the signature of transaction {hash}: {e}"
-                    );
+                    error!(error = %e, hash, "Failed to verify the signature of transaction {hash}: {e}");
                     invalid_params_error(e.to_string())
                 })
                 .map_ok(|_| {
@@ -180,16 +177,30 @@ where
             self.kernel
                 .verify_proof_eth_call(&tx)
                 .map_err(|e| {
-                    let e = decode_contract_error::<
+                    let zkevm_error = decode_contract_error::<
+                        _,
+                        crate::contracts::polygon_zk_evm::PolygonZkEvmErrors
+                    >(&e);
+
+                    let rollup_error = decode_contract_error::<
                         _,
                         crate::contracts::polygon_rollup_manager::PolygonRollupManagerErrors,
                     >(&e);
+
+                    let error = match (zkevm_error, rollup_error) {
+                        (Some(zkevm_error), _) => zkevm_error,
+                        (_, Some(rollup_error)) => rollup_error,
+                        (_, _) => e.to_string(),
+                    };
+
                     error!(
+                        error_code = %e,
+                        error,
                         hash,
                         "Failed to dry-run the verify_batches_trusted_aggregator for transaction \
-                         {hash}: {e}"
+                         {hash}: {error}"
                     );
-                    invalid_params_error(e)
+                    invalid_params_error(error)
                 })
                 .map_ok(|_| {
                     agglayer_telemetry::EXECUTE.add(1, metrics_attrs);
@@ -198,6 +209,7 @@ where
                 .verify_proof_zkevm_node(&tx)
                 .map_err(|e| {
                     error!(
+                        error = %e,
                         hash,
                         "Failed to verify the batch local_exit_root and state_root of transaction \
                          {hash}: {e}"
@@ -211,7 +223,11 @@ where
 
         // Settle the proof on-chain and return the transaction hash.
         let receipt = self.kernel.settle(&tx).await.map_err(|e| {
-            error!(hash, "Failed to settle transaction {hash} on L1: {e}");
+            error!(
+                error = %e,
+                hash,
+                "Failed to settle transaction {hash} on L1: {e}"
+            );
             internal_error(e.to_string())
         })?;
 
@@ -273,12 +289,9 @@ where
 
 fn decode_contract_error<M: Middleware, E: ContractRevert + std::fmt::Debug>(
     e: &ContractError<M>,
-) -> String {
-    if let Some(err) = e.decode_contract_revert::<E>() {
-        format!("{:?}", err)
-    } else {
-        e.to_string()
-    }
+) -> Option<String> {
+    e.decode_contract_revert::<E>()
+        .map(|err| format!("{:?}", err))
 }
 
 type TxStatus = String;
