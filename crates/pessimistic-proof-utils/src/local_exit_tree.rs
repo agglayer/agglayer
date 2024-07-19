@@ -26,7 +26,7 @@ where
 
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LETMerkleProof<H, const TREE_DEPTH: usize = 32>
+pub struct LocalExitTreeMerkleProof<H, const TREE_DEPTH: usize = 32>
 where
     H: Hasher,
     H::Digest: Serialize + DeserializeOwned,
@@ -91,14 +91,12 @@ where
         leaf_index
     }
 
+    /// Get the hash at the given height and index, or the empty hash if the
+    /// index is out of bounds.
     pub fn get(&self, height: usize, index: usize) -> H::Digest {
         *self.layers[height]
             .get(index)
             .unwrap_or(&self.empty_hash_at_height[height])
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.layers[0].is_empty()
     }
 
     /// Returns the root of the tree.
@@ -107,7 +105,8 @@ where
         H::merge(&get_last_layer(0), &get_last_layer(1))
     }
 
-    pub fn get_proof(&self, leaf_index: usize) -> LETMerkleProof<H, TREE_DEPTH> {
+    /// Returns an inclusion proof for the leaf at the given index.
+    pub fn get_proof(&self, leaf_index: usize) -> LocalExitTreeMerkleProof<H, TREE_DEPTH> {
         assert!(
             leaf_index < self.layers[0].len(),
             "Leaf index out of bounds."
@@ -120,7 +119,17 @@ where
             index >>= 1;
         }
 
-        LETMerkleProof { siblings }
+        LocalExitTreeMerkleProof { siblings }
+    }
+}
+
+impl<H, const TREE_DEPTH: usize> FromIterator<H::Digest> for LocalExitTreeData<H, TREE_DEPTH>
+where
+    H: Hasher,
+    H::Digest: Copy + Default + Serialize + DeserializeOwned,
+{
+    fn from_iter<T: IntoIterator<Item = H::Digest>>(iter: T) -> Self {
+        Self::from_leaves(iter.into_iter())
     }
 }
 
@@ -152,11 +161,13 @@ where
     }
 }
 
-impl<H, const TREE_DEPTH: usize> LETMerkleProof<H, TREE_DEPTH>
+impl<H, const TREE_DEPTH: usize> LocalExitTreeMerkleProof<H, TREE_DEPTH>
 where
     H: Hasher,
     H::Digest: Eq + Copy + Default + Serialize + DeserializeOwned,
 {
+    /// Returns `true` iff the proof is valid for the given leaf, leaf index,
+    /// and Merkle root.
     pub fn verify(&self, leaf: H::Digest, leaf_index: usize, root: H::Digest) -> bool {
         let mut entry = leaf;
         let mut index = leaf_index;
@@ -190,6 +201,8 @@ mod tests {
     const TREE_DEPTH: usize = 32;
     type H = Keccak256Hasher;
 
+    // TODO: Consider using `rstest`, `proptest`, or `quickcheck` to generate these
+    // tests.
     fn compare_let_data_let_frontier(num_leaves: usize) {
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
         let local_exit_tree_frontier: LocalExitTree<H, TREE_DEPTH> =
