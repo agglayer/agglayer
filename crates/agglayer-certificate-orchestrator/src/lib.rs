@@ -8,7 +8,7 @@ use std::{
 
 use agglayer_clock::Event;
 use futures_util::{future::BoxFuture, Stream, StreamExt};
-use pessimistic_proof::{certificate::Certificate, LocalNetworkState, NetworkId};
+use pessimistic_proof::{certificate::Certificate, LocalNetworkState, NetworkId, ProofError};
 use tokio::{
     sync::mpsc::Receiver,
     task::{JoinHandle, JoinSet},
@@ -382,9 +382,13 @@ pub trait Certifier: Clone + Unpin + Send + Sync + 'static {
     ) -> CertifierResult<Self::Proof>;
 }
 
-#[derive(Debug)]
+use thiserror::Error;
+#[derive(Error, Debug)]
 pub enum Error {
+    #[error("proof verification failed")]
     ProofVerificationFailed,
-    ProofExecutionFailed,
-    NativeExecutionFailed,
+    #[error("prover execution failed: {0}")]
+    ProverExecutionFailed(#[from] anyhow::Error),
+    #[error("native execution failed: {0}")]
+    NativeExecutionFailed(#[from] ProofError),
 }

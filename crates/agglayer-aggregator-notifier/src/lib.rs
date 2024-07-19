@@ -79,12 +79,12 @@ impl Certifier for AggregatorNotifier<Certificate> {
         let mut state = local_state.clone();
         let _native_outputs = state
             .apply_certificate(&certificate)
-            .map_err(|_| Error::NativeExecutionFailed)?;
+            .map_err(Error::NativeExecutionFailed)?;
 
         Ok(Box::pin(async move {
             let proof = proving_request
                 .await
-                .map_err(|_| Error::ProofExecutionFailed)?;
+                .map_err(Error::ProverExecutionFailed)?;
 
             // TODO: Check outputs matches
 

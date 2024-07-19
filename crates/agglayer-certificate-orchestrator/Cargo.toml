@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+thiserror.workspace = true
 buildstructor.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
