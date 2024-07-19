@@ -104,20 +104,34 @@ where
     /// ```
     /// # use agglayer_certificate_orchestrator::Error;
     /// # use agglayer_certificate_orchestrator::EpochPacker;
+    /// # use agglayer_certificate_orchestrator::Certifier;
+    /// # use agglayer_certificate_orchestrator::CertifierResult;
+    /// # use agglayer_certificate_orchestrator::CertifierOutput;
+    /// # use agglayer_certificate_orchestrator::CertificateInput;
     /// # use agglayer_certificate_orchestrator::CertificateOrchestrator;
     /// # use tokio_stream::wrappers::BroadcastStream;
     /// # use tokio_util::sync::CancellationToken;
     /// # use futures_util::future::BoxFuture;
     /// # use tokio_stream::StreamExt;
+    /// # use pessimistic_proof::NetworkId;
+    /// # use pessimistic_proof::LocalNetworkState;
     ///
-    /// ##[derive(Clone)]
-    /// pub struct AggregatorNotifier {}
+    /// # #[derive(Clone)]
+    /// # pub struct Empty;
+    /// # impl CertificateInput for Empty {
+    /// #     fn network_id(&self) -> NetworkId {
+    /// #         NetworkId::new(0)
+    /// #     }
+    /// # }
     ///
-    /// impl AggregatorNotifier {
-    ///     pub(crate) fn new() -> Self {
-    ///         Self {}
-    ///     }
-    /// }
+    /// # #[derive(Clone)]
+    /// # pub struct AggregatorNotifier {}
+    ///
+    /// # impl AggregatorNotifier {
+    /// #     pub(crate) fn new() -> Self {
+    /// #         Self {}
+    /// #     }
+    /// # }
     ///
     /// impl EpochPacker for AggregatorNotifier {
     ///     type Item = ();
@@ -125,25 +139,47 @@ where
     ///         &self,
     ///         epoch: u64,
     ///         to_pack: T,
-    ///     ) -> Result<BoxFuture<Result<(), Error>>, Error> {Ok(Box::pin(async move {Ok(())}))}
+    ///     ) -> Result<BoxFuture<Result<(), Error>>, Error> {
+    ///         Ok(Box::pin(async move { Ok(()) }))
+    ///     }
+    /// }
+    ///
+    /// impl Certifier for AggregatorNotifier {
+    ///     type Input = Empty;
+    ///     type Proof = ();
+    ///
+    ///     fn certify(
+    ///         &self,
+    ///         local_state: LocalNetworkState,
+    ///         certificate: Self::Input,
+    ///     ) -> CertifierResult<Self::Proof> {
+    ///         Ok(Box::pin(async move {
+    ///             Ok(CertifierOutput {
+    ///                 proof: (),
+    ///                 new_state: LocalNetworkState::default(),
+    ///                 network: NetworkId::new(0),
+    ///             })
+    ///         }))
+    ///     }
     /// }
     ///
     /// async fn start() -> Result<(), ()> {
-    ///    let (sender, receiver) = tokio::sync::broadcast::channel(1);
-    ///    let clock_stream = BroadcastStream::new(sender.subscribe()).filter_map(|value| value.ok());
-    ///    let notifier = AggregatorNotifier::new();
-    ///    let data_receiver = tokio::sync::mpsc::channel(1).1;
+    ///     let (sender, receiver) = tokio::sync::broadcast::channel(1);
+    ///     let clock_stream = BroadcastStream::new(sender.subscribe()).filter_map(|value| value.ok());
+    ///     let notifier = AggregatorNotifier::new();
+    ///     let data_receiver = tokio::sync::mpsc::channel(1).1;
     ///
-    ///    CertificateOrchestrator::builder()
-    ///      .clock(clock_stream)
-    ///      .data_receiver(data_receiver)
-    ///      .cancellation_token(CancellationToken::new())
-    ///      .epoch_packing_task_builder(notifier)
-    ///      .start()
-    ///      .await
-    ///      .unwrap();
+    ///     CertificateOrchestrator::builder()
+    ///         .clock(clock_stream)
+    ///         .data_receiver(data_receiver)
+    ///         .cancellation_token(CancellationToken::new())
+    ///         .epoch_packing_task_builder(notifier.clone())
+    ///         .certifier_task_builder(notifier)
+    ///         .start()
+    ///         .await
+    ///         .unwrap();
     ///
-    ///    Ok(())
+    ///     Ok(())
     /// }
     /// ```
     ///
@@ -332,7 +368,7 @@ pub struct CertifierOutput<P> {
     pub network: NetworkId,
 }
 
-type CertifierResult<'a, P> = Result<BoxFuture<'a, Result<CertifierOutput<P>, Error>>, Error>;
+pub type CertifierResult<'a, P> = Result<BoxFuture<'a, Result<CertifierOutput<P>, Error>>, Error>;
 
 /// Apply one Certificate on top of a local state and computes one proof.
 pub trait Certifier: Clone + Unpin + Send + Sync + 'static {
