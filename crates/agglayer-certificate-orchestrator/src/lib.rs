@@ -273,7 +273,7 @@ where
                 error!("Critical error during p-proof generation: {:?}", error);
             }
             Poll::Ready(Some(Ok(Ok(certifier_outputs)))) => {
-                info!("Received the successfully generated p-proof");
+                debug!("Received the successfully generated p-proof");
                 self.receive_proof(certifier_outputs);
             }
             _ => {}
