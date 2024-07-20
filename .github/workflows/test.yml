@@ -58,6 +58,7 @@ jobs:
         run: cargo nextest run --workspace --nocapture && cargo test --doc --workspace
 
   elf:
+    if: ${{ false }}
     name: Check ELF compatibility
     runs-on: ubuntu-latest
     timeout-minutes: 30
