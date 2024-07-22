@@ -40,12 +40,12 @@ where
 impl<H> Clone for Node<H>
 where
     H: Hasher,
-    H::Digest: Copy + Serialize + DeserializeOwned,
+    H::Digest: Clone + Serialize + DeserializeOwned,
 {
     fn clone(&self) -> Self {
         Node {
-            left: self.left,
-            right: self.right,
+            left: self.left.clone(),
+            right: self.right.clone(),
         }
     }
 }
