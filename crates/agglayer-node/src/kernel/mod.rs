@@ -4,7 +4,7 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use ethers::prelude::*;
 use thiserror::Error;
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use crate::{
     contracts::{
@@ -329,6 +329,7 @@ where
         &self,
         signed_tx: &SignedTx,
     ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
+        let hash = signed_tx.hash().to_string();
         let f = self
             .build_verify_batches_trusted_aggregator_call(signed_tx)
             .await
@@ -337,6 +338,7 @@ where
         let tx = f
             .send()
             .await
+            .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
             .map_err(SettlementError::ContractError)?
             .interval(self.config.outbound.rpc.settle.retry_interval)
             .retries(self.config.outbound.rpc.settle.max_retries)
