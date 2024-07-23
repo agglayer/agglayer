@@ -5,8 +5,9 @@ use agglayer_config::{Config, Epoch};
 use agglayer_signer::ConfiguredSigner;
 use anyhow::Result;
 use ethers::{
-    middleware::MiddlewareBuilder as _,
+    middleware::MiddlewareBuilder,
     providers::{Http, Provider},
+    signers::Signer,
 };
 use tokio::{join, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -61,9 +62,12 @@ impl Node {
         config: Arc<Config>,
         cancellation_token: CancellationToken,
     ) -> Result<Self> {
+        let signer = ConfiguredSigner::new(config.clone()).await?;
+        let address = signer.address();
         // Create a new L1 RPC provider with the configured signer.
         let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
-            .with_signer(ConfiguredSigner::new(config.clone()).await?);
+            .with_signer(signer)
+            .nonce_manager(address);
 
         // Construct the core.
         let core = Kernel::new(rpc, config.clone());
