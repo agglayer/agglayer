@@ -7,7 +7,8 @@ use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    CertificateInput, CertificateOrchestrator, Certifier, CertifierOutput, EpochPacker, Error,
+    CertificateInput, CertificateOrchestrator, Certifier, CertifierOutput, CertifierResult,
+    EpochPacker, Error,
 };
 
 // CertificateOrchestrator can be stopped
@@ -198,7 +199,7 @@ where
         &self,
         local_state: LocalNetworkState,
         certificate: I,
-    ) -> Result<BoxFuture<Result<CertifierOutput<Self::Proof>, Error>>, Error> {
+    ) -> CertifierResult<Self::Proof> {
         // TODO: check whether the initial state is the expected one
         _ = self.executed.try_send(());
         Ok(Box::pin(async move {
