@@ -145,7 +145,7 @@ where
         let hash = format!("{:?}", tx.hash());
         tracing::Span::current().record("hash", &hash);
 
-        debug!(
+        info!(
             hash,
             "Received transaction {hash} for rollup {}", tx.tx.rollup_id
         );

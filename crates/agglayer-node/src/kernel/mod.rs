@@ -342,11 +342,6 @@ where
             warn!(hash, "Transaction already settled: {:?}", tx);
         }
 
-        info!(
-            "Calling `verify_batches_trusted_aggregator` with {:?} nonce",
-            f.tx.nonce()
-        );
-
         let tx = f
             .send()
             .await
