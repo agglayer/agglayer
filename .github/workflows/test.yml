@@ -36,7 +36,7 @@ jobs:
         run: curl -L https://sp1.succinct.xyz | bash
 
       - name: Install SP1 toolchain
-        run: /home/runner/.config/.sp1/bin/sp1up
+        run: /home/runner/.sp1/bin/sp1up
         shell: bash
 
       - name: Set up rust cache
@@ -83,7 +83,7 @@ jobs:
 
       - name: Install SP1 toolchain
         if: steps.filter.outputs.src == 'true'
-        run: /home/runner/.config/.sp1/bin/sp1up
+        run: /home/runner/.sp1/bin/sp1up
         shell: bash
 
       - name: Set up rust cache
@@ -115,7 +115,6 @@ jobs:
 
   pre-e2e:
     needs:
-      - elf
       - unit
     name: E2E Tests | Docker
     uses: ./.github/workflows/util:docker.yml
