@@ -65,17 +65,7 @@ where
         let proving_key = self.proving_key.clone();
         let prover = self.prover.clone();
 
-        async move {
-            prover
-                .prove_async(
-                    &proving_key.elf,
-                    stdin,
-                    sp1_sdk::proto::network::ProofMode::Core,
-                )
-                .await
-                .map(Proof::SP1)
-        }
-        .boxed()
+        async move { prover.prove(&proving_key.elf, stdin).await.map(Proof::SP1) }.boxed()
     }
 
     fn verify(&self, proof: &Proof) -> Result<(), anyhow::Error> {
