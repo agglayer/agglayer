@@ -11,7 +11,6 @@ futures.workspace = true
 hex.workspace = true
 hyper = "1.4.1"
 jsonrpsee = { workspace = true, features = ["full"] }
-lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with.workspace = true
@@ -32,11 +31,6 @@ agglayer-signer = { path = "../agglayer-signer" }
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
 pessimistic-proof = { path = "../pessimistic-proof" }
 agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
-
-sp1-core.workspace = true
-sp1-recursion-compiler.workspace = true
-sp1-recursion-core.workspace = true
-sp1-sdk.workspace = true
 
 [dev-dependencies]
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.23.2" }

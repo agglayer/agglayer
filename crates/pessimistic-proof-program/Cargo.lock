@@ -3559,7 +3559,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "sp1-derive",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?branch=patch-v2.0.2)",
 ]
 
@@ -3569,7 +3568,6 @@ version = "0.1.0"
 dependencies = [
  "pessimistic-proof",
  "sp1-cli",
- "sp1-derive",
  "sp1-zkvm",
 ]
 
@@ -4910,7 +4908,7 @@ dependencies = [
 [[package]]
 name = "sp1-cli"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "anstyle",
  "anyhow",
@@ -4938,7 +4936,7 @@ dependencies = [
 [[package]]
 name = "sp1-core"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "anyhow",
  "arrayref",
@@ -4996,7 +4994,7 @@ dependencies = [
 [[package]]
 name = "sp1-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5006,7 +5004,7 @@ dependencies = [
 [[package]]
 name = "sp1-precompiles"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "anyhow",
  "bincode",
@@ -5040,7 +5038,7 @@ dependencies = [
 [[package]]
 name = "sp1-primitives"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "itertools 0.12.1",
  "lazy_static",
@@ -5053,7 +5051,7 @@ dependencies = [
 [[package]]
 name = "sp1-prover"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -5095,7 +5093,7 @@ dependencies = [
 [[package]]
 name = "sp1-recursion-circuit"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "bincode",
  "itertools 0.12.1",
@@ -5118,7 +5116,7 @@ dependencies = [
 [[package]]
 name = "sp1-recursion-compiler"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "backtrace",
  "itertools 0.12.1",
@@ -5142,7 +5140,7 @@ dependencies = [
 [[package]]
 name = "sp1-recursion-core"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "arrayref",
  "backtrace",
@@ -5175,7 +5173,7 @@ dependencies = [
 [[package]]
 name = "sp1-recursion-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5185,7 +5183,7 @@ dependencies = [
 [[package]]
 name = "sp1-recursion-gnark-ffi"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "bindgen",
  "cc",
@@ -5204,7 +5202,7 @@ dependencies = [
 [[package]]
 name = "sp1-recursion-program"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "itertools 0.12.1",
  "p3-air",
@@ -5231,7 +5229,7 @@ dependencies = [
 [[package]]
 name = "sp1-sdk"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "alloy-sol-types",
  "anyhow",
@@ -5269,7 +5267,7 @@ dependencies = [
 [[package]]
 name = "sp1-zkvm"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
+source = "git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet#19ef89a4b8a509b7d765c46ff6e0a1c9a8fcbfb4"
 dependencies = [
  "bincode",
  "cfg-if",
@@ -5280,7 +5278,7 @@ dependencies = [
  "rand",
  "serde",
  "sha2",
- "sp1-precompiles 0.1.0 (git+https://github.com/succinctlabs/sp1.git?tag=v1.0.5-testnet)",
+ "sp1-precompiles 0.1.0 (git+https://github.com/succinctlabs/sp1?tag=v1.0.5-testnet)",
 ]
 
 [[package]]
