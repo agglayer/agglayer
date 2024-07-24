@@ -4,15 +4,12 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-ethers-gcp-kms-signer.workspace = true
 ethers.workspace = true
 jsonrpsee.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
-thiserror.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-tracing.workspace = true
 url = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]

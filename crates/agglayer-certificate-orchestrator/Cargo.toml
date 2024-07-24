@@ -8,10 +8,8 @@ anyhow.workspace = true
 buildstructor.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
-tower.workspace = true
 tracing.workspace = true
 
 agglayer-clock = { path = "../agglayer-clock" }
 tokio-stream = { version = "0.1.15", features = ["sync"] }
 futures-util = "0.3.30"
-pin-project = "1.1.5"

@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 async-trait.workspace = true
-ethers-gcp-kms-signer.workspace = true
 ethers.workspace = true
 thiserror.workspace = true
 

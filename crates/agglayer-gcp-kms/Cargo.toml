@@ -7,7 +7,6 @@ edition.workspace = true
 ethers-gcp-kms-signer.workspace = true
 ethers.workspace = true
 serde = { workspace = true, features = ["derive"] }
-serde_with.workspace = true
 thiserror.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
