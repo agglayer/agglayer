@@ -14,7 +14,7 @@ serde_with = { version = "3" }
 tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "patch-v2.0.2", features = [
     "keccak",
 ] }
-thiserror = "1.0.61"
+thiserror.workspace = true
 
 [dev-dependencies]
 rand = "0.8.5"

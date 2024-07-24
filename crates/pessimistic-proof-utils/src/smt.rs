@@ -9,6 +9,7 @@ use thiserror::Error;
 
 use crate::utils::empty_hash_at_height;
 
+/// A trait for types that can be converted to a fixed-size array of bits.
 pub trait ToBits<const NUM_BITS: usize> {
     fn to_bits(&self) -> [bool; NUM_BITS];
 }
@@ -67,7 +68,8 @@ where
     }
 }
 
-/// An SMT consistent with a zero-initialized Merkle tree.
+/// An in-memory sparse merkle tree (SMT) consistent with a zero-initialized
+/// Merkle tree.
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Smt<H, const DEPTH: usize>
@@ -87,9 +89,10 @@ where
     empty_hash_at_height: [H::Digest; DEPTH],
 }
 
+/// An inclusion proof for a key in an SMT.
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SmtMerkleProof<H, const DEPTH: usize>
+pub struct SmtInclusionProof<H, const DEPTH: usize>
 where
     H: Hasher,
     H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
@@ -98,6 +101,7 @@ where
     siblings: [H::Digest; DEPTH],
 }
 
+/// A non-inclusion proof for a key in an SMT.
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SmtNonInclusionProof<H, const DEPTH: usize>
@@ -124,6 +128,7 @@ where
     H: Hasher,
     H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
+    /// Constructs a new, empty `Smt`.
     pub fn new() -> Self
     where
         H::Digest: Default,
@@ -141,14 +146,7 @@ where
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.root
-            == H::merge(
-                &self.empty_hash_at_height[DEPTH - 1],
-                &self.empty_hash_at_height[DEPTH - 1],
-            )
-    }
-
+    /// Returns the value associated with the given key, if any.
     pub fn get<K>(&self, key: K) -> Option<H::Digest>
     where
         K: ToBits<DEPTH>,
@@ -180,20 +178,17 @@ where
             };
         }
         let node = self.tree.get(&hash);
+        assert!(depth < DEPTH, "`depth` should be less than `DEPTH`");
         let mut node = node.copied().unwrap_or(Node {
             left: self.empty_hash_at_height[DEPTH - depth - 1],
             right: self.empty_hash_at_height[DEPTH - depth - 1],
         });
-        let child_hash = if bits[depth] {
-            self.insert_helper(node.right, depth + 1, bits, value)
+        let node_place = if bits[depth] {
+            &mut node.right
         } else {
-            self.insert_helper(node.left, depth + 1, bits, value)
-        }?;
-        if bits[depth] {
-            node.right = child_hash;
-        } else {
-            node.left = child_hash;
-        }
+            &mut node.left
+        };
+        *node_place = self.insert_helper(*node_place, depth + 1, bits, value)?;
 
         let new_hash = node.hash();
         self.tree.insert(new_hash, node);
@@ -201,17 +196,20 @@ where
         Ok(new_hash)
     }
 
+    /// Inserts a key-value pair into the SMT.
+    /// Returns an error if the key is already in the SMT.
     pub fn insert<K>(&mut self, key: K, value: H::Digest) -> Result<(), SmtError>
     where
         K: ToBits<DEPTH>,
     {
-        let new_root = self.insert_helper(self.root, 0, &key.to_bits(), value)?;
-        self.root = new_root;
+        self.root = self.insert_helper(self.root, 0, &key.to_bits(), value)?;
 
         Ok(())
     }
 
-    pub fn get_inclusion_proof<K>(&self, key: K) -> Result<SmtMerkleProof<H, DEPTH>, SmtError>
+    /// Returns an inclusion proof for the given key.
+    /// Returns an error if the key is not in the SMT.
+    pub fn get_inclusion_proof<K>(&self, key: K) -> Result<SmtInclusionProof<H, DEPTH>, SmtError>
     where
         K: ToBits<DEPTH>,
     {
@@ -227,9 +225,11 @@ where
             return Err(SmtError::KeyNotPresent);
         }
 
-        Ok(SmtMerkleProof { siblings })
+        Ok(SmtInclusionProof { siblings })
     }
 
+    /// Returns a non-inclusion proof for the given key.
+    /// Returns an error if the key is in the SMT.
     pub fn get_non_inclusion_proof<K>(
         &self,
         key: K,
@@ -269,11 +269,13 @@ where
     }
 }
 
-impl<H, const DEPTH: usize> SmtMerkleProof<H, DEPTH>
+impl<H, const DEPTH: usize> SmtInclusionProof<H, DEPTH>
 where
     H: Hasher,
     H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
+    /// Returns `true` if and only if the proof is valid for the given key,
+    /// value, and root.
     pub fn verify<K>(&self, key: K, value: H::Digest, root: H::Digest) -> bool
     where
         K: ToBits<DEPTH>,
@@ -297,6 +299,8 @@ where
     H: Hasher,
     H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
+    /// Returns `true` if and only if the proof is valid for the given key and
+    /// root.
     pub fn verify<K>(
         &self,
         key: K,
