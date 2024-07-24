@@ -113,9 +113,8 @@ where
         );
         let mut siblings = [Default::default(); TREE_DEPTH];
         let mut index = leaf_index;
-        for height in 0..TREE_DEPTH {
-            let sibling = self.get(height, index ^ 1);
-            siblings[height] = sibling;
+        for (height, sibling) in siblings.iter_mut().enumerate().take(TREE_DEPTH) {
+            *sibling = self.get(height, index ^ 1);
             index >>= 1;
         }
 
@@ -166,8 +165,8 @@ where
     H: Hasher,
     H::Digest: Eq + Copy + Default + Serialize + DeserializeOwned,
 {
-    /// Returns `true` iff the proof is valid for the given leaf, leaf index,
-    /// and Merkle root.
+    /// Returns `true` if and only if the proof is valid for the given leaf,
+    /// leaf index, and Merkle root.
     pub fn verify(&self, leaf: H::Digest, leaf_index: usize, root: H::Digest) -> bool {
         let mut entry = leaf;
         let mut index = leaf_index;
