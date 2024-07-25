@@ -6,10 +6,12 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 buildstructor.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 
 agglayer-clock = { path = "../agglayer-clock" }
+pessimistic-proof = { path = "../pessimistic-proof" }
 tokio-stream = { version = "0.1.15", features = ["sync"] }
 futures-util = "0.3.30"

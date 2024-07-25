@@ -1,12 +1,16 @@
+use thiserror::Error;
+
 use crate::{
     bridge_exit::NetworkId, certificate::Certificate, keccak::Digest,
     local_state::LocalNetworkState,
 };
 
 /// Represents all errors that can occur while generating the proof.
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ProofError {
+    #[error("invalid local exit root")]
     InvalidLocalExitRoot { got: Digest, expected: Digest },
+    #[error("detected debt for the network {network:?}")]
     HasDebt { network: NetworkId },
 }
 

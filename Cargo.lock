@@ -71,6 +71,7 @@ dependencies = [
  "agglayer-config",
  "anyhow",
  "futures",
+ "pessimistic-proof",
  "rstest",
  "serde",
  "sp1-sdk",
@@ -87,6 +88,8 @@ dependencies = [
  "anyhow",
  "buildstructor",
  "futures-util",
+ "pessimistic-proof",
+ "thiserror",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -4604,6 +4607,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "thiserror",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?branch=patch-v2.0.2)",
 ]
 

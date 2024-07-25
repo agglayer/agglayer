@@ -11,9 +11,9 @@ serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
-
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
 agglayer-config = { path = "../agglayer-config" }
+pessimistic-proof = { path = "../pessimistic-proof" }
 
 sp1-sdk.workspace = true
 
