@@ -7,11 +7,11 @@ edition = "2021"
 
 [dependencies]
 base64 = "0.22.0"
-thiserror.workspace = true
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 serde_with = { version = "3" }
+thiserror.workspace = true
 tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "patch-v2.0.2", features = [
     "keccak",
 ] }
