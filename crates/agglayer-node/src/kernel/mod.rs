@@ -4,7 +4,7 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use ethers::prelude::*;
 use thiserror::Error;
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 
 use crate::{
     contracts::{
@@ -289,8 +289,6 @@ where
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
 
-        println!("sequencer_address: {:?}", sequencer_address);
-
         let signer = signed_tx
             .signer()
             .map_err(|e| SignatureVerificationError::CouldNotRecoverSigner(e))?;
@@ -330,11 +328,17 @@ where
         &self,
         signed_tx: &SignedTx,
     ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
-        let hash = signed_tx.hash().to_string();
+        let hex_hash = signed_tx.hash();
+        let hash = format!("{:?}", hex_hash);
+
         let f = self
             .build_verify_batches_trusted_aggregator_call(signed_tx)
             .await
             .map_err(SettlementError::ContractError)?;
+
+        if let Ok(Some(tx)) = self.check_tx_status(hex_hash).await {
+            warn!(hash, "Transaction already settled: {:?}", tx);
+        }
 
         let tx = f
             .send()
