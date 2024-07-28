@@ -1,5 +1,5 @@
 use pessimistic_proof::{BridgeExit, NetworkId};
-use pessimistic_proof_client::{Certificate, Client, LocalNetworkState};
+use pessimistic_proof_client::{Certificate, LocalNetworkState, Runner};
 use tracing::{debug, info};
 
 mod data;
@@ -25,7 +25,7 @@ fn cycles_on_sample_inputs(
 
     let certificate = Certificate::new(origin_network, exit_root, bridge_exits);
 
-    let (roots, stats) = Client::new()
+    let (roots, stats) = Runner::new()
         .execute(&state, &certificate)
         .expect("execution failed");
 

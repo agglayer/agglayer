@@ -6,47 +6,20 @@ use sp1_sdk::SP1Stdin;
 pub const PESSIMISTIC_PROOF_ELF: &[u8] =
     include_bytes!("../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");
 
-/// A convenient interface to the pessimistic proof
-pub struct Client {
+/// A convenient interface to run the pessimistic proof ELF bytecode.
+pub struct Runner {
     client: sp1_sdk::ProverClient,
-    proving_key: sp1_sdk::SP1ProvingKey,
-    verifying_key: sp1_sdk::SP1VerifyingKey,
 }
 
-impl Client {
+impl Runner {
     /// A new pessimistic proof client
     pub fn new() -> Self {
-        let client = sp1_sdk::ProverClient::new();
-        Self::from_client(client)
+        Self::from_client(sp1_sdk::ProverClient::new())
     }
 
     /// A new pessimistic proof client from a custom generic client
     pub fn from_client(client: sp1_sdk::ProverClient) -> Self {
-        let (proving_key, verifying_key) = client.setup(PESSIMISTIC_PROOF_ELF);
-
-        Self {
-            client,
-            proving_key,
-            verifying_key,
-        }
-    }
-
-    /// Verify given proof
-    pub fn verify(&self, proof: &SP1Proof) -> Result<(), sp1_sdk::SP1VerificationError> {
-        self.client.verify(proof, &self.verifying_key)
-    }
-
-    /// Create a proof for given inputs
-    pub fn prove(
-        &self,
-        state: &LocalNetworkState,
-        cert: &Certificate,
-    ) -> anyhow::Result<(SP1Proof, LeafProofOutput)> {
-        let stdin = Self::prepare_stdin(state, cert);
-        let mut proof = self.client.prove(&self.proving_key, stdin)?;
-        self.verify(&proof)?;
-        let output = proof.public_values.read();
-        Ok((proof, output))
+        Self { client }
     }
 
     /// Convert inputs to stdin
