@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::utils::empty_hash_at_height;
 /// Represents a local exit tree as defined by the LxLy bridge.
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -42,13 +43,7 @@ where
 {
     /// Creates a new empty [`LocalExitTreeData`].
     pub fn new() -> Self {
-        let mut empty_hash_at_height = [H::Digest::default(); TREE_DEPTH];
-        for height in 1..TREE_DEPTH {
-            empty_hash_at_height[height] = H::merge(
-                &empty_hash_at_height[height - 1],
-                &empty_hash_at_height[height - 1],
-            );
-        }
+        let empty_hash_at_height = empty_hash_at_height::<H, TREE_DEPTH>();
         LocalExitTreeData {
             layers: std::array::from_fn(|_| Vec::new()),
             empty_hash_at_height,
@@ -91,6 +86,7 @@ where
         leaf_index
     }
 
+
     /// Get the hash at the given height and index, or the empty hash if the
     /// index is out of bounds.
     pub fn get(&self, height: usize, index: usize) -> H::Digest {
@@ -113,6 +109,7 @@ where
         );
         let mut siblings = [Default::default(); TREE_DEPTH];
         let mut index = leaf_index;
+
         for (height, sibling) in siblings.iter_mut().enumerate().take(TREE_DEPTH) {
             *sibling = self.get(height, index ^ 1);
             index >>= 1;
@@ -165,6 +162,7 @@ where
     H: Hasher,
     H::Digest: Eq + Copy + Default + Serialize + DeserializeOwned,
 {
+  
     /// Returns `true` if and only if the proof is valid for the given leaf,
     /// leaf index, and Merkle root.
     pub fn verify(&self, leaf: H::Digest, leaf_index: usize, root: H::Digest) -> bool {
@@ -181,11 +179,8 @@ where
         if index != 0 {
             return false;
         }
-        if entry != root {
-            return false;
-        }
 
-        true
+        entry == root
     }
 }
 
@@ -199,6 +194,7 @@ mod tests {
 
     const TREE_DEPTH: usize = 32;
     type H = Keccak256Hasher;
+
 
     // TODO: Consider using `rstest`, `proptest`, or `quickcheck` to generate these
     // tests.
