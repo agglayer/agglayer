@@ -1,13 +1,16 @@
 use prover::ProverConfig;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub mod prover;
 
 /// The CertificateOrchestrator configuration.
-#[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub struct CertificateOrchestrator {
-    #[serde(default = "default_input_backpressure_buffer_size_default")]
+    #[serde(
+        alias = "InputBackpressureBufferSize",
+        default = "default_input_backpressure_buffer_size_default"
+    )]
     pub input_backpressure_buffer_size: usize,
 
     #[serde(default = "default_prover_config_default")]

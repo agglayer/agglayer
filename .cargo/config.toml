@@ -1,3 +1,25 @@
 [alias]
 xtask = "run --package xtask --"
 doc-full = "doc --document-private-items --workspace --all-features"
+
+# SP1 profile
+[profile.dev.package.sp1-sdk]
+opt-level = 3
+[profile.dev.package.sp1-core]
+opt-level = 3
+[profile.dev.package.sp1-recursion-compiler]
+opt-level = 3
+[profile.dev.package.sp1-recursion-core]
+opt-level = 3
+
+[profile.test]
+opt-level = 3
+debug-assertions = true
+overflow-checks = true
+
+[profile.codecov]
+inherits = "test"
+rustflags = ["-Cinstrument-coverage"]
+
+[profile.codecov.package."*"]
+rustflags = []
