@@ -29,7 +29,7 @@ serde_with = "3.9.0"
 thiserror = "1.0.58"
 tokio = { version = "1.38.1", features = ["full"] }
 tokio-util = "0.7.11"
-toml = "0.8.15"
+toml = "0.8.16"
 tower = "0.4.13"
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
