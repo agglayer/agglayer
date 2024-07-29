@@ -86,7 +86,9 @@ impl Node {
             }
         };
 
-        let aggregator_task: AggregatorNotifier<_> =
+        let certifier_aggregator_task: AggregatorNotifier<_> =
+            config.certificate_orchestrator.prover.clone().try_into()?;
+        let epoch_packing_aggregator_task: AggregatorNotifier<_> =
             config.certificate_orchestrator.prover.clone().try_into()?;
         let clock_subscription =
             tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
@@ -102,7 +104,8 @@ impl Node {
             .clock(clock_subscription)
             .data_receiver(data_receiver)
             .cancellation_token(cancellation_token.clone())
-            .epoch_packing_task_builder(aggregator_task)
+            .epoch_packing_task_builder(epoch_packing_aggregator_task)
+            .certifier_task_builder(certifier_aggregator_task)
             .start()
             .await?;
 

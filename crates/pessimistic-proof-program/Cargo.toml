@@ -7,7 +7,6 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 pessimistic-proof = { path = "../pessimistic-proof" }
 sp1-zkvm = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.5-testnet" }
-sp1-derive = { git = "https://github.com/succinctlabs/sp1.git", tag = "v1.0.5-testnet" }
 
 [build-dependencies]
 sp1-cli = { git = "https://github.com/succinctlabs/sp1.git", tag = "v1.0.5-testnet" }

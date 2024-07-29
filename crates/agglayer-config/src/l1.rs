@@ -1,19 +1,19 @@
 use ethers::types::Address;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 /// The L1 configuration.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub struct L1 {
-    #[serde(rename = "ChainID")]
+    #[serde(alias = "ChainID")]
     pub chain_id: u64,
-    #[serde(rename = "NodeURL")]
+    #[serde(alias = "NodeURL")]
     pub node_url: Url,
-    #[serde(rename = "RollupManagerContract")]
+    #[serde(alias = "RollupManagerContract")]
     pub rollup_manager_contract: Address,
 }
 
-#[cfg(any(test, feature = "testutils"))]
 impl Default for L1 {
     fn default() -> Self {
         // Values are coming from https://github.com/0xPolygon/agglayer/blob/main/config/default.go#L11

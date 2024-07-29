@@ -3,9 +3,10 @@ use std::time::Duration;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// The Epoch configuration.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub enum Epoch {
+    #[serde(alias = "TimeClock")]
     TimeClock(TimeClockConfig),
 }
 
@@ -15,13 +16,14 @@ impl Default for Epoch {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub struct TimeClockConfig {
     #[serde(
         default = "default_epoch_duration",
         serialize_with = "serialize_duration",
         deserialize_with = "deserialize_duration",
-        rename = "EpochDuration"
+        alias = "EpochDuration"
     )]
     pub epoch_duration: Duration,
 }
@@ -63,12 +65,12 @@ mod tests {
         let epoch = Epoch::TimeClock(TimeClockConfig::default());
         let serialized = serde_json::to_string(&epoch).unwrap();
 
-        assert_eq!(serialized, r#"{"TimeClock":{"EpochDuration":5}}"#);
+        assert_eq!(serialized, r#"{"time-clock":{"epoch-duration":5}}"#);
     }
 
     #[test]
     fn deserialize_epoch() {
-        let config = r#"{"TimeClock":{"EpochDuration":3600}}"#;
+        let config = r#"{"time-clock":{"epoch-duration":3600}}"#;
 
         let expected_duration = Duration::from_secs(3600);
         let epoch: Epoch = serde_json::from_str(config).unwrap();

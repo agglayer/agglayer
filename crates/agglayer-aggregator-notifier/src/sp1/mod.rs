@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use futures::{future::BoxFuture, FutureExt as _};
+use pessimistic_proof::LocalNetworkState;
 use serde::Serialize;
 use sp1_sdk::{
     LocalProver, MockProver, NetworkProver, Prover as _, SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
@@ -32,9 +33,14 @@ impl<I> super::AggregatorProver<I> for SP1<LocalProver>
 where
     I: Serialize,
 {
-    fn prove(&self, to_pack: Vec<I>) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
+    fn prove(
+        &self,
+        initial_state: LocalNetworkState,
+        certificate: I,
+    ) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
         let mut stdin = SP1Stdin::new();
-        stdin.write(&to_pack);
+        stdin.write(&initial_state);
+        stdin.write(&certificate);
 
         let proving_key = self.proving_key.clone();
         let prover = self.prover.clone();
@@ -58,24 +64,19 @@ impl<I> super::AggregatorProver<I> for SP1<NetworkProver>
 where
     I: Serialize,
 {
-    fn prove(&self, to_pack: Vec<I>) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
+    fn prove(
+        &self,
+        initial_state: LocalNetworkState,
+        certificate: I,
+    ) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
         let mut stdin = SP1Stdin::new();
-        stdin.write(&to_pack);
+        stdin.write(&initial_state);
+        stdin.write(&certificate);
 
         let proving_key = self.proving_key.clone();
         let prover = self.prover.clone();
 
-        async move {
-            prover
-                .prove_async(
-                    &proving_key.elf,
-                    stdin,
-                    sp1_sdk::proto::network::ProofMode::Core,
-                )
-                .await
-                .map(Proof::SP1)
-        }
-        .boxed()
+        async move { prover.prove(&proving_key.elf, stdin).await.map(Proof::SP1) }.boxed()
     }
 
     fn verify(&self, proof: &Proof) -> Result<(), anyhow::Error> {
@@ -88,9 +89,14 @@ impl<I> super::AggregatorProver<I> for SP1<MockProver>
 where
     I: Serialize,
 {
-    fn prove(&self, to_pack: Vec<I>) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
+    fn prove(
+        &self,
+        initial_state: LocalNetworkState,
+        certificate: I,
+    ) -> BoxFuture<'_, Result<Proof, anyhow::Error>> {
         let mut stdin = SP1Stdin::new();
-        stdin.write(&to_pack);
+        stdin.write(&initial_state);
+        stdin.write(&certificate);
 
         let proving_key = self.proving_key.clone();
         let prover = self.prover.clone();

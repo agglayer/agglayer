@@ -145,7 +145,8 @@ impl ServerBuilder {
         // configure OpenTelemetry to use the registry
         let exporter = opentelemetry_prometheus::exporter()
             .with_registry(registry.clone())
-            .build()?;
+            .build()
+            .unwrap();
 
         // set up a meter meter to create instruments
         let provider = SdkMeterProvider::builder().with_reader(exporter).build();

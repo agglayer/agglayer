@@ -2,7 +2,11 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_telemetry::KeyValue;
-use ethers::{providers::Middleware, types::H256};
+use ethers::{
+    contract::{ContractError, ContractRevert},
+    providers::Middleware,
+    types::H256,
+};
 use futures::TryFutureExt;
 use jsonrpsee::{
     core::{async_trait, RpcResult},
@@ -139,6 +143,8 @@ where
     #[instrument(skip(self, tx), fields(hash, rollup_id = tx.tx.rollup_id), level = "info")]
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
         let hash = format!("{:?}", tx.hash());
+        tracing::Span::current().record("hash", &hash);
+
         debug!(
             hash,
             "Received transaction {hash} for rollup {}", tx.tx.rollup_id
@@ -174,12 +180,16 @@ where
             self.kernel
                 .verify_proof_eth_call(&tx)
                 .map_err(|e| {
+                    let e = decode_contract_error::<
+                        _,
+                        crate::contracts::polygon_rollup_manager::PolygonRollupManagerErrors,
+                    >(&e);
                     error!(
                         hash,
                         "Failed to dry-run the verify_batches_trusted_aggregator for transaction \
                          {hash}: {e}"
                     );
-                    invalid_params_error(e.to_string())
+                    invalid_params_error(e)
                 })
                 .map_ok(|_| {
                     agglayer_telemetry::EXECUTE.add(1, metrics_attrs);
@@ -258,6 +268,16 @@ where
         }
 
         Ok(())
+    }
+}
+
+fn decode_contract_error<M: Middleware, E: ContractRevert + std::fmt::Debug>(
+    e: &ContractError<M>,
+) -> String {
+    if let Some(err) = e.decode_contract_revert::<E>() {
+        format!("{:?}", err)
+    } else {
+        e.to_string()
     }
 }
 

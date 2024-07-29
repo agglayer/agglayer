@@ -12,7 +12,10 @@ use ethers::{
     types::{Signature, H256, U256},
 };
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
+use serde_json::json;
 
+use crate::contracts::polygon_rollup_manager::FinalNumBatchBelowLastVerifiedBatch;
+use crate::contracts::polygon_rollup_manager::PolygonRollupManagerErrors;
 use crate::contracts::polygon_rollup_manager::{
     RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
 };
@@ -139,6 +142,77 @@ async fn interop_executor_verify_zkp() {
         .unwrap();
 }
 
+#[tokio::test]
+async fn interop_executor_verify_zkp_failure() {
+    let config = Arc::new(Config::default());
+
+    let (provider, mock) = providers::Provider::mocked();
+
+    let l1 = config.l1.clone();
+    let kernel = Kernel::new(provider, config);
+
+    let signed_tx = signed_tx();
+
+    let response = rollup_data(&l1).encode_hex();
+
+    let error = PolygonRollupManagerErrors::FinalNumBatchBelowLastVerifiedBatch(
+        FinalNumBatchBelowLastVerifiedBatch {},
+    )
+    .encode();
+
+    let error = JsonRpcError {
+        code: 3,
+        message: "reverted".into(),
+        data: Some(json!(ethers::utils::hex::encode(error))),
+    };
+    mock.push_response(MockResponse::Error(error));
+    let sequencer_address = Address::random();
+
+    push_response!(mock, to_hex: TrustedSequencerReturn(sequencer_address));
+    push_response!(mock, response);
+
+    let res = kernel.verify_proof_eth_call(&signed_tx).await;
+    assert!(res.is_err());
+
+    if let Err(e) = res {
+        assert!(matches!(
+            e.decode_contract_revert::<PolygonRollupManagerErrors>()
+                .unwrap(),
+            PolygonRollupManagerErrors::FinalNumBatchBelowLastVerifiedBatch(_)
+        ));
+    }
+    let tx_rollup_data = transaction_request!(
+        to: l1.rollup_manager_contract,
+        data: RollupIDToRollupDataCall { rollup_id: 1 }
+    );
+
+    let tx_trusted_sequencer =
+        transaction_request!(to: l1.rollup_manager_contract, data: TrustedSequencerCall {});
+
+    let tx_verify_batch = transaction_request!(
+        to: l1.rollup_manager_contract,
+        data: VerifyBatchesTrustedAggregatorCall {
+            rollup_id: 1,
+            pending_state_num: 0,
+            init_num_batch: signed_tx.tx.last_verified_batch.as_u64(),
+            final_new_batch: signed_tx.tx.new_verified_batch.as_u64(),
+            new_local_exit_root: signed_tx.tx.zkp.new_local_exit_root.to_fixed_bytes(),
+            new_state_root: signed_tx.tx.zkp.new_state_root.to_fixed_bytes(),
+            beneficiary: sequencer_address,
+            proof: signed_tx.tx.zkp.proof.to_fixed_bytes(),
+        }
+    );
+
+    let block = utils::serialize(&(BlockNumber::Latest));
+
+    // Check if the calls are made
+    mock.assert_request("eth_call", [tx_rollup_data, block.clone()])
+        .unwrap();
+    mock.assert_request("eth_call", [tx_trusted_sequencer, block.clone()])
+        .unwrap();
+    mock.assert_request("eth_call", [tx_verify_batch, block])
+        .unwrap();
+}
 /// Test that check if the verify_signature method
 #[tokio::test]
 async fn interop_executor_verify_signature() {
@@ -205,6 +279,60 @@ async fn interop_executor_verify_signature() {
         .unwrap();
     mock.assert_request("eth_call", [tx_trusted_sequencer, block.clone()])
         .unwrap();
+}
+
+/// Test that check if the verify_signature method works with proof signer.
+#[tokio::test]
+async fn interop_executor_verify_signature_proof_signer() {
+    let mut config = Config::default();
+
+    let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
+    let sequencer_address = sequencer_wallet.address();
+
+    config.proof_signers.insert(1, sequencer_address);
+
+    let config = Arc::new(config);
+    let (provider, mock) = providers::Provider::mocked();
+
+    let l1 = config.l1.clone();
+    let kernel = Kernel::new(provider, config);
+
+    let mut signed_tx = signed_tx();
+
+    let response = rollup_data(&l1).encode_hex();
+
+    signed_tx.sign(&sequencer_wallet).unwrap();
+
+    // valid signature with valid sequencer_address
+    {
+        push_response!(mock, response);
+        assert!(kernel.verify_signature(&signed_tx).await.is_ok());
+    }
+
+    let tx_rollup_data = transaction_request!(
+        to: l1.rollup_manager_contract,
+        data: RollupIDToRollupDataCall { rollup_id: 1 }
+    );
+
+    let tx_trusted_sequencer = transaction_request!(
+        to: l1.rollup_manager_contract,
+        data: TrustedSequencerCall {}
+    );
+
+    let block = utils::serialize(&(BlockNumber::Latest));
+
+    // Check if the calls are made
+    assert!(matches!(
+        mock.assert_request("eth_call", [tx_rollup_data, block.clone()])
+            .unwrap_err(),
+        MockError::EmptyRequests
+    ));
+
+    assert!(matches!(
+        mock.assert_request("eth_call", [tx_trusted_sequencer, block.clone()])
+            .unwrap_err(),
+        MockError::EmptyRequests
+    ));
 }
 
 mod interop_executor_execute {
