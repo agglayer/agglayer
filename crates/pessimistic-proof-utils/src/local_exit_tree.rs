@@ -86,7 +86,6 @@ where
         leaf_index
     }
 
-
     /// Get the hash at the given height and index, or the empty hash if the
     /// index is out of bounds.
     pub fn get(&self, height: usize, index: usize) -> H::Digest {
@@ -162,7 +161,6 @@ where
     H: Hasher,
     H::Digest: Eq + Copy + Default + Serialize + DeserializeOwned,
 {
-  
     /// Returns `true` if and only if the proof is valid for the given leaf,
     /// leaf index, and Merkle root.
     pub fn verify(&self, leaf: H::Digest, leaf_index: usize, root: H::Digest) -> bool {
@@ -194,7 +192,6 @@ mod tests {
 
     const TREE_DEPTH: usize = 32;
     type H = Keccak256Hasher;
-
 
     // TODO: Consider using `rstest`, `proptest`, or `quickcheck` to generate these
     // tests.
