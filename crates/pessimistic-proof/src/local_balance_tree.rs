@@ -106,12 +106,4 @@ where
 
         Ok(())
     }
-    // pub fn recompute_root(
-    //     &mut self,
-    //     paths_to_update: Vec<(TokenInfo, LocalBalancePath<H>, U256, U256)>,
-    // ) {
-    //     for (key, path, old_balance, new_balance) in paths_to_update {
-    //         self.verify_and_update(key, path, old_balance, new_balance);
-    //     }
-    // }
 }

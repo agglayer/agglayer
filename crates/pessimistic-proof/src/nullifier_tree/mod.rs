@@ -108,10 +108,4 @@ where
 
         Ok(())
     }
-
-    // pub fn recompute_root(&mut self, paths_to_update: Vec<(NullifierKey, NullifierPath<H>)>) {
-    //     for (key, path) in paths_to_update {
-    //         self.verify_and_update(key, path);
-    //     }
-    // }
 }
