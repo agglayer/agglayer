@@ -20,3 +20,5 @@ tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "pa
 hex = "0.4.3"
 lazy_static.workspace = true
 rs_merkle = { version = "1.4", default-features = false }
+rand = "0.8.5"
+sp1-sdk = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.5-testnet" }

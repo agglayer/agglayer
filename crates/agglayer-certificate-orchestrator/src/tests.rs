@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, task::Poll};
 
 use futures_util::{future::BoxFuture, poll};
-use pessimistic_proof::{LocalNetworkState, NetworkId};
+use pessimistic_proof::{bridge_exit::NetworkId, LocalNetworkState};
 use tokio::sync::{broadcast, mpsc};
 use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 use tokio_util::sync::CancellationToken;

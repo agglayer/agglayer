@@ -1,9 +1,12 @@
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
 pub mod hasher;
 use hasher::Hasher;
 
+use crate::local_exit_tree::data::LocalExitTreeData;
+
+pub mod data;
 #[cfg(test)]
 mod tests;
 
@@ -117,4 +120,30 @@ where
 /// Returns the bit value at index `bit_idx` in `target`
 fn get_bit_at(target: u32, bit_idx: usize) -> u32 {
     (target >> bit_idx) & 1
+}
+
+impl<H, const TREE_DEPTH: usize> From<&LocalExitTreeData<H, TREE_DEPTH>>
+    for LocalExitTree<H, TREE_DEPTH>
+where
+    H: Hasher,
+    H::Digest: Copy + Default + Serialize + DeserializeOwned,
+{
+    fn from(data: &LocalExitTreeData<H, TREE_DEPTH>) -> Self {
+        let leaf_count = data.layers[0].len();
+        let mut frontier = [H::Digest::default(); TREE_DEPTH];
+        let mut index = leaf_count;
+        let mut height = 0;
+        while index != 0 {
+            if index & 1 == 1 {
+                frontier[height] = data.layers[height][index ^ 1];
+            }
+            height += 1;
+            index >>= 1;
+        }
+
+        LocalExitTree::from_parts(
+            leaf_count.try_into().expect("usize expected to be at least 32 bits"),
+            frontier,
+        )
+    }
 }

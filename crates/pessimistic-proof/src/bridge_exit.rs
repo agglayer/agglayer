@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 use std::ops::Deref;
 
 use reth_primitives::{revm_primitives::bitvec::view::BitViewSized, Address, U256};
@@ -24,15 +25,22 @@ impl TokenInfo {
     }
 }
 
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub enum LeafType {
+    Transfer = 0,
+    Message = 1,
+}
+
 /// Represents a token bridge exit from the network.
+// TODO: Change it to an enum depending on `leaf_type`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BridgeExit {
-    pub leaf_type: u8,
+    pub leaf_type: LeafType,
 
     /// Unique ID for the token being transferred.
     pub token_info: TokenInfo,
 
-    /// Network which the token is transfered to
+    /// Network which the token is transferred to
     pub dest_network: NetworkId,
     /// Address which will own the received token
     pub dest_address: Address,
@@ -46,7 +54,7 @@ pub struct BridgeExit {
 impl BridgeExit {
     /// Creates a new [`BridgeExit`].
     pub fn new(
-        leaf_type: u8,
+        leaf_type: LeafType,
         origin_network: NetworkId,
         origin_token_address: Address,
         dest_network: NetworkId,
@@ -70,7 +78,7 @@ impl BridgeExit {
     /// Hashes the [`BridgeExit`] to be inserted in a [`crate::local_exit_tree::LocalExitTree`].
     pub fn hash(&self) -> KeccakDigest {
         keccak256_combine([
-            self.leaf_type.as_raw_slice(),
+            (self.leaf_type as u8).as_raw_slice(),
             &u32::to_be_bytes(self.token_info.origin_network.into()),
             self.token_info.origin_token_address.as_slice(),
             &u32::to_be_bytes(self.dest_network.into()),
@@ -120,7 +128,7 @@ mod tests {
     #[test]
     fn test_deposit_hash() {
         let mut deposit = BridgeExit::new(
-            0,
+            LeafType::Transfer,
             0.into(),
             Address::default(),
             1.into(),
