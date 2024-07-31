@@ -8,7 +8,7 @@ use std::{
 
 use agglayer_clock::Event;
 use futures_util::{future::BoxFuture, Stream, StreamExt};
-use pessimistic_proof::{certificate::Certificate, LocalNetworkState, NetworkId, ProofError};
+use pessimistic_proof::{bridge_exit::NetworkId, LocalNetworkState, ProofError};
 use tokio::{
     sync::mpsc::Receiver,
     task::{JoinHandle, JoinSet},
@@ -113,7 +113,7 @@ where
     /// # use tokio_util::sync::CancellationToken;
     /// # use futures_util::future::BoxFuture;
     /// # use tokio_stream::StreamExt;
-    /// # use pessimistic_proof::NetworkId;
+    /// # use pessimistic_proof::bridge_exit::NetworkId;
     /// # use pessimistic_proof::LocalNetworkState;
     ///
     /// # #[derive(Clone)]
@@ -356,7 +356,7 @@ pub trait CertificateInput: Clone {
     fn network_id(&self) -> NetworkId;
 }
 
-impl CertificateInput for Certificate {
+impl CertificateInput for MultiBatchHeader<Keccak256Hasher> {
     fn network_id(&self) -> NetworkId {
         self.origin_network
     }
@@ -382,13 +382,16 @@ pub trait Certifier: Clone + Unpin + Send + Sync + 'static {
     ) -> CertifierResult<Self::Proof>;
 }
 
+use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof::multi_batch_header::MultiBatchHeader;
 use thiserror::Error;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("proof verification failed")]
     ProofVerificationFailed,
     #[error("prover execution failed: {0}")]
     ProverExecutionFailed(#[from] anyhow::Error),
-    #[error("native execution failed: {0}")]
+    #[error("native execution failed: {0:?}")]
     NativeExecutionFailed(#[from] ProofError),
 }

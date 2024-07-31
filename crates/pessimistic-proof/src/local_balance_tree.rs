@@ -1,192 +1,109 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    ops::{Deref, DerefMut},
-};
+use std::hash::Hash;
 
 use reth_primitives::U256;
-use serde::{Deserialize, Serialize};
-use tiny_keccak::{Hasher, Keccak};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_with::serde_as;
 
 use crate::{
-    bridge_exit::{NetworkId, TokenInfo},
-    keccak::Digest,
-    BridgeExit,
+    bridge_exit::TokenInfo,
+    local_exit_tree::hasher::Hasher,
+    utils::smt::{SmtMerkleProof, ToBits},
+    ProofError,
 };
 
-/// Records all the deposits and bridge exits for each network.
-///
-/// Specifically, this records a map `network => (token_id => (deposit, withdraw))`: for each
-/// network, the amounts withdrawn and deposited for every token are recorded.
-///
-/// Note: a "deposit" is the counterpart of a [`BridgeExit`]; a "bridge exit" from the source
-/// network is a "deposit" in the destination network.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct BalanceTreeByNetwork(BTreeMap<NetworkId, BalanceTree>);
+/// The key is [`TokenInfo`] which can be packed into 192 bits (32 for network id and 160 for token address).
+pub const LOCAL_BALANCE_TREE_DEPTH: usize = 192;
 
-impl BalanceTreeByNetwork {
-    /// Creates a new empty [`BalanceTreeByNetwork`].
+// TODO: This is basically the same as the nullifier tree, consider refactoring
+/// A commitment to the set of per-network nullifier sets maintained by the local network
+#[serde_as]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LocalBalanceTree<H>
+where
+    H: Hasher,
+    H::Digest: Serialize + DeserializeOwned,
+{
+    /// The Merkle Root of the nullifier set
+    #[serde_as(as = "_")]
+    pub root: H::Digest,
+    /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
+    /// `i`.
+    #[serde_as(as = "[_; LOCAL_BALANCE_TREE_DEPTH]")]
+    empty_hash_at_height: [H::Digest; LOCAL_BALANCE_TREE_DEPTH],
+}
+
+pub type LocalBalancePath<H> = SmtMerkleProof<H, LOCAL_BALANCE_TREE_DEPTH>;
+
+impl ToBits<192> for TokenInfo {
+    fn to_bits(&self) -> [bool; 192] {
+        let address_bytes = self.origin_token_address.0;
+        std::array::from_fn(|i| {
+            if i < 32 {
+                (*self.origin_network >> i) & 1 == 1
+            } else {
+                ((address_bytes[(i - 32) / 8]) >> (i % 8)) & 1 == 1
+            }
+        })
+    }
+}
+
+pub trait FromU256 {
+    fn from_u256(u: U256) -> Self;
+}
+
+impl<H> Default for LocalBalanceTree<H>
+where
+    H: Hasher,
+    H::Digest: Copy + Eq + Hash + Default + Serialize + for<'a> Deserialize<'a> + FromU256,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl<H> LocalBalanceTree<H>
+where
+    H: Hasher,
+    H::Digest: Copy + Eq + Hash + Default + Serialize + for<'a> Deserialize<'a> + FromU256,
+{
     pub fn new() -> Self {
-        Self(BTreeMap::new())
-    }
-
-    /// Updates the origin and destination network in the aggregate from a [`BridgeExit`].
-    pub fn insert(&mut self, origin_network: NetworkId, bridge_exit: BridgeExit) {
-        // Withdraw the origin network
-        self.0
-            .entry(origin_network)
-            .or_default()
-            .withdraw(bridge_exit.token_info, bridge_exit.amount);
-
-        // Deposit the destination network
-        self.0
-            .entry(bridge_exit.dest_network)
-            .or_default()
-            .deposit(bridge_exit.token_info, bridge_exit.amount);
-    }
-
-    /// Merge two [`BalanceTreeByNetwork`].
-    pub fn merge(&mut self, other: &BalanceTreeByNetwork) {
-        for (network, balance_tree) in other.0.iter() {
-            self.0
-                .entry(*network)
-                .and_modify(|bt| bt.merge(balance_tree))
-                .or_insert(balance_tree.clone());
+        let mut empty_hash_at_height = [H::Digest::default(); LOCAL_BALANCE_TREE_DEPTH];
+        for height in 1..LOCAL_BALANCE_TREE_DEPTH {
+            empty_hash_at_height[height] =
+                H::merge(&empty_hash_at_height[height - 1], &empty_hash_at_height[height - 1]);
         }
-    }
-}
-
-/// Merge a set of [`BalanceTreeByNetwork`].
-pub fn merge_balance_trees(
-    balance_trees: &HashMap<NetworkId, BalanceTreeByNetwork>,
-) -> BalanceTreeByNetwork {
-    let mut merged_balance_trees = BalanceTreeByNetwork::new();
-
-    for balance_tree in balance_trees.values() {
-        merged_balance_trees.merge(balance_tree);
-    }
-
-    merged_balance_trees
-}
-
-impl From<BTreeMap<NetworkId, BalanceTree>> for BalanceTreeByNetwork {
-    fn from(value: BTreeMap<NetworkId, BalanceTree>) -> Self {
-        Self(value)
-    }
-}
-
-impl Deref for BalanceTreeByNetwork {
-    type Target = BTreeMap<NetworkId, BalanceTree>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for BalanceTreeByNetwork {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// Record the balance as total deposit and total withdraw.
-#[derive(Default, Clone, Serialize, Deserialize, Debug)]
-pub struct Balance {
-    deposit: U256,
-    withdraw: U256,
-}
-
-pub struct Deposit(pub U256);
-pub struct Withdraw(pub U256);
-
-impl From<Deposit> for Balance {
-    fn from(v: Deposit) -> Self {
-        Self {
-            deposit: v.0,
-            withdraw: U256::ZERO,
-        }
-    }
-}
-
-impl From<Withdraw> for Balance {
-    fn from(v: Withdraw) -> Self {
-        Self {
-            deposit: U256::ZERO,
-            withdraw: v.0,
-        }
-    }
-}
-
-impl Balance {
-    pub fn is_negative(&self) -> bool {
-        self.withdraw > self.deposit
-    }
-
-    pub fn deposit(&mut self, amount: U256) {
-        self.deposit += amount;
-    }
-
-    pub fn withdraw(&mut self, amount: U256) {
-        self.withdraw += amount;
-    }
-
-    pub fn hash(&self) -> Digest {
-        let mut hasher = Keccak::v256();
-
-        hasher.update(&self.deposit.to_be_bytes::<32>());
-        hasher.update(&self.withdraw.to_be_bytes::<32>());
-
-        let mut output = [0u8; 32];
-        hasher.finalize(&mut output);
-        output
-    }
-}
-
-/// Records the balances for each [`TokenInfo`].
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct BalanceTree(BTreeMap<TokenInfo, Balance>);
-
-impl From<BTreeMap<TokenInfo, Balance>> for BalanceTree {
-    fn from(initial_balance: BTreeMap<TokenInfo, Balance>) -> Self {
-        Self(initial_balance)
-    }
-}
-
-impl BalanceTree {
-    /// Apply deposit to the given [`TokenInfo`].
-    pub fn deposit(&mut self, token: TokenInfo, amount: U256) {
-        self.0.entry(token).or_default().deposit(amount);
-    }
-
-    /// Apply withdraw to the given [`TokenInfo`].
-    pub fn withdraw(&mut self, token: TokenInfo, amount: U256) {
-        self.0.entry(token).or_default().withdraw(amount);
-    }
-
-    /// Merge with another [`BalanceTree`].
-    pub fn merge(&mut self, other: &BalanceTree) {
-        for (token, balance) in other.0.iter() {
-            self.deposit(*token, balance.deposit);
-            self.withdraw(*token, balance.withdraw)
+        let root = H::merge(
+            &empty_hash_at_height[LOCAL_BALANCE_TREE_DEPTH - 1],
+            &empty_hash_at_height[LOCAL_BALANCE_TREE_DEPTH - 1],
+        );
+        LocalBalanceTree {
+            root,
+            empty_hash_at_height,
         }
     }
 
-    /// Returns whether any token has debt.
-    /// TODO: We may want to return the debtor (token, debt)
-    pub fn has_debt(&self) -> bool {
-        self.0.iter().any(|(_, balance)| balance.is_negative())
+    pub fn new_with_root(root: H::Digest) -> Self {
+        let mut res = Self::new();
+        res.root = root;
+        res
     }
 
-    /// Returns the hash of [`BalanceTree`].
-    pub fn hash(&self) -> Digest {
-        let mut hasher = Keccak::v256();
+    // TODO: Consider batching the updates per network for efficiency
+    pub fn verify_and_update(
+        &mut self,
+        key: TokenInfo,
+        path_to_update: &LocalBalancePath<H>,
+        old_balance: U256,
+        new_balance: U256,
+    ) -> Result<(), ProofError> {
+        self.root = path_to_update
+            .verify_and_update(
+                key,
+                H::Digest::from_u256(old_balance),
+                H::Digest::from_u256(new_balance),
+                self.root,
+            )
+            .ok_or(ProofError::InvalidBalancePath)?;
 
-        for (token_info, balance) in self.0.iter() {
-            hasher.update(&token_info.hash());
-            hasher.update(&balance.hash());
-        }
-
-        let mut output = [0u8; 32];
-        hasher.finalize(&mut output);
-        output
+        Ok(())
     }
 }

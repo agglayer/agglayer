@@ -8,7 +8,9 @@ use agglayer_certificate_orchestrator::{
 use agglayer_config::certificate_orchestrator::prover::ProverConfig;
 use error::NotifierError;
 use futures::future::BoxFuture;
-use pessimistic_proof::{certificate::Certificate, LocalNetworkState};
+use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof::multi_batch_header::MultiBatchHeader;
+use pessimistic_proof::LocalNetworkState;
 use proof::Proof;
 use serde::Serialize;
 use sp1::SP1;
@@ -65,20 +67,21 @@ where
     }
 }
 
-impl Certifier for AggregatorNotifier<Certificate> {
-    type Input = Certificate;
+impl Certifier for AggregatorNotifier<MultiBatchHeader<Keccak256Hasher>> {
+    type Input = MultiBatchHeader<Keccak256Hasher>;
     type Proof = Proof;
 
     fn certify(
         &self,
         local_state: LocalNetworkState,
-        certificate: Certificate,
+        batch_header: MultiBatchHeader<Keccak256Hasher>,
     ) -> Result<BoxFuture<Result<CertifierOutput<Self::Proof>, Error>>, Error> {
-        let proving_request = self.prover.prove(local_state.clone(), certificate.clone());
+        let proving_request = self.prover.prove(local_state.clone(), batch_header.clone());
 
         let mut state = local_state.clone();
+        #[allow(clippy::let_unit_value)]
         let _native_outputs = state
-            .apply_certificate(&certificate)
+            .apply_batch_header(&batch_header)
             .map_err(Error::NativeExecutionFailed)?;
 
         Ok(Box::pin(async move {
@@ -97,7 +100,7 @@ impl Certifier for AggregatorNotifier<Certificate> {
                 Ok(CertifierOutput {
                     proof,
                     new_state: state,
-                    network: certificate.network_id(),
+                    network: batch_header.network_id(),
                 })
             }
         }))

@@ -5,7 +5,7 @@ use reth_primitives::U256;
 use serde::{Deserialize, Deserializer};
 use serde_json::Number;
 
-use crate::{BridgeExit, TokenInfo};
+use crate::bridge_exit::{BridgeExit, LeafType, TokenInfo};
 
 pub fn parse_json_file<T>(json_file_path: &str) -> T
 where
@@ -47,7 +47,7 @@ pub enum EventData {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DepositEventData {
-    pub leaf_type: u8,
+    pub leaf_type: LeafType,
     pub origin_network: u32,
     pub origin_address: String,
     pub destination_network: u32,

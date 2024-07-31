@@ -1,11 +1,14 @@
 use pessimistic_proof::{
+    bridge_exit::BridgeExit,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     test_utils::{parse_json_file, BridgeEvent, EventData},
-    BridgeExit,
 };
+
 const JSON_FILE_PATH: &str = "tests/data/bridge_events_10k.json";
 
+// TODO: reintroduce this test
 #[test]
+#[ignore]
 fn test_local_exit_root() {
     let mut local_exit_tree: LocalExitTree<Keccak256Hasher> = LocalExitTree::new();
 

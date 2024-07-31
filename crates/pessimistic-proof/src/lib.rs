@@ -6,11 +6,14 @@ pub use proof::{generate_leaf_proof, LeafProofOutput, ProofError};
 
 pub mod test_utils;
 
-pub mod certificate;
 pub mod local_balance_tree;
 
-mod bridge_exit;
-pub use bridge_exit::{BridgeExit, NetworkId, TokenInfo};
+pub mod bridge_exit;
 
+pub mod imported_bridge_exit;
 pub mod local_state;
+pub mod multi_batch_header;
+pub mod nullifier_tree;
+pub mod utils;
+
 pub use local_state::LocalNetworkState;
