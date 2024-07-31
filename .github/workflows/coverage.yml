@@ -1,0 +1,86 @@
+name: Coverage
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: SonarCloud and Linter
+    runs-on: ubuntu-latest-16-cores
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2024-07-15
+          components: clippy rustfmt llvm-tools-preview
+
+      - name: Install SP1UP
+        run: curl -L https://sp1.succinct.xyz | bash
+
+      - name: Install SP1 toolchain
+        run: /home/runner/.sp1/bin/sp1up
+        shell: bash
+
+      - name: Install Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - uses: taiki-e/install-action@grcov
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+            cache-on-failure: true
+
+      - name: Install cargo-sonar and run Clippy
+        run: |
+            cargo install cargo-sonar
+            cargo clippy --all-features --all-targets --message-format=json > clippy.json
+            cargo sonar --clippy
+
+      - name: Build with coverage
+        env:
+          RUST_LOG: info
+          LLVM_PROFILE_FILE: "llvm_profile-instrumentation-%p-%m.profraw"
+        run: cargo nextest run --workspace --nocapture -F coverage --cargo-profile codecov -Z profile-rustflags
+
+      - name: Run grcov
+        run: |
+          grcov . --binary-path target/codecov/ -s . \
+            -t lcov \
+            --branch \
+            --ignore-not-existing \
+            --ignore '../**' \
+            --ignore '/*' \
+            -o coverage.lcov
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.externalIssuesReportPaths=sonar-issues.json
+            -Dsonar.scm.revision=${{ github.event.pull_request.head.sha }}
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          verbose: true

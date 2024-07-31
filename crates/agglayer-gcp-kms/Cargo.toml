@@ -1,0 +1,16 @@
+[package]
+name = "agglayer-gcp-kms"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ethers-gcp-kms-signer.workspace = true
+ethers.workspace = true
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+
+agglayer-config = { path = "../agglayer-config" }
+
+[features]
+default = []
+testutils = []

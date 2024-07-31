@@ -1,0 +1,34 @@
+[FullNodeRPCs]
+1 = "http://zkevm-node:8123"
+
+[RPC]
+Host = "0.0.0.0"
+Port = 9090
+
+[Log]
+Level = "info"
+Outputs = ["stderr"]
+
+[L1]
+ChainID = 1337
+NodeURL = "https://rpc-cdk-validium-cardona-03-zkevm.polygondev.tools"
+RollupManagerContract = "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff"
+
+[auth.local]
+PrivateKeys = [{ Path = "/pk/agglayer.keystore", Password = "testonly" }]
+
+[auth.gcpkms]
+ProjectId = ""
+Location = ""
+Keyring = ""
+KeyName = ""
+
+[Telemetry]
+
+[outbound.rpc.settle]
+max_retries = 10
+retry_interval = 1
+confirmations = 3
+
+[shutdown]
+runtime_timeout = 5

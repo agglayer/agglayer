@@ -1,0 +1,12 @@
+[package]
+name = "pessimistic-proof-program"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+pessimistic-proof = { path = "../pessimistic-proof" }
+sp1-zkvm = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.5-testnet" }
+
+[build-dependencies]
+sp1-cli = { git = "https://github.com/succinctlabs/sp1.git", tag = "v1.0.5-testnet" }

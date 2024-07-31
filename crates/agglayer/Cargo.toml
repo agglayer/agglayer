@@ -1,0 +1,17 @@
+[package]
+name = "agglayer"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive", "env"] }
+dotenvy.workspace = true
+toml.workspace = true
+
+agglayer-node = { path = "../agglayer-node" }
+agglayer-config = { path = "../agglayer-config" }
+
+[dev-dependencies]
+assert_cmd = "2.0.14"
+insta = { version = "1.39.0", features = ["toml", "yaml"] }

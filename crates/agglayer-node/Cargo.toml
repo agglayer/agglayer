@@ -1,0 +1,44 @@
+[package]
+name = "agglayer-node"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+buildstructor.workspace = true
+ethers.workspace = true
+futures.workspace = true
+hex.workspace = true
+hyper = "1.4.1"
+jsonrpsee = { workspace = true, features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_with.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-util.workspace = true
+tokio-stream = "0.1.15"
+toml.workspace = true
+tower-http = { version = "0.5.2", features = ["full"] }
+tower.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
+tracing.workspace = true
+
+agglayer-config = { path = "../agglayer-config" }
+agglayer-clock = { path = "../agglayer-clock" }
+agglayer-telemetry = { path = "../agglayer-telemetry" }
+agglayer-signer = { path = "../agglayer-signer" }
+agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
+pessimistic-proof = { path = "../pessimistic-proof" }
+agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
+
+[dev-dependencies]
+jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.23.2" }
+serde_json = "1.0.120"
+agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
+hyper-util = { version = "0.1.6", features = ["client"] }
+http-body-util = "0.1.2"
+
+[features]
+default = ["sp1"]
+sp1 = []

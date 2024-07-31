@@ -1,0 +1,26 @@
+[package]
+name = "agglayer-aggregator-notifier"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
+agglayer-config = { path = "../agglayer-config" }
+pessimistic-proof = { path = "../pessimistic-proof" }
+
+sp1-sdk.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+
+[features]
+coverage = []
+sp1 = []
+testutils = []

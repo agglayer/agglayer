@@ -1,0 +1,16 @@
+[package]
+name = "agglayer-signer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait.workspace = true
+ethers.workspace = true
+thiserror.workspace = true
+
+agglayer-config = { path = "../agglayer-config" }
+agglayer-gcp-kms = { path = "../agglayer-gcp-kms" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+rstest.workspace = true

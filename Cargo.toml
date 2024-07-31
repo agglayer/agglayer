@@ -1,0 +1,53 @@
+[workspace]
+resolver = "2"
+default-members = ["crates/agglayer"]
+members = ["crates/*", "xtask"]
+exclude = ["crates/pessimistic-proof-program"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+anyhow = "1.0.81"
+async-trait = "0.1.81"
+buildstructor = "0.5.4"
+clap = { version = "4.5.8", features = ["derive", "env"] }
+dotenvy = "0.15.7"
+ethers = "2.0.14"
+ethers-gcp-kms-signer = "0.1.5"
+fail = "0.5.1"
+futures = "0.3.30"
+hex = "0.4.3"
+jsonrpsee = { version = "0.24.0", features = ["full"] }
+lazy_static = "1.5.0"
+rstest = "0.21.0"
+serde = { version = "1.0.204", features = ["derive"] }
+serde_json = "1.0.120"
+serde_with = "3.9.0"
+thiserror = "1.0.58"
+tokio = { version = "1.38.1", features = ["full"] }
+tokio-util = "0.7.11"
+toml = "0.8.15"
+tower = "0.4.13"
+tracing = "0.1.40"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+url = { version = "2.5.2", features = ["serde"] }
+
+sp1-core = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
+sp1-precompiles = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
+sp1-recursion-compiler = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
+sp1-recursion-core = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
+sp1-sdk = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
+
+# A hack to make the resolver pull in the correct sp1 branch when processing the reth and revm deps.
+# This is intended to be a temporary hotfix while the dependency issue in the upstream packages is
+# being fixed.
+#
+# Note the doubled up '/' character. It is present to make Cargo treat the target git repository as
+# being distinct from the source. That is to work around the current limitation in Cargo where
+# patches differing solely in git branch/tag are not allowed. This may stop working in the future.
+[patch.'https://github.com/succinctlabs/sp1']
+sp1-precompiles = { git = "https://github.com/succinctlabs//sp1", tag = "v1.0.8-testnet" }

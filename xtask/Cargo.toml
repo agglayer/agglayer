@@ -1,0 +1,12 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+cargo_metadata = "0.18.1"
+clap.workspace = true
+nu-ansi-term = "0.50.0"
+which = "6.0.1"
