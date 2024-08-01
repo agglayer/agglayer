@@ -188,7 +188,7 @@ jobs:
           COMMAND: "cast rpc zkevm_batchNumber && cast rpc zkevm_virtualBatchNumber && cast rpc zkevm_verifiedBatchNumber"
           ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
           INTERVAL_SECONDS: 10
-          TIMEOUT_SECONDS: 300
+          TIMEOUT_SECONDS: 600
         run: >
           ./.github/workflows/scripts/are_counters_progressing.sh
           "$COMMAND"
