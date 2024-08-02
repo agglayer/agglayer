@@ -1,34 +1,34 @@
-use pessimistic_proof::{BridgeExit, NetworkId};
-use pessimistic_proof_client::{Certificate, LocalNetworkState, Runner};
+use pessimistic_proof::bridge_exit::BridgeExit;
 use tracing::{debug, info};
 
-mod data;
+mod test_utils;
+
+use test_utils::{forest::Forest, runner::Runner, sample_data as data};
 
 #[rstest::rstest]
-#[case::empty(data::empty_state(), std::iter::empty())]
+#[case::empty(Forest::new([]), std::iter::empty())]
 #[case::s01_n000(data::sample_state_01(), std::iter::empty())]
 #[case::s01_n001(data::sample_state_01(), data::sample_bridge_exits_01().take(1))]
 #[case::s01_n002(data::sample_state_01(), data::sample_bridge_exits_01().take(2))]
 #[case::s01_n020(data::sample_state_01(), data::sample_bridge_exits_01().take(20))]
 #[case::s01_n100(data::sample_state_01(), data::sample_bridge_exits_01().take(100))]
 #[case::s01_full(data::sample_state_01(), data::sample_bridge_exits_01())]
+#[ignore = "Too expensive to run by default"]
 fn cycles_on_sample_inputs(
-    #[case] state: LocalNetworkState,
+    #[case] mut state: Forest,
     #[case] bridge_exits: impl Iterator<Item = BridgeExit>,
 ) {
     sp1_sdk::utils::setup_logger();
 
-    let origin_network = NetworkId::from(0);
-    let exit_root = state.exit_tree.get_root();
-    let bridge_exits: Vec<_> = bridge_exits.collect();
-    let n_exits = bridge_exits.len();
+    let withdrawals = bridge_exits.map(|be| (be.token_info, be.amount)).collect::<Vec<_>>();
+    let n_exits = withdrawals.len();
 
-    let certificate = Certificate::new(origin_network, exit_root, bridge_exits);
+    let old_state = state.local_state();
+    let batch_header = state.apply_events(&[], &withdrawals);
 
-    let (roots, stats) = Runner::new()
-        .execute(&state, &certificate)
-        .expect("execution failed");
+    let (new_roots, stats) =
+        Runner::new().execute(&old_state, &batch_header).expect("execution failed");
 
-    debug!("result: {roots:?}");
+    debug!("result: {new_roots:?}");
     info!("execution summary: n={n_exits}, {stats}");
 }

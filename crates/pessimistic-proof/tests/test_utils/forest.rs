@@ -5,7 +5,7 @@ use pessimistic_proof::{
     imported_bridge_exit::ImportedBridgeExit,
     keccak::Digest,
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
-    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher},
+    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{FromBool, NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
     utils::smt::Smt,
@@ -19,7 +19,7 @@ use super::sample_data::{NETWORK_A, NETWORK_B};
 /// Trees for the network B, as well as the LET for network A.
 pub struct Forest {
     pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
-    pub local_exit_tree_data: LocalExitTreeData<Keccak256Hasher>,
+    pub local_exit_tree: LocalExitTree<Keccak256Hasher>,
     pub local_balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
     pub nullifier_set: Smt<Keccak256Hasher, NULLIFIER_TREE_DEPTH>,
 }
@@ -27,6 +27,14 @@ pub struct Forest {
 impl Forest {
     /// Create a new forest based on given initial balances.
     pub fn new(initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>) -> Self {
+        Self::new_with_local_exit_tree(initial_balances, LocalExitTree::new())
+    }
+
+    /// Override the local exit tree for network B
+    pub fn new_with_local_exit_tree(
+        initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>,
+        local_exit_tree: LocalExitTree<Keccak256Hasher>,
+    ) -> Self {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {
             local_balance_tree.insert(token, balance.to_be_bytes()).unwrap();
@@ -34,7 +42,7 @@ impl Forest {
 
         Self {
             local_exit_tree_data_a: LocalExitTreeData::new(),
-            local_exit_tree_data: LocalExitTreeData::new(),
+            local_exit_tree,
             local_balance_tree,
             nullifier_set: Smt::new(),
         }
@@ -80,7 +88,7 @@ impl Forest {
         let mut res = Vec::new();
         for (token, amount) in events {
             let exit = exit_to_a(*token, *amount);
-            self.local_exit_tree_data.add_leaf(exit.hash());
+            self.local_exit_tree.add_leaf(exit.hash());
             res.push(exit);
         }
 
@@ -133,7 +141,7 @@ impl Forest {
     /// Local state associated with this forest.
     pub fn local_state(&self) -> LocalNetworkState {
         LocalNetworkState {
-            exit_tree: (&self.local_exit_tree_data).into(),
+            exit_tree: self.local_exit_tree.clone(),
             balance_tree: LocalBalanceTree::new_with_root(self.local_balance_tree.root),
             nullifier_set: NullifierTree::new_with_root(self.nullifier_set.root),
         }
@@ -145,7 +153,7 @@ impl Forest {
         imported_bridge_events: &[(TokenInfo, U256)],
         bridge_events: &[(TokenInfo, U256)],
     ) -> MultiBatchHeader<Keccak256Hasher> {
-        let prev_local_exit_root = self.local_exit_tree_data.get_root();
+        let prev_local_exit_root = self.local_exit_tree.get_root();
         let prev_balance_root = self.local_balance_tree.root;
         let prev_nullifier_root = self.nullifier_set.root;
         let balances_proofs = self.balances_proofs(imported_bridge_events, bridge_events);
@@ -154,7 +162,7 @@ impl Forest {
         MultiBatchHeader {
             origin_network: *NETWORK_B,
             prev_local_exit_root,
-            new_local_exit_root: self.local_exit_tree_data.get_root(),
+            new_local_exit_root: self.local_exit_tree.get_root(),
             bridge_exits,
             imported_bridge_exits,
             imported_exits_root: None,

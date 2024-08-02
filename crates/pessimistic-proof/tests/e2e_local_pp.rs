@@ -56,11 +56,11 @@ fn e2e_local_pp_random() {
     let target = u(u64::MAX);
     let upper = u64::MAX / 10;
     let mut forest = Forest::new(vec![(*USDC, target), (*ETH, target)]);
-    let prev_local_exit_root = forest.local_exit_tree_data.get_root();
+    let prev_local_exit_root = forest.local_exit_tree.get_root();
     let prev_balance_root = forest.local_balance_tree.root;
     let prev_nullifier_root = forest.nullifier_set.root;
     let mut local_state = LocalNetworkState {
-        exit_tree: (&forest.local_exit_tree_data).into(),
+        exit_tree: forest.local_exit_tree.clone(),
         balance_tree: LocalBalanceTree::new_with_root(prev_balance_root),
         nullifier_set: NullifierTree::new_with_root(prev_nullifier_root),
     };
@@ -95,7 +95,7 @@ fn e2e_local_pp_random() {
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
-        new_local_exit_root: forest.local_exit_tree_data.get_root(),
+        new_local_exit_root: forest.local_exit_tree.get_root(),
         bridge_exits,
         imported_bridge_exits,
         imported_exits_root: None,
@@ -118,11 +118,11 @@ fn test_sp1_simple() {
     utils::setup_logger();
 
     let mut forest = Forest::new(vec![(*USDC, u(100)), (*ETH, u(200))]);
-    let prev_local_exit_root = forest.local_exit_tree_data.get_root();
+    let prev_local_exit_root = forest.local_exit_tree.get_root();
     let prev_balance_root = forest.local_balance_tree.root;
     let prev_nullifier_root = forest.nullifier_set.root;
     let local_state = LocalNetworkState {
-        exit_tree: (&forest.local_exit_tree_data).into(),
+        exit_tree: forest.local_exit_tree.clone(),
         balance_tree: LocalBalanceTree::new_with_root(prev_balance_root),
         nullifier_set: NullifierTree::new_with_root(prev_nullifier_root),
     };
@@ -134,7 +134,7 @@ fn test_sp1_simple() {
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
-        new_local_exit_root: forest.local_exit_tree_data.get_root(),
+        new_local_exit_root: forest.local_exit_tree.get_root(),
         bridge_exits,
         imported_bridge_exits,
         imported_exits_root: None,

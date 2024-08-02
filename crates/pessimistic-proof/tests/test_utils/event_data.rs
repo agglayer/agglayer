@@ -47,7 +47,7 @@ pub enum EventData {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DepositEventData {
-    pub leaf_type: LeafType,
+    pub leaf_type: u8,
     pub origin_network: u32,
     pub origin_address: String,
     pub destination_network: u32,
@@ -61,7 +61,7 @@ pub struct DepositEventData {
 impl From<DepositEventData> for BridgeExit {
     fn from(deposit_event_data: DepositEventData) -> Self {
         Self {
-            leaf_type: deposit_event_data.leaf_type,
+            leaf_type: LeafType::from_u8(deposit_event_data.leaf_type).unwrap(),
             token_info: TokenInfo {
                 origin_network: deposit_event_data.origin_network.into(),
                 origin_token_address: deposit_event_data.origin_address.parse().unwrap(),

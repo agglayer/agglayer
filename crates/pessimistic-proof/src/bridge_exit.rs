@@ -31,6 +31,16 @@ pub enum LeafType {
     Message = 1,
 }
 
+impl LeafType {
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::Transfer),
+            1 => Some(Self::Message),
+            _ => None,
+        }
+    }
+}
+
 /// Represents a token bridge exit from the network.
 // TODO: Change it to an enum depending on `leaf_type`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
