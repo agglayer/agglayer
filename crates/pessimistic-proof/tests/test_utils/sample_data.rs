@@ -86,20 +86,6 @@ fn sample_exit_tree_01() -> LocalExitTree {
 }
 
 pub fn sample_state_01() -> Forest {
-    /*
-    let balance_tree = {
-        let root = Forest::new([(*ETH, U256::MAX), (*USDC, U256::MAX)]).local_balance_tree.root;
-        LocalBalanceTree::new_with_root(root)
-    };
-    let exit_tree = sample_exit_tree_01();
-    let nullifier_set = NullifierTree::new();
-
-    LocalNetworkState {
-        balance_tree,
-        exit_tree,
-        nullifier_set,
-    }
-    */
     let balances = [(*ETH, U256::MAX), (*USDC, U256::MAX)];
     Forest::new_with_local_exit_tree(balances, sample_exit_tree_01())
 }

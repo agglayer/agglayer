@@ -1,5 +1,6 @@
 use pessimistic_proof::bridge_exit::NetworkId;
 pub use pessimistic_proof::{LeafProofOutput, LocalNetworkState};
+pub use sp1_core::runtime::ExecutionReport;
 pub use sp1_sdk::SP1Proof;
 use sp1_sdk::{SP1PublicValues, SP1Stdin};
 
@@ -55,36 +56,13 @@ impl Runner {
         &self,
         state: &LocalNetworkState,
         batch_header: &MultiBatchHeader,
-    ) -> anyhow::Result<(LeafProofOutput, ExecutionStats)> {
+    ) -> anyhow::Result<(LeafProofOutput, ExecutionReport)> {
         let stdin = Self::prepare_stdin(state, batch_header);
         let (public_vals, report) = self.client.execute(PESSIMISTIC_PROOF_ELF, stdin)?;
 
         let output =
             Self::extract_output(public_vals, batch_header.imported_local_exit_roots.len());
-        let stats = ExecutionStats {
-            instructions: report.total_instruction_count(),
-            syscalls: report.total_syscall_count(),
-        };
 
-        Ok((output, stats))
-    }
-}
-
-/// Handy statistics about a VM execution
-#[derive(PartialEq, Eq, Debug)]
-pub struct ExecutionStats {
-    /// Number of executed instructions (cycles)
-    pub instructions: u64,
-    /// Number of executed syscalls
-    pub syscalls: u64,
-}
-
-impl std::fmt::Display for ExecutionStats {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            instructions,
-            syscalls,
-        } = self;
-        write!(f, "instructions={instructions}, syscalls={syscalls}")
+        Ok((output, report))
     }
 }

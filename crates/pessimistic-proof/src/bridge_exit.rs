@@ -31,12 +31,18 @@ pub enum LeafType {
     Message = 1,
 }
 
-impl LeafType {
-    pub fn from_u8(value: u8) -> Option<Self> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("Invalid leaf type number")]
+pub struct LeafTypeFromU8Error;
+
+impl TryFrom<u8> for LeafType {
+    type Error = LeafTypeFromU8Error;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Some(Self::Transfer),
-            1 => Some(Self::Message),
-            _ => None,
+            0 => Ok(Self::Transfer),
+            1 => Ok(Self::Message),
+            _ => Err(LeafTypeFromU8Error),
         }
     }
 }

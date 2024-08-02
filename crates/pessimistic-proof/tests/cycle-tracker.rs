@@ -29,6 +29,10 @@ fn cycles_on_sample_inputs(
     let (new_roots, stats) =
         Runner::new().execute(&old_state, &batch_header).expect("execution failed");
 
+    debug!("full execution stats:\n{stats}");
     debug!("result: {new_roots:?}");
-    info!("execution summary: n={n_exits}, {stats}");
+
+    let cycles = stats.total_instruction_count();
+    let syscalls = stats.total_syscall_count();
+    info!("execution summary: n={n_exits}, cycles={cycles}, syscalls={syscalls}");
 }

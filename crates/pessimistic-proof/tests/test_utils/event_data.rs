@@ -1,11 +1,10 @@
 use std::{fs::File, io::BufReader};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
+use pessimistic_proof::bridge_exit::{BridgeExit, LeafType, TokenInfo};
 use reth_primitives::U256;
 use serde::{Deserialize, Deserializer};
 use serde_json::Number;
-
-use pessimistic_proof::bridge_exit::{BridgeExit, LeafType, TokenInfo};
 
 pub fn parse_json_file<T>(json_file_path: &str) -> T
 where
@@ -61,7 +60,7 @@ pub struct DepositEventData {
 impl From<DepositEventData> for BridgeExit {
     fn from(deposit_event_data: DepositEventData) -> Self {
         Self {
-            leaf_type: LeafType::from_u8(deposit_event_data.leaf_type).unwrap(),
+            leaf_type: deposit_event_data.leaf_type.try_into().unwrap(),
             token_info: TokenInfo {
                 origin_network: deposit_event_data.origin_network.into(),
                 origin_token_address: deposit_event_data.origin_address.parse().unwrap(),
