@@ -4861,6 +4861,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pessimistic-proof-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex-literal",
+ "pessimistic-proof",
+ "reth-primitives",
+ "rstest",
+ "sp1-sdk 0.1.0 (git+https://github.com/succinctlabs/sp1?tag=v1.0.8-testnet)",
+ "tracing",
+]
+
+[[package]]
 name = "pessimistic-proof-utils"
 version = "0.1.0"
 dependencies = [
@@ -4874,19 +4887,6 @@ dependencies = [
  "serde_with",
  "thiserror",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?branch=patch-v2.0.2)",
-]
-
-[[package]]
-name = "pessimistic-proof-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "hex-literal",
- "pessimistic-proof",
- "reth-primitives",
- "rstest",
- "sp1-sdk",
- "tracing",
 ]
 
 [[package]]

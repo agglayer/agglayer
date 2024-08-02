@@ -1,8 +1,11 @@
 use pessimistic_proof::{
     bridge_exit::BridgeExit,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    test_utils::{parse_json_file, BridgeEvent, EventData},
 };
+
+mod test_utils;
+
+use test_utils::event_data::{parse_json_file, BridgeEvent, EventData};
 
 const JSON_FILE_PATH: &str = "tests/data/bridge_events_10k.json";
 

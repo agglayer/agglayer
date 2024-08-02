@@ -5,7 +5,7 @@ use reth_primitives::U256;
 use serde::{Deserialize, Deserializer};
 use serde_json::Number;
 
-use crate::bridge_exit::{BridgeExit, LeafType, TokenInfo};
+use pessimistic_proof::bridge_exit::{BridgeExit, LeafType, TokenInfo};
 
 pub fn parse_json_file<T>(json_file_path: &str) -> T
 where
