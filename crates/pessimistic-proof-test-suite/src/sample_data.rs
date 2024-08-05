@@ -1,9 +1,6 @@
 //! Sample data, either synthetic or taken from real traces.
 
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use hex_literal::hex;
 use pessimistic_proof::{
@@ -91,7 +88,9 @@ pub fn sample_state_01() -> Forest {
 }
 
 fn sample_file_path(filename: impl AsRef<Path>) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(filename)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data")
+        .join(filename)
 }
 
 fn load_sample_bridge_exits(filename: impl AsRef<Path>) -> impl Iterator<Item = BridgeExit> {

@@ -59,7 +59,9 @@ impl Forest {
     ) -> Self {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {
-            local_balance_tree.insert(token, balance.to_be_bytes()).unwrap();
+            local_balance_tree
+                .insert(token, balance.to_be_bytes())
+                .unwrap();
         }
 
         Self {
@@ -91,8 +93,13 @@ impl Forest {
                 network_id: *NETWORK_A,
                 let_index: index,
             };
-            let nullifier_path = self.nullifier_set.get_non_inclusion_proof(null_key).unwrap();
-            self.nullifier_set.insert(null_key, Digest::from_bool(true)).unwrap();
+            let nullifier_path = self
+                .nullifier_set
+                .get_non_inclusion_proof(null_key)
+                .unwrap();
+            self.nullifier_set
+                .insert(null_key, Digest::from_bool(true))
+                .unwrap();
             res.push((imported_exit, nullifier_path));
         }
 
@@ -148,7 +155,9 @@ impl Forest {
         for token in tokens {
             let balance = initial_balances[&token];
             let path = if balance.is_zero() {
-                self.local_balance_tree.get_inclusion_proof_zero(token).unwrap()
+                self.local_balance_tree
+                    .get_inclusion_proof_zero(token)
+                    .unwrap()
             } else {
                 self.local_balance_tree.get_inclusion_proof(token).unwrap()
             };

@@ -1,10 +1,9 @@
 use pessimistic_proof::bridge_exit::NetworkId;
 pub use pessimistic_proof::{LeafProofOutput, LocalNetworkState};
-pub use sp1_core::runtime::ExecutionReport;
-pub use sp1_sdk::SP1Proof;
+pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1PublicValues, SP1Stdin};
 
-use crate::test_utils::PESSIMISTIC_PROOF_ELF;
+use crate::PESSIMISTIC_PROOF_ELF;
 
 pub type Hasher = pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 pub type Digest = <Hasher as pessimistic_proof::local_exit_tree::hasher::Hasher>::Digest;
@@ -41,7 +40,8 @@ impl Runner {
         mut public_vals: SP1PublicValues,
         num_imported_local_exit_roots: usize,
     ) -> LeafProofOutput {
-        // Ignore the first couple of committed values which are taken directly from inputs
+        // Ignore the first couple of committed values which are taken directly from
+        // inputs
         for _ in 0..num_imported_local_exit_roots {
             let _ = public_vals.read::<(NetworkId, Digest)>();
         }

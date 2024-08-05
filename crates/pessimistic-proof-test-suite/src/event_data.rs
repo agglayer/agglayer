@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufReader};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
-use pessimistic_proof::bridge_exit::{BridgeExit, LeafType, TokenInfo};
+use pessimistic_proof::bridge_exit::{BridgeExit, TokenInfo};
 use reth_primitives::U256;
 use serde::{Deserialize, Deserializer};
 use serde_json::Number;

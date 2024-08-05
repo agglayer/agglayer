@@ -2,10 +2,7 @@ use pessimistic_proof::{
     bridge_exit::BridgeExit,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
 };
-
-mod test_utils;
-
-use test_utils::event_data::{parse_json_file, BridgeEvent, EventData};
+use pessimistic_proof_test_suite::event_data::{parse_json_file, BridgeEvent, EventData};
 
 const JSON_FILE_PATH: &str = "tests/data/bridge_events_10k.json";
 
@@ -42,7 +39,8 @@ fn test_local_exit_root() {
     }
 }
 
-/// Reads the bridge events from disk, and sorts by (block number, tx index, log index).
+/// Reads the bridge events from disk,
+/// and sorts by (block number, tx index, log index).
 fn read_sorted_bridge_events() -> Vec<BridgeEvent> {
     let mut bridge_events: Vec<BridgeEvent> = parse_json_file(JSON_FILE_PATH);
     bridge_events.sort_unstable_by(|a, b| {

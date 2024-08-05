@@ -1,9 +1,6 @@
 use pessimistic_proof::bridge_exit::BridgeExit;
+use pessimistic_proof_test_suite::{forest::Forest, runner::Runner, sample_data as data};
 use tracing::{debug, info};
-
-mod test_utils;
-
-use test_utils::{forest::Forest, runner::Runner, sample_data as data};
 
 #[rstest::rstest]
 #[case::empty(Forest::new([]), std::iter::empty())]
@@ -20,14 +17,17 @@ fn cycles_on_sample_inputs(
 ) {
     sp1_sdk::utils::setup_logger();
 
-    let withdrawals = bridge_exits.map(|be| (be.token_info, be.amount)).collect::<Vec<_>>();
+    let withdrawals = bridge_exits
+        .map(|be| (be.token_info, be.amount))
+        .collect::<Vec<_>>();
     let n_exits = withdrawals.len();
 
     let old_state = state.local_state();
     let batch_header = state.apply_events(&[], &withdrawals);
 
-    let (new_roots, stats) =
-        Runner::new().execute(&old_state, &batch_header).expect("execution failed");
+    let (new_roots, stats) = Runner::new()
+        .execute(&old_state, &batch_header)
+        .expect("execution failed");
 
     debug!("full execution stats:\n{stats}");
     debug!("result: {new_roots:?}");
