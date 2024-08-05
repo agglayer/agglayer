@@ -31,6 +31,22 @@ pub enum LeafType {
     Message = 1,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("Invalid leaf type number")]
+pub struct LeafTypeFromU8Error;
+
+impl TryFrom<u8> for LeafType {
+    type Error = LeafTypeFromU8Error;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Transfer),
+            1 => Ok(Self::Message),
+            _ => Err(LeafTypeFromU8Error),
+        }
+    }
+}
+
 /// Represents a token bridge exit from the network.
 // TODO: Change it to an enum depending on `leaf_type`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
