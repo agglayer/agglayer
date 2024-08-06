@@ -42,3 +42,6 @@ http-body-util = "0.1.2"
 [features]
 default = ["sp1"]
 sp1 = []
+
+[build-dependencies]
+ethers-contract = "2.0.14"
