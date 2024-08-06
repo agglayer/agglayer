@@ -13,18 +13,18 @@ license = "MIT OR Apache-2.0"
 anyhow = "1.0.81"
 async-trait = "0.1.81"
 buildstructor = "0.5.4"
-clap = { version = "4.5.8", features = ["derive", "env"] }
+clap = { version = "4.5.13", features = ["derive", "env"] }
 dotenvy = "0.15.7"
 ethers = "2.0.14"
 ethers-gcp-kms-signer = "0.1.5"
 fail = "0.5.1"
 futures = "0.3.30"
 hex = "0.4.3"
-jsonrpsee = { version = "0.24.0", features = ["full"] }
+jsonrpsee = { version = "0.24.2", features = ["full"] }
 lazy_static = "1.5.0"
-rstest = "0.21.0"
+rstest = "0.22.0"
 serde = { version = "1.0.204", features = ["derive"] }
-serde_json = "1.0.120"
+serde_json = "1.0.122"
 serde_with = "3.9.0"
 thiserror = "1.0.58"
 tokio = { version = "1.38.1", features = ["full"] }

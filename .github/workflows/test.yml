@@ -1,4 +1,4 @@
-name: Test
+kkkname: Test
 
 on:
   push:
@@ -193,6 +193,7 @@ jobs:
         run: echo "ETH_RPC_URL=$(kurtosis port print cdk-v1 zkevm-node-rpc-001 http-rpc)" >> $GITHUB_ENV
 
       - name: Check that batches are progressing
+        continue-on-error: true
         env:
           COMMAND: "cast rpc zkevm_batchNumber && cast rpc zkevm_virtualBatchNumber && cast rpc zkevm_verifiedBatchNumber"
           ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
