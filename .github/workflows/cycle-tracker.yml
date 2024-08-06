@@ -1,0 +1,57 @@
+name: Cycle tracker
+
+on:
+  workflow_dispatch:
+    branches:
+      - "**"
+  schedule:
+    - cron: '0 13 * * 3'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  unit:
+    name: Cycle tracker report
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install SP1UP
+        run: curl -L https://sp1.succinct.xyz | bash
+
+      - name: Install SP1 toolchain
+        run: /home/runner/.sp1/bin/sp1up
+        shell: bash
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: Install Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+            cache-on-failure: true
+
+      - name: Cycle tracker report
+        env:
+          # Make sure we get useful output and a handy summary at the end
+          RUST_LOG: warn,cycle_tracker=info
+          NEXTEST_SUCCESS_OUTPUT: immediate-final
+          NEXTEST_FAILURE_OUTPUT: immediate-final
+        run: cargo nextest run --release -j1 -p pessimistic-proof --test cycle-tracker --run-ignored=all
