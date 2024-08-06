@@ -18,7 +18,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   CARGO_TERM_COLOR: always
-  KURTOSIS_CDK_GIT_REF: main
+  KURTOSIS_CDK_GIT_REF: v0.2.4
 
 jobs:
   unit:
@@ -203,6 +203,8 @@ jobs:
           "$COMMAND"
           "$TIMEOUT_SECONDS"
           "$INTERVAL_SECONDS"
+      - name: debug
+        run: kurtosis service logs cdk-v1 zkevm-agglayer-001
 
   pushing-docker-image:
     name: Docker | Publish image to registry
