@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use pessimistic_proof::{
     bridge_exit::{commit_bridge_exits, BridgeExit, LeafType, NetworkId, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
-    keccak::{keccak256, keccak256_combine, Digest},
+    keccak::{keccak256_combine, Digest},
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher},
     multi_batch_header::MultiBatchHeader,
@@ -15,7 +15,6 @@ use pessimistic_proof::{
 };
 use rand::{random, thread_rng};
 use reth_primitives::{address, Address, Signature, U256};
-// use secp256k1::{Message, Secp256k1, SecretKey};
 use sp1_sdk::{utils, ProverClient, SP1Stdin};
 
 /// The ELF we want to execute inside the zkVM.
@@ -47,22 +46,9 @@ fn signing_utils(
         commit_imported_bridge_exits(imported_bridge_exits.iter().map(|(exit, _)| exit));
     let exit_hash = commit_bridge_exits(bridge_exits.iter());
     let combined_hash = keccak256_combine([exit_hash.as_slice(), imported_hash.as_slice()]);
-    // let secp = Secp256k1::new();
-    // let sk = SecretKey::new(&mut thread_rng());
-    // // dbg!(sk.secret_bytes());
-    // let signer = sk.public_key(&secp);
-    // // dbg!(signer);
-    // let signature = secp.sign_ecdsa_recoverable(&Message::from_digest(combined_hash), &sk);
-    // let (rec, data) = signature.serialize_compact();
-    // let signature = Sig(rec.to_i32(), data.to_vec());
-    // let address = keccak256(&signer.serialize_uncompressed()[1..]);
-    // let address = Address::from_slice(&address[12..]);
-    // dbg!(address);
-    // (imported_hash, address, signature)
 
     let wallet = LocalWallet::new(&mut thread_rng());
     let signer = wallet.address();
-    // dbg!(signer);
     let signature = wallet.sign_hash(combined_hash.into()).unwrap();
     let signature = Signature {
         r: U256::from_limbs(signature.r.0),

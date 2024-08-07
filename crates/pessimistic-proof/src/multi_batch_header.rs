@@ -13,9 +13,6 @@ use crate::{
     nullifier_tree::NullifierPath,
 };
 
-// #[derive(Default, Clone, Debug, Serialize, Deserialize)]
-// pub struct Sig(pub i32, pub Vec<u8>);
-
 /// Represents the data submitted by the CDKs to the AggLayer.
 ///
 /// The bridge exits plus the imported bridge exits define
@@ -89,7 +86,6 @@ where
     /// The signer that commits to the bridge exits
     pub signer: Address,
     /// The signature that commits to the bridge exits
-    // pub signature: Sig,
     pub signature: Signature,
 }
 
@@ -113,7 +109,6 @@ where
         prev_nullifier_root: H::Digest,
         new_nullifier_root: H::Digest,
         signer: Address,
-        // signature: Sig,
         signature: Signature,
     ) -> Self {
         Self {
