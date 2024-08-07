@@ -73,6 +73,7 @@ impl LocalNetworkState {
         let combined_hash =
             keccak256_combine([exits_hash.as_slice(), imported_exits_root.as_slice()]);
 
+        // Check batch header signature
         let signer = multi_batch_header
             .signature
             .recover_signer(B256::new(combined_hash))
