@@ -1,7 +1,5 @@
 //! Sample data, either synthetic or taken from real traces.
 
-use std::path::{Path, PathBuf};
-
 use hex_literal::hex;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
@@ -11,8 +9,8 @@ use pessimistic_proof::{
 };
 use reth_primitives::{address, U256};
 
-use super::{
-    event_data::{parse_json_file, DepositEventData},
+use crate::{
+    event_data::{load_json_data_file, DepositEventData},
     forest::Forest,
 };
 
@@ -87,18 +85,8 @@ pub fn sample_state_01() -> Forest {
     Forest::new_with_local_exit_tree(balances, sample_exit_tree_01())
 }
 
-fn sample_file_path(filename: impl AsRef<Path>) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/data")
-        .join(filename)
-}
-
-fn load_sample_bridge_exits(filename: impl AsRef<Path>) -> impl Iterator<Item = BridgeExit> {
-    parse_json_file::<Vec<DepositEventData>>(sample_file_path(filename).to_str().unwrap())
+pub fn sample_bridge_exits_01() -> impl Iterator<Item = BridgeExit> {
+    load_json_data_file::<Vec<DepositEventData>>("withdrawals.json")
         .into_iter()
         .map(Into::into)
-}
-
-pub fn sample_bridge_exits_01() -> impl Iterator<Item = BridgeExit> {
-    load_sample_bridge_exits("withdrawals.json")
 }
