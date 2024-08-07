@@ -1,10 +1,10 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use reth_primitives::B256;
-use secp256k1::{
-    ecdsa::{RecoverableSignature, RecoveryId, Signature},
-    Message,
-};
+// use secp256k1::{
+//     ecdsa::{RecoverableSignature, RecoveryId, Signature},
+//     Message,
+// };
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -78,22 +78,22 @@ impl LocalNetworkState {
         let combined_hash =
             keccak256_combine([exits_hash.as_slice(), imported_exits_root.as_slice()]);
 
-        let sig = RecoverableSignature::from_compact(
-            &multi_batch_header.signature.1,
-            RecoveryId::from_i32(multi_batch_header.signature.0).unwrap(),
-        )
-        .unwrap();
-        let message = Message::from_digest(combined_hash);
-        let public_key = sig.recover(&message).unwrap();
-        // dbg!(public_key.0.underlying_bytes());
-        // let signer = multi_batch_header
-        //     .signature
-        //     .recover_signer(B256::new(combined_hash))
-        //     .ok_or(ProofError::InvalidSignature)?;
-        // // dbg!(signer);
-        // if signer != multi_batch_header.signer {
-        //     return Err(ProofError::InvalidSignature);
-        // }
+        // let sig = RecoverableSignature::from_compact(
+        //     &multi_batch_header.signature.1,
+        //     RecoveryId::from_i32(multi_batch_header.signature.0).unwrap(),
+        // )
+        // .unwrap();
+        // let message = Message::from_digest(combined_hash);
+        // let public_key = sig.recover(&message).unwrap();
+        // // dbg!(public_key.0.underlying_bytes());
+        let signer = multi_batch_header
+            .signature
+            .recover_signer(B256::new(combined_hash))
+            .ok_or(ProofError::InvalidSignature)?;
+        // dbg!(signer);
+        if signer != multi_batch_header.signer {
+            return Err(ProofError::InvalidSignature);
+        }
 
         // Apply the imported bridge exits
         for (imported_bridge_exit, nullifier_path) in &multi_batch_header.imported_bridge_exits {

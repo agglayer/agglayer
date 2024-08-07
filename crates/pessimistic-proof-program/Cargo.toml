@@ -10,3 +10,6 @@ sp1-zkvm = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.5-testnet"
 
 [build-dependencies]
 sp1-cli = { git = "https://github.com/succinctlabs/sp1.git", tag = "v1.0.5-testnet" }
+
+#[patch.crates-io]
+#secp256k1 = { git = "https://github.com/sp1-patches/rust-secp256k1", branch = "patch-secp256k1-v0.29.0" }
