@@ -80,8 +80,6 @@ while true; do
 
     # Check if the timeout has been reached
     if [ "$SECONDS" -ge "$increment_timeout" ]; then
-
-        kurtosis service logs cdk-v1 zkevm-agglayer-001
         echo "No increment within $increment_timeout seconds"
         exit 1
     fi
