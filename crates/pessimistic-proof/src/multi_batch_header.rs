@@ -1,7 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 use std::{collections::BTreeMap, hash::Hash};
 
-use reth_primitives::U256;
+use reth_primitives::{Address, Signature, U256};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -12,6 +12,9 @@ use crate::{
     local_exit_tree::hasher::Hasher,
     nullifier_tree::NullifierPath,
 };
+
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+pub struct Sig(pub i32, pub Vec<u8>);
 
 /// Represents the data submitted by the CDKs to the AggLayer.
 ///
@@ -83,9 +86,11 @@ where
 
     // /// A consensus proof for the latest block
     //pub consensus_proof: Option<ConsensusProof>,
-
-    // /// The signature that commits to the state transition.
-    //pub signature: (),
+    /// The signer that commits to the bridge exits
+    pub signer: Address,
+    /// The signature that commits to the bridge exits
+    pub signature: Sig,
+    // pub signature: Signature,
 }
 
 impl<H> MultiBatchHeader<H>
@@ -107,6 +112,9 @@ where
         new_balance_root: H::Digest,
         prev_nullifier_root: H::Digest,
         new_nullifier_root: H::Digest,
+        signer: Address,
+        signature: Sig,
+        // signature: Signature,
     ) -> Self {
         Self {
             origin_network,
@@ -121,6 +129,8 @@ where
             new_balance_root,
             prev_nullifier_root,
             new_nullifier_root,
+            signer,
+            signature,
         }
     }
 }

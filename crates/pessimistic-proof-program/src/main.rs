@@ -20,6 +20,7 @@ pub fn main() {
     }
 
     sp1_zkvm::io::commit(&batch_header.imported_exits_root);
+    sp1_zkvm::io::commit(&batch_header.signer);
     sp1_zkvm::io::commit(&prev_roots);
     sp1_zkvm::io::commit(&new_roots);
 }

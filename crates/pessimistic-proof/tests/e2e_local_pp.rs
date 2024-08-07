@@ -1,19 +1,21 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use ethers_signers::{LocalWallet, Signer};
 use lazy_static::lazy_static;
 use pessimistic_proof::{
-    bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
-    imported_bridge_exit::ImportedBridgeExit,
-    keccak::Digest,
+    bridge_exit::{commit_bridge_exits, BridgeExit, LeafType, NetworkId, TokenInfo},
+    imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
+    keccak::{keccak256, keccak256_combine, Digest},
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher},
-    multi_batch_header::MultiBatchHeader,
+    multi_batch_header::{MultiBatchHeader, Sig},
     nullifier_tree::{FromBool, NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
     utils::smt::Smt,
     LocalNetworkState,
 };
-use rand::random;
-use reth_primitives::{address, U256};
+use rand::{random, thread_rng};
+use reth_primitives::{address, Address, Signature, U256};
+use secp256k1::{Message, Secp256k1, SecretKey};
 use sp1_sdk::{utils, ProverClient, SP1Stdin};
 
 /// The ELF we want to execute inside the zkVM.
@@ -35,6 +37,41 @@ lazy_static! {
 
 fn u(x: u64) -> U256 {
     x.try_into().unwrap()
+}
+
+fn signing_utils(
+    imported_bridge_exits: &[(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)],
+    bridge_exits: &[BridgeExit],
+) -> (Digest, Address, Sig) {
+    let imported_hash =
+        commit_imported_bridge_exits(imported_bridge_exits.iter().map(|(exit, _)| exit));
+    let exit_hash = commit_bridge_exits(bridge_exits.iter());
+    let combined_hash = keccak256_combine([exit_hash.as_slice(), imported_hash.as_slice()]);
+    let secp = Secp256k1::new();
+    let sk = SecretKey::new(&mut thread_rng());
+    // dbg!(sk.secret_bytes());
+    let signer = sk.public_key(&secp);
+    // dbg!(signer);
+    let signature = secp.sign_ecdsa_recoverable(&Message::from_digest(combined_hash), &sk);
+    let (rec, data) = signature.serialize_compact();
+    let signature = Sig(rec.to_i32(), data.to_vec());
+    let address = keccak256(&signer.serialize_uncompressed()[1..]);
+    let address = Address::from_slice(&address[12..]);
+    // dbg!(address);
+
+    // let wallet = LocalWallet::new(&mut thread_rng());
+    // let signer = wallet.address();
+    // // dbg!(signer);
+    // let signature = wallet.sign_hash(combined_hash.into()).unwrap();
+    // let signature = Signature {
+    //     r: U256::from_limbs(signature.r.0),
+    //     s: U256::from_limbs(signature.s.0),
+    //     odd_y_parity: signature.recovery_id().unwrap().is_y_odd(),
+    // };
+    //
+    // (imported_hash, signer.0.into(), signature)
+
+    (imported_hash, address, signature)
 }
 
 // Trees for the network B, as well as the LET for network A.
@@ -190,19 +227,23 @@ fn e2e_local_pp_simple_helper(
     let balances_proofs = forest.balances_proofs(&imported_bridge_events, &bridge_events);
     let imported_bridge_exits = forest.imported_bridge_exits(imported_bridge_events);
     let bridge_exits = forest.bridge_exits(bridge_events);
+    let (imported_exits_root, signer, signature) =
+        signing_utils(&imported_bridge_exits, &bridge_exits);
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
         new_local_exit_root: forest.local_exit_tree_data.get_root(),
         bridge_exits,
         imported_bridge_exits,
-        imported_exits_root: None,
+        imported_exits_root: Some(imported_exits_root),
         imported_local_exit_roots: [(*NETWORK_A, forest.local_exit_tree_data_a.get_root())].into(),
         balances_proofs,
         prev_balance_root,
         new_balance_root: forest.local_balance_tree.root,
         prev_nullifier_root,
         new_nullifier_root: forest.nullifier_set.root,
+        signer,
+        signature,
     };
 
     local_state.apply_batch_header(&batch_header).unwrap()
@@ -266,19 +307,23 @@ fn e2e_local_pp_random() {
     let balances_proofs = forest.balances_proofs(&imported_bridge_events, &bridge_events);
     let imported_bridge_exits = forest.imported_bridge_exits(imported_bridge_events);
     let bridge_exits = forest.bridge_exits(bridge_events);
+    let (imported_exits_root, signer, signature) =
+        signing_utils(&imported_bridge_exits, &bridge_exits);
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
         new_local_exit_root: forest.local_exit_tree_data.get_root(),
         bridge_exits,
         imported_bridge_exits,
-        imported_exits_root: None,
+        imported_exits_root: Some(imported_exits_root),
         imported_local_exit_roots: [(*NETWORK_A, forest.local_exit_tree_data_a.get_root())].into(),
         balances_proofs,
         prev_balance_root,
         new_balance_root: forest.local_balance_tree.root,
         prev_nullifier_root,
         new_nullifier_root: forest.nullifier_set.root,
+        signer,
+        signature,
     };
 
     local_state.apply_batch_header(&batch_header).unwrap()
@@ -305,19 +350,23 @@ fn test_sp1_simple() {
     let balances_proofs = forest.balances_proofs(&imported_bridge_events, &bridge_events);
     let imported_bridge_exits = forest.imported_bridge_exits(imported_bridge_events);
     let bridge_exits = forest.bridge_exits(bridge_events);
+    let (imported_exits_root, signer, signature) =
+        signing_utils(&imported_bridge_exits, &bridge_exits);
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
         new_local_exit_root: forest.local_exit_tree_data.get_root(),
         bridge_exits,
         imported_bridge_exits,
-        imported_exits_root: None,
+        imported_exits_root: Some(imported_exits_root),
         imported_local_exit_roots: [(*NETWORK_A, forest.local_exit_tree_data_a.get_root())].into(),
         balances_proofs,
         prev_balance_root,
         new_balance_root: forest.local_balance_tree.root,
         prev_nullifier_root,
         new_nullifier_root: forest.nullifier_set.root,
+        signer,
+        signature,
     };
 
     let mut stdin = SP1Stdin::new();

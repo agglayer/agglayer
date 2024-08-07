@@ -482,7 +482,7 @@ mod tests {
         let mut rng = thread_rng();
         let num_keys = rng.gen_range(0..=1 << DEPTH);
         let mut smt = Smt::<H, DEPTH>::new();
-        let mut kvs: Vec<_> = (0..u8::MAX).map(|i| (i, random())).collect();
+        let mut kvs: Vec<_> = (0..=u8::MAX).map(|i| (i, random())).collect();
         kvs.shuffle(&mut rng);
         for (key, value) in &kvs[..num_keys] {
             smt.insert(*key, *value).unwrap();

@@ -1,9 +1,16 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
+use reth_primitives::B256;
+use secp256k1::{
+    ecdsa::{RecoverableSignature, RecoveryId, Signature},
+    Message,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bridge_exit::LeafType,
+    bridge_exit::{commit_bridge_exits, LeafType},
+    imported_bridge_exit::commit_imported_bridge_exits,
+    keccak::keccak256_combine,
     local_balance_tree::LocalBalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::MultiBatchHeader,
@@ -54,7 +61,40 @@ impl LocalNetworkState {
         let mut new_balances: BTreeMap<_, _> =
             multi_batch_header.balances_proofs.iter().map(|(k, v)| (*k, v.0)).collect();
 
-        // TODO: check batch_header.imported_exits_root
+        // Check batch_header.imported_exits_root
+        let imported_exits_root = commit_imported_bridge_exits(
+            multi_batch_header.imported_bridge_exits.iter().map(|(exit, _)| exit),
+        );
+        if let Some(batch_imported_exits_root) = multi_batch_header.imported_exits_root {
+            if imported_exits_root != batch_imported_exits_root {
+                return Err(ProofError::InvalidImportedExitsRoot);
+            }
+        } else if !multi_batch_header.imported_bridge_exits.is_empty() {
+            return Err(ProofError::InvalidImportedExitsRoot);
+        }
+
+        let exits_hash = commit_bridge_exits(multi_batch_header.bridge_exits.iter());
+
+        let combined_hash =
+            keccak256_combine([exits_hash.as_slice(), imported_exits_root.as_slice()]);
+
+        let sig = RecoverableSignature::from_compact(
+            &multi_batch_header.signature.1,
+            RecoveryId::from_i32(multi_batch_header.signature.0).unwrap(),
+        )
+        .unwrap();
+        let message = Message::from_digest(combined_hash);
+        let public_key = sig.recover(&message).unwrap();
+        // dbg!(public_key.0.underlying_bytes());
+        // let signer = multi_batch_header
+        //     .signature
+        //     .recover_signer(B256::new(combined_hash))
+        //     .ok_or(ProofError::InvalidSignature)?;
+        // // dbg!(signer);
+        // if signer != multi_batch_header.signer {
+        //     return Err(ProofError::InvalidSignature);
+        // }
+
         // Apply the imported bridge exits
         for (imported_bridge_exit, nullifier_path) in &multi_batch_header.imported_bridge_exits {
             if matches!(imported_bridge_exit.bridge_exit.leaf_type, LeafType::Message) {

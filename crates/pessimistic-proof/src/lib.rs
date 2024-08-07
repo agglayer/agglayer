@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod keccak;
 pub mod local_exit_tree;
 
