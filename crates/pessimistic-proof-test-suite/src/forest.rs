@@ -10,7 +10,7 @@ use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{FromBool, NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
     utils::smt::Smt,
-    LocalNetworkState,
+    LeafProofOutput, LocalNetworkState,
 };
 use rand::{random, thread_rng};
 use reth_primitives::{Address, Signature, U256};
@@ -210,6 +210,14 @@ impl Forest {
             signer,
             signature,
         }
+    }
+
+    /// Check the current state corresponds to given proof output.
+    pub fn assert_output_matches(&self, output: &LeafProofOutput) {
+        let (local_exit_tree, local_balance_tree, nullifier_set) = output;
+        assert_eq!(*local_exit_tree, self.local_exit_tree.get_root());
+        assert_eq!(*local_balance_tree, self.local_balance_tree.root);
+        assert_eq!(*nullifier_set, self.nullifier_set.root);
     }
 }
 

@@ -29,6 +29,9 @@ fn cycles_on_sample_inputs(
         .execute(&old_state, &batch_header)
         .expect("execution failed");
 
+    // Double check the roots match what is calculated by the proof-external state.
+    state.assert_output_matches(&new_roots);
+
     debug!("full execution stats:\n{stats}");
     debug!("result: {new_roots:?}");
 
