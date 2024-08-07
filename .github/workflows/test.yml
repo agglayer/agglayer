@@ -57,15 +57,6 @@ jobs:
       - name: Test
         run: cargo nextest run --workspace --nocapture && cargo test --doc --workspace
 
-      - name: Cycle tracker report
-        continue-on-error: true
-        env:
-          # Make sure we get useful output and a handy summary at the end
-          RUST_LOG: warn,cycle_tracker=info
-          NEXTEST_SUCCESS_OUTPUT: immediate-final
-          NEXTEST_FAILURE_OUTPUT: immediate-final
-        run: cargo nextest run --release -j1 -p pessimistic-proof --test cycle-tracker --run-ignored=all
-
   elf:
     if: ${{ false }}
     name: Check ELF compatibility
