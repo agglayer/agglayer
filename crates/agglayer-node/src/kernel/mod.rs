@@ -4,7 +4,7 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use ethers::prelude::*;
 use thiserror::Error;
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 
 use crate::{
     contracts::{
@@ -126,10 +126,6 @@ where
     /// The rollup manager contract address is specified by the given
     /// configuration.
     fn get_rollup_manager_contract(&self) -> PolygonRollupManager<RpcProvider> {
-        info!(
-            "Rollup manager contract address is {}",
-            self.config.l1.rollup_manager_contract
-        );
         PolygonRollupManager::new(self.config.l1.rollup_manager_contract, self.rpc.clone())
     }
 }
@@ -222,10 +218,7 @@ where
         rollup_id: u32,
     ) -> Result<PolygonZkEvm<RpcProvider>, ContractError<RpcProvider>> {
         let rollup_metadata = self.get_rollup_metadata(rollup_id).await?;
-        info!(
-            "Rollup contract for rollup id {} is {}",
-            rollup_id, rollup_metadata.rollup_contract
-        );
+
         Ok(PolygonZkEvm::new(
             rollup_metadata.rollup_contract,
             self.rpc.clone(),
@@ -296,8 +289,6 @@ where
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
 
-        println!("sequencer_address: {:?}", sequencer_address);
-
         let signer = signed_tx
             .signer()
             .map_err(|e| SignatureVerificationError::CouldNotRecoverSigner(e))?;
@@ -337,14 +328,22 @@ where
         &self,
         signed_tx: &SignedTx,
     ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
+        let hex_hash = signed_tx.hash();
+        let hash = format!("{:?}", hex_hash);
+
         let f = self
             .build_verify_batches_trusted_aggregator_call(signed_tx)
             .await
             .map_err(SettlementError::ContractError)?;
 
+        if let Ok(Some(tx)) = self.check_tx_status(hex_hash).await {
+            warn!(hash, "Transaction already settled: {:?}", tx);
+        }
+
         let tx = f
             .send()
             .await
+            .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
             .map_err(SettlementError::ContractError)?
             .interval(self.config.outbound.rpc.settle.retry_interval)
             .retries(self.config.outbound.rpc.settle.max_retries)
