@@ -65,6 +65,5 @@ impl ImportedBridgeExit {
 pub fn commit_imported_bridge_exits<E: Borrow<ImportedBridgeExit>>(
     iter: impl Iterator<Item = E>,
 ) -> Digest {
-    let hashes = iter.map(|exit| exit.borrow().hash()).collect::<Vec<_>>();
-    keccak256_combine(hashes.iter().map(|hash| hash.as_slice()).collect::<Vec<_>>())
+    keccak256_combine(iter.map(|exit| exit.borrow().hash()).collect::<Vec<_>>())
 }

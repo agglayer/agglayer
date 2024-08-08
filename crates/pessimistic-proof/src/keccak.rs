@@ -38,13 +38,14 @@ pub fn keccak256(data: &[u8]) -> Digest {
 }
 
 /// Hashes the input items using a Keccak hasher with a 256-bit security level.
-pub fn keccak256_combine<'a, I>(items: I) -> Digest
+pub fn keccak256_combine<I, T>(items: I) -> Digest
 where
-    I: IntoIterator<Item = &'a [u8]>,
+    I: IntoIterator<Item = T>,
+    T: AsRef<[u8]>,
 {
     let mut hasher = Keccak::v256();
     for data in items {
-        hasher.update(data);
+        hasher.update(data.as_ref());
     }
 
     let mut output = [0u8; 32];
