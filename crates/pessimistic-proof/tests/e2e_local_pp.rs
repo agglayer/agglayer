@@ -11,7 +11,7 @@ use test_utils::{
     PESSIMISTIC_PROOF_ELF,
 };
 
-use crate::test_utils::forest::signing_utils;
+use crate::test_utils::forest::compute_signature_info;
 
 mod test_utils;
 
@@ -95,7 +95,7 @@ fn e2e_local_pp_random() {
     let bridge_exits = forest.bridge_exits(&bridge_events);
     let new_local_exit_root = forest.local_exit_tree.get_root();
     let (imported_exits_root, signer, signature) =
-        signing_utils(new_local_exit_root, &imported_bridge_exits);
+        compute_signature_info(new_local_exit_root, &imported_bridge_exits);
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
@@ -139,7 +139,7 @@ fn test_sp1_simple() {
     let bridge_exits = forest.bridge_exits(&bridge_events);
     let new_local_exit_root = forest.local_exit_tree.get_root();
     let (imported_exits_root, signer, signature) =
-        signing_utils(new_local_exit_root, &imported_bridge_exits);
+        compute_signature_info(new_local_exit_root, &imported_bridge_exits);
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,

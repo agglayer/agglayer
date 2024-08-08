@@ -17,7 +17,7 @@ use reth_primitives::{Address, Signature, U256};
 
 use super::sample_data::{NETWORK_A, NETWORK_B};
 
-pub fn signing_utils(
+pub fn compute_signature_info(
     new_local_exit_root: Digest,
     imported_bridge_exits: &[(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)],
 ) -> (Digest, Address, Signature) {
@@ -183,7 +183,7 @@ impl Forest {
         let bridge_exits = self.bridge_exits(bridge_events);
         let new_local_exit_root = self.local_exit_tree.get_root();
         let (imported_exits_root, signer, signature) =
-            signing_utils(new_local_exit_root, &imported_bridge_exits);
+            compute_signature_info(new_local_exit_root, &imported_bridge_exits);
         MultiBatchHeader {
             origin_network: *NETWORK_B,
             prev_local_exit_root,
