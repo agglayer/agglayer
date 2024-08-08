@@ -4,7 +4,7 @@ use reth_primitives::B256;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bridge_exit::{commit_bridge_exits, LeafType},
+    bridge_exit::LeafType,
     imported_bridge_exit::commit_imported_bridge_exits,
     keccak::keccak256_combine,
     local_balance_tree::LocalBalanceTree,
@@ -69,9 +69,10 @@ impl LocalNetworkState {
             return Err(ProofError::InvalidImportedExitsRoot);
         }
 
-        let exits_hash = commit_bridge_exits(multi_batch_header.bridge_exits.iter());
-        let combined_hash =
-            keccak256_combine([exits_hash.as_slice(), imported_exits_root.as_slice()]);
+        let combined_hash = keccak256_combine([
+            multi_batch_header.new_local_exit_root.as_slice(),
+            imported_exits_root.as_slice(),
+        ]);
 
         // Check batch header signature
         let signer = multi_batch_header

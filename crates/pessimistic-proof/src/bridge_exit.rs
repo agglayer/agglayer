@@ -1,6 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
-use std::{borrow::Borrow, ops::Deref};
+use std::ops::Deref;
 
 use reth_primitives::{revm_primitives::bitvec::view::BitViewSized, Address, U256};
 use serde::{Deserialize, Serialize};
@@ -104,15 +104,6 @@ impl BridgeExit {
             &keccak256(&self.metadata),
         ])
     }
-}
-
-pub fn commit_bridge_exits<E: Borrow<BridgeExit>>(iter: impl Iterator<Item = E>) -> KeccakDigest {
-    let hashes = iter
-        .flat_map(|exit| -> KeccakDigest {
-            std::array::from_fn(|i| exit.borrow().hash().as_slice()[i])
-        })
-        .collect::<Vec<_>>();
-    keccak256(&hashes)
 }
 
 #[derive(

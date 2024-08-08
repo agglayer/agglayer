@@ -28,4 +28,5 @@ sp1-sdk = { git = "https://github.com/succinctlabs/sp1" }
 ethers-signers = "2.0.14"
 sp1-zkvm = { git = "https://github.com/succinctlabs/sp1" }
 sp1-core = { git = "https://github.com/succinctlabs/sp1" }
+tracing.workspace = true
 

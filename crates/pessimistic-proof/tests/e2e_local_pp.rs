@@ -93,12 +93,13 @@ fn e2e_local_pp_random() {
     let balances_proofs = forest.balances_proofs(&imported_bridge_events, &bridge_events);
     let imported_bridge_exits = forest.imported_bridge_exits(&imported_bridge_events);
     let bridge_exits = forest.bridge_exits(&bridge_events);
+    let new_local_exit_root = forest.local_exit_tree.get_root();
     let (imported_exits_root, signer, signature) =
-        signing_utils(&imported_bridge_exits, &bridge_exits);
+        signing_utils(new_local_exit_root, &imported_bridge_exits);
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
-        new_local_exit_root: forest.local_exit_tree.get_root(),
+        new_local_exit_root,
         bridge_exits,
         imported_bridge_exits,
         imported_exits_root: Some(imported_exits_root),
@@ -136,12 +137,13 @@ fn test_sp1_simple() {
     let balances_proofs = forest.balances_proofs(&imported_bridge_events, &bridge_events);
     let imported_bridge_exits = forest.imported_bridge_exits(&imported_bridge_events);
     let bridge_exits = forest.bridge_exits(&bridge_events);
+    let new_local_exit_root = forest.local_exit_tree.get_root();
     let (imported_exits_root, signer, signature) =
-        signing_utils(&imported_bridge_exits, &bridge_exits);
+        signing_utils(new_local_exit_root, &imported_bridge_exits);
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
-        new_local_exit_root: forest.local_exit_tree.get_root(),
+        new_local_exit_root,
         bridge_exits,
         imported_bridge_exits,
         imported_exits_root: Some(imported_exits_root),

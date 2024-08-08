@@ -4671,6 +4671,7 @@ dependencies = [
  "sp1-zkvm",
  "thiserror",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?branch=patch-v2.0.2)",
+ "tracing",
 ]
 
 [[package]]

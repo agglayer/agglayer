@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ethers_signers::{LocalWallet, Signer};
 use pessimistic_proof::{
-    bridge_exit::{commit_bridge_exits, BridgeExit, LeafType, NetworkId, TokenInfo},
+    bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
     keccak::{keccak256_combine, Digest},
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
@@ -18,13 +18,13 @@ use reth_primitives::{Address, Signature, U256};
 use super::sample_data::{NETWORK_A, NETWORK_B};
 
 pub fn signing_utils(
+    new_local_exit_root: Digest,
     imported_bridge_exits: &[(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)],
-    bridge_exits: &[BridgeExit],
 ) -> (Digest, Address, Signature) {
     let imported_hash =
         commit_imported_bridge_exits(imported_bridge_exits.iter().map(|(exit, _)| exit));
-    let exit_hash = commit_bridge_exits(bridge_exits.iter());
-    let combined_hash = keccak256_combine([exit_hash.as_slice(), imported_hash.as_slice()]);
+    let combined_hash =
+        keccak256_combine([new_local_exit_root.as_slice(), imported_hash.as_slice()]);
 
     let wallet = LocalWallet::new(&mut thread_rng());
     let signer = wallet.address();
@@ -181,12 +181,13 @@ impl Forest {
         let balances_proofs = self.balances_proofs(imported_bridge_events, bridge_events);
         let imported_bridge_exits = self.imported_bridge_exits(imported_bridge_events);
         let bridge_exits = self.bridge_exits(bridge_events);
+        let new_local_exit_root = self.local_exit_tree.get_root();
         let (imported_exits_root, signer, signature) =
-            signing_utils(&imported_bridge_exits, &bridge_exits);
+            signing_utils(new_local_exit_root, &imported_bridge_exits);
         MultiBatchHeader {
             origin_network: *NETWORK_B,
             prev_local_exit_root,
-            new_local_exit_root: self.local_exit_tree.get_root(),
+            new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
             imported_exits_root: Some(imported_exits_root),
