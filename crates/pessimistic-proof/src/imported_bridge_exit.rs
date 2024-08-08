@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     bridge_exit::{BridgeExit, NetworkId},
-    keccak::{keccak256, Digest as KeccakDigest, Digest},
+    keccak::{keccak256_combine, Digest as KeccakDigest, Digest},
     local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
 };
 
@@ -65,8 +65,6 @@ impl ImportedBridgeExit {
 pub fn commit_imported_bridge_exits<E: Borrow<ImportedBridgeExit>>(
     iter: impl Iterator<Item = E>,
 ) -> Digest {
-    let hashes = iter
-        .flat_map(|exit| -> Digest { std::array::from_fn(|i| exit.borrow().hash().as_slice()[i]) })
-        .collect::<Vec<_>>();
-    keccak256(&hashes)
+    let hashes = iter.map(|exit| exit.borrow().hash()).collect::<Vec<_>>();
+    keccak256_combine(hashes.iter().map(|hash| hash.as_slice()).collect::<Vec<_>>())
 }
