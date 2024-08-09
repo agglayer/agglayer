@@ -74,6 +74,7 @@ dependencies = [
  "pessimistic-proof",
  "rstest",
  "serde",
+ "sp1-prover 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp1-sdk 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
  "tokio",

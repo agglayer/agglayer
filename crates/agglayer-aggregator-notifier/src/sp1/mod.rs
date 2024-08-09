@@ -3,6 +3,7 @@ use std::sync::Arc;
 use futures::{future::BoxFuture, FutureExt as _};
 use pessimistic_proof::LocalNetworkState;
 use serde::Serialize;
+use sp1_prover::components::DefaultProverComponents;
 use sp1_sdk::{
     LocalProver, MockProver, NetworkProver, Prover as _, SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
 };
@@ -17,7 +18,7 @@ pub(crate) struct SP1<P> {
     verifying_key: SP1VerifyingKey,
 }
 
-impl<P: sp1_sdk::Prover> SP1<P> {
+impl<P: sp1_sdk::Prover<DefaultProverComponents>> SP1<P> {
     pub(super) fn new(prover: P, elf: &[u8]) -> Self {
         let (proving_key, verifying_key) = prover.setup(elf);
 
@@ -29,7 +30,7 @@ impl<P: sp1_sdk::Prover> SP1<P> {
     }
 }
 
-impl<I> super::AggregatorProver<I> for SP1<LocalProver>
+impl<I> super::AggregatorProver<I> for SP1<LocalProver<DefaultProverComponents>>
 where
     I: Serialize,
 {
@@ -46,9 +47,17 @@ where
         let prover = self.prover.clone();
 
         async move {
-            spawn_blocking(move || prover.prove(&proving_key, stdin))
-                .await?
-                .map(Proof::SP1)
+            spawn_blocking(move || {
+                prover.prove(
+                    &proving_key,
+                    stdin,
+                    Default::default(),
+                    Default::default(),
+                    Default::default(),
+                )
+            })
+            .await?
+            .map(Proof::SP1)
         }
         .boxed()
     }
@@ -76,7 +85,18 @@ where
         let proving_key = self.proving_key.clone();
         let prover = self.prover.clone();
 
-        async move { prover.prove(&proving_key.elf, stdin).await.map(Proof::SP1) }.boxed()
+        async move {
+            prover
+                .prove(
+                    &proving_key.elf,
+                    stdin,
+                    Default::default(),
+                    Default::default(),
+                )
+                .await
+                .map(Proof::SP1)
+        }
+        .boxed()
     }
 
     fn verify(&self, proof: &Proof) -> Result<(), anyhow::Error> {
@@ -102,9 +122,17 @@ where
         let prover = self.prover.clone();
 
         async move {
-            spawn_blocking(move || prover.prove(&proving_key, stdin))
-                .await?
-                .map(Proof::SP1)
+            spawn_blocking(move || {
+                prover.prove(
+                    &proving_key,
+                    stdin,
+                    Default::default(),
+                    Default::default(),
+                    Default::default(),
+                )
+            })
+            .await?
+            .map(Proof::SP1)
         }
         .boxed()
     }
