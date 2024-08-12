@@ -36,7 +36,7 @@ agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.23.2" }
 serde_json.workspace = true
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
-hyper-util = { version = "0.1.6", features = ["client"] }
+hyper-util = { version = "0.1.7", features = ["client"] }
 http-body-util = "0.1.2"
 
 [features]
