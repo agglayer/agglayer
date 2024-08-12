@@ -13,5 +13,5 @@ agglayer-node = { path = "../agglayer-node" }
 agglayer-config = { path = "../agglayer-config" }
 
 [dev-dependencies]
-assert_cmd = "2.0.14"
+assert_cmd = "2.0.16"
 insta = { version = "1.39.0", features = ["toml", "yaml"] }
