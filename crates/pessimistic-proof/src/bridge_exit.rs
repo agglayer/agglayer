@@ -2,10 +2,16 @@
 
 use std::ops::Deref;
 
-use reth_primitives::{revm_primitives::bitvec::view::BitViewSized, Address, U256};
+use reth_primitives::{address, revm_primitives::bitvec::view::BitViewSized, Address, U256};
 use serde::{Deserialize, Serialize};
 
 use crate::keccak::{keccak256, keccak256_combine, Digest as KeccakDigest};
+
+pub(crate) const L1_NETWORK_ID: NetworkId = NetworkId(0);
+pub(crate) const L1_ETH: TokenInfo = TokenInfo {
+    origin_network: L1_NETWORK_ID,
+    origin_token_address: address!("0000000000000000000000000000000000000000"),
+};
 
 /// Encapsulates the information to uniquely identify a token on the origin network.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Copy)]
