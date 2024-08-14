@@ -1,4 +1,5 @@
 #![allow(clippy::too_many_arguments)]
+
 use std::ops::Deref;
 
 use reth_primitives::{revm_primitives::bitvec::view::BitViewSized, Address, U256};

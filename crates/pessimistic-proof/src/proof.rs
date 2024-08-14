@@ -38,6 +38,10 @@ pub enum ProofError {
     ExitToSameNetwork,
     #[error("detected debt for the network {network:?}")]
     HasDebt { network: NetworkId },
+    #[error("Invalid imported exits root")]
+    InvalidImportedExitsRoot,
+    #[error("Invalid signature")]
+    InvalidSignature,
 }
 
 pub type ExitRoot = Digest;

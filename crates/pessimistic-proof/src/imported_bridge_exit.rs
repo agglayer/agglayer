@@ -1,8 +1,10 @@
+use std::borrow::Borrow;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
     bridge_exit::{BridgeExit, NetworkId},
-    keccak::{Digest as KeccakDigest, Digest},
+    keccak::{keccak256_combine, Digest as KeccakDigest, Digest},
     local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
 };
 
@@ -54,4 +56,14 @@ impl ImportedBridgeExit {
             self.imported_local_exit_root,
         )
     }
+
+    pub fn hash(&self) -> Digest {
+        self.bridge_exit.hash()
+    }
+}
+
+pub fn commit_imported_bridge_exits<E: Borrow<ImportedBridgeExit>>(
+    iter: impl Iterator<Item = E>,
+) -> Digest {
+    keccak256_combine(iter.map(|exit| exit.borrow().hash()))
 }

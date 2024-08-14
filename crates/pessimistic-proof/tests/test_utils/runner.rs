@@ -58,7 +58,7 @@ impl Runner {
         batch_header: &MultiBatchHeader,
     ) -> anyhow::Result<(LeafProofOutput, ExecutionReport)> {
         let stdin = Self::prepare_stdin(state, batch_header);
-        let (public_vals, report) = self.client.execute(PESSIMISTIC_PROOF_ELF, stdin)?;
+        let (public_vals, report) = self.client.execute(PESSIMISTIC_PROOF_ELF, stdin).run()?;
 
         let output =
             Self::extract_output(public_vals, batch_header.imported_local_exit_roots.len());

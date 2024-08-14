@@ -5,14 +5,15 @@ use pessimistic_proof::{
 use rand::random;
 use reth_primitives::U256;
 use sp1_sdk::{utils, ProverClient, SP1Stdin};
-
-mod test_utils;
-
 use test_utils::{
     forest::Forest,
     sample_data::{ETH, NETWORK_A, NETWORK_B, USDC},
     PESSIMISTIC_PROOF_ELF,
 };
+
+use crate::test_utils::forest::compute_signature_info;
+
+mod test_utils;
 
 fn u(x: u64) -> U256 {
     x.try_into().unwrap()
@@ -92,19 +93,24 @@ fn e2e_local_pp_random() {
     let balances_proofs = forest.balances_proofs(&imported_bridge_events, &bridge_events);
     let imported_bridge_exits = forest.imported_bridge_exits(&imported_bridge_events);
     let bridge_exits = forest.bridge_exits(&bridge_events);
+    let new_local_exit_root = forest.local_exit_tree.get_root();
+    let (imported_exits_root, signer, signature) =
+        compute_signature_info(new_local_exit_root, &imported_bridge_exits);
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
-        new_local_exit_root: forest.local_exit_tree.get_root(),
+        new_local_exit_root,
         bridge_exits,
         imported_bridge_exits,
-        imported_exits_root: None,
+        imported_exits_root: Some(imported_exits_root),
         imported_local_exit_roots: [(*NETWORK_A, forest.local_exit_tree_data_a.get_root())].into(),
         balances_proofs,
         prev_balance_root,
         new_balance_root: forest.local_balance_tree.root,
         prev_nullifier_root,
         new_nullifier_root: forest.nullifier_set.root,
+        signer,
+        signature,
     };
 
     local_state.apply_batch_header(&batch_header).unwrap()
@@ -131,19 +137,24 @@ fn test_sp1_simple() {
     let balances_proofs = forest.balances_proofs(&imported_bridge_events, &bridge_events);
     let imported_bridge_exits = forest.imported_bridge_exits(&imported_bridge_events);
     let bridge_exits = forest.bridge_exits(&bridge_events);
+    let new_local_exit_root = forest.local_exit_tree.get_root();
+    let (imported_exits_root, signer, signature) =
+        compute_signature_info(new_local_exit_root, &imported_bridge_exits);
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
-        new_local_exit_root: forest.local_exit_tree.get_root(),
+        new_local_exit_root,
         bridge_exits,
         imported_bridge_exits,
-        imported_exits_root: None,
+        imported_exits_root: Some(imported_exits_root),
         imported_local_exit_roots: [(*NETWORK_A, forest.local_exit_tree_data_a.get_root())].into(),
         balances_proofs,
         prev_balance_root,
         new_balance_root: forest.local_balance_tree.root,
         prev_nullifier_root,
         new_nullifier_root: forest.nullifier_set.root,
+        signer,
+        signature,
     };
 
     let mut stdin = SP1Stdin::new();
@@ -153,7 +164,7 @@ fn test_sp1_simple() {
     // Generate the proof for the given program and input.
     let client = ProverClient::new();
     let (pk, vk) = client.setup(PESSIMISTIC_PROOF_ELF);
-    let proof = client.prove(&pk, stdin).unwrap();
+    let proof = client.prove(&pk, stdin).run().unwrap();
 
     // Verify proof and public values
     client.verify(&proof, &vk).expect("verification failed");

@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use ethers_signers::{LocalWallet, Signer};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
-    imported_bridge_exit::ImportedBridgeExit,
-    keccak::Digest,
+    imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
+    keccak::{keccak256_combine, Digest},
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::MultiBatchHeader,
@@ -11,10 +12,31 @@ use pessimistic_proof::{
     utils::smt::Smt,
     LocalNetworkState,
 };
-use rand::random;
-use reth_primitives::U256;
+use rand::{random, thread_rng};
+use reth_primitives::{Address, Signature, U256};
 
 use super::sample_data::{NETWORK_A, NETWORK_B};
+
+pub fn compute_signature_info(
+    new_local_exit_root: Digest,
+    imported_bridge_exits: &[(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)],
+) -> (Digest, Address, Signature) {
+    let imported_hash =
+        commit_imported_bridge_exits(imported_bridge_exits.iter().map(|(exit, _)| exit));
+    let combined_hash =
+        keccak256_combine([new_local_exit_root.as_slice(), imported_hash.as_slice()]);
+
+    let wallet = LocalWallet::new(&mut thread_rng());
+    let signer = wallet.address();
+    let signature = wallet.sign_hash(combined_hash.into()).unwrap();
+    let signature = Signature {
+        r: U256::from_limbs(signature.r.0),
+        s: U256::from_limbs(signature.s.0),
+        odd_y_parity: signature.recovery_id().unwrap().is_y_odd(),
+    };
+
+    (imported_hash, signer.0.into(), signature)
+}
 
 /// Trees for the network B, as well as the LET for network A.
 pub struct Forest {
@@ -159,13 +181,16 @@ impl Forest {
         let balances_proofs = self.balances_proofs(imported_bridge_events, bridge_events);
         let imported_bridge_exits = self.imported_bridge_exits(imported_bridge_events);
         let bridge_exits = self.bridge_exits(bridge_events);
+        let new_local_exit_root = self.local_exit_tree.get_root();
+        let (imported_exits_root, signer, signature) =
+            compute_signature_info(new_local_exit_root, &imported_bridge_exits);
         MultiBatchHeader {
             origin_network: *NETWORK_B,
             prev_local_exit_root,
-            new_local_exit_root: self.local_exit_tree.get_root(),
+            new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            imported_exits_root: None,
+            imported_exits_root: Some(imported_exits_root),
             imported_local_exit_roots: [(*NETWORK_A, self.local_exit_tree_data_a.get_root())]
                 .into(),
             balances_proofs,
@@ -173,6 +198,8 @@ impl Forest {
             new_balance_root: self.local_balance_tree.root,
             prev_nullifier_root,
             new_nullifier_root: self.nullifier_set.root,
+            signer,
+            signature,
         }
     }
 }
