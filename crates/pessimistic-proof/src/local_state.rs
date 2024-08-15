@@ -107,20 +107,19 @@ impl LocalNetworkState {
             };
             self.nullifier_set.verify_and_update(nullifier_key, nullifier_path)?;
 
-            if multi_batch_header.origin_network
-                == imported_bridge_exit.bridge_exit.token_info.origin_network
-            {
+            // The amount corresponds to L1 ETH if the leaf is a message
+            let token_info = match imported_bridge_exit.bridge_exit.leaf_type {
+                LeafType::Message => L1_ETH,
+                _ => imported_bridge_exit.bridge_exit.token_info,
+            };
+
+            if multi_batch_header.origin_network == token_info.origin_network {
                 // When the token is native to the chain, we don't care about the local balance
                 continue;
             }
 
             // Update the token balance.
             let amount = imported_bridge_exit.bridge_exit.amount;
-            // The amount corresponds to L1 ETH if the leaf is a message
-            let token_info = match imported_bridge_exit.bridge_exit.leaf_type {
-                LeafType::Message => L1_ETH,
-                _ => imported_bridge_exit.bridge_exit.token_info,
-            };
             let entry = new_balances.entry(token_info);
             match entry {
                 Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof),
@@ -140,18 +139,20 @@ impl LocalNetworkState {
                 return Err(ProofError::ExitToSameNetwork);
             }
             self.exit_tree.add_leaf(bridge_exit.hash());
-            if multi_batch_header.origin_network == bridge_exit.token_info.origin_network {
+
+            // The amount corresponds to L1 ETH if the leaf is a message
+            let token_info = match bridge_exit.leaf_type {
+                LeafType::Message => L1_ETH,
+                _ => bridge_exit.token_info,
+            };
+
+            if multi_batch_header.origin_network == token_info.origin_network {
                 // When the token is native to the chain, we don't care about the local balance
                 continue;
             }
 
             // Update the token balance.
             let amount = bridge_exit.amount;
-            // The amount corresponds to L1 ETH if the leaf is a message
-            let token_info = match bridge_exit.leaf_type {
-                LeafType::Message => L1_ETH,
-                _ => bridge_exit.token_info,
-            };
             let entry = new_balances.entry(token_info);
             match entry {
                 Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof),
