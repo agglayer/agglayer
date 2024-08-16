@@ -1,0 +1,22 @@
+[package]
+name = "pessimistic-proof-test-suite"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+base64.workspace = true
+ethers-signers.workspace = true
+reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+pessimistic-proof = { path = "../pessimistic-proof" }
+sp1-sdk.workspace = true
+lazy_static.workspace = true
+anyhow.workspace = true
+rand.workspace = true
+hex-literal = "0.4"
+
+[dev-dependencies]
+rstest.workspace = true
+tracing.workspace = true

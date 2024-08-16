@@ -2,18 +2,14 @@ use pessimistic_proof::{
     bridge_exit::TokenInfo, local_balance_tree::LocalBalanceTree,
     multi_batch_header::MultiBatchHeader, nullifier_tree::NullifierTree, LocalNetworkState,
 };
-use rand::random;
-use reth_primitives::U256;
-use sp1_sdk::{utils, ProverClient, SP1Stdin};
-use test_utils::{
-    forest::Forest,
+use pessimistic_proof_test_suite::{
+    forest::{compute_signature_info, Forest},
     sample_data::{ETH, NETWORK_A, NETWORK_B, USDC},
     PESSIMISTIC_PROOF_ELF,
 };
-
-use crate::test_utils::forest::compute_signature_info;
-
-mod test_utils;
+use rand::random;
+use reth_primitives::U256;
+use sp1_sdk::{utils, ProverClient, SP1Stdin};
 
 fn u(x: u64) -> U256 {
     x.try_into().unwrap()
@@ -65,14 +61,19 @@ fn e2e_local_pp_random() {
         balance_tree: LocalBalanceTree::new_with_root(prev_balance_root),
         nullifier_set: NullifierTree::new_with_root(prev_nullifier_root),
     };
-    // Generate random bridge events such that the sum of the USDC and ETH amounts is less than `target`
+    // Generate random bridge events such that the sum of the USDC and ETH amounts
+    // is less than `target`
     let get_events = || {
         let mut usdc_acc = U256::ZERO;
         let mut eth_acc = U256::ZERO;
         let mut events = Vec::new();
         loop {
             let amount = u(random::<u64>() % upper);
-            let token = if random::<u64>() & 1 == 1 { *USDC } else { *ETH };
+            let token = if random::<u64>() & 1 == 1 {
+                *USDC
+            } else {
+                *ETH
+            };
             if token == *USDC {
                 usdc_acc += amount;
                 if usdc_acc > target {

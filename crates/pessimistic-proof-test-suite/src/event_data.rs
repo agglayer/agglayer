@@ -1,14 +1,24 @@
 use std::{fs::File, io::BufReader};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
-use pessimistic_proof::bridge_exit::{BridgeExit, LeafType, TokenInfo};
+use pessimistic_proof::bridge_exit::{BridgeExit, TokenInfo};
 use reth_primitives::U256;
-use serde::{Deserialize, Deserializer};
+use serde::{de::DeserializeOwned, Deserialize, Deserializer};
 use serde_json::Number;
 
-pub fn parse_json_file<T>(json_file_path: &str) -> T
+/// Load a data file from the test suite data folder. It is expected to be
+/// a json representation of an object of type `T`.
+pub fn load_json_data_file<T: DeserializeOwned>(filename: impl AsRef<str>) -> T {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("data")
+        .join(filename.as_ref());
+    parse_json_file(path)
+}
+
+/// Load a json file from the specified path.
+pub fn parse_json_file<T>(json_file_path: impl AsRef<std::path::Path>) -> T
 where
-    T: for<'de> Deserialize<'de>,
+    T: DeserializeOwned,
 {
     let json_file = File::open(json_file_path).unwrap();
     let reader = BufReader::new(json_file);

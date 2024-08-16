@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-base64 = "0.22.0"
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
@@ -17,16 +16,6 @@ tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "pa
 ] }
 
 [dev-dependencies]
-anyhow.workspace = true
 hex = "0.4.3"
-hex-literal = "0.4"
-lazy_static.workspace = true
 rs_merkle = { version = "1.4", default-features = false }
-rstest.workspace = true
 rand = "0.8.5"
-sp1-sdk = { git = "https://github.com/succinctlabs/sp1" }
-ethers-signers = "2.0.14"
-sp1-zkvm = { git = "https://github.com/succinctlabs/sp1" }
-sp1-core = { git = "https://github.com/succinctlabs/sp1" }
-tracing.workspace = true
-

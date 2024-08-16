@@ -54,4 +54,4 @@ jobs:
           RUST_LOG: warn,cycle_tracker=info
           NEXTEST_SUCCESS_OUTPUT: immediate-final
           NEXTEST_FAILURE_OUTPUT: immediate-final
-        run: cargo nextest run --release -j1 -p pessimistic-proof --test cycle-tracker --run-ignored=all
+        run: cargo nextest run --release -j1 -p pessimistic-proof-test-suite --test cycle-tracker --run-ignored=all
