@@ -6,9 +6,7 @@ use pessimistic_proof_test_suite::event_data::{load_json_data_file, BridgeEvent,
 
 const JSON_FILE_NAME: &str = "bridge_events_10k.json";
 
-// TODO: reintroduce this test
 #[test]
-#[ignore]
 fn test_local_exit_root() {
     let mut local_exit_tree: LocalExitTree<Keccak256Hasher> = LocalExitTree::new();
 

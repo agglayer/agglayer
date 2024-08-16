@@ -4,7 +4,7 @@ use reth_primitives::B256;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bridge_exit::LeafType,
+    bridge_exit::{LeafType, L1_ETH},
     imported_bridge_exit::commit_imported_bridge_exits,
     keccak::keccak256_combine,
     local_balance_tree::LocalBalanceTree,
@@ -85,11 +85,6 @@ impl LocalNetworkState {
 
         // Apply the imported bridge exits
         for (imported_bridge_exit, nullifier_path) in &multi_batch_header.imported_bridge_exits {
-            if matches!(imported_bridge_exit.bridge_exit.leaf_type, LeafType::Message) {
-                // TODO: handle bridge messages
-                panic!()
-            }
-
             if imported_bridge_exit.sending_network == multi_batch_header.origin_network {
                 // We don't allow a chain to exit to itself
                 return Err(ProofError::ExitToSameNetwork);
@@ -112,16 +107,20 @@ impl LocalNetworkState {
             };
             self.nullifier_set.verify_and_update(nullifier_key, nullifier_path)?;
 
-            if multi_batch_header.origin_network
-                == imported_bridge_exit.bridge_exit.token_info.origin_network
-            {
+            // The amount corresponds to L1 ETH if the leaf is a message
+            let token_info = match imported_bridge_exit.bridge_exit.leaf_type {
+                LeafType::Message => L1_ETH,
+                _ => imported_bridge_exit.bridge_exit.token_info,
+            };
+
+            if multi_batch_header.origin_network == token_info.origin_network {
                 // When the token is native to the chain, we don't care about the local balance
                 continue;
             }
 
             // Update the token balance.
             let amount = imported_bridge_exit.bridge_exit.amount;
-            let entry = new_balances.entry(imported_bridge_exit.bridge_exit.token_info);
+            let entry = new_balances.entry(token_info);
             match entry {
                 Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof),
                 Entry::Occupied(mut entry) => {
@@ -135,24 +134,26 @@ impl LocalNetworkState {
 
         // Apply the bridge exits
         for bridge_exit in &multi_batch_header.bridge_exits {
-            if matches!(bridge_exit.leaf_type, LeafType::Message) {
-                // TODO: handle bridge messages
-                panic!()
-            }
-
             if bridge_exit.dest_network == multi_batch_header.origin_network {
                 // We don't allow a chain to exit to itself
                 return Err(ProofError::ExitToSameNetwork);
             }
             self.exit_tree.add_leaf(bridge_exit.hash());
-            if multi_batch_header.origin_network == bridge_exit.token_info.origin_network {
+
+            // The amount corresponds to L1 ETH if the leaf is a message
+            let token_info = match bridge_exit.leaf_type {
+                LeafType::Message => L1_ETH,
+                _ => bridge_exit.token_info,
+            };
+
+            if multi_batch_header.origin_network == token_info.origin_network {
                 // When the token is native to the chain, we don't care about the local balance
                 continue;
             }
 
             // Update the token balance.
             let amount = bridge_exit.amount;
-            let entry = new_balances.entry(bridge_exit.token_info);
+            let entry = new_balances.entry(token_info);
             match entry {
                 Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof),
                 Entry::Occupied(mut entry) => {
