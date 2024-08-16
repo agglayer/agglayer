@@ -14,7 +14,7 @@ anyhow = "1.0.81"
 async-trait = "0.1.81"
 base64 = "0.22.0"
 buildstructor = "0.5.4"
-clap = { version = "4.5.13", features = ["derive", "env"] }
+clap = { version = "4.5.16", features = ["derive", "env"] }
 dotenvy = "0.15.7"
 ethers = "2.0.14"
 ethers-gcp-kms-signer = "0.1.5"
