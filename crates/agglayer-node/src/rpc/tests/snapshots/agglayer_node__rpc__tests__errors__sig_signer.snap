@@ -1,0 +1,13 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "SignatureMismatch { detail: \"invalid signer: expected 0x4444…4444, got 0x3333…3333\" }"
+---
+{
+  "code": -10002,
+  "data": {
+    "signature-mismatch": {
+      "detail": "invalid signer: expected 0x4444…4444, got 0x3333…3333"
+    }
+  },
+  "message": "Rollup signature verification failed"
+}
