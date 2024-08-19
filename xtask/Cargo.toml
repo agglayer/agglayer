@@ -9,4 +9,4 @@ anyhow.workspace = true
 cargo_metadata = "0.18.1"
 clap.workspace = true
 nu-ansi-term = "0.50.1"
-which = "6.0.2"
+which = "6.0.3"
