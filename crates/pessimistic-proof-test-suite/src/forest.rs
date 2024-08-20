@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use ethers_signers::{LocalWallet, Signer};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
+    global_index::GlobalIndex,
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
     keccak::{keccak256_combine, Digest},
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
@@ -86,8 +87,13 @@ impl Forest {
                 bridge_exit: exit,
                 sending_network: *NETWORK_A,
                 imported_local_exit_root: self.local_exit_tree_data_a.get_root(),
-                leaf_index: index,
                 inclusion_proof: proof,
+                inclusion_proof_rer: None,
+                global_index: GlobalIndex {
+                    mainnet_flag: true,
+                    rollup_index: 0,
+                    leaf_index: index,
+                },
             };
             let null_key = NullifierKey {
                 network_id: *NETWORK_A,
@@ -106,7 +112,9 @@ impl Forest {
         // We need to update the LER/LEP to the final versions
         for (exit, _) in res.iter_mut() {
             exit.imported_local_exit_root = self.local_exit_tree_data_a.get_root();
-            exit.inclusion_proof = self.local_exit_tree_data_a.get_proof(exit.leaf_index);
+            exit.inclusion_proof = self
+                .local_exit_tree_data_a
+                .get_proof(exit.global_index.leaf_index);
         }
 
         res
@@ -193,6 +201,7 @@ impl Forest {
         let new_local_exit_root = self.local_exit_tree.get_root();
         let (imported_exits_root, signer, signature) =
             compute_signature_info(new_local_exit_root, &imported_bridge_exits);
+        let dummy = self.local_exit_tree_data_a.get_root();
         MultiBatchHeader {
             origin_network: *NETWORK_B,
             prev_local_exit_root,
@@ -204,6 +213,8 @@ impl Forest {
                 .into(),
             balances_proofs,
             prev_balance_root,
+            imported_mainnet_exit_root: self.local_exit_tree_data_a.get_root(),
+            imported_rollup_exit_root: dummy,
             new_balance_root: self.local_balance_tree.root,
             prev_nullifier_root,
             new_nullifier_root: self.nullifier_set.root,

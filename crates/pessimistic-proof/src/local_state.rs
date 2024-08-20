@@ -99,6 +99,22 @@ impl LocalNetworkState {
             {
                 return Err(ProofError::InvalidImportedBridgeExitRoot);
             }
+
+            match &imported_bridge_exit.inclusion_proof_rer {
+                Some((_proof, rer)) => {
+                    if *rer != multi_batch_header.imported_rollup_exit_root {
+                        return Err(ProofError::InvalidImportedBridgeExitRoot);
+                    }
+                }
+                None => {
+                    if imported_bridge_exit.imported_local_exit_root
+                        != multi_batch_header.imported_mainnet_exit_root
+                    {
+                        return Err(ProofError::InvalidImportedBridgeExitRoot);
+                    }
+                }
+            }
+
             // Check the LER inclusion path
             if !imported_bridge_exit.verify_path() {
                 return Err(ProofError::InvalidImportedBridgeExitMerklePath);
@@ -107,7 +123,7 @@ impl LocalNetworkState {
             // Check the nullifier non-inclusion path and update the nullifier set
             let nullifier_key = NullifierKey {
                 network_id: imported_bridge_exit.sending_network,
-                let_index: imported_bridge_exit.leaf_index,
+                let_index: imported_bridge_exit.global_index.leaf_index,
             };
             self.nullifier_set.verify_and_update(nullifier_key, nullifier_path)?;
 
