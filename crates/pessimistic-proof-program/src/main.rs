@@ -2,7 +2,7 @@
 
 use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::multi_batch_header::MultiBatchHeader;
-use pessimistic_proof::{generate_leaf_proof, LocalNetworkState};
+use pessimistic_proof::{generate_leaf_proof, LocalNetworkState, PPPublicInputs};
 
 sp1_zkvm::entrypoint!(main);
 
@@ -15,12 +15,19 @@ pub fn main() {
 
     //TODO: only necessary to expose a commitment to the imported_lers as a public
     // input, though maybe SP1 does that for us
-    for (network, ler) in &batch_header.imported_local_exit_roots {
-        sp1_zkvm::io::commit(&(network, ler));
-    }
+    let v = batch_header
+        .imported_local_exit_roots
+        .iter()
+        .map(|(&network, &ler)| (network, ler))
+        .collect();
 
-    sp1_zkvm::io::commit(&batch_header.imported_exits_root);
-    sp1_zkvm::io::commit(&batch_header.signer);
-    sp1_zkvm::io::commit(&prev_roots);
-    sp1_zkvm::io::commit(&new_roots);
+    let pis = PPPublicInputs {
+        imported_lers: v,
+        imported_exits_root: batch_header.imported_exits_root,
+        signer: batch_header.signer,
+        prev_roots,
+        new_roots,
+    };
+
+    sp1_zkvm::io::commit(&pis);
 }

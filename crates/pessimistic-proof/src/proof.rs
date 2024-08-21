@@ -1,3 +1,5 @@
+use reth_primitives::Address;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -48,6 +50,16 @@ pub type ExitRoot = Digest;
 pub type BalanceRoot = Digest;
 pub type NullifierRoot = Digest;
 pub type LeafProofOutput = (ExitRoot, BalanceRoot, NullifierRoot);
+
+/// Public inputs of the pessimistic proof.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PPPublicInputs {
+    pub imported_lers: Vec<(NetworkId, Digest)>,
+    pub imported_exits_root: Option<Digest>,
+    pub signer: Address,
+    pub prev_roots: LeafProofOutput,
+    pub new_roots: LeafProofOutput,
+}
 
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given [`LocalNetworkState`].
 pub fn generate_leaf_proof(

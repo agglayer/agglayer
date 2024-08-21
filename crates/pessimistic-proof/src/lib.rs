@@ -2,12 +2,13 @@ pub mod keccak;
 pub mod local_exit_tree;
 
 mod proof;
-pub use proof::{generate_leaf_proof, LeafProofOutput, ProofError};
+pub use proof::{generate_leaf_proof, LeafProofOutput, PPPublicInputs, ProofError};
 
 pub mod local_balance_tree;
 
 pub mod bridge_exit;
 
+pub mod aggregation;
 pub mod imported_bridge_exit;
 pub mod local_state;
 pub mod multi_batch_header;
