@@ -89,6 +89,10 @@ impl LocalNetworkState {
                 // We don't allow a chain to exit to itself
                 return Err(ProofError::ExitToSameNetwork);
             }
+            // Check that the destination network of the bridge exit matches the current network
+            if imported_bridge_exit.bridge_exit.dest_network != multi_batch_header.origin_network {
+                return Err(ProofError::InvalidImportedBridgeExitNetwork);
+            }
             // Check the LER
             if multi_batch_header.imported_local_exit_roots[&imported_bridge_exit.sending_network]
                 != imported_bridge_exit.imported_local_exit_root
@@ -152,7 +156,7 @@ impl LocalNetworkState {
             if bridge_exit.token_info.origin_token_address.is_zero()
                 && bridge_exit.token_info.origin_network != L1_NETWORK_ID
             {
-                return Err(ProofError::InvalidEthNetworkId);
+                return Err(ProofError::InvalidEthNetwork);
             }
 
             // The amount corresponds to L1 ETH if the leaf is a message

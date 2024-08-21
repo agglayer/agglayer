@@ -44,8 +44,10 @@ pub enum ProofError {
     InvalidSignature,
     #[error("Invalid message origin network")]
     InvalidMessageOriginNetwork,
-    #[error("Invalid ETH network id")]
-    InvalidEthNetworkId,
+    #[error("Invalid ETH network")]
+    InvalidEthNetwork,
+    #[error("Invalid imported bridge exit network")]
+    InvalidImportedBridgeExitNetwork,
 }
 
 pub type ExitRoot = Digest;
