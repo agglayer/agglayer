@@ -42,6 +42,10 @@ pub enum ProofError {
     InvalidImportedExitsRoot,
     #[error("Invalid signature")]
     InvalidSignature,
+    #[error("Invalid message origin network")]
+    InvalidMessageOriginNetwork,
+    #[error("Invalid ETH network id")]
+    InvalidEthNetworkId,
 }
 
 pub type ExitRoot = Digest;

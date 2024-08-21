@@ -4,7 +4,7 @@ use reth_primitives::B256;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bridge_exit::{LeafType, L1_ETH},
+    bridge_exit::{LeafType, L1_ETH, L1_NETWORK_ID},
     imported_bridge_exit::commit_imported_bridge_exits,
     keccak::keccak256_combine,
     local_balance_tree::LocalBalanceTree,
@@ -139,6 +139,21 @@ impl LocalNetworkState {
                 return Err(ProofError::ExitToSameNetwork);
             }
             self.exit_tree.add_leaf(bridge_exit.hash());
+
+            // For message exits, the origin network in token info should be the origin network
+            // of the batch header.
+            if bridge_exit.is_message()
+                && bridge_exit.token_info.origin_network != multi_batch_header.origin_network
+            {
+                return Err(ProofError::InvalidMessageOriginNetwork);
+            }
+
+            // For ETH transfers, we need to check that the origin network is the L1 network
+            if bridge_exit.token_info.origin_token_address.is_zero()
+                && bridge_exit.token_info.origin_network != L1_NETWORK_ID
+            {
+                return Err(ProofError::InvalidEthNetworkId);
+            }
 
             // The amount corresponds to L1 ETH if the leaf is a message
             let token_info = match bridge_exit.leaf_type {

@@ -32,7 +32,7 @@ impl TokenInfo {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LeafType {
     Transfer = 0,
     Message = 1,
@@ -109,6 +109,13 @@ impl BridgeExit {
             &self.amount.to_be_bytes::<32>(),
             &keccak256(&self.metadata),
         ])
+    }
+
+    pub fn is_transfer(&self) -> bool {
+        self.leaf_type == LeafType::Transfer
+    }
+    pub fn is_message(&self) -> bool {
+        self.leaf_type == LeafType::Message
     }
 }
 
