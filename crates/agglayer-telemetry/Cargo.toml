@@ -8,9 +8,9 @@ axum = "0.7.4"
 buildstructor.workspace = true
 futures.workspace = true
 lazy_static.workspace = true
-opentelemetry = { version = "0.23.0", features = ["metrics"] }
-opentelemetry-prometheus = "0.16.0"
-opentelemetry_sdk = { version = "0.23.0", features = ["metrics"] }
+opentelemetry = { version = "0.24.0", features = ["metrics"] }
+opentelemetry-prometheus = "0.17.0"
+opentelemetry_sdk = { version = "0.24.1", features = ["metrics"] }
 prometheus = "0.13.3"
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }

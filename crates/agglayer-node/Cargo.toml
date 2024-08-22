@@ -33,7 +33,7 @@ pessimistic-proof = { path = "../pessimistic-proof" }
 agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
 
 [dev-dependencies]
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.23.2" }
+jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.3" }
 serde_json.workspace = true
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
 hyper-util = { version = "0.1.6", features = ["client"] }
