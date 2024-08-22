@@ -1,5 +1,5 @@
+use pessimistic_proof::bridge_exit::NetworkId;
 pub use pessimistic_proof::{LeafProofOutput, LocalNetworkState};
-use reth_primitives::Address;
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1PublicValues, SP1Stdin};
 
@@ -37,13 +37,6 @@ impl Runner {
 
     /// Extract outputs from the committed public values.
     pub fn extract_output(mut public_vals: SP1PublicValues) -> LeafProofOutput {
-        // Ignore the first couple of committed values which are taken directly from
-        // inputs
-        let _exits_root = public_vals.read::<Option<Digest>>();
-        let _signer = public_vals.read::<Address>();
-        let _selected_ger = public_vals.read::<Digest>();
-        let _prev_roots = public_vals.read::<LeafProofOutput>();
-
         public_vals.read::<LeafProofOutput>()
     }
 
