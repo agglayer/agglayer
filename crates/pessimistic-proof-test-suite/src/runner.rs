@@ -1,5 +1,6 @@
 use pessimistic_proof::bridge_exit::NetworkId;
 pub use pessimistic_proof::{LeafProofOutput, LocalNetworkState};
+use reth_primitives::Address;
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1PublicValues, SP1Stdin};
 
@@ -43,10 +44,13 @@ impl Runner {
         // Ignore the first couple of committed values which are taken directly from
         // inputs
         for _ in 0..num_imported_local_exit_roots {
-            let _ = public_vals.read::<(NetworkId, Digest)>();
+            let (_network, _ler) = public_vals.read::<(NetworkId, Digest)>();
         }
-        let _ = public_vals.read::<Option<Digest>>();
-        let _ = public_vals.read::<LeafProofOutput>();
+
+        let _exits_root = public_vals.read::<Option<Digest>>();
+        let _signer = public_vals.read::<Address>();
+        let _selected_ger = public_vals.read::<Digest>();
+        let _prev_roots = public_vals.read::<LeafProofOutput>();
 
         public_vals.read::<LeafProofOutput>()
     }

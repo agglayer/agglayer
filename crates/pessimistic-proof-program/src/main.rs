@@ -25,8 +25,8 @@ pub fn main() {
         batch_header.imported_rollup_exit_root,
     ]);
 
+    sp1_zkvm::io::commit(&batch_header.imported_exits_root);
     sp1_zkvm::io::commit(&batch_header.signer);
-    sp1_zkvm::io::commit(&batch_header.imported_bridge_exits);
     sp1_zkvm::io::commit(&selected_ger);
     sp1_zkvm::io::commit(&prev_roots);
     sp1_zkvm::io::commit(&new_roots);
