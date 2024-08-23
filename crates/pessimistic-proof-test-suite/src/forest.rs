@@ -85,13 +85,12 @@ impl Forest {
             let proof = self.local_exit_tree_data_a.get_proof(index);
             let imported_exit = ImportedBridgeExit {
                 bridge_exit: exit,
-                sending_network: *NETWORK_A,
                 imported_local_exit_root: self.local_exit_tree_data_a.get_root(),
                 inclusion_proof: proof,
                 inclusion_proof_rer: None,
                 global_index: GlobalIndex {
                     mainnet_flag: true,
-                    rollup_index: 0,
+                    rollup_index: *NETWORK_A,
                     leaf_index: index,
                 },
             };
