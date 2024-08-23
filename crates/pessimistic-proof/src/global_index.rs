@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 /// The [`GlobalIndex`] uniquely references one leaf within one Global Exit Tree.
 /// Further defined by the LXLY specifications.
-/// | 191 bits |    1 bit      |    32 bits   |      32 bits     |
-/// |    0     |  mainnet flag | rollup index | local root index |
+/// | 191 bits |    1 bit      |    32 bits   |    32 bits   |
+/// |    0     |  mainnet flag | rollup index |  leaf index  |
 #[derive(Debug, Clone, Serialize, Deserialize, Copy, Default, PartialEq)]
 pub struct GlobalIndex {
     pub mainnet_flag: bool,

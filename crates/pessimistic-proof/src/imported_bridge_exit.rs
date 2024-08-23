@@ -23,7 +23,7 @@ pub struct ImportedBridgeExit {
     pub imported_local_exit_root: Digest,
     /// The inclusion proof of the imported bridge exit in the sending local exit root.
     pub inclusion_proof: LETMerkleProof<Keccak256Hasher>,
-    /// The inclusion proof of the LER to the Rollup Exit Root if from rollup.
+    /// The inclusion proof of the LER to the Rollup Exit Root and the Rollup Exit Root.
     pub inclusion_proof_rer: Option<(LETMerkleProof<Keccak256Hasher>, Digest)>,
     /// The global index of the imported bridge exit.
     pub global_index: GlobalIndex,
