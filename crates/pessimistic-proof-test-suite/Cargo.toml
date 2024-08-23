@@ -11,11 +11,13 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
+pessimistic-proof-prover = { path = "../pessimistic-proof-prover" }
 sp1-sdk.workspace = true
 lazy_static.workspace = true
 anyhow.workspace = true
 rand.workspace = true
 hex-literal = "0.4"
+bincode = "1.3.3"
 
 [dev-dependencies]
 rstest.workspace = true
