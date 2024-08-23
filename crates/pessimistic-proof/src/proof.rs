@@ -1,8 +1,8 @@
 use thiserror::Error;
 
 use crate::{
-    bridge_exit::NetworkId, keccak::Digest, local_exit_tree::hasher::Keccak256Hasher,
-    local_state::LocalNetworkState, multi_batch_header::MultiBatchHeader,
+    keccak::Digest, local_exit_tree::hasher::Keccak256Hasher, local_state::LocalNetworkState,
+    multi_batch_header::MultiBatchHeader,
 };
 
 /// Represents all errors that can occur while generating the proof.
@@ -36,18 +36,18 @@ pub enum ProofError {
     BalanceUnderflowInBridgeExit,
     #[error("Exit to same network.")]
     ExitToSameNetwork,
-    #[error("detected debt for the network {network:?}")]
-    HasDebt { network: NetworkId },
-    #[error("Invalid imported exits root")]
+    #[error("Invalid imported exits root.")]
     InvalidImportedExitsRoot,
-    #[error("Invalid signature")]
+    #[error("Invalid signature.")]
     InvalidSignature,
-    #[error("Invalid message origin network")]
+    #[error("Invalid message origin network.")]
     InvalidMessageOriginNetwork,
-    #[error("Invalid ETH network")]
+    #[error("Invalid ETH network.")]
     InvalidEthNetwork,
-    #[error("Invalid imported bridge exit network")]
+    #[error("Invalid imported bridge exit network.")]
     InvalidImportedBridgeExitNetwork,
+    #[error("Mismatch between the global index and the inclusion proof.")]
+    MismatchGlobalIndexInclusionProof,
 }
 
 pub type ExitRoot = Digest;

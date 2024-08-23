@@ -100,6 +100,14 @@ impl LocalNetworkState {
                 return Err(ProofError::InvalidImportedBridgeExitRoot);
             }
 
+            // Check that the global index and the inclusion proof both refer to mainnet or rollup
+            if imported_bridge_exit.global_index.mainnet_flag
+                != imported_bridge_exit.inclusion_proof_rer.is_none()
+            {
+                return Err(ProofError::MismatchGlobalIndexInclusionProof);
+            }
+
+            // Check that the inclusion proof is against the considered mainnet/rollup exit root
             match &imported_bridge_exit.inclusion_proof_rer {
                 Some((_proof, rer)) => {
                     if *rer != multi_batch_header.imported_rollup_exit_root {
