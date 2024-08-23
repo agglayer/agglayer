@@ -54,9 +54,13 @@ where
     #[serde_as(as = "Option<_>")]
     pub imported_exits_root: Option<H::Digest>,
 
-    /// The set of imported local exit roots
-    // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
-    pub imported_local_exit_roots: BTreeMap<NetworkId, H::Digest>,
+    /// The rollup exit root against which we imported the rollup bridge exits
+    #[serde_as(as = "_")]
+    pub imported_rollup_exit_root: H::Digest,
+
+    /// The mainnet exit root against which we imported the mainnet bridge exits
+    #[serde_as(as = "_")]
+    pub imported_mainnet_exit_root: H::Digest,
 
     /// A map from token info to the token balance of the origin network before any bridge event is processed,
     /// along with the Merkle proof of this balance in the local balance tree.
@@ -102,7 +106,6 @@ where
         bridge_exits: Vec<BridgeExit>,
         imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<H>)>,
         imported_exits_root: Option<H::Digest>,
-        imported_local_exit_roots: BTreeMap<NetworkId, H::Digest>,
         balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
         prev_balance_root: H::Digest,
         new_balance_root: H::Digest,
@@ -110,6 +113,8 @@ where
         new_nullifier_root: H::Digest,
         signer: Address,
         signature: Signature,
+        imported_rollup_exit_root: H::Digest,
+        imported_mainnet_exit_root: H::Digest,
     ) -> Self {
         Self {
             origin_network,
@@ -118,7 +123,6 @@ where
             bridge_exits,
             imported_bridge_exits,
             imported_exits_root,
-            imported_local_exit_roots,
             balances_proofs,
             prev_balance_root,
             new_balance_root,
@@ -126,6 +130,8 @@ where
             new_nullifier_root,
             signer,
             signature,
+            imported_rollup_exit_root,
+            imported_mainnet_exit_root,
         }
     }
 }
