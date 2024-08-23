@@ -45,12 +45,7 @@ impl ImportedBridgeExit {
         }
     }
 
-    pub fn verify_path_mainnet(&self, mer: Digest) -> Result<(), ProofError> {
-        // Check that the inclusion proof is against the considered rollup exit root
-        if self.imported_local_exit_root != mer {
-            return Err(ProofError::InvalidImportedBridgeExitRoot);
-        }
-
+    pub fn verify_leaf_inclusion(&self) -> Result<(), ProofError> {
         // Check the inclusion proof of the leaf to the LER
         if !self.inclusion_proof.verify(
             self.bridge_exit.hash(),
@@ -63,16 +58,16 @@ impl ImportedBridgeExit {
         Ok(())
     }
 
-    pub fn verify_path_rollup(&self, rer: Digest) -> Result<(), ProofError> {
-        // Check the inclusion proof of the leaf to the LER
-        if !self.inclusion_proof.verify(
-            self.bridge_exit.hash(),
-            self.global_index.leaf_index,
-            self.imported_local_exit_root,
-        ) {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+    pub fn verify_path_mainnet(&self, mer: Digest) -> Result<(), ProofError> {
+        // Check that the inclusion proof is against the considered mainnet exit root
+        if self.imported_local_exit_root != mer {
+            return Err(ProofError::InvalidImportedBridgeExitRoot);
         }
 
+        self.verify_leaf_inclusion()
+    }
+
+    pub fn verify_path_rollup(&self, rer: Digest) -> Result<(), ProofError> {
         let (rollup_inclusion_proof, rollup_exit_root) = self
             .inclusion_proof_rer
             .as_ref()
@@ -92,7 +87,7 @@ impl ImportedBridgeExit {
             return Err(ProofError::InvalidImportedBridgeExitMerklePath);
         }
 
-        Ok(())
+        self.verify_leaf_inclusion()
     }
 
     /// Verifies that the provided inclusion path is valid and consistent with the provided LER
@@ -103,12 +98,10 @@ impl ImportedBridgeExit {
         }
 
         if self.global_index.mainnet_flag {
-            self.verify_path_mainnet(mer)?;
+            self.verify_path_mainnet(mer)
         } else {
-            self.verify_path_rollup(rer)?;
+            self.verify_path_rollup(rer)
         }
-
-        Ok(())
     }
 
     pub fn hash(&self) -> Digest {
