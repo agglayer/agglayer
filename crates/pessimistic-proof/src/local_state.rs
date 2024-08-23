@@ -94,13 +94,6 @@ impl LocalNetworkState {
             if imported_bridge_exit.bridge_exit.dest_network != multi_batch_header.origin_network {
                 return Err(ProofError::InvalidImportedBridgeExitNetwork);
             }
-            // Check the LER
-            if multi_batch_header.imported_local_exit_roots
-                [&imported_bridge_exit.global_index.rollup_index.into()]
-                != imported_bridge_exit.imported_local_exit_root
-            {
-                return Err(ProofError::InvalidImportedBridgeExitRoot);
-            }
 
             // Check the inclusion proof
             imported_bridge_exit.verify_path(

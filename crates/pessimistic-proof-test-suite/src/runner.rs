@@ -1,4 +1,3 @@
-use pessimistic_proof::bridge_exit::NetworkId;
 pub use pessimistic_proof::{LeafProofOutput, LocalNetworkState};
 use reth_primitives::Address;
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
@@ -37,16 +36,9 @@ impl Runner {
     }
 
     /// Extract outputs from the committed public values.
-    pub fn extract_output(
-        mut public_vals: SP1PublicValues,
-        num_imported_local_exit_roots: usize,
-    ) -> LeafProofOutput {
+    pub fn extract_output(mut public_vals: SP1PublicValues) -> LeafProofOutput {
         // Ignore the first couple of committed values which are taken directly from
         // inputs
-        for _ in 0..num_imported_local_exit_roots {
-            let (_network, _ler) = public_vals.read::<(NetworkId, Digest)>();
-        }
-
         let _exits_root = public_vals.read::<Option<Digest>>();
         let _signer = public_vals.read::<Address>();
         let _selected_ger = public_vals.read::<Digest>();
@@ -64,8 +56,7 @@ impl Runner {
         let stdin = Self::prepare_stdin(state, batch_header);
         let (public_vals, report) = self.client.execute(PESSIMISTIC_PROOF_ELF, stdin).run()?;
 
-        let output =
-            Self::extract_output(public_vals, batch_header.imported_local_exit_roots.len());
+        let output = Self::extract_output(public_vals);
 
         Ok((output, report))
     }

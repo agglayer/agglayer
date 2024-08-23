@@ -4,7 +4,7 @@ use pessimistic_proof::{
 };
 use pessimistic_proof_test_suite::{
     forest::{compute_signature_info, Forest},
-    sample_data::{ETH, NETWORK_A, NETWORK_B, USDC},
+    sample_data::{ETH, NETWORK_B, USDC},
     PESSIMISTIC_PROOF_ELF,
 };
 use rand::random;
@@ -104,7 +104,6 @@ fn e2e_local_pp_random() {
         bridge_exits,
         imported_bridge_exits,
         imported_exits_root: Some(imported_exits_root),
-        imported_local_exit_roots: [(*NETWORK_A, forest.local_exit_tree_data_a.get_root())].into(),
         imported_mainnet_exit_root: forest.local_exit_tree_data_a.get_root(),
         imported_rollup_exit_root: Digest::default(),
         balances_proofs,
@@ -151,7 +150,6 @@ fn test_sp1_simple() {
         bridge_exits,
         imported_bridge_exits,
         imported_exits_root: Some(imported_exits_root),
-        imported_local_exit_roots: [(*NETWORK_A, forest.local_exit_tree_data_a.get_root())].into(),
         imported_mainnet_exit_root: forest.local_exit_tree_data_a.get_root(),
         imported_rollup_exit_root: dummy,
         balances_proofs,

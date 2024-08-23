@@ -54,10 +54,6 @@ where
     #[serde_as(as = "Option<_>")]
     pub imported_exits_root: Option<H::Digest>,
 
-    /// The set of imported local exit roots
-    // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
-    pub imported_local_exit_roots: BTreeMap<NetworkId, H::Digest>,
-
     /// The rollup exit root against which we imported the rollup bridge exits
     #[serde_as(as = "_")]
     pub imported_rollup_exit_root: H::Digest,
@@ -110,7 +106,6 @@ where
         bridge_exits: Vec<BridgeExit>,
         imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<H>)>,
         imported_exits_root: Option<H::Digest>,
-        imported_local_exit_roots: BTreeMap<NetworkId, H::Digest>,
         balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
         prev_balance_root: H::Digest,
         new_balance_root: H::Digest,
@@ -137,7 +132,6 @@ where
             signature,
             imported_rollup_exit_root,
             imported_mainnet_exit_root,
-            imported_local_exit_roots,
         }
     }
 }

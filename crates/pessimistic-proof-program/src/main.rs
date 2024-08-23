@@ -14,12 +14,6 @@ pub fn main() {
     let prev_roots = initial_state.roots();
     let new_roots = generate_leaf_proof(initial_state, &batch_header).unwrap();
 
-    //TODO: only necessary to expose a commitment to the imported_lers as a public
-    // input, though maybe SP1 does that for us
-    for (network, ler) in &batch_header.imported_local_exit_roots {
-        sp1_zkvm::io::commit(&(network, ler));
-    }
-
     let selected_ger = keccak256_combine([
         batch_header.imported_mainnet_exit_root,
         batch_header.imported_rollup_exit_root,

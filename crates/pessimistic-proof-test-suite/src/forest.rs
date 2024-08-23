@@ -207,8 +207,6 @@ impl Forest {
             bridge_exits,
             imported_bridge_exits,
             imported_exits_root: Some(imported_exits_root),
-            imported_local_exit_roots: [(*NETWORK_A, self.local_exit_tree_data_a.get_root())]
-                .into(),
             balances_proofs,
             prev_balance_root,
             imported_mainnet_exit_root: self.local_exit_tree_data_a.get_root(),

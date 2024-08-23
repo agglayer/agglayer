@@ -34,7 +34,7 @@ impl From<U256> for GlobalIndex {
 
 impl GlobalIndex {
     #[allow(unused)]
-    fn to_u256(&self) -> U256 {
+    fn to_u256(self) -> U256 {
         let mut bytes = [0u8; 32];
 
         let leaf_bytes = self.leaf_index.to_le_bytes();
