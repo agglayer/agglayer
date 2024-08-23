@@ -3,10 +3,11 @@ use std::borrow::Borrow;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bridge_exit::{BridgeExit, NetworkId},
+    bridge_exit::BridgeExit,
     global_index::GlobalIndex,
     keccak::{keccak256_combine, Digest as KeccakDigest, Digest},
     local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
+    ProofError,
 };
 
 /// Represents a token bridge exit originating on another network but claimed on the current network.
@@ -44,25 +45,70 @@ impl ImportedBridgeExit {
         }
     }
 
-    /// Verifies that the provided inclusion path is valid and consistent with the provided LER
-    pub fn verify_path(&self) -> bool {
-        let leaf_inclusion = self.inclusion_proof.verify(
+    pub fn verify_path_mainnet(&self, mer: Digest) -> Result<(), ProofError> {
+        // Check that the inclusion proof is against the considered rollup exit root
+        if self.imported_local_exit_root != mer {
+            return Err(ProofError::InvalidImportedBridgeExitRoot);
+        }
+
+        // Check the inclusion proof of the leaf to the LER
+        if !self.inclusion_proof.verify(
             self.bridge_exit.hash(),
             self.global_index.leaf_index,
             self.imported_local_exit_root,
-        );
+        ) {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
 
-        self.inclusion_proof_rer.as_ref().map_or(
-            leaf_inclusion,
-            |(rollup_inclusion_proof, rollup_exit_root)| {
-                leaf_inclusion
-                    && rollup_inclusion_proof.verify(
-                        self.imported_local_exit_root,
-                        self.global_index.rollup_index,
-                        *rollup_exit_root,
-                    )
-            },
-        )
+        Ok(())
+    }
+
+    pub fn verify_path_rollup(&self, rer: Digest) -> Result<(), ProofError> {
+        // Check the inclusion proof of the leaf to the LER
+        if !self.inclusion_proof.verify(
+            self.bridge_exit.hash(),
+            self.global_index.leaf_index,
+            self.imported_local_exit_root,
+        ) {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        let (rollup_inclusion_proof, rollup_exit_root) = self
+            .inclusion_proof_rer
+            .as_ref()
+            .ok_or(ProofError::InvalidImportedBridgeExitMerklePath)?;
+
+        // Check that the inclusion proof is against the considered rollup exit root
+        if *rollup_exit_root != rer {
+            return Err(ProofError::InvalidImportedBridgeExitRoot);
+        }
+
+        // Check the inclusion proof of the LER to RER
+        if !rollup_inclusion_proof.verify(
+            self.imported_local_exit_root,
+            self.global_index.rollup_index,
+            *rollup_exit_root,
+        ) {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        Ok(())
+    }
+
+    /// Verifies that the provided inclusion path is valid and consistent with the provided LER
+    pub fn verify_path(&self, mer: Digest, rer: Digest) -> Result<(), ProofError> {
+        // Check that the inclusion proof and the global index both refer to mainnet or rollup
+        if self.global_index.mainnet_flag != self.inclusion_proof_rer.is_none() {
+            return Err(ProofError::MismatchGlobalIndexInclusionProof);
+        }
+
+        if self.global_index.mainnet_flag {
+            self.verify_path_mainnet(mer)?;
+        } else {
+            self.verify_path_rollup(rer)?;
+        }
+
+        Ok(())
     }
 
     pub fn hash(&self) -> Digest {

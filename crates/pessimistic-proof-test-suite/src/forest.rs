@@ -90,7 +90,7 @@ impl Forest {
                 inclusion_proof_rer: None,
                 global_index: GlobalIndex {
                     mainnet_flag: true,
-                    rollup_index: *NETWORK_A,
+                    rollup_index: **NETWORK_A,
                     leaf_index: index,
                 },
             };

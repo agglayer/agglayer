@@ -33,6 +33,7 @@ impl From<U256> for GlobalIndex {
 }
 
 impl GlobalIndex {
+    #[allow(unused)]
     fn to_u256(&self) -> U256 {
         let mut bytes = [0u8; 32];
 
