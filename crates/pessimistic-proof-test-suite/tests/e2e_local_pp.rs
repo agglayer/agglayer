@@ -1,5 +1,5 @@
 use pessimistic_proof::{
-    bridge_exit::TokenInfo, local_balance_tree::LocalBalanceTree,
+    bridge_exit::TokenInfo, keccak::Digest, local_balance_tree::LocalBalanceTree,
     multi_batch_header::MultiBatchHeader, nullifier_tree::NullifierTree, LocalNetworkState,
 };
 use pessimistic_proof_test_suite::{
@@ -97,7 +97,6 @@ fn e2e_local_pp_random() {
     let new_local_exit_root = forest.local_exit_tree.get_root();
     let (imported_exits_root, signer, signature) =
         compute_signature_info(new_local_exit_root, &imported_bridge_exits);
-    let dummy = forest.local_exit_tree.get_root();
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
@@ -107,7 +106,7 @@ fn e2e_local_pp_random() {
         imported_exits_root: Some(imported_exits_root),
         imported_local_exit_roots: [(*NETWORK_A, forest.local_exit_tree_data_a.get_root())].into(),
         imported_mainnet_exit_root: forest.local_exit_tree_data_a.get_root(),
-        imported_rollup_exit_root: dummy,
+        imported_rollup_exit_root: Digest::default(),
         balances_proofs,
         prev_balance_root,
         new_balance_root: forest.local_balance_tree.root,

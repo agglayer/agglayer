@@ -201,7 +201,6 @@ impl Forest {
         let new_local_exit_root = self.local_exit_tree.get_root();
         let (imported_exits_root, signer, signature) =
             compute_signature_info(new_local_exit_root, &imported_bridge_exits);
-        let dummy = self.local_exit_tree_data_a.get_root();
         MultiBatchHeader {
             origin_network: *NETWORK_B,
             prev_local_exit_root,
@@ -214,7 +213,7 @@ impl Forest {
             balances_proofs,
             prev_balance_root,
             imported_mainnet_exit_root: self.local_exit_tree_data_a.get_root(),
-            imported_rollup_exit_root: dummy,
+            imported_rollup_exit_root: Digest::default(),
             new_balance_root: self.local_balance_tree.root,
             prev_nullifier_root,
             new_nullifier_root: self.nullifier_set.root,
