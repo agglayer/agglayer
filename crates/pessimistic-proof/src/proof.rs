@@ -61,12 +61,19 @@ pub type NullifierRoot = Digest;
 /// Outputs of the leaf proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeafProofOutput {
+    /// The previous local exit root.
     pub prev_local_exit_root: Digest,
+    /// The previous pessimistic root.
     pub prev_pessimistic_root: Digest,
+    /// The global exit root against which we prove the inclusion of the imported bridge exits.
     pub selected_ger: Digest,
+    /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
+    /// The consensus hash.
     pub consensus_hash: Digest,
+    /// The new local exit root.
     pub new_local_exit_root: Digest,
+    /// The new pessimistic root which commits to the balance and nullifier tree.
     pub new_pessimistic_root: Digest,
 }
 
