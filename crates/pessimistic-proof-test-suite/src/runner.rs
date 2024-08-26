@@ -15,6 +15,12 @@ pub struct Runner {
     client: sp1_sdk::ProverClient,
 }
 
+impl Default for Runner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Runner {
     /// Create a new pessimistic proof client.
     pub fn new() -> Self {
