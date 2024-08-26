@@ -1,4 +1,3 @@
-use pessimistic_proof::bridge_exit::NetworkId;
 pub use pessimistic_proof::{LeafProofOutput, LocalNetworkState};
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1PublicValues, SP1Stdin};

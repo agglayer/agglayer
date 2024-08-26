@@ -58,7 +58,7 @@ pub type ExitRoot = Digest;
 pub type BalanceRoot = Digest;
 pub type NullifierRoot = Digest;
 
-/// PP leaf proof
+/// Outputs of the leaf proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeafProofOutput {
     pub prev_local_exit_root: Digest,
