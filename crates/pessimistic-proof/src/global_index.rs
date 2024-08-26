@@ -1,6 +1,8 @@
 use reth_primitives::U256;
 use serde::{Deserialize, Serialize};
 
+use crate::bridge_exit::NetworkId;
+
 /// The [`GlobalIndex`] uniquely references one leaf within one Global Exit Tree.
 ///
 /// Further defined by the LXLY specifications.
@@ -15,6 +17,10 @@ pub struct GlobalIndex {
 
 impl GlobalIndex {
     const MAINNET_FLAG_OFFSET: usize = 2 * 32;
+
+    pub fn network_id(&self) -> NetworkId {
+        if self.mainnet_flag { 0 } else { self.rollup_index + 1 }.into()
+    }
 }
 
 impl From<U256> for GlobalIndex {

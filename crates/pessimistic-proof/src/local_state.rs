@@ -85,8 +85,7 @@ impl LocalNetworkState {
 
         // Apply the imported bridge exits
         for (imported_bridge_exit, nullifier_path) in &multi_batch_header.imported_bridge_exits {
-            if imported_bridge_exit.global_index.rollup_index == *multi_batch_header.origin_network
-            {
+            if imported_bridge_exit.global_index.network_id() == multi_batch_header.origin_network {
                 // We don't allow a chain to exit to itself
                 return Err(ProofError::ExitToSameNetwork);
             }
@@ -103,7 +102,7 @@ impl LocalNetworkState {
 
             // Check the nullifier non-inclusion path and update the nullifier set
             let nullifier_key = NullifierKey {
-                network_id: imported_bridge_exit.global_index.rollup_index.into(),
+                network_id: imported_bridge_exit.global_index.network_id(),
                 let_index: imported_bridge_exit.global_index.leaf_index,
             };
             self.nullifier_set.verify_and_update(nullifier_key, nullifier_path)?;
