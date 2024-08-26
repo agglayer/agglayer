@@ -257,8 +257,9 @@ where
     where
         K: Copy + ToBits<DEPTH>,
     {
-        // Hack: We use update to insert all the necessary nodes in the SMT.
-        self.update(key, self.empty_hash_at_height[0])?;
+        // Hack: We use `insert` to insert all the necessary nodes in the SMT.
+        // This will return an error if the key is in the SMT.
+        self.insert(key, self.empty_hash_at_height[0])?;
         self.get_inclusion_proof_helper(key, true)
     }
 
@@ -625,5 +626,22 @@ mod tests {
         let new_root = proof.verify_and_update(key, value, new_value, smt.root).unwrap();
         smt.update(key, new_value).unwrap();
         assert_eq!(smt.root, new_root);
+    }
+
+    #[test]
+    fn test_inclusion_proof_zero_doesnt_update() {
+        let mut smt = Smt::<H, DEPTH>::new();
+        let num_keys = thread_rng().gen_range(1..100);
+        let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
+        check_no_duplicates(&kvs);
+        for (key, value) in kvs.iter() {
+            smt.insert(*key, *value).unwrap();
+        }
+        let (key, value) = kvs[thread_rng().gen_range(0..num_keys)];
+        assert_ne!(value, smt.empty_hash_at_height[0], "Check your rng");
+        let root = smt.root;
+        let proof = smt.get_inclusion_proof_zero(key);
+        assert!(proof.is_err(), "The key is in the SMT");
+        assert_eq!(root, smt.root, "The SMT should not be updated");
     }
 }
