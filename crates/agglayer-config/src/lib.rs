@@ -22,6 +22,7 @@ pub(crate) mod auth;
 pub mod certificate_orchestrator;
 pub mod epoch;
 pub(crate) mod l1;
+pub(crate) mod l2;
 pub mod log;
 pub(crate) mod outbound;
 pub mod proof_signers;
@@ -32,6 +33,7 @@ pub(crate) mod telemetry;
 pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
 pub use epoch::Epoch;
 pub use l1::L1;
+pub use l2::L2;
 pub use log::Log;
 pub use rpc::RpcConfig;
 
@@ -45,6 +47,8 @@ pub struct Config {
     /// endpoint.
     #[serde(alias = "FullNodeRPCs", deserialize_with = "deserialize_rpc_map")]
     pub full_node_rpcs: HashMap<u32, Url>,
+    #[serde(default)]
+    pub l2: L2,
     #[serde(
         alias = "ProofSigners",
         deserialize_with = "deserialize_signers_map",

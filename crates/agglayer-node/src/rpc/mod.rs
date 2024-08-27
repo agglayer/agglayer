@@ -26,6 +26,7 @@ use crate::{
 };
 
 mod error;
+mod rpc_middleware;
 
 #[cfg(test)]
 mod tests;
@@ -119,6 +120,7 @@ where
 
         let server = server_builder
             .set_http_middleware(middleware)
+            .set_rpc_middleware(rpc_middleware::from_config(&config))
             .build(addr)
             .await?;
 

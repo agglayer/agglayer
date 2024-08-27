@@ -1,9 +1,11 @@
 ---
 source: crates/agglayer/tests/config.rs
-assertion_line: 12
 expression: result
 ---
 [full-node-rpcs]
+
+[l2]
+rpc-timeout = 45
 
 [proof-signers]
 
@@ -15,6 +17,7 @@ format = "pretty"
 [rpc]
 port = 9090
 host = "0.0.0.0"
+request-timeout = 180
 
 [outbound.rpc.settle]
 max-retries = 3
@@ -25,6 +28,7 @@ confirmations = 1
 chain-id = 1337
 node-url = "http://zkevm-mock-l1-network:8545/"
 rollup-manager-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
+rpc-timeout = 45
 
 [auth.local]
 private-keys = []
