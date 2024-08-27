@@ -1,5 +1,4 @@
-pub use pessimistic_proof::{LeafProofOutput, LocalNetworkState};
-use reth_primitives::Address;
+pub use pessimistic_proof::{LocalNetworkState, PessimisticProofOutput};
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1PublicValues, SP1Stdin};
 
@@ -14,6 +13,12 @@ pub struct ProofOutput {}
 /// A convenient interface to run the pessimistic proof ELF bytecode.
 pub struct Runner {
     client: sp1_sdk::ProverClient,
+}
+
+impl Default for Runner {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Runner {
@@ -36,15 +41,8 @@ impl Runner {
     }
 
     /// Extract outputs from the committed public values.
-    pub fn extract_output(mut public_vals: SP1PublicValues) -> LeafProofOutput {
-        // Ignore the first couple of committed values which are taken directly from
-        // inputs
-        let _exits_root = public_vals.read::<Option<Digest>>();
-        let _signer = public_vals.read::<Address>();
-        let _selected_ger = public_vals.read::<Digest>();
-        let _prev_roots = public_vals.read::<LeafProofOutput>();
-
-        public_vals.read::<LeafProofOutput>()
+    pub fn extract_output(mut public_vals: SP1PublicValues) -> PessimisticProofOutput {
+        public_vals.read::<PessimisticProofOutput>()
     }
 
     /// Execute the ELF with given inputs.
@@ -52,7 +50,7 @@ impl Runner {
         &self,
         state: &LocalNetworkState,
         batch_header: &MultiBatchHeader,
-    ) -> anyhow::Result<(LeafProofOutput, ExecutionReport)> {
+    ) -> anyhow::Result<(PessimisticProofOutput, ExecutionReport)> {
         let stdin = Self::prepare_stdin(state, batch_header);
         let (public_vals, report) = self.client.execute(PESSIMISTIC_PROOF_ELF, stdin).run()?;
 

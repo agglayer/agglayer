@@ -11,7 +11,8 @@ use crate::{
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierTree},
-    LeafProofOutput, ProofError,
+    proof::{BalanceRoot, ExitRoot, NullifierRoot},
+    ProofError,
 };
 
 /// Local state of one network.
@@ -28,7 +29,7 @@ pub struct LocalNetworkState {
 }
 
 impl LocalNetworkState {
-    pub fn roots(&self) -> LeafProofOutput {
+    pub fn roots(&self) -> (ExitRoot, BalanceRoot, NullifierRoot) {
         (self.exit_tree.get_root(), self.balance_tree.root, self.nullifier_set.root)
     }
     /// Apply the [`MultiBatchHeader`] on the current [`State`].

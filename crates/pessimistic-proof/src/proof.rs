@@ -1,7 +1,11 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    keccak::Digest, local_exit_tree::hasher::Keccak256Hasher, local_state::LocalNetworkState,
+    bridge_exit::NetworkId,
+    keccak::{keccak256_combine, Digest},
+    local_exit_tree::hasher::Keccak256Hasher,
+    local_state::LocalNetworkState,
     multi_batch_header::MultiBatchHeader,
 };
 
@@ -53,20 +57,59 @@ pub enum ProofError {
 pub type ExitRoot = Digest;
 pub type BalanceRoot = Digest;
 pub type NullifierRoot = Digest;
-pub type LeafProofOutput = (ExitRoot, BalanceRoot, NullifierRoot);
+
+/// Outputs of the pessimistic proof.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PessimisticProofOutput {
+    /// The previous local exit root.
+    pub prev_local_exit_root: Digest,
+    /// The previous pessimistic root.
+    pub prev_pessimistic_root: Digest,
+    /// The global exit root against which we prove the inclusion of the imported bridge exits.
+    pub selected_ger: Digest,
+    /// The origin network of the pessimistic proof.
+    pub origin_network: NetworkId,
+    /// The consensus hash.
+    pub consensus_hash: Digest,
+    /// The new local exit root.
+    pub new_local_exit_root: Digest,
+    /// The new pessimistic root which commits to the balance and nullifier tree.
+    pub new_pessimistic_root: Digest,
+}
+
+const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;
 
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given [`LocalNetworkState`].
-pub fn generate_leaf_proof(
+pub fn generate_pessimistic_proof(
     initial_network_state: LocalNetworkState,
     batch_header: &MultiBatchHeader<Keccak256Hasher>,
-) -> Result<LeafProofOutput, ProofError> {
-    let mut network_state = initial_network_state;
+) -> Result<PessimisticProofOutput, ProofError> {
+    let (prev_ler, prev_lbr, prev_nr) = initial_network_state.roots();
+    let prev_pessimistic_root = keccak256_combine([prev_lbr, prev_nr]);
 
+    let consensus_hash = keccak256_combine([
+        &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
+        batch_header.signer.as_slice(),
+    ]);
+
+    let selected_ger = keccak256_combine([
+        batch_header.imported_mainnet_exit_root,
+        batch_header.imported_rollup_exit_root,
+    ]);
+
+    let new_pessimistic_root =
+        keccak256_combine([batch_header.new_balance_root, batch_header.new_nullifier_root]);
+
+    let mut network_state = initial_network_state;
     network_state.apply_batch_header(batch_header)?;
 
-    Ok((
-        batch_header.new_local_exit_root,
-        batch_header.new_balance_root,
-        batch_header.new_nullifier_root,
-    ))
+    Ok(PessimisticProofOutput {
+        prev_local_exit_root: prev_ler,
+        prev_pessimistic_root,
+        selected_ger,
+        origin_network: batch_header.origin_network,
+        consensus_hash,
+        new_local_exit_root: batch_header.new_local_exit_root,
+        new_pessimistic_root,
+    })
 }
