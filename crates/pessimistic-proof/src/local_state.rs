@@ -31,10 +31,22 @@ impl LocalNetworkState {
     pub fn roots(&self) -> LeafProofOutput {
         (self.exit_tree.get_root(), self.balance_tree.root, self.nullifier_set.root)
     }
+    /// Apply the [`MultiBatchHeader`] on the current [`State`].
+    /// The state isn't modified on error.
+    pub fn apply_batch_header(
+        &mut self,
+        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+    ) -> Result<(), ProofError> {
+        let mut clone = self.clone();
+        clone.apply_batch_header_helper(multi_batch_header)?;
+        *self = clone;
+
+        Ok(())
+    }
 
     /// Apply the [`MultiBatchHeader`] on the current [`State`].
-    /// Returns the commitment on the resulting state if successful.
-    pub fn apply_batch_header(
+    /// The state can be modified on error.
+    fn apply_batch_header_helper(
         &mut self,
         multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
     ) -> Result<(), ProofError> {
