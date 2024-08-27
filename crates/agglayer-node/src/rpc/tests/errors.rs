@@ -5,7 +5,6 @@ use ethers::{
     types::{Bytes, SignatureError as EthSignatureError, H160, H256},
 };
 use jsonrpsee::types::ErrorObjectOwned;
-use serde::Serialize;
 
 use crate::{
     kernel::{self, ZkevmNodeVerificationError},
