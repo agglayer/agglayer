@@ -58,9 +58,9 @@ pub type ExitRoot = Digest;
 pub type BalanceRoot = Digest;
 pub type NullifierRoot = Digest;
 
-/// Outputs of the leaf proof.
+/// Outputs of the pessimistic proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LeafProofOutput {
+pub struct PessimisticProofOutput {
     /// The previous local exit root.
     pub prev_local_exit_root: Digest,
     /// The previous pessimistic root.
@@ -80,10 +80,10 @@ pub struct LeafProofOutput {
 const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;
 
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given [`LocalNetworkState`].
-pub fn generate_leaf_proof(
+pub fn generate_pessimistic_proof(
     initial_network_state: LocalNetworkState,
     batch_header: &MultiBatchHeader<Keccak256Hasher>,
-) -> Result<LeafProofOutput, ProofError> {
+) -> Result<PessimisticProofOutput, ProofError> {
     let (prev_ler, prev_lbr, prev_nr) = initial_network_state.roots();
     let prev_pessimistic_root = keccak256_combine([prev_lbr, prev_nr]);
 
@@ -103,7 +103,7 @@ pub fn generate_leaf_proof(
     let mut network_state = initial_network_state;
     network_state.apply_batch_header(batch_header)?;
 
-    Ok(LeafProofOutput {
+    Ok(PessimisticProofOutput {
         prev_local_exit_root: prev_ler,
         prev_pessimistic_root,
         selected_ger,

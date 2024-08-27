@@ -11,7 +11,7 @@ use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{FromBool, NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
     utils::smt::Smt,
-    LeafProofOutput, LocalNetworkState,
+    LocalNetworkState, PessimisticProofOutput,
 };
 use rand::{random, thread_rng};
 use reth_primitives::{Address, Signature, U256};
@@ -220,7 +220,7 @@ impl Forest {
     }
 
     /// Check the current state corresponds to given proof output.
-    pub fn assert_output_matches(&self, output: &LeafProofOutput) {
+    pub fn assert_output_matches(&self, output: &PessimisticProofOutput) {
         assert_eq!(output.new_local_exit_root, self.local_exit_tree.get_root());
         assert_eq!(
             output.new_pessimistic_root,

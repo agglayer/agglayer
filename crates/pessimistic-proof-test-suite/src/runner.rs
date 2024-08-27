@@ -1,4 +1,4 @@
-pub use pessimistic_proof::{LeafProofOutput, LocalNetworkState};
+pub use pessimistic_proof::{LocalNetworkState, PessimisticProofOutput};
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1PublicValues, SP1Stdin};
 
@@ -41,8 +41,8 @@ impl Runner {
     }
 
     /// Extract outputs from the committed public values.
-    pub fn extract_output(mut public_vals: SP1PublicValues) -> LeafProofOutput {
-        public_vals.read::<LeafProofOutput>()
+    pub fn extract_output(mut public_vals: SP1PublicValues) -> PessimisticProofOutput {
+        public_vals.read::<PessimisticProofOutput>()
     }
 
     /// Execute the ELF with given inputs.
@@ -50,7 +50,7 @@ impl Runner {
         &self,
         state: &LocalNetworkState,
         batch_header: &MultiBatchHeader,
-    ) -> anyhow::Result<(LeafProofOutput, ExecutionReport)> {
+    ) -> anyhow::Result<(PessimisticProofOutput, ExecutionReport)> {
         let stdin = Self::prepare_stdin(state, batch_header);
         let (public_vals, report) = self.client.execute(PESSIMISTIC_PROOF_ELF, stdin).run()?;
 
