@@ -65,8 +65,10 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "clap",
+ "dirs",
  "dotenvy",
  "insta",
+ "regex",
  "toml 0.8.19",
 ]
 
@@ -123,6 +125,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "ethers",
  "jsonrpsee",
  "pretty_assertions",
