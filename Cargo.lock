@@ -197,6 +197,11 @@ dependencies = [
 [[package]]
 name = "agglayer-storage"
 version = "0.1.0"
+dependencies = [
+ "bincode",
+ "serde",
+ "thiserror",
+]
 
 [[package]]
 name = "agglayer-telemetry"
