@@ -75,9 +75,11 @@ impl<RpcProvider> Kernel<RpcProvider> {
             .get(&rollup_id)
             .ok_or(ZkevmNodeVerificationError::InvalidRollupId(rollup_id))?;
 
-        Ok(ZkevmNodeClient::new(
-            jsonrpsee::http_client::HttpClientBuilder::new().build(url.as_str())?,
-        ))
+        let client = jsonrpsee::http_client::HttpClientBuilder::new()
+            .request_timeout(std::time::Duration::from_secs(45))
+            .build(url.as_str())?;
+
+        Ok(ZkevmNodeClient::new(client))
     }
 
     /// Verify that the given [`SignedTx`] is valid according to the ZkEVM node.
