@@ -12,6 +12,13 @@ rocksdb = "0.22.0"
 serde.workspace = true
 thiserror.workspace = true
 
+agglayer-types = { path = "../agglayer-types" }
+
 [dev-dependencies]
 criterion = "0.5.1"
 rand.workspace = true
+sp1-sdk.workspace = true
+
+[[bench]]
+name = "latest_certificate_bench"
+harness = false

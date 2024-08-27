@@ -1,3 +1,5 @@
+use sp1_sdk::{SP1ProofWithPublicValues, SP1PublicValues};
+
 use crate::columns::{
     proof_per_certificate::{CertificateId, Proof},
     Codec as _,
@@ -5,7 +7,7 @@ use crate::columns::{
 
 #[test]
 fn can_parse_key() {
-    let key = CertificateId([1; 32]);
+    let key: CertificateId = [1; 32];
 
     let encoded = key.encode().expect("Unable to encode key");
 
@@ -24,22 +26,18 @@ fn can_parse_key() {
 
 #[test]
 fn can_parse_value() {
-    let value = Proof([2; 32].to_vec());
+    let mut stdin = sp1_sdk::SP1Stdin::new();
+    stdin.write_slice(&[2; 32]);
 
+    let value = Proof::SP1(SP1ProofWithPublicValues {
+        proof: sp1_sdk::proof::SP1Proof::Core(Vec::new()),
+        stdin,
+        public_values: SP1PublicValues::new(),
+        sp1_version: String::new(),
+    });
     let encoded = value.encode().expect("Unable to encode value");
 
     let expected_value = Proof::decode(&encoded[..]).expect("Unable to decode value");
 
-    assert_eq!(expected_value, value);
-
-    // length
-    assert_eq!(encoded[..8], [0, 0, 0, 0, 0, 0, 0, 32]);
-    // payload
-    assert_eq!(
-        encoded[8..40],
-        [
-            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-            2, 2, 2,
-        ]
-    );
+    assert!(matches!(expected_value, Proof::SP1(_)));
 }

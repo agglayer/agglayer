@@ -1,5 +1,7 @@
+use agglayer_types::CertificateId;
+
 use super::{ColumnSchema, CERTIFICATE_HEADER_CF};
-use crate::types::{CertificateHeader, CertificateId};
+use crate::types::CertificateHeader;
 
 #[cfg(test)]
 mod tests;

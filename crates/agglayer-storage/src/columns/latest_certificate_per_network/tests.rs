@@ -1,9 +1,9 @@
 use super::{Key, ProvenCertificate};
-use crate::{columns::Codec as _, types::NetworkId};
+use crate::columns::Codec as _;
 
 #[test]
 fn can_parse_key() {
-    let key = NetworkId(1);
+    let key = 1;
 
     let encoded = key.encode().expect("Unable to encode key");
 
