@@ -52,6 +52,8 @@ pub enum ProofError {
     InvalidImportedBridgeExitNetwork,
     #[error("Mismatch between the global index and the inclusion proof.")]
     MismatchGlobalIndexInclusionProof,
+    #[error("Duplicate token balance proof")]
+    DuplicateTokenBalanceProof,
 }
 
 pub type ExitRoot = Digest;
