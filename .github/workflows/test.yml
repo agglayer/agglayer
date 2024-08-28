@@ -114,6 +114,7 @@ jobs:
         run: git diff --exit-code crates/pessimistic-proof-program/elf
 
   pre-e2e:
+    if: github.ref == 'refs/heads/main'
     needs:
       - unit
     name: E2E Tests | Docker
