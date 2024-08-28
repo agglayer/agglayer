@@ -1,6 +1,6 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use reth_primitives::{alloy_primitives::U512, B256, U256};
+use reth_primitives::{alloy_primitives::U512, ruint::UintTryFrom, B256, U256};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -200,10 +200,11 @@ impl LocalNetworkState {
         // TODO: implement batch `verify_and_update` for the LBT
         for (token, (old_balance, balance_path)) in &multi_batch_header.balances_proofs {
             let new_balance = new_balances[token];
-            if new_balance > U512::from(U256::MAX) {
+            let new_balance = if let Ok(balance) = U256::uint_try_from(new_balance) {
+                balance
+            } else {
                 return Err(ProofError::BalanceOverflowInBridgeExit);
-            }
-            let new_balance = U256::from(new_balance);
+            };
             self.balance_tree
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
         }
