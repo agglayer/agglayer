@@ -200,11 +200,8 @@ impl LocalNetworkState {
         // TODO: implement batch `verify_and_update` for the LBT
         for (token, (old_balance, balance_path)) in &multi_batch_header.balances_proofs {
             let new_balance = new_balances[token];
-            let new_balance = if let Ok(balance) = U256::uint_try_from(new_balance) {
-                balance
-            } else {
-                return Err(ProofError::BalanceOverflowInBridgeExit);
-            };
+            let new_balance = U256::uint_try_from(new_balance)
+                .map_err(|_| ProofError::BalanceOverflowInBridgeExit)?;
             self.balance_tree
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
         }
