@@ -5,13 +5,16 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-arc-swap = "1.7.1"
+arc-swap.workspace = true
 bincode = "1.3.3"
-reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
+hex.workspace = true
+parking_lot = "0.12.3"
+rand = { version = "0.8.5", optional = true }
 rocksdb = "0.22.0"
 serde.workspace = true
 thiserror.workspace = true
 
+agglayer-config = { path = "../agglayer-config" }
 agglayer-types = { path = "../agglayer-types" }
 
 [dev-dependencies]
@@ -22,3 +25,8 @@ sp1-sdk.workspace = true
 [[bench]]
 name = "latest_certificate_bench"
 harness = false
+required-features = ["tests"]
+
+[features]
+default = []
+tests = ["rand"]

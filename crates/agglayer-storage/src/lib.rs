@@ -13,6 +13,5 @@ pub mod error;
 #[rustfmt::skip]
 pub mod types;
 
-#[cfg(test)]
-#[rustfmt::skip]
-mod tests;
+#[cfg(any(test, feature = "tests"))]
+pub mod tests;

@@ -28,11 +28,11 @@ pub use pessimistic_proof::bridge_exit::NetworkId;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CertificateHeader {
-    pub certificate_id: CertificateId,
     pub network_id: NetworkId,
     pub height: Height,
     pub epoch_number: Option<EpochNumber>,
     pub certificate_index: Option<CertificateIndex>,
+    pub certificate_id: CertificateId,
     pub new_local_exit_root: Hash,
 }
 

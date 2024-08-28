@@ -1,4 +1,6 @@
-use super::{Key, Value};
+use agglayer_types::CertificateHeader;
+
+use super::Key;
 use crate::columns::Codec as _;
 
 #[test]
@@ -17,28 +19,45 @@ fn can_parse_key() {
 
 #[test]
 fn can_parse_value() {
-    let value = Value {
+    let value = CertificateHeader {
+        network_id: 1,
         certificate_id: [1; 32],
-        epoch_number: 3,
-        certificate_index: 4,
+        epoch_number: Some(3),
+        certificate_index: Some(4),
+        height: 0,
+        local_exit_root: [0; 32],
     };
 
     let encoded = value.encode().expect("Unable to encode value");
 
-    let expected_value = Value::decode(&encoded[..]).expect("Unable to decode value");
+    let expected_value = CertificateHeader::decode(&encoded[..]).expect("Unable to decode value");
 
     assert_eq!(expected_value, value);
 
-    // certificate_id
+    // network_id
+    assert_eq!(encoded[..4], [0, 0, 0, 1]);
+    // height
+    assert_eq!(encoded[4..12], [0, 0, 0, 0, 0, 0, 0, 0]);
+    // epoch_number
+    assert_eq!(encoded[12..21], [1, 0, 0, 0, 0, 0, 0, 0, 3]);
+    // certificate_index
+    assert_eq!(encoded[21..30], [1, 0, 0, 0, 0, 0, 0, 0, 4]);
+    // CertificateId
     assert_eq!(
-        encoded[..32],
+        encoded[30..62],
         [
             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1,
+            1, 1, 1
         ]
     );
-    // epoch_number
-    assert_eq!(encoded[32..40], [0, 0, 0, 0, 0, 0, 0, 3]);
-    // certificate_index
-    assert_eq!(encoded[40..48], [0, 0, 0, 0, 0, 0, 0, 4]);
+    // local_exit_root
+    assert_eq!(
+        encoded[62..94],
+        [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0
+        ]
+    );
+
+    assert!(encoded[94..].is_empty());
 }

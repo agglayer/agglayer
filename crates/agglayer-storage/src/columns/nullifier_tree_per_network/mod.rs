@@ -1,7 +1,7 @@
+use agglayer_types::Hash;
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, NULLIFIER_TREE_PER_NETWORK_CF};
-use crate::types::Hash;
 
 #[cfg(test)]
 mod tests;
