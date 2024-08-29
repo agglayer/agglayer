@@ -67,11 +67,12 @@ impl LocalNetworkState {
         }
 
         // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
-        let mut new_balances: BTreeMap<_, _> = multi_batch_header
-            .balances_proofs
-            .iter()
-            .map(|(k, v)| (*k, U512::from(v.0)))
-            .collect();
+        let mut new_balances = BTreeMap::new();
+        for (k, v) in &multi_batch_header.balances_proofs {
+            if new_balances.insert(*k, U512::from(v.0)).is_some() {
+                return Err(ProofError::DuplicateTokenBalanceProof(*k));
+            }
+        }
 
         // Check batch_header.imported_exits_root
         let imported_exits_root = commit_imported_bridge_exits(

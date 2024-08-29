@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    bridge_exit::NetworkId,
+    bridge_exit::{NetworkId, TokenInfo},
     keccak::{keccak256_combine, Digest},
     local_exit_tree::hasher::Keccak256Hasher,
     local_state::LocalNetworkState,
@@ -52,6 +52,8 @@ pub enum ProofError {
     InvalidImportedBridgeExitNetwork,
     #[error("Mismatch between the global index and the inclusion proof.")]
     MismatchGlobalIndexInclusionProof,
+    #[error("Duplicate token {0:?} in balance proofs")]
+    DuplicateTokenBalanceProof(TokenInfo),
 }
 
 pub type ExitRoot = Digest;
