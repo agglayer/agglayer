@@ -70,7 +70,7 @@ impl Node {
         let address = signer.address();
         // Create a new L1 RPC provider with the configured signer.
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(45))
+            .timeout(config.l1.rpc_timeout)
             .build()?;
         let rpc = Provider::new(Http::new_with_client(config.l1.node_url.clone(), client))
             .with_signer(signer)

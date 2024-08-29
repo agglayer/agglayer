@@ -76,7 +76,7 @@ impl<RpcProvider> Kernel<RpcProvider> {
             .ok_or(ZkevmNodeVerificationError::InvalidRollupId(rollup_id))?;
 
         let client = jsonrpsee::http_client::HttpClientBuilder::new()
-            .request_timeout(std::time::Duration::from_secs(45))
+            .request_timeout(self.config.l2.rpc_timeout)
             .build(url.as_str())?;
 
         Ok(ZkevmNodeClient::new(client))
