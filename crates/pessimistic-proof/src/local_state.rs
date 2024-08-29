@@ -1,6 +1,6 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use reth_primitives::B256;
+use reth_primitives::{alloy_primitives::U512, ruint::UintTryFrom, B256, U256};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -69,7 +69,7 @@ impl LocalNetworkState {
         // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
         let mut new_balances = BTreeMap::new();
         for (k, v) in &multi_batch_header.balances_proofs {
-            if new_balances.insert(*k, v.0).is_some() {
+            if new_balances.insert(*k, U512::from(v.0)).is_some() {
                 return Err(ProofError::DuplicateTokenBalanceProof(*k));
             }
         }
@@ -143,7 +143,7 @@ impl LocalNetworkState {
                 Entry::Occupied(mut entry) => {
                     *entry.get_mut() = entry
                         .get()
-                        .checked_add(amount)
+                        .checked_add(U512::from(amount))
                         .ok_or(ProofError::BalanceOverflowInBridgeExit)?;
                 }
             }
@@ -191,7 +191,7 @@ impl LocalNetworkState {
                 Entry::Occupied(mut entry) => {
                     *entry.get_mut() = entry
                         .get()
-                        .checked_sub(amount)
+                        .checked_sub(U512::from(amount))
                         .ok_or(ProofError::BalanceUnderflowInBridgeExit)?;
                 }
             }
@@ -201,6 +201,8 @@ impl LocalNetworkState {
         // TODO: implement batch `verify_and_update` for the LBT
         for (token, (old_balance, balance_path)) in &multi_batch_header.balances_proofs {
             let new_balance = new_balances[token];
+            let new_balance = U256::uint_try_from(new_balance)
+                .map_err(|_| ProofError::BalanceOverflowInBridgeExit)?;
             self.balance_tree
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
         }
