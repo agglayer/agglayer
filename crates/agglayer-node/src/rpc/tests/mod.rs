@@ -4,19 +4,22 @@ use std::time::Duration;
 
 use agglayer_config::Config;
 use ethers::providers::{self, Http, Middleware, Provider, ProviderExt as _};
-use ethers::types::TransactionRequest;
+use ethers::types::{TransactionRequest, H256};
 use ethers::utils::Anvil;
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::ClientError;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::multi_batch_header::MultiBatchHeader;
 
-use crate::rpc::TxStatus;
+use crate::rpc::{self, TxStatus};
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
+
+mod errors;
 
 #[tokio::test]
 async fn healthcheck_method_can_be_called() {
@@ -200,6 +203,53 @@ async fn send_certificate_method_can_be_called_and_fail() {
         .await;
 
     assert!(res.is_err());
+}
+
+#[tokio::test]
+async fn check_tx_status_fail() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
+
+    let anvil = Anvil::new().block_time(1u64).spawn();
+    let client = Provider::<Http>::connect(&anvil.endpoint()).await;
+    let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
+
+    let mut config = Config::default();
+    let addr = next_available_addr();
+    if let std::net::IpAddr::V4(ip) = addr.ip() {
+        config.rpc.host = ip;
+    }
+    let config = Arc::new(config);
+
+    let kernel = Kernel::new(client, config.clone());
+
+    let _server_handle = AgglayerImpl::new(kernel, certificate_sender)
+        .start(config.clone())
+        .await
+        .unwrap();
+
+    let url = format!("http://{}/", config.rpc_addr());
+    let client = HttpClientBuilder::default().build(url).unwrap();
+
+    // Try to get status using a non-existent address
+    let fake_tx_hash = H256([0x27; 32]);
+    let result: Result<TxStatus, ClientError> = client
+        .request("interop_getTxStatus", rpc_params![fake_tx_hash])
+        .await;
+
+    match result.unwrap_err() {
+        ClientError::Call(err) => {
+            assert_eq!(err.code(), rpc::error::code::STATUS_ERROR);
+
+            let data_expected = serde_json::json! {
+                { "status": { "tx-not-found": { "hash":  fake_tx_hash} } }
+            };
+            let data = serde_json::to_value(err.data().expect("data should not be empty")).unwrap();
+            assert_eq!(data_expected, data);
+        }
+        _ => panic!("Unexpected error returned"),
+    }
 }
 
 fn next_available_addr() -> std::net::SocketAddr {

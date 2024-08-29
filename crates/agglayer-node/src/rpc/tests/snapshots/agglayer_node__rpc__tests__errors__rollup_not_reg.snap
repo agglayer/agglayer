@@ -1,0 +1,13 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "RollupNotRegistered { rollup_id: 1337 }"
+---
+{
+  "code": -10001,
+  "data": {
+    "rollup-not-registered": {
+      "rollup-id": 1337
+    }
+  },
+  "message": "Rollup 1337 not registered"
+}
