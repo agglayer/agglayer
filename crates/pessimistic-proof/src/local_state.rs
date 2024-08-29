@@ -70,7 +70,7 @@ impl LocalNetworkState {
         let mut new_balances = BTreeMap::new();
         for (k, v) in &multi_batch_header.balances_proofs {
             if new_balances.insert(*k, v.0).is_some() {
-                return Err(ProofError::DuplicateTokenBalanceProof);
+                return Err(ProofError::DuplicateTokenBalanceProof(*k));
             }
         }
 
