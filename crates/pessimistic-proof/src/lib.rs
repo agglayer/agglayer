@@ -3,6 +3,7 @@ pub mod local_exit_tree;
 
 mod proof;
 pub use proof::{generate_pessimistic_proof, PessimisticProofOutput, ProofError};
+pub use reth_primitives::{Address, Signature, U256};
 
 pub mod local_balance_tree;
 
