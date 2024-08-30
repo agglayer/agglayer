@@ -24,6 +24,7 @@ use crate::{
     EpochPacker, Error,
 };
 
+mod certifier_results;
 mod receive_certificates;
 
 #[derive(Default)]
@@ -131,6 +132,7 @@ impl StateWriter for DummyPendingStore {
                 new_local_exit_root: certificate.new_local_exit_root,
             },
         );
+
         Ok(())
     }
 }
@@ -423,6 +425,7 @@ pub(crate) fn create_orchestrator(
 #[derive(Clone)]
 pub(crate) struct Check {
     pending_store: Arc<DummyPendingStore>,
+    #[allow(unused)]
     state_store: Arc<DummyPendingStore>,
     expected_certificate: Option<Certificate>,
     #[allow(unused)]
@@ -521,18 +524,10 @@ impl Certifier for Check {
             .insert_generated_proof(&certificate_id, &proof)
             .expect("Storage failure: Unable to insert proof");
 
-        self.state_store
-            .insert_certificate_header(&certificate)
-            .expect("Storage failure: Unable to insert certificate header");
-
-        self.pending_store
-            .remove_pending_certificate(network_id, height)
-            .expect("Storage failure: Unable to remove certificate");
-
         let result = CertifierOutput {
             certificate,
             height,
-            new_state: local_state.into(),
+            new_state: local_state,
             network: network_id,
         };
         _ = self.executed.try_send(result.clone());

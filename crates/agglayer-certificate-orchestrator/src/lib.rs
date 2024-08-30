@@ -373,7 +373,7 @@ where
                 let entry = self.cursors.entry(network);
 
                 match entry {
-                    Entry::Vacant(entry) if certificate.height == 0 => {
+                    Entry::Vacant(entry) if height == 0 => {
                         entry.insert(0);
                     }
                     Entry::Vacant(_) => {
@@ -385,8 +385,22 @@ where
 
                         return Err(());
                     }
-                    Entry::Occupied(entry) if *entry.get() + 1 == certificate.height => todo!(),
-                    Entry::Occupied(_) => todo!(),
+                    // If the certificate is generated for the next height, we
+                    // can update the cursor
+                    Entry::Occupied(mut entry) if *entry.get() + 1 == height => {
+                        entry.insert(height);
+                    }
+                    Entry::Occupied(entry) => {
+                        warn!(
+                            "Received a certificate with an unexpected height: {} for network {} \
+                             which is currently at {}",
+                            height,
+                            network,
+                            *entry.get()
+                        );
+
+                        return Err(());
+                    }
                 }
                 // TODO: Deal with errors
                 self.state_store
