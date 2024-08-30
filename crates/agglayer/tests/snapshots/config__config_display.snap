@@ -17,6 +17,7 @@ format = "pretty"
 [rpc]
 port = 9090
 host = "0.0.0.0"
+request-timeout = 180
 
 [outbound.rpc.settle]
 max-retries = 3

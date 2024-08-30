@@ -5,12 +5,14 @@ use serde::{
     de::{MapAccess, Visitor},
     Deserialize, Deserializer, Serialize,
 };
+use serde_with::{serde_as, DurationSeconds};
 use url::Url;
 
 /// The default port for the local RPC server.
 const DEFAULT_PORT: u16 = 9090;
 
 /// The local RPC server configuration.
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct RpcConfig {
@@ -43,6 +45,10 @@ pub struct RpcConfig {
     /// The interval at which to send ping messages
     #[serde(skip)]
     pub ping_interval: Option<Duration>,
+    /// Timeout for completion of an RPC request to the AggLayer node.
+    #[serde_as(as = "DurationSeconds")]
+    #[serde(default = "default_request_timeout")]
+    pub request_timeout: Duration,
 }
 
 impl Default for RpcConfig {
@@ -55,6 +61,7 @@ impl Default for RpcConfig {
             max_connections: default_max_connections(),
             batch_request_limit: None,
             ping_interval: None,
+            request_timeout: default_request_timeout(),
         }
     }
 }
@@ -78,6 +85,11 @@ fn default_port() -> u16 {
 /// The default host for the local RPC server.
 const fn default_host() -> Ipv4Addr {
     Ipv4Addr::new(0, 0, 0, 0)
+}
+
+/// Default timeout for completion of an RPC request to the AggLayer node.
+const fn default_request_timeout() -> Duration {
+    Duration::from_secs(180)
 }
 
 fn deserialize_port<'de, D>(deserializer: D) -> Result<u16, D::Error>
