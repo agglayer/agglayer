@@ -3,8 +3,13 @@ name = "pessimistic-proof-test-suite"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "ppgen"
+path = "src/bin/ppgen.rs"
+
 [dependencies]
 base64.workspace = true
+clap = { version = "4.0", features = ["derive", "env"] }
 ethers-signers.workspace = true
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
 serde.workspace = true
@@ -16,6 +21,9 @@ lazy_static.workspace = true
 anyhow.workspace = true
 rand.workspace = true
 hex-literal = "0.4"
+hex.workspace = true
+tracing = "0.1.40"
+uuid = { version = "1.10.0", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
 rstest.workspace = true
