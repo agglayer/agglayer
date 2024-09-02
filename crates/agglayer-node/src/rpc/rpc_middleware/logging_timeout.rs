@@ -53,7 +53,7 @@ impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for LoggingTimeoutService<S> {
             timeout: self.timeout,
             method: request.method.clone(),
             request_id: request.id.clone(),
-            inner: self.inner.call(request),
+            inner: tokio::time::timeout(self.timeout, self.inner.call(request)),
         }
     }
 }
@@ -69,7 +69,7 @@ pub struct LoggingTimeoutFuture<'a, F> {
 
     // The future to execute under a timeout.
     #[pin]
-    inner: F,
+    inner: tokio::time::Timeout<F>,
 }
 
 impl<F: Future<Output = MethodResponse>> Future for LoggingTimeoutFuture<'_, F> {
@@ -80,14 +80,13 @@ impl<F: Future<Output = MethodResponse>> Future for LoggingTimeoutFuture<'_, F> 
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         let this = self.project();
-        let timeout = *this.timeout;
 
-        let fut = tokio::time::timeout(timeout, this.inner).unwrap_or_else(move |e| {
+        let fut = this.inner.unwrap_or_else(move |e| {
             let method = &**this.method;
             let id = &*this.request_id;
             warn!("Request ID `{id}` to `{method}` timed out: {e}");
 
-            let info = serde_json::json!({ "timeout": timeout.as_secs() });
+            let info = serde_json::json!({ "timeout": this.timeout.as_secs() });
             let err = ErrorObject::owned(TIMEOUT_ERROR_CODE, "request timed out", Some(info));
             MethodResponse::error(id.to_owned(), err)
         });
