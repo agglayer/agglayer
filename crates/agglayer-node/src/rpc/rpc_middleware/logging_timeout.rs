@@ -1,14 +1,12 @@
 //! A logging timeout layer.
 
-use std::{borrow::Cow, future::Future, time::Duration};
+use std::{future::Future, time::Duration};
 
 use futures::TryFutureExt;
-use jsonrpsee::{
-    server::middleware::rpc::RpcServiceT,
-    types::{ErrorObject, Id, Request},
-    MethodResponse,
-};
+use jsonrpsee::{server::middleware::rpc::RpcServiceT, types::ErrorObject, MethodResponse};
 use tracing::warn;
+
+use super::RequestInfo;
 
 /// Error code to return when the response time is too long.
 pub const TIMEOUT_ERROR_CODE: i32 = -32001;
@@ -17,6 +15,7 @@ pub const TIMEOUT_ERROR_CODE: i32 = -32001;
 /// timeout expires before the request is completed.
 #[derive(Clone, Debug)]
 pub struct LoggingTimeoutLayer {
+    /// Maximum duration for the request to complete.
     timeout: Duration,
 }
 
@@ -35,7 +34,10 @@ impl<S> tower::Layer<S> for LoggingTimeoutLayer {
 }
 
 pub struct LoggingTimeoutService<S> {
+    /// The underlying service.
     inner: S,
+
+    /// Maximum duration for the request to complete.
     timeout: Duration,
 }
 
@@ -48,11 +50,10 @@ impl<S> LoggingTimeoutService<S> {
 impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for LoggingTimeoutService<S> {
     type Future = LoggingTimeoutFuture<'a, S::Future>;
 
-    fn call(&self, request: Request<'a>) -> Self::Future {
+    fn call(&self, request: jsonrpsee::types::Request<'a>) -> Self::Future {
         LoggingTimeoutFuture {
             timeout: self.timeout,
-            method: request.method.clone(),
-            request_id: request.id.clone(),
+            request_info: RequestInfo::from_request(&request),
             inner: tokio::time::timeout(self.timeout, self.inner.call(request)),
         }
     }
@@ -60,14 +61,13 @@ impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for LoggingTimeoutService<S> {
 
 #[pin_project::pin_project]
 pub struct LoggingTimeoutFuture<'a, F> {
-    // Timeout duration.
+    /// The timeout duration.
     timeout: Duration,
 
-    // Method information.
-    method: Cow<'a, str>,
-    request_id: Id<'a>,
+    /// Information about the request and the method.
+    request_info: RequestInfo<'a>,
 
-    // The future to execute under a timeout.
+    /// The future to be executed under the timeout.
     #[pin]
     inner: tokio::time::Timeout<F>,
 }
@@ -82,8 +82,8 @@ impl<F: Future<Output = MethodResponse>> Future for LoggingTimeoutFuture<'_, F> 
         let this = self.project();
 
         let fut = this.inner.unwrap_or_else(move |e| {
-            let method = &**this.method;
-            let id = &*this.request_id;
+            let method = &*this.request_info.method;
+            let id = &this.request_info.request_id;
             warn!("Request ID `{id}` to `{method}` timed out: {e}");
 
             let info = serde_json::json!({ "timeout": this.timeout.as_secs() });

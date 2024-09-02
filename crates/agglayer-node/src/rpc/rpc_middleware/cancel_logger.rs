@@ -1,12 +1,10 @@
 //! RPC middleware for recording cancelled requests.
 
-use std::{borrow::Cow, future::Future};
+use std::future::Future;
 
-use jsonrpsee::{
-    server::middleware::rpc::RpcServiceT,
-    types::{Id, Request},
-    MethodResponse,
-};
+use jsonrpsee::{server::middleware::rpc::RpcServiceT, types::Request, MethodResponse};
+
+use super::RequestInfo;
 
 /// An RPC layer that logs request cancellations.
 #[derive(Clone, Debug)]
@@ -34,8 +32,7 @@ impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for CancelLoggerService<S> {
     fn call(&self, request: Request<'a>) -> Self::Future {
         CancelLoggerFuture {
             completed: false,
-            method: request.method.clone(),
-            request_id: request.id.clone(),
+            request_info: RequestInfo::from_request(&request),
             inner: self.0.call(request),
         }
     }
@@ -43,14 +40,13 @@ impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for CancelLoggerService<S> {
 
 #[pin_project::pin_project(PinnedDrop)]
 pub struct CancelLoggerFuture<'a, F> {
-    // Future state.
+    /// The future completion state.
     completed: bool,
 
-    // Method information.
-    method: Cow<'a, str>,
-    request_id: Id<'a>,
+    /// Request and method information.
+    request_info: RequestInfo<'a>,
 
-    // The future to execute under a timeout.
+    /// The future to log cancellation for.
     #[pin]
     inner: F,
 }
@@ -75,8 +71,8 @@ impl<F: Future<Output = MethodResponse>> Future for CancelLoggerFuture<'_, F> {
 impl<F> PinnedDrop for CancelLoggerFuture<'_, F> {
     fn drop(self: std::pin::Pin<&mut Self>) {
         if !self.completed {
-            let method = &*self.method;
-            let id = &self.request_id;
+            let method = &*self.request_info.method;
+            let id = &self.request_info.request_id;
             tracing::warn!("Request ID `{id}` to `{method}` was cancelled");
         }
     }
