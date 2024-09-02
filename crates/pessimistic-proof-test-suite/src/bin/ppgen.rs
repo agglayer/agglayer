@@ -19,9 +19,14 @@ struct PPGenArgs {
     #[clap(long, default_value = "10")]
     n_exits: usize,
 
-    /// The output directory for the generated proofs in json.
-    #[clap(long, default_value = "./data/proofs/")]
-    proof_dir: PathBuf,
+    /// The optional output directory to write the proofs in JSON. If not set,
+    /// the proof is simply logged.
+    #[clap(long)]
+    proof_dir: Option<PathBuf>,
+
+    /// The optional path to the custom sample data.
+    #[clap(long)]
+    sample_path: Option<PathBuf>,
 }
 
 pub fn main() {
@@ -30,9 +35,15 @@ pub fn main() {
     let args = PPGenArgs::parse();
 
     let mut state = data::sample_state_01();
-    let bridge_exits = data::sample_bridge_exits_01()
-        .take(args.n_exits)
-        .collect::<Vec<_>>();
+    let bridge_exits = if let Some(p) = args.sample_path {
+        data::sample_bridge_exits(p)
+            .take(args.n_exits)
+            .collect::<Vec<_>>()
+    } else {
+        data::sample_bridge_exits_01()
+            .take(args.n_exits)
+            .collect::<Vec<_>>()
+    };
 
     let withdrawals = bridge_exits
         .iter()
@@ -62,21 +73,23 @@ pub fn main() {
         proof: format!("0x{}", hex::encode(proof.bytes())),
     };
 
-    let id = Uuid::new_v4();
-    // Save the plonk proof to a json file.
-    let proof_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(args.proof_dir);
-    let proof_path = proof_dir.join(format!(
-        "{}-exits-v{}-{}.json",
-        args.n_exits,
-        &vkey[..8],
-        id
-    ));
-    if let Err(e) = std::fs::create_dir_all(&proof_dir) {
-        warn!("Failed to create directory: {e}");
+    if let Some(proof_dir) = args.proof_dir {
+        // Save the plonk proof to a json file.
+        let proof_path = proof_dir.join(format!(
+            "{}-exits-v{}-{}.json",
+            args.n_exits,
+            &vkey[..8],
+            Uuid::new_v4()
+        ));
+        if let Err(e) = std::fs::create_dir_all(&proof_dir) {
+            warn!("Failed to create directory: {e}");
+        }
+        info!("Writing the proof to {:?}", proof_path);
+        std::fs::write(proof_path, serde_json::to_string_pretty(&fixture).unwrap())
+            .expect("failed to write fixture");
+    } else {
+        info!("Proof: {:?}", fixture);
     }
-    info!("Writing the proof to {:?}", proof_path);
-    std::fs::write(proof_path, serde_json::to_string_pretty(&fixture).unwrap())
-        .expect("failed to write fixture");
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

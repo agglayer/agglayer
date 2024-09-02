@@ -11,14 +11,14 @@ cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --help
 The following command will generate one plonk proof for 10 bridge exits, with the default mode which is local.
 
 ```
-RUST_LOG=info ./target/release/ppgen --proof-dir ./data/proofs/ --n-exits 10
+RUST_LOG=info cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --proof-dir ./data/proofs/ --n-exits 10
 ```
 
 The local mode requires a large machine with ~128GB RAM.
 
 ## Network mode
 
-Necessary environment variables to generate with the succinct infrastructure:
+The succinct infrastructure generates the proof upon request. This requires to define two environment variables:
 
 ```
 SP1_PROVER=network
@@ -28,7 +28,7 @@ SP1_PRIVATE_KEY=...
 Then, the command remains the same:
 
 ```
-RUST_LOG=info ./target/release/ppgen --proof-dir ./data/proofs/ --n-exits 10
+RUST_LOG=info cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --proof-dir ./data/proofs/ --n-exits 10
 ```
 
 Expected logs:
@@ -47,3 +47,7 @@ Expected logs:
 2024-08-30T13:05:58.374793Z  INFO Successfully generated the plonk proof
 2024-08-30T13:05:58.374934Z  INFO Writing the proof to "./agglayer/crates/pessimistic-proof-test-suite/./data/proofs/10-exits-v0x0072d7-4c049331-cde2-4a82-84f9-c720d89b1752.json"
 ```
+
+## Proof output
+
+Use `--proof-dir` to save the proof as a JSON file in the specified directory. If not set, the proof will be logged instead.

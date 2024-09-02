@@ -9,7 +9,7 @@ path = "src/bin/ppgen.rs"
 
 [dependencies]
 base64.workspace = true
-clap = { version = "4.0", features = ["derive", "env"] }
+clap.workspace = true
 ethers-signers.workspace = true
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
 serde.workspace = true
