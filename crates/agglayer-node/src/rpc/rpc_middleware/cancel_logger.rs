@@ -73,7 +73,7 @@ impl<F> PinnedDrop for CancelLoggerFuture<'_, F> {
         if !self.completed {
             let method = &*self.request_info.method;
             let id = &self.request_info.request_id;
-            tracing::warn!("Request ID `{id}` to `{method}` was cancelled");
+            tracing::info!("Request ID `{id}` to `{method}` was cancelled");
         }
     }
 }

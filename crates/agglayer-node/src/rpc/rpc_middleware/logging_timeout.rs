@@ -4,7 +4,6 @@ use std::{future::Future, time::Duration};
 
 use futures::TryFutureExt;
 use jsonrpsee::{server::middleware::rpc::RpcServiceT, types::ErrorObject, MethodResponse};
-use tracing::warn;
 
 use super::RequestInfo;
 
@@ -84,7 +83,7 @@ impl<F: Future<Output = MethodResponse>> Future for LoggingTimeoutFuture<'_, F> 
         let fut = this.inner.unwrap_or_else(move |e| {
             let method = &*this.request_info.method;
             let id = &this.request_info.request_id;
-            warn!("Request ID `{id}` to `{method}` timed out: {e}");
+            tracing::warn!("Request ID `{id}` to `{method}` timed out: {e}");
 
             let info = serde_json::json!({ "timeout": this.timeout.as_secs() });
             let err = ErrorObject::owned(TIMEOUT_ERROR_CODE, "request timed out", Some(info));
