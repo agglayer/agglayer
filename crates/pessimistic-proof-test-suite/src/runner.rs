@@ -1,6 +1,6 @@
 pub use pessimistic_proof::{LocalNetworkState, PessimisticProofOutput};
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
-use sp1_sdk::{SP1PublicValues, SP1Stdin};
+use sp1_sdk::{SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin, SP1VerifyingKey};
 
 use crate::PESSIMISTIC_PROOF_ELF;
 
@@ -57,5 +57,24 @@ impl Runner {
         let output = Self::extract_output(public_vals);
 
         Ok((output, report))
+    }
+
+    /// Generate one plonk proof.
+    pub fn generate_plonk_proof(
+        &self,
+        state: &LocalNetworkState,
+        batch_header: &MultiBatchHeader,
+    ) -> anyhow::Result<(
+        SP1ProofWithPublicValues,
+        SP1VerifyingKey,
+        PessimisticProofOutput,
+    )> {
+        let stdin = Self::prepare_stdin(state, batch_header);
+        let (pk, vk) = self.client.setup(PESSIMISTIC_PROOF_ELF);
+
+        let proof = self.client.prove(&pk, stdin).plonk().run()?;
+        let output = Self::extract_output(proof.public_values.clone());
+
+        Ok((proof, vk, output))
     }
 }

@@ -4689,7 +4689,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "clap",
  "ethers-signers",
+ "hex",
  "hex-literal",
  "lazy_static",
  "pessimistic-proof",
@@ -4701,6 +4703,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror",
  "tracing",
+ "uuid 1.10.0",
 ]
 
 [[package]]
@@ -7763,6 +7766,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81dfa00651efa65069b0b6b651f4aaa31ba9e3c3ce0137aaad053604ee7e0314"
 dependencies = [
  "getrandom",
+ "rand",
 ]
 
 [[package]]
