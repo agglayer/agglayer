@@ -6,6 +6,7 @@ use pessimistic_proof::{
     PessimisticProofOutput,
 };
 use pessimistic_proof_test_suite::{runner::Runner, sample_data as data};
+use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use sp1_sdk::HashableKey;
 use tracing::{info, warn};
@@ -68,6 +69,7 @@ pub fn main() {
     let fixture = PessimisticProofFixture {
         bridge_exits,
         pp_inputs: new_roots.into(),
+        signer: batch_header.signer,
         vkey: vkey.clone(),
         public_values: format!("0x{}", hex::encode(proof.public_values.as_slice())),
         proof: format!("0x{}", hex::encode(proof.bytes())),
@@ -134,6 +136,7 @@ impl From<PessimisticProofOutput> for VerifierInputs {
 struct PessimisticProofFixture {
     bridge_exits: Vec<BridgeExit>,
     pp_inputs: VerifierInputs,
+    signer: Address,
     vkey: String,
     public_values: String,
     proof: String,
