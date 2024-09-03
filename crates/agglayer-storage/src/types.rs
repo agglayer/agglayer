@@ -9,11 +9,29 @@ pub struct Certificate(Vec<u8>);
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EpochNumber(pub(crate) u64);
 
+impl From<u64> for EpochNumber {
+    fn from(epoch_number: u64) -> Self {
+        Self(epoch_number)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CertificateIndex(pub(crate) u64);
 
+impl From<u64> for CertificateIndex {
+    fn from(index: u64) -> Self {
+        Self(index)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CertificateId(pub(crate) [u8; 32]);
+
+impl From<[u8; 32]> for CertificateId {
+    fn from(id: [u8; 32]) -> Self {
+        Self(id)
+    }
+}
 
 impl Deref for CertificateId {
     type Target = [u8; 32];

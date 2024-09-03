@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, CERTIFICATE_PER_NETWORK_CF};
+use crate::types;
 
 #[cfg(test)]
 mod tests;
@@ -22,9 +23,9 @@ pub struct Key {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Value {
-    certificate_id: [u8; 32],
-    epoch_number: u64,
-    certificate_index: u64,
+    certificate_id: types::CertificateId,
+    epoch_number: types::EpochNumber,
+    certificate_index: types::CertificateIndex,
 }
 
 impl Codec for Key {}
