@@ -10,7 +10,7 @@ use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
 };
-use reth_primitives::{Address, Signature, U256};
+use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -19,6 +19,7 @@ pub enum Error {
     TypeConversion(&'static str),
 }
 
+pub use reth_primitives::U256;
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = [u8; 32];

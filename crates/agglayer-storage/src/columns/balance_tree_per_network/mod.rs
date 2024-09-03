@@ -1,7 +1,7 @@
+use agglayer_types::{Hash, U256};
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, BALANCE_TREE_PER_NETWORK_CF};
-use crate::types::Hash;
 
 #[cfg(test)]
 mod tests;
@@ -36,7 +36,7 @@ pub enum KeyType {
 pub enum Value {
     Node(Hash, Hash),
     Leaf(Hash),
-    LeafData(reth_primitives::U256),
+    LeafData(U256),
 }
 
 impl Codec for Key {}

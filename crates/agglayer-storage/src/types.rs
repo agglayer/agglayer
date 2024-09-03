@@ -1,13 +1,5 @@
 use agglayer_types::{Certificate, CertificateHeader, CertificateId, Proof};
-use agglayer_types::{
-    Certificate, CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, Proof,
-};
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    columns::{default_bincode_options, Codec},
-    error::Error,
-};
 
 macro_rules! default_codec_impl {
     ($($ident: ident),+) => {

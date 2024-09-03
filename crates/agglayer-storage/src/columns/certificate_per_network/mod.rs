@@ -1,4 +1,4 @@
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber};
+use agglayer_types::CertificateHeader;
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, CERTIFICATE_PER_NETWORK_CF};
