@@ -18,9 +18,9 @@ fn can_parse_key() {
 #[test]
 fn can_parse_value() {
     let value = Value {
-        certificate_id: [1; 32].into(),
-        epoch_number: 3.into(),
-        certificate_index: 4.into(),
+        certificate_id: [1; 32],
+        epoch_number: 3,
+        certificate_index: 4,
     };
 
     let encoded = value.encode().expect("Unable to encode value");

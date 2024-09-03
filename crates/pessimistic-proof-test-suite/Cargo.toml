@@ -18,6 +18,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 sp1-sdk.workspace = true
+sp1-core-machine.workspace = true
 lazy_static.workspace = true
 anyhow.workspace = true
 rand.workspace = true

@@ -1,8 +1,13 @@
 use agglayer_types::{
     Certificate, CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, Proof,
 };
-use bincode::Options as _;
 use serde::{Deserialize, Serialize};
+
+macro_rules! default_codec_impl {
+    ($($ident: ident),+) => {
+        $(impl crate::columns::Codec for $ident {})+
+    };
+}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hash(pub(crate) [u8; 32]);

@@ -13,7 +13,7 @@ use proof::Proof;
 use reth_primitives::Address;
 use serde::Serialize;
 use sp1::SP1;
-use sp1_sdk::{LocalProver, MockProver, NetworkProver};
+use sp1_sdk::{CpuProver, MockProver, NetworkProver};
 use tracing::{debug, error, info};
 
 /// ELF of the pessimistic proof program
@@ -57,7 +57,7 @@ where
                 prover: Arc::new(SP1::new(NetworkProver::new(), ELF)),
             }),
             ProverConfig::SP1Local {} => Ok(Self {
-                prover: Arc::new(SP1::new(LocalProver::new(), ELF)),
+                prover: Arc::new(SP1::new(CpuProver::new(), ELF)),
             }),
             ProverConfig::SP1Mock {} => Ok(Self {
                 prover: Arc::new(SP1::new(MockProver::new(), ELF)),

@@ -43,7 +43,7 @@ impl Proof {
         Proof::SP1(sp1_sdk::SP1ProofWithPublicValues {
             proof: sp1_sdk::SP1Proof::Core(Vec::new()),
             stdin: sp1_sdk::SP1Stdin::new(),
-            public_values: sp1_sdk::SP1PublicValues::new(),
+            public_values: sp1_core_machine::io::SP1PublicValues::new(),
             sp1_version: String::new(),
         })
     }

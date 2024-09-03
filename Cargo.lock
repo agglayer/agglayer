@@ -244,6 +244,7 @@ dependencies = [
  "pessimistic-proof",
  "reth-primitives",
  "serde",
+ "sp1-core-machine",
  "sp1-sdk",
  "thiserror",
 ]
@@ -4979,6 +4980,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+ "sp1-core-machine",
  "sp1-sdk",
  "thiserror",
  "tracing",

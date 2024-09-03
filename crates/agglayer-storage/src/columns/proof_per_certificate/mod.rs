@@ -1,7 +1,5 @@
 use agglayer_types::{CertificateId, Proof};
-use bincode::Options;
 
-use super::{default_bincode_options, Codec, ColumnSchema, PROOF_PER_CERTIFICATE_CF};
 use super::{ColumnSchema, PROOF_PER_CERTIFICATE_CF};
 
 #[cfg(test)]

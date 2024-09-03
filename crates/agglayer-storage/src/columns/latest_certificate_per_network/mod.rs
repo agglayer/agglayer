@@ -1,7 +1,7 @@
+use agglayer_types::NetworkId;
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF};
-use crate::types::NetworkId;
 
 #[cfg(test)]
 mod tests;
