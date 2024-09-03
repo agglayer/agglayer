@@ -2,8 +2,11 @@ use crate::columns::PER_EPOCH_PROOFS_CF;
 
 /// Column family for the proofs in an epoch.
 ///
-/// | --- key --- |    | --- value --- |
-/// | index       | => | proof bytes   |
+/// ## Column definition
+/// ```
+/// |-key--------------|    |-value---|
+/// | CertificateIndex   =>   Proof   |
+/// ```
 pub struct ProofPerIndex;
 
 impl crate::columns::ColumnSchema for ProofPerIndex {

@@ -2,6 +2,7 @@ use bincode::{
     config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding},
     DefaultOptions, Options,
 };
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::error::Error;
 
@@ -33,9 +34,14 @@ pub const PER_EPOCH_PROOFS_CF: &str = "per_epoch_proofs_cf";
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
 pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
 
-pub trait Codec: Sized {
-    fn encode(&self) -> Result<Vec<u8>, Error>;
-    fn decode(buf: &[u8]) -> Result<Self, Error>;
+pub trait Codec: Sized + Serialize + DeserializeOwned {
+    fn encode(&self) -> Result<Vec<u8>, Error> {
+        Ok(default_bincode_options().serialize(self)?)
+    }
+
+    fn decode(buf: &[u8]) -> Result<Self, Error> {
+        Ok(default_bincode_options().deserialize(buf)?)
+    }
 }
 
 pub trait ColumnSchema {

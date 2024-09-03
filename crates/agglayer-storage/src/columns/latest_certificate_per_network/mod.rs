@@ -1,10 +1,7 @@
-use bincode::Options;
 use serde::{Deserialize, Serialize};
 
-use super::{
-    default_bincode_options, Codec, ColumnSchema, LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF,
-};
-use crate::{error::Error, types::NetworkId};
+use super::{Codec, ColumnSchema, LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF};
+use crate::types::NetworkId;
 
 #[cfg(test)]
 mod tests;
@@ -13,8 +10,11 @@ mod tests;
 /// The key is the network_id and the value is the certificateID,
 /// the height and the epoch_number.
 ///
-/// | --- key ---- |    | ---------- value ----------  |
-/// | NetworkID    | => | Proof CertificateID Height   |
+/// ## Column definition
+/// ```
+/// |-key-------|    |-value----------------------------|
+/// | NetworkId   =>   (Proof, CertificateId, Height)   |
+/// ```
 pub struct LatestSettledCertificatePerNetworkColumn;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -22,14 +22,7 @@ pub struct ProvenCertificate(pub [u8; 32], pub u64, pub u64);
 
 pub type Key = NetworkId;
 
-impl Codec for ProvenCertificate {
-    fn encode(&self) -> Result<Vec<u8>, Error> {
-        Ok(default_bincode_options().serialize(self)?)
-    }
-    fn decode(buf: &[u8]) -> Result<Self, Error> {
-        Ok(default_bincode_options().deserialize(buf)?)
-    }
-}
+impl Codec for ProvenCertificate {}
 
 impl ColumnSchema for LatestSettledCertificatePerNetworkColumn {
     type Key = Key;

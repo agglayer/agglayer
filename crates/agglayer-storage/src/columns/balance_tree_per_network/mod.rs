@@ -1,19 +1,20 @@
-use bincode::Options;
 use serde::{Deserialize, Serialize};
 
-use super::{default_bincode_options, Codec, ColumnSchema, BALANCE_TREE_PER_NETWORK_CF};
-use crate::{error::Error, types::Hash};
+use super::{Codec, ColumnSchema, BALANCE_TREE_PER_NETWORK_CF};
+use crate::types::Hash;
 
 #[cfg(test)]
 mod tests;
 
 /// Column family for the balance tree per network.
-///
-/// | ------------ key ------------ |    | ------------- value -------------- |
-/// | NetworkId "root"              | => | hash(node.left) hash(node.right)   |
-/// | NetworkId hash(node)          | => | hash(node.left) hash(node.right)   |
-/// | NetworkId hash(node)          | => | hash(leaf)                         |
-/// | NetworkId "leaves" hash(leaf) | => | leaf bytes array                   |
+/// ## Column definition
+/// ```
+/// |-key-----------------------------------|    |-value-----------------------------|
+/// | (NetworkId, KeyType::Root)              =>  (hash(root.left) hash(root.right)) |
+/// | (NetworkId, hash(node))                 =>  (hash(node.left) hash(node.right)) |
+/// | (NetworkId, hash(node))                 =>  (hash(leaf))                       |
+/// | (NetworkId, KeyType::Leaf(hash(leaf)))  =>  (U256)                             |
+/// ```
 pub struct BalanceTreePerNetworkColumn;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -30,31 +31,15 @@ pub enum KeyType {
     Leaves,
 }
 
-impl Codec for Key {
-    fn encode(&self) -> Result<Vec<u8>, Error> {
-        Ok(default_bincode_options().serialize(&self)?)
-    }
-
-    fn decode(buf: &[u8]) -> Result<Self, Error> {
-        Ok(default_bincode_options().deserialize(buf)?)
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Value {
     Node(Hash, Hash),
     Leaf(Hash),
-    LeafData(Vec<u8>),
+    LeafData(reth_primitives::U256),
 }
 
-impl Codec for Value {
-    fn encode(&self) -> Result<Vec<u8>, Error> {
-        Ok(default_bincode_options().serialize(&self)?)
-    }
-    fn decode(buf: &[u8]) -> Result<Self, Error> {
-        Ok(default_bincode_options().deserialize(buf)?)
-    }
-}
+impl Codec for Key {}
+impl Codec for Value {}
 
 impl ColumnSchema for BalanceTreePerNetworkColumn {
     type Key = Key;

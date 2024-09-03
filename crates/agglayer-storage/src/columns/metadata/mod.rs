@@ -2,8 +2,11 @@ use super::{ColumnSchema, METADATA_CF};
 
 /// Column family that store metadata related to the node.
 ///
-/// | ---- key ---- |    | --- value --- |
-/// | MetadataKey   | => | MetadataValue |
+/// ## Column definition
+/// ```
+/// |-key---------|    |-value---------|
+/// | MetadataKey   =>   MetadataValue |
+/// ```
 pub struct MetadataColumn;
 
 impl ColumnSchema for MetadataColumn {

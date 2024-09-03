@@ -3,6 +3,7 @@ use std::ops::Deref;
 use bincode::Options as _;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Certificate(Vec<u8>);
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,15 +39,7 @@ macro_rules! wrapper_codec_impl {
 
 macro_rules! default_codec_impl {
     ($($ident: ident),+) => {
-        $(impl crate::columns::Codec for $ident {
-            fn encode(&self) -> Result<Vec<u8>, crate::error::Error> {
-                Ok(crate::columns::default_bincode_options().serialize(self)?)
-            }
-
-            fn decode(buf: &[u8]) -> Result<Self, crate::error::Error> {
-                Ok(crate::columns::default_bincode_options().deserialize(buf)?)
-            }
-        })+
+        $(impl crate::columns::Codec for $ident {})+
     };
 }
 wrapper_codec_impl!(
@@ -57,7 +50,7 @@ wrapper_codec_impl!(
     Proof
 );
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Proof(pub(crate) Vec<u8>);
 
 impl Deref for Proof {
