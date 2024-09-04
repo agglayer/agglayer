@@ -3,12 +3,17 @@ use crate::{
     error::Error,
 };
 
+/// The status of the iterator.
 enum IteratorStatus {
+    /// The iterator is initialized and ready to be used.
     Initialized,
+    /// The iterator is currently progressing.
     Progressing,
+    /// The iterator has reached the end.
     Done,
 }
 
+/// An iterator over the keys of a column.
 pub struct KeysIterator<'a, C: ColumnSchema> {
     iter: rocksdb::DBRawIterator<'a>,
     status: IteratorStatus,
@@ -17,6 +22,8 @@ pub struct KeysIterator<'a, C: ColumnSchema> {
 }
 
 impl<'a, C: ColumnSchema> KeysIterator<'a, C> {
+    /// Creates a new iterator over the keys of a column using the given raw
+    /// iterator and a direction.
     pub(crate) fn new(iter: rocksdb::DBRawIterator<'a>, direction: rocksdb::Direction) -> Self {
         Self {
             iter,
