@@ -1,0 +1,28 @@
+name: Test proof generation with SP1 network
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Request proof generation
+        run: |
+          RUST_LOG=info cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --n-exits 10
+        env:
+          SP1_PROVER: network
+          SP1_PRIVATE_KEY: ${{ secrets.SP1_PRIVATE_KEY }}
