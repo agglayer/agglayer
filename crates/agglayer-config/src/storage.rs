@@ -4,6 +4,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
 
+/// Configuration for the storage.
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
