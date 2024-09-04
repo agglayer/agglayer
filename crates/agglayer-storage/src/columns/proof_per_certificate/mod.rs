@@ -7,10 +7,10 @@ mod tests;
 /// Column family that returns the generated proof for one certificate.
 ///
 /// ## Column definition
-/// ```
-/// |-key-----------|    |-value--|
-/// | CertificateId   =>   Proof  |
-/// ```
+///
+/// | key             | value   |
+/// | --              | --      |
+/// | `CertificateId` | `Proof` |
 pub struct ProofPerCertificateColumn;
 
 impl ColumnSchema for ProofPerCertificateColumn {

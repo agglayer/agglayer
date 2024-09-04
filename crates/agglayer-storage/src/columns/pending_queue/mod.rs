@@ -6,10 +6,10 @@ use crate::types::{Certificate, Height, NetworkId};
 /// Column family containing the pending certificates queue.
 ///
 /// ## Column definition
-/// ```
-/// |-key-----------------|    |-value-------|
-/// | (NetworkId, Height)   =>   Certificate |
-/// ```
+///
+/// | key                     | value           |
+/// | --                      | --              |
+/// | (`NetworkId`, `Height`) | `Certificate`   |
 pub(crate) struct PendingQueueColumn;
 
 #[derive(Debug, Serialize, Deserialize)]

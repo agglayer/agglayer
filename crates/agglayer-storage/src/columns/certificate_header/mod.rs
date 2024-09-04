@@ -7,10 +7,10 @@ mod tests;
 /// Column family for the certificate headers.
 ///
 /// ## Column definition
-/// ```
-/// |-key-----------|    |-value------------|
-/// | CertificateId   =>  CertificateHeader |
-/// ```
+///
+/// | key               | value                |
+/// | --                | --                   |
+/// | `CertificateId`   |  `CertificateHeader` |
 pub struct CertificateHeaderColumn;
 
 pub type Key = CertificateId;

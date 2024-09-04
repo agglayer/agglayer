@@ -9,13 +9,13 @@ mod tests;
 /// Column family for the nullifier tree per network.
 ///
 /// ## Column definition
-/// ```
-/// |-key--------------------------------------|    |-value-------------------------------|
-/// | (NetworkId, KeyType::Root)                 =>   (hash(root.left), hash(root.right)) |
-/// | (NetworkId, hash(node))                    =>   (hash(node.left), hash(node.right)) |
-/// | (NetworkId, hash(node))                    =>   hash(leat)                          |
-/// | (NetworkId, KeyType::Leaves, hash(left))   =>   hash(leat)                          |
-/// ```
+///
+/// | key                            | value                                   |
+/// | ---                            | --                                      |
+/// | (`NetworkId`, `KeyType::Root`) | (`hash(root.left)`, `hash(root.right)`) |
+/// | (`NetworkId`, `hash(node)`)    | (`hash(node.left)`, `hash(node.right)`) |
+/// | (`NetworkId`, `hash(node)`)    | (`hash(leaf)`)                          |
+/// | (`NetworkId`, `KeyType::Leaf`) | [`U256`](type@reth_primitives::U256)    |
 pub struct NullifierTreePerNetworkColumn;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

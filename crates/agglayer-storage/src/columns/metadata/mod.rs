@@ -3,10 +3,10 @@ use super::{ColumnSchema, METADATA_CF};
 /// Column family that store metadata related to the node.
 ///
 /// ## Column definition
-/// ```
-/// |-key---------|    |-value---------|
-/// | MetadataKey   =>   MetadataValue |
-/// ```
+///
+/// | key           | value           |
+/// | --            | --              |
+/// | `MetadataKey` | `MetadataValue` |
 pub struct MetadataColumn;
 
 impl ColumnSchema for MetadataColumn {

@@ -9,10 +9,10 @@ mod tests;
 /// Column family for the certificate per network per height.
 ///
 /// ## Column definition
-/// ```
-/// |-key-----------------|    |-value------------------------------------------|
-/// | (NetworkId, Height)   =>   (CertificateId, EpochNumber, CertificateIndex) |
-/// ```
+///
+/// | key                     | value                                                |
+/// | --                      | --                                                   |
+/// | (`NetworkId`, `Height`) | (`CertificateId`, `EpochNumber`, `CertificateIndex`) |
 pub struct CertificatePerNetworkColumn;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

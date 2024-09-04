@@ -11,10 +11,10 @@ mod tests;
 /// the height and the epoch_number.
 ///
 /// ## Column definition
-/// ```
-/// |-key-------|    |-value----------------------------|
-/// | NetworkId   =>   (Proof, CertificateId, Height)   |
-/// ```
+///
+/// | key         | value                                |
+/// | --          | --                                   |
+/// | `NetworkId` | (`Proof`, `CertificateId`, `Height`) |
 pub struct LatestSettledCertificatePerNetworkColumn;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

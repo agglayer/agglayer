@@ -7,14 +7,15 @@ use crate::types::Hash;
 mod tests;
 
 /// Column family for the balance tree per network.
+///
 /// ## Column definition
-/// ```
-/// |-key-----------------------------------|    |-value-----------------------------|
-/// | (NetworkId, KeyType::Root)              =>  (hash(root.left) hash(root.right)) |
-/// | (NetworkId, hash(node))                 =>  (hash(node.left) hash(node.right)) |
-/// | (NetworkId, hash(node))                 =>  (hash(leaf))                       |
-/// | (NetworkId, KeyType::Leaf(hash(leaf)))  =>  (U256)                             |
-/// ```
+///
+/// | key                            | value                                   |
+/// | ---                            | --                                      |
+/// | (`NetworkId`, `KeyType::Root`) | (`hash(root.left)`, `hash(root.right)`) |
+/// | (`NetworkId`, `hash(node)`)    | (`hash(node.left)`, `hash(node.right)`) |
+/// | (`NetworkId`, `hash(node)`)    | (`hash(leaf)`)                          |
+/// | (`NetworkId`, `KeyType::Leaf`) | [`U256`](type@reth_primitives::U256)    |
 pub struct BalanceTreePerNetworkColumn;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
