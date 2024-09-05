@@ -1,0 +1,15 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "Validation(RootVerification { detail: \"invalid exit root. expected: 0x7777…7777, got: 0x8888…8888\" })"
+---
+{
+  "code": -10003,
+  "data": {
+    "validation": {
+      "root-verification": {
+        "detail": "invalid exit root. expected: 0x7777…7777, got: 0x8888…8888"
+      }
+    }
+  },
+  "message": "Validation failed: State root verification failed"
+}

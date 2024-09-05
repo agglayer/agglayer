@@ -9,16 +9,9 @@ use ethers::{
 };
 use futures::TryFutureExt;
 use jsonrpsee::{
-    core::{async_trait, RpcResult},
+    core::async_trait,
     proc_macros::rpc,
     server::{middleware::http::ProxyGetRequestLayer, PingConfig, ServerBuilder, ServerHandle},
-    types::{
-        error::{
-            CALL_EXECUTION_FAILED_CODE, INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG,
-            INVALID_PARAMS_CODE, INVALID_PARAMS_MSG,
-        },
-        ErrorObject, ErrorObjectOwned,
-    },
 };
 use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::multi_batch_header::MultiBatchHeader;
@@ -27,9 +20,12 @@ use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument};
 
 use crate::{
-    kernel::{Kernel, ZkevmNodeVerificationError},
+    kernel::Kernel,
+    rpc::error::{Error, RpcResult, StatusError},
     signed_tx::SignedTx,
 };
+
+mod error;
 
 #[cfg(test)]
 mod tests;
@@ -132,16 +128,6 @@ where
     }
 }
 
-/// Helper function to create an invalid params error with a custom message.
-fn invalid_params_error(msg: impl Into<String>) -> ErrorObjectOwned {
-    ErrorObject::owned(INVALID_PARAMS_CODE, INVALID_PARAMS_MSG, Some(msg.into()))
-}
-
-/// Helper function to create an internal error with a custom message.
-fn internal_error(msg: impl Into<String>) -> ErrorObjectOwned {
-    ErrorObject::owned(INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, Some(msg.into()))
-}
-
 #[async_trait]
 impl<Rpc> AgglayerServer for AgglayerImpl<Rpc>
 where
@@ -163,9 +149,7 @@ where
 
         if !self.kernel.check_rollup_registered(tx.tx.rollup_id) {
             // Return an invalid params error if the rollup is not registered.
-            return Err(invalid_params_error(
-                ZkevmNodeVerificationError::InvalidRollupId(tx.tx.rollup_id).to_string(),
-            ));
+            return Err(Error::rollup_not_registered(tx.tx.rollup_id));
         }
 
         agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
@@ -176,7 +160,7 @@ where
                 .verify_signature(&tx)
                 .map_err(|e| {
                     error!(error = %e, hash, "Failed to verify the signature of transaction {hash}: {e}");
-                    invalid_params_error(e.to_string())
+                    Error::signature_mismatch(e)
                 })
                 .map_ok(|_| {
                     agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
@@ -186,7 +170,7 @@ where
                 .map_err(|e| {
                     let zkevm_error = decode_contract_error::<
                         _,
-                        crate::contracts::polygon_zk_evm::PolygonZkEvmErrors
+                        crate::contracts::polygon_zk_evm::PolygonZkEvmErrors,
                     >(&e);
 
                     let rollup_error = decode_contract_error::<
@@ -207,7 +191,7 @@ where
                         "Failed to dry-run the verify_batches_trusted_aggregator for transaction \
                          {hash}: {error}"
                     );
-                    invalid_params_error(error)
+                    Error::dry_run(error)
                 })
                 .map_ok(|_| {
                     agglayer_telemetry::EXECUTE.add(1, metrics_attrs);
@@ -221,7 +205,7 @@ where
                         "Failed to verify the batch local_exit_root and state_root of transaction \
                          {hash}: {e}"
                     );
-                    invalid_params_error(e.to_string())
+                    Error::root_verification(e)
                 })
                 .map_ok(|_| {
                     agglayer_telemetry::VERIFY_ZKP.add(1, metrics_attrs);
@@ -235,7 +219,7 @@ where
                 hash,
                 "Failed to settle transaction {hash} on L1: {e}"
             );
-            internal_error(e.to_string())
+            Error::settlement(e)
         })?;
 
         agglayer_telemetry::SETTLE.add(1, metrics_attrs);
@@ -248,39 +232,24 @@ where
     #[instrument(skip(self), fields(hash = hash.to_string()), level = "info")]
     async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus> {
         debug!("Received request to get transaction status for hash {hash}");
-        let recipt = self.kernel.check_tx_status(hash).await.map_err(|e| {
+        let receipt = self.kernel.check_tx_status(hash).await.map_err(|e| {
             error!("Failed to get transaction status for hash {hash}: {e}");
-
-            ErrorObject::owned(
-                CALL_EXECUTION_FAILED_CODE,
-                INTERNAL_ERROR_MSG,
-                Some(format!("failed to get tx, error: {}", e)),
-            )
+            StatusError::tx_status(e)
         })?;
 
         let current_block = self.kernel.current_l1_block_height().await.map_err(|e| {
             error!("Failed to get current L1 block: {e}");
-
-            ErrorObject::owned(
-                CALL_EXECUTION_FAILED_CODE,
-                INTERNAL_ERROR_MSG,
-                Some(format!("failed to get current L1 block, error: {}", e)),
-            )
+            StatusError::l1_block(e)
         })?;
 
-        recipt
-            .map(|recipt| match recipt.block_number {
-                Some(block_number) if block_number < current_block => "done".to_string(),
-                Some(_) => "pending".to_string(),
-                None => "not found".to_string(),
-            })
-            .ok_or_else(|| {
-                ErrorObject::owned(
-                    CALL_EXECUTION_FAILED_CODE,
-                    INTERNAL_ERROR_MSG,
-                    Some(format!("tx not found for hash: {}", hash)),
-                )
-            })
+        let receipt = receipt.ok_or_else(|| StatusError::tx_not_found(hash))?;
+
+        let status = match receipt.block_number {
+            Some(block_number) if block_number < current_block => "done",
+            Some(_) => "pending",
+            None => "not found",
+        };
+        Ok(status.to_string())
     }
 
     async fn send_certificate(
@@ -290,7 +259,7 @@ where
         if let Err(error) = self.certificate_sender.send(certificate).await {
             error!("Failed to send certificate: {error}");
 
-            return Err(internal_error("Unable to send certificate to collector"));
+            return Err(Error::send_certificate(error));
         }
 
         Ok(())

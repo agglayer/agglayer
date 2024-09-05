@@ -1,0 +1,15 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "Settlement(Contract { detail: \"Contract call reverted with data: 0x666f6f\" })"
+---
+{
+  "code": -10004,
+  "data": {
+    "settlement": {
+      "contract": {
+        "detail": "Contract call reverted with data: 0x666f6f"
+      }
+    }
+  },
+  "message": "L1 settlement error: Contract error"
+}
