@@ -42,6 +42,8 @@ serde_json.workspace = true
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
 hyper-util = { version = "0.1.6", features = ["client"] }
 http-body-util = "0.1.2"
+tokio = { workspace = true, features = ["full", "test-util"] }
+tracing-capture = "0.1.0"
 
 [features]
 default = ["sp1"]

@@ -6,6 +6,9 @@ use tower::layer::util::{Identity, Stack};
 mod cancel_logger;
 mod logging_timeout;
 
+#[cfg(test)]
+mod tests;
+
 pub use cancel_logger::CancelLoggerLayer;
 pub use logging_timeout::LoggingTimeoutLayer;
 
