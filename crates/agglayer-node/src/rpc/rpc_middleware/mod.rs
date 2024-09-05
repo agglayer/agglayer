@@ -25,11 +25,16 @@ impl<'a> RequestInfo<'a> {
 }
 
 /// The stack of RPC middleware layers.
-pub type RpcStack = Stack<CancelLoggerLayer, Stack<LoggingTimeoutLayer, Identity>>;
+pub type RpcStack = Stack<LoggingTimeoutLayer, Stack<CancelLoggerLayer, Identity>>;
+
+/// Build the middleware stack with given params.
+pub fn build(request_timeout: std::time::Duration) -> RpcServiceBuilder<RpcStack> {
+    jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new()
+        .layer(CancelLoggerLayer::new())
+        .layer(LoggingTimeoutLayer::new(request_timeout))
+}
 
 /// Build the RPC middleware stack from config.
-pub fn build(config: &agglayer_config::Config) -> RpcServiceBuilder<RpcStack> {
-    jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new()
-        .layer(LoggingTimeoutLayer::new(config.rpc.request_timeout))
-        .layer(CancelLoggerLayer::new())
+pub fn from_config(config: &agglayer_config::Config) -> RpcServiceBuilder<RpcStack> {
+    build(config.rpc.request_timeout)
 }

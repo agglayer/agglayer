@@ -7,9 +7,6 @@ use jsonrpsee::{server::middleware::rpc::RpcServiceT, types::ErrorObject, Method
 
 use super::RequestInfo;
 
-/// Error code to return when the response time is too long.
-pub const TIMEOUT_ERROR_CODE: i32 = -32001;
-
 /// A layer that applies a timeout on a request and issues a log entry if the
 /// timeout expires before the request is completed.
 #[derive(Clone, Debug)]
@@ -19,6 +16,9 @@ pub struct LoggingTimeoutLayer {
 }
 
 impl LoggingTimeoutLayer {
+    /// Error code to return when the response time is too long.
+    pub const ERROR_CODE: i32 = -32001;
+
     pub fn new(timeout: Duration) -> Self {
         Self { timeout }
     }
@@ -86,7 +86,8 @@ impl<F: Future<Output = MethodResponse>> Future for LoggingTimeoutFuture<'_, F> 
             tracing::warn!("Request ID `{id}` to `{method}` timed out: {e}");
 
             let info = serde_json::json!({ "timeout": this.timeout.as_secs() });
-            let err = ErrorObject::owned(TIMEOUT_ERROR_CODE, "request timed out", Some(info));
+            let error_code = LoggingTimeoutLayer::ERROR_CODE;
+            let err = ErrorObject::owned(error_code, "request timed out", Some(info));
             MethodResponse::error(id.to_owned(), err)
         });
 
