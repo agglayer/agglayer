@@ -61,6 +61,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-node",
+ "agglayer-prover",
  "anyhow",
  "assert_cmd",
  "clap",
@@ -182,6 +183,10 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
 ]
+
+[[package]]
+name = "agglayer-prover"
+version = "0.1.0"
 
 [[package]]
 name = "agglayer-signer"
