@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package agglayer.prover.v1;
+
+service ProofGenerationService {
+    rpc GenerateProof(ProofGenerationRequest) returns (ProofGenerationResponse);
+}
+
+message ProofGenerationRequest {
+}
+
+message ProofGenerationResponse {
+}
