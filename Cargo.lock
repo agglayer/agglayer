@@ -199,6 +199,12 @@ dependencies = [
 [[package]]
 name = "agglayer-storage"
 version = "0.1.0"
+dependencies = [
+ "bincode",
+ "reth-primitives",
+ "serde",
+ "thiserror",
+]
 
 [[package]]
 name = "agglayer-telemetry"
