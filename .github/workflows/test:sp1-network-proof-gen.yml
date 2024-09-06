@@ -2,6 +2,11 @@ name: Test proof generation with SP1 network
 
 on:
   workflow_dispatch:
+    inputs:
+      num-exits:
+        description: "Number of bridge exits"
+        required: false
+        default: "10"
 
 jobs:
   test:
@@ -22,7 +27,7 @@ jobs:
 
       - name: Request proof generation
         run: |
-          RUST_LOG=info cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --n-exits 10
+          RUST_LOG=info cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --n-exits ${{ inputs.num-exits }}
         env:
           SP1_PROVER: network
           SP1_PRIVATE_KEY: ${{ secrets.SP1_PRIVATE_KEY }}
