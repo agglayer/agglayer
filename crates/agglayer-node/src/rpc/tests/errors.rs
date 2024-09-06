@@ -79,7 +79,13 @@ type SettlementError = kernel::SettlementError<RpcProvider>;
 )]
 fn rpc_error_rendering(#[case] name: &str, #[case] err: Error) {
     let debug_str = format!("{err:?}");
-    let err_obj = serde_json::to_value(ErrorObjectOwned::from(err)).expect("json ok");
+    let err_obj = ErrorObjectOwned::from(err);
+    let err_json_string = {
+        // Going through an extra encode/decode here helps normalize the output.
+        let json_string = serde_json::to_string(&err_obj).unwrap();
+        let json = serde_json::from_str::<serde_json::Value>(&json_string).unwrap();
+        serde_json::to_string_pretty(&json).unwrap()
+    };
 
-    insta::assert_json_snapshot!(name, err_obj, &debug_str);
+    insta::assert_snapshot!(name, err_json_string, &debug_str);
 }
