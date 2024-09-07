@@ -118,7 +118,7 @@ pub enum MetadataKey {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataValue {
-    LastestSettledEpoch(u64),
+    LatestSettledEpoch(u64),
     EpochSynchronization(u64),
 }
 
