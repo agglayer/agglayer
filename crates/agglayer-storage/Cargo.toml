@@ -7,5 +7,9 @@ license.workspace = true
 [dependencies]
 bincode = "1.3.3"
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
+rocksdb = "0.22.0"
 serde.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+rand.workspace = true

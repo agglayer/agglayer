@@ -1,5 +1,8 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("RocksDB error: {0}")]
+    RocksDB(#[from] rocksdb::Error),
+
     #[error("Trying to access an unknown ColumnFamily")]
     ColumnFamilyNotFound,
 
