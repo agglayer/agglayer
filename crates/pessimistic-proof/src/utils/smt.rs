@@ -376,11 +376,11 @@ where
             return false;
         }
         if self.siblings.is_empty() {
-            return root
-                == H::merge(
-                    &empty_hash_at_height[DEPTH - 1],
-                    &empty_hash_at_height[DEPTH - 1],
-                );
+            let empty_root = H::merge(
+                &empty_hash_at_height[DEPTH - 1],
+                &empty_hash_at_height[DEPTH - 1],
+            );
+            return root == empty_root;
         }
         let bits = key.to_bits();
         let mut entry = empty_hash_at_height[DEPTH - self.siblings.len()];
