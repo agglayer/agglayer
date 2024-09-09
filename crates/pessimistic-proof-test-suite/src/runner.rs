@@ -1,4 +1,4 @@
-pub use bincode::Options;
+use bincode::config::Options;
 pub use pessimistic_proof::{LocalNetworkState, PessimisticProofOutput};
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin, SP1VerifyingKey};
@@ -43,10 +43,7 @@ impl Runner {
 
     /// Extract outputs from the committed public values.
     pub fn extract_output(public_vals: SP1PublicValues) -> PessimisticProofOutput {
-        bincode::DefaultOptions::new()
-            .with_big_endian()
-            .with_fixint_encoding()
-            .allow_trailing_bytes()
+        PessimisticProofOutput::bincode_options()
             .deserialize(public_vals.as_slice())
             .expect("deser")
     }
