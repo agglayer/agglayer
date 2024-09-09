@@ -3751,6 +3751,7 @@ dependencies = [
 name = "pessimistic-proof-program"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "pessimistic-proof",
  "sp1-cli",
  "sp1-zkvm",
