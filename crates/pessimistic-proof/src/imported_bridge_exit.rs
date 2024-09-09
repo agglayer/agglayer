@@ -6,10 +6,150 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
-    keccak::{keccak256, keccak256_combine, Digest as KeccakDigest, Digest},
+    keccak::{keccak256, keccak256_combine, Digest},
     local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
     ProofError,
 };
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct L1InfoTreeLeaf {
+    l1_info_tree_index: u32,
+    rer: Digest,
+    mer: Digest,
+    last_block_hash: Digest,
+    timestamp: u64,
+}
+
+impl L1InfoTreeLeaf {
+    fn ger(&self) -> Digest {
+        keccak256_combine([self.mer, self.rer])
+    }
+
+    fn hash(&self) -> Digest {
+        let ger = self.ger();
+        keccak256_combine([
+            ger.as_slice(),
+            self.last_block_hash.as_slice(),
+            &self.timestamp.to_be_bytes(),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MerkleProof {
+    proof: LETMerkleProof<Keccak256Hasher>,
+    root: Digest,
+}
+
+impl MerkleProof {
+    pub fn verify(&self, leaf: Digest, leaf_index: u32) -> bool {
+        self.proof.verify(leaf, leaf_index, self.root)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Claim {
+    Mainnet(Box<ClaimFromMainnet>),
+    Rollup(Box<ClaimFromRollup>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaimFromMainnet {
+    /// Proof from bridge exit leaf to MER
+    proof_leaf_mer: MerkleProof,
+    /// Proof from GER to L1Root
+    proof_ger_l1root: MerkleProof,
+    /// L1InfoTree leaf
+    l1_leaf: L1InfoTreeLeaf,
+}
+
+impl ClaimFromMainnet {
+    pub fn verify(
+        &self,
+        leaf: Digest,
+        global_index: GlobalIndex,
+        l1root: Digest,
+    ) -> Result<(), ProofError> {
+        // Check the consistency on the l1 root
+        if l1root != self.l1_leaf.hash() {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        // Check the consistency on the declared MER
+        if self.proof_leaf_mer.root != self.l1_leaf.mer {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        // Check the inclusion proof of the leaf to the MER
+        if !self.proof_leaf_mer.verify(leaf, global_index.leaf_index) {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        // Check the inclusion proof of the L1 leaf to L1Root
+        if !self
+            .proof_ger_l1root
+            .verify(self.l1_leaf.hash(), self.l1_leaf.l1_info_tree_index)
+        {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaimFromRollup {
+    /// Proof from bridge exit leaf to LER
+    proof_leaf_ler: MerkleProof,
+    /// Proof from LER to RER
+    proof_ler_rer: MerkleProof,
+    /// Proof from GER to L1Root
+    proof_ger_l1root: MerkleProof,
+    /// L1InfoTree leaf
+    l1_leaf: L1InfoTreeLeaf,
+}
+
+impl ClaimFromRollup {
+    pub fn verify(
+        &self,
+        leaf: Digest,
+        global_index: GlobalIndex,
+        l1root: Digest,
+    ) -> Result<(), ProofError> {
+        // Check the consistency on the l1 root
+        if l1root != self.l1_leaf.hash() {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        // Check the consistency on the declared RER
+        if self.proof_ler_rer.root != self.l1_leaf.rer {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        // Check the inclusion proof of the leaf to the LER
+        if !self.proof_leaf_ler.verify(leaf, global_index.leaf_index) {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        // Check the inclusion proof of the LER to the RER
+        if !self
+            .proof_ler_rer
+            .verify(self.proof_leaf_ler.root, global_index.rollup_index)
+        {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        // Check the inclusion proof of the L1 leaf to L1Root
+        if !self
+            .proof_ger_l1root
+            .verify(self.l1_leaf.hash(), self.l1_leaf.l1_info_tree_index)
+        {
+            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        }
+
+        Ok(())
+    }
+}
 
 /// Represents a token bridge exit originating on another network but claimed on
 /// the current network.
@@ -20,95 +160,38 @@ pub struct ImportedBridgeExit {
     /// current network, and that the bridge exit is included in an imported
     /// LER
     pub bridge_exit: BridgeExit,
-    /// The Imported Local Exit Root for the Local Exit Tree containing this
-    /// bridge exit.
-    pub imported_local_exit_root: Digest,
-    /// The inclusion proof of the imported bridge exit in the sending local
-    /// exit root.
-    pub inclusion_proof: LETMerkleProof<Keccak256Hasher>,
-    /// The inclusion proof of the LER to the Rollup Exit Root and the Rollup
-    /// Exit Root.
-    pub inclusion_proof_rer: Option<(LETMerkleProof<Keccak256Hasher>, Digest)>,
+    /// The claim data
+    pub claim_data: Claim,
     /// The global index of the imported bridge exit.
     pub global_index: GlobalIndex,
 }
 
 impl ImportedBridgeExit {
     /// Creates a new [`ImportedBridgeExit`].
-    pub fn new(
-        bridge_exit: BridgeExit,
-        imported_local_exit_root: KeccakDigest,
-        global_index: GlobalIndex,
-        inclusion_proof: LETMerkleProof<Keccak256Hasher>,
-        inclusion_proof_rer: Option<(LETMerkleProof<Keccak256Hasher>, KeccakDigest)>,
-    ) -> Self {
+    pub fn new(bridge_exit: BridgeExit, claim_data: Claim, global_index: GlobalIndex) -> Self {
         Self {
             bridge_exit,
             global_index,
-            inclusion_proof,
-            inclusion_proof_rer,
-            imported_local_exit_root,
+            claim_data,
         }
-    }
-
-    pub fn verify_leaf_inclusion(&self) -> Result<(), ProofError> {
-        // Check the inclusion proof of the leaf to the LER
-        if !self.inclusion_proof.verify(
-            self.bridge_exit.hash(),
-            self.global_index.leaf_index,
-            self.imported_local_exit_root,
-        ) {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
-        }
-
-        Ok(())
-    }
-
-    pub fn verify_path_mainnet(&self, mer: Digest) -> Result<(), ProofError> {
-        // Check that the inclusion proof is against the considered mainnet exit root
-        if self.imported_local_exit_root != mer {
-            return Err(ProofError::InvalidImportedBridgeExitRoot);
-        }
-
-        self.verify_leaf_inclusion()
-    }
-
-    pub fn verify_path_rollup(&self, rer: Digest) -> Result<(), ProofError> {
-        let (rollup_inclusion_proof, rollup_exit_root) = self
-            .inclusion_proof_rer
-            .as_ref()
-            .ok_or(ProofError::InvalidImportedBridgeExitMerklePath)?;
-
-        // Check that the inclusion proof is against the considered rollup exit root
-        if *rollup_exit_root != rer {
-            return Err(ProofError::InvalidImportedBridgeExitRoot);
-        }
-
-        // Check the inclusion proof of the LER to RER
-        if !rollup_inclusion_proof.verify(
-            self.imported_local_exit_root,
-            self.global_index.rollup_index,
-            *rollup_exit_root,
-        ) {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
-        }
-
-        self.verify_leaf_inclusion()
     }
 
     /// Verifies that the provided inclusion path is valid and consistent with
     /// the provided LER
-    pub fn verify_path(&self, mer: Digest, rer: Digest) -> Result<(), ProofError> {
+    pub fn verify_path(&self, l1root: Digest) -> Result<(), ProofError> {
         // Check that the inclusion proof and the global index both refer to mainnet or
         // rollup
-        if self.global_index.mainnet_flag != self.inclusion_proof_rer.is_none() {
+        if self.global_index.mainnet_flag != matches!(self.claim_data, Claim::Mainnet(_)) {
             return Err(ProofError::MismatchGlobalIndexInclusionProof);
         }
 
-        if self.global_index.mainnet_flag {
-            self.verify_path_mainnet(mer)
-        } else {
-            self.verify_path_rollup(rer)
+        match &self.claim_data {
+            Claim::Mainnet(claim) => {
+                claim.verify(self.bridge_exit.hash(), self.global_index, l1root)
+            }
+            Claim::Rollup(claim) => {
+                claim.verify(self.bridge_exit.hash(), self.global_index, l1root)
+            }
         }
     }
 
