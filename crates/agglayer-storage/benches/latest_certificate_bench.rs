@@ -125,9 +125,9 @@ fn bench_latest_certificate(c: &mut Criterion) {
 }
 
 criterion_group! {
-  name = benches_last_certificate;
+  name = benches_latest_certificate;
   config = Criterion::default().sample_size(10);
-  targets = bench_last_certificate
+  targets = bench_latest_certificate
 }
 
-criterion_main!(benches_last_certificate);
+criterion_main!(benches_latest_certificate);

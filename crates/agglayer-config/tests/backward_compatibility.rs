@@ -1,9 +1,15 @@
-use std::{io::Read, net::SocketAddr, path::PathBuf, str::FromStr, time::Duration};
+use std::{
+    io::Read,
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Duration,
+};
 
 use agglayer_config::{
     epoch::TimeClockConfig,
     log::{LogFormat, LogOutput},
-    AuthConfig, Config, Epoch, PrivateKey,
+    AuthConfig, Config, ConfigMigrator, Epoch, PrivateKey,
 };
 use ethers::types::H160;
 use pretty_assertions::assert_eq;
@@ -24,9 +30,12 @@ fn all_config() {
         std::fs::File::open(backward_compatibility_config("backward_compatibility.toml")).unwrap();
     file.read_to_string(&mut reader).unwrap();
 
-    let config: Config = toml::from_str(&reader).unwrap();
+    let config_path = Path::new("/tmp/agglayer");
+    let config: Config = toml::from_str::<ConfigMigrator>(&reader)
+        .unwrap()
+        .migrate(config_path);
 
-    let mut base_config = Config::default();
+    let mut base_config = Config::new_for_test();
 
     base_config
         .full_node_rpcs
@@ -54,7 +63,7 @@ fn all_config() {
     base_config.shutdown.runtime_timeout = Duration::from_secs(10);
     base_config
         .certificate_orchestrator
-        .input_backpressure_buffer_size = 10000;
+        .input_backpressure_buffer_size = 1000;
 
     base_config.auth = AuthConfig::Local(agglayer_config::LocalConfig {
         private_keys: vec![PrivateKey {
@@ -74,9 +83,13 @@ fn kurtosis() {
     .unwrap();
     file.read_to_string(&mut reader).unwrap();
 
-    let config: Config = toml::from_str(&reader).unwrap();
+    let config_path = Path::new("/tmp/agglayer");
+    let config: Config = toml::from_str::<ConfigMigrator>(&reader)
+        .unwrap()
+        .migrate(config_path);
 
-    let mut base_config = Config::default();
+    let base_path: PathBuf = "/tmp/agglayer".into();
+    let mut base_config = Config::new(&base_path);
 
     base_config
         .full_node_rpcs

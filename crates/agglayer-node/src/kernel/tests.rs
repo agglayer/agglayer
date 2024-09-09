@@ -48,7 +48,7 @@ macro_rules! transaction_request {
 /// Test to check if the rollup_id is registered
 #[tokio::test]
 async fn interop_executor_check_tx() {
-    let mut config = Config::default();
+    let mut config = Config::new_for_test();
     let response = BatchByNumberResponse {
         state_root: TxHash::from_slice(&[0; 32]),
         local_exit_root: TxHash::zero(),
@@ -87,7 +87,7 @@ async fn interop_executor_check_tx() {
 /// Test the verify_zkp method
 #[tokio::test]
 async fn interop_executor_verify_zkp() {
-    let config = Arc::new(Config::default());
+    let config = Arc::new(Config::new_for_test());
 
     let (provider, mock) = providers::Provider::mocked();
 
@@ -144,7 +144,7 @@ async fn interop_executor_verify_zkp() {
 
 #[tokio::test]
 async fn interop_executor_verify_zkp_failure() {
-    let config = Arc::new(Config::default());
+    let config = Arc::new(Config::new_for_test());
 
     let (provider, mock) = providers::Provider::mocked();
 
@@ -216,7 +216,7 @@ async fn interop_executor_verify_zkp_failure() {
 /// Test that check if the verify_signature method
 #[tokio::test]
 async fn interop_executor_verify_signature() {
-    let config = Arc::new(Config::default());
+    let config = Arc::new(Config::new_for_test());
 
     let (provider, mock) = providers::Provider::mocked();
 
@@ -284,7 +284,7 @@ async fn interop_executor_verify_signature() {
 /// Test that check if the verify_signature method works with proof signer.
 #[tokio::test]
 async fn interop_executor_verify_signature_proof_signer() {
-    let mut config = Config::default();
+    let mut config = Config::new_for_test();
 
     let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
     let sequencer_address = sequencer_wallet.address();
@@ -342,7 +342,7 @@ mod interop_executor_execute {
 
     #[tokio::test]
     async fn batch_not_nil_root_match() {
-        let mut config = Config::default();
+        let mut config = Config::new_for_test();
         let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
         let mut signed_tx = signed_tx();
         let _ = signed_tx.sign(&sequencer_wallet);
@@ -371,7 +371,7 @@ mod interop_executor_execute {
 
     #[tokio::test]
     async fn return_error_when_response_is_null() {
-        let mut config = Config::default();
+        let mut config = Config::new_for_test();
         let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
         let mut signed_tx = signed_tx();
         let _ = signed_tx.sign(&sequencer_wallet);
@@ -399,7 +399,7 @@ mod interop_executor_execute {
 
     #[tokio::test]
     async fn return_error_when_state_root_differ() {
-        let mut config = Config::default();
+        let mut config = Config::new_for_test();
         let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
         let mut signed_tx = signed_tx();
         let _ = signed_tx.sign(&sequencer_wallet);
@@ -432,7 +432,7 @@ mod interop_executor_execute {
 
     #[tokio::test]
     async fn return_error_when_exit_root_differ() {
-        let mut config = Config::default();
+        let mut config = Config::new_for_test();
         let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
         let mut signed_tx = signed_tx();
         let _ = signed_tx.sign(&sequencer_wallet);

@@ -1,7 +1,7 @@
 use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 
-use agglayer_config::Config;
-use anyhow::Result;
+use agglayer_config::{Config, ConfigMigrator};
+use anyhow::{bail, Result};
 use node::Node;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -26,8 +26,18 @@ use agglayer_telemetry::ServerBuilder as MetricsBuilder;
 /// This function returns on fatal error or after graceful shutdown has
 /// completed.
 pub fn main(cfg: PathBuf) -> Result<()> {
-    // Load the configuration file
-    let config: Arc<Config> = Arc::new(toml::from_str(&std::fs::read_to_string(cfg)?)?);
+    let cfg = cfg.canonicalize()?;
+
+    let config: Arc<Config> = if cfg.is_file() {
+        let dir = cfg.parent().unwrap();
+        // Load the configuration file
+        Arc::new(toml::from_str::<ConfigMigrator>(&std::fs::read_to_string(&cfg)?)?.migrate(dir))
+    } else {
+        bail!(
+            "Provided configuration file path is not a file: {}",
+            cfg.display()
+        )
+    };
 
     let global_cancellation_token = CancellationToken::new();
 
