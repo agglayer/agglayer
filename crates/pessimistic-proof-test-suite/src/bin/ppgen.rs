@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Instant};
 
 use clap::Parser;
 use pessimistic_proof::{
@@ -59,11 +59,16 @@ pub fn main() {
         withdrawals.len()
     );
 
+    let start = Instant::now();
     let (proof, vk, new_roots) = Runner::new()
         .generate_plonk_proof(&old_state, &batch_header)
         .expect("proving failed");
+    let duration = start.elapsed();
 
-    info!("Successfully generated the plonk proof");
+    info!(
+        "Successfully generated the plonk proof with a latency of {:?}",
+        duration
+    );
 
     let vkey = vk.bytes32().to_string();
     let fixture = PessimisticProofFixture {
