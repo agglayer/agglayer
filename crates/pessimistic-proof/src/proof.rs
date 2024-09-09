@@ -67,7 +67,8 @@ pub struct PessimisticProofOutput {
     pub prev_local_exit_root: Digest,
     /// The previous pessimistic root.
     pub prev_pessimistic_root: Digest,
-    /// The global exit root against which we prove the inclusion of the imported bridge exits.
+    /// The global exit root against which we prove the inclusion of the
+    /// imported bridge exits.
     pub selected_ger: Digest,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
@@ -75,13 +76,15 @@ pub struct PessimisticProofOutput {
     pub consensus_hash: Digest,
     /// The new local exit root.
     pub new_local_exit_root: Digest,
-    /// The new pessimistic root which commits to the balance and nullifier tree.
+    /// The new pessimistic root which commits to the balance and nullifier
+    /// tree.
     pub new_pessimistic_root: Digest,
 }
 
 const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;
 
-/// Proves that the given [`MultiBatchHeader`] can be applied on the given [`LocalNetworkState`].
+/// Proves that the given [`MultiBatchHeader`] can be applied on the given
+/// [`LocalNetworkState`].
 pub fn generate_pessimistic_proof(
     initial_network_state: LocalNetworkState,
     batch_header: &MultiBatchHeader<Keccak256Hasher>,
@@ -99,8 +102,10 @@ pub fn generate_pessimistic_proof(
         batch_header.imported_rollup_exit_root,
     ]);
 
-    let new_pessimistic_root =
-        keccak256_combine([batch_header.new_balance_root, batch_header.new_nullifier_root]);
+    let new_pessimistic_root = keccak256_combine([
+        batch_header.new_balance_root,
+        batch_header.new_nullifier_root,
+    ]);
 
     let mut network_state = initial_network_state;
     network_state.apply_batch_header(batch_header)?;

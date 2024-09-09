@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::bridge_exit::NetworkId;
 
-/// The [`GlobalIndex`] uniquely references one leaf within one Global Exit Tree.
+/// The [`GlobalIndex`] uniquely references one leaf within one Global Exit
+/// Tree.
 ///
 /// Further defined by the LXLY specifications.
 /// | 191 bits |    1 bit      |    32 bits   |    32 bits   |
@@ -19,7 +20,12 @@ impl GlobalIndex {
     const MAINNET_FLAG_OFFSET: usize = 2 * 32;
 
     pub fn network_id(&self) -> NetworkId {
-        if self.mainnet_flag { 0 } else { self.rollup_index + 1 }.into()
+        if self.mainnet_flag {
+            0
+        } else {
+            self.rollup_index + 1
+        }
+        .into()
     }
 }
 
@@ -64,7 +70,10 @@ mod tests {
 
     fn check(raw: &str, expected: GlobalIndex) {
         let global_index_u256 = U256::from_str_radix(raw, 10).unwrap();
-        assert_eq!(global_index_u256, GlobalIndex::from(global_index_u256).to_u256());
+        assert_eq!(
+            global_index_u256,
+            GlobalIndex::from(global_index_u256).to_u256()
+        );
         assert_eq!(expected, GlobalIndex::from(global_index_u256));
     }
 

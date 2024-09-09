@@ -24,13 +24,18 @@ pub struct LocalNetworkState {
     pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// Commitment to the balance for each token.
     pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
-    /// Commitment to the Nullifier Set for the local network, tracks claimed assets on foreign networks
+    /// Commitment to the Nullifier Set for the local network, tracks claimed
+    /// assets on foreign networks
     pub nullifier_set: NullifierTree<Keccak256Hasher>,
 }
 
 impl LocalNetworkState {
     pub fn roots(&self) -> (ExitRoot, BalanceRoot, NullifierRoot) {
-        (self.exit_tree.get_root(), self.balance_tree.root, self.nullifier_set.root)
+        (
+            self.exit_tree.get_root(),
+            self.balance_tree.root,
+            self.nullifier_set.root,
+        )
     }
     /// Apply the [`MultiBatchHeader`] on the current [`State`].
     /// The state isn't modified on error.
@@ -76,7 +81,10 @@ impl LocalNetworkState {
 
         // Check batch_header.imported_exits_root
         let imported_exits_root = commit_imported_bridge_exits(
-            multi_batch_header.imported_bridge_exits.iter().map(|(exit, _)| exit),
+            multi_batch_header
+                .imported_bridge_exits
+                .iter()
+                .map(|(exit, _)| exit),
         );
         if let Some(batch_imported_exits_root) = multi_batch_header.imported_exits_root {
             if imported_exits_root != batch_imported_exits_root {
@@ -106,7 +114,8 @@ impl LocalNetworkState {
                 // We don't allow a chain to exit to itself
                 return Err(ProofError::ExitToSameNetwork);
             }
-            // Check that the destination network of the bridge exit matches the current network
+            // Check that the destination network of the bridge exit matches the current
+            // network
             if imported_bridge_exit.bridge_exit.dest_network != multi_batch_header.origin_network {
                 return Err(ProofError::InvalidImportedBridgeExitNetwork);
             }
@@ -122,7 +131,8 @@ impl LocalNetworkState {
                 network_id: imported_bridge_exit.global_index.network_id(),
                 let_index: imported_bridge_exit.global_index.leaf_index,
             };
-            self.nullifier_set.verify_and_update(nullifier_key, nullifier_path)?;
+            self.nullifier_set
+                .verify_and_update(nullifier_key, nullifier_path)?;
 
             // The amount corresponds to L1 ETH if the leaf is a message
             let token_info = match imported_bridge_exit.bridge_exit.leaf_type {
@@ -157,8 +167,8 @@ impl LocalNetworkState {
             }
             self.exit_tree.add_leaf(bridge_exit.hash());
 
-            // For message exits, the origin network in token info should be the origin network
-            // of the batch header.
+            // For message exits, the origin network in token info should be the origin
+            // network of the batch header.
             if bridge_exit.is_message()
                 && bridge_exit.token_info.origin_network != multi_batch_header.origin_network
             {
@@ -197,8 +207,9 @@ impl LocalNetworkState {
             }
         }
 
-        // Verify that the original balances were correct and update the local balance tree with the new balances.
-        // TODO: implement batch `verify_and_update` for the LBT
+        // Verify that the original balances were correct and update the local balance
+        // tree with the new balances. TODO: implement batch `verify_and_update`
+        // for the LBT
         for (token, (old_balance, balance_path)) in &multi_batch_header.balances_proofs {
             let new_balance = new_balances[token];
             let new_balance = U256::uint_try_from(new_balance)

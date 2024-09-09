@@ -124,7 +124,10 @@ where
         H::Digest: Default,
     {
         let empty_hash_at_height = empty_hash_at_height::<H, DEPTH>();
-        let root = H::merge(&empty_hash_at_height[DEPTH - 1], &empty_hash_at_height[DEPTH - 1]);
+        let root = H::merge(
+            &empty_hash_at_height[DEPTH - 1],
+            &empty_hash_at_height[DEPTH - 1],
+        );
         let tree = HashMap::new();
         Smt {
             root,
@@ -246,10 +249,11 @@ where
     }
 
     /// Returns an inclusion proof that the key is not in the SMT.
-    /// This has the same purpose as a non-inclusion proof, but with the same format as an inclusion proof.
-    /// Use case: In the balance tree, we use inclusion proofs to verify the balance of a token in
-    /// the tree and update it. If the token is not already in the tree, we still want an inclusion
-    /// proof, so we use this function.
+    /// This has the same purpose as a non-inclusion proof, but with the same
+    /// format as an inclusion proof. Use case: In the balance tree, we use
+    /// inclusion proofs to verify the balance of a token in the tree and
+    /// update it. If the token is not already in the tree, we still want an
+    /// inclusion proof, so we use this function.
     pub fn get_inclusion_proof_zero<K>(
         &mut self,
         key: K,
@@ -324,8 +328,9 @@ where
         hash == root
     }
 
-    /// Verify the inclusion proof (i.e. that `(key, old_value)` is in the SMT) and
-    /// return the updated root of the SMT with `(key, new_value)` inserted, or `None` if the inclusion proof is invalid.
+    /// Verify the inclusion proof (i.e. that `(key, old_value)` is in the SMT)
+    /// and return the updated root of the SMT with `(key, new_value)`
+    /// inserted, or `None` if the inclusion proof is invalid.
     pub fn verify_and_update<K>(
         &self,
         key: K,
@@ -371,8 +376,11 @@ where
             return false;
         }
         if self.siblings.is_empty() {
-            return root
-                == H::merge(&empty_hash_at_height[DEPTH - 1], &empty_hash_at_height[DEPTH - 1]);
+            let empty_root = H::merge(
+                &empty_hash_at_height[DEPTH - 1],
+                &empty_hash_at_height[DEPTH - 1],
+            );
+            return root == empty_root;
         }
         let bits = key.to_bits();
         let mut entry = empty_hash_at_height[DEPTH - self.siblings.len()];
@@ -389,7 +397,8 @@ where
     }
 
     /// Verify the non-inclusion proof (i.e. that `key` is not in the SMT) and
-    /// return the updated root of the SMT with `(key, value)` inserted, or `None` if the inclusion proof is invalid.
+    /// return the updated root of the SMT with `(key, value)` inserted, or
+    /// `None` if the inclusion proof is invalid.
     pub fn verify_and_update<K>(
         &self,
         key: K,
@@ -623,7 +632,9 @@ mod tests {
         let proof = smt.get_inclusion_proof(key).unwrap();
         assert!(proof.verify(key, value, smt.root));
         let new_value = random();
-        let new_root = proof.verify_and_update(key, value, new_value, smt.root).unwrap();
+        let new_root = proof
+            .verify_and_update(key, value, new_value, smt.root)
+            .unwrap();
         smt.update(key, new_value).unwrap();
         assert_eq!(smt.root, new_root);
     }

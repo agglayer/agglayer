@@ -13,7 +13,8 @@ pub(crate) const L1_ETH: TokenInfo = TokenInfo {
     origin_token_address: address!("0000000000000000000000000000000000000000"),
 };
 
-/// Encapsulates the information to uniquely identify a token on the origin network.
+/// Encapsulates the information to uniquely identify a token on the origin
+/// network.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Copy)]
 pub struct TokenInfo {
     /// Network which the token originates from
@@ -98,7 +99,8 @@ impl BridgeExit {
         }
     }
 
-    /// Hashes the [`BridgeExit`] to be inserted in a [`crate::local_exit_tree::LocalExitTree`].
+    /// Hashes the [`BridgeExit`] to be inserted in a
+    /// [`crate::local_exit_tree::LocalExitTree`].
     pub fn hash(&self) -> KeccakDigest {
         keccak256_combine([
             (self.leaf_type as u8).as_raw_slice(),
