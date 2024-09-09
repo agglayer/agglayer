@@ -1,3 +1,4 @@
+pub use bincode::Options;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -79,6 +80,14 @@ pub struct PessimisticProofOutput {
     /// The new pessimistic root which commits to the balance and nullifier
     /// tree.
     pub new_pessimistic_root: Digest,
+}
+
+impl PessimisticProofOutput {
+    pub fn bincode_options() -> impl bincode::Options {
+        bincode::DefaultOptions::new()
+            .with_big_endian()
+            .with_fixint_encoding()
+    }
 }
 
 const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;
