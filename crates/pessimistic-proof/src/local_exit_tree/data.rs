@@ -92,11 +92,15 @@ where
             }
         }
 
-        leaf_index.try_into().expect("usize expected to be at least 32 bits")
+        leaf_index
+            .try_into()
+            .expect("usize expected to be at least 32 bits")
     }
 
     pub fn get(&self, height: usize, index: usize) -> H::Digest {
-        *self.layers[height].get(index).unwrap_or(&self.empty_hash_at_height[height])
+        *self.layers[height]
+            .get(index)
+            .unwrap_or(&self.empty_hash_at_height[height])
     }
 
     pub fn is_empty(&self) -> bool {
@@ -110,9 +114,13 @@ where
     }
 
     pub fn get_proof(&self, leaf_index: u32) -> LETMerkleProof<H, TREE_DEPTH> {
-        let leaf_index: usize =
-            leaf_index.try_into().expect("usize expected to be at least 32 bits");
-        assert!(leaf_index < self.layers[0].len(), "Leaf index out of bounds.");
+        let leaf_index: usize = leaf_index
+            .try_into()
+            .expect("usize expected to be at least 32 bits");
+        assert!(
+            leaf_index < self.layers[0].len(),
+            "Leaf index out of bounds."
+        );
         let mut siblings = [Default::default(); TREE_DEPTH];
         let mut index = leaf_index;
         for height in 0..TREE_DEPTH {
@@ -164,7 +172,10 @@ mod tests {
             LocalExitTree::from_leaves(leaves.iter().cloned());
         let local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
             LocalExitTreeData::from_leaves(leaves.into_iter());
-        assert_eq!(local_exit_tree_frontier.get_root(), local_exit_tree_data.get_root());
+        assert_eq!(
+            local_exit_tree_frontier.get_root(),
+            local_exit_tree_data.get_root()
+        );
     }
 
     #[test]
@@ -186,11 +197,17 @@ mod tests {
             LocalExitTreeData::from_leaves(leaves.into_iter());
         let mut local_exit_tree_frontier: LocalExitTree<_, TREE_DEPTH> =
             (&local_exit_tree_data).into();
-        assert_eq!(local_exit_tree_data.get_root(), local_exit_tree_frontier.get_root());
+        assert_eq!(
+            local_exit_tree_data.get_root(),
+            local_exit_tree_frontier.get_root()
+        );
         let leaf = random();
         local_exit_tree_data.add_leaf(leaf);
         local_exit_tree_frontier.add_leaf(leaf);
-        assert_eq!(local_exit_tree_data.get_root(), local_exit_tree_frontier.get_root());
+        assert_eq!(
+            local_exit_tree_data.get_root(),
+            local_exit_tree_frontier.get_root()
+        );
     }
 
     #[test]

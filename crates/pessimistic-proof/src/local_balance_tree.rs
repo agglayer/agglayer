@@ -11,11 +11,13 @@ use crate::{
     ProofError,
 };
 
-/// The key is [`TokenInfo`] which can be packed into 192 bits (32 for network id and 160 for token address).
+/// The key is [`TokenInfo`] which can be packed into 192 bits (32 for network
+/// id and 160 for token address).
 pub const LOCAL_BALANCE_TREE_DEPTH: usize = 192;
 
 // TODO: This is basically the same as the nullifier tree, consider refactoring
-/// A commitment to the set of per-network nullifier sets maintained by the local network
+/// A commitment to the set of per-network nullifier sets maintained by the
+/// local network
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LocalBalanceTree<H>
@@ -68,8 +70,10 @@ where
     pub fn new() -> Self {
         let mut empty_hash_at_height = [H::Digest::default(); LOCAL_BALANCE_TREE_DEPTH];
         for height in 1..LOCAL_BALANCE_TREE_DEPTH {
-            empty_hash_at_height[height] =
-                H::merge(&empty_hash_at_height[height - 1], &empty_hash_at_height[height - 1]);
+            empty_hash_at_height[height] = H::merge(
+                &empty_hash_at_height[height - 1],
+                &empty_hash_at_height[height - 1],
+            );
         }
         let root = H::merge(
             &empty_hash_at_height[LOCAL_BALANCE_TREE_DEPTH - 1],

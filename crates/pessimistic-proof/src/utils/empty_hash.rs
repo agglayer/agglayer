@@ -9,8 +9,10 @@ where
 {
     let mut empty_hash_at_height = [H::Digest::default(); DEPTH];
     for height in 1..DEPTH {
-        empty_hash_at_height[height] =
-            H::merge(&empty_hash_at_height[height - 1], &empty_hash_at_height[height - 1]);
+        empty_hash_at_height[height] = H::merge(
+            &empty_hash_at_height[height - 1],
+            &empty_hash_at_height[height - 1],
+        );
     }
     empty_hash_at_height
 }

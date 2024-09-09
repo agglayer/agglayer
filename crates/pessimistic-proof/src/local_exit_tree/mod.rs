@@ -48,7 +48,8 @@ where
         tree
     }
 
-    /// Creates a new [`LocalExitTree`] from its parts: leaf count, and frontier.
+    /// Creates a new [`LocalExitTree`] from its parts: leaf count, and
+    /// frontier.
     pub fn from_parts(leaf_count: u32, frontier: [H::Digest; TREE_DEPTH]) -> Self {
         Self {
             leaf_count,
@@ -142,7 +143,9 @@ where
         }
 
         LocalExitTree::from_parts(
-            leaf_count.try_into().expect("usize expected to be at least 32 bits"),
+            leaf_count
+                .try_into()
+                .expect("usize expected to be at least 32 bits"),
             frontier,
         )
     }

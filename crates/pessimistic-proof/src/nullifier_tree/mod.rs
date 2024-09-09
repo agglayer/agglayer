@@ -9,12 +9,14 @@ use crate::{
 };
 
 // 32 bits for the network id and 32 bits for the LET index
-// TODO: consider using less than 32 bits for the network id - unlikely that we'll have 4 billion chains :)
+// TODO: consider using less than 32 bits for the network id - unlikely that
+// we'll have 4 billion chains :)
 pub const NULLIFIER_TREE_DEPTH: usize = 64;
 
-// TODO: This is basically the same as the local balance tree, consider refactoring
-// TODO: Consider using an Indexed Merkle Tree instead of an SMT. See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
-/// A commitment to the set of per-network nullifier sets maintained by the local network
+// TODO: This is basically the same as the local balance tree, consider
+// refactoring TODO: Consider using an Indexed Merkle Tree instead of an SMT. See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
+/// A commitment to the set of per-network nullifier sets maintained by the
+/// local network
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NullifierTree<H>
@@ -73,8 +75,10 @@ where
     pub fn new() -> Self {
         let mut empty_hash_at_height = [H::Digest::default(); NULLIFIER_TREE_DEPTH];
         for height in 1..NULLIFIER_TREE_DEPTH {
-            empty_hash_at_height[height] =
-                H::merge(&empty_hash_at_height[height - 1], &empty_hash_at_height[height - 1]);
+            empty_hash_at_height[height] = H::merge(
+                &empty_hash_at_height[height - 1],
+                &empty_hash_at_height[height - 1],
+            );
         }
         let root = H::merge(
             &empty_hash_at_height[NULLIFIER_TREE_DEPTH - 1],

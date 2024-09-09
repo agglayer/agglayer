@@ -19,7 +19,10 @@ fn test_local_exit_tree_basic() {
         MerkleTree::from_leaves(&leaves)
     };
 
-    assert_eq!(ground_truth_tree.root().unwrap(), local_exit_tree.get_root());
+    assert_eq!(
+        ground_truth_tree.root().unwrap(),
+        local_exit_tree.get_root()
+    );
 }
 
 #[derive(Clone, Debug)]
