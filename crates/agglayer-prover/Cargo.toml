@@ -19,6 +19,8 @@ agglayer-prover-types = { path = "../agglayer-prover-types" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
 tonic = "0.12.2"
 tower.workspace = true
+tonic-health = "0.12.2"
+tonic-reflection = "0.12.2"
 
 # hex.workspace = true
 # hyper = "1.4.1"

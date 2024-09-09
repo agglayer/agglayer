@@ -202,6 +202,8 @@ dependencies = [
  "tokio-util",
  "toml 0.8.19",
  "tonic 0.12.2",
+ "tonic-health",
+ "tonic-reflection",
  "tower",
  "tracing",
  "tracing-subscriber",
@@ -7978,6 +7980,32 @@ dependencies = [
  "prost-build",
  "quote",
  "syn 2.0.77",
+]
+
+[[package]]
+name = "tonic-health"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec0a34e6f706bae26b2b490e1da5c3f6a6ff87cae442bcbc7c881bab9631b5a7"
+dependencies = [
+ "async-stream",
+ "prost 0.13.2",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.12.2",
+]
+
+[[package]]
+name = "tonic-reflection"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b56b874eedb04f89907573b408eab1e87c1c1dce43aac6ad63742f57faa99ff"
+dependencies = [
+ "prost 0.13.2",
+ "prost-types 0.13.2",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.12.2",
 ]
 
 [[package]]
