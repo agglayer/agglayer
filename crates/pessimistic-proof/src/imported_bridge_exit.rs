@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
-    keccak::{keccak256_combine, Digest as KeccakDigest, Digest},
+    keccak::{keccak256, keccak256_combine, Digest as KeccakDigest, Digest},
     local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
     ProofError,
 };
@@ -112,7 +112,7 @@ impl ImportedBridgeExit {
     }
 
     pub fn hash(&self) -> Digest {
-        self.bridge_exit.hash()
+        keccak256(self.global_index.to_u256().as_le_slice())
     }
 }
 
