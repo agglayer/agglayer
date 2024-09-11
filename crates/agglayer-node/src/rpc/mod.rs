@@ -139,6 +139,12 @@ where
             return Err(Error::rollup_not_registered(tx.tx.rollup_id));
         }
 
+        // Check rate limiting early so that we can report it before entering
+        // the subsequent expensive checks.
+        self.kernel
+            .rate_limiter()
+            .check_send_tx_now(tx.tx.rollup_id)?;
+
         agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
 
         // Run all the verification checks in parallel.

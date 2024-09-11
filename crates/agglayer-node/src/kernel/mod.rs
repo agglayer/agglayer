@@ -11,6 +11,7 @@ use crate::{
         polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
         polygon_zk_evm::PolygonZkEvm,
     },
+    rate_limiting::RateLimiter,
     signed_tx::SignedTx,
     zkevm_node_client::ZkevmNodeClient,
 };
@@ -28,6 +29,7 @@ pub(crate) mod tests;
 #[derive(Debug)]
 pub(crate) struct Kernel<RpcProvider> {
     rpc: Arc<RpcProvider>,
+    rate_limiter: RateLimiter,
     config: Arc<Config>,
 }
 
@@ -53,8 +55,13 @@ impl<RpcProvider> Kernel<RpcProvider> {
     pub(crate) fn new(rpc: RpcProvider, config: Arc<Config>) -> Self {
         Self {
             rpc: Arc::new(rpc),
+            rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
             config,
         }
+    }
+
+    pub(crate) fn rate_limiter(&self) -> &RateLimiter {
+        &self.rate_limiter
     }
 
     /// Check if the given rollup id is registered in the configuration.
@@ -170,6 +177,8 @@ where
     ProviderError(ProviderError),
     #[error("contract error: {0}")]
     ContractError(ContractError<RpcProvider>),
+    #[error(transparent)]
+    RateLimited(#[from] crate::rate_limiting::Error),
 }
 
 #[derive(Error, Debug)]
@@ -342,6 +351,9 @@ where
         if let Ok(Some(tx)) = self.check_tx_status(hex_hash).await {
             warn!(hash, "Transaction already settled: {:?}", tx);
         }
+
+        self.rate_limiter
+            .limit_send_tx_now(signed_tx.tx.rollup_id)?;
 
         let tx = f
             .send()
