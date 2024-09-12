@@ -96,15 +96,14 @@ const CANCELLED_STR: &'static str = "`do_stuff` was cancelled";
 
 #[tokio::test]
 async fn completed_before_deadline() {
-    tokio::time::pause();
-
     let (log, res) = capture_log(async {
-        let middleware = super::build(Duration::from_secs(45));
-        let (_server, client) = TestRpc::start(Duration::from_secs(30), middleware).await;
+        let middleware = super::build(Duration::from_secs(10));
+        let (_server, client) = TestRpc::start(Duration::from_secs(1), middleware).await;
 
-        let test_task = tokio::spawn(async move { client.do_stuff().await });
-        tokio::time::advance(Duration::from_secs(32)).await;
-        test_task.await.unwrap()
+        let res = client.do_stuff().await;
+        // Give the server the chance to log stuff before shutting down.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        res
     })
     .await;
 
@@ -115,16 +114,14 @@ async fn completed_before_deadline() {
 
 #[tokio::test]
 async fn timed_out() {
-    tokio::time::pause();
-
     let (log, res) = capture_log(async {
-        let middleware = super::build(Duration::from_secs(20));
-        let (_server, client) = TestRpc::start(Duration::from_secs(30), middleware).await;
+        let middleware = super::build(Duration::from_secs(2));
+        let (_server, client) = TestRpc::start(Duration::from_secs(10), middleware).await;
 
-        let test_task = tokio::spawn(async move { client.do_stuff().await });
-        tokio::time::advance(Duration::from_secs(22)).await;
-
-        test_task.await.unwrap()
+        let res = client.do_stuff().await;
+        // Give the server the chance to log stuff before shutting down.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        res
     })
     .await;
 
@@ -134,7 +131,7 @@ async fn timed_out() {
             assert_eq!(err.message(), "request timed out");
             assert_eq!(
                 serde_json::to_value(err.data()).unwrap(),
-                serde_json::json!({ "timeout": 20 }),
+                serde_json::json!({ "timeout": 2 }),
             );
         }
         _ => panic!("Unexpected error kind"),
@@ -146,20 +143,13 @@ async fn timed_out() {
 
 #[tokio::test]
 async fn request_dropped() {
-    tokio::time::pause();
-
     let (log, res) = capture_log(async {
-        let middleware = super::build(Duration::from_secs(45));
-        let (_server, client) = TestRpc::start(Duration::from_secs(30), middleware).await;
+        let middleware = super::build(Duration::from_secs(20));
+        let (_server, client) = TestRpc::start(Duration::from_secs(10), middleware).await;
 
-        let test_task = tokio::spawn(async move {
-            tokio::time::timeout(Duration::from_secs(10), client.do_stuff()).await
-        });
-
-        tokio::time::advance(Duration::from_secs(11)).await;
-        let res = test_task.await.unwrap();
-        tokio::time::advance(Duration::from_secs(1)).await;
-
+        let res = tokio::time::timeout(Duration::from_secs(2), client.do_stuff()).await;
+        // Give the server the chance to log stuff before shutting down.
+        tokio::time::sleep(Duration::from_secs(1)).await;
         res
     })
     .await;
