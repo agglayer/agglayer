@@ -2,43 +2,68 @@ use std::borrow::Borrow;
 
 use reth_primitives::U256;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
     keccak::{keccak256, keccak256_combine, Digest},
     local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
-    ProofError,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct L1InfoTreeLeaf {
-    l1_info_tree_index: u32,
-    rer: Digest,
-    mer: Digest,
-    last_block_hash: Digest,
-    timestamp: u64,
+pub struct L1InfoTreeLeafInner {
+    pub ger: Digest,
+    pub block_hash: Digest,
+    pub timestamp: u64,
 }
 
-impl L1InfoTreeLeaf {
-    fn ger(&self) -> Digest {
-        keccak256_combine([self.mer, self.rer])
-    }
-
+impl L1InfoTreeLeafInner {
     fn hash(&self) -> Digest {
-        let ger = self.ger();
         keccak256_combine([
-            ger.as_slice(),
-            self.last_block_hash.as_slice(),
+            self.ger.as_slice(),
+            self.block_hash.as_slice(),
             &self.timestamp.to_be_bytes(),
         ])
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct L1InfoTreeLeaf {
+    pub l1_info_tree_index: u32,
+    pub rer: Digest,
+    pub mer: Digest,
+    pub inner: L1InfoTreeLeafInner,
+}
+
+impl L1InfoTreeLeaf {
+    pub fn hash(&self) -> Digest {
+        self.inner.hash()
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Mismatch between the global index and the inclusion proof.")]
+    MismatchGlobalIndexInclusionProof,
+    #[error("Mismatch between the provided L1 root and the inclusion proof.")]
+    MismatchL1Root,
+    #[error("Mismatch on the MER between the L1 leaf and the inclusion proof.")]
+    MismatchMER,
+    #[error("Mismatch on the RER between the L1 leaf and the inclusion proof.")]
+    MismatchRER,
+    #[error("Invalid merkle path from the leaf to the LER.")]
+    InvalidMerklePathLeafToLER,
+    #[error("Invalid merkle path from the LER to the RER.")]
+    InvalidMerklePathLERToRER,
+    #[error("Invalid merkle path from the GER to the L1 Info Root.")]
+    InvalidMerklePathGERToL1Root,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MerkleProof {
-    proof: LETMerkleProof<Keccak256Hasher>,
-    root: Digest,
+    pub proof: LETMerkleProof<Keccak256Hasher>,
+    pub root: Digest,
 }
 
 impl MerkleProof {
@@ -56,11 +81,11 @@ pub enum Claim {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClaimFromMainnet {
     /// Proof from bridge exit leaf to MER
-    proof_leaf_mer: MerkleProof,
+    pub proof_leaf_mer: MerkleProof,
     /// Proof from GER to L1Root
-    proof_ger_l1root: MerkleProof,
+    pub proof_ger_l1root: MerkleProof,
     /// L1InfoTree leaf
-    l1_leaf: L1InfoTreeLeaf,
+    pub l1_leaf: L1InfoTreeLeaf,
 }
 
 impl ClaimFromMainnet {
@@ -69,20 +94,20 @@ impl ClaimFromMainnet {
         leaf: Digest,
         global_index: GlobalIndex,
         l1root: Digest,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), Error> {
         // Check the consistency on the l1 root
-        if l1root != self.l1_leaf.hash() {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        if l1root != self.proof_ger_l1root.root {
+            return Err(Error::MismatchL1Root);
         }
 
         // Check the consistency on the declared MER
         if self.proof_leaf_mer.root != self.l1_leaf.mer {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+            return Err(Error::MismatchMER);
         }
 
-        // Check the inclusion proof of the leaf to the MER
+        // Check the inclusion proof of the leaf to the LER (here LER is the MER)
         if !self.proof_leaf_mer.verify(leaf, global_index.leaf_index) {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+            return Err(Error::InvalidMerklePathLeafToLER);
         }
 
         // Check the inclusion proof of the L1 leaf to L1Root
@@ -90,7 +115,7 @@ impl ClaimFromMainnet {
             .proof_ger_l1root
             .verify(self.l1_leaf.hash(), self.l1_leaf.l1_info_tree_index)
         {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+            return Err(Error::InvalidMerklePathGERToL1Root);
         }
 
         Ok(())
@@ -115,20 +140,20 @@ impl ClaimFromRollup {
         leaf: Digest,
         global_index: GlobalIndex,
         l1root: Digest,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), Error> {
         // Check the consistency on the l1 root
-        if l1root != self.l1_leaf.hash() {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+        if l1root != self.proof_ger_l1root.root {
+            return Err(Error::MismatchL1Root);
         }
 
         // Check the consistency on the declared RER
         if self.proof_ler_rer.root != self.l1_leaf.rer {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+            return Err(Error::MismatchRER);
         }
 
         // Check the inclusion proof of the leaf to the LER
         if !self.proof_leaf_ler.verify(leaf, global_index.leaf_index) {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+            return Err(Error::InvalidMerklePathLeafToLER);
         }
 
         // Check the inclusion proof of the LER to the RER
@@ -136,7 +161,7 @@ impl ClaimFromRollup {
             .proof_ler_rer
             .verify(self.proof_leaf_ler.root, global_index.rollup_index)
         {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+            return Err(Error::InvalidMerklePathLERToRER);
         }
 
         // Check the inclusion proof of the L1 leaf to L1Root
@@ -144,7 +169,7 @@ impl ClaimFromRollup {
             .proof_ger_l1root
             .verify(self.l1_leaf.hash(), self.l1_leaf.l1_info_tree_index)
         {
-            return Err(ProofError::InvalidImportedBridgeExitMerklePath);
+            return Err(Error::InvalidMerklePathGERToL1Root);
         }
 
         Ok(())
@@ -178,11 +203,11 @@ impl ImportedBridgeExit {
 
     /// Verifies that the provided inclusion path is valid and consistent with
     /// the provided LER
-    pub fn verify_path(&self, l1root: Digest) -> Result<(), ProofError> {
+    pub fn verify_path(&self, l1root: Digest) -> Result<(), Error> {
         // Check that the inclusion proof and the global index both refer to mainnet or
         // rollup
         if self.global_index.mainnet_flag != matches!(self.claim_data, Claim::Mainnet(_)) {
-            return Err(ProofError::MismatchGlobalIndexInclusionProof);
+            return Err(Error::MismatchGlobalIndexInclusionProof);
         }
 
         match &self.claim_data {
@@ -205,4 +230,49 @@ pub fn commit_imported_bridge_exits<E: Borrow<ImportedBridgeExit>>(
     iter: impl Iterator<Item = E>,
 ) -> Digest {
     keccak256_combine(iter.map(|exit| exit.borrow().hash()))
+}
+
+#[cfg(test)]
+mod tests {
+    use hex_literal::hex;
+
+    use super::*;
+    use crate::local_exit_tree::LocalExitTree;
+
+    #[test]
+    fn can_parse_empty_l1infotree() {
+        let empty_l1_info_tree =
+            hex!("27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757");
+
+        let l1_tree = LocalExitTree::<Keccak256Hasher, 32>::default();
+
+        assert_eq!(empty_l1_info_tree, l1_tree.get_root());
+    }
+
+    #[test]
+    fn can_parse_l1infotree_leaf() {
+        assert_eq!(
+            hex!("f62f487534b899b1c362242616725878188ca891fab60854b792ca0628286de7"),
+            L1InfoTreeLeafInner {
+                ger: hex!("16994edfddddb9480667b64174fc00d3b6da7290d37b8db3a16571b4ddf0789f"),
+                block_hash: hex!(
+                    "24a5871d68723340d9eadc674aa8ad75f3e33b61d5a9db7db92af856a19270bb"
+                ),
+                timestamp: 1697231573,
+            }
+            .hash(),
+        );
+
+        assert_eq!(
+            hex!("ba9c9985e6c9cee54f57991049af0c42439fa2b2915a0597f4d63f63d31c1d4f"),
+            L1InfoTreeLeafInner {
+                ger: hex!("356682567c5d485bbabe89590d3d72b08671a0a07899dcbaddccbe0599491669"),
+                block_hash: hex!(
+                    "8f9cfb43c0f6bc7ce9f9e43e8761776a2ef9657ccf87318e2487c313d119b8cf"
+                ),
+                timestamp: 658736476,
+            }
+            .hash(),
+        );
+    }
 }

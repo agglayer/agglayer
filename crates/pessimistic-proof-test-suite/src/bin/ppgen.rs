@@ -108,7 +108,7 @@ pub struct VerifierInputs {
     pub prev_pessimistic_root: String,
     /// The global exit root against which we prove the inclusion of the
     /// imported bridge exits.
-    pub selected_ger: String,
+    pub l1_info_root: String,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
     /// The consensus hash.
@@ -125,7 +125,7 @@ impl From<PessimisticProofOutput> for VerifierInputs {
         Self {
             prev_local_exit_root: format!("0x{}", hex::encode(v.prev_local_exit_root)),
             prev_pessimistic_root: format!("0x{}", hex::encode(v.prev_pessimistic_root)),
-            selected_ger: format!("0x{}", hex::encode(v.selected_ger)),
+            l1_info_root: format!("0x{}", hex::encode(v.l1_info_root)),
             origin_network: v.origin_network,
             consensus_hash: format!("0x{}", hex::encode(v.consensus_hash)),
             new_local_exit_root: format!("0x{}", hex::encode(v.new_local_exit_root)),

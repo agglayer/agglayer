@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use crate::{
     bridge_exit::{NetworkId, TokenInfo},
+    imported_bridge_exit,
     keccak::{keccak256_combine, Digest},
     local_exit_tree::hasher::Keccak256Hasher,
     local_state::{LocalNetworkState, StateCommitment},
@@ -29,6 +30,8 @@ pub enum ProofError {
     InvalidImportedBridgeExitMerklePath,
     #[error("Invalid imported bridge exit root.")]
     InvalidImportedBridgeExitRoot,
+    #[error("Invalid imported bridge exit: {0}")]
+    InvalidImportedBridgeExit(#[from] imported_bridge_exit::Error),
     #[error("Missing token balance proof.")]
     MissingTokenBalanceProof,
     #[error("Invalid nullifier path.")]
@@ -51,8 +54,6 @@ pub enum ProofError {
     InvalidEthNetwork,
     #[error("Invalid imported bridge exit network.")]
     InvalidImportedBridgeExitNetwork,
-    #[error("Mismatch between the global index and the inclusion proof.")]
-    MismatchGlobalIndexInclusionProof,
     #[error("Duplicate token {0:?} in balance proofs")]
     DuplicateTokenBalanceProof(TokenInfo),
 }

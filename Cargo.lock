@@ -4955,6 +4955,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "hex",
+ "hex-literal",
  "rand",
  "reth-primitives",
  "rs_merkle",

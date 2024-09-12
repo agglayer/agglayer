@@ -1,7 +1,6 @@
 use pessimistic_proof::{
-    bridge_exit::TokenInfo, keccak::Digest, local_balance_tree::LocalBalanceTree,
-    local_state::StateCommitment, multi_batch_header::MultiBatchHeader,
-    nullifier_tree::NullifierTree, LocalNetworkState,
+    bridge_exit::TokenInfo, local_balance_tree::LocalBalanceTree, local_state::StateCommitment,
+    multi_batch_header::MultiBatchHeader, nullifier_tree::NullifierTree, LocalNetworkState,
 };
 use pessimistic_proof_test_suite::{
     forest::{compute_signature_info, Forest},
@@ -104,8 +103,6 @@ fn e2e_local_pp_random() {
         bridge_exits,
         imported_bridge_exits,
         imported_exits_root: Some(imported_exits_root),
-        imported_mainnet_exit_root: forest.local_exit_tree_data_a.get_root(),
-        imported_rollup_exit_root: Digest::default(),
         balances_proofs,
         prev_balance_root,
         prev_nullifier_root,
@@ -116,6 +113,7 @@ fn e2e_local_pp_random() {
             balance_root: forest.local_balance_tree.root,
             nullifier_root: forest.nullifier_set.root,
         },
+        l1_info_root: forest.l1_info_tree.get_root(),
     };
 
     local_state.apply_batch_header(&batch_header).unwrap();
@@ -145,15 +143,12 @@ fn test_sp1_simple() {
     let new_local_exit_root = forest.local_exit_tree.get_root();
     let (imported_exits_root, signer, signature) =
         compute_signature_info(new_local_exit_root, &imported_bridge_exits);
-    let dummy = forest.local_exit_tree.get_root();
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
         bridge_exits,
         imported_bridge_exits,
         imported_exits_root: Some(imported_exits_root),
-        imported_mainnet_exit_root: forest.local_exit_tree_data_a.get_root(),
-        imported_rollup_exit_root: dummy,
         balances_proofs,
         prev_balance_root,
         prev_nullifier_root,
@@ -164,6 +159,7 @@ fn test_sp1_simple() {
             balance_root: forest.local_balance_tree.root,
             nullifier_root: forest.nullifier_set.root,
         },
+        l1_info_root: forest.l1_info_tree.get_root(),
     };
 
     let mut stdin = SP1Stdin::new();
