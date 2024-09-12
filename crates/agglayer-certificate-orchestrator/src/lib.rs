@@ -8,7 +8,8 @@ use std::{
 
 use agglayer_clock::Event;
 use futures_util::{future::BoxFuture, Stream, StreamExt};
-use pessimistic_proof::{bridge_exit::NetworkId, LocalNetworkState, ProofError};
+use pessimistic_proof::bridge_exit::NetworkId;
+use pessimistic_proof::{certificate::Certificate, local_state::LocalNetworkStateData, ProofError};
 use tokio::{
     sync::mpsc::Receiver,
     task::{JoinHandle, JoinSet},
@@ -23,7 +24,7 @@ const MAX_POLL_READS: usize = 1_000;
 
 /// Global State composed of each network state for all networks.
 /// Eventually, each state will live only in the networks themselves.
-type GlobalState = BTreeMap<NetworkId, LocalNetworkState>;
+type GlobalState = BTreeMap<NetworkId, LocalNetworkStateData>;
 
 /// The Certificate orchestrator receives the certificates from CDKs.
 ///
@@ -357,15 +358,15 @@ pub trait CertificateInput: Clone {
     fn network_id(&self) -> NetworkId;
 }
 
-impl CertificateInput for MultiBatchHeader<Keccak256Hasher> {
+impl CertificateInput for Certificate {
     fn network_id(&self) -> NetworkId {
-        self.origin_network
+        self.network_id
     }
 }
 
 pub struct CertifierOutput<P> {
     pub proof: P,
-    pub new_state: LocalNetworkState,
+    pub new_state: LocalNetworkStateData,
     pub network: NetworkId,
 }
 
@@ -378,13 +379,11 @@ pub trait Certifier: Clone + Unpin + Send + Sync + 'static {
 
     fn certify(
         &self,
-        local_state: LocalNetworkState,
-        certificate: Self::Input,
+        full_state: LocalNetworkStateData,
+        batch_header: Self::Input,
     ) -> CertifierResult<Self::Proof>;
 }
 
-use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
-use pessimistic_proof::multi_batch_header::MultiBatchHeader;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -395,4 +394,6 @@ pub enum Error {
     ProverExecutionFailed(#[from] anyhow::Error),
     #[error("native execution failed: {0:?}")]
     NativeExecutionFailed(#[from] ProofError),
+    #[error("Type error: {0}")]
+    Types(#[from] pessimistic_proof::certificate::Error),
 }

@@ -10,6 +10,7 @@ use crate::{
     imported_bridge_exit::ImportedBridgeExit,
     local_balance_tree::LocalBalancePath,
     local_exit_tree::hasher::Hasher,
+    local_state::StateCommitment,
     nullifier_tree::NullifierPath,
 };
 
@@ -40,10 +41,6 @@ where
     /// The initial local exit root.
     #[serde_as(as = "_")]
     pub prev_local_exit_root: H::Digest,
-
-    /// The new local exit root
-    #[serde_as(as = "_")]
-    pub new_local_exit_root: H::Digest,
 
     /// The set of bridge exits created in this batch
     /// TODO: move out of the header and into a separate struct
@@ -76,26 +73,17 @@ where
     #[serde_as(as = "_")]
     pub prev_balance_root: H::Digest,
 
-    /// The new Local Balance Root
-    #[serde_as(as = "_")]
-    pub new_balance_root: H::Digest,
-
     /// The previous NullifierTree Root
     #[serde_as(as = "_")]
     pub prev_nullifier_root: H::Digest,
 
-    /// The new NullifierTree Root
-    #[serde_as(as = "_")]
-    pub new_nullifier_root: H::Digest,
-    // /// A validity proof verifying transaction execution
-    //pub validity_proof: Option<ValidityProof>,
-
-    // /// A consensus proof for the latest block
-    //pub consensus_proof: Option<ConsensusProof>,
     /// The signer that commits to the bridge exits
     pub signer: Address,
     /// The signature that commits to the bridge exits
     pub signature: Signature,
+
+    /// Target hashes
+    pub target: StateCommitment,
 }
 
 impl<H> MultiBatchHeader<H>
@@ -107,36 +95,32 @@ where
     pub fn new(
         origin_network: NetworkId,
         prev_local_exit_root: H::Digest,
-        new_local_exit_root: H::Digest,
         bridge_exits: Vec<BridgeExit>,
         imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<H>)>,
         imported_exits_root: Option<H::Digest>,
         balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
         prev_balance_root: H::Digest,
-        new_balance_root: H::Digest,
         prev_nullifier_root: H::Digest,
-        new_nullifier_root: H::Digest,
         signer: Address,
         signature: Signature,
         imported_rollup_exit_root: H::Digest,
         imported_mainnet_exit_root: H::Digest,
+        target: StateCommitment,
     ) -> Self {
         Self {
             origin_network,
             prev_local_exit_root,
-            new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
             imported_exits_root,
             balances_proofs,
             prev_balance_root,
-            new_balance_root,
             prev_nullifier_root,
-            new_nullifier_root,
             signer,
             signature,
             imported_rollup_exit_root,
             imported_mainnet_exit_root,
+            target,
         }
     }
 }

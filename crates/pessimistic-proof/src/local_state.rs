@@ -6,18 +6,39 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::{LeafType, L1_ETH, L1_NETWORK_ID},
     imported_bridge_exit::commit_imported_bridge_exits,
-    keccak::keccak256_combine,
-    local_balance_tree::LocalBalanceTree,
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
+    keccak::{keccak256_combine, Digest},
+    local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
+    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::MultiBatchHeader,
-    nullifier_tree::{NullifierKey, NullifierTree},
-    proof::{BalanceRoot, ExitRoot, NullifierRoot},
+    nullifier_tree::{NullifierKey, NullifierTree, NULLIFIER_TREE_DEPTH},
+    utils::smt::Smt,
     ProofError,
 };
 
-/// Local state of one network.
+/// Local state of one network including the leaves.
 /// The AggLayer tracks the [`LocalNetworkState`] for all networks.
 /// Eventually, this state will be entirely tracked by the networks themselves.
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct LocalNetworkStateData {
+    /// The full local exit tree.
+    pub exit_tree: LocalExitTreeData<Keccak256Hasher>,
+    /// The full local balance tree.
+    pub balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
+    /// The full nullifier set.
+    pub nullifier_set: Smt<Keccak256Hasher, NULLIFIER_TREE_DEPTH>,
+}
+
+impl From<LocalNetworkStateData> for LocalNetworkState {
+    fn from(state: LocalNetworkStateData) -> Self {
+        LocalNetworkState {
+            exit_tree: (&state.exit_tree).into(),
+            balance_tree: LocalBalanceTree::new_with_root(state.balance_tree.root),
+            nullifier_set: NullifierTree::new_with_root(state.nullifier_set.root),
+        }
+    }
+}
+
+/// State representation of one network without the leaves.
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`].
@@ -29,33 +50,45 @@ pub struct LocalNetworkState {
     pub nullifier_set: NullifierTree<Keccak256Hasher>,
 }
 
+/// The roots of one [`LocalNetworkState`].
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+pub struct StateCommitment {
+    pub exit_root: Digest,
+    pub balance_root: Digest,
+    pub nullifier_root: Digest,
+}
+
 impl LocalNetworkState {
-    pub fn roots(&self) -> (ExitRoot, BalanceRoot, NullifierRoot) {
-        (
-            self.exit_tree.get_root(),
-            self.balance_tree.root,
-            self.nullifier_set.root,
-        )
+    /// Returns the roots.
+    pub fn roots(&self) -> StateCommitment {
+        StateCommitment {
+            exit_root: self.exit_tree.get_root(),
+            balance_root: self.balance_tree.root,
+            nullifier_root: self.nullifier_set.root,
+        }
     }
-    /// Apply the [`MultiBatchHeader`] on the current [`State`].
+
+    /// Apply the [`MultiBatchHeader`] on the current [`LocalNetworkState`].
+    /// Checks that the transition reaches the target [`StateCommitment`].
     /// The state isn't modified on error.
     pub fn apply_batch_header(
         &mut self,
         multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
-    ) -> Result<(), ProofError> {
+    ) -> Result<StateCommitment, ProofError> {
         let mut clone = self.clone();
-        clone.apply_batch_header_helper(multi_batch_header)?;
+        let roots = clone.apply_batch_header_helper(multi_batch_header)?;
         *self = clone;
 
-        Ok(())
+        Ok(roots)
     }
 
-    /// Apply the [`MultiBatchHeader`] on the current [`State`].
+    /// Apply the [`MultiBatchHeader`] on the current [`LocalNetworkState`].
+    /// Returns the resulting [`StateCommitment`] upon success.
     /// The state can be modified on error.
     fn apply_batch_header_helper(
         &mut self,
         multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
-    ) -> Result<(), ProofError> {
+    ) -> Result<StateCommitment, ProofError> {
         // Check the initial state
         let computed_root = self.exit_tree.get_root();
         if computed_root != multi_batch_header.prev_local_exit_root {
@@ -95,7 +128,7 @@ impl LocalNetworkState {
         }
 
         let combined_hash = keccak256_combine([
-            multi_batch_header.new_local_exit_root.as_slice(),
+            multi_batch_header.target.exit_root.as_slice(),
             imported_exits_root.as_slice(),
         ]);
 
@@ -218,16 +251,6 @@ impl LocalNetworkState {
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
         }
 
-        if self.exit_tree.get_root() != multi_batch_header.new_local_exit_root {
-            return Err(ProofError::InvalidFinalLocalExitRoot);
-        }
-        if self.balance_tree.root != multi_batch_header.new_balance_root {
-            return Err(ProofError::InvalidFinalBalanceRoot);
-        }
-        if self.nullifier_set.root != multi_batch_header.new_nullifier_root {
-            return Err(ProofError::InvalidFinalNullifierRoot);
-        }
-
-        Ok(())
+        Ok(self.roots())
     }
 }

@@ -1,6 +1,7 @@
 use pessimistic_proof::{
     bridge_exit::TokenInfo, keccak::Digest, local_balance_tree::LocalBalanceTree,
-    multi_batch_header::MultiBatchHeader, nullifier_tree::NullifierTree, LocalNetworkState,
+    local_state::StateCommitment, multi_batch_header::MultiBatchHeader,
+    nullifier_tree::NullifierTree, LocalNetworkState,
 };
 use pessimistic_proof_test_suite::{
     forest::{compute_signature_info, Forest},
@@ -27,7 +28,7 @@ fn e2e_local_pp_simple_helper(
     let mut local_state = forest.local_state();
     let batch_header = forest.apply_events(&imported_events, &events);
 
-    local_state.apply_batch_header(&batch_header).unwrap()
+    local_state.apply_batch_header(&batch_header).unwrap();
 }
 
 #[test]
@@ -100,7 +101,6 @@ fn e2e_local_pp_random() {
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
-        new_local_exit_root,
         bridge_exits,
         imported_bridge_exits,
         imported_exits_root: Some(imported_exits_root),
@@ -108,14 +108,17 @@ fn e2e_local_pp_random() {
         imported_rollup_exit_root: Digest::default(),
         balances_proofs,
         prev_balance_root,
-        new_balance_root: forest.local_balance_tree.root,
         prev_nullifier_root,
-        new_nullifier_root: forest.nullifier_set.root,
         signer,
         signature,
+        target: StateCommitment {
+            exit_root: new_local_exit_root,
+            balance_root: forest.local_balance_tree.root,
+            nullifier_root: forest.nullifier_set.root,
+        },
     };
 
-    local_state.apply_batch_header(&batch_header).unwrap()
+    local_state.apply_batch_header(&batch_header).unwrap();
 }
 
 // Same as `e2e_local_pp_simple` with an SP1 proof on top
@@ -146,7 +149,6 @@ fn test_sp1_simple() {
     let batch_header = MultiBatchHeader {
         origin_network: *NETWORK_B,
         prev_local_exit_root,
-        new_local_exit_root,
         bridge_exits,
         imported_bridge_exits,
         imported_exits_root: Some(imported_exits_root),
@@ -154,11 +156,14 @@ fn test_sp1_simple() {
         imported_rollup_exit_root: dummy,
         balances_proofs,
         prev_balance_root,
-        new_balance_root: forest.local_balance_tree.root,
         prev_nullifier_root,
-        new_nullifier_root: forest.nullifier_set.root,
         signer,
         signature,
+        target: StateCommitment {
+            exit_root: new_local_exit_root,
+            balance_root: forest.local_balance_tree.root,
+            nullifier_root: forest.nullifier_set.root,
+        },
     };
 
     let mut stdin = SP1Stdin::new();

@@ -6,7 +6,7 @@ use crate::{
     bridge_exit::{NetworkId, TokenInfo},
     keccak::{keccak256_combine, Digest},
     local_exit_tree::hasher::Keccak256Hasher,
-    local_state::LocalNetworkState,
+    local_state::{LocalNetworkState, StateCommitment},
     multi_batch_header::MultiBatchHeader,
 };
 
@@ -57,10 +57,6 @@ pub enum ProofError {
     DuplicateTokenBalanceProof(TokenInfo),
 }
 
-pub type ExitRoot = Digest;
-pub type BalanceRoot = Digest;
-pub type NullifierRoot = Digest;
-
 /// Outputs of the pessimistic proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PessimisticProofOutput {
@@ -98,7 +94,11 @@ pub fn generate_pessimistic_proof(
     initial_network_state: LocalNetworkState,
     batch_header: &MultiBatchHeader<Keccak256Hasher>,
 ) -> Result<PessimisticProofOutput, ProofError> {
-    let (prev_ler, prev_lbr, prev_nr) = initial_network_state.roots();
+    let StateCommitment {
+        exit_root: prev_ler,
+        balance_root: prev_lbr,
+        nullifier_root: prev_nr,
+    } = initial_network_state.roots();
     let prev_pessimistic_root = keccak256_combine([prev_lbr, prev_nr]);
 
     let consensus_hash = keccak256_combine([
@@ -112,12 +112,22 @@ pub fn generate_pessimistic_proof(
     ]);
 
     let new_pessimistic_root = keccak256_combine([
-        batch_header.new_balance_root,
-        batch_header.new_nullifier_root,
+        batch_header.target.balance_root,
+        batch_header.target.nullifier_root,
     ]);
 
     let mut network_state = initial_network_state;
-    network_state.apply_batch_header(batch_header)?;
+    let computed_target = network_state.apply_batch_header(batch_header)?;
+
+    if computed_target.exit_root != batch_header.target.exit_root {
+        return Err(ProofError::InvalidFinalLocalExitRoot);
+    }
+    if computed_target.balance_root != batch_header.target.balance_root {
+        return Err(ProofError::InvalidFinalBalanceRoot);
+    }
+    if computed_target.nullifier_root != batch_header.target.nullifier_root {
+        return Err(ProofError::InvalidFinalNullifierRoot);
+    }
 
     Ok(PessimisticProofOutput {
         prev_local_exit_root: prev_ler,
@@ -125,7 +135,7 @@ pub fn generate_pessimistic_proof(
         selected_ger,
         origin_network: batch_header.origin_network,
         consensus_hash,
-        new_local_exit_root: batch_header.new_local_exit_root,
+        new_local_exit_root: batch_header.target.exit_root,
         new_pessimistic_root,
     })
 }
