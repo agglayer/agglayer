@@ -94,6 +94,15 @@ impl RateLimitingConfig {
         }
     }
 
+    /// Override `sendTx`setting for given network
+    pub fn with_send_tx_override(mut self, nid: RollupId, limit: TimeRateLimit) -> Self {
+        let limit_override = RateLimitOverride {
+            send_tx: Some(limit),
+        };
+        let _ = self.network.0.insert(nid, limit_override);
+        self
+    }
+
     /// Get rate limiting for the `sendTx` call for given network.
     pub fn send_tx_limit(&self, nid: RollupId) -> &TimeRateLimit {
         self.override_for(nid)

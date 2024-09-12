@@ -6,10 +6,13 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use agglayer_config::rate_limiting::{RateLimitingConfig, RollupId, TimeRateLimit};
+pub use agglayer_config::rate_limiting::{RateLimitingConfig, RollupId, TimeRateLimit};
 use tokio::time::Instant;
 
 pub mod wall_clock;
+
+#[cfg(test)]
+pub mod tests;
 
 #[derive(PartialEq, Eq, Clone, Debug, serde::Serialize, thiserror::Error)]
 #[serde(rename_all = "kebab-case")]
