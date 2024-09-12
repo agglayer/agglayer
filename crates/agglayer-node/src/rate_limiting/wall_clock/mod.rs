@@ -5,6 +5,9 @@ use std::{num::NonZeroU32, time::Duration};
 use serde_with::{serde_as, DurationSeconds};
 use tokio::time::Instant;
 
+#[cfg(test)]
+mod tests;
+
 /// An error indicating the request has been rate limited.
 #[serde_with::serde_as]
 #[derive(Clone, Eq, PartialEq, Debug, serde::Serialize, thiserror::Error)]
@@ -23,6 +26,7 @@ pub struct RateLimited {
     pub until_next: Duration,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 struct Params {
     max_per_interval: NonZeroU32,
     time_interval: Duration,
@@ -48,6 +52,7 @@ impl Params {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RateLimiter {
     /// Past events recorded by the limiter and their times.
     ///
@@ -81,7 +86,7 @@ impl RateLimiter {
 
         if num_events >= self.params.max_per_interval() {
             let earliest = *self.past.first().expect("rate limited with empty past");
-            let until_next = self.params.expiry_point(earliest).duration_since(time);
+            let until_next = earliest.duration_since(self.params.expiry_point(time));
 
             return Err(RateLimited {
                 time_interval: self.params.time_interval,
