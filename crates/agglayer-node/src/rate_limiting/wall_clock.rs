@@ -12,15 +12,15 @@ use tokio::time::Instant;
 #[error("Limit reached")]
 pub struct RateLimited {
     /// Limit for number of requests in given time window.
-    max_per_interval: u32,
+    pub max_per_interval: u32,
 
     /// Rate limiting time window.
     #[serde_as(as = "DurationSeconds")]
-    time_interval: Duration,
+    pub time_interval: Duration,
 
     /// Number of seconds left until rate limit is expected to pass.
     #[serde_as(as = "DurationSeconds")]
-    until_next: Duration,
+    pub until_next: Duration,
 }
 
 struct Params {

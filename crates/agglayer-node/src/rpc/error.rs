@@ -112,9 +112,12 @@ pub enum Error {
     #[error("Status retrieval error: {0}")]
     Status(#[from] StatusError),
 
-    #[error(transparent)]
+    #[error("Rate limited")]
     #[serde(rename_all = "kebab-case")]
-    RateLimited(#[from] rate_limiting::Error),
+    RateLimited {
+        detail: String,
+        error: rate_limiting::Error,
+    },
 }
 
 impl Error {
@@ -148,7 +151,7 @@ impl Error {
             Self::Validation(_) => code::VALIDATION_FAILURE,
             Self::Settlement(_) => code::SETTLEMENT_ERROR,
             Self::Status(_) => code::STATUS_ERROR,
-            Self::RateLimited(_) => code::RATE_LIMITED,
+            Self::RateLimited { .. } => code::RATE_LIMITED,
         }
     }
 }
@@ -165,6 +168,13 @@ impl<R: Middleware> From<crate::kernel::SettlementError<R>> for Error {
             }
             E::RateLimited(e) => e.into(),
         }
+    }
+}
+
+impl From<rate_limiting::Error> for Error {
+    fn from(error: rate_limiting::Error) -> Self {
+        let detail = error.to_string();
+        Self::RateLimited { detail, error }
     }
 }
 

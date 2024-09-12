@@ -9,15 +9,16 @@ use std::{
 use agglayer_config::rate_limiting::{RateLimitingConfig, RollupId, TimeRateLimit};
 use tokio::time::Instant;
 
-mod wall_clock;
+pub mod wall_clock;
 
 #[derive(PartialEq, Eq, Clone, Debug, serde::Serialize, thiserror::Error)]
+#[serde(rename_all = "kebab-case")]
 pub enum Error {
     #[error("The `sendTx` settlement has been limited: {0}")]
     SendTxRateLimited(wall_clock::RateLimited),
 
     #[error("The `sendTx` settlement disabled by rate limiter")]
-    SendTxDiabled,
+    SendTxDiabled {},
 }
 
 /// A global rate-limiter.
@@ -118,7 +119,7 @@ impl RateLimiterImpl {
                 time_interval,
             } => {
                 let max_per_interval =
-                    NonZeroU32::new(*max_per_interval).ok_or(Error::SendTxDiabled)?;
+                    NonZeroU32::new(*max_per_interval).ok_or(Error::SendTxDiabled {})?;
                 let mk_limiter = || wall_clock::RateLimiter::new(max_per_interval, *time_interval);
                 let limiter = self.send_tx.entry(nid).or_insert_with(mk_limiter);
                 func(limiter)
