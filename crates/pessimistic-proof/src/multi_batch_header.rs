@@ -14,17 +14,7 @@ use crate::{
     nullifier_tree::NullifierPath,
 };
 
-/// Represents the data submitted by the CDKs to the AggLayer.
-///
-/// The bridge exits plus the imported bridge exits define
-/// the state transition, resp. the amount that goes out and the amount that
-/// comes in.
-///
-/// The bridge exits refer to the [`BridgeExit`]  emitted by
-/// the origin network of the [`MultiBatchHeader`].
-///
-/// The imported bridge exits refer to the [`BridgeExit`] received and imported
-/// by the origin network of the [`MultiBatchHeader].
+/// Represents the chain state transition for the pessimistic proof.
 #[serde_as]
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct MultiBatchHeader<H>

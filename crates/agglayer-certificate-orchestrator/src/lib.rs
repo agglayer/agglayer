@@ -116,7 +116,7 @@ where
     /// # use futures_util::future::BoxFuture;
     /// # use tokio_stream::StreamExt;
     /// # use pessimistic_proof::bridge_exit::NetworkId;
-    /// # use pessimistic_proof::LocalNetworkState;
+    /// # use pessimistic_proof::local_state::LocalNetworkStateData;
     ///
     /// # #[derive(Clone)]
     /// # pub struct Empty;
@@ -152,13 +152,13 @@ where
     ///
     ///     fn certify(
     ///         &self,
-    ///         local_state: LocalNetworkState,
+    ///         local_state: LocalNetworkStateData,
     ///         certificate: Self::Input,
     ///     ) -> CertifierResult<Self::Proof> {
     ///         Ok(Box::pin(async move {
     ///             Ok(CertifierOutput {
     ///                 proof: (),
-    ///                 new_state: LocalNetworkState::default(),
+    ///                 new_state: LocalNetworkStateData::default(),
     ///                 network: NetworkId::new(0),
     ///             })
     ///         }))

@@ -24,6 +24,17 @@ pub enum Error {
 
 pub type Height = u64;
 
+/// Represents the data submitted by the chains to the AggLayer.
+///
+/// The bridge exits plus the imported bridge exits define
+/// the state transition, resp. the amount that goes out and the amount that
+/// comes in.
+///
+/// The bridge exits refer to the [`BridgeExit`] emitted by
+/// the origin network of the [`Certificate`].
+///
+/// The imported bridge exits refer to the [`BridgeExit`] received and imported
+/// by the origin network of the [`Certificate`].
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct Certificate {
     pub network_id: NetworkId,
