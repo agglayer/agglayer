@@ -98,7 +98,7 @@ pub struct Config {
 impl Config {
     pub fn new(base_path: &Path) -> Self {
         Self {
-            storage: storage::StorageConfig::from(base_path),
+            storage: storage::StorageConfig::new_from_path(base_path),
             full_node_rpcs: Default::default(),
             proof_signers: Default::default(),
             log: Default::default(),

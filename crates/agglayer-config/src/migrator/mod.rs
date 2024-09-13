@@ -43,7 +43,7 @@ impl ConfigMigrator {
                     epoch,
                     shutdown,
                     certificate_orchestrator: CertificateOrchestrator::default(),
-                    storage: config_path.into(),
+                    storage: crate::storage::StorageConfig::new_from_path(config_path),
                 }
             }
             ConfigMigrator::V0_2(config) => config,
