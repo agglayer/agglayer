@@ -38,7 +38,7 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
 
       - uses: taiki-e/install-action@grcov
-
+      - uses: taiki-e/install-action@protoc
       - uses: taiki-e/install-action@nextest
 
       - name: Set up rust cache

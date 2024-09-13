@@ -52,6 +52,7 @@ jobs:
           key: ${{ runner.os }}-cargo-registry-rocksdb-${{ hashFiles('Cargo.lock') }}
 
       - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
 
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
