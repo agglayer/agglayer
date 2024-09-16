@@ -8,6 +8,7 @@ use pessimistic_proof::{
     keccak::{keccak256_combine, Digest},
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
+    local_state::StateCommitment,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{FromBool, NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
     utils::smt::Smt,
@@ -203,7 +204,6 @@ impl Forest {
         MultiBatchHeader {
             origin_network: *NETWORK_B,
             prev_local_exit_root,
-            new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
             imported_exits_root: Some(imported_exits_root),
@@ -211,11 +211,14 @@ impl Forest {
             prev_balance_root,
             imported_mainnet_exit_root: self.local_exit_tree_data_a.get_root(),
             imported_rollup_exit_root: Digest::default(),
-            new_balance_root: self.local_balance_tree.root,
             prev_nullifier_root,
-            new_nullifier_root: self.nullifier_set.root,
             signer,
             signature,
+            target: StateCommitment {
+                exit_root: new_local_exit_root,
+                balance_root: self.local_balance_tree.root,
+                nullifier_root: self.nullifier_set.root,
+            },
         }
     }
 

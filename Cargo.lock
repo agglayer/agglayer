@@ -80,6 +80,7 @@ dependencies = [
  "anyhow",
  "futures",
  "pessimistic-proof",
+ "reth-primitives",
  "rstest",
  "serde",
  "sp1-prover",

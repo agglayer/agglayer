@@ -2,16 +2,15 @@
 
 use std::sync::Arc;
 
-use agglayer_certificate_orchestrator::{
-    CertificateInput, Certifier, CertifierOutput, EpochPacker, Error,
-};
+use agglayer_certificate_orchestrator::{Certifier, CertifierOutput, EpochPacker, Error};
 use agglayer_config::certificate_orchestrator::prover::ProverConfig;
 use error::NotifierError;
 use futures::future::BoxFuture;
-use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
-use pessimistic_proof::multi_batch_header::MultiBatchHeader;
-use pessimistic_proof::LocalNetworkState;
+use pessimistic_proof::{
+    certificate::Certificate, local_state::LocalNetworkStateData, LocalNetworkState,
+};
 use proof::Proof;
+use reth_primitives::Address;
 use serde::Serialize;
 use sp1::SP1;
 use sp1_sdk::{LocalProver, MockProver, NetworkProver};
@@ -67,29 +66,44 @@ where
     }
 }
 
-impl Certifier for AggregatorNotifier<MultiBatchHeader<Keccak256Hasher>> {
-    type Input = MultiBatchHeader<Keccak256Hasher>;
+impl Certifier for AggregatorNotifier<Certificate> {
+    type Input = Certificate;
     type Proof = Proof;
 
     fn certify(
         &self,
-        local_state: LocalNetworkState,
-        batch_header: MultiBatchHeader<Keccak256Hasher>,
+        full_state: LocalNetworkStateData,
+        certificate: Certificate,
     ) -> Result<BoxFuture<Result<CertifierOutput<Self::Proof>, Error>>, Error> {
-        let proving_request = self.prover.prove(local_state.clone(), batch_header.clone());
-
-        let mut state = local_state.clone();
-        #[allow(clippy::let_unit_value)]
-        let _native_outputs = state
+        let signer = Address::new([0; 20]); // TODO: put the trusted sequencer address
+        let mut batch_header = certificate.into_pessimistic_proof_input(&full_state, signer)?;
+        let initial_state = LocalNetworkState::from(full_state.clone());
+        let target = initial_state
+            .clone()
             .apply_batch_header(&batch_header)
             .map_err(Error::NativeExecutionFailed)?;
+
+        if batch_header.target.exit_root != target.exit_root {
+            // state transition mismatch between execution and received certificate
+            return Err(Error::NativeExecutionFailed(
+                pessimistic_proof::ProofError::InvalidFinalLocalExitRoot,
+            ));
+        }
+
+        batch_header.target.balance_root = target.balance_root;
+        batch_header.target.nullifier_root = target.nullifier_root;
+
+        // TODO: implement `apply_batch_header` for LocalNetworkStateData
+        let new_state = full_state.clone();
+
+        let proving_request = self
+            .prover
+            .prove(initial_state.clone(), certificate.clone()); // TODO: should be batch
 
         Ok(Box::pin(async move {
             let proof = proving_request
                 .await
                 .map_err(Error::ProverExecutionFailed)?;
-
-            // TODO: Check outputs matches
 
             if let Err(error) = self.prover.verify(&proof) {
                 error!("Failed to verify the p-proof: {:?}", error);
@@ -99,8 +113,8 @@ impl Certifier for AggregatorNotifier<MultiBatchHeader<Keccak256Hasher>> {
                 info!("Successfully generated and verified the p-proof!");
                 Ok(CertifierOutput {
                     proof,
-                    new_state: state,
-                    network: batch_header.network_id(),
+                    new_state,
+                    network: batch_header.origin_network,
                 })
             }
         }))

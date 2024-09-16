@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, task::Poll};
 
 use futures_util::{future::BoxFuture, poll};
-use pessimistic_proof::{bridge_exit::NetworkId, LocalNetworkState};
+use pessimistic_proof::{bridge_exit::NetworkId, local_state::LocalNetworkStateData};
 use tokio::sync::{broadcast, mpsc};
 use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 use tokio_util::sync::CancellationToken;
@@ -197,7 +197,7 @@ where
 
     fn certify(
         &self,
-        local_state: LocalNetworkState,
+        local_state: LocalNetworkStateData,
         certificate: I,
     ) -> CertifierResult<Self::Proof> {
         // TODO: check whether the initial state is the expected one
