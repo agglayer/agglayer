@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use reth_primitives::{Address, Signature, U256};
 use serde::{Deserialize, Serialize};
@@ -35,6 +35,9 @@ pub type Height = u64;
 ///
 /// The imported bridge exits refer to the [`BridgeExit`] received and imported
 /// by the origin network of the [`Certificate`].
+///
+/// Note: be mindful to update the [`Self::hash`] method accordingly
+/// upon modifying the fields of this structure.
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct Certificate {
     pub network_id: NetworkId,
@@ -47,22 +50,6 @@ pub struct Certificate {
 }
 
 impl Certificate {
-    pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
-        Self {
-            network_id,
-            height,
-            prev_local_exit_root: [0; 32],
-            new_local_exit_root: [0; 32],
-            bridge_exits: Vec::new(),
-            imported_bridge_exits: Vec::new(),
-            signature: Signature {
-                r: U256::ZERO,
-                s: U256::ZERO,
-                odd_y_parity: false,
-            },
-        }
-    }
-
     pub fn hash(&self) -> Digest {
         keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
@@ -81,33 +68,35 @@ impl Certificate {
         let prev_nullifier_root = state.nullifier_set.root;
 
         let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
-            let mut res = BTreeMap::new();
-
-            let mutated_tokens = {
+            // Set of dedup tokens mutated in the transition
+            let mutated_tokens: BTreeSet<TokenInfo> = {
                 let imported_tokens = self
                     .imported_bridge_exits
                     .iter()
                     .map(|exit| exit.bridge_exit.token_info);
                 let exported_tokens = self.bridge_exits.iter().map(|exit| exit.token_info);
-                imported_tokens.chain(exported_tokens)
+                imported_tokens.chain(exported_tokens).collect()
             };
 
-            mutated_tokens.for_each(|token| {
-                let initial_balance =
-                    U256::from_be_bytes(state.balance_tree.get(token).unwrap_or_default());
-                let path = if initial_balance.is_zero() {
-                    // TODO: dont clone once get_inclusion_proof_zero doesnt mutate anymore
-                    state
-                        .balance_tree
-                        .clone()
-                        .get_inclusion_proof_zero(token)
-                        .unwrap()
-                } else {
-                    state.balance_tree.get_inclusion_proof(token).unwrap()
-                };
-                res.insert(token, (initial_balance, path));
-            });
-            res
+            // Get the proof against the initial balance for each token
+            mutated_tokens
+                .into_iter()
+                .map(|token| {
+                    let initial_balance =
+                        U256::from_be_bytes(state.balance_tree.get(token).unwrap_or_default());
+                    let path = if initial_balance.is_zero() {
+                        // TODO: dont clone once get_inclusion_proof_zero doesnt mutate anymore
+                        state
+                            .balance_tree
+                            .clone()
+                            .get_inclusion_proof_zero(token)
+                            .unwrap()
+                    } else {
+                        state.balance_tree.get_inclusion_proof(token).unwrap()
+                    };
+                    (token, (initial_balance, path))
+                })
+                .collect()
         };
 
         let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> = self
