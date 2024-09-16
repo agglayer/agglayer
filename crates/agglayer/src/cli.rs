@@ -18,5 +18,14 @@ pub(crate) enum Commands {
         cfg: PathBuf,
     },
 
-    Config {},
+    Config {
+        /// The path to the agglayer dir.
+        #[arg(
+            long,
+            short,
+            value_hint = ValueHint::DirPath,
+            env = "CONFIG_PATH"
+        )]
+        base_dir: PathBuf,
+    },
 }

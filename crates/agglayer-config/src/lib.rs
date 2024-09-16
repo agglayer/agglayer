@@ -3,7 +3,7 @@
 //! The agglayer is configured via its TOML configuration file, `agglayer.toml`
 //! by default, which is deserialized into the [`Config`] struct.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use auth::deserialize_auth;
 use ethers::types::Address;
@@ -18,6 +18,10 @@ use self::{
 
 pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
 
+mod migrator;
+
+pub use migrator::ConfigMigrator;
+
 pub(crate) mod auth;
 pub mod certificate_orchestrator;
 pub mod epoch;
@@ -28,6 +32,7 @@ pub(crate) mod outbound;
 pub mod proof_signers;
 pub(crate) mod rpc;
 pub mod shutdown;
+pub mod storage;
 pub(crate) mod telemetry;
 
 pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
@@ -38,7 +43,7 @@ pub use log::Log;
 pub use rpc::RpcConfig;
 
 /// The Agglayer configuration.
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     /// A map of Zkevm node RPC endpoints for each rollup.
@@ -85,11 +90,45 @@ pub struct Config {
     /// The certificate orchestrator configuration.
     #[serde(alias = "CertificateOrchestrator", default)]
     pub certificate_orchestrator: certificate_orchestrator::CertificateOrchestrator,
+
+    /// The storage configuration.
+    pub storage: storage::StorageConfig,
 }
 
 impl Config {
+    pub fn new(base_path: &Path) -> Self {
+        Self {
+            storage: storage::StorageConfig::new_from_path(base_path),
+            full_node_rpcs: Default::default(),
+            proof_signers: Default::default(),
+            log: Default::default(),
+            rpc: Default::default(),
+            outbound: Default::default(),
+            l1: Default::default(),
+            l2: Default::default(),
+            auth: Default::default(),
+            telemetry: Default::default(),
+            epoch: Default::default(),
+            shutdown: Default::default(),
+            certificate_orchestrator: Default::default(),
+        }
+    }
+
     /// Get the target RPC socket address from the configuration.
     pub fn rpc_addr(&self) -> std::net::SocketAddr {
         std::net::SocketAddr::from((self.rpc.host, self.rpc.port))
+    }
+
+    pub fn path_contextualized(mut self, base_path: &Path) -> Self {
+        self.storage = self.storage.path_contextualized(base_path);
+
+        self
+    }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+impl Config {
+    pub fn new_for_test() -> Self {
+        Config::new(Path::new("/tmp/agglayer"))
     }
 }

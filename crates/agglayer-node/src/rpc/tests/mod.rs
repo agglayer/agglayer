@@ -28,7 +28,7 @@ async fn healthcheck_method_can_be_called() {
     let _ = tracing_subscriber::FmtSubscriber::builder()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .try_init();
-    let mut config = Config::default();
+    let mut config = Config::new_for_test();
     let addr = next_available_addr();
     if let std::net::IpAddr::V4(ip) = addr.ip() {
         config.rpc.host = ip;
@@ -88,7 +88,7 @@ async fn check_tx_status() {
         .unwrap()
         .transaction_hash;
 
-    let mut config = Config::default();
+    let mut config = Config::new_for_test();
     let addr = next_available_addr();
     if let std::net::IpAddr::V4(ip) = addr.ip() {
         config.rpc.host = ip;
@@ -132,7 +132,7 @@ async fn send_certificate_method_can_be_called() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .try_init();
 
-    let mut config = Config::default();
+    let mut config = Config::new_for_test();
     let addr = next_available_addr();
     if let IpAddr::V4(ip) = addr.ip() {
         config.rpc.host = ip;
@@ -171,7 +171,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .try_init();
 
-    let mut config = Config::default();
+    let mut config = Config::new_for_test();
     let addr = next_available_addr();
     if let IpAddr::V4(ip) = addr.ip() {
         config.rpc.host = ip;
@@ -215,7 +215,7 @@ async fn check_tx_status_fail() {
     let client = Provider::<Http>::connect(&anvil.endpoint()).await;
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-    let mut config = Config::default();
+    let mut config = Config::new_for_test();
     let addr = next_available_addr();
     if let std::net::IpAddr::V4(ip) = addr.ip() {
         config.rpc.host = ip;

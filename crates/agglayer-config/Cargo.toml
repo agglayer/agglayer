@@ -4,10 +4,12 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+dirs.workspace = true
 ethers.workspace = true
 jsonrpsee.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
+tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 url = { workspace = true, features = ["serde"] }

@@ -31,6 +31,3 @@ EpochDuration = 10
 
 [shutdown]
 runtime-timeout = 10
-
-[CertificateOrchestrator]
-InputBackpressureBufferSize = 10000
