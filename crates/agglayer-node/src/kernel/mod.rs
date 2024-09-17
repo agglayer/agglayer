@@ -178,7 +178,7 @@ where
     #[error("contract error: {0}")]
     ContractError(ContractError<RpcProvider>),
     #[error(transparent)]
-    RateLimited(#[from] crate::rate_limiting::Error),
+    RateLimited(#[from] crate::rate_limiting::RateLimited),
 }
 
 #[derive(Error, Debug)]

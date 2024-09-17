@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::{
     kernel::{CheckTxStatusError, SignatureVerificationError, ZkevmNodeVerificationError},
-    rate_limiting,
+    rate_limiting::RateLimited as RateLimitedError,
 };
 
 /// RPC error codes.
@@ -116,7 +116,7 @@ pub enum Error {
     #[serde(rename_all = "kebab-case")]
     RateLimited {
         detail: String,
-        error: rate_limiting::Error,
+        error: RateLimitedError,
     },
 }
 
@@ -171,8 +171,8 @@ impl<R: Middleware> From<crate::kernel::SettlementError<R>> for Error {
     }
 }
 
-impl From<rate_limiting::Error> for Error {
-    fn from(error: rate_limiting::Error) -> Self {
+impl From<RateLimitedError> for Error {
+    fn from(error: RateLimitedError) -> Self {
         let detail = error.to_string();
         Self::RateLimited { detail, error }
     }

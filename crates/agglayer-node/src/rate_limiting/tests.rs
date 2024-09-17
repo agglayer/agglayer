@@ -4,9 +4,10 @@ use std::{
     time::Duration,
 };
 
+use agglayer_config::rate_limiting::TimeRateLimit;
 use tokio::time::Instant;
 
-use super::{Error, RateLimiter, RateLimitingConfig, TimeRateLimit};
+use super::{RateLimited, RateLimiter, RateLimitingConfig};
 
 const ONE_PER_100S: TimeRateLimit = TimeRateLimit::Limited {
     max_per_interval: 1,
@@ -108,6 +109,9 @@ fn network_disabled() {
     let now = Instant::now();
 
     assert_eq!(limiter.limit_send_tx(12, now), Ok(()));
-    assert_eq!(limiter.limit_send_tx(55, now), Err(Error::SendTxDiabled {}));
+    assert_eq!(
+        limiter.limit_send_tx(55, now),
+        Err(RateLimited::SendTxDiabled {})
+    );
     assert_eq!(limiter.limit_send_tx(19, now), Ok(()));
 }

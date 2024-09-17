@@ -82,11 +82,11 @@ type SettlementError = kernel::SettlementError<RpcProvider>;
 )]
 #[case(
     "rate_disallowed",
-    rate_limiting::Error::SendTxDiabled {}.into()
+    rate_limiting::RateLimited::SendTxDiabled {}.into()
 )]
 #[case(
     "rate_sendtx",
-    rate_limiting::Error::SendTxRateLimited(rate_limiting::wall_clock::RateLimited {
+    rate_limiting::RateLimited::SendTxRateLimited(rate_limiting::local::wall_clock::RateLimited {
         max_per_interval: 3,
         time_interval: Duration::from_secs(30 * 60),
         until_next: Duration::from_secs(123),

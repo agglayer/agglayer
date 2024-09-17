@@ -128,4 +128,27 @@ impl RateLimiter {
         assert!(self.past.len() < self.params.max_per_interval());
         self.past.push(time)
     }
+
+    /// Check if the limiter is empty.
+    fn is_clear(&mut self, time: Instant) -> bool {
+        self.updated_past(time).is_empty()
+    }
+}
+
+impl super::RateLimiter for RateLimiter {
+    type Instant = Instant;
+
+    type RateLimited = RateLimited;
+
+    fn check(&mut self, time: Self::Instant) -> Result<(), Self::RateLimited> {
+        self.check(time)
+    }
+
+    fn limit(&mut self, time: Self::Instant) -> Result<(), Self::RateLimited> {
+        self.rate_limit(time)
+    }
+
+    fn is_clear(&mut self, time: Self::Instant) -> bool {
+        self.is_clear(time)
+    }
 }
