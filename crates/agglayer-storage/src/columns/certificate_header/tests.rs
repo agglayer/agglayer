@@ -22,7 +22,7 @@ fn can_parse_value() {
         height: 2,
         epoch_number: Some(3),
         certificate_index: Some(4),
-        local_exit_root: [5; 32],
+        new_local_exit_root: [5; 32],
     };
 
     let encoded = value.encode().expect("Unable to encode value");

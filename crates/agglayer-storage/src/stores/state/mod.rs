@@ -8,7 +8,7 @@ use crate::{
     columns::{
         certificate_per_network::{self, CertificatePerNetworkColumn},
         latest_certificate_per_network::{
-            LatestSettledCertificatePerNetworkColumn, ProvenCertificate,
+            LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
     },
     error::Error,
@@ -33,7 +33,7 @@ impl StateWriter for StateStore {
     fn insert_certificate_header(&self, certificate: &Certificate) -> Result<(), Error> {
         self.db.put::<CertificatePerNetworkColumn>(
             &certificate_per_network::Key {
-                network_id: certificate.network_id,
+                network_id: *certificate.network_id,
                 height: certificate.height,
             },
             &CertificateHeader {
@@ -42,7 +42,7 @@ impl StateWriter for StateStore {
                 height: certificate.height,
                 epoch_number: None,
                 certificate_index: None,
-                local_exit_root: certificate.new_local_exit_root,
+                new_local_exit_root: certificate.new_local_exit_root,
             },
         )
     }
@@ -54,7 +54,7 @@ impl StateReader for StateStore {
     ///
     /// Performance: O(n) where n is the number of networks.
     /// This is because we need to scan all the keys in the
-    /// `last_certificate_per_account` column family.
+    /// `last_certificate_per_network` column family.
     /// This is not a problem because the number of networks is expected to be
     /// small. This function is only called once when the node starts.
     /// Benchmark: `last_certificate_bench.rs`
@@ -72,7 +72,7 @@ impl StateReader for StateStore {
     ) -> Result<Option<CertificateHeader>, Error> {
         self.db
             .get::<CertificatePerNetworkColumn>(&certificate_per_network::Key {
-                network_id,
+                network_id: *network_id,
                 height,
             })
     }
@@ -85,7 +85,7 @@ impl StateReader for StateStore {
                 Direction::Forward,
             )?
             .filter_map(|v| {
-                v.map(|(network_id, ProvenCertificate(id, height, _epoch))| {
+                v.map(|(network_id, SettledCertificate(id, height, _epoch))| {
                     (network_id, height, id)
                 })
                 .ok()

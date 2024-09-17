@@ -20,12 +20,12 @@ fn can_parse_key() {
 #[test]
 fn can_parse_value() {
     let value = CertificateHeader {
-        network_id: 1,
+        network_id: 1.into(),
         certificate_id: [1; 32],
         epoch_number: Some(3),
         certificate_index: Some(4),
         height: 0,
-        local_exit_root: [0; 32],
+        new_local_exit_root: [0; 32],
     };
 
     let encoded = value.encode().expect("Unable to encode value");

@@ -1,4 +1,4 @@
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Proof};
+use agglayer_types::{Certificate, CertificateHeader, CertificateId, NetworkId, Proof};
 use serde::{Deserialize, Serialize};
 
 macro_rules! default_codec_impl {

@@ -58,7 +58,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
     }
 
     c.bench_function(
-        "last_certificate_per_account iterator with small set",
+        "last_certificate_per_network iterator with small set",
         |b| {
             b.iter_custom(|iters| {
                 let mut total = Duration::new(0, 0);
@@ -75,7 +75,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
     );
 
     c.bench_function(
-        "last_certificate_per_account iterator with medium set",
+        "last_certificate_per_network iterator with medium set",
         |b| {
             b.iter_custom(|iters| {
                 let mut total = Duration::new(0, 0);
@@ -91,7 +91,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
     );
 
     c.bench_function(
-        "last_certificate_per_account iterator with large set",
+        "last_certificate_per_network iterator with large set",
         |b| {
             b.iter_custom(|iters| {
                 let mut total = Duration::new(0, 0);
@@ -107,7 +107,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
     );
 
     c.bench_function(
-        "last_certificate_per_account iterator with very large set",
+        "last_certificate_per_network iterator with very large set",
         |b| {
             b.iter_custom(|iters| {
                 let mut total = Duration::new(0, 0);

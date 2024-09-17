@@ -27,7 +27,10 @@ impl PerEpochStore {
         pending_db: Arc<DB>,
     ) -> Result<Self, Error> {
         // TODO: refactor this
-        let path = config.storage.epochs_path.join(format!("{}", epoch_number));
+        let path = config
+            .storage
+            .epochs_db_path
+            .join(format!("{}", epoch_number));
 
         let db = Arc::new(DB::open_cf(&path, epochs_db_cf_definitions())?);
 
