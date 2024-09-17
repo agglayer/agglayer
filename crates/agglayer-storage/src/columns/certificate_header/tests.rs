@@ -14,7 +14,7 @@ fn can_parse_key() {
 #[test]
 fn can_parse_value() {
     let value = Value {
-        network_id: 1,
+        network_id: 1.into(),
         height: 2,
         epoch_number: 3,
         certificate_index: 4,

@@ -8,7 +8,6 @@ pub mod local_balance_tree;
 
 pub mod bridge_exit;
 
-pub mod certificate;
 pub mod global_index;
 pub mod imported_bridge_exit;
 pub mod local_state;

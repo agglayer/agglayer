@@ -16,7 +16,10 @@ fn can_retrieve_list_of_network() {
     let store = StateStore::new(db.clone());
     assert!(store.get_active_networks().unwrap().is_empty());
 
-    db.put::<LatestSettledCertificatePerNetworkColumn>(&1, &ProvenCertificate([0; 32], 0, 0))
-        .expect("Unable to put certificate into storage");
+    db.put::<LatestSettledCertificatePerNetworkColumn>(
+        &1.into(),
+        &ProvenCertificate([0; 32], 0, 0),
+    )
+    .expect("Unable to put certificate into storage");
     assert!(store.get_active_networks().unwrap().len() == 1);
 }

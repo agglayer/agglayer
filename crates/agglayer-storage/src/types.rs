@@ -51,6 +51,7 @@ default_codec_impl!(
     CertificateHeader,
     MetadataKey,
     MetadataValue,
+    NetworkId,
     PerEpochMetadataKey,
     PerEpochMetadataValue,
     Proof

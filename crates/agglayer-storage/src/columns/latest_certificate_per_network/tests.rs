@@ -1,9 +1,11 @@
+use agglayer_types::NetworkId;
+
 use super::{Key, ProvenCertificate};
 use crate::columns::Codec as _;
 
 #[test]
 fn can_parse_key() {
-    let key = 1;
+    let key: NetworkId = 1.into();
 
     let encoded = key.encode().expect("Unable to encode key");
 

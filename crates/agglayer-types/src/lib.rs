@@ -1,9 +1,14 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::{
-    bridge_exit::BridgeExit, imported_bridge_exit::ImportedBridgeExit, keccak::Digest,
-    multi_batch_header::MultiBatchHeader, LocalNetworkState,
+    bridge_exit::{BridgeExit, TokenInfo},
+    imported_bridge_exit::ImportedBridgeExit,
+    keccak::{keccak256_combine, Digest},
+    local_balance_tree::LocalBalancePath,
+    local_state::{LocalNetworkStateData, StateCommitment},
+    multi_batch_header::MultiBatchHeader,
+    nullifier_tree::{NullifierKey, NullifierPath},
 };
 use reth_primitives::{Address, Signature, U256};
 use serde::{Deserialize, Serialize};
@@ -19,7 +24,7 @@ pub type CertificateIndex = u64;
 pub type CertificateId = [u8; 32];
 pub type Hash = [u8; 32];
 pub type Height = u64;
-pub type NetworkId = u32;
+pub use pessimistic_proof::bridge_exit::NetworkId;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CertificateHeader {
@@ -49,7 +54,21 @@ impl Proof {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+/// Represents the data submitted by the chains to the AggLayer.
+///
+/// The bridge exits plus the imported bridge exits define
+/// the state transition, resp. the amount that goes out and the amount that
+/// comes in.
+///
+/// The bridge exits refer to the [`BridgeExit`] emitted by
+/// the origin network of the [`Certificate`].
+///
+/// The imported bridge exits refer to the [`BridgeExit`] received and imported
+/// by the origin network of the [`Certificate`].
+///
+/// Note: be mindful to update the [`Self::hash`] method accordingly
+/// upon modifying the fields of this structure.
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct Certificate {
     pub network_id: NetworkId,
     pub height: Height,
@@ -61,89 +80,89 @@ pub struct Certificate {
 }
 
 impl Certificate {
-    pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
-        Self {
-            network_id,
-            height,
-            prev_local_exit_root: [0; 32],
-            new_local_exit_root: [0; 32],
-            bridge_exits: Vec::new(),
-            imported_bridge_exits: Vec::new(),
-            signature: Signature {
-                r: U256::ZERO,
-                s: U256::ZERO,
-                odd_y_parity: false,
-            },
-        }
-    }
-
-    pub fn hash(&self) -> CertificateId {
-        let data = [
-            &(self.network_id as u64).to_be_bytes(),
-            &self.height.to_be_bytes(),
+    pub fn hash(&self) -> Digest {
+        keccak256_combine([
+            self.network_id.to_be_bytes().as_slice(),
+            self.height.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_slice(),
             self.new_local_exit_root.as_slice(),
-        ]
-        .concat();
-
-        pessimistic_proof::keccak::keccak256(data.as_slice())
+        ])
     }
 
     pub fn into_pessimistic_proof_input(
         &self,
-        state: &LocalNetworkState,
+        state: &LocalNetworkStateData,
         signer: Address,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = state.balance_tree.root;
         let prev_nullifier_root = state.nullifier_set.root;
 
-        let balances_proofs = {
-            #[allow(clippy::let_and_return)]
-            let res = BTreeMap::new();
-            // let mutated_tokens: BTreeSet<_> = self
-            //     .imported_bridge_exits
-            //     .iter()
-            //     .map(|exit| exit.bridge_exit.token_info)
-            //     .chain(self.bridge_exits)
-            //     .collect();
-            //
-            // for token in mutated_tokens {
-            //     let initial_balance =
-            //         U256::from_be_bytes(self.local_balance_tree.get(token).
-            // unwrap_or_default());     let path = if initial_balance.is_zero()
-            // {         self.local_balance_tree
-            //             .get_inclusion_proof_zero(token)
-            //             .unwrap()
-            //     } else {
-            //         self.local_balance_tree.get_inclusion_proof(token).unwrap()
-            //     };
-            //     res.insert(token, (initial_balance, path));
-            // }
-            res
+        let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
+            // Set of dedup tokens mutated in the transition
+            let mutated_tokens: BTreeSet<TokenInfo> = {
+                let imported_tokens = self
+                    .imported_bridge_exits
+                    .iter()
+                    .map(|exit| exit.bridge_exit.token_info);
+                let exported_tokens = self.bridge_exits.iter().map(|exit| exit.token_info);
+                imported_tokens.chain(exported_tokens).collect()
+            };
+
+            // Get the proof against the initial balance for each token
+            mutated_tokens
+                .into_iter()
+                .map(|token| {
+                    let initial_balance =
+                        U256::from_be_bytes(state.balance_tree.get(token).unwrap_or_default());
+                    let path = if initial_balance.is_zero() {
+                        // TODO: dont clone once get_inclusion_proof_zero doesnt mutate anymore
+                        state
+                            .balance_tree
+                            .clone()
+                            .get_inclusion_proof_zero(token)
+                            .unwrap()
+                    } else {
+                        state.balance_tree.get_inclusion_proof(token).unwrap()
+                    };
+                    (token, (initial_balance, path))
+                })
+                .collect()
         };
 
-        // let imported_bridge_exit = self.imported_bridge_exits.iter().map(|exit| {
-        //     let nullifier_path = state
-        //         .nullifier_set.get_non
-        //     (exit.clone(), nullifier_path)
-        // });
+        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> = self
+            .imported_bridge_exits
+            .iter()
+            .map(|exit| {
+                let null_key = NullifierKey {
+                    network_id: exit.global_index.network_id(),
+                    let_index: exit.global_index.leaf_index,
+                };
+                let nullifier_path = state
+                    .nullifier_set
+                    .get_non_inclusion_proof(null_key)
+                    .unwrap();
+                (exit.clone(), nullifier_path)
+            })
+            .collect();
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
-            origin_network: self.network_id.into(),
+            origin_network: self.network_id,
             prev_local_exit_root: self.prev_local_exit_root,
-            new_local_exit_root: self.new_local_exit_root,
             bridge_exits: self.bridge_exits.clone(),
-            imported_bridge_exits: Vec::new(),
+            imported_bridge_exits,
             balances_proofs,
             prev_balance_root,
-            new_balance_root: state.balance_tree.root,
             prev_nullifier_root,
-            new_nullifier_root: state.nullifier_set.root,
             signer,
             signature: self.signature,
             imported_rollup_exit_root: [0; 32],
             imported_mainnet_exit_root: [0; 32],
             imported_exits_root: None,
+            target: StateCommitment {
+                exit_root: self.new_local_exit_root,
+                balance_root: Default::default(), // computed by agglayer
+                nullifier_root: Default::default(), // computed by agglayer
+            },
         })
     }
 }

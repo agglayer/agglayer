@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agglayer_config::Config;
+use agglayer_types::Certificate;
 use ethers::providers::{self, Http, Middleware, Provider, ProviderExt as _};
 use ethers::types::{TransactionRequest, H256};
 use ethers::utils::Anvil;
@@ -13,7 +14,6 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::ClientError;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
-use pessimistic_proof::certificate::Certificate;
 
 use crate::rpc::{self, TxStatus};
 use crate::{kernel::Kernel, rpc::AgglayerImpl};

@@ -13,6 +13,7 @@ tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
 agglayer-config = { path = "../agglayer-config" }
+agglayer-types = { path = "../agglayer-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
 

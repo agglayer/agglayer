@@ -71,6 +71,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
+ "agglayer-types",
  "anyhow",
  "futures",
  "pessimistic-proof",
@@ -89,6 +90,7 @@ name = "agglayer-certificate-orchestrator"
 version = "0.1.0"
 dependencies = [
  "agglayer-clock",
+ "agglayer-types",
  "anyhow",
  "buildstructor",
  "futures-util",
@@ -154,6 +156,7 @@ dependencies = [
  "agglayer-config",
  "agglayer-signer",
  "agglayer-telemetry",
+ "agglayer-types",
  "anyhow",
  "buildstructor",
  "ethers",

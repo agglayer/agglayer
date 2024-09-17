@@ -7,9 +7,10 @@ use std::{
 };
 
 use agglayer_clock::Event;
+use agglayer_types::Certificate;
 use futures_util::{future::BoxFuture, Stream, StreamExt};
 use pessimistic_proof::bridge_exit::NetworkId;
-use pessimistic_proof::{certificate::Certificate, local_state::LocalNetworkStateData, ProofError};
+use pessimistic_proof::{local_state::LocalNetworkStateData, ProofError};
 use tokio::{
     sync::mpsc::Receiver,
     task::{JoinHandle, JoinSet},
@@ -395,5 +396,5 @@ pub enum Error {
     #[error("native execution failed: {0:?}")]
     NativeExecutionFailed(#[from] ProofError),
     #[error("Type error: {0}")]
-    Types(#[from] pessimistic_proof::certificate::Error),
+    Types(#[from] agglayer_types::Error),
 }

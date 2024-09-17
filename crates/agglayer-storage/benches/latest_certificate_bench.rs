@@ -42,7 +42,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
 
         for i in 1..=expected {
             db.put::<LatestSettledCertificatePerNetworkColumn>(
-                &i,
+                &i.into(),
                 &ProvenCertificate([0; 32], 0, 0),
             )
             .expect("Unable to put certificate into storage");
