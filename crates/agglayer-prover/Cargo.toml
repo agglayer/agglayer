@@ -21,13 +21,3 @@ tonic = "0.12.2"
 tower.workspace = true
 tonic-health = "0.12.2"
 tonic-reflection = "0.12.2"
-
-# hex.workspace = true
-# hyper = "1.4.1"
-# jsonrpsee = { workspace = true, features = ["full"] }
-# serde = { workspace = true, features = ["derive"] }
-# serde_json.workspace = true
-# serde_with.workspace = true
-# thiserror.workspace = true
-# tokio-stream = "0.1.15"
-# tower-http = { version = "0.5.2", features = ["full"] }
