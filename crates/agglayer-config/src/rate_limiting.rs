@@ -8,8 +8,11 @@ pub type RollupId = u32;
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum TimeRateLimit {
+    /// Don't apply any rate limiting, allowing the client to make requests as
+    /// often as desired.
     Unlimited,
 
+    /// Apply rate limit of `max_per_interval` events in given `time_interval`.
     #[serde(untagged, rename_all = "kebab-case")]
     Limited {
         max_per_interval: u32,
@@ -53,12 +56,11 @@ impl PerNetworkRateLimitOverride {
 impl TryFrom<BTreeMap<String, RateLimitOverride>> for PerNetworkRateLimitOverride {
     type Error = <RollupId as std::str::FromStr>::Err;
 
-    fn try_from(value: BTreeMap<String, RateLimitOverride>) -> Result<Self, Self::Error> {
-        let overrides = value
+    fn try_from(overrides: BTreeMap<String, RateLimitOverride>) -> Result<Self, Self::Error> {
+        overrides
             .into_iter()
             .map(|(k, v)| Ok((k.parse::<RollupId>()?, v)))
-            .collect::<Result<Self, Self::Error>>()?;
-        Ok(overrides)
+            .collect::<Result<Self, Self::Error>>()
     }
 }
 
