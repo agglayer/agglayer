@@ -65,7 +65,10 @@ impl Node {
         let signer = ConfiguredSigner::new(config.clone()).await?;
         let address = signer.address();
         // Create a new L1 RPC provider with the configured signer.
-        let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
+        let client = reqwest::Client::builder()
+            .timeout(config.l1.rpc_timeout)
+            .build()?;
+        let rpc = Provider::new(Http::new_with_client(config.l1.node_url.clone(), client))
             .with_signer(signer)
             .nonce_manager(address);
 

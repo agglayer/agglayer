@@ -1,8 +1,12 @@
+use std::time::Duration;
+
 use ethers::types::Address;
 use serde::Deserialize;
+use serde_with::{serde_as, DurationSeconds};
 use url::Url;
 
 /// The L1 configuration.
+#[serde_as]
 #[derive(Deserialize, Debug, Clone)]
 pub struct L1 {
     #[serde(rename = "ChainID")]
@@ -11,6 +15,15 @@ pub struct L1 {
     pub node_url: Url,
     #[serde(rename = "RollupManagerContract")]
     pub rollup_manager_contract: Address,
+    #[serde(default = "L1::default_rpc_timeout")]
+    #[serde_as(as = "DurationSeconds")]
+    pub rpc_timeout: Duration,
+}
+
+impl L1 {
+    const fn default_rpc_timeout() -> Duration {
+        Duration::from_secs(45)
+    }
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -23,6 +36,7 @@ impl Default for L1 {
             rollup_manager_contract: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
                 .parse()
                 .unwrap(),
+            rpc_timeout: Self::default_rpc_timeout(),
         }
     }
 }
