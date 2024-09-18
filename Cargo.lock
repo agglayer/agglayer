@@ -114,6 +114,7 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-test-utils",
  "lazy_static",
+ "parking_lot",
  "pin-project 1.1.5",
  "reqwest",
  "rstest",

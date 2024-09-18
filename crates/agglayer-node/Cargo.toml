@@ -13,6 +13,7 @@ hex.workspace = true
 hyper = "0.14.20"
 jsonrpsee = { workspace = true, features = ["full"] }
 lazy_static.workspace = true
+parking_lot = "0.12.3"
 pin-project = "1.1.5"
 reqwest = "0.11.27"
 serde = { workspace = true, features = ["derive"] }

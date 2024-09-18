@@ -1,12 +1,9 @@
 //! Transaction settlement rate limiter implementation.
 
-use std::{
-    collections::BTreeMap,
-    num::NonZeroU32,
-    sync::{Arc, Mutex, MutexGuard},
-};
+use std::{collections::BTreeMap, num::NonZeroU32, sync::Arc};
 
 pub use agglayer_config::rate_limiting::{RateLimitingConfig, RollupId, TimeRateLimit};
+use parking_lot::{Mutex, MutexGuard};
 use tokio::time::Instant;
 
 pub mod wall_clock;
@@ -63,7 +60,7 @@ impl RateLimiter {
     }
 
     fn lock(&self) -> MutexGuard<RateLimiterImpl> {
-        self.0.lock().expect("mutex poisoned")
+        self.0.lock()
     }
 }
 
