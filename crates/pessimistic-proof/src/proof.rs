@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use crate::{
     bridge_exit::{NetworkId, TokenInfo},
+    imported_bridge_exit,
     keccak::{keccak256_combine, Digest},
     local_exit_tree::hasher::Keccak256Hasher,
     local_state::{LocalNetworkState, StateCommitment},
@@ -29,6 +30,8 @@ pub enum ProofError {
     InvalidImportedBridgeExitMerklePath,
     #[error("Invalid imported bridge exit root.")]
     InvalidImportedBridgeExitRoot,
+    #[error("Invalid imported bridge exit: {0}")]
+    InvalidImportedBridgeExit(#[from] imported_bridge_exit::Error),
     #[error("Missing token balance proof.")]
     MissingTokenBalanceProof,
     #[error("Invalid nullifier path.")]
@@ -51,8 +54,6 @@ pub enum ProofError {
     InvalidEthNetwork,
     #[error("Invalid imported bridge exit network.")]
     InvalidImportedBridgeExitNetwork,
-    #[error("Mismatch between the global index and the inclusion proof.")]
-    MismatchGlobalIndexInclusionProof,
     #[error("Duplicate token {0:?} in balance proofs")]
     DuplicateTokenBalanceProof(TokenInfo),
 }
@@ -64,9 +65,9 @@ pub struct PessimisticProofOutput {
     pub prev_local_exit_root: Digest,
     /// The previous pessimistic root.
     pub prev_pessimistic_root: Digest,
-    /// The global exit root against which we prove the inclusion of the
-    /// imported bridge exits.
-    pub selected_ger: Digest,
+    /// The l1 info root against which we prove the inclusion of the imported
+    /// bridge exits.
+    pub l1_info_root: Digest,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
     /// The consensus hash.
@@ -106,11 +107,6 @@ pub fn generate_pessimistic_proof(
         batch_header.signer.as_slice(),
     ]);
 
-    let selected_ger = keccak256_combine([
-        batch_header.imported_mainnet_exit_root,
-        batch_header.imported_rollup_exit_root,
-    ]);
-
     let new_pessimistic_root = keccak256_combine([
         batch_header.target.balance_root,
         batch_header.target.nullifier_root,
@@ -132,7 +128,7 @@ pub fn generate_pessimistic_proof(
     Ok(PessimisticProofOutput {
         prev_local_exit_root: prev_ler,
         prev_pessimistic_root,
-        selected_ger,
+        l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
         consensus_hash,
         new_local_exit_root: batch_header.target.exit_root,

@@ -155,14 +155,13 @@ impl Certificate {
             prev_nullifier_root,
             signer,
             signature: self.signature,
-            imported_rollup_exit_root: [0; 32],
-            imported_mainnet_exit_root: [0; 32],
             imported_exits_root: None,
             target: StateCommitment {
                 exit_root: self.new_local_exit_root,
                 balance_root: Default::default(), // computed by agglayer
                 nullifier_root: Default::default(), // computed by agglayer
             },
+            l1_info_root: [0; 32],
         })
     }
 }

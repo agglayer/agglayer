@@ -154,10 +154,7 @@ impl LocalNetworkState {
             }
 
             // Check the inclusion proof
-            imported_bridge_exit.verify_path(
-                multi_batch_header.imported_mainnet_exit_root,
-                multi_batch_header.imported_rollup_exit_root,
-            )?;
+            imported_bridge_exit.verify_path(multi_batch_header.l1_info_root)?;
 
             // Check the nullifier non-inclusion path and update the nullifier set
             let nullifier_key = NullifierKey {
