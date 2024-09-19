@@ -13,7 +13,7 @@ use crate::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L1InfoTreeLeafInner {
-    pub ger: Digest,
+    pub global_exit_root: Digest,
     pub block_hash: Digest,
     pub timestamp: u64,
 }
@@ -21,7 +21,7 @@ pub struct L1InfoTreeLeafInner {
 impl L1InfoTreeLeafInner {
     fn hash(&self) -> Digest {
         keccak256_combine([
-            self.ger.as_slice(),
+            self.global_exit_root.as_slice(),
             self.block_hash.as_slice(),
             &self.timestamp.to_be_bytes(),
         ])
@@ -254,7 +254,9 @@ mod tests {
         assert_eq!(
             hex!("f62f487534b899b1c362242616725878188ca891fab60854b792ca0628286de7"),
             L1InfoTreeLeafInner {
-                ger: hex!("16994edfddddb9480667b64174fc00d3b6da7290d37b8db3a16571b4ddf0789f"),
+                global_exit_root: hex!(
+                    "16994edfddddb9480667b64174fc00d3b6da7290d37b8db3a16571b4ddf0789f"
+                ),
                 block_hash: hex!(
                     "24a5871d68723340d9eadc674aa8ad75f3e33b61d5a9db7db92af856a19270bb"
                 ),
@@ -266,7 +268,9 @@ mod tests {
         assert_eq!(
             hex!("ba9c9985e6c9cee54f57991049af0c42439fa2b2915a0597f4d63f63d31c1d4f"),
             L1InfoTreeLeafInner {
-                ger: hex!("356682567c5d485bbabe89590d3d72b08671a0a07899dcbaddccbe0599491669"),
+                global_exit_root: hex!(
+                    "356682567c5d485bbabe89590d3d72b08671a0a07899dcbaddccbe0599491669"
+                ),
                 block_hash: hex!(
                     "8f9cfb43c0f6bc7ce9f9e43e8761776a2ef9657ccf87318e2487c313d119b8cf"
                 ),

@@ -103,7 +103,7 @@ impl Forest {
             inner: L1InfoTreeLeafInner {
                 block_hash: Digest::default(),
                 timestamp: 0,
-                ger: Digest::default(),
+                global_exit_root: Digest::default(),
             },
         };
 
