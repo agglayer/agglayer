@@ -1,11 +1,12 @@
 use std::borrow::Borrow;
 
+use reth_primitives::U256;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
-    keccak::{keccak256_combine, Digest as KeccakDigest, Digest},
+    keccak::{keccak256, keccak256_combine, Digest as KeccakDigest, Digest},
     local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
     ProofError,
 };
@@ -112,7 +113,8 @@ impl ImportedBridgeExit {
     }
 
     pub fn hash(&self) -> Digest {
-        self.bridge_exit.hash()
+        let global_index: U256 = self.global_index.into();
+        keccak256(global_index.as_le_slice())
     }
 }
 

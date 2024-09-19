@@ -45,18 +45,17 @@ impl From<U256> for GlobalIndex {
     }
 }
 
-impl GlobalIndex {
-    #[allow(unused)]
-    fn to_u256(self) -> U256 {
+impl From<GlobalIndex> for U256 {
+    fn from(value: GlobalIndex) -> Self {
         let mut bytes = [0u8; 32];
 
-        let leaf_bytes = self.leaf_index.to_le_bytes();
+        let leaf_bytes = value.leaf_index.to_le_bytes();
         bytes[0..4].copy_from_slice(&leaf_bytes);
 
-        let rollup_bytes = self.rollup_index.to_le_bytes();
+        let rollup_bytes = value.rollup_index.to_le_bytes();
         bytes[4..8].copy_from_slice(&rollup_bytes);
 
-        if self.mainnet_flag {
+        if value.mainnet_flag {
             bytes[8] |= 0x01;
         }
 
@@ -72,7 +71,7 @@ mod tests {
         let global_index_u256 = U256::from_str_radix(raw, 10).unwrap();
         assert_eq!(
             global_index_u256,
-            GlobalIndex::from(global_index_u256).to_u256()
+            GlobalIndex::from(global_index_u256).into()
         );
         assert_eq!(expected, GlobalIndex::from(global_index_u256));
     }
