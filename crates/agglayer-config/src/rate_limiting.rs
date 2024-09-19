@@ -37,7 +37,7 @@ impl TimeRateLimit {
 }
 
 /// Rate limiting override for each endpoint
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 struct RateLimitOverride {
     send_tx: Option<TimeRateLimit>,
@@ -70,6 +70,13 @@ impl FromIterator<(RollupId, RateLimitOverride)> for PerNetworkRateLimitOverride
     }
 }
 
+/// Rate limiting configuration for a single network.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetworkRateLimitingConfig<'a> {
+    /// Rate limit for `sendTx` for given network.
+    pub send_tx: &'a TimeRateLimit,
+}
+
 /// Full rate limiting config.
 /// Contains the defaults and the per-network overrides.
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -96,20 +103,19 @@ impl RateLimitingConfig {
         }
     }
 
-    /// Override `sendTx`setting for given network
+    /// Override `sendTx`setting for given network.
     pub fn with_send_tx_override(mut self, nid: RollupId, limit: TimeRateLimit) -> Self {
-        let limit_override = RateLimitOverride {
-            send_tx: Some(limit),
-        };
-        let _ = self.network.0.insert(nid, limit_override);
+        self.network.0.entry(nid).or_default().send_tx = Some(limit);
         self
     }
 
-    /// Get rate limiting for the `sendTx` call for given network.
-    pub fn send_tx_limit(&self, nid: RollupId) -> &TimeRateLimit {
-        self.override_for(nid)
+    /// Get rate limiting configuration for given network.
+    pub fn config_for(&self, rollup_id: RollupId) -> NetworkRateLimitingConfig {
+        let overrides = self.override_for(rollup_id);
+        let send_tx = overrides
             .and_then(|l| l.send_tx.as_ref())
-            .unwrap_or(&self.send_tx)
+            .unwrap_or(&self.send_tx);
+        NetworkRateLimitingConfig { send_tx }
     }
 
     fn override_for(&self, nid: RollupId) -> Option<&RateLimitOverride> {
@@ -191,8 +197,8 @@ mod test {
         };
 
         assert_eq!(config, expected);
-        assert_eq!(config.send_tx_limit(1), &network_1_send_tx_limit);
-        assert_eq!(config.send_tx_limit(2), &default_send_tx_limit);
-        assert_eq!(config.send_tx_limit(1337), &default_send_tx_limit);
+        assert_eq!(config.config_for(1).send_tx, &network_1_send_tx_limit);
+        assert_eq!(config.config_for(2).send_tx, &default_send_tx_limit);
+        assert_eq!(config.config_for(1337).send_tx, &default_send_tx_limit);
     }
 }

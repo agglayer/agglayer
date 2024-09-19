@@ -1,6 +1,6 @@
 //! Local rate limiter, i.e. one constraining a single network.
 
-use agglayer_config::rate_limiting::TimeRateLimit;
+use agglayer_config::rate_limiting::{NetworkRateLimitingConfig, TimeRateLimit};
 use tokio::time::Instant;
 
 mod interface;
@@ -16,8 +16,8 @@ pub struct LocalRateLimiter {
 }
 
 impl LocalRateLimiter {
-    pub fn from_config(send_tx_config: &TimeRateLimit) -> Self {
-        let send_tx = match send_tx_config {
+    pub fn from_config(config: &NetworkRateLimitingConfig) -> Self {
+        let send_tx = match config.send_tx {
             TimeRateLimit::Unlimited => trivial::RateLimiter::Unlimited,
             TimeRateLimit::Limited {
                 max_per_interval,

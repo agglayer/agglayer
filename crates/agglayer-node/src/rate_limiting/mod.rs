@@ -91,7 +91,7 @@ impl RateLimiterImpl {
     }
 
     fn limiter_for(&mut self, rollup_id: RollupId) -> &mut LocalRateLimiter {
-        let mk_limiter = || LocalRateLimiter::from_config(self.config.send_tx_limit(rollup_id));
+        let mk_limiter = || LocalRateLimiter::from_config(&self.config.config_for(rollup_id));
         self.per_network.entry(rollup_id).or_insert_with(mk_limiter)
     }
 }
