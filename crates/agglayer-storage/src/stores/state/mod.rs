@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
+use agglayer_types::NetworkId;
+
 use super::StateReader;
 use crate::{
     columns::latest_certificate_per_network::LatestSettledCertificatePerNetworkColumn,
-    error::Error, storage::DB, types::NetworkId,
+    error::Error, storage::DB,
 };
 
 #[cfg(test)]

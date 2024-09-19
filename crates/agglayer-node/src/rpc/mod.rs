@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_telemetry::KeyValue;
+use agglayer_types::Certificate;
 use ethers::{
     contract::{ContractError, ContractRevert},
     providers::Middleware,
@@ -13,7 +14,6 @@ use jsonrpsee::{
     proc_macros::rpc,
     server::{middleware::http::ProxyGetRequestLayer, PingConfig, ServerBuilder, ServerHandle},
 };
-use pessimistic_proof::certificate::Certificate;
 use tokio::{sync::mpsc, try_join};
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument};

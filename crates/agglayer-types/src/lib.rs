@@ -1,20 +1,17 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use reth_primitives::{Address, Signature, U256};
-use serde::{Deserialize, Serialize};
-
-use crate::bridge_exit::NetworkId;
-use crate::keccak::keccak256_combine;
-use crate::local_exit_tree::hasher::Keccak256Hasher;
-use crate::local_state::{LocalNetworkStateData, StateCommitment};
-use crate::{
-    bridge_exit::BridgeExit,
+pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof::{
+    bridge_exit::{BridgeExit, TokenInfo},
     imported_bridge_exit::ImportedBridgeExit,
-    keccak::Digest,
+    keccak::{keccak256_combine, Digest},
+    local_balance_tree::LocalBalancePath,
+    local_state::{LocalNetworkStateData, StateCommitment},
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
 };
-use crate::{bridge_exit::TokenInfo, local_balance_tree::LocalBalancePath};
+use reth_primitives::{Address, Signature, U256};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -22,7 +19,40 @@ pub enum Error {
     TypeConversion(&'static str),
 }
 
+pub type EpochNumber = u64;
+pub type CertificateIndex = u64;
+pub type CertificateId = [u8; 32];
+pub type Hash = [u8; 32];
 pub type Height = u64;
+pub use pessimistic_proof::bridge_exit::NetworkId;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CertificateHeader {
+    pub certificate_id: CertificateId,
+    pub network_id: NetworkId,
+    pub height: Height,
+    pub epoch_number: Option<EpochNumber>,
+    pub certificate_index: Option<CertificateIndex>,
+    pub new_local_exit_root: Hash,
+}
+
+/// Proof is a wrapper around all the different types of proofs that can be
+/// generated
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Proof {
+    SP1(sp1_sdk::SP1ProofWithPublicValues),
+}
+
+impl Proof {
+    pub fn new_for_test() -> Self {
+        Proof::SP1(sp1_sdk::SP1ProofWithPublicValues {
+            proof: sp1_sdk::SP1Proof::Core(Vec::new()),
+            stdin: sp1_sdk::SP1Stdin::new(),
+            public_values: sp1_core_machine::io::SP1PublicValues::new(),
+            sp1_version: String::new(),
+        })
+    }
+}
 
 /// Represents the data submitted by the chains to the AggLayer.
 ///

@@ -1,12 +1,8 @@
 use super::{Key, Value};
-use crate::{
-    columns::Codec as _,
-    types::{self, CertificateId},
-};
-
+use crate::{columns::Codec as _, types};
 #[test]
 fn can_parse_key() {
-    let key = CertificateId([1; 32]);
+    let key = [1; 32];
 
     let encoded = key.encode().expect("Unable to encode key");
 
@@ -18,10 +14,10 @@ fn can_parse_key() {
 #[test]
 fn can_parse_value() {
     let value = Value {
-        network_id: types::NetworkId(1),
-        height: types::Height(2),
-        epoch_number: types::EpochNumber(3),
-        certificate_index: types::CertificateIndex(4),
+        network_id: 1.into(),
+        height: 2,
+        epoch_number: 3,
+        certificate_index: 4,
         local_exit_root: types::Hash([5; 32]),
     };
 

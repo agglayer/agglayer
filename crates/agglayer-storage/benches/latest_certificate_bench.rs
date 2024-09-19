@@ -6,11 +6,10 @@ use std::{
 
 use agglayer_storage::{
     columns::latest_certificate_per_network::{
-        LatestSettledCertificatePerNetworkColumn, ProvenCertificate,
+        LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     storage::{state_db_cf_definitions, DB},
     stores::{state::StateStore, StateReader as _},
-    types::NetworkId,
 };
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::Rng;
@@ -43,8 +42,8 @@ fn bench_latest_certificate(c: &mut Criterion) {
 
         for i in 1..=expected {
             db.put::<LatestSettledCertificatePerNetworkColumn>(
-                &NetworkId::new(i),
-                &ProvenCertificate([0; 32], 0, 0),
+                &i.into(),
+                &SettledCertificate([0; 32], 0, 0),
             )
             .expect("Unable to put certificate into storage");
         }

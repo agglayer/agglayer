@@ -1,7 +1,7 @@
+use agglayer_types::{CertificateId, CertificateIndex, EpochNumber};
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, CERTIFICATE_PER_NETWORK_CF};
-use crate::types;
 
 #[cfg(test)]
 mod tests;
@@ -23,9 +23,9 @@ pub struct Key {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Value {
-    certificate_id: types::CertificateId,
-    epoch_number: types::EpochNumber,
-    certificate_index: types::CertificateIndex,
+    certificate_id: CertificateId,
+    epoch_number: EpochNumber,
+    certificate_index: CertificateIndex,
 }
 
 impl Codec for Key {}

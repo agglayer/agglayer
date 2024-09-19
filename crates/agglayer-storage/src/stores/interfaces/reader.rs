@@ -1,4 +1,6 @@
-use crate::{error::Error, types::NetworkId};
+use agglayer_types::NetworkId;
+
+use crate::error::Error;
 
 pub trait PendingCertificateReader: Send + Sync {}
 

@@ -1,5 +1,6 @@
+use agglayer_types::{CertificateId, Proof};
+
 use super::{ColumnSchema, PROOF_PER_CERTIFICATE_CF};
-use crate::types::{CertificateId, Proof};
 
 #[cfg(test)]
 mod tests;

@@ -1,9 +1,11 @@
-use super::{Key, ProvenCertificate};
-use crate::{columns::Codec as _, types::NetworkId};
+use agglayer_types::NetworkId;
+
+use super::{Key, SettledCertificate};
+use crate::columns::Codec as _;
 
 #[test]
 fn can_parse_key() {
-    let key = NetworkId(1);
+    let key: NetworkId = 1.into();
 
     let encoded = key.encode().expect("Unable to encode key");
 
@@ -14,11 +16,11 @@ fn can_parse_key() {
 
 #[test]
 fn can_parse_value() {
-    let value = ProvenCertificate([1; 32], 10, 21);
+    let value = SettledCertificate([1; 32], 10, 21);
 
     let encoded = value.encode().expect("Unable to encode value");
 
-    let expected_value = ProvenCertificate::decode(&encoded[..]).expect("Unable to decode value");
+    let expected_value = SettledCertificate::decode(&encoded[..]).expect("Unable to decode value");
 
     assert_eq!(expected_value, value);
 

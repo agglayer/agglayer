@@ -1,7 +1,7 @@
+use agglayer_types::{Certificate, Height, NetworkId};
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, PENDING_QUEUE_CF};
-use crate::types::{Certificate, Height, NetworkId};
 
 /// Column family containing the pending certificates queue.
 ///

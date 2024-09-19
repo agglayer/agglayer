@@ -1,3 +1,5 @@
+use agglayer_types::{CertificateIndex, Proof};
+
 use crate::columns::PER_EPOCH_PROOFS_CF;
 
 /// Column family for the proofs in an epoch.
@@ -10,8 +12,8 @@ use crate::columns::PER_EPOCH_PROOFS_CF;
 pub struct ProofPerIndex;
 
 impl crate::columns::ColumnSchema for ProofPerIndex {
-    type Key = crate::types::CertificateIndex;
-    type Value = crate::types::Proof;
+    type Key = CertificateIndex;
+    type Value = Proof;
 
     const COLUMN_FAMILY_NAME: &'static str = PER_EPOCH_PROOFS_CF;
 }

@@ -5,7 +5,7 @@ use pessimistic_proof::LocalNetworkState;
 use serde::Serialize;
 use sp1_prover::components::DefaultProverComponents;
 use sp1_sdk::{
-    LocalProver, MockProver, NetworkProver, Prover as _, SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
+    CpuProver, MockProver, NetworkProver, Prover as _, SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
 };
 use tokio::task::spawn_blocking;
 
@@ -30,7 +30,7 @@ impl<P: sp1_sdk::Prover<DefaultProverComponents>> SP1<P> {
     }
 }
 
-impl<I> super::AggregatorProver<I> for SP1<LocalProver<DefaultProverComponents>>
+impl<I> super::AggregatorProver<I> for SP1<CpuProver>
 where
     I: Serialize,
 {
