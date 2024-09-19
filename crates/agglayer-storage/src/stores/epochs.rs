@@ -9,6 +9,7 @@ use crate::{error::Error, storage::DB};
 pub struct EpochsStore {
     config: Arc<agglayer_config::Config>,
     current_epoch: Arc<ArcSwap<PerEpochStore>>,
+    #[allow(dead_code)]
     open_epochs: RwLock<BTreeSet<u64>>,
     pending_db: Arc<DB>,
 }

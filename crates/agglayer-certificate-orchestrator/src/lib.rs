@@ -31,10 +31,11 @@ const MAX_POLL_READS: usize = 1_000;
 /// Eventually, each state will live only in the networks themselves.
 type GlobalState = BTreeMap<NetworkId, LocalNetworkStateData>;
 
-/// The Certificate orchestrator receives the certificates from CDKs. Each
-/// certificate reception triggers the generation of a pessimistic proof. At the
-/// end of the epoch, the Certificate Orchestrator collects a set of pessimistic
-/// proofs generated so far and settles them on the L1.
+/// The Certificate orchestrator receives the certificates from CDKs.
+///
+/// Each certificate reception triggers the generation of a pessimistic proof.
+/// At the end of the epoch, the Certificate Orchestrator collects a set of
+/// pessimistic proofs generated so far and settles them on the L1.
 pub struct CertificateOrchestrator<C, E, A, PendingStore, EpochsStore, PerEpochStore, StateStore> {
     /// Epoch packing task resolver.
     epoch_packing_tasks: JoinSet<Result<(), Error>>,
