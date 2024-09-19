@@ -82,7 +82,7 @@ impl RateLimiter {
     pub fn check(&mut self, time: Instant) -> Result<(), RateLimited> {
         assert!(self.past.len() <= self.params.max_per_interval.get() as usize);
 
-        let num_events = self.updated_event_count(self.params.expiry_point(time));
+        let num_events = self.updated_event_count(time);
 
         if num_events >= self.params.max_per_interval() {
             let earliest = *self.past.first().expect("rate limited with empty past");
@@ -94,6 +94,7 @@ impl RateLimiter {
                 until_next,
             });
         }
+
         Ok(())
     }
 
@@ -116,8 +117,9 @@ impl RateLimiter {
         &self.past
     }
 
-    /// Wipe the expired past events before the specified time instant.
-    fn wipe(&mut self, up_to: Instant) {
+    /// Wipe the expired past events given the current time.
+    fn wipe(&mut self, time: Instant) {
+        let up_to = self.params.expiry_point(time);
         self.past.retain(|t| *t > up_to);
     }
 
@@ -130,7 +132,7 @@ impl RateLimiter {
     }
 
     /// Check if the limiter is empty.
-    fn is_clear(&mut self, time: Instant) -> bool {
+    fn is_empty(&mut self, time: Instant) -> bool {
         self.updated_past(time).is_empty()
     }
 }
@@ -149,6 +151,6 @@ impl super::RateLimiter for RateLimiter {
     }
 
     fn is_empty(&mut self, time: Self::Instant) -> bool {
-        self.is_clear(time)
+        self.is_empty(time)
     }
 }

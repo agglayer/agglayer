@@ -2,7 +2,7 @@ use std::{num::NonZeroU32, time::Duration};
 
 use tokio::time::Instant;
 
-use super::{RateLimited, RateLimiter};
+use super::{Params, RateLimited, RateLimiter};
 
 impl RateLimiter {
     /// Just like [Self::rate_limit] but with additional sanity checks.
@@ -15,7 +15,9 @@ impl RateLimiter {
         // Record the history after the first check.
         let pruned_past = self.past.clone();
         assert!(pruned_past.len() <= orig_past_len);
-        assert_eq!(self.is_clear(time), pruned_past.is_empty());
+        let is_empty = self.is_empty(time);
+        assert_eq!(is_empty, pruned_past.is_empty());
+        assert_eq!(self.past, pruned_past);
 
         // Make second check, assert history is idempotent.
         let check_result_2 = self.check(time);
@@ -33,6 +35,30 @@ impl RateLimiter {
         }
 
         check_result
+    }
+}
+
+#[test]
+fn wipe_idempotent() {
+    let time_interval = Duration::from_secs(100);
+    let max_per_interval = 100;
+    let now = Instant::now();
+
+    let offsets = [0, 12, 21, 28, 45, 52, 75, 77, 85, 89];
+    let past = offsets
+        .into_iter()
+        .map(|s| now + Duration::from_secs(s))
+        .collect();
+
+    let params = Params::new(NonZeroU32::new(max_per_interval).unwrap(), time_interval);
+
+    let mut limiter = RateLimiter { past, params };
+
+    for t in (0..120).map(|dt| now + Duration::from_secs(dt)) {
+        limiter.wipe(t);
+        let past = limiter.past.clone();
+        limiter.wipe(t);
+        assert_eq!(past, limiter.past);
     }
 }
 
