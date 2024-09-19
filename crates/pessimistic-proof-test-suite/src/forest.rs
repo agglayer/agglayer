@@ -4,7 +4,10 @@ use ethers_signers::{LocalWallet, Signer};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
     global_index::GlobalIndex,
-    imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
+    imported_bridge_exit::{
+        commit_imported_bridge_exits, Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf,
+        L1InfoTreeLeafInner, MerkleProof,
+    },
     keccak::{keccak256_combine, Digest},
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
@@ -42,6 +45,7 @@ pub fn compute_signature_info(
 
 /// Trees for the network B, as well as the LET for network A.
 pub struct Forest {
+    pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
     pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
     pub local_exit_tree: LocalExitTree<Keccak256Hasher>,
     pub local_balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
@@ -71,6 +75,7 @@ impl Forest {
             local_exit_tree,
             local_balance_tree,
             nullifier_set: Smt::new(),
+            l1_info_tree: Default::default(),
         }
     }
 
@@ -80,20 +85,53 @@ impl Forest {
         events: &[(TokenInfo, U256)],
     ) -> Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> {
         let mut res = Vec::new();
-        for (token, amount) in events {
-            let exit = exit_to_b(*token, *amount);
-            let index = self.local_exit_tree_data_a.add_leaf(exit.hash());
-            let proof = self.local_exit_tree_data_a.get_proof(index);
+
+        let exits: Vec<BridgeExit> = events
+            .into_iter()
+            .map(|(token, amount)| exit_to_b(*token, *amount))
+            .collect();
+
+        // Append all the leafs in LET A (mainnet)
+        for exit in &exits {
+            self.local_exit_tree_data_a.add_leaf(exit.hash());
+        }
+
+        let l1_leaf = L1InfoTreeLeaf {
+            l1_info_tree_index: 0,
+            rer: Digest::default(),
+            mer: self.local_exit_tree_data_a.get_root(),
+            inner: L1InfoTreeLeafInner {
+                block_hash: Digest::default(),
+                timestamp: 0,
+                global_exit_root: Digest::default(),
+            },
+        };
+
+        self.l1_info_tree.add_leaf(l1_leaf.hash());
+
+        let proof_ger_l1root = MerkleProof {
+            proof: self.l1_info_tree.get_proof(0),
+            root: self.l1_info_tree.get_root(),
+        };
+
+        // Generate them as imported bridge exits
+        for (idx, exit) in exits.into_iter().enumerate() {
+            let index = idx as u32;
             let imported_exit = ImportedBridgeExit {
                 bridge_exit: exit,
-                imported_local_exit_root: self.local_exit_tree_data_a.get_root(),
-                inclusion_proof: proof,
-                inclusion_proof_rer: None,
                 global_index: GlobalIndex {
                     mainnet_flag: true,
                     rollup_index: **NETWORK_A,
                     leaf_index: index,
                 },
+                claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
+                    proof_leaf_mer: MerkleProof {
+                        proof: self.local_exit_tree_data_a.get_proof(index),
+                        root: self.local_exit_tree_data_a.get_root(),
+                    },
+                    proof_ger_l1root: proof_ger_l1root.clone(),
+                    l1_leaf: l1_leaf.clone(),
+                })),
             };
             let null_key = NullifierKey {
                 network_id: *NETWORK_A,
@@ -107,14 +145,6 @@ impl Forest {
                 .insert(null_key, Digest::from_bool(true))
                 .unwrap();
             res.push((imported_exit, nullifier_path));
-        }
-
-        // We need to update the LER/LEP to the final versions
-        for (exit, _) in res.iter_mut() {
-            exit.imported_local_exit_root = self.local_exit_tree_data_a.get_root();
-            exit.inclusion_proof = self
-                .local_exit_tree_data_a
-                .get_proof(exit.global_index.leaf_index);
         }
 
         res
@@ -209,8 +239,6 @@ impl Forest {
             imported_exits_root: Some(imported_exits_root),
             balances_proofs,
             prev_balance_root,
-            imported_mainnet_exit_root: self.local_exit_tree_data_a.get_root(),
-            imported_rollup_exit_root: Digest::default(),
             prev_nullifier_root,
             signer,
             signature,
@@ -219,6 +247,7 @@ impl Forest {
                 balance_root: self.local_balance_tree.root,
                 nullifier_root: self.nullifier_set.root,
             },
+            l1_info_root: self.l1_info_tree.get_root(),
         }
     }
 

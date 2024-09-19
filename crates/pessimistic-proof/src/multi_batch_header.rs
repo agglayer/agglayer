@@ -45,13 +45,9 @@ where
     #[serde_as(as = "Option<_>")]
     pub imported_exits_root: Option<H::Digest>,
 
-    /// The rollup exit root against which we imported the rollup bridge exits
+    /// The l1 info root against which we import the bridge exits
     #[serde_as(as = "_")]
-    pub imported_rollup_exit_root: H::Digest,
-
-    /// The mainnet exit root against which we imported the mainnet bridge exits
-    #[serde_as(as = "_")]
-    pub imported_mainnet_exit_root: H::Digest,
+    pub l1_info_root: H::Digest,
 
     /// A map from token info to the token balance of the origin network before
     /// any bridge event is processed, along with the Merkle proof of this
@@ -93,9 +89,8 @@ where
         prev_nullifier_root: H::Digest,
         signer: Address,
         signature: Signature,
-        imported_rollup_exit_root: H::Digest,
-        imported_mainnet_exit_root: H::Digest,
         target: StateCommitment,
+        l1_info_root: H::Digest,
     ) -> Self {
         Self {
             origin_network,
@@ -108,9 +103,8 @@ where
             prev_nullifier_root,
             signer,
             signature,
-            imported_rollup_exit_root,
-            imported_mainnet_exit_root,
             target,
+            l1_info_root,
         }
     }
 }
