@@ -148,7 +148,7 @@ impl super::RateLimiter for RateLimiter {
         self.rate_limit(time)
     }
 
-    fn is_clear(&mut self, time: Self::Instant) -> bool {
+    fn is_empty(&mut self, time: Self::Instant) -> bool {
         self.is_clear(time)
     }
 }

@@ -15,6 +15,7 @@ impl RateLimiter {
         // Record the history after the first check.
         let pruned_past = self.past.clone();
         assert!(pruned_past.len() <= orig_past_len);
+        assert_eq!(self.is_clear(time), pruned_past.is_empty());
 
         // Make second check, assert history is idempotent.
         let check_result_2 = self.check(time);

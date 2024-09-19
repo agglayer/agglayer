@@ -3,13 +3,13 @@
 use agglayer_config::rate_limiting::TimeRateLimit;
 use tokio::time::Instant;
 
-// TODO: make private if possible
 mod interface;
 pub mod trivial;
 pub mod wall_clock;
 
 pub use interface::RateLimiter;
 
+/// Rate limiter state for single network / rollup.
 pub struct LocalRateLimiter {
     /// Rate limiter for `sendTx` settlement.
     send_tx: trivial::RateLimiter<wall_clock::RateLimiter>,

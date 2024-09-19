@@ -13,5 +13,5 @@ pub trait RateLimiter {
     fn limit(&mut self, time: Self::Instant) -> Result<(), Self::RateLimited>;
 
     /// Check if the rate limiter contains any events in this period.
-    fn is_clear(&mut self, time: Self::Instant) -> bool;
+    fn is_empty(&mut self, time: Self::Instant) -> bool;
 }

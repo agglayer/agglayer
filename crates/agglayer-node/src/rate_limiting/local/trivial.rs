@@ -3,8 +3,13 @@
 /// This rate limiter handles edge cases, namely if no rate limit is imposed or
 /// if rate limit is zero. Otherwise, it delegates to the inner limiter.
 pub enum RateLimiter<L> {
+    /// The request is disallowed completely.
     Disabled,
+
+    /// Delegate to the inner rate limiter.
     Limited(L),
+
+    /// No rate limit imposed, requests can be as frequent as desired.
     Unlimited,
 }
 
@@ -34,11 +39,10 @@ impl<L: super::RateLimiter> super::RateLimiter for RateLimiter<L> {
         self.with_inner(|inner| inner.limit(time))
     }
 
-    fn is_clear(&mut self, time: Self::Instant) -> bool {
+    fn is_empty(&mut self, time: Self::Instant) -> bool {
         match self {
-            Self::Disabled => true,
-            Self::Limited(inner) => inner.is_clear(time),
-            Self::Unlimited => true,
+            Self::Limited(inner) => inner.is_empty(time),
+            Self::Disabled | Self::Unlimited => true,
         }
     }
 }
