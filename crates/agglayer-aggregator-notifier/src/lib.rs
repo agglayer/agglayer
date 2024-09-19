@@ -10,7 +10,7 @@ use agglayer_storage::stores::{
 use agglayer_types::{Certificate, Height, NetworkId, Proof};
 use error::NotifierError;
 use futures::future::BoxFuture;
-use pessimistic_proof::{Address, LocalNetworkState};
+use pessimistic_proof::{local_state::LocalNetworkStateData, Address, LocalNetworkState};
 use serde::Serialize;
 use sp1::SP1;
 use sp1_sdk::{CpuProver, MockProver, NetworkProver};
@@ -94,33 +94,23 @@ where
         let signer = Address::new([0; 20]); // TODO: put the trusted sequencer address
         let mut batch_header = certificate.into_pessimistic_proof_input(&full_state, signer)?;
         let initial_state = LocalNetworkState::from(full_state.clone());
-        let target = initial_state
-            .clone()
 
-        let proving_request = self.prover.prove(local_state.clone(), certificate.clone());
-
-        let mut state = local_state.clone();
-
-        let signer = Address::new([0; 20]);
-        let batch_header = certificate.into_pessimistic_proof_input(&state, signer)?;
+        let mut state = initial_state.clone();
 
         #[allow(clippy::let_unit_value)]
         let _native_outputs = state
             .apply_batch_header(&batch_header)
             .map_err(Error::NativeExecutionFailed)?;
 
-        if batch_header.target.exit_root != target.exit_root {
+        if batch_header.target.exit_root != initial_state.exit_tree.get_root() {
             // state transition mismatch between execution and received certificate
             return Err(Error::NativeExecutionFailed(
                 pessimistic_proof::ProofError::InvalidFinalLocalExitRoot,
             ));
         }
 
-        batch_header.target.balance_root = target.balance_root;
-        batch_header.target.nullifier_root = target.nullifier_root;
-
-        // TODO: implement `apply_batch_header` for LocalNetworkStateData
-        let new_state = full_state.clone();
+        batch_header.target.balance_root = initial_state.balance_tree.root;
+        batch_header.target.nullifier_root = initial_state.nullifier_set.root;
 
         let proving_request = self
             .prover
@@ -146,7 +136,7 @@ where
                     certificate,
                     height,
                     new_state: state,
-                    network: *batch_header.origin_network,
+                    network: batch_header.origin_network,
                 })
             }
         }))

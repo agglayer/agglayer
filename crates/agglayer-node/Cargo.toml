@@ -32,7 +32,6 @@ agglayer-telemetry = { path = "../agglayer-telemetry" }
 agglayer-types = { path = "../agglayer-types" }
 agglayer-signer = { path = "../agglayer-signer" }
 agglayer-storage = { path = "../agglayer-storage" }
-agglayer-types = { path = "../agglayer-types" }
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
 pessimistic-proof = { path = "../pessimistic-proof" }
 agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }

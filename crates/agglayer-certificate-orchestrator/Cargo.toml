@@ -20,5 +20,6 @@ tokio-stream = { version = "0.1.15", features = ["sync"] }
 futures-util = "0.3.30"
 
 [dev-dependencies]
-agglayer-storage = { path = "../agglayer-storage", features = ["tests"] }
+agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
+agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
 rstest.workspace = true

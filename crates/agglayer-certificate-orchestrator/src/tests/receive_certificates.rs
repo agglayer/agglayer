@@ -17,7 +17,7 @@ async fn receive_certificate_with_height_zero() {
     let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
 
     let certificate = Certificate {
-        network_id: 1,
+        network_id: 1.into(),
         height: 0,
         prev_local_exit_root: [0; 32],
         new_local_exit_root: [0; 32],
@@ -34,14 +34,14 @@ async fn receive_certificate_with_height_zero() {
 
     orchestrator
         .pending_store
-        .insert_pending_certificate(1, 0, &certificate)
+        .insert_pending_certificate(1.into(), 0, &certificate)
         .unwrap();
 
-    let result = orchestrator.receive_certificates(&[(1, 0, certificate_id)]);
+    let result = orchestrator.receive_certificates(&[(1.into(), 0, certificate_id)]);
 
     assert!(result.is_ok());
-    assert!(matches!(orchestrator.cursors.get(&1), Some(0)));
-    assert!(orchestrator.global_state.contains_key(&1));
+    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(0)));
+    assert!(orchestrator.global_state.contains_key(&1.into()));
     assert!(receiver.recv().await.is_some());
 }
 
@@ -52,7 +52,7 @@ async fn receive_certificate_with_previous_proved() {
     let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
 
     let previous = Certificate {
-        network_id: 1,
+        network_id: 1.into(),
         height: 0,
         prev_local_exit_root: [0; 32],
         new_local_exit_root: [0; 32],
@@ -71,7 +71,7 @@ async fn receive_certificate_with_previous_proved() {
         .unwrap();
 
     let certificate = Certificate {
-        network_id: 1,
+        network_id: 1.into(),
         height: 1,
         prev_local_exit_root: [0; 32],
         new_local_exit_root: [0; 32],
@@ -86,16 +86,16 @@ async fn receive_certificate_with_previous_proved() {
 
     orchestrator
         .pending_store
-        .insert_pending_certificate(1, 1, &certificate)
+        .insert_pending_certificate(1.into(), 1, &certificate)
         .unwrap();
 
-    orchestrator.cursors.insert(1, 0);
+    orchestrator.cursors.insert(1.into(), 0);
 
-    let result = orchestrator.receive_certificates(&[(1, 1, [0; 32])]);
+    let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32])]);
 
     assert!(result.is_ok());
-    assert!(matches!(orchestrator.cursors.get(&1), Some(1)));
-    assert!(orchestrator.global_state.contains_key(&1));
+    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(1)));
+    assert!(orchestrator.global_state.contains_key(&1.into()));
     assert!(receiver.recv().await.is_some());
 }
 
@@ -106,7 +106,7 @@ async fn receive_certificate_with_previous_pending() {
     let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
 
     let previous = Certificate {
-        network_id: 1,
+        network_id: 1.into(),
         height: 0,
         prev_local_exit_root: [0; 32],
         new_local_exit_root: [0; 32],
@@ -121,11 +121,11 @@ async fn receive_certificate_with_previous_pending() {
 
     orchestrator
         .pending_store
-        .insert_pending_certificate(1, 0, &previous)
+        .insert_pending_certificate(1.into(), 0, &previous)
         .unwrap();
 
     let certificate = Certificate {
-        network_id: 1,
+        network_id: 1.into(),
         height: 1,
         prev_local_exit_root: [0; 32],
         new_local_exit_root: [0; 32],
@@ -140,13 +140,13 @@ async fn receive_certificate_with_previous_pending() {
 
     orchestrator
         .pending_store
-        .insert_pending_certificate(1, 1, &certificate)
+        .insert_pending_certificate(1.into(), 1, &certificate)
         .unwrap();
 
-    let result = orchestrator.receive_certificates(&[(1, 1, [0; 32])]);
+    let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32])]);
 
     assert!(result.is_ok());
-    assert!(!orchestrator.cursors.contains_key(&1));
+    assert!(!orchestrator.cursors.contains_key(&1.into()));
     sleep(Duration::from_millis(10)).await;
 
     assert!(receiver.try_recv().is_err());

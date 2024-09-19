@@ -6,14 +6,13 @@ use std::{
     task::Poll,
 };
 
-
 use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, PerEpochWriter, StateReader, StateWriter,
 };
 use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, poll, Stream};
-use pessimistic_proof::LocalNetworkState;
+use pessimistic_proof::{local_state::LocalNetworkStateData, LocalNetworkState};
 use rstest::fixture;
 use tokio::sync::{broadcast, mpsc};
 use tokio_stream::{wrappers::BroadcastStream, StreamExt as _};
@@ -128,7 +127,7 @@ impl StateWriter for DummyPendingStore {
                 height: certificate.height,
                 epoch_number: None,
                 certificate_index: None,
-                local_exit_root: certificate.new_local_exit_root,
+                new_local_exit_root: certificate.new_local_exit_root,
             },
         );
         Ok(())
@@ -250,7 +249,7 @@ async fn test_collect_certificates() {
     )
     .expect("Unable to create orchestrator");
 
-    _ = data_sender.send((1, 1, [0; 32])).await;
+    _ = data_sender.send((1.into(), 1, [0; 32])).await;
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
 
     let _poll = poll!(&mut orchestrator);
@@ -295,7 +294,7 @@ async fn test_collect_certificates_after_epoch() {
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
     let _poll = poll!(&mut orchestrator);
 
-    _ = data_sender.send((1, 1, [0; 32])).await;
+    _ = data_sender.send((1.into(), 1, [0; 32])).await;
 
     let _poll = poll!(&mut orchestrator);
 
@@ -658,10 +657,10 @@ impl EpochPacker for Check {
             certificate: self
                 .expected_certificate
                 .clone()
-                .unwrap_or_else(|| Certificate::new_for_test(1, 0)),
+                .unwrap_or_else(|| Certificate::new_for_test(1.into(), 0)),
             height: 0,
             new_state: LocalNetworkState::default(),
-            network: 1,
+            network: 1.into(),
         });
 
         Ok(Box::pin(async { Ok(()) }))
@@ -670,7 +669,7 @@ impl EpochPacker for Check {
 
 impl CertificateInput for () {
     fn network_id(&self) -> NetworkId {
-        0
+        NetworkId::new(0)
     }
 }
 
@@ -708,7 +707,7 @@ impl Certifier for Check {
         let result = CertifierOutput {
             certificate,
             height,
-            new_state: local_state,
+            new_state: local_state.into(),
             network: network_id,
         };
         _ = self.executed.try_send(result.clone());

@@ -75,15 +75,15 @@ impl Node {
     ) -> Result<Self> {
         // Initializing storage
         let metadata_db = Arc::new(DB::open_cf(
-            &config.storage.metadata_path,
+            &config.storage.metadata_db_path,
             agglayer_storage::storage::metadata_db_cf_definitions(),
         )?);
         let pending_db = Arc::new(DB::open_cf(
-            &config.storage.pending_path,
+            &config.storage.pending_db_path,
             agglayer_storage::storage::pending_db_cf_definitions(),
         )?);
         let state_db = Arc::new(DB::open_cf(
-            &config.storage.state_path,
+            &config.storage.state_db_path,
             agglayer_storage::storage::state_db_cf_definitions(),
         )?);
 

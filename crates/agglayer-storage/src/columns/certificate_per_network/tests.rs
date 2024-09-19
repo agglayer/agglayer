@@ -50,7 +50,7 @@ fn can_parse_value() {
             1, 1, 1
         ]
     );
-    // local_exit_root
+    // new_local_exit_root
     assert_eq!(
         encoded[62..94],
         [

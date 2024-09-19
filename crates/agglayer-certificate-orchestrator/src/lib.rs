@@ -14,7 +14,7 @@ use agglayer_storage::stores::{
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, Stream, StreamExt};
-use pessimistic_proof::{LocalNetworkState, ProofError};
+use pessimistic_proof::{local_state::LocalNetworkStateData, LocalNetworkState, ProofError};
 use tokio::{
     sync::mpsc::Receiver,
     task::{JoinHandle, JoinSet},
