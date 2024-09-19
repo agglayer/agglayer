@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Converstion error: {0}")]
+    #[error("Conversion error: {0}")]
     TypeConversion(&'static str),
 }
 
@@ -33,7 +33,7 @@ pub struct CertificateHeader {
     pub height: Height,
     pub epoch_number: Option<EpochNumber>,
     pub certificate_index: Option<CertificateIndex>,
-    pub local_exit_root: Hash,
+    pub new_local_exit_root: Hash,
 }
 
 /// Proof is a wrapper around all the different types of proofs that can be

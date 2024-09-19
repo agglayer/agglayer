@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     columns::latest_certificate_per_network::{
-        LatestSettledCertificatePerNetworkColumn, ProvenCertificate,
+        LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     storage::{state_db_cf_definitions, DB},
     stores::{state::StateStore, StateReader as _},
@@ -18,7 +18,7 @@ fn can_retrieve_list_of_network() {
 
     db.put::<LatestSettledCertificatePerNetworkColumn>(
         &1.into(),
-        &ProvenCertificate([0; 32], 0, 0),
+        &SettledCertificate([0; 32], 0, 0),
     )
     .expect("Unable to put certificate into storage");
     assert!(store.get_active_networks().unwrap().len() == 1);

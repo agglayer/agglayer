@@ -1,4 +1,4 @@
-use agglayer_types::NetworkId;
+use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF};
@@ -12,21 +12,21 @@ mod tests;
 ///
 /// ## Column definition
 ///
-/// | key         | value                                |
-/// | --          | --                                   |
-/// | `NetworkId` | (`Proof`, `CertificateId`, `Height`) |
+/// | key         | value                                      |
+/// | --          | --                                         |
+/// | `NetworkId` | (`CertificateId`, `Height`, `EpochNumber`) |
 pub struct LatestSettledCertificatePerNetworkColumn;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProvenCertificate(pub [u8; 32], pub u64, pub u64);
+pub struct SettledCertificate(pub CertificateId, pub Height, pub EpochNumber);
 
 pub type Key = NetworkId;
 
-impl Codec for ProvenCertificate {}
+impl Codec for SettledCertificate {}
 
 impl ColumnSchema for LatestSettledCertificatePerNetworkColumn {
     type Key = Key;
-    type Value = ProvenCertificate;
+    type Value = SettledCertificate;
 
     const COLUMN_FAMILY_NAME: &'static str = LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF;
 }

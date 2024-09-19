@@ -6,7 +6,7 @@ use std::{
 
 use agglayer_storage::{
     columns::latest_certificate_per_network::{
-        LatestSettledCertificatePerNetworkColumn, ProvenCertificate,
+        LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     storage::{state_db_cf_definitions, DB},
     stores::{state::StateStore, StateReader as _},
@@ -43,7 +43,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
         for i in 1..=expected {
             db.put::<LatestSettledCertificatePerNetworkColumn>(
                 &i.into(),
-                &ProvenCertificate([0; 32], 0, 0),
+                &SettledCertificate([0; 32], 0, 0),
             )
             .expect("Unable to put certificate into storage");
         }
