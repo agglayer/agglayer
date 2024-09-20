@@ -68,6 +68,8 @@ jobs:
         with:
           cache-on-failure: true
 
+      - uses: taiki-e/install-action@protoc
+
       - name: Run cargo clippy
         run: cargo clippy --all-targets -- -D warnings
 

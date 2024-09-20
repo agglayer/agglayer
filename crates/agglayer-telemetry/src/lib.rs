@@ -59,6 +59,36 @@ lazy_static! {
         .init();
 }
 
+pub mod prover {
+    use lazy_static::lazy_static;
+    use opentelemetry::global;
+
+    use crate::constant::AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME;
+
+    lazy_static! {
+        pub static ref PROVING_REQUEST_RECV: opentelemetry::metrics::Counter<u64> =
+            global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
+                .u64_counter("proving_request_recv")
+                .with_description("Number of proving request received")
+                .init();
+        pub static ref PROVING_REQUEST_SUCCEEDED: opentelemetry::metrics::Counter<u64> =
+            global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
+                .u64_counter("proving_request_succeeded")
+                .with_description("Number of proving request that succeeded")
+                .init();
+        pub static ref PROVING_REQUEST_FAILED: opentelemetry::metrics::Counter<u64> =
+            global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
+                .u64_counter("proving_request_failed")
+                .with_description("Number of proving request that failed")
+                .init();
+        pub static ref PROVING_FALLBACK_TRIGGERED: opentelemetry::metrics::Counter<u64> =
+            global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
+                .u64_counter("proving_fallback_triggered")
+                .with_description("Number of proving fallback triggered")
+                .init();
+    }
+}
+
 pub struct ServerBuilder {}
 
 #[buildstructor::buildstructor]
