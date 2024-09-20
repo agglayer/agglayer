@@ -71,10 +71,10 @@ pub mod prover {
                 .u64_counter("proving_request_recv")
                 .with_description("Number of proving request received")
                 .init();
-        pub static ref PROVING_REQUEST_SUCCEED: opentelemetry::metrics::Counter<u64> =
+        pub static ref PROVING_REQUEST_SUCCEEDED: opentelemetry::metrics::Counter<u64> =
             global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
-                .u64_counter("proving_request_succeed")
-                .with_description("Number of proving request that succeed")
+                .u64_counter("proving_request_succeeded")
+                .with_description("Number of proving request that succeeded")
                 .init();
         pub static ref PROVING_REQUEST_FAILED: opentelemetry::metrics::Counter<u64> =
             global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)

@@ -1,5 +1,5 @@
 use agglayer_prover_types::v1::proof_generation_service_server::ProofGenerationService;
-use agglayer_telemetry::prover::{PROVING_REQUEST_RECV, PROVING_REQUEST_SUCCEED};
+use agglayer_telemetry::prover::{PROVING_REQUEST_RECV, PROVING_REQUEST_SUCCEEDED};
 use tracing::debug;
 
 #[derive(Default)]
@@ -18,7 +18,7 @@ impl ProofGenerationService for ProverRPC {
         debug!("Got a request from {:?}", request.remote_addr());
         let reply = agglayer_prover_types::v1::ProofGenerationResponse {};
 
-        PROVING_REQUEST_SUCCEED.add(1, metrics_attrs);
+        PROVING_REQUEST_SUCCEEDED.add(1, metrics_attrs);
         Ok(tonic::Response::new(reply))
     }
 }
