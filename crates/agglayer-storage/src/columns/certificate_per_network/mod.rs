@@ -1,4 +1,4 @@
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber};
+use agglayer_types::CertificateHeader;
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, CERTIFICATE_PER_NETWORK_CF};
@@ -10,30 +10,22 @@ mod tests;
 ///
 /// ## Column definition
 ///
-/// | key                     | value                                                |
-/// | --                      | --                                                   |
-/// | (`NetworkId`, `Height`) | (`CertificateId`, `EpochNumber`, `CertificateIndex`) |
+/// | key                     | value               |
+/// | --                      | --                  |
+/// | (`NetworkId`, `Height`) | `CertificateHeader` |
 pub struct CertificatePerNetworkColumn;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Key {
-    network_id: u32,
-    height: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Value {
-    certificate_id: CertificateId,
-    epoch_number: EpochNumber,
-    certificate_index: CertificateIndex,
+    pub(crate) network_id: u32,
+    pub(crate) height: u64,
 }
 
 impl Codec for Key {}
-impl Codec for Value {}
 
 impl ColumnSchema for CertificatePerNetworkColumn {
     type Key = Key;
-    type Value = Value;
+    type Value = CertificateHeader;
 
     const COLUMN_FAMILY_NAME: &'static str = CERTIFICATE_PER_NETWORK_CF;
 }

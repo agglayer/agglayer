@@ -24,10 +24,8 @@ fn can_parse_key() {
 
 #[test]
 fn can_parse_value() {
-    let mut stdin = sp1_sdk::SP1Stdin::new();
-    stdin.write_slice(&[2; 32]);
-
     let value = Proof::new_for_test();
+
     let encoded = value.encode().expect("Unable to encode value");
 
     let expected_value = Proof::decode(&encoded[..]).expect("Unable to decode value");

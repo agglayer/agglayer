@@ -9,9 +9,9 @@ use crate::columns::PER_EPOCH_PROOFS_CF;
 /// | key                | value   |
 /// | --                 | --      |
 /// | `CertificateIndex` | `Proof` |
-pub struct ProofPerIndex;
+pub struct ProofPerIndexColumn;
 
-impl crate::columns::ColumnSchema for ProofPerIndex {
+impl crate::columns::ColumnSchema for ProofPerIndexColumn {
     type Key = CertificateIndex;
     type Value = Proof;
 

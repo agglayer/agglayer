@@ -9,9 +9,9 @@ use crate::columns::PER_EPOCH_CERTIFICATES_CF;
 /// | key                | value         |
 /// | --                 | --            |
 /// | `CertificateIndex` | `Certificate` |
-pub struct CertificatePerIndex;
+pub struct CertificatePerIndexColumn;
 
-impl crate::columns::ColumnSchema for CertificatePerIndex {
+impl crate::columns::ColumnSchema for CertificatePerIndexColumn {
     type Key = CertificateIndex;
     type Value = Certificate;
 

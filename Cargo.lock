@@ -235,12 +235,14 @@ dependencies = [
 name = "agglayer-storage"
 version = "0.1.0"
 dependencies = [
+ "agglayer-config",
  "agglayer-types",
  "arc-swap",
  "bincode",
  "criterion",
+ "hex",
+ "parking_lot",
  "rand",
- "reth-primitives",
  "rocksdb",
  "serde",
  "sp1-sdk",
