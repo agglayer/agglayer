@@ -145,6 +145,18 @@ where
     /// # use tokio_stream::StreamExt;
     /// # use pessimistic_proof::bridge_exit::NetworkId;
     /// # use pessimistic_proof::local_state::LocalNetworkStateData;
+    /// # use agglayer_types::Certificate;
+    /// # use agglayer_types::Proof;
+    /// # use agglayer_types::Height;
+    /// # use std::sync::Arc;
+    /// # use agglayer_config::Config;
+    /// # use agglayer_storage::tests::TempDBDir;
+    /// # use agglayer_storage::storage::DB;
+    /// # use agglayer_storage::storage::state_db_cf_definitions;
+    /// # use agglayer_storage::stores::pending::PendingStore;
+    /// # use agglayer_storage::stores::epochs::EpochsStore;
+    /// # use agglayer_storage::stores::state::StateStore;
+    /// # use agglayer_storage::stores::EpochStoreReader;
     ///
     /// # #[derive(Clone)]
     /// # pub struct Empty;
@@ -164,8 +176,8 @@ where
     /// # }
     ///
     /// impl EpochPacker for AggregatorNotifier {
-    ///     type Item = ();
-    ///     fn pack<T: IntoIterator<Item = ()>>(
+    ///     type Item = (Certificate, Proof);
+    ///     fn pack<T: IntoIterator<Item = (Certificate, Proof)>>(
     ///         &self,
     ///         epoch: u64,
     ///         to_pack: T,
@@ -175,36 +187,61 @@ where
     /// }
     ///
     /// impl Certifier for AggregatorNotifier {
-    ///     type Input = Empty;
-    ///     type Proof = ();
-    ///
     ///     fn certify(
     ///         &self,
     ///         local_state: LocalNetworkStateData,
-    ///         certificate: Self::Input,
-    ///     ) -> CertifierResult<Self::Proof> {
+    ///         network_id: NetworkId,
+    ///         height: Height,
+    ///     ) -> CertifierResult {
     ///         Ok(Box::pin(async move {
     ///             Ok(CertifierOutput {
-    ///                 proof: (),
-    ///                 new_state: LocalNetworkStateData::default(),
+    ///                 new_state: LocalNetworkStateData::default().into(),
     ///                 network: NetworkId::new(0),
+    ///                 certificate: Certificate::new_for_test(network_id, height),
+    ///                 height: 0,
     ///             })
     ///         }))
     ///     }
     /// }
     ///
-    /// async fn start() -> Result<(), ()> {
+    /// async fn start() -> anyhow::Result<()> {
     ///     let (sender, receiver) = tokio::sync::broadcast::channel(1);
     ///     let clock_stream = BroadcastStream::new(sender.subscribe()).filter_map(|value| value.ok());
     ///     let notifier = AggregatorNotifier::new();
     ///     let data_receiver = tokio::sync::mpsc::channel(1).1;
     ///
+    ///     let config = Arc::new(Config::new_for_test());
+    ///     let tmp = TempDBDir::new();
+    ///     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
+    ///
+    ///     let metadata_db = Arc::new(DB::open_cf(
+    ///         &config.storage.metadata_db_path,
+    ///         agglayer_storage::storage::metadata_db_cf_definitions(),
+    ///     )?);
+    ///     let pending_db = Arc::new(DB::open_cf(
+    ///         &config.storage.pending_db_path,
+    ///         agglayer_storage::storage::pending_db_cf_definitions(),
+    ///     )?);
+    ///     let state_db = Arc::new(DB::open_cf(
+    ///         &config.storage.state_db_path,
+    ///         agglayer_storage::storage::state_db_cf_definitions(),
+    ///     )?);
+    ///
+    ///     let epochs_store = Arc::new(EpochsStore::new(config, 0, pending_db.clone())?);
+    ///
+    ///     let state_store = Arc::new(StateStore::new(state_db.clone()));
+    ///     let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
+
     ///     CertificateOrchestrator::builder()
     ///         .clock(clock_stream)
     ///         .data_receiver(data_receiver)
     ///         .cancellation_token(CancellationToken::new())
     ///         .epoch_packing_task_builder(notifier.clone())
     ///         .certifier_task_builder(notifier)
+    ///         .pending_store(pending_store)
+    ///         .current_epoch(epochs_store.get_current_epoch())
+    ///         .epochs_store(epochs_store)
+    ///         .state_store(state_store)
     ///         .start()
     ///         .await
     ///         .unwrap();
@@ -212,7 +249,7 @@ where
     ///     Ok(())
     /// }
     /// ```
-    ///
+    /// 
     /// # Errors
     ///
     /// This function can't fail but returns a Result for convenience and future

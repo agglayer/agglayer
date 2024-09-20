@@ -21,5 +21,6 @@ futures-util = "0.3.30"
 
 [dev-dependencies]
 agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
+agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
 agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
 rstest.workspace = true

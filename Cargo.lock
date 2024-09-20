@@ -91,6 +91,7 @@ name = "agglayer-certificate-orchestrator"
 version = "0.1.0"
 dependencies = [
  "agglayer-clock",
+ "agglayer-config",
  "agglayer-storage",
  "agglayer-types",
  "anyhow",
