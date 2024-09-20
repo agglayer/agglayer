@@ -47,7 +47,7 @@ impl Prover {
             .set_serving::<ProofGenerationServiceServer<ProverRPC>>()
             .await;
 
-        let reflexion = tonic_reflection::server::Builder::configure()
+        let reflection = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(agglayer_prover_types::FILE_DESCRIPTOR_SET)
             .build_v1alpha()
             .expect("Cannot build gRPC because of FILE_DESCRIPTOR_SET error");
@@ -58,7 +58,7 @@ impl Prover {
         let handle = tokio::spawn(async move {
             if let Err(error) = Server::builder()
                 .layer(layer)
-                .add_service(reflexion)
+                .add_service(reflection)
                 .add_service(health_service)
                 .add_service(svc)
                 .serve_with_shutdown(config.grpc_endpoint, cancellation_token.cancelled())
