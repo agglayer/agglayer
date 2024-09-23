@@ -16,6 +16,8 @@ use self::{
     proof_signers::deserialize_signers_map, rpc::deserialize_rpc_map, telemetry::TelemetryConfig,
 };
 
+pub mod prover;
+
 pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
 
 mod migrator;

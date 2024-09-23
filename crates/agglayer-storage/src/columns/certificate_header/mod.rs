@@ -1,7 +1,6 @@
-use agglayer_types::CertificateId;
+use agglayer_types::CertificateHeader;
 
 use super::{ColumnSchema, CERTIFICATE_HEADER_CF};
-use crate::types::CertificateHeader;
 
 #[cfg(test)]
 mod tests;
@@ -15,7 +14,7 @@ mod tests;
 /// | `CertificateId`   |  `CertificateHeader` |
 pub struct CertificateHeaderColumn;
 
-pub type Key = CertificateId;
+pub type Key = agglayer_types::CertificateId;
 pub type Value = CertificateHeader;
 
 impl ColumnSchema for CertificateHeaderColumn {

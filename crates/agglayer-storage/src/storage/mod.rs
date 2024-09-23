@@ -1,10 +1,12 @@
 use std::path::Path;
 
-use iterators::KeysIterator;
-use rocksdb::{ColumnFamilyDescriptor, DBCompressionType, Options};
+use iterators::{ColumnIterator, KeysIterator};
+use rocksdb::{
+    ColumnFamilyDescriptor, DBCompressionType, DBPinnableSlice, Direction, Options, ReadOptions,
+};
 
 use crate::{
-    columns::{Codec as _, ColumnSchema},
+    columns::{Codec, ColumnSchema},
     error::Error,
 };
 
@@ -44,6 +46,33 @@ impl DB {
             .map_or(Ok(None), |v| v.map(Some))
     }
 
+    pub fn multi_get<C: ColumnSchema>(
+        &self,
+        keys: impl IntoIterator<Item = C::Key>,
+    ) -> Result<Vec<Option<C::Value>>, Error> {
+        let cf = self
+            .rocksdb
+            .cf_handle(C::COLUMN_FAMILY_NAME)
+            .ok_or(Error::ColumnFamilyNotFound)?;
+
+        let keys: Result<Vec<_>, _> = keys.into_iter().map(|k| k.encode()).collect();
+
+        let results: Result<Vec<Option<DBPinnableSlice>>, _> = self
+            .rocksdb
+            .batched_multi_get_cf(cf, &keys?, false)
+            .into_iter()
+            .map(|r| r.map_err(Error::from))
+            .collect();
+
+        results?
+            .into_iter()
+            .map(|bytes| match bytes {
+                Some(bytes) => C::Value::decode(&bytes[..]).map(Some),
+                None => Ok(None),
+            })
+            .collect()
+    }
+
     /// Try to put the value for the given key.
     pub fn put<C: ColumnSchema>(&self, key: &C::Key, value: &C::Value) -> Result<(), Error> {
         let key = key.encode()?;
@@ -68,7 +97,33 @@ impl DB {
         let mut iterator = self.rocksdb.raw_iterator_cf(&cf);
         iterator.seek_to_first();
 
-        Ok(KeysIterator::new(iterator, rocksdb::Direction::Forward))
+        Ok(KeysIterator::new(iterator, Direction::Forward))
+    }
+
+    pub(crate) fn iter_with_direction<C: ColumnSchema>(
+        &self,
+        opts: ReadOptions,
+        direction: Direction,
+    ) -> Result<ColumnIterator<C>, Error> {
+        let cf = self
+            .rocksdb
+            .cf_handle(C::COLUMN_FAMILY_NAME)
+            .ok_or(Error::ColumnFamilyNotFound)?;
+
+        Ok(ColumnIterator::new(
+            self.rocksdb.raw_iterator_cf_opt(&cf, opts),
+            direction,
+        ))
+    }
+
+    pub(crate) fn delete<C: ColumnSchema>(&self, key: &C::Key) -> Result<(), Error> {
+        let cf = self
+            .rocksdb
+            .cf_handle(C::COLUMN_FAMILY_NAME)
+            .ok_or(Error::ColumnFamilyNotFound)?;
+        let key = key.encode()?;
+
+        Ok(self.rocksdb.delete_cf(&cf, key)?)
     }
 }
 
@@ -111,17 +166,20 @@ pub fn epochs_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
 
 /// Definitions for the column families in the state storage.
 pub fn state_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    [crate::columns::LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF]
-        .iter_mut()
-        .map(|cf| {
-            let mut cfg = rocksdb::Options::default();
+    [
+        crate::columns::LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF,
+        crate::columns::CERTIFICATE_PER_NETWORK_CF,
+    ]
+    .iter_mut()
+    .map(|cf| {
+        let mut cfg = rocksdb::Options::default();
 
-            cfg.set_compression_type(DBCompressionType::Lz4);
-            cfg.create_if_missing(true);
+        cfg.set_compression_type(DBCompressionType::Lz4);
+        cfg.create_if_missing(true);
 
-            ColumnFamilyDescriptor::new(*cf, cfg)
-        })
-        .collect()
+        ColumnFamilyDescriptor::new(*cf, cfg)
+    })
+    .collect()
 }
 
 /// Definitions for the column families in the metadata storage.

@@ -8,11 +8,16 @@ use std::{
 use rand::Rng as _;
 
 pub struct TempDBDir {
-    pub(crate) path: PathBuf,
+    pub path: PathBuf,
+}
+
+impl Default for TempDBDir {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TempDBDir {
-    #[allow(dead_code)]
     pub fn new() -> Self {
         let mut path = temp_dir();
 
