@@ -37,7 +37,7 @@ agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
 
 [dev-dependencies]
 insta = { version = "1.39.0", features = ["json"] }
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.3" }
+jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.4" }
 rstest.workspace = true
 serde_json.workspace = true
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
