@@ -148,7 +148,7 @@ const fn default_activation_network_prover() -> bool {
 }
 
 pub(crate) fn default_prover_entrypoint() -> String {
-    default_socket_addr().to_string()
+    format!("http://{}", default_socket_addr())
 }
 
 const fn default_max_concurrency_limit() -> usize {
