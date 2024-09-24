@@ -8,14 +8,14 @@
 //! The layers correspond to modules as follows:
 //!
 //! * [state] defines the internal state of a limiter component.
-//! * [limiter] implements rate limiting for single limiter component.
-//!   It adds the ability to reserve a slot which can be committed later,
-//!   handling of trivial cases (e.g. no limit), and concurrency control.
+//! * [limiter] implements rate limiting for single limiter component. It adds
+//!   the ability to reserve a slot which can be committed later,chandling of
+//!   trivial cases (e.g. no limit), and concurrency control.
 //! * [inner] is effectively a collection of limiter components for one network.
 //!   It defines what a [Component] is and bundles them into a struct.
-//! * [self] (this module) defines the top-level [LocalRateLimiter].
-//!   It takes care of cross-thread synchronization and provides a safe
-//!   interface to rate limiter using a [SlotGuard].
+//! * [self] (this module) defines the top-level [LocalRateLimiter]. It takes
+//!   care of cross-thread synchronization and provides a safe interface to rate
+//!   limiter using a [SlotGuard].
 
 use std::sync::Arc;
 
@@ -49,6 +49,6 @@ impl LocalRateLimiter {
     pub fn reserve<C: Component>(&self, time: C::Instant) -> Result<SlotGuard<C>, RateLimited> {
         let mut this = self.0.lock();
         let slot = this.reserve::<C>(time)?;
-        Ok(SlotGuard::new(&self, slot))
+        Ok(SlotGuard::new(self, slot))
     }
 }

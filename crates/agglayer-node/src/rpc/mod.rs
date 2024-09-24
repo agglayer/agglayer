@@ -147,7 +147,6 @@ where
         agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
 
         // Reserve a rate limiting slot.
-        //TODO: Check `rollup_id` to `network_id` conversion here!!!
         let guard = self
             .kernel
             .rate_limiter()

@@ -4,6 +4,7 @@ mod core;
 mod slot_tracker;
 
 pub use core::RateLimiterCore;
+
 pub use slot_tracker::SlotTracker;
 
 /// Single network single component rate limiter.

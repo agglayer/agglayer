@@ -167,7 +167,7 @@ impl<R: Middleware> From<crate::kernel::SettlementError<R>> for Error {
                 SettlementError::Contract { detail }.into()
             }
             E::RateLimited(e) => e.into(),
-            e@E::Timeout(_) => SettlementError::IoError(e.to_string()).into(),
+            e @ E::Timeout(_) => SettlementError::IoError(e.to_string()).into(),
         }
     }
 }

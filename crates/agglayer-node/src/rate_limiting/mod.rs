@@ -6,11 +6,8 @@ mod top_level;
 #[cfg(test)]
 pub mod tests;
 
-// Internal exports.
-use local::LocalRateLimiter;
-
-// Public exports.
 pub use agglayer_config::rate_limiting::{NetworkId, RateLimitingConfig};
+use local::LocalRateLimiter;
 pub use local::{component, Component, RateLimited, SlotGuard};
 pub use top_level::RateLimiter;
 
