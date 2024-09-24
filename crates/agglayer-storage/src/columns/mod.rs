@@ -31,6 +31,8 @@ pub const METADATA_CF: &str = "metadata_cf";
 pub const PER_EPOCH_CERTIFICATES_CF: &str = "per_epoch_certificates_cf";
 pub const PER_EPOCH_METADATA_CF: &str = "per_epoch_metadata_cf";
 pub const PER_EPOCH_PROOFS_CF: &str = "per_epoch_proofs_cf";
+pub const PER_EPOCH_END_CHECKPOINT_CF: &str = "per_epoch_end_checkpoint_cf";
+pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
 
 // Pending related CFs
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
@@ -72,6 +74,8 @@ pub(crate) mod metadata;
 // PerEpoch
 pub mod epochs {
     pub(crate) mod certificates;
+    pub(crate) mod end_checkpoint;
     pub(crate) mod metadata;
     pub(crate) mod proofs;
+    pub(crate) mod start_checkpoint;
 }

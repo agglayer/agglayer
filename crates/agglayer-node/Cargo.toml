@@ -39,12 +39,14 @@ pessimistic-proof = { path = "../pessimistic-proof" }
 agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
 
 [dev-dependencies]
+ethers.workspace = true
 insta = { version = "1.39.0", features = ["json"] }
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.6" }
 rstest.workspace = true
 serde_json.workspace = true
 hyper-util = { version = "0.1.6", features = ["client"] }
 http-body-util = "0.1.2"
+rand.workspace = true
 test-log.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-capture = "0.1.0"
@@ -52,6 +54,7 @@ tracing-capture = "0.1.0"
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
 agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
 agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
+agglayer-prover = { path = "../agglayer-prover", features = ["testutils"] }
 
 [features]
 default = ["sp1"]

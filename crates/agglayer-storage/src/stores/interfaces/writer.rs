@@ -4,6 +4,7 @@ use crate::error::Error;
 
 pub trait PerEpochWriter: Send + Sync {
     fn add_certificate(&self, network_id: NetworkId, height: Height) -> Result<(), Error>;
+    fn start_packing(&self) -> Result<(), Error>;
 }
 
 pub trait EpochStoreWriter: Send + Sync {

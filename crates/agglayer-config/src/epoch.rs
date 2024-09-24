@@ -37,7 +37,7 @@ impl Default for TimeClockConfig {
 }
 
 fn default_epoch_duration() -> Duration {
-    Duration::from_secs(5)
+    Duration::from_secs(60)
 }
 
 fn serialize_duration<S>(value: &Duration, s: S) -> Result<S::Ok, S::Error>
