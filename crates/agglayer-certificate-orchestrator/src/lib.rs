@@ -11,10 +11,10 @@ use agglayer_storage::stores::{
     EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochWriter,
     StateReader, StateWriter,
 };
-use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
+use agglayer_types::{Certificate, CertificateId, Height, LocalNetworkStateData, NetworkId, Proof};
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, Stream, StreamExt};
-use pessimistic_proof::{local_state::LocalNetworkStateData, LocalNetworkState, ProofError};
+use pessimistic_proof::ProofError;
 use tokio::{
     sync::mpsc::Receiver,
     task::{JoinHandle, JoinSet},
@@ -144,7 +144,6 @@ where
     /// # use futures_util::future::BoxFuture;
     /// # use tokio_stream::StreamExt;
     /// # use pessimistic_proof::bridge_exit::NetworkId;
-    /// # use pessimistic_proof::local_state::LocalNetworkStateData;
     /// # use agglayer_types::Certificate;
     /// # use agglayer_types::Proof;
     /// # use agglayer_types::Height;
@@ -157,6 +156,7 @@ where
     /// # use agglayer_storage::stores::epochs::EpochsStore;
     /// # use agglayer_storage::stores::state::StateStore;
     /// # use agglayer_storage::stores::EpochStoreReader;
+    /// # use agglayer_types::LocalNetworkStateData;
     ///
     /// # #[derive(Clone)]
     /// # pub struct Empty;
@@ -197,8 +197,8 @@ where
     ///             Ok(CertifierOutput {
     ///                 new_state: LocalNetworkStateData::default().into(),
     ///                 network: NetworkId::new(0),
-    ///                 certificate: Certificate::new_for_test(network_id, height),
-    ///                 height: 0,
+    ///                 certificate: Certificate::new_for_test(network_id,
+    /// height),                 height: 0,
     ///             })
     ///         }))
     ///     }
@@ -206,13 +206,15 @@ where
     ///
     /// async fn start() -> anyhow::Result<()> {
     ///     let (sender, receiver) = tokio::sync::broadcast::channel(1);
-    ///     let clock_stream = BroadcastStream::new(sender.subscribe()).filter_map(|value| value.ok());
+    ///     let clock_stream =
+    /// BroadcastStream::new(sender.subscribe()).filter_map(|value| value.ok());
     ///     let notifier = AggregatorNotifier::new();
     ///     let data_receiver = tokio::sync::mpsc::channel(1).1;
     ///
     ///     let config = Arc::new(Config::new_for_test());
     ///     let tmp = TempDBDir::new();
-    ///     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
+    ///     let db = Arc::new(DB::open_cf(tmp.path.as_path(),
+    /// state_db_cf_definitions()).unwrap());
     ///
     ///     let metadata_db = Arc::new(DB::open_cf(
     ///         &config.storage.metadata_db_path,
@@ -227,7 +229,8 @@ where
     ///         agglayer_storage::storage::state_db_cf_definitions(),
     ///     )?);
     ///
-    ///     let epochs_store = Arc::new(EpochsStore::new(config, 0, pending_db.clone())?);
+    ///     let epochs_store = Arc::new(EpochsStore::new(config, 0,
+    /// pending_db.clone())?);
     ///
     ///     let state_store = Arc::new(StateStore::new(state_db.clone()));
     ///     let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
@@ -673,7 +676,7 @@ impl CertificateInput for Certificate {
 pub struct CertifierOutput {
     pub certificate: Certificate,
     pub height: Height,
-    pub new_state: LocalNetworkState,
+    pub new_state: LocalNetworkStateData,
     pub network: NetworkId,
 }
 
@@ -703,7 +706,7 @@ pub enum Error {
     ProverExecutionFailed(#[from] anyhow::Error),
     #[error("native execution failed: {0:?}")]
     NativeExecutionFailed(#[from] ProofError),
-    #[error("Type error: {0}")]
+    #[error("type error: {0}")]
     Types(#[from] agglayer_types::Error),
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),

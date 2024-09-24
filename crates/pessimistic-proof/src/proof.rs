@@ -1,4 +1,5 @@
 pub use bincode::Options;
+use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -20,16 +21,12 @@ pub enum ProofError {
     InvalidFinalLocalExitRoot,
     #[error("Invalid initial balance root.")]
     InvalidInitialBalanceRoot,
-    #[error("Invalid final balance root.")]
-    InvalidFinalBalanceRoot,
+    #[error("Invalid final balance root. Got: {got:?}, Expected: {expected:?}")]
+    InvalidFinalBalanceRoot { got: Digest, expected: Digest },
     #[error("Invalid initial nullifier root.")]
     InvalidInitialNullifierRoot,
     #[error("Invalid final nullifier root.")]
     InvalidFinalNullifierRoot,
-    #[error("Invalid imported bridge exit merkle path.")]
-    InvalidImportedBridgeExitMerklePath,
-    #[error("Invalid imported bridge exit root.")]
-    InvalidImportedBridgeExitRoot,
     #[error("Invalid imported bridge exit: {0}")]
     InvalidImportedBridgeExit(#[from] imported_bridge_exit::Error),
     #[error("Missing token balance proof.")]
@@ -48,6 +45,11 @@ pub enum ProofError {
     InvalidImportedExitsRoot,
     #[error("Invalid signature.")]
     InvalidSignature,
+    #[error("Invalid signer. Witness: {witness:?}, Recovered: {recovered:?}")]
+    InvalidSigner {
+        witness: Address,
+        recovered: Address,
+    },
     #[error("Invalid message origin network.")]
     InvalidMessageOriginNetwork,
     #[error("Invalid ETH network.")]
@@ -119,7 +121,10 @@ pub fn generate_pessimistic_proof(
         return Err(ProofError::InvalidFinalLocalExitRoot);
     }
     if computed_target.balance_root != batch_header.target.balance_root {
-        return Err(ProofError::InvalidFinalBalanceRoot);
+        return Err(ProofError::InvalidFinalBalanceRoot {
+            got: batch_header.target.balance_root,
+            expected: computed_target.balance_root,
+        });
     }
     if computed_target.nullifier_root != batch_header.target.nullifier_root {
         return Err(ProofError::InvalidFinalNullifierRoot);

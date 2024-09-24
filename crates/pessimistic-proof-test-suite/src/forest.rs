@@ -1,19 +1,15 @@
-use std::collections::{BTreeMap, BTreeSet};
-
+use agglayer_types::{Certificate, LocalNetworkStateData};
 use ethers_signers::{LocalWallet, Signer};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit::{
-        commit_imported_bridge_exits, Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf,
-        L1InfoTreeLeafInner, MerkleProof,
+        Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
+        MerkleProof,
     },
     keccak::{keccak256_combine, Digest},
-    local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
-    local_state::StateCommitment,
-    multi_batch_header::MultiBatchHeader,
-    nullifier_tree::{FromBool, NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
+    multi_batch_header::signature_commitment,
     utils::smt::Smt,
     LocalNetworkState, PessimisticProofOutput,
 };
@@ -24,13 +20,9 @@ use super::sample_data::{NETWORK_A, NETWORK_B};
 
 pub fn compute_signature_info(
     new_local_exit_root: Digest,
-    imported_bridge_exits: &[(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)],
+    imported_bridge_exits: &[ImportedBridgeExit],
 ) -> (Digest, Address, Signature) {
-    let imported_hash =
-        commit_imported_bridge_exits(imported_bridge_exits.iter().map(|(exit, _)| exit));
-    let combined_hash =
-        keccak256_combine([new_local_exit_root.as_slice(), imported_hash.as_slice()]);
-
+    let combined_hash = signature_commitment(new_local_exit_root, imported_bridge_exits);
     let wallet = LocalWallet::new(&mut thread_rng());
     let signer = wallet.address();
     let signature = wallet.sign_hash(combined_hash.into()).unwrap();
@@ -40,16 +32,15 @@ pub fn compute_signature_info(
         odd_y_parity: signature.recovery_id().unwrap().is_y_odd(),
     };
 
-    (imported_hash, signer.0.into(), signature)
+    (combined_hash, signer.0.into(), signature)
 }
 
 /// Trees for the network B, as well as the LET for network A.
+#[derive(Clone)]
 pub struct Forest {
     pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
     pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
-    pub local_exit_tree: LocalExitTree<Keccak256Hasher>,
-    pub local_balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
-    pub nullifier_set: Smt<Keccak256Hasher, NULLIFIER_TREE_DEPTH>,
+    pub state_b: LocalNetworkStateData,
 }
 
 impl Forest {
@@ -72,10 +63,12 @@ impl Forest {
 
         Self {
             local_exit_tree_data_a: LocalExitTreeData::new(),
-            local_exit_tree,
-            local_balance_tree,
-            nullifier_set: Smt::new(),
             l1_info_tree: Default::default(),
+            state_b: LocalNetworkStateData {
+                exit_tree: local_exit_tree,
+                balance_tree: local_balance_tree,
+                nullifier_set: Smt::new(),
+            },
         }
     }
 
@@ -83,7 +76,7 @@ impl Forest {
     pub fn imported_bridge_exits(
         &mut self,
         events: &[(TokenInfo, U256)],
-    ) -> Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> {
+    ) -> Vec<ImportedBridgeExit> {
         let mut res = Vec::new();
 
         let exits: Vec<BridgeExit> = events
@@ -133,18 +126,7 @@ impl Forest {
                     l1_leaf: l1_leaf.clone(),
                 })),
             };
-            let null_key = NullifierKey {
-                network_id: *NETWORK_A,
-                let_index: index,
-            };
-            let nullifier_path = self
-                .nullifier_set
-                .get_non_inclusion_proof(null_key)
-                .unwrap();
-            self.nullifier_set
-                .insert(null_key, Digest::from_bool(true))
-                .unwrap();
-            res.push((imported_exit, nullifier_path));
+            res.push(imported_exit);
         }
 
         res
@@ -155,108 +137,56 @@ impl Forest {
         let mut res = Vec::new();
         for (token, amount) in events {
             let exit = exit_to_a(*token, *amount);
-            self.local_exit_tree.add_leaf(exit.hash());
+            self.state_b.exit_tree.add_leaf(exit.hash());
             res.push(exit);
         }
 
         res
     }
 
-    /// Collect balance proofs for given set of bridge events.
-    pub fn balances_proofs(
-        &mut self,
-        imported_bridge_events: &[(TokenInfo, U256)],
-        bridge_events: &[(TokenInfo, U256)],
-    ) -> BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> {
-        let mut res = BTreeMap::new();
-        let tokens: BTreeSet<_> = imported_bridge_events
-            .iter()
-            .chain(bridge_events)
-            .map(|(token, _)| *token)
-            .collect();
-        let initial_balances: BTreeMap<_, _> = tokens
-            .iter()
-            .map(|&token| {
-                (
-                    token,
-                    U256::from_be_bytes(self.local_balance_tree.get(token).unwrap_or_default()),
-                )
-            })
-            .collect();
-        let mut new_balances = initial_balances.clone();
-        for &(token, amount) in imported_bridge_events {
-            new_balances.insert(token, new_balances[&token].checked_add(amount).unwrap());
-        }
-        for &(token, amount) in bridge_events {
-            new_balances.insert(token, new_balances[&token].checked_sub(amount).unwrap());
-        }
-        for token in tokens {
-            let balance = initial_balances[&token];
-            let path = if balance.is_zero() {
-                self.local_balance_tree
-                    .get_inclusion_proof_zero(token)
-                    .unwrap()
-            } else {
-                self.local_balance_tree.get_inclusion_proof(token).unwrap()
-            };
-            res.insert(token, (balance, path));
-            self.local_balance_tree
-                .update(token, new_balances[&token].to_be_bytes())
-                .unwrap();
-        }
-        res
-    }
-
     /// Local state associated with this forest.
     pub fn local_state(&self) -> LocalNetworkState {
-        LocalNetworkState {
-            exit_tree: self.local_exit_tree.clone(),
-            balance_tree: LocalBalanceTree::new_with_root(self.local_balance_tree.root),
-            nullifier_set: NullifierTree::new_with_root(self.nullifier_set.root),
-        }
+        LocalNetworkState::from(self.state_b.clone())
     }
 
-    /// Apply a sequence of events and return the corresponding batch header.
+    /// Apply a sequence of events and return the corresponding [`Certificate`].
     pub fn apply_events(
         &mut self,
         imported_bridge_events: &[(TokenInfo, U256)],
         bridge_events: &[(TokenInfo, U256)],
-    ) -> MultiBatchHeader<Keccak256Hasher> {
-        let prev_local_exit_root = self.local_exit_tree.get_root();
-        let prev_balance_root = self.local_balance_tree.root;
-        let prev_nullifier_root = self.nullifier_set.root;
-        let balances_proofs = self.balances_proofs(imported_bridge_events, bridge_events);
+    ) -> (Certificate, Address) {
+        let prev_local_exit_root = self.state_b.exit_tree.get_root();
         let imported_bridge_exits = self.imported_bridge_exits(imported_bridge_events);
         let bridge_exits = self.bridge_exits(bridge_events);
-        let new_local_exit_root = self.local_exit_tree.get_root();
-        let (imported_exits_root, signer, signature) =
+        let new_local_exit_root = self.state_b.exit_tree.get_root();
+        let (_combined_hash, signer, signature) =
             compute_signature_info(new_local_exit_root, &imported_bridge_exits);
-        MultiBatchHeader {
-            origin_network: *NETWORK_B,
+
+        let certificate = Certificate {
+            network_id: *NETWORK_B,
+            height: 0,
             prev_local_exit_root,
+            new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            imported_exits_root: Some(imported_exits_root),
-            balances_proofs,
-            prev_balance_root,
-            prev_nullifier_root,
-            signer,
             signature,
-            target: StateCommitment {
-                exit_root: new_local_exit_root,
-                balance_root: self.local_balance_tree.root,
-                nullifier_root: self.nullifier_set.root,
-            },
-            l1_info_root: self.l1_info_tree.get_root(),
-        }
+        };
+
+        (certificate, signer)
     }
 
     /// Check the current state corresponds to given proof output.
     pub fn assert_output_matches(&self, output: &PessimisticProofOutput) {
-        assert_eq!(output.new_local_exit_root, self.local_exit_tree.get_root());
+        assert_eq!(
+            output.new_local_exit_root,
+            self.state_b.exit_tree.get_root()
+        );
         assert_eq!(
             output.new_pessimistic_root,
-            keccak256_combine([self.local_balance_tree.root, self.nullifier_set.root])
+            keccak256_combine([
+                self.state_b.balance_tree.root,
+                self.state_b.nullifier_set.root
+            ])
         );
     }
 }

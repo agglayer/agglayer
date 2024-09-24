@@ -258,7 +258,16 @@ where
         Ok(status.to_string())
     }
 
+    #[instrument(skip(self), fields(hash, rollup_id = *certificate.network_id), level = "info")]
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<()> {
+        let hash = format!("{:?}", certificate.hash());
+        tracing::Span::current().record("hash", &hash);
+
+        info!(
+            hash,
+            "Received certificate {hash} for rollup {}", *certificate.network_id
+        );
+
         _ = self.pending_store.insert_pending_certificate(
             certificate.network_id,
             certificate.height,

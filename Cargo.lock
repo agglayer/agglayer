@@ -5023,6 +5023,7 @@ dependencies = [
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
+ "agglayer-types",
  "anyhow",
  "base64 0.22.1",
  "bincode",

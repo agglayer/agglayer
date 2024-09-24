@@ -7,10 +7,11 @@ use agglayer_config::certificate_orchestrator::prover::ProverConfig;
 use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
 };
-use agglayer_types::{Certificate, Height, NetworkId, Proof};
+use agglayer_types::{Certificate, Height, LocalNetworkStateData, NetworkId, Proof};
 use error::NotifierError;
 use futures::future::BoxFuture;
-use pessimistic_proof::{local_state::LocalNetworkStateData, Address, LocalNetworkState};
+use pessimistic_proof::{generate_pessimistic_proof, LocalNetworkState};
+use reth_primitives::Address;
 use serde::Serialize;
 use sp1::SP1;
 use sp1_sdk::{CpuProver, MockProver, NetworkProver};
@@ -75,7 +76,7 @@ where
 {
     fn certify(
         &self,
-        full_state: LocalNetworkStateData,
+        mut state: LocalNetworkStateData,
         network_id: NetworkId,
         height: Height,
     ) -> Result<BoxFuture<Result<CertifierOutput, Error>>, Error> {
@@ -92,29 +93,20 @@ where
         }
 
         let signer = Address::new([0; 20]); // TODO: put the trusted sequencer address
-        let mut batch_header = certificate.into_pessimistic_proof_input(&full_state, signer)?;
-        let initial_state = LocalNetworkState::from(full_state.clone());
 
-        let mut state = initial_state.clone();
+        let initial_state = LocalNetworkState::from(state.clone());
+        let multi_batch_header = state.apply_certificate(&certificate, signer)?;
 
-        #[allow(clippy::let_unit_value)]
-        let _native_outputs = state
-            .apply_batch_header(&batch_header)
+        // Perform the native pp execution
+        generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)
             .map_err(Error::NativeExecutionFailed)?;
 
-        if batch_header.target.exit_root != initial_state.exit_tree.get_root() {
-            // state transition mismatch between execution and received certificate
-            return Err(Error::NativeExecutionFailed(
-                pessimistic_proof::ProofError::InvalidFinalLocalExitRoot,
-            ));
-        }
+        info!(
+            "Successfully executed the native pp for the Certificate {:?}",
+            certificate.hash()
+        );
 
-        batch_header.target.balance_root = initial_state.balance_tree.root;
-        batch_header.target.nullifier_root = initial_state.nullifier_set.root;
-
-        let proving_request = self
-            .prover
-            .prove(initial_state.clone(), certificate.clone()); // TODO: should be batch
+        let proving_request = self.prover.prove(initial_state, certificate.clone()); // TODO: should be batch
 
         Ok(Box::pin(async move {
             let proof = proving_request
@@ -136,7 +128,7 @@ where
                     certificate,
                     height,
                     new_state: state,
-                    network: batch_header.origin_network,
+                    network: multi_batch_header.origin_network,
                 })
             }
         }))

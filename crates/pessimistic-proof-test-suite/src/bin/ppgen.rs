@@ -5,7 +5,11 @@ use pessimistic_proof::{
     bridge_exit::{BridgeExit, NetworkId},
     PessimisticProofOutput,
 };
-use pessimistic_proof_test_suite::{runner::Runner, sample_data as data};
+use pessimistic_proof_test_suite::{
+    forest::Forest,
+    runner::Runner,
+    sample_data::{self as data},
+};
 use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use sp1_sdk::HashableKey;
@@ -35,7 +39,7 @@ pub fn main() {
 
     let args = PPGenArgs::parse();
 
-    let mut state = data::sample_state_01();
+    let mut state = Forest::new([]);
     let bridge_exits = if let Some(p) = args.sample_path {
         data::sample_bridge_exits(p)
             .take(args.n_exits)
@@ -51,8 +55,19 @@ pub fn main() {
         .map(|be| (be.token_info, be.amount))
         .collect::<Vec<_>>();
 
-    let old_state = state.local_state();
-    let batch_header = state.apply_events(&[], &withdrawals);
+    let old_state = state.state_b.clone();
+
+    let imported_bridge_events = withdrawals.clone(); // import as much as we withdraw to bypass balance
+    let (certificate, signer) = state.apply_events(&imported_bridge_events, &withdrawals);
+
+    info!(
+        "Certificate: [{}]",
+        serde_json::to_string(&certificate).unwrap()
+    );
+
+    let multi_batch_header = old_state
+        .make_multi_batch_header(&certificate, signer.clone())
+        .unwrap();
 
     info!(
         "Generating the proof for {} bridge exits",
@@ -61,7 +76,7 @@ pub fn main() {
 
     let start = Instant::now();
     let (proof, vk, new_roots) = Runner::new()
-        .generate_plonk_proof(&old_state, &batch_header)
+        .generate_plonk_proof(&old_state.into(), &multi_batch_header)
         .expect("proving failed");
     let duration = start.elapsed();
 
@@ -74,7 +89,7 @@ pub fn main() {
     let fixture = PessimisticProofFixture {
         bridge_exits,
         pp_inputs: new_roots.into(),
-        signer: batch_header.signer,
+        signer: signer,
         vkey: vkey.clone(),
         public_values: format!("0x{}", hex::encode(proof.public_values.as_slice())),
         proof: format!("0x{}", hex::encode(proof.bytes())),

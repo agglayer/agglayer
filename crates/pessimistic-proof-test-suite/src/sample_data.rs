@@ -83,7 +83,8 @@ fn sample_exit_tree_01() -> LocalExitTree {
 }
 
 pub fn sample_state_01() -> Forest {
-    let balances = [(*ETH, U256::MAX), (*USDC, U256::MAX)];
+    let large_amount = U256::MAX.checked_div(U256::from(2u64)).unwrap(); // not max to allow importing bridge exits
+    let balances = [(*ETH, large_amount.clone()), (*USDC, large_amount.clone())];
     Forest::new_with_local_exit_tree(balances, sample_exit_tree_01())
 }
 
