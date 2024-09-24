@@ -7,6 +7,8 @@ use std::{
 
 use rand::Rng as _;
 
+pub mod mocks;
+
 pub struct TempDBDir {
     pub path: PathBuf,
 }
