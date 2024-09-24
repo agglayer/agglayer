@@ -18,7 +18,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   CARGO_TERM_COLOR: always
-  KURTOSIS_CDK_GIT_REF: v0.2.3
+  KURTOSIS_CDK_GIT_REF: v0.2.11
 
 jobs:
   unit:
@@ -179,7 +179,7 @@ jobs:
           kurtosis run --enclave cdk-v1 --args-file params.yml --image-download always .
 
       - name: Expose RPC URL
-        run: echo "ETH_RPC_URL=$(kurtosis port print cdk-v1 zkevm-node-rpc-001 http-rpc)" >> $GITHUB_ENV
+        run: echo "ETH_RPC_URL=$(kurtosis port print cdk-v1 cdk-erigon-node-001 http-rpc)" >> $GITHUB_ENV
 
       - name: Check that batches are progressing
         continue-on-error: true
@@ -193,8 +193,9 @@ jobs:
           "$COMMAND"
           "$TIMEOUT_SECONDS"
           "$INTERVAL_SECONDS"
-      - name: debug
-        run: kurtosis service logs cdk-v1 zkevm-agglayer-001
+
+      - name: Debug
+        run: kurtosis service logs cdk-v1 agglayer
 
   pushing-docker-image:
     name: Docker | Publish image to registry
