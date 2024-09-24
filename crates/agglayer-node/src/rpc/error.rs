@@ -4,7 +4,10 @@ use ethers::{middleware::Middleware, types::H256};
 use jsonrpsee::types::error::ErrorObjectOwned;
 use serde::Serialize;
 
-use crate::kernel::{CheckTxStatusError, SignatureVerificationError, ZkevmNodeVerificationError};
+use crate::{
+    kernel::{CheckTxStatusError, SignatureVerificationError, ZkevmNodeVerificationError},
+    rate_limiting::RateLimited as RateLimitedError,
+};
 
 /// RPC error codes.
 pub mod code {
@@ -22,6 +25,11 @@ pub mod code {
 
     /// Transaction status retrieval error.
     pub const STATUS_ERROR: i32 = -10005;
+
+    // Note we skip -10006 here which is reserved for certificate submission.
+
+    /// Transaction settlement has been rate limited.
+    pub const RATE_LIMITED: i32 = -10007;
 }
 
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
@@ -45,19 +53,6 @@ pub enum SettlementError {
 
     #[error("Contract error")]
     Contract { detail: String },
-}
-
-impl<R: Middleware> From<crate::kernel::SettlementError<R>> for SettlementError {
-    fn from(err: crate::kernel::SettlementError<R>) -> Self {
-        match err {
-            crate::kernel::SettlementError::NoReceipt => Self::NoReceipt,
-            crate::kernel::SettlementError::ProviderError(e) => Self::IoError(e.to_string()),
-            crate::kernel::SettlementError::ContractError(e) => {
-                let detail = e.to_string();
-                Self::Contract { detail }
-            }
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
@@ -100,9 +95,9 @@ impl StatusError {
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
 #[serde(rename_all = "kebab-case")]
 pub enum Error {
-    #[error("Rollup {rollup_id} not registered")]
+    #[error("Network ID {network_id} not registered")]
     #[serde(rename_all = "kebab-case")]
-    RollupNotRegistered { rollup_id: u32 },
+    NetworkNotRegistered { network_id: u32 },
 
     #[error("Rollup signature verification failed")]
     #[serde(rename_all = "kebab-case")]
@@ -116,11 +111,18 @@ pub enum Error {
 
     #[error("Status retrieval error: {0}")]
     Status(#[from] StatusError),
+
+    #[error("Rate limited")]
+    #[serde(rename_all = "kebab-case")]
+    RateLimited {
+        detail: String,
+        error: RateLimitedError,
+    },
 }
 
 impl Error {
-    pub(crate) fn rollup_not_registered(rollup_id: u32) -> Self {
-        Self::RollupNotRegistered { rollup_id }
+    pub(crate) fn network_not_registered(network_id: u32) -> Self {
+        Self::NetworkNotRegistered { network_id }
     }
 
     pub(crate) fn signature_mismatch<R: Middleware>(err: SignatureVerificationError<R>) -> Self {
@@ -138,18 +140,41 @@ impl Error {
     }
 
     pub(crate) fn settlement<R: Middleware>(err: crate::kernel::SettlementError<R>) -> Self {
-        Self::Settlement(err.into())
+        err.into()
     }
 
     /// Get the jsonrpc error code for this error.
     pub fn code(&self) -> i32 {
         match self {
-            Self::RollupNotRegistered { .. } => code::ROLLUP_NOT_REGISTERED,
+            Self::NetworkNotRegistered { .. } => code::ROLLUP_NOT_REGISTERED,
             Self::SignatureMismatch { .. } => code::SIGNATURE_MISMATCH,
             Self::Validation(_) => code::VALIDATION_FAILURE,
             Self::Settlement(_) => code::SETTLEMENT_ERROR,
             Self::Status(_) => code::STATUS_ERROR,
+            Self::RateLimited { .. } => code::RATE_LIMITED,
         }
+    }
+}
+
+impl<R: Middleware> From<crate::kernel::SettlementError<R>> for Error {
+    fn from(err: crate::kernel::SettlementError<R>) -> Self {
+        use crate::kernel::SettlementError as E;
+        match err {
+            E::NoReceipt => SettlementError::NoReceipt.into(),
+            E::ProviderError(e) => SettlementError::IoError(e.to_string()).into(),
+            E::ContractError(e) => {
+                let detail = e.to_string();
+                SettlementError::Contract { detail }.into()
+            }
+            E::RateLimited(e) => e.into(),
+        }
+    }
+}
+
+impl From<RateLimitedError> for Error {
+    fn from(error: RateLimitedError) -> Self {
+        let detail = error.to_string();
+        Self::RateLimited { detail, error }
     }
 }
 
