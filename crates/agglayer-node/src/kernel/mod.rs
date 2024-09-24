@@ -179,6 +179,8 @@ where
     ContractError(ContractError<RpcProvider>),
     #[error(transparent)]
     RateLimited(#[from] crate::rate_limiting::RateLimited),
+    #[error("Settlement timed out after {}s", .0.as_secs())]
+    Timeout(std::time::Duration),
 }
 
 #[derive(Error, Debug)]
@@ -360,18 +362,25 @@ where
         let receipt = tokio::spawn({
             let config = Arc::clone(&self.config);
             async move {
-                let receipt = f
-                    .send()
+                let config = &*config;
+                let settlement = async move {
+                    f.send()
+                        .await
+                        .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
+                        .map_err(SettlementError::ContractError)?
+                        .interval(config.outbound.rpc.settle.retry_interval)
+                        .retries(config.outbound.rpc.settle.max_retries)
+                        .confirmations(config.outbound.rpc.settle.confirmations)
+                        .await
+                        .map_err(SettlementError::ProviderError)?
+                        // The result of `None` means the transaction is no longer in the mempool.
+                        .ok_or(SettlementError::NoReceipt)
+                };
+
+                let settlement_timeout = config.outbound.rpc.settle.settlement_timeout;
+                let receipt = tokio::time::timeout(settlement_timeout, settlement)
                     .await
-                    .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
-                    .map_err(SettlementError::ContractError)?
-                    .interval(config.outbound.rpc.settle.retry_interval)
-                    .retries(config.outbound.rpc.settle.max_retries)
-                    .confirmations(config.outbound.rpc.settle.confirmations)
-                    .await
-                    .map_err(SettlementError::ProviderError)?
-                    // If the result is `None`, it means the transaction is no longer in the mempool.
-                    .ok_or(SettlementError::NoReceipt)?;
+                    .map_err(|_| SettlementError::Timeout(settlement_timeout))??;
 
                 rate_guard.record(tokio::time::Instant::now());
                 Ok(receipt)

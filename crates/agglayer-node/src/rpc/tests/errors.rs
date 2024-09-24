@@ -82,6 +82,10 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
     )))
 )]
 #[case(
+    "settle_l1_timeout",
+    Error::settlement(SettlementError::Timeout(Duration::from_secs(30 * 60)))
+)]
+#[case(
     "rate_disallowed",
     rate_limiting::RateLimited::SendTxDiabled {}.into()
 )]
