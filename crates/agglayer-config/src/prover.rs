@@ -1,16 +1,23 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use serde_with::DurationSeconds;
 
 use crate::{shutdown::ShutdownConfig, telemetry::TelemetryConfig, Log};
 
 /// The Agglayer Prover configuration.
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ProverConfig {
     /// The gRPC endpoint used by the prover.
     #[serde(default = "default_socket_addr")]
     pub grpc_endpoint: SocketAddr,
+
     /// The log configuration.
     #[serde(alias = "Log")]
     pub log: Log,
@@ -22,6 +29,21 @@ pub struct ProverConfig {
     /// The list of configuration options used during shutdown.
     #[serde(default)]
     pub shutdown: ShutdownConfig,
+
+    #[serde(default = "default_max_concurrency_limit")]
+    pub max_concurrency_limit: usize,
+
+    #[serde(default = "default_max_request_duration")]
+    #[serde_as(as = "DurationSeconds")]
+    pub max_request_duration: Duration,
+
+    #[serde(default = "default_max_buffered_queries")]
+    pub max_buffered_queries: usize,
+
+    #[serde(default)]
+    pub cpu_prover: CpuProverConfig,
+    #[serde(default)]
+    pub network_prover: NetworkProverConfig,
 }
 
 impl Default for ProverConfig {
@@ -31,10 +53,72 @@ impl Default for ProverConfig {
             log: Log::default(),
             telemetry: TelemetryConfig::default(),
             shutdown: ShutdownConfig::default(),
+            max_concurrency_limit: default_max_concurrency_limit(),
+            max_request_duration: default_max_request_duration(),
+            max_buffered_queries: default_max_buffered_queries(),
+            cpu_prover: CpuProverConfig::default(),
+            network_prover: NetworkProverConfig::default(),
         }
     }
 }
 
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct CpuProverConfig {
+    #[serde(default = "default_max_concurrency_limit")]
+    pub max_concurrency_limit: usize,
+
+    #[serde(default = "default_cpu_proving_timeout")]
+    #[serde_as(as = "DurationSeconds")]
+    pub proving_timeout: Duration,
+}
+
+impl Default for CpuProverConfig {
+    fn default() -> Self {
+        Self {
+            max_concurrency_limit: default_max_concurrency_limit(),
+            proving_timeout: default_cpu_proving_timeout(),
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct NetworkProverConfig {
+    #[serde(default = "default_network_proving_timeout")]
+    #[serde_as(as = "DurationSeconds")]
+    pub proving_timeout: Duration,
+}
+
+impl Default for NetworkProverConfig {
+    fn default() -> Self {
+        Self {
+            proving_timeout: default_network_proving_timeout(),
+        }
+    }
+}
 const fn default_socket_addr() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)
+}
+
+const fn default_max_concurrency_limit() -> usize {
+    100
+}
+
+const fn default_max_buffered_queries() -> usize {
+    100
+}
+
+const fn default_max_request_duration() -> Duration {
+    Duration::from_secs(60 * 5)
+}
+
+const fn default_cpu_proving_timeout() -> Duration {
+    Duration::from_secs(60 * 5)
+}
+
+const fn default_network_proving_timeout() -> Duration {
+    Duration::from_secs(60 * 5)
 }

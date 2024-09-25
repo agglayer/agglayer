@@ -46,6 +46,7 @@ impl ConfigMigrator {
                     shutdown,
                     certificate_orchestrator: CertificateOrchestrator::default(),
                     storage: crate::storage::StorageConfig::new_from_path(config_path),
+                    prover_entrypoint: Default::default(),
                 }
             }
             ConfigMigrator::V0_2(config) => config,

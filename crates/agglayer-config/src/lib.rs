@@ -56,8 +56,10 @@ pub struct Config {
     /// endpoint.
     #[serde(alias = "FullNodeRPCs", deserialize_with = "deserialize_rpc_map")]
     pub full_node_rpcs: HashMap<u32, Url>,
+
     #[serde(default)]
     pub l2: L2,
+
     #[serde(
         alias = "ProofSigners",
         deserialize_with = "deserialize_signers_map",
@@ -100,6 +102,10 @@ pub struct Config {
 
     /// The storage configuration.
     pub storage: storage::StorageConfig,
+
+    /// AggLayer prover entrypoint.
+    #[serde(default)]
+    pub prover_entrypoint: String,
 }
 
 impl Config {
@@ -119,6 +125,7 @@ impl Config {
             epoch: Default::default(),
             shutdown: Default::default(),
             certificate_orchestrator: Default::default(),
+            prover_entrypoint: Default::default(),
         }
     }
 

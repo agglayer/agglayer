@@ -40,7 +40,15 @@ type GlobalState = BTreeMap<NetworkId, LocalNetworkStateData>;
 /// Each certificate reception triggers the generation of a pessimistic proof.
 /// At the end of the epoch, the Certificate Orchestrator collects a set of
 /// pessimistic proofs generated so far and settles them on the L1.
-pub struct CertificateOrchestrator<C, E, A, PendingStore, EpochsStore, PerEpochStore, StateStore> {
+pub struct CertificateOrchestrator<
+    C,
+    E,
+    CertifierClient,
+    PendingStore,
+    EpochsStore,
+    PerEpochStore,
+    StateStore,
+> {
     /// Epoch packing task resolver.
     epoch_packing_tasks: JoinSet<Result<(), Error>>,
     /// Epoch packing task builder.
@@ -49,7 +57,7 @@ pub struct CertificateOrchestrator<C, E, A, PendingStore, EpochsStore, PerEpochS
     /// Certifier task resolver.
     certifier_tasks: JoinSet<Result<CertifierOutput, Error>>,
     /// Certifier task builder.
-    certifier_task_builder: Arc<A>,
+    certifier_task_builder: Arc<CertifierClient>,
     /// Global network state.
     global_state: GlobalState,
     /// Clock stream to receive EpochEnded events.
@@ -68,8 +76,16 @@ pub struct CertificateOrchestrator<C, E, A, PendingStore, EpochsStore, PerEpochS
     current_epoch: Arc<ArcSwap<PerEpochStore>>,
 }
 
-impl<C, E, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
-    CertificateOrchestrator<C, E, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+    CertificateOrchestrator<
+        C,
+        E,
+        CertifierClient,
+        PendingStore,
+        EpochsStore,
+        PerEpochStore,
+        StateStore,
+    >
 where
     StateStore: StateReader,
 {
@@ -80,7 +96,7 @@ where
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
         cancellation_token: CancellationToken,
         epoch_packing_task_builder: E,
-        certifier_task_builder: A,
+        certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
@@ -111,11 +127,19 @@ where
 }
 
 #[buildstructor::buildstructor]
-impl<C, E, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
-    CertificateOrchestrator<C, E, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+    CertificateOrchestrator<
+        C,
+        E,
+        CertifierClient,
+        PendingStore,
+        EpochsStore,
+        PerEpochStore,
+        StateStore,
+    >
 where
     C: Stream<Item = Event> + Unpin + Send + 'static,
-    A: Certifier,
+    CertifierClient: Certifier,
     E: EpochPacker<Item = (Certificate, Proof)>,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + 'static,
@@ -265,7 +289,7 @@ where
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
         cancellation_token: CancellationToken,
         epoch_packing_task_builder: E,
-        certifier_task_builder: A,
+        certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
@@ -309,10 +333,18 @@ where
     }
 }
 
-impl<C, E, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
-    CertificateOrchestrator<C, E, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+    CertificateOrchestrator<
+        C,
+        E,
+        CertifierClient,
+        PendingStore,
+        EpochsStore,
+        PerEpochStore,
+        StateStore,
+    >
 where
-    A: Certifier,
+    CertifierClient: Certifier,
     E: EpochPacker<Item = (Certificate, Proof)>,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     EpochsStore: Send + Sync + 'static,
@@ -813,4 +845,8 @@ pub enum Error {
     Storage(#[from] agglayer_storage::error::Error),
     #[error("internal error")]
     InternalError,
+    #[error("Serialize error")]
+    Serialize,
+    #[error("Deserialize error")]
+    Deserialize,
 }
