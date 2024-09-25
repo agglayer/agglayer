@@ -21,7 +21,7 @@ type SettlementError = kernel::SettlementError<RpcProvider>;
 type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 
 #[rstest::rstest]
-#[case("rollup_not_reg", Error::network_not_registered(1337))]
+#[case("rollup_not_reg", Error::rollup_not_registered(1337))]
 #[case(
     "sig_invalid_len",
     Error::signature_mismatch(SignatureError::CouldNotRecoverSigner(

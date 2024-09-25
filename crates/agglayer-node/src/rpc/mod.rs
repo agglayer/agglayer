@@ -136,7 +136,7 @@ where
 
         if !self.kernel.check_rollup_registered(tx.tx.rollup_id) {
             // Return an invalid params error if the rollup is not registered.
-            return Err(Error::network_not_registered(tx.tx.rollup_id));
+            return Err(Error::rollup_not_registered(tx.tx.rollup_id));
         }
 
         self.kernel.verify_signature(&tx).await.map_err(|e| {

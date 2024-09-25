@@ -95,9 +95,9 @@ impl StatusError {
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
 #[serde(rename_all = "kebab-case")]
 pub enum Error {
-    #[error("Network ID {network_id} not registered")]
+    #[error("Rollup {rollup_id} not registered")]
     #[serde(rename_all = "kebab-case")]
-    NetworkNotRegistered { network_id: u32 },
+    RollupNotRegistered { rollup_id: u32 },
 
     #[error("Rollup signature verification failed")]
     #[serde(rename_all = "kebab-case")]
@@ -121,8 +121,8 @@ pub enum Error {
 }
 
 impl Error {
-    pub(crate) fn network_not_registered(network_id: u32) -> Self {
-        Self::NetworkNotRegistered { network_id }
+    pub(crate) fn rollup_not_registered(rollup_id: u32) -> Self {
+        Self::RollupNotRegistered { rollup_id }
     }
 
     pub(crate) fn signature_mismatch<R: Middleware>(err: SignatureVerificationError<R>) -> Self {
@@ -146,7 +146,7 @@ impl Error {
     /// Get the jsonrpc error code for this error.
     pub fn code(&self) -> i32 {
         match self {
-            Self::NetworkNotRegistered { .. } => code::ROLLUP_NOT_REGISTERED,
+            Self::RollupNotRegistered { .. } => code::ROLLUP_NOT_REGISTERED,
             Self::SignatureMismatch { .. } => code::SIGNATURE_MISMATCH,
             Self::Validation(_) => code::VALIDATION_FAILURE,
             Self::Settlement(_) => code::SETTLEMENT_ERROR,
