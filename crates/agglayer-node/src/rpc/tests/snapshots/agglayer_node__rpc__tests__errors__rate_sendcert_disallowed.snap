@@ -1,0 +1,16 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "RateLimited { detail: \"The `sendCertificate` settlement disabled by rate limiter\", error: SendCertificateDiabled }"
+---
+{
+  "code": -10007,
+  "data": {
+    "rate-limited": {
+      "detail": "The `sendCertificate` settlement disabled by rate limiter",
+      "error": {
+        "send-certificate-diabled": {}
+      }
+    }
+  },
+  "message": "Rate limited"
+}

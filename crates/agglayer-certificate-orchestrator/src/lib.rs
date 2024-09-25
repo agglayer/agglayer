@@ -7,11 +7,12 @@ use std::{
 };
 
 use agglayer_clock::Event;
+use agglayer_rate_limiting::SendCertificateSlotGuard;
 use agglayer_storage::{
     columns::latest_proven_certificate_per_network::ProvenCertificate,
     stores::{
-        EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochWriter,
-        StateReader, StateWriter,
+        EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochReader,
+        PerEpochWriter, StateReader, StateWriter,
     },
 };
 use agglayer_types::{
@@ -38,6 +39,36 @@ const MAX_POLL_READS: usize = 1_000;
 /// Eventually, each state will live only in the networks themselves.
 type GlobalState = BTreeMap<NetworkId, LocalNetworkStateData>;
 
+/// A type containing all the data needed to process a certificate.
+pub struct CertificateRequest {
+    network_id: NetworkId,
+    height: Height,
+    slot_guard: SendCertificateSlotGuard,
+}
+
+impl CertificateRequest {
+    /// New certificate request.
+    pub fn new(
+        network_id: NetworkId,
+        height: Height,
+        _certificate_id: CertificateId,
+        slot_guard: SendCertificateSlotGuard,
+    ) -> Self {
+        Self {
+            network_id,
+            height,
+            slot_guard,
+        }
+    }
+
+    /// New certificate request for testing w/o a rate limit.
+    #[cfg(test)]
+    pub fn for_test(network_id: NetworkId, height: Height, certificate_id: CertificateId) -> Self {
+        let slot_guard = SendCertificateSlotGuard::dummy();
+        Self::new(network_id, height, certificate_id, slot_guard)
+    }
+}
+
 /// The Certificate orchestrator receives the certificates from CDKs.
 ///
 /// Each certificate reception triggers the generation of a pessimistic proof.
@@ -58,7 +89,10 @@ pub struct CertificateOrchestrator<
     #[allow(unused)]
     epoch_packing_task_builder: Arc<E>,
     /// Certifier task resolver.
-    certifier_tasks: JoinSet<Result<CertifierOutput, Error>>,
+    certifier_tasks: JoinSet<(
+        Result<CertifierOutput, Error>,
+        Option<SendCertificateSlotGuard>,
+    )>,
     /// Certifier task builder.
     certifier_task_builder: Arc<CertifierClient>,
     /// Global network state.
@@ -66,7 +100,7 @@ pub struct CertificateOrchestrator<
     /// Clock stream to receive EpochEnded events.
     clock: C,
     /// Receiver for certificates coming from CDKs.
-    data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+    data_receiver: Receiver<CertificateRequest>,
     /// Cancellation token for graceful shutdown.
     cancellation_token: Pin<Box<WaitForCancellationFutureOwned>>,
 
@@ -98,7 +132,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn try_new(
         clock: C,
-        data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+        data_receiver: Receiver<CertificateRequest>,
         cancellation_token: CancellationToken,
         epoch_packing_task_builder: E,
         certifier_task_builder: CertifierClient,
@@ -148,7 +182,7 @@ where
     E: EpochPacker,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + 'static,
-    PerEpochStore: PerEpochWriter + 'static,
+    PerEpochStore: PerEpochReader + PerEpochWriter + 'static,
     StateStore: StateReader + StateWriter + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
@@ -171,7 +205,7 @@ where
     #[builder(entry = "builder", exit = "start", visibility = "pub")]
     pub async fn start(
         clock: C,
-        data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+        data_receiver: Receiver<CertificateRequest>,
         cancellation_token: CancellationToken,
         epoch_packing_task_builder: E,
         certifier_task_builder: CertifierClient,
@@ -207,9 +241,10 @@ where
                 .clone();
 
             let task = orchestrator.certifier_task_builder.clone();
-            orchestrator
-                .certifier_tasks
-                .spawn(async move { task.certify(local_state, network_id, height)?.await });
+            orchestrator.certifier_tasks.spawn(async move {
+                let res = async { task.certify(local_state, network_id, height)?.await };
+                (res.await, None)
+            });
         }
 
         let handle = tokio::spawn(orchestrator);
@@ -234,7 +269,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     EpochsStore: Send + Sync + 'static,
     StateStore: StateReader + StateWriter + 'static,
-    PerEpochStore: PerEpochWriter + 'static,
+    PerEpochStore: PerEpochReader + PerEpochWriter + 'static,
 {
     fn handle_epoch_end(&mut self, epoch: u64) -> Result<(), Error> {
         debug!("Start the settlement of the epoch {}", epoch);
@@ -248,23 +283,29 @@ where
 
     fn receive_certificates(
         &mut self,
-        cursors: &[(NetworkId, Height, CertificateId)],
+        cursors: impl IntoIterator<Item = CertificateRequest>,
     ) -> Result<(), Error> {
-        for (network_id, height, _) in cursors {
-            let entry = self.proving_cursors.entry(*network_id);
+        for request in cursors {
+            let CertificateRequest {
+                network_id,
+                height,
+                slot_guard,
+            } = request;
+
+            let entry = self.proving_cursors.entry(network_id);
             match entry {
-                Entry::Vacant(entry) if *height == 0 => {
-                    entry.insert(*height);
-                    self.spawn_certifier_task(*network_id, *height);
+                Entry::Vacant(entry) if height == 0 => {
+                    entry.insert(height);
+                    self.spawn_certifier_task_with_limiting(network_id, height, slot_guard);
                 }
                 Entry::Occupied(mut entry) => {
                     let cursor_height = entry.get_mut();
 
                     if *cursor_height == height - 1 {
-                        *cursor_height = *height;
+                        *cursor_height = height;
 
                         // TODO: Check already present in `CertificateHeader`
-                        self.spawn_certifier_task(*network_id, *height);
+                        self.spawn_certifier_task_with_limiting(network_id, height, slot_guard);
                     } else {
                         warn!(
                             "Received a certificate with an unexpected height: {} for network {}",
@@ -279,20 +320,41 @@ where
         Ok(())
     }
 
+    fn spawn_certifier_task_with_limiting(
+        &mut self,
+        network_id: NetworkId,
+        height: Height,
+        slot_guard: SendCertificateSlotGuard,
+    ) {
+        self.spawn_certifier_task_impl(network_id, height, Some(slot_guard));
+    }
+
     fn spawn_certifier_task(&mut self, network: NetworkId, height: Height) {
+        self.spawn_certifier_task_impl(network, height, None)
+    }
+
+    fn spawn_certifier_task_impl(
+        &mut self,
+        network: NetworkId,
+        height: Height,
+        slot_guard: Option<SendCertificateSlotGuard>,
+    ) {
         let local_state = self.global_state.entry(network).or_default().clone();
         let task = self.certifier_task_builder.clone();
         debug!(
             "Spawning certifier task for network {} at height {}",
             network, height
         );
-        self.certifier_tasks
-            .spawn(async move { task.certify(local_state, network, height)?.await });
+        self.certifier_tasks.spawn(async move {
+            let res = async { task.certify(local_state, network, height)?.await };
+            (res.await, slot_guard)
+        });
     }
 
     fn handle_certifier_result(
         &mut self,
         certifier_result: Result<CertifierOutput, Error>,
+        slot_guard: Option<SendCertificateSlotGuard>,
     ) -> Result<(), ()> {
         match certifier_result {
             Ok(CertifierOutput {
@@ -375,6 +437,8 @@ where
                                 .remove_pending_certificate(network, height)
                                 .expect("Failed to remove certificate");
                         }
+
+                        let _ = slot_guard.map_or((), |g| g.record(current_epoch.epoch_number()));
                     }
 
                     // - 2. If the state knows the network and the height is the next one, we update
@@ -405,6 +469,9 @@ where
                                 error
                             );
                         }
+
+                        let epoch_number = self.current_epoch.load().epoch_number();
+                        let _ = slot_guard.map_or((), |g| g.record(epoch_number));
                     }
 
                     // - 3. If the state doesn't know the network and the height is not 0, we ignore
@@ -814,7 +881,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     EpochsStore: Send + Sync + 'static,
     StateStore: StateReader + StateWriter + 'static,
-    PerEpochStore: PerEpochWriter + 'static,
+    PerEpochStore: PerEpochReader + PerEpochWriter + 'static,
 {
     type Output = ();
 
@@ -828,9 +895,9 @@ where
 
         // Poll the notification tasks to check for
         match self.certifier_tasks.poll_join_next(cx) {
-            Poll::Ready(Some(Ok(proof_result))) => {
+            Poll::Ready(Some(Ok((proof_result, slot_guard)))) => {
                 debug!("Certifier task completed successfully");
-                _ = self.handle_certifier_result(proof_result);
+                _ = self.handle_certifier_result(proof_result, slot_guard);
             }
 
             Poll::Ready(Some(Err(error))) => {
@@ -868,7 +935,7 @@ where
             self.data_receiver
                 .poll_recv_many(cx, &mut received, MAX_POLL_READS)
         {
-            if let Err(e) = self.receive_certificates(&received) {
+            if let Err(e) = self.receive_certificates(received) {
                 error!("Failed to handle a group of certificates: {e:?}");
             }
 
@@ -877,7 +944,6 @@ where
 
         if let Poll::Ready(Some(Event::EpochEnded(epoch))) = self.clock.poll_next_unpin(cx) {
             debug!("Epoch change event received: {}", epoch);
-
             if let Err(error) = self.handle_epoch_end(epoch) {
                 error!("Failed to handle the EpochEnded event: {:?}", error);
             }

@@ -21,6 +21,8 @@ rstest.workspace = true
 serde_json = { workspace = true }
 toml.workspace = true
 
+agglayer-config = { path = ".", features = ["testutils"] }
+
 [features]
 default = []
 testutils = []

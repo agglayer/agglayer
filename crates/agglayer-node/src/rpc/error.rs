@@ -1,13 +1,11 @@
 //! Support for structured errors in RPC.
 
+use agglayer_rate_limiting::RateLimited as RateLimitedError;
 use ethers::{middleware::Middleware, types::H256};
 use jsonrpsee::types::error::ErrorObjectOwned;
 use serde::Serialize;
 
-use crate::{
-    kernel::{CheckTxStatusError, SignatureVerificationError, ZkevmNodeVerificationError},
-    rate_limiting::RateLimited as RateLimitedError,
-};
+use crate::kernel::{CheckTxStatusError, SignatureVerificationError, ZkevmNodeVerificationError};
 
 /// RPC error codes.
 pub mod code {
@@ -195,7 +193,6 @@ impl<R: Middleware> From<crate::kernel::SettlementError<R>> for Error {
                 let detail = e.to_string();
                 SettlementError::Contract { detail }.into()
             }
-            E::RateLimited(e) => e.into(),
             e @ E::Timeout(_) => SettlementError::IoError(e.to_string()).into(),
         }
     }

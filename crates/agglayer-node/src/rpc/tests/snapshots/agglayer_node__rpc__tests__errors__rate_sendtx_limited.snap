@@ -1,6 +1,6 @@
 ---
 source: crates/agglayer-node/src/rpc/tests/errors.rs
-expression: "RateLimited { detail: \"The `sendTx` settlement has been limited: Limit reached\", error: SendTxRateLimited(RateLimited { max_per_interval: 3, time_interval: 1800s, until_next: 123s }) }"
+expression: "RateLimited { detail: \"The `sendTx` settlement has been limited: Limit reached\", error: SendTxRateLimited(RateLimited { max_per_interval: 3, time_interval: 1800s, until_next: Some(123s) }) }"
 ---
 {
   "code": -10007,

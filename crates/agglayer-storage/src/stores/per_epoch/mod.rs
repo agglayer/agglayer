@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use agglayer_types::{Height, NetworkId};
+use agglayer_types::{EpochNumber, Height, NetworkId};
 use parking_lot::RwLock;
 use rocksdb::ReadOptions;
 use tracing::{debug, warn};
@@ -30,6 +30,7 @@ mod tests;
 
 /// A logical store for an Epoch.
 pub struct PerEpochStore {
+    epoch_number: EpochNumber,
     db: Arc<DB>,
     pending_db: Arc<DB>,
     next_certificate_index: AtomicU64,
@@ -94,6 +95,7 @@ impl PerEpochStore {
         };
 
         Ok(Self {
+            epoch_number,
             db,
             pending_db,
             next_certificate_index: AtomicU64::new(0),
@@ -215,6 +217,10 @@ impl PerEpochWriter for PerEpochStore {
 }
 
 impl PerEpochReader for PerEpochStore {
+    fn epoch_number(&self) -> EpochNumber {
+        self.epoch_number
+    }
+
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {
         &self.start_checkpoint
     }

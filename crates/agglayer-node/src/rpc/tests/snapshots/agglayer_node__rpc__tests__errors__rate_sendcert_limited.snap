@@ -1,0 +1,19 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "RateLimited { detail: \"The `sendCertificate` settlement has been limited: Limit reached\", error: SendCertificateRateLimited(RateLimited { max_per_epoch: 3, epoch: 1337 }) }"
+---
+{
+  "code": -10007,
+  "data": {
+    "rate-limited": {
+      "detail": "The `sendCertificate` settlement has been limited: Limit reached",
+      "error": {
+        "send-certificate-rate-limited": {
+          "epoch": 1337,
+          "max-per-epoch": 3
+        }
+      }
+    }
+  },
+  "message": "Rate limited"
+}

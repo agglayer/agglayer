@@ -1,8 +1,10 @@
-use agglayer_config::rate_limiting::{NetworkRateLimitingConfig, TimeRateLimit};
+use agglayer_config::rate_limiting::{EpochRateLimit, NetworkRateLimitingConfig, TimeRateLimit};
 
 use super::{
     limiter::{self, RateLimiter, SlotTracker},
-    state::{self, RawState, WallClockLimitedInfo, WallClockState},
+    state::{
+        self, PerEpochLimitedInfo, PerEpochState, RawState, WallClockLimitedInfo, WallClockState,
+    },
 };
 
 pub mod component;
@@ -13,6 +15,9 @@ pub use component::Component;
 pub struct LocalRateLimiter {
     /// Rate limiter for `sendTx` settlement.
     send_tx: RateLimiter<WallClockState>,
+
+    /// Rate limiter for `sendCertificate` settlement.
+    send_certificate: RateLimiter<PerEpochState>,
 }
 
 impl LocalRateLimiter {
@@ -31,7 +36,18 @@ impl LocalRateLimiter {
             ),
         };
 
-        LocalRateLimiter { send_tx }
+        let send_certificate = match config.send_certificate {
+            EpochRateLimit::Unlimited => RateLimiter::Unlimited,
+            EpochRateLimit::Limited { max_per_epoch } => std::num::NonZeroU32::new(*max_per_epoch)
+                .map_or(RateLimiter::Disabled, |max_per_epoch| {
+                    RateLimiter::limited(PerEpochState::new(max_per_epoch))
+                }),
+        };
+
+        LocalRateLimiter {
+            send_tx,
+            send_certificate,
+        }
     }
 
     pub fn reserve<C: Component>(&mut self, time: C::Instant) -> Result<SlotTracker, RateLimited> {
@@ -56,6 +72,12 @@ pub enum RateLimited {
 
     #[error("The `sendTx` settlement disabled by rate limiter")]
     SendTxDiabled {},
+
+    #[error("The `sendCertificate` settlement has been limited: {0}")]
+    SendCertificateRateLimited(PerEpochLimitedInfo),
+
+    #[error("The `sendCertificate` settlement disabled by rate limiter")]
+    SendCertificateDiabled {},
 }
 
 impl RateLimited {
@@ -63,6 +85,13 @@ impl RateLimited {
         match err {
             limiter::RateLimited::Disabled {} => Self::SendTxDiabled {},
             limiter::RateLimited::Inner(err) => Self::SendTxRateLimited(err),
+        }
+    }
+
+    fn send_certificate(err: limiter::RateLimited<PerEpochLimitedInfo>) -> Self {
+        match err {
+            limiter::RateLimited::Disabled {} => Self::SendCertificateDiabled {},
+            limiter::RateLimited::Inner(err) => Self::SendCertificateRateLimited(err),
         }
     }
 }

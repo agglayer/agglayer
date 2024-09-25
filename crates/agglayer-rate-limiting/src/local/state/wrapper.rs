@@ -1,7 +1,8 @@
 //! A safer interface to rate limiter state.
 
+use agglayer_utils::log_assert;
+
 use super::RawState;
-use crate::log_assert;
 
 /// A wrapper over the raw state that ensures it's up to date when queried.
 ///

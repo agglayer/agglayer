@@ -1,7 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use agglayer_clock::ClockRef;
 use agglayer_config::Config;
+use agglayer_rate_limiting::RateLimiter;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::pending::PendingStore;
 use agglayer_storage::stores::state::StateStore;
@@ -55,6 +57,8 @@ async fn check_tx_status() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        RateLimiter::new(Default::default()),
+        ClockRef::for_testing(5, 1000),
     )
     .start(config.clone())
     .await
@@ -103,10 +107,17 @@ async fn check_tx_status_fail() {
     let store = Arc::new(PendingStore::new(db));
     let state = Arc::new(StateStore::new(store_db));
 
-    let _server_handle = AgglayerImpl::new(kernel, certificate_sender, store, state)
-        .start(config.clone())
-        .await
-        .unwrap();
+    let _server_handle = AgglayerImpl::new(
+        kernel,
+        certificate_sender,
+        store,
+        state,
+        RateLimiter::new(Default::default()),
+        ClockRef::for_testing(5, 1000),
+    )
+    .start(config.clone())
+    .await
+    .unwrap();
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();

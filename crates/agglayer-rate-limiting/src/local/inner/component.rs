@@ -44,3 +44,20 @@ impl Component for SendTx {
         RateLimited::send_tx(info)
     }
 }
+
+/// The rate limiter component for `sendCertificate` settlement.
+pub enum SendCertificate {}
+
+impl Component for SendCertificate {
+    type Instant = agglayer_types::EpochNumber;
+    type LimitedInfo = state::PerEpochLimitedInfo;
+    type State = state::PerEpochState;
+
+    fn component(limiter: &mut LocalRateLimiter) -> &mut RateLimiter<Self::State> {
+        &mut limiter.send_certificate
+    }
+
+    fn error(info: limiter::RateLimited<Self::LimitedInfo>) -> RateLimited {
+        RateLimited::send_certificate(info)
+    }
+}
