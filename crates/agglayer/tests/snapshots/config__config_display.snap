@@ -21,6 +21,7 @@ request-timeout = 180
 
 [rate-limiting]
 send-tx = "unlimited"
+send-certificate = "unlimited"
 
 [rate-limiting.network]
 
