@@ -207,6 +207,7 @@ dependencies = [
  "agglayer-config",
  "agglayer-prover-types",
  "agglayer-telemetry",
+ "agglayer-types",
  "anyhow",
  "bincode",
  "buildstructor",

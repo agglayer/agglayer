@@ -2,6 +2,7 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
+    time::Duration,
 };
 
 use agglayer_config::prover::ProverConfig;
@@ -15,8 +16,14 @@ use sp1_sdk::{
     SP1ProofWithPublicValues, SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
 };
 use tokio::task::spawn_blocking;
-use tower::{limit::ConcurrencyLimitLayer, util::BoxCloneService, Service, ServiceBuilder};
+use tower::{
+    limit::ConcurrencyLimitLayer, timeout::TimeoutLayer, util::BoxCloneService, Service,
+    ServiceBuilder, ServiceExt,
+};
 use tracing::error;
+
+#[cfg(test)]
+mod tests;
 
 /// ELF of the pessimistic proof program
 const ELF: &[u8] =
@@ -29,34 +36,76 @@ pub struct Executor {
 }
 
 impl Executor {
+    pub fn build_network_service<S>(
+        timeout: Duration,
+        service: S,
+    ) -> BoxCloneService<Request, Response, Error>
+    where
+        S: Service<Request, Response = Response, Error = Error> + Send + Clone + 'static,
+        <S as Service<Request>>::Future: std::marker::Send,
+    {
+        BoxCloneService::new(
+            ServiceBuilder::new()
+                .layer(TimeoutLayer::new(timeout))
+                .service(service)
+                .map_err(|error| match error.downcast::<Error>() {
+                    Ok(error) => *error,
+                    Err(error) => Error::ProverFailed(anyhow::Error::msg(error.to_string())),
+                }),
+        )
+    }
+
+    pub fn build_local_service<S>(
+        timeout: Duration,
+        concurrency: usize,
+        service: S,
+    ) -> BoxCloneService<Request, Response, Error>
+    where
+        S: Service<Request, Response = Response, Error = Error> + Send + Clone + 'static,
+        <S as Service<Request>>::Future: std::marker::Send,
+    {
+        BoxCloneService::new(
+            ServiceBuilder::new()
+                .layer(TimeoutLayer::new(timeout))
+                .layer(ConcurrencyLimitLayer::new(concurrency))
+                .service(service)
+                .map_err(|error| match error.downcast::<Error>() {
+                    Ok(error) => *error,
+                    Err(error) => Error::ProverFailed(anyhow::Error::msg(error.to_string())),
+                }),
+        )
+    }
+
+    #[cfg(test)]
+    pub fn new_with_services(
+        network: BoxCloneService<Request, Response, Error>,
+        local: BoxCloneService<Request, Response, Error>,
+    ) -> Self {
+        Self { network, local }
+    }
+
     pub fn new(config: &ProverConfig) -> Self {
         let network_prover = NetworkProver::new();
         let (_proving_key, verification_key) = network_prover.setup(ELF);
-        let network = BoxCloneService::new(
-            ServiceBuilder::new()
-                .timeout(config.network_prover.proving_timeout)
-                .service(NetworkExecutor {
-                    prover: Arc::new(network_prover),
-                    verification_key,
-                })
-                .into_inner(),
+        let network = Self::build_network_service(
+            config.network_prover.proving_timeout,
+            NetworkExecutor {
+                prover: Arc::new(network_prover),
+                verification_key,
+            },
         );
 
         let prover = CpuProver::new();
         let (proving_key, verification_key) = prover.setup(ELF);
 
-        let local = BoxCloneService::new(
-            ServiceBuilder::new()
-                .timeout(config.cpu_prover.proving_timeout)
-                .layer(ConcurrencyLimitLayer::new(
-                    config.cpu_prover.max_concurrency_limit,
-                ))
-                .service(LocalExecutor {
-                    prover: Arc::new(prover),
-                    proving_key,
-                    verification_key,
-                })
-                .into_inner(),
+        let local = Self::build_local_service(
+            config.cpu_prover.proving_timeout,
+            config.cpu_prover.max_concurrency_limit,
+            LocalExecutor {
+                prover: Arc::new(prover),
+                proving_key,
+                verification_key,
+            },
         );
 
         Self { network, local }
@@ -108,7 +157,7 @@ impl Service<Request> for Executor {
 
     fn call(&mut self, req: Request) -> Self::Future {
         let network = self.network.call(req.clone());
-        let local = self.local.call(req);
+        let mut local = self.local.clone();
 
         let fut = async move {
             match network.await {
@@ -116,7 +165,7 @@ impl Service<Request> for Executor {
                 Err(err) => {
                     error!("Network prover failed: {:?}", err);
 
-                    local.await
+                    local.ready().await?.call(req).await
                 }
             }
         };

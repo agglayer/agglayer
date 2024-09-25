@@ -27,3 +27,6 @@ pessimistic-proof = { path = "../pessimistic-proof" }
 
 sp1-sdk.workspace = true
 sp1-prover.workspace = true
+
+[dev-dependencies]
+agglayer-types = { path = "../agglayer-types" }
