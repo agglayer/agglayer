@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+bincode.workspace = true
 prost = "0.13.3"
 tonic = { workspace = true, default-features = false, features = [
     "prost",

@@ -71,9 +71,11 @@ version = "0.1.0"
 dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
+ "agglayer-prover-types",
  "agglayer-storage",
  "agglayer-types",
  "anyhow",
+ "bincode",
  "futures",
  "pessimistic-proof",
  "reth-primitives",
@@ -83,6 +85,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror",
  "tokio",
+ "tonic 0.12.3",
  "tracing",
 ]
 
@@ -205,8 +208,13 @@ dependencies = [
  "agglayer-prover-types",
  "agglayer-telemetry",
  "anyhow",
+ "bincode",
  "buildstructor",
  "futures",
+ "pessimistic-proof",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror",
  "tokio",
  "tokio-util",
  "toml 0.8.19",
@@ -222,6 +230,7 @@ dependencies = [
 name = "agglayer-prover-types"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "prost 0.13.3",
  "tonic 0.12.3",
  "tonic-build",

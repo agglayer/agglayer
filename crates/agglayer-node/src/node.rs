@@ -1,6 +1,6 @@
 use std::{num::NonZeroU64, sync::Arc};
 
-use agglayer_aggregator_notifier::AggregatorNotifier;
+use agglayer_aggregator_notifier::{AggregatorNotifier, CertifierClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
@@ -114,21 +114,21 @@ impl Node {
 
         // Construct the core.
         let core = Kernel::new(rpc, config.clone());
+
+        let certifier_client =
+            CertifierClient::try_new(config.prover_entrypoint.clone(), pending_store.clone())
+                .await?;
+
+        let clock_subscription =
+            tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
+                .filter_map(|value| value.ok());
+
         let current_epoch = clock_ref.current_epoch();
 
         let epochs_store = Arc::new(EpochsStore::new(config.clone(), current_epoch, pending_db)?);
 
-        let certifier_aggregator_task: AggregatorNotifier<_, _, _> = AggregatorNotifier::try_new(
-            &config.certificate_orchestrator.prover,
-            pending_store.clone(),
-            state_store.clone(),
-        )?;
-        let epoch_packing_aggregator_task: AggregatorNotifier<_, _, _> =
-            AggregatorNotifier::try_new(
-                &config.certificate_orchestrator.prover,
-                pending_store.clone(),
-                state_store.clone(),
-            )?;
+        let epoch_packing_aggregator_task: AggregatorNotifier<_> =
+            AggregatorNotifier::try_from(config.certificate_orchestrator.prover.clone())?;
 
         let (data_sender, data_receiver) = mpsc::channel(
             config
@@ -145,11 +145,11 @@ impl Node {
             .data_receiver(data_receiver)
             .cancellation_token(cancellation_token.clone())
             .epoch_packing_task_builder(epoch_packing_aggregator_task)
-            .certifier_task_builder(certifier_aggregator_task)
             .pending_store(pending_store.clone())
             .epochs_store(epochs_store.clone())
             .current_epoch(epochs_store.get_current_epoch())
             .state_store(state_store.clone())
+            .certifier_task_builder(certifier_client)
             .start()
             .await?;
 
