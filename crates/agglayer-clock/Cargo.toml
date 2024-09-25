@@ -16,3 +16,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 fail = { workspace = true, features = ["failpoints"] }
+
+[features]
+default = []
+testutils = []

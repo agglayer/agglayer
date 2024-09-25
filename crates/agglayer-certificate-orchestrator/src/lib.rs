@@ -7,6 +7,7 @@ use std::{
 };
 
 use agglayer_clock::Event;
+use agglayer_rate_limiting::SendCertificateSlotGuard;
 use agglayer_storage::{
     columns::latest_proven_certificate_per_network::ProvenCertificate,
     stores::{
@@ -58,7 +59,10 @@ pub struct CertificateOrchestrator<
     #[allow(unused)]
     epoch_packing_task_builder: Arc<E>,
     /// Certifier task resolver.
-    certifier_tasks: JoinSet<Result<CertifierOutput, Error>>,
+    certifier_tasks: JoinSet<(
+        Result<CertifierOutput, Error>,
+        Option<SendCertificateSlotGuard>,
+    )>,
     /// Certifier task builder.
     certifier_task_builder: Arc<CertifierClient>,
     /// Global network state.
@@ -66,7 +70,7 @@ pub struct CertificateOrchestrator<
     /// Clock stream to receive EpochEnded events.
     clock: C,
     /// Receiver for certificates coming from CDKs.
-    data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+    data_receiver: Receiver<(NetworkId, Height, CertificateId, SendCertificateSlotGuard)>,
     /// Cancellation token for graceful shutdown.
     cancellation_token: Pin<Box<WaitForCancellationFutureOwned>>,
 
@@ -96,7 +100,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn try_new(
         clock: C,
-        data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+        data_receiver: Receiver<(NetworkId, Height, CertificateId, SendCertificateSlotGuard)>,
         cancellation_token: CancellationToken,
         epoch_packing_task_builder: E,
         certifier_task_builder: CertifierClient,
@@ -169,7 +173,7 @@ where
     #[builder(entry = "builder", exit = "start", visibility = "pub")]
     pub async fn start(
         clock: C,
-        data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+        data_receiver: Receiver<(NetworkId, Height, CertificateId, SendCertificateSlotGuard)>,
         cancellation_token: CancellationToken,
         epoch_packing_task_builder: E,
         certifier_task_builder: CertifierClient,
@@ -205,9 +209,10 @@ where
                 .clone();
 
             let task = orchestrator.certifier_task_builder.clone();
-            orchestrator
-                .certifier_tasks
-                .spawn(async move { task.certify(local_state, network_id, height)?.await });
+            orchestrator.certifier_tasks.spawn(async move {
+                let res = async { task.certify(local_state, network_id, height)?.await };
+                (res.await, None)
+            });
         }
 
         let handle = tokio::spawn(orchestrator);
@@ -240,23 +245,23 @@ where
 
     fn receive_certificates(
         &mut self,
-        cursors: &[(NetworkId, Height, CertificateId)],
+        cursors: impl IntoIterator<Item = (NetworkId, Height, CertificateId, SendCertificateSlotGuard)>,
     ) -> Result<(), Error> {
-        for (network_id, height, _) in cursors {
-            let entry = self.cursors.entry(*network_id);
+        for (network_id, height, _, slot_guard) in cursors {
+            let entry = self.cursors.entry(network_id);
             match entry {
-                Entry::Vacant(entry) if *height == 0 => {
-                    entry.insert(*height);
-                    self.spawn_certifier_task(*network_id, *height);
+                Entry::Vacant(entry) if height == 0 => {
+                    entry.insert(height);
+                    self.spawn_certifier_task_with_limiting(network_id, height, slot_guard);
                 }
                 Entry::Occupied(mut entry) => {
                     let cursor_height = entry.get_mut();
 
                     if *cursor_height == height - 1 {
-                        *cursor_height = *height;
+                        *cursor_height = height;
 
                         // TODO: Check already present in `CertificateHeader`
-                        self.spawn_certifier_task(*network_id, *height);
+                        self.spawn_certifier_task_with_limiting(network_id, height, slot_guard);
                     } else {
                         warn!(
                             "Received a certificate with an unexpected height: {} for network {}",
@@ -271,21 +276,44 @@ where
         Ok(())
     }
 
+    fn spawn_certifier_task_with_limiting(
+        &mut self,
+        network_id: NetworkId,
+        height: Height,
+        slot_guard: SendCertificateSlotGuard,
+    ) {
+        self.spawn_certifier_task_impl(network_id, height, Some(slot_guard));
+    }
+
     fn spawn_certifier_task(&mut self, network: NetworkId, height: Height) {
+        self.spawn_certifier_task_impl(network, height, None)
+    }
+
+    fn spawn_certifier_task_impl(
+        &mut self,
+        network: NetworkId,
+        height: Height,
+        slot_guard: Option<SendCertificateSlotGuard>,
+    ) {
         let local_state = self.global_state.entry(network).or_default().clone();
         let task = self.certifier_task_builder.clone();
         debug!(
             "Spawning certifier task for network {} at height {}",
             network, height
         );
-        self.certifier_tasks
-            .spawn(async move { task.certify(local_state, network, height)?.await });
+        self.certifier_tasks.spawn(async move {
+            let res = async { task.certify(local_state, network, height)?.await };
+            (res.await, slot_guard)
+        });
     }
 
     fn handle_certifier_result(
         &mut self,
         certifier_result: Result<CertifierOutput, Error>,
+        slot_guard: Option<SendCertificateSlotGuard>,
     ) -> Result<(), ()> {
+        let current_epoch = 0; // TODO
+
         match certifier_result {
             Ok(CertifierOutput {
                 height,
@@ -352,6 +380,8 @@ where
                                 error
                             );
                         }
+
+                        let _ = slot_guard.map_or((), |g| g.record(current_epoch));
                     }
 
                     // - 2. If the state knows the network and the height is the next one, we update
@@ -382,6 +412,8 @@ where
                                 error
                             );
                         }
+
+                        let _ = slot_guard.map_or((), |g| g.record(current_epoch));
                     }
 
                     // - 3. If the state doesn't know the network and the height is not 0, we ignore
@@ -698,9 +730,9 @@ where
 
         // Poll the notification tasks to check for
         match self.certifier_tasks.poll_join_next(cx) {
-            Poll::Ready(Some(Ok(proof_result))) => {
+            Poll::Ready(Some(Ok((proof_result, slot_guard)))) => {
                 debug!("Certifier task completed successfully");
-                _ = self.handle_certifier_result(proof_result);
+                _ = self.handle_certifier_result(proof_result, slot_guard);
             }
 
             Poll::Ready(Some(Err(error))) => {
@@ -738,7 +770,7 @@ where
             self.data_receiver
                 .poll_recv_many(cx, &mut received, MAX_POLL_READS)
         {
-            if let Err(e) = self.receive_certificates(&received) {
+            if let Err(e) = self.receive_certificates(received) {
                 error!("Failed to handle a group of certificates: {e:?}");
             }
 
@@ -747,7 +779,6 @@ where
 
         if let Poll::Ready(Some(Event::EpochEnded(epoch))) = self.clock.poll_next_unpin(cx) {
             debug!("Epoch change event received: {}", epoch);
-
             if let Err(error) = self.handle_epoch_end(epoch) {
                 error!("Failed to handle the EpochEnded event: {:?}", error);
             }

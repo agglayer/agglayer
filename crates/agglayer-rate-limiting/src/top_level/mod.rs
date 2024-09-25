@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use agglayer_types::EpochNumber;
 use parking_lot::{Mutex, MutexGuard};
 use tokio::time::Instant;
 
@@ -29,6 +30,15 @@ impl RateLimiter {
         time: Instant,
     ) -> Result<SlotGuard<component::SendTx>, RateLimited> {
         self.reserve::<component::SendTx>(network_id, time)
+    }
+
+    /// Reserve rate limiting slot for `sendTx`.
+    pub fn reserve_send_certificate(
+        &self,
+        network_id: NetworkId,
+        epoch_no: EpochNumber,
+    ) -> Result<SlotGuard<component::SendCertificate>, RateLimited> {
+        self.reserve::<component::SendCertificate>(network_id, epoch_no)
     }
 
     /// Reserve rate limiting slot for given component.

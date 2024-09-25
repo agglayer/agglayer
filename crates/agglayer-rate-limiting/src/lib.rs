@@ -12,3 +12,4 @@ pub use local::{component, Component, RateLimited, SlotGuard};
 pub use top_level::RateLimiter;
 
 pub type SendTxSlotGuard = SlotGuard<component::SendTx>;
+pub type SendCertificateSlotGuard = SlotGuard<component::SendCertificate>;
