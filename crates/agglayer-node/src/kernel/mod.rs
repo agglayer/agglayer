@@ -363,6 +363,8 @@ where
             let config = Arc::clone(&self.config);
             async move {
                 let config = &*config;
+                let hash = &hash;
+
                 let settlement = async move {
                     f.send()
                         .await
@@ -380,7 +382,10 @@ where
                 let settlement_timeout = config.outbound.rpc.settle.settlement_timeout;
                 let receipt = tokio::time::timeout(settlement_timeout, settlement)
                     .await
-                    .map_err(|_| SettlementError::Timeout(settlement_timeout))??;
+                    .map_err(|_| {
+                        warn!(hash, "Settlement of {hash} timed out");
+                        SettlementError::Timeout(settlement_timeout)
+                    })??;
 
                 rate_guard.record(tokio::time::Instant::now());
                 Ok(receipt)
