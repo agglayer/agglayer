@@ -36,11 +36,38 @@ impl TimeRateLimit {
     }
 }
 
+/// Epoch-based rate limiting
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum EpochRateLimit {
+    /// Don't apply any rate limiting, allowing the client to make requests as
+    /// often as desired.
+    Unlimited,
+
+    /// Apply rate limit of `max_per_epoch` events in any given epoch.
+    #[serde(untagged, rename_all = "kebab-case")]
+    Limited { max_per_epoch: u32 },
+}
+
+impl EpochRateLimit {
+    /// Default rate limiting for the `sendCertificate` call.
+    pub const fn send_certificate_default() -> Self {
+        // TODO What should the default be? Picked 3 for now by a die roll.
+        Self::limited(3)
+    }
+
+    /// Create a time-based rate limiting
+    pub const fn limited(max_per_epoch: u32) -> Self {
+        Self::Limited { max_per_epoch }
+    }
+}
+
 /// Rate limiting override for each endpoint
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 struct RateLimitOverride {
     send_tx: Option<TimeRateLimit>,
+    send_certificate: Option<EpochRateLimit>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -75,6 +102,9 @@ impl FromIterator<(NetworkId, RateLimitOverride)> for PerNetworkRateLimitOverrid
 pub struct NetworkRateLimitingConfig<'a> {
     /// Rate limit for `sendTx` for given network.
     pub send_tx: &'a TimeRateLimit,
+
+    /// Rate limit for `sendCertificate` for given network.
+    pub send_certificate: &'a EpochRateLimit,
 }
 
 /// Full rate limiting config.
@@ -86,6 +116,10 @@ pub struct RateLimitingConfig {
     #[serde(default = "TimeRateLimit::send_tx_default")]
     send_tx: TimeRateLimit,
 
+    /// Settlement rate limiting for the `sendCertificate` call.
+    #[serde(default = "EpochRateLimit::send_certificate_default")]
+    send_certificate: EpochRateLimit,
+
     /// Per-network rate limiting overrides.
     #[serde(default)]
     network: PerNetworkRateLimitOverride,
@@ -93,12 +127,16 @@ pub struct RateLimitingConfig {
 
 impl RateLimitingConfig {
     /// Default rate limiting configuration.
-    pub const DEFAULT: Self = Self::new(TimeRateLimit::send_tx_default());
+    pub const DEFAULT: Self = Self::new(
+        TimeRateLimit::send_tx_default(),
+        EpochRateLimit::send_certificate_default(),
+    );
 
     /// New rate limiting config with no network-specific settings.
-    pub const fn new(send_tx: TimeRateLimit) -> Self {
+    pub const fn new(send_tx: TimeRateLimit, send_certificate: EpochRateLimit) -> Self {
         Self {
             send_tx,
+            send_certificate,
             network: PerNetworkRateLimitOverride::new(),
         }
     }
@@ -115,7 +153,13 @@ impl RateLimitingConfig {
         let send_tx = overrides
             .and_then(|l| l.send_tx.as_ref())
             .unwrap_or(&self.send_tx);
-        NetworkRateLimitingConfig { send_tx }
+        let send_certificate = overrides
+            .and_then(|l| l.send_certificate.as_ref())
+            .unwrap_or(&self.send_certificate);
+        NetworkRateLimitingConfig {
+            send_tx,
+            send_certificate,
+        }
     }
 
     fn override_for(&self, nid: NetworkId) -> Option<&RateLimitOverride> {
