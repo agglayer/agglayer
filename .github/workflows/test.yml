@@ -1,4 +1,4 @@
-name: Test
+name: Test - units
 
 on:
   push:
@@ -12,13 +12,11 @@ on:
       - "**"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
-  REGISTRY: ghcr.io
   CARGO_TERM_COLOR: always
-  KURTOSIS_CDK_GIT_REF: v0.2.3
 
 jobs:
   unit:
@@ -32,13 +30,17 @@ jobs:
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Install SP1UP
         run: curl -L https://sp1.succinct.xyz | bash
-      
+
       - name: Install SP1 toolchain
         run: /home/runner/.sp1/bin/sp1up
         shell: bash
-
 
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -46,187 +48,5 @@ jobs:
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Set up rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-            cache-on-failure: true
-
       - name: Test
-        run: cargo nextest run --workspace --nocapture && cargo test --doc --workspace
-
-  elf:
-    if: ${{ false }}
-    name: Check ELF compatibility
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            src:
-              - 'crates/pessimistic-proof/**'
-              - 'crates/pessimistic-proof-program/**'
-
-      - name: Install toolchain
-        if: steps.filter.outputs.src == 'true'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install SP1UP
-        if: steps.filter.outputs.src == 'true'
-        run: curl -L https://sp1.succinct.xyz | bash
-
-      - name: Install SP1 toolchain
-        if: steps.filter.outputs.src == 'true'
-        run: /home/runner/.sp1/bin/sp1up
-        shell: bash
-
-      - name: Set up rust cache
-        if: steps.filter.outputs.src == 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - uses: taiki-e/install-action@nextest
-        if: steps.filter.outputs.src == 'true'
-
-      - name: Install Anvil
-        if: steps.filter.outputs.src == 'true'
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Set up rust cache
-        if: steps.filter.outputs.src == 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-            cache-on-failure: true
-
-      - name: Regenerate ELF
-        if: steps.filter.outputs.src == 'true'
-        run: cargo xtask elf
-
-      - name: ELF is up to date
-        if: steps.filter.outputs.src == 'true'
-        run: git diff --exit-code crates/pessimistic-proof-program/elf
-
-  pre-e2e:
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
-    needs:
-      - unit
-    name: E2E Tests | Docker
-    uses: ./.github/workflows/util:docker.yml
-    secrets: inherit
-    with:
-      push: false
-      local-artifact-name: "docker-image"
-      local-artifact-dir: "/tmp"
-
-  e2e-kurtosis-cdk:
-    name: E2E Tests | Kurtosis-CDK
-    runs-on: ubuntu-latest
-    needs: pre-e2e
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: "docker-image"
-          path: "/tmp"
-
-      - name: Load image
-        run: |
-          echo ${{ needs.pre-e2e.outputs.tags }}
-          docker load --input /tmp/docker-image.tar
-          docker image ls -a
-
-      - name: Checkout agglayer-rs
-        uses: actions/checkout@v4
-
-      - name: Checkout kurtosis-cdk
-        uses: actions/checkout@v4
-        with:
-          repository: 0xpolygon/kurtosis-cdk
-          ref: ${{ env.KURTOSIS_CDK_GIT_REF }}
-          path: kurtosis-cdk
-
-      - name: Replace param with local agglayer-rs docker img
-        run: |
-          cd kurtosis-cdk
-          new_value="${{ needs.pre-e2e.outputs.tags }}"
-
-          # Escape special characters in the new value
-          escaped_new_value=$(sed 's/[\/&]/\\&/g' <<< "$new_value")
-
-          sed -i "s/zkevm_agglayer_image: .*/zkevm_agglayer_image: $escaped_new_value/" "params.yml"
-
-          # Debug
-          cat params.yml
-
-      - name: Install kurtosis
-        run: |
-          echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
-          sudo apt update
-          # sudo apt install kurtosis-cli=0.88.19
-          sudo apt install kurtosis-cli
-          kurtosis analytics disable
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Run kurtosis
-        run: |
-          cd kurtosis-cdk
-          kurtosis run --enclave cdk-v1 --args-file params.yml --image-download always .
-
-      - name: Expose RPC URL
-        run: echo "ETH_RPC_URL=$(kurtosis port print cdk-v1 zkevm-node-rpc-001 http-rpc)" >> $GITHUB_ENV
-
-      - name: Check that batches are progressing
-        continue-on-error: true
-        env:
-          COMMAND: "cast rpc zkevm_batchNumber && cast rpc zkevm_virtualBatchNumber && cast rpc zkevm_verifiedBatchNumber"
-          ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
-          INTERVAL_SECONDS: 10
-          TIMEOUT_SECONDS: 900
-        run: >
-          ./.github/workflows/scripts/are_counters_progressing.sh
-          "$COMMAND"
-          "$TIMEOUT_SECONDS"
-          "$INTERVAL_SECONDS"
-      - name: debug
-        run: kurtosis service logs cdk-v1 zkevm-agglayer-001
-
-  pushing-docker-image:
-    name: Docker | Publish image to registry
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    needs: 
-      - pre-e2e
-      - e2e-kurtosis-cdk
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: "docker-image"
-          path: "/tmp"
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Load image
-        run: |
-          echo ${{ needs.pre-e2e.outputs.tags }}
-          docker load --input /tmp/docker-image.tar
-          docker image ls -a
-
-      - name: Publishing image
-        env:
-          DOCKER_IMAGE: ${{ needs.pre-e2e.outputs.tags }}
-        run: docker push ${{ env.DOCKER_IMAGE }}
-
-
+        run: cargo nextest run --workspace && cargo test --doc --workspace

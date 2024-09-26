@@ -1,0 +1,17 @@
+# Format
+[tasks.cargo-fmt]
+category = "LOCAL"
+toolchain = "nightly"
+command = "cargo"
+args = ["fmt", "--all", "--check"]
+
+# CI
+[tasks.ci-format]
+category = "CI - CHECK"
+dependencies = ["cargo-fmt"]
+
+[tasks.ci-clippy]
+category = "CI - CHECK"
+toolchain = "nightly"
+command = "cargo"
+args = ["clippy", "--workspace", "--tests", "--", "-D", "warnings"]

@@ -87,7 +87,7 @@ impl Forest {
         let mut res = Vec::new();
 
         let exits: Vec<BridgeExit> = events
-            .into_iter()
+            .iter()
             .map(|(token, amount)| exit_to_b(*token, *amount))
             .collect();
 
