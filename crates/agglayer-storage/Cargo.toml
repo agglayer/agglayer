@@ -13,6 +13,7 @@ rand = { version = "0.8.5", optional = true }
 rocksdb = "0.22.0"
 serde.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
 agglayer-types = { path = "../agglayer-types" }

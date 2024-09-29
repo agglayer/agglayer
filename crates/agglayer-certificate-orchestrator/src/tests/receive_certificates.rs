@@ -3,6 +3,7 @@ use std::time::Duration;
 use agglayer_storage::stores::PendingCertificateWriter;
 use agglayer_storage::stores::StateWriter;
 use agglayer_types::Certificate;
+use agglayer_types::CertificateStatus;
 use pessimistic_proof::Signature;
 use pessimistic_proof::U256;
 use rstest::rstest;
@@ -67,7 +68,7 @@ async fn receive_certificate_with_previous_proved() {
 
     orchestrator
         .state_store
-        .insert_certificate_header(&previous)
+        .insert_certificate_header(&previous, CertificateStatus::Pending)
         .unwrap();
 
     let certificate = Certificate {
@@ -91,7 +92,7 @@ async fn receive_certificate_with_previous_proved() {
 
     orchestrator.cursors.insert(1.into(), 0);
 
-    let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32])]);
+    let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32].into())]);
 
     assert!(result.is_ok());
     assert!(matches!(orchestrator.cursors.get(&1.into()), Some(1)));
@@ -143,7 +144,7 @@ async fn receive_certificate_with_previous_pending() {
         .insert_pending_certificate(1.into(), 1, &certificate)
         .unwrap();
 
-    let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32])]);
+    let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32].into())]);
 
     assert!(result.is_ok());
     assert!(!orchestrator.cursors.contains_key(&1.into()));

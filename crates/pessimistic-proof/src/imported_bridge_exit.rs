@@ -42,7 +42,7 @@ impl L1InfoTreeLeaf {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Error {
     #[error("Mismatch between the global index and the inclusion proof.")]
     MismatchGlobalIndexInclusionProof,

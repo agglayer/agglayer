@@ -11,7 +11,11 @@ use agglayer_storage::stores::{
     EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochWriter,
     StateReader, StateWriter,
 };
-use agglayer_types::{Certificate, CertificateId, Height, LocalNetworkStateData, NetworkId, Proof};
+use agglayer_types::LocalNetworkStateData;
+use agglayer_types::{
+    Certificate, CertificateId, CertificateStatus, CertificateStatusError, Height, NetworkId,
+    Proof, ProofVerificationError,
+};
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, Stream, StreamExt};
 use pessimistic_proof::ProofError;
@@ -355,6 +359,10 @@ where
     fn spawn_certifier_task(&mut self, network: NetworkId, height: Height) {
         let local_state = self.global_state.entry(network).or_default().clone();
         let task = self.certifier_task_builder.clone();
+        debug!(
+            "Spawning certifier task for network {} at height {}",
+            network, height
+        );
         self.certifier_tasks
             .spawn(async move { task.certify(local_state, network, height)?.await });
     }
@@ -404,7 +412,7 @@ where
                 }
                 // TODO: Deal with errors
                 self.state_store
-                    .insert_certificate_header(&certificate)
+                    .insert_certificate_header(&certificate, CertificateStatus::Pending)
                     .expect("Failed to insert certificate header");
 
                 self.pending_store
@@ -471,7 +479,10 @@ where
                                     .expect("Failed to get certificate")
                                 {
                                     self.state_store
-                                        .insert_certificate_header(&certificate)
+                                        .insert_certificate_header(
+                                            &certificate,
+                                            CertificateStatus::Pending,
+                                        )
                                         .expect("Failed to insert certificate header");
                                 } else {
                                     // This should not happen as ProofAlreadyExists should only
@@ -543,7 +554,10 @@ where
                                     .expect("Failed to get certificate")
                                 {
                                     self.state_store
-                                        .insert_certificate_header(&certificate)
+                                        .insert_certificate_header(
+                                            &certificate,
+                                            CertificateStatus::Pending,
+                                        )
                                         .expect("Failed to insert certificate header");
                                 } else {
                                     // This should not happen as ProofAlreadyExists should only
@@ -573,7 +587,68 @@ where
                     }
                 }
             }
-            _ => {}
+            Err(error) => {
+                warn!("Error during certification process: {}", error);
+                let certificate_error: Option<(CertificateId, CertificateStatusError)> = match error
+                {
+                    Error::ProofVerificationFailed {
+                        source,
+                        certificate_id,
+                    } => Some((certificate_id, source.into())),
+
+                    Error::ProverExecutionFailed {
+                        source,
+                        certificate_id,
+                    } => Some((
+                        certificate_id,
+                        CertificateStatusError::ProofGenerationError {
+                            generation_type: agglayer_types::GenerationType::Prover,
+                            source,
+                        },
+                    )),
+
+                    Error::NativeExecutionFailed {
+                        source,
+                        certificate_id,
+                    } => Some((
+                        certificate_id,
+                        CertificateStatusError::ProofGenerationError {
+                            generation_type: agglayer_types::GenerationType::Native,
+                            source,
+                        },
+                    )),
+
+                    Error::Types {
+                        source,
+                        certificate_id,
+                    } => Some((certificate_id, source.into())),
+
+                    Error::Storage(error) => {
+                        warn!(
+                            "Storage error happened in the certification process: {:?}",
+                            error
+                        );
+                        None
+                    }
+                    _ => None,
+                };
+
+                if let Some((certificate_id, error)) = certificate_error {
+                    if self
+                        .state_store
+                        .update_certificate_header_status(
+                            &certificate_id,
+                            &CertificateStatus::InError { error },
+                        )
+                        .is_err()
+                    {
+                        error!(
+                            "Certificate in error and failed to update the certificate header \
+                             status"
+                        );
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -603,6 +678,7 @@ where
         // Poll the notification tasks to check for
         match self.certifier_tasks.poll_join_next(cx) {
             Poll::Ready(Some(Ok(proof_result))) => {
+                debug!("Certifier task completed successfully");
                 _ = self.handle_certifier_result(proof_result);
             }
 
@@ -654,6 +730,8 @@ where
             if let Err(error) = self.handle_epoch_end(epoch) {
                 error!("Failed to handle the EpochEnded event: {:?}", error);
             }
+
+            return self.poll(cx);
         }
 
         Poll::Pending
@@ -683,7 +761,7 @@ impl CertificateInput for Certificate {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CertifierOutput {
     pub certificate: Certificate,
     pub height: Height,
@@ -712,13 +790,25 @@ pub enum Error {
     #[error("proof already exists for network {0} at height {1}")]
     ProofAlreadyExists(NetworkId, Height),
     #[error("proof verification failed")]
-    ProofVerificationFailed,
-    #[error("prover execution failed: {0}")]
-    ProverExecutionFailed(#[from] anyhow::Error),
-    #[error("native execution failed: {0:?}")]
-    NativeExecutionFailed(#[from] ProofError),
-    #[error("type error: {0}")]
-    Types(#[from] agglayer_types::Error),
+    ProofVerificationFailed {
+        certificate_id: CertificateId,
+        source: ProofVerificationError,
+    },
+    #[error("prover execution failed: {source}")]
+    ProverExecutionFailed {
+        certificate_id: CertificateId,
+        source: ProofError,
+    },
+    #[error("native execution failed: {source:?}")]
+    NativeExecutionFailed {
+        certificate_id: CertificateId,
+        source: ProofError,
+    },
+    #[error("Type error: {source}")]
+    Types {
+        certificate_id: CertificateId,
+        source: agglayer_types::Error,
+    },
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
     #[error("internal error")]

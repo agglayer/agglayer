@@ -36,6 +36,12 @@ pub trait MetadataReader: Send + Sync {
 pub trait StateReader: Send + Sync {
     /// Get the active networks.
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
+
+    fn get_certificate_header(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<CertificateHeader>, Error>;
+
     fn get_certificate_header_by_cursor(
         &self,
         network_id: NetworkId,

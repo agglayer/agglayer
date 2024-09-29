@@ -114,11 +114,6 @@ impl Node {
 
         // Construct the core.
         let core = Kernel::new(rpc, config.clone());
-
-        let clock_subscription =
-            tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
-                .filter_map(|value| value.ok());
-
         let current_epoch = clock_ref.current_epoch();
 
         let epochs_store = Arc::new(EpochsStore::new(config.clone(), current_epoch, pending_db)?);
@@ -141,6 +136,10 @@ impl Node {
                 .input_backpressure_buffer_size,
         );
 
+        let clock_subscription =
+            tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
+                .filter_map(|value| value.ok());
+
         let certificate_orchestrator_handle = CertificateOrchestrator::builder()
             .clock(clock_subscription)
             .data_receiver(data_receiver)
@@ -150,14 +149,19 @@ impl Node {
             .pending_store(pending_store.clone())
             .epochs_store(epochs_store.clone())
             .current_epoch(epochs_store.get_current_epoch())
-            .state_store(state_store)
+            .state_store(state_store.clone())
             .start()
             .await?;
 
         // Bind the core to the RPC server.
-        let server_handle = AgglayerImpl::new(core, data_sender, pending_store.clone())
-            .start(config)
-            .await?;
+        let server_handle = AgglayerImpl::new(
+            core,
+            data_sender,
+            pending_store.clone(),
+            state_store.clone(),
+        )
+        .start(config)
+        .await?;
 
         let rpc_handle = tokio::spawn(async move {
             tokio::select! {

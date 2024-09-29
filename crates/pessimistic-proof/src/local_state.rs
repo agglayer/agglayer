@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::{LeafType, L1_ETH, L1_NETWORK_ID},
     imported_bridge_exit::commit_imported_bridge_exits,
-    keccak::Digest,
+    keccak::{Digest, Hash},
     local_balance_tree::LocalBalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::{signature_commitment, MultiBatchHeader},
@@ -70,8 +70,8 @@ impl LocalNetworkState {
         let computed_root = self.exit_tree.get_root();
         if computed_root != multi_batch_header.prev_local_exit_root {
             return Err(ProofError::InvalidInitialLocalExitRoot {
-                got: computed_root,
-                expected: multi_batch_header.prev_local_exit_root,
+                got: Hash(computed_root),
+                expected: Hash(multi_batch_header.prev_local_exit_root),
             });
         }
         if self.balance_tree.root != multi_batch_header.prev_balance_root {

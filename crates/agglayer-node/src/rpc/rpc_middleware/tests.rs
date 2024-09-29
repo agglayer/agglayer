@@ -68,7 +68,9 @@ struct ServerGuard(Option<jsonrpsee::server::ServerHandle>);
 
 impl Drop for ServerGuard {
     fn drop(&mut self) {
-        self.0.take().map(|s| s.stop().unwrap());
+        if let Some(s) = self.0.take() {
+            s.stop().unwrap();
+        }
     }
 }
 
@@ -91,8 +93,8 @@ fn log_contains(log: &tracing_capture::SharedStorage, needle: &str) -> bool {
         .any(|e| e.message().is_some_and(|m| m.contains(needle)))
 }
 
-const TIMED_OUT_STR: &'static str = "`do_stuff` timed out";
-const CANCELLED_STR: &'static str = "`do_stuff` was cancelled";
+const TIMED_OUT_STR: &str = "`do_stuff` timed out";
+const CANCELLED_STR: &str = "`do_stuff` was cancelled";
 
 #[tokio::test]
 async fn completed_before_deadline() {

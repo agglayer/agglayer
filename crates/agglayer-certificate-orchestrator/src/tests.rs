@@ -10,7 +10,8 @@ use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, PerEpochWriter, StateReader, StateWriter,
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, Height, LocalNetworkStateData, NetworkId, Proof,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height,
+    LocalNetworkStateData, NetworkId, Proof,
 };
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, poll, Stream};
@@ -33,6 +34,7 @@ pub(crate) struct DummyPendingStore {
     pub(crate) proofs: RwLock<BTreeMap<CertificateId, Proof>>,
     pub(crate) settled: RwLock<BTreeMap<NetworkId, (Height, CertificateId)>>,
     pub(crate) certificate_per_network: RwLock<BTreeMap<(NetworkId, Height), CertificateHeader>>,
+    pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
 }
 
 impl PerEpochWriter for DummyPendingStore {
@@ -50,6 +52,17 @@ impl StateReader for DummyPendingStore {
         todo!()
     }
 
+    fn get_certificate_header(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<CertificateHeader>, agglayer_storage::error::Error> {
+        Ok(self
+            .certificate_headers
+            .read()
+            .unwrap()
+            .get(certificate_id)
+            .cloned())
+    }
     fn get_current_settled_height(
         &self,
     ) -> Result<Vec<(NetworkId, Height, CertificateId)>, agglayer_storage::error::Error> {
@@ -120,6 +133,7 @@ impl StateWriter for DummyPendingStore {
     fn insert_certificate_header(
         &self,
         certificate: &Certificate,
+        _status: CertificateStatus,
     ) -> Result<(), agglayer_storage::error::Error> {
         self.certificate_per_network.write().unwrap().insert(
             (certificate.network_id, certificate.height),
@@ -129,10 +143,19 @@ impl StateWriter for DummyPendingStore {
                 height: certificate.height,
                 epoch_number: None,
                 certificate_index: None,
-                new_local_exit_root: certificate.new_local_exit_root,
+                new_local_exit_root: certificate.new_local_exit_root.into(),
+                status: agglayer_types::CertificateStatus::Pending,
             },
         );
 
+        Ok(())
+    }
+
+    fn update_certificate_header_status(
+        &self,
+        _certificate_id: &CertificateId,
+        _status: &CertificateStatus,
+    ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
 }
@@ -252,7 +275,7 @@ async fn test_collect_certificates() {
     )
     .expect("Unable to create orchestrator");
 
-    _ = data_sender.send((1.into(), 1, [0; 32])).await;
+    _ = data_sender.send((1.into(), 1, [0; 32].into())).await;
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
 
     let _poll = poll!(&mut orchestrator);
@@ -297,7 +320,7 @@ async fn test_collect_certificates_after_epoch() {
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
     let _poll = poll!(&mut orchestrator);
 
-    _ = data_sender.send((1.into(), 1, [0; 32])).await;
+    _ = data_sender.send((1.into(), 1, [0; 32].into())).await;
 
     let _poll = poll!(&mut orchestrator);
 

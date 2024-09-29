@@ -1,4 +1,4 @@
-use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
+use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId, Proof};
 
 use crate::error::Error;
 
@@ -18,7 +18,17 @@ pub trait MetadataWriter: Send + Sync {
 }
 
 pub trait StateWriter: Send + Sync {
-    fn insert_certificate_header(&self, certificate: &Certificate) -> Result<(), Error>;
+    fn insert_certificate_header(
+        &self,
+        certificate: &Certificate,
+        status: CertificateStatus,
+    ) -> Result<(), Error>;
+
+    fn update_certificate_header_status(
+        &self,
+        certificate_id: &CertificateId,
+        status: &CertificateStatus,
+    ) -> Result<(), Error>;
 }
 
 pub trait PendingCertificateWriter: Send + Sync {
@@ -27,6 +37,7 @@ pub trait PendingCertificateWriter: Send + Sync {
         network_id: NetworkId,
         height: Height,
     ) -> Result<(), Error>;
+
     fn insert_pending_certificate(
         &self,
         network_id: NetworkId,

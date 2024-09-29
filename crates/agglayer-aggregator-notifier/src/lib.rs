@@ -7,11 +7,12 @@ use agglayer_config::certificate_orchestrator::prover::ProverConfig;
 use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
 };
-use agglayer_types::{Certificate, Height, LocalNetworkStateData, NetworkId, Proof};
+use agglayer_types::{Certificate, Height, NetworkId, Proof, ProofVerificationError};
 use error::NotifierError;
 use futures::future::BoxFuture;
-use pessimistic_proof::{generate_pessimistic_proof, LocalNetworkState};
-use reth_primitives::Address;
+use pessimistic_proof::{
+    local_state::LocalNetworkStateData, Address, LocalNetworkState, ProofError,
+};
 use serde::Serialize;
 use sp1::SP1;
 use sp1_sdk::{CpuProver, MockProver, NetworkProver};
@@ -33,8 +34,8 @@ pub(crate) trait AggregatorProver<I>: Send + Sync {
         &self,
         local_state: LocalNetworkState,
         certificate: I,
-    ) -> BoxFuture<'_, Result<Proof, anyhow::Error>>;
-    fn verify(&self, proof: &Proof) -> Result<(), anyhow::Error>;
+    ) -> BoxFuture<'_, Result<Proof, ProofError>>;
+    fn verify(&self, proof: &Proof) -> Result<(), ProofVerificationError>;
 }
 
 /// The notifier that will be used to notify the aggregator
@@ -80,6 +81,8 @@ where
         network_id: NetworkId,
         height: Height,
     ) -> Result<BoxFuture<Result<CertifierOutput, Error>>, Error> {
+        debug!("Certifying the certificate of network {network_id} at height {height}");
+
         // Fetch certificate from storage
         let certificate = self
             .pending_store
@@ -89,6 +92,7 @@ where
         let certificate_id = certificate.hash();
 
         if self.pending_store.get_proof(certificate_id)?.is_some() {
+            debug!("Proof already exists for the certificate {certificate_id:?}");
             return Err(Error::ProofAlreadyExists(network_id, height));
         }
 
@@ -98,8 +102,12 @@ where
         let multi_batch_header = state.apply_certificate(&certificate, signer)?;
 
         // Perform the native PP execution
-        let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)
-            .map_err(Error::NativeExecutionFailed)?;
+        let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header).map_err(
+            |source| Error::NativeExecutionFailed {
+                source,
+                certificate_id,
+            },
+        )?;
 
         info!(
             "Successfully executed the native PP for the Certificate {:?}",
@@ -112,12 +120,18 @@ where
         Ok(Box::pin(async move {
             let proof = proving_request
                 .await
-                .map_err(Error::ProverExecutionFailed)?;
+                .map_err(|source| Error::ProverExecutionFailed {
+                    certificate_id,
+                    source,
+                })?;
 
-            if let Err(error) = self.prover.verify(&proof) {
-                error!("Failed to verify the p-proof: {:?}", error);
+            if let Err(source) = self.prover.verify(&proof) {
+                error!("Failed to verify the p-proof: {:?}", source);
 
-                Err(Error::ProofVerificationFailed)
+                Err(Error::ProofVerificationFailed {
+                    source,
+                    certificate_id,
+                })
             } else {
                 info!("Successfully generated and verified the p-proof!");
 

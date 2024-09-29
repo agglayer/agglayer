@@ -3740,6 +3740,7 @@ name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "hex",
  "reth-primitives",
  "serde",
  "serde_json",

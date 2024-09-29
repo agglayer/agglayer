@@ -6,6 +6,7 @@ use agglayer_storage::stores::StateReader;
 use agglayer_storage::stores::StateWriter;
 use agglayer_types::Certificate;
 use agglayer_types::CertificateHeader;
+use agglayer_types::CertificateStatus;
 use agglayer_types::LocalNetworkStateData;
 use agglayer_types::Proof;
 use pessimistic_proof::Signature;
@@ -62,7 +63,7 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
 
     orchestrator
         .state_store
-        .insert_certificate_header(&certificate)
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
         .unwrap();
 
     assert!(orchestrator
@@ -216,7 +217,7 @@ async fn certifier_error_proof_already_exists_with_height_zero() {
 
     orchestrator
         .state_store
-        .insert_certificate_header(&certificate)
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
         .unwrap();
 
     assert!(orchestrator
@@ -280,7 +281,7 @@ async fn certifier_error_proof_already_exists_with_height_zero_still_pending() {
 
     orchestrator
         .state_store
-        .insert_certificate_header(&certificate)
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
         .unwrap();
 
     orchestrator

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use ::serde::{Deserialize, Serialize};
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::LocalExitTree;
@@ -13,6 +14,7 @@ use pessimistic_proof::{
     local_balance_tree::LocalBalancePath,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
+    ProofError,
 };
 use pessimistic_proof::{LocalNetworkState, ProofError};
 use reth_primitives::{Address, Signature};
@@ -31,14 +33,24 @@ pub enum Error {
 }
 
 pub use reth_primitives::U256;
+use reth_primitives::{Address, Signature};
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
-pub type CertificateId = [u8; 32];
-pub type Hash = [u8; 32];
+pub type CertificateId = Hash;
 pub type Height = u64;
-pub use pessimistic_proof::bridge_exit::NetworkId;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+mod hash;
+pub use hash::Hash;
+pub use pessimistic_proof::bridge_exit::NetworkId;
+use sp1_sdk::SP1VerificationError;
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum Error {
+    #[error("Conversion error: {0}")]
+    TypeConversion(String),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CertificateHeader {
     pub network_id: NetworkId,
     pub height: Height,
@@ -46,6 +58,69 @@ pub struct CertificateHeader {
     pub certificate_index: Option<CertificateIndex>,
     pub certificate_id: CertificateId,
     pub new_local_exit_root: Hash,
+    pub status: CertificateStatus,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
+pub enum CertificateStatusError {
+    #[error("({generation_type}) proof generation error: {}", source.to_string())]
+    ProofGenerationError {
+        generation_type: GenerationType,
+        source: ProofError,
+    },
+    #[error("proof verification failed")]
+    ProofVerificationFailed(#[from] ProofVerificationError),
+
+    #[error(transparent)]
+    TypeConversionError(#[from] Error),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
+pub enum GenerationType {
+    Native,
+    Prover,
+}
+
+impl std::fmt::Display for GenerationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GenerationType::Native => write!(f, "native"),
+            GenerationType::Prover => write!(f, "prover"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
+pub enum ProofVerificationError {
+    #[error("Version mismatch")]
+    VersionMismatch,
+    #[error("Core machine verification error")]
+    Core,
+    #[error("Recursion verification error")]
+    Recursion,
+    #[error("Plonk verification error")]
+    Plonk,
+    #[error("Groth16 verification error")]
+    Groth16,
+}
+
+impl From<SP1VerificationError> for ProofVerificationError {
+    fn from(err: SP1VerificationError) -> Self {
+        match err {
+            SP1VerificationError::VersionMismatch(_) => ProofVerificationError::VersionMismatch,
+            SP1VerificationError::Core(_) => ProofVerificationError::Core,
+            SP1VerificationError::Recursion(_) => ProofVerificationError::Recursion,
+            SP1VerificationError::Plonk(_) => ProofVerificationError::Plonk,
+            SP1VerificationError::Groth16(_) => ProofVerificationError::Groth16,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CertificateStatus {
+    Pending,
+    InError { error: CertificateStatusError },
+    Settled,
 }
 
 /// Proof is a wrapper around all the different types of proofs that can be
@@ -105,13 +180,14 @@ impl Certificate {
         }
     }
 
-    pub fn hash(&self) -> Digest {
+    pub fn hash(&self) -> CertificateId {
         keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
             self.height.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_slice(),
             self.new_local_exit_root.as_slice(),
         ])
+        .into()
     }
 }
 

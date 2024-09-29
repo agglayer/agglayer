@@ -39,7 +39,7 @@ impl DB {
             .ok_or(Error::ColumnFamilyNotFound)?;
 
         self.rocksdb
-            .get_cf(&cf, key)?
+            .get_cf(&cf, &key)?
             .map(|v| C::Value::decode(&v[..]))
             // If the value is not found, return None.
             // If the value is found, decode it and wrap it in Some to propagate decode error.
@@ -169,6 +169,7 @@ pub fn state_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
     [
         crate::columns::LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF,
         crate::columns::CERTIFICATE_PER_NETWORK_CF,
+        crate::columns::CERTIFICATE_HEADER_CF,
     ]
     .iter_mut()
     .map(|cf| {
