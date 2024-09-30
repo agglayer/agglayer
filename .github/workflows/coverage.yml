@@ -55,7 +55,7 @@ jobs:
         env:
           RUST_LOG: info
           LLVM_PROFILE_FILE: "llvm_profile-instrumentation-%p-%m.profraw"
-        run: cargo nextest run --workspace --nocapture -F coverage --cargo-profile codecov -Z profile-rustflags
+        run: cargo nextest run --workspace -F coverage --cargo-profile codecov -Z profile-rustflags
 
       - name: Run grcov
         run: |
