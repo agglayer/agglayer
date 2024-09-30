@@ -25,7 +25,6 @@ impl DB {
         options.create_if_missing(true);
         options.create_missing_column_families(true);
 
-        let x = 1;
         Ok(DB {
             rocksdb: rocksdb::DB::open_cf_descriptors(&options, path, cfs)?,
         })
