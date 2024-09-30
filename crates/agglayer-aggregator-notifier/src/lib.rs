@@ -4,12 +4,13 @@ use std::sync::Arc;
 
 use agglayer_certificate_orchestrator::{Certifier, CertifierOutput, EpochPacker, Error};
 use agglayer_config::certificate_orchestrator::prover::ProverConfig;
-use agglayer_types::Certificate;
+use agglayer_storage::stores::{
+    PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
+};
+use agglayer_types::{Certificate, Height, NetworkId, Proof};
 use error::NotifierError;
 use futures::future::BoxFuture;
-use pessimistic_proof::{local_state::LocalNetworkStateData, LocalNetworkState};
-use proof::Proof;
-use reth_primitives::Address;
+use pessimistic_proof::{local_state::LocalNetworkStateData, Address, LocalNetworkState};
 use serde::Serialize;
 use sp1::SP1;
 use sp1_sdk::{CpuProver, MockProver, NetworkProver};
@@ -37,63 +38,79 @@ pub(crate) trait AggregatorProver<I>: Send + Sync {
 
 /// The notifier that will be used to notify the aggregator
 /// using a prover that implements the [`AggregatorProver`] trait
-#[derive(Clone)]
-pub struct AggregatorNotifier<I> {
+pub struct AggregatorNotifier<I, PendingStore, StateStore> {
     /// The prover that will be used to generate the proof
     prover: Arc<dyn AggregatorProver<I>>,
+    pending_store: Arc<PendingStore>,
+    #[allow(unused)]
+    state_store: Arc<StateStore>,
 }
-
-impl<I> TryFrom<ProverConfig> for AggregatorNotifier<I>
+impl<I, PendingStore, StateStore> AggregatorNotifier<I, PendingStore, StateStore>
 where
     I: Serialize,
 {
-    type Error = NotifierError;
-
-    #[cfg_attr(feature = "coverage", coverage(off))]
-    fn try_from(config: ProverConfig) -> Result<Self, Self::Error> {
-        match config {
-            ProverConfig::SP1Network {} => Ok(Self {
-                prover: Arc::new(SP1::new(NetworkProver::new(), ELF)),
-            }),
-            ProverConfig::SP1Local {} => Ok(Self {
-                prover: Arc::new(SP1::new(CpuProver::new(), ELF)),
-            }),
-            ProverConfig::SP1Mock {} => Ok(Self {
-                prover: Arc::new(SP1::new(MockProver::new(), ELF)),
-            }),
-        }
+    /// Try to create a new notifier using the given configuration
+    pub fn try_new(
+        config: &ProverConfig,
+        pending_store: Arc<PendingStore>,
+        state_store: Arc<StateStore>,
+    ) -> Result<Self, NotifierError> {
+        Ok(Self {
+            prover: match config {
+                ProverConfig::SP1Network {} => Arc::new(SP1::new(NetworkProver::new(), ELF)),
+                ProverConfig::SP1Local {} => Arc::new(SP1::new(CpuProver::new(), ELF)),
+                ProverConfig::SP1Mock {} => Arc::new(SP1::new(MockProver::new(), ELF)),
+            },
+            pending_store,
+            state_store,
+        })
     }
 }
 
-impl Certifier for AggregatorNotifier<Certificate> {
-    type Input = Certificate;
-    type Proof = Proof;
-
+impl<PendingStore, StateStore> Certifier
+    for AggregatorNotifier<Certificate, PendingStore, StateStore>
+where
+    PendingStore: PendingCertificateReader + PendingCertificateWriter + Clone + 'static,
+    StateStore: StateWriter + StateReader + 'static,
+{
     fn certify(
         &self,
         full_state: LocalNetworkStateData,
-        certificate: Certificate,
-    ) -> Result<BoxFuture<Result<CertifierOutput<Self::Proof>, Error>>, Error> {
+        network_id: NetworkId,
+        height: Height,
+    ) -> Result<BoxFuture<Result<CertifierOutput, Error>>, Error> {
+        // Fetch certificate from storage
+        let certificate = self
+            .pending_store
+            .get_certificate(network_id, height)?
+            .ok_or(Error::CertificateNotFound(network_id, height))?;
+
+        let certificate_id = certificate.hash();
+
+        if self.pending_store.get_proof(certificate_id)?.is_some() {
+            return Err(Error::ProofAlreadyExists(network_id, height));
+        }
+
         let signer = Address::new([0; 20]); // TODO: put the trusted sequencer address
         let mut batch_header = certificate.into_pessimistic_proof_input(&full_state, signer)?;
         let initial_state = LocalNetworkState::from(full_state.clone());
-        let target = initial_state
-            .clone()
+
+        let mut state = initial_state.clone();
+
+        #[allow(clippy::let_unit_value)]
+        let _native_outputs = state
             .apply_batch_header(&batch_header)
             .map_err(Error::NativeExecutionFailed)?;
 
-        if batch_header.target.exit_root != target.exit_root {
+        if batch_header.target.exit_root != initial_state.exit_tree.get_root() {
             // state transition mismatch between execution and received certificate
             return Err(Error::NativeExecutionFailed(
                 pessimistic_proof::ProofError::InvalidFinalLocalExitRoot,
             ));
         }
 
-        batch_header.target.balance_root = target.balance_root;
-        batch_header.target.nullifier_root = target.nullifier_root;
-
-        // TODO: implement `apply_batch_header` for LocalNetworkStateData
-        let new_state = full_state.clone();
+        batch_header.target.balance_root = initial_state.balance_tree.root;
+        batch_header.target.nullifier_root = initial_state.nullifier_set.root;
 
         let proving_request = self
             .prover
@@ -110,9 +127,15 @@ impl Certifier for AggregatorNotifier<Certificate> {
                 Err(Error::ProofVerificationFailed)
             } else {
                 info!("Successfully generated and verified the p-proof!");
+
+                // TODO: Check if the key already exists
+                self.pending_store
+                    .insert_generated_proof(&certificate.hash(), &proof)?;
+
                 Ok(CertifierOutput {
-                    proof,
-                    new_state,
+                    certificate,
+                    height,
+                    new_state: state,
                     network: batch_header.origin_network,
                 })
             }
@@ -120,8 +143,10 @@ impl Certifier for AggregatorNotifier<Certificate> {
     }
 }
 
-impl<I> EpochPacker for AggregatorNotifier<I>
+impl<I, PendingStore, StateStore> EpochPacker for AggregatorNotifier<I, PendingStore, StateStore>
 where
+    PendingStore: PendingCertificateReader + Clone + 'static,
+    StateStore: StateReader + 'static,
     I: Clone + 'static,
 {
     type Item = I;

@@ -3,7 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agglayer_config::Config;
-use agglayer_types::Certificate;
+use agglayer_storage::storage::{pending_db_cf_definitions, DB};
+use agglayer_storage::stores::pending::PendingStore;
+use agglayer_storage::stores::PendingCertificateWriter;
+use agglayer_storage::tests::TempDBDir;
+use agglayer_types::{Certificate, NetworkId};
 use ethers::providers::{self, Http, Middleware, Provider, ProviderExt as _};
 use ethers::types::{TransactionRequest, H256};
 use ethers::utils::Anvil;
@@ -40,7 +44,7 @@ async fn healthcheck_method_can_be_called() {
 
     let kernel = Kernel::new(provider, config.clone());
 
-    let _server_handle = AgglayerImpl::new(kernel, certificate_sender)
+    let _server_handle = AgglayerImpl::new(kernel, certificate_sender, Arc::new(DummyStore {}))
         .start(config.clone())
         .await
         .unwrap();
@@ -99,7 +103,7 @@ async fn check_tx_status() {
     let kernel = Kernel::new(client, config.clone());
 
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
-    let _server_handle = AgglayerImpl::new(kernel, certificate_sender)
+    let _server_handle = AgglayerImpl::new(kernel, certificate_sender, Arc::new(DummyStore {}))
         .start(config.clone())
         .await
         .unwrap();
@@ -145,7 +149,7 @@ async fn send_certificate_method_can_be_called() {
 
     let kernel = Kernel::new(provider, config.clone());
 
-    let _server_handle = AgglayerImpl::new(kernel, certificate_sender)
+    let _server_handle = AgglayerImpl::new(kernel, certificate_sender, Arc::new(DummyStore {}))
         .start(config.clone())
         .await
         .unwrap();
@@ -156,7 +160,7 @@ async fn send_certificate_method_can_be_called() {
     let _: () = client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::default()],
+            rpc_params![Certificate::new_for_test(1.into(), 0)],
         )
         .await
         .unwrap();
@@ -184,7 +188,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
 
     let kernel = Kernel::new(provider, config.clone());
 
-    let _server_handle = AgglayerImpl::new(kernel, certificate_sender)
+    let _server_handle = AgglayerImpl::new(kernel, certificate_sender, Arc::new(DummyStore {}))
         .start(config.clone())
         .await
         .unwrap();
@@ -223,7 +227,11 @@ async fn check_tx_status_fail() {
 
     let kernel = Kernel::new(client, config.clone());
 
-    let _server_handle = AgglayerImpl::new(kernel, certificate_sender)
+    let tmp = TempDBDir::new();
+    let db = Arc::new(DB::open_cf(tmp.path.as_path(), pending_db_cf_definitions()).unwrap());
+    let store = Arc::new(PendingStore::new(db));
+
+    let _server_handle = AgglayerImpl::new(kernel, certificate_sender, store)
         .start(config.clone())
         .await
         .unwrap();
@@ -272,4 +280,33 @@ fn next_available_addr() -> std::net::SocketAddr {
     let _incoming = listener.accept().expect("Can't accept an available port");
 
     addr
+}
+
+struct DummyStore {}
+
+impl PendingCertificateWriter for DummyStore {
+    fn insert_pending_certificate(
+        &self,
+        _network_id: NetworkId,
+        _height: u64,
+        _certificate: &Certificate,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
+    fn insert_generated_proof(
+        &self,
+        _certificate_id: &agglayer_types::CertificateId,
+        _proof: &agglayer_types::Proof,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
+    fn remove_pending_certificate(
+        &self,
+        _network_id: agglayer_types::NetworkId,
+        _height: agglayer_types::Height,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
 }

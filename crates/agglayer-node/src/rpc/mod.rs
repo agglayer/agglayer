@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_storage::stores::PendingCertificateWriter;
 use agglayer_telemetry::KeyValue;
-use agglayer_types::Certificate;
+use agglayer_types::{Certificate, CertificateId, Height, NetworkId};
 use ethers::{
     contract::{ContractError, ContractRevert},
     providers::Middleware,
@@ -43,23 +44,32 @@ trait Agglayer {
 }
 
 /// The RPC agglayer service implementation.
-pub(crate) struct AgglayerImpl<Rpc> {
+pub(crate) struct AgglayerImpl<Rpc, PendingStore> {
     kernel: Kernel<Rpc>,
-    certificate_sender: mpsc::Sender<Certificate>,
+    certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
+    #[allow(unused)]
+    pending_store: Arc<PendingStore>,
 }
 
-impl<Rpc> AgglayerImpl<Rpc> {
+impl<Rpc, PendingStore> AgglayerImpl<Rpc, PendingStore> {
     /// Create an instance of the RPC agglayer service.
-    pub(crate) fn new(kernel: Kernel<Rpc>, certificate_sender: mpsc::Sender<Certificate>) -> Self {
+    pub(crate) fn new(
+        kernel: Kernel<Rpc>,
+        certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
+        pending_store: Arc<PendingStore>,
+    ) -> Self {
         Self {
             kernel,
             certificate_sender,
+            pending_store,
         }
     }
 }
-impl<Rpc> AgglayerImpl<Rpc>
+
+impl<Rpc, PendingStore> AgglayerImpl<Rpc, PendingStore>
 where
     Rpc: Middleware + 'static,
+    PendingStore: PendingCertificateWriter + 'static,
 {
     pub(crate) async fn start(self, config: Arc<Config>) -> anyhow::Result<ServerHandle> {
         // Create the RPC service
@@ -124,9 +134,10 @@ where
 }
 
 #[async_trait]
-impl<Rpc> AgglayerServer for AgglayerImpl<Rpc>
+impl<Rpc, PendingStore> AgglayerServer for AgglayerImpl<Rpc, PendingStore>
 where
     Rpc: Middleware + 'static,
+    PendingStore: PendingCertificateWriter + 'static,
 {
     #[instrument(skip(self, tx), fields(hash, rollup_id = tx.tx.rollup_id), level = "info")]
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
@@ -248,7 +259,21 @@ where
     }
 
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<()> {
-        if let Err(error) = self.certificate_sender.send(certificate).await {
+        _ = self.pending_store.insert_pending_certificate(
+            certificate.network_id,
+            certificate.height,
+            &certificate,
+        );
+
+        if let Err(error) = self
+            .certificate_sender
+            .send((
+                certificate.network_id,
+                certificate.height,
+                certificate.hash(),
+            ))
+            .await
+        {
             error!("Failed to send certificate: {error}");
 
             return Err(Error::send_certificate(error));
