@@ -1,6 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
-use std::ops::Deref;
+use std::{fmt::Display, ops::Deref};
 
 use reth_primitives::{address, revm_primitives::bitvec::view::BitViewSized, Address, U256};
 use serde::{Deserialize, Serialize};
@@ -125,6 +125,12 @@ impl BridgeExit {
     Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash,
 )]
 pub struct NetworkId(u32);
+
+impl Display for NetworkId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl NetworkId {
     pub fn new(value: u32) -> Self {

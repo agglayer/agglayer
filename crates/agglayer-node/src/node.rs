@@ -5,6 +5,13 @@ use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
 use agglayer_signer::ConfiguredSigner;
+use agglayer_storage::{
+    storage::DB,
+    stores::{
+        epochs::EpochsStore, metadata::MetadataStore, pending::PendingStore, state::StateStore,
+        EpochStoreReader,
+    },
+};
 use anyhow::Result;
 use ethers::{
     middleware::MiddlewareBuilder,
@@ -66,18 +73,23 @@ impl Node {
         config: Arc<Config>,
         cancellation_token: CancellationToken,
     ) -> Result<Self> {
-        let signer = ConfiguredSigner::new(config.clone()).await?;
-        let address = signer.address();
-        // Create a new L1 RPC provider with the configured signer.
-        let client = reqwest::Client::builder()
-            .timeout(config.l1.rpc_timeout)
-            .build()?;
-        let rpc = Provider::new(Http::new_with_client(config.l1.node_url.clone(), client))
-            .with_signer(signer)
-            .nonce_manager(address);
+        // Initializing storage
+        let metadata_db = Arc::new(DB::open_cf(
+            &config.storage.metadata_db_path,
+            agglayer_storage::storage::metadata_db_cf_definitions(),
+        )?);
+        let pending_db = Arc::new(DB::open_cf(
+            &config.storage.pending_db_path,
+            agglayer_storage::storage::pending_db_cf_definitions(),
+        )?);
+        let state_db = Arc::new(DB::open_cf(
+            &config.storage.state_db_path,
+            agglayer_storage::storage::state_db_cf_definitions(),
+        )?);
 
-        // Construct the core.
-        let core = Kernel::new(rpc, config.clone());
+        let _metadata_store = Arc::new(MetadataStore::new(metadata_db));
+        let state_store = Arc::new(StateStore::new(state_db.clone()));
+        let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
 
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
@@ -93,13 +105,35 @@ impl Node {
             }
         };
 
-        let certifier_aggregator_task: AggregatorNotifier<_> =
-            config.certificate_orchestrator.prover.clone().try_into()?;
-        let epoch_packing_aggregator_task: AggregatorNotifier<_> =
-            config.certificate_orchestrator.prover.clone().try_into()?;
+        let signer = ConfiguredSigner::new(config.clone()).await?;
+        let address = signer.address();
+        // Create a new L1 RPC provider with the configured signer.
+        let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
+            .with_signer(signer)
+            .nonce_manager(address);
+
+        // Construct the core.
+        let core = Kernel::new(rpc, config.clone());
+
         let clock_subscription =
             tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
                 .filter_map(|value| value.ok());
+
+        let current_epoch = clock_ref.current_epoch();
+
+        let epochs_store = Arc::new(EpochsStore::new(config.clone(), current_epoch, pending_db)?);
+
+        let certifier_aggregator_task: AggregatorNotifier<_, _, _> = AggregatorNotifier::try_new(
+            &config.certificate_orchestrator.prover,
+            pending_store.clone(),
+            state_store.clone(),
+        )?;
+        let epoch_packing_aggregator_task: AggregatorNotifier<_, _, _> =
+            AggregatorNotifier::try_new(
+                &config.certificate_orchestrator.prover,
+                pending_store.clone(),
+                state_store.clone(),
+            )?;
 
         let (data_sender, data_receiver) = mpsc::channel(
             config
@@ -113,11 +147,17 @@ impl Node {
             .cancellation_token(cancellation_token.clone())
             .epoch_packing_task_builder(epoch_packing_aggregator_task)
             .certifier_task_builder(certifier_aggregator_task)
+            .pending_store(pending_store.clone())
+            .epochs_store(epochs_store.clone())
+            .current_epoch(epochs_store.get_current_epoch())
+            .state_store(state_store)
             .start()
             .await?;
 
         // Bind the core to the RPC server.
-        let server_handle = AgglayerImpl::new(core, data_sender).start(config).await?;
+        let server_handle = AgglayerImpl::new(core, data_sender, pending_store.clone())
+            .start(config)
+            .await?;
 
         let rpc_handle = tokio::spawn(async move {
             tokio::select! {

@@ -71,6 +71,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
+ "agglayer-storage",
  "agglayer-types",
  "anyhow",
  "futures",
@@ -90,11 +91,15 @@ name = "agglayer-certificate-orchestrator"
 version = "0.1.0"
 dependencies = [
  "agglayer-clock",
+ "agglayer-config",
+ "agglayer-storage",
  "agglayer-types",
  "anyhow",
+ "arc-swap",
  "buildstructor",
  "futures-util",
  "pessimistic-proof",
+ "rstest",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -155,6 +160,7 @@ dependencies = [
  "agglayer-clock",
  "agglayer-config",
  "agglayer-signer",
+ "agglayer-storage",
  "agglayer-telemetry",
  "agglayer-types",
  "anyhow",

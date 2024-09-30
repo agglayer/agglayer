@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  coverage:
-    name: SonarCloud and Linter
+  rust-unit-coverage:
+    name: Unit & Linter coverage
     runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +26,11 @@ jobs:
         with:
           toolchain: nightly-2024-07-15
           components: clippy rustfmt llvm-tools-preview
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install SP1UP
         run: curl -L https://sp1.succinct.xyz | bash
@@ -40,12 +45,6 @@ jobs:
       - uses: taiki-e/install-action@grcov
       - uses: taiki-e/install-action@protoc
       - uses: taiki-e/install-action@nextest
-
-      - name: Set up rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-            cache-on-failure: true
-
       - name: Install cargo-sonar and run Clippy
         run: |
             cargo install cargo-sonar
@@ -56,7 +55,7 @@ jobs:
         env:
           RUST_LOG: info
           LLVM_PROFILE_FILE: "llvm_profile-instrumentation-%p-%m.profraw"
-        run: cargo nextest run --workspace --nocapture -F coverage --cargo-profile codecov -Z profile-rustflags
+        run: cargo nextest run --workspace -F coverage --cargo-profile codecov -Z profile-rustflags
 
       - name: Run grcov
         run: |
@@ -70,6 +69,7 @@ jobs:
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -80,6 +80,7 @@ jobs:
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v4
+        continue-on-error: true
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true

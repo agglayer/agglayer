@@ -4,5 +4,6 @@ use serde::Serialize;
 /// generated
 #[derive(Clone, Serialize)]
 pub enum Proof {
+    #[allow(unused)]
     SP1(sp1_sdk::SP1ProofWithPublicValues),
 }

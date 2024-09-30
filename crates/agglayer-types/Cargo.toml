@@ -12,3 +12,7 @@ serde.workspace = true
 sp1-sdk.workspace = true
 sp1-core-machine.workspace = true
 thiserror.workspace = true
+
+[features]
+default = []
+testutils = []

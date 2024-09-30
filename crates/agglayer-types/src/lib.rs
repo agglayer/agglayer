@@ -81,6 +81,19 @@ pub struct Certificate {
 }
 
 impl Certificate {
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
+        Certificate {
+            network_id,
+            height,
+            prev_local_exit_root: [0; 32],
+            new_local_exit_root: [0; 32],
+            bridge_exits: Vec::new(),
+            imported_bridge_exits: Vec::new(),
+            signature: Signature::default(),
+        }
+    }
+
     pub fn hash(&self) -> Digest {
         keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),

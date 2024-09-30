@@ -29,4 +29,4 @@ required-features = ["tests"]
 
 [features]
 default = []
-tests = ["rand"]
+testutils = ["rand"]
