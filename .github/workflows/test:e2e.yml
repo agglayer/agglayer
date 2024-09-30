@@ -19,8 +19,6 @@ env:
 
 jobs:
   docker-build-local:
-    needs:
-      - unit
     name: E2E Tests | Docker build
     uses: ./.github/workflows/util:docker.yml
     secrets: inherit
@@ -32,7 +30,8 @@ jobs:
   e2e-kurtosis-cdk:
     name: E2E Tests | Kurtosis-CDK
     runs-on: ubuntu-latest
-    needs: pre-e2e
+    needs:
+      - docker-build-local
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -42,7 +41,7 @@ jobs:
 
       - name: Load image
         run: |
-          echo ${{ needs.pre-e2e.outputs.tags }}
+          echo ${{ needs.docker-build-local.outputs.tags }}
           docker load --input /tmp/docker-image.tar
           docker image ls -a
 
@@ -54,7 +53,7 @@ jobs:
 
       - name: Replace param with local agglayer-rs docker img
         run: |
-          new_value="${{ needs.pre-e2e.outputs.tags }}"
+          new_value="${{ needs.docker-build-local.outputs.tags }}"
 
           # Escape special characters in the new value
           escaped_new_value=$(sed 's/[\/&]/\\&/g' <<< "$new_value")
@@ -98,7 +97,7 @@ jobs:
     permissions:
       packages: write
     needs:
-      - pre-e2e
+      - docker-build-local
       - e2e-kurtosis-cdk
     steps:
       - name: Download artifact
@@ -116,10 +115,10 @@ jobs:
 
       - name: Load image
         run: |
-          echo ${{ needs.pre-e2e.outputs.tags }}
+          echo ${{ needs.docker-build-local.outputs.tags }}
           docker load --input /tmp/docker-image.tar
 
       - name: Publishing image
         env:
-          DOCKER_IMAGE: ${{ needs.pre-e2e.outputs.tags }}
+          DOCKER_IMAGE: ${{ needs.docker-build-local.outputs.tags }}
         run: docker push ${{ env.DOCKER_IMAGE }}
