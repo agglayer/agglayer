@@ -197,8 +197,8 @@ where
     ///             Ok(CertifierOutput {
     ///                 new_state: LocalNetworkStateData::default().into(),
     ///                 network: NetworkId::new(0),
-    ///                 certificate: Certificate::new_for_test(network_id,
-    /// height),                 height: 0,
+    ///                 certificate: Certificate::new_for_test(network_id, height),
+    ///                 height: 0,
     ///             })
     ///         }))
     ///     }
@@ -206,15 +206,13 @@ where
     ///
     /// async fn start() -> anyhow::Result<()> {
     ///     let (sender, receiver) = tokio::sync::broadcast::channel(1);
-    ///     let clock_stream =
-    /// BroadcastStream::new(sender.subscribe()).filter_map(|value| value.ok());
+    ///     let clock_stream = BroadcastStream::new(sender.subscribe()).filter_map(|value| value.ok());
     ///     let notifier = AggregatorNotifier::new();
     ///     let data_receiver = tokio::sync::mpsc::channel(1).1;
     ///
     ///     let config = Arc::new(Config::new_for_test());
     ///     let tmp = TempDBDir::new();
-    ///     let db = Arc::new(DB::open_cf(tmp.path.as_path(),
-    /// state_db_cf_definitions()).unwrap());
+    ///     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
     ///
     ///     let metadata_db = Arc::new(DB::open_cf(
     ///         &config.storage.metadata_db_path,
@@ -229,12 +227,11 @@ where
     ///         agglayer_storage::storage::state_db_cf_definitions(),
     ///     )?);
     ///
-    ///     let epochs_store = Arc::new(EpochsStore::new(config, 0,
-    /// pending_db.clone())?);
+    ///     let epochs_store = Arc::new(EpochsStore::new(config, 0, pending_db.clone())?);
     ///
     ///     let state_store = Arc::new(StateStore::new(state_db.clone()));
     ///     let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
-
+    ///
     ///     CertificateOrchestrator::builder()
     ///         .clock(clock_stream)
     ///         .data_receiver(data_receiver)
@@ -252,7 +249,7 @@ where
     ///     Ok(())
     /// }
     /// ```
-    /// 
+    ///
     /// # Errors
     ///
     /// This function can't fail but returns a Result for convenience and future
