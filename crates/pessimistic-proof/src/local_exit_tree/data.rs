@@ -98,6 +98,7 @@ where
     }
 
     pub fn get(&self, height: usize, index: usize) -> H::Digest {
+        assert!(index < 1 << (TREE_DEPTH - height), "Index out of bounds.");
         *self.layers[height]
             .get(index)
             .unwrap_or(&self.empty_hash_at_height[height])

@@ -170,6 +170,7 @@ where
         // If false, insert the value at the key and error if the key is present.
         update: bool,
     ) -> Result<H::Digest, SmtError> {
+        assert!(depth <= DEPTH, "Depth out of bounds");
         if depth == DEPTH {
             return if !update && hash != self.empty_hash_at_height[0] {
                 Err(SmtError::KeyAlreadyPresent)
