@@ -23,10 +23,15 @@ fn cycles_on_sample_inputs(
     let n_exits = withdrawals.len();
 
     let old_state = state.local_state();
-    let batch_header = state.apply_events(&[], &withdrawals);
+    let (certificate, signer) = state.clone().apply_events(&[], &withdrawals);
+
+    let multi_batch_header = state
+        .state_b
+        .apply_certificate(&certificate, signer)
+        .unwrap();
 
     let (new_roots, stats) = Runner::new()
-        .execute(&old_state, &batch_header)
+        .execute(&old_state, &multi_batch_header)
         .expect("execution failed");
 
     // Double check the roots match what is calculated by the proof-external state.

@@ -9,10 +9,11 @@ use std::{
 use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, PerEpochWriter, StateReader, StateWriter,
 };
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateId, Height, LocalNetworkStateData, NetworkId, Proof,
+};
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, poll, Stream};
-use pessimistic_proof::{local_state::LocalNetworkStateData, LocalNetworkState};
 use rstest::fixture;
 use tokio::sync::{broadcast, mpsc};
 use tokio_stream::{wrappers::BroadcastStream, StreamExt as _};
@@ -483,7 +484,7 @@ impl EpochPacker for Check {
                 .clone()
                 .unwrap_or_else(|| Certificate::new_for_test(1.into(), 0)),
             height: 0,
-            new_state: LocalNetworkState::default(),
+            new_state: LocalNetworkStateData::default(),
             network: 1.into(),
         });
 

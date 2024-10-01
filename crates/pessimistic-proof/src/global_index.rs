@@ -1,7 +1,7 @@
 use reth_primitives::U256;
 use serde::{Deserialize, Serialize};
 
-use crate::bridge_exit::NetworkId;
+use crate::{bridge_exit::NetworkId, nullifier_tree::NullifierKey};
 
 /// The [`GlobalIndex`] uniquely references one leaf within one Global Exit
 /// Tree.
@@ -26,6 +26,15 @@ impl GlobalIndex {
             self.rollup_index + 1
         }
         .into()
+    }
+}
+
+impl From<GlobalIndex> for NullifierKey {
+    fn from(value: GlobalIndex) -> Self {
+        Self {
+            network_id: value.network_id(),
+            let_index: value.leaf_index,
+        }
     }
 }
 

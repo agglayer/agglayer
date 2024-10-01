@@ -8,13 +8,33 @@ cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --help
 
 ## Local mode
 
-The following command will generate one plonk proof for 10 bridge exits, with the default mode which is local.
+The following command will generate one plonk proof with the default mode which is local.
 
 ```
 RUST_LOG=info cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --proof-dir ./data/proofs/ --n-exits 10
 ```
 
 The local mode requires a large machine with ~128GB RAM.
+
+### Bridge exits and Imported bridge exits
+
+The transition is given by `--n-exits <number>`. It will generate one Certificate with `<number>` brige exits and `<number>` imported bridge exits.
+
+The imported bridge exits are mirroring the bridge exits. This means that one bridge exit from chain A to chain B will be mirrored in the imported bridge exit as a bridge exit from another arbitrary chain to chain A.
+
+Example:
+
+```
+bridge exits:
+   A -> B: 2 ETH
+   A -> C: 10 USDT
+
+imported bridge exits:
+   * -> A: 2 ETH
+   * -> A: 10 USDT
+```
+
+The bridge exits are taken from this sample file: [withdrawals.json](../../data/withdrawals.json)
 
 ## Network mode
 
@@ -34,19 +54,28 @@ RUST_LOG=info cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --proo
 Expected logs:
 
 ```
-2024-08-30T13:02:29.261953Z  INFO Generating the proof for 10 bridge exits
-2024-08-30T13:02:29.261973Z  INFO Client circuit version: v1.1.0
-2024-08-30T13:02:37.100401Z  WARN network_prover: close time.busy=3.75µs time.idle=2.72µs
-2024-08-30T13:02:37.111616Z  INFO execute: clk = 0 pc = 0x209758
-2024-08-30T13:02:37.277199Z  INFO execute: close time.busy=176ms time.idle=1.57µs
-2024-08-30T13:02:37.277218Z  INFO Simulation complete, cycles: 1264128
-2024-08-30T13:02:45.374985Z  INFO Created proofrequest_01j6hp2xm7fpjtc6depe2sfa9s
-2024-08-30T13:02:45.375028Z  INFO View in explorer: https://explorer.succinct.xyz/proofrequest_01j6hp2xm7fpjtc6depe2sfa9s
-2024-08-30T13:02:48.651517Z  INFO Proof request claimed, proving...
-2024-08-30T13:05:57.296735Z  INFO Proof request fulfilled
-2024-08-30T13:05:58.374793Z  INFO Successfully generated the plonk proof
-2024-08-30T13:05:58.374934Z  INFO Writing the proof to "./agglayer/crates/pessimistic-proof-test-suite/./data/proofs/10-exits-v0x0072d7-4c049331-cde2-4a82-84f9-c720d89b1752.json"
+2024-10-01T10:30:41.580433Z  INFO Certificate: [{"network_id":1,"height":0,"prev_local_exit_root":[39,174,91,160,141,114, ...
+2024-10-01T10:30:41.580860Z  INFO Generating the proof for 1 bridge exits
+2024-10-01T10:30:41.580881Z  INFO Client circuit version: v2.0.0
+2024-10-01T10:30:56.775226Z  WARN network_prover: close time.busy=72.9ms time.idle=3.57µs
+2024-10-01T10:30:56.776023Z  INFO Skipping simulation
+2024-10-01T10:31:05.958647Z  INFO Created proofrequest_01j93t47b4e8dv7kgcm0a02dra
+2024-10-01T10:31:05.958692Z  INFO View in explorer: https://explorer.succinct.xyz/proofrequest_01j93t47b4e8dv7kgcm0a02dra
+2024-10-01T10:31:10.517512Z  INFO Proof request claimed, proving...
+2024-10-01T10:34:23.797319Z  INFO Proof request fulfilled
+2024-10-01T10:34:24.767493Z  INFO Successfully generated the plonk proof with a latency of 223.186621825s
+2024-10-01T10:34:24.767799Z  INFO Writing the proof to "./data/proofs/1-exits-v0x00c745-b99b2bf1-c58c-4808-8b3a-7548d13a151d.json"
 ```
+
+The first line in the logs is the full Certificate which is trimmed in this example.
+
+The execution outputs a json file which contains the following:
+
+- The certificate
+- The signer address
+- The public inputs of the pessimistic proof in clear and serialized for the verifier
+- The SNARK pessimistic proof
+- The verifier key
 
 ## Proof output
 

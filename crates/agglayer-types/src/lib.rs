@@ -1,22 +1,33 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof::local_exit_tree::LocalExitTree;
+use pessimistic_proof::local_state::StateCommitment;
+use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
+use pessimistic_proof::utils::smt::Smt;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
-    imported_bridge_exit::ImportedBridgeExit,
+    imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
     keccak::{keccak256_combine, Digest},
     local_balance_tree::LocalBalancePath,
-    local_state::{LocalNetworkStateData, StateCommitment},
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
 };
+use pessimistic_proof::{LocalNetworkState, ProofError};
 use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Conversion error: {0}")]
-    TypeConversion(&'static str),
+    #[error("Imported bridge exits refer to multiple L1 info root")]
+    MultipleL1InfoRoot,
+    #[error("Computed exit root: {computed:?} differs from certificate exit root: {declared:?}")]
+    MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
+    #[error("Overflowed imported bridge exits: {0}")]
+    ImportedBridgeExitOverflow(#[from] pessimistic_proof::ProofError),
+    #[error("Failed to apply the Certificate on the given state: {0}")]
+    InvalidCertificateProjection(#[from] pessimistic_proof::utils::smt::SmtError),
 }
 
 pub use reth_primitives::U256;
@@ -102,80 +113,184 @@ impl Certificate {
             self.new_local_exit_root.as_slice(),
         ])
     }
+}
 
-    pub fn into_pessimistic_proof_input(
-        &self,
-        state: &LocalNetworkStateData,
+/// Local state data of one network.
+/// The AggLayer tracks the [`LocalNetworkStateData`] for all networks.
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct LocalNetworkStateData {
+    /// The local exit tree without leaves.
+    pub exit_tree: LocalExitTree<Keccak256Hasher>,
+    /// The full local balance tree.
+    pub balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
+    /// The full nullifier tree.
+    pub nullifier_tree: Smt<Keccak256Hasher, NULLIFIER_TREE_DEPTH>,
+}
+
+impl From<LocalNetworkStateData> for LocalNetworkState {
+    fn from(state: LocalNetworkStateData) -> Self {
+        LocalNetworkState {
+            exit_tree: state.exit_tree,
+            balance_tree: LocalBalanceTree::new_with_root(state.balance_tree.root),
+            nullifier_tree: NullifierTree::new_with_root(state.nullifier_tree.root),
+        }
+    }
+}
+
+impl LocalNetworkStateData {
+    /// Apply the [`Certificate`] on the current state and returns the
+    /// [`MultiBatchHeader`] associated to the state transition.
+    pub fn apply_certificate(
+        &mut self,
+        certificate: &Certificate,
         signer: Address,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
-        let prev_balance_root = state.balance_tree.root;
-        let prev_nullifier_root = state.nullifier_set.root;
+        let prev_balance_root = self.balance_tree.root;
+        let prev_nullifier_root = self.nullifier_tree.root;
+
+        certificate
+            .bridge_exits
+            .iter()
+            .for_each(|e| self.exit_tree.add_leaf(e.hash()));
 
         let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
+            // Consider all the imported bridge exits
+            let imported_bridge_exits = certificate.imported_bridge_exits.iter();
+            // Consider all the bridge exits except for the native token
+            let bridge_exits = certificate
+                .bridge_exits
+                .iter()
+                .filter(|b| b.token_info.origin_network != certificate.network_id);
+
             // Set of dedup tokens mutated in the transition
             let mutated_tokens: BTreeSet<TokenInfo> = {
-                let imported_tokens = self
-                    .imported_bridge_exits
-                    .iter()
+                let imported_tokens = imported_bridge_exits
+                    .clone()
                     .map(|exit| exit.bridge_exit.token_info);
-                let exported_tokens = self.bridge_exits.iter().map(|exit| exit.token_info);
+                let exported_tokens = bridge_exits.clone().map(|exit| exit.token_info);
                 imported_tokens.chain(exported_tokens).collect()
             };
+
+            let initial_balances: BTreeMap<_, _> = mutated_tokens
+                .iter()
+                .map(|&token| {
+                    let balance =
+                        U256::from_be_bytes(self.balance_tree.get(token).unwrap_or_default());
+                    (token, balance)
+                })
+                .collect();
+
+            let mut new_balances = initial_balances.clone();
+            for imported_bridge_exit in imported_bridge_exits {
+                let token = imported_bridge_exit.bridge_exit.token_info;
+                new_balances.insert(
+                    token,
+                    new_balances[&token]
+                        .checked_add(imported_bridge_exit.bridge_exit.amount)
+                        .ok_or(ProofError::BalanceOverflowInBridgeExit)?,
+                );
+            }
+
+            for bridge_exit in bridge_exits {
+                let token = bridge_exit.token_info;
+                new_balances.insert(
+                    token,
+                    new_balances[&token]
+                        .checked_sub(bridge_exit.amount)
+                        .ok_or(ProofError::BalanceUnderflowInBridgeExit)?,
+                );
+            }
 
             // Get the proof against the initial balance for each token
             mutated_tokens
                 .into_iter()
                 .map(|token| {
-                    let initial_balance =
-                        U256::from_be_bytes(state.balance_tree.get(token).unwrap_or_default());
+                    let initial_balance = initial_balances[&token];
+
                     let path = if initial_balance.is_zero() {
-                        // TODO: dont clone once get_inclusion_proof_zero doesnt mutate anymore
-                        state
-                            .balance_tree
-                            .clone()
-                            .get_inclusion_proof_zero(token)
-                            .unwrap()
+                        self.balance_tree.get_inclusion_proof_zero(token)?
                     } else {
-                        state.balance_tree.get_inclusion_proof(token).unwrap()
+                        self.balance_tree.get_inclusion_proof(token)?
                     };
-                    (token, (initial_balance, path))
+
+                    self.balance_tree
+                        .update(token, new_balances[&token].to_be_bytes())?;
+
+                    Ok((token, (initial_balance, path)))
                 })
-                .collect()
+                .collect::<Result<BTreeMap<_, _>, Error>>()?
         };
 
-        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> = self
-            .imported_bridge_exits
-            .iter()
-            .map(|exit| {
-                let null_key = NullifierKey {
-                    network_id: exit.global_index.network_id(),
-                    let_index: exit.global_index.leaf_index,
-                };
-                let nullifier_path = state
-                    .nullifier_set
-                    .get_non_inclusion_proof(null_key)
-                    .unwrap();
-                (exit.clone(), nullifier_path)
-            })
-            .collect();
+        let l1_info_root: Digest = {
+            if let Some(imported_bridge_exit) = certificate.imported_bridge_exits.first() {
+                let l1_root = imported_bridge_exit.l1_root();
+                if certificate
+                    .imported_bridge_exits
+                    .iter()
+                    .all(|exit| exit.l1_root() == l1_root)
+                {
+                    Ok(l1_root)
+                } else {
+                    Err(Error::MultipleL1InfoRoot)
+                }
+            } else {
+                Ok(Digest::default())
+            }
+        }?;
+
+        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> =
+            certificate
+                .imported_bridge_exits
+                .iter()
+                .map(|exit| {
+                    let nullifier_key: NullifierKey = exit.global_index.into();
+                    let nullifier_path =
+                        self.nullifier_tree.get_non_inclusion_proof(nullifier_key)?;
+                    self.nullifier_tree
+                        .insert(nullifier_key, Digest::from_bool(true))?;
+                    Ok((exit.clone(), nullifier_path))
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
+
+        let imported_hash =
+            commit_imported_bridge_exits(imported_bridge_exits.iter().map(|(exit, _)| exit));
+
+        // Check that the certificate referred to the right target
+        let computed = self.exit_tree.get_root();
+        if computed != certificate.new_local_exit_root {
+            return Err(Error::MismatchNewLocalExitRoot {
+                declared: certificate.new_local_exit_root,
+                computed,
+            });
+        }
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
-            origin_network: self.network_id,
-            prev_local_exit_root: self.prev_local_exit_root,
-            bridge_exits: self.bridge_exits.clone(),
+            origin_network: certificate.network_id,
+            prev_local_exit_root: certificate.prev_local_exit_root,
+            bridge_exits: certificate.bridge_exits.clone(),
             imported_bridge_exits,
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
             signer,
-            signature: self.signature,
-            imported_exits_root: None,
+            signature: certificate.signature,
+            imported_exits_root: Some(imported_hash),
             target: StateCommitment {
-                exit_root: self.new_local_exit_root,
-                balance_root: Default::default(), // computed by agglayer
-                nullifier_root: Default::default(), // computed by agglayer
+                exit_root: certificate.new_local_exit_root,
+                balance_root: self.balance_tree.root,
+                nullifier_root: self.nullifier_tree.root,
             },
-            l1_info_root: [0; 32],
+            l1_info_root,
         })
+    }
+
+    /// Generates the [`MultiBatchHeader`] from the state and a [`Certificate`].
+    /// Does not mutate the current state.
+    pub fn make_multi_batch_header(
+        &self,
+        certificate: &Certificate,
+        signer: Address,
+    ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
+        self.clone().apply_certificate(certificate, signer)
     }
 }

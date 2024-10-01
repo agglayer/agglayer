@@ -1,11 +1,13 @@
 use std::{path::PathBuf, time::Instant};
 
+use agglayer_types::Certificate;
 use clap::Parser;
-use pessimistic_proof::{
-    bridge_exit::{BridgeExit, NetworkId},
-    PessimisticProofOutput,
+use pessimistic_proof::{bridge_exit::NetworkId, PessimisticProofOutput};
+use pessimistic_proof_test_suite::{
+    forest::Forest,
+    runner::Runner,
+    sample_data::{self as data},
 };
-use pessimistic_proof_test_suite::{runner::Runner, sample_data as data};
 use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use sp1_sdk::HashableKey;
@@ -16,7 +18,7 @@ use uuid::Uuid;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct PPGenArgs {
-    /// The number of bridge exits.
+    /// The number of bridge exits and imported bridge exits.
     #[clap(long, default_value = "10")]
     n_exits: usize,
 
@@ -35,7 +37,7 @@ pub fn main() {
 
     let args = PPGenArgs::parse();
 
-    let mut state = data::sample_state_01();
+    let mut state = Forest::new([]);
     let bridge_exits = if let Some(p) = args.sample_path {
         data::sample_bridge_exits(p)
             .take(args.n_exits)
@@ -51,8 +53,19 @@ pub fn main() {
         .map(|be| (be.token_info, be.amount))
         .collect::<Vec<_>>();
 
-    let old_state = state.local_state();
-    let batch_header = state.apply_events(&[], &withdrawals);
+    let old_state = state.state_b.clone();
+
+    let imported_bridge_events = withdrawals.clone(); // import as much as we withdraw to bypass balance
+    let (certificate, signer) = state.apply_events(&imported_bridge_events, &withdrawals);
+
+    info!(
+        "Certificate: [{}]",
+        serde_json::to_string(&certificate).unwrap()
+    );
+
+    let multi_batch_header = old_state
+        .make_multi_batch_header(&certificate, signer.clone())
+        .unwrap();
 
     info!(
         "Generating the proof for {} bridge exits",
@@ -61,7 +74,7 @@ pub fn main() {
 
     let start = Instant::now();
     let (proof, vk, new_roots) = Runner::new()
-        .generate_plonk_proof(&old_state, &batch_header)
+        .generate_plonk_proof(&old_state.into(), &multi_batch_header)
         .expect("proving failed");
     let duration = start.elapsed();
 
@@ -72,9 +85,9 @@ pub fn main() {
 
     let vkey = vk.bytes32().to_string();
     let fixture = PessimisticProofFixture {
-        bridge_exits,
+        certificate,
         pp_inputs: new_roots.into(),
-        signer: batch_header.signer,
+        signer: signer,
         vkey: vkey.clone(),
         public_values: format!("0x{}", hex::encode(proof.public_values.as_slice())),
         proof: format!("0x{}", hex::encode(proof.bytes())),
@@ -106,7 +119,7 @@ pub struct VerifierInputs {
     pub prev_local_exit_root: String,
     /// The previous pessimistic root.
     pub prev_pessimistic_root: String,
-    /// The global exit root against which we prove the inclusion of the
+    /// The l1 info root against which we prove the inclusion of the
     /// imported bridge exits.
     pub l1_info_root: String,
     /// The origin network of the pessimistic proof.
@@ -139,7 +152,7 @@ impl From<PessimisticProofOutput> for VerifierInputs {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct PessimisticProofFixture {
-    bridge_exits: Vec<BridgeExit>,
+    certificate: Certificate,
     pp_inputs: VerifierInputs,
     signer: Address,
     vkey: String,

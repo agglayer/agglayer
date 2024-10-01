@@ -6,48 +6,25 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::{LeafType, L1_ETH, L1_NETWORK_ID},
     imported_bridge_exit::commit_imported_bridge_exits,
-    keccak::{keccak256_combine, Digest},
-    local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
-    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
-    multi_batch_header::MultiBatchHeader,
-    nullifier_tree::{NullifierKey, NullifierTree, NULLIFIER_TREE_DEPTH},
-    utils::smt::Smt,
+    keccak::Digest,
+    local_balance_tree::LocalBalanceTree,
+    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
+    multi_batch_header::{signature_commitment, MultiBatchHeader},
+    nullifier_tree::{NullifierKey, NullifierTree},
     ProofError,
 };
 
-/// Local state of one network including the leaves.
-/// The AggLayer tracks the [`LocalNetworkState`] for all networks.
-/// Eventually, this state will be entirely tracked by the networks themselves.
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct LocalNetworkStateData {
-    /// The full local exit tree.
-    pub exit_tree: LocalExitTreeData<Keccak256Hasher>,
-    /// The full local balance tree.
-    pub balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
-    /// The full nullifier set.
-    pub nullifier_set: Smt<Keccak256Hasher, NULLIFIER_TREE_DEPTH>,
-}
-
-impl From<LocalNetworkStateData> for LocalNetworkState {
-    fn from(state: LocalNetworkStateData) -> Self {
-        LocalNetworkState {
-            exit_tree: (&state.exit_tree).into(),
-            balance_tree: LocalBalanceTree::new_with_root(state.balance_tree.root),
-            nullifier_set: NullifierTree::new_with_root(state.nullifier_set.root),
-        }
-    }
-}
-
-/// State representation of one network without the leaves.
+/// State representation of one network without the leaves, taken as input by
+/// the prover.
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`].
     pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// Commitment to the balance for each token.
     pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
-    /// Commitment to the Nullifier Set for the local network, tracks claimed
+    /// Commitment to the Nullifier tree for the local network, tracks claimed
     /// assets on foreign networks
-    pub nullifier_set: NullifierTree<Keccak256Hasher>,
+    pub nullifier_tree: NullifierTree<Keccak256Hasher>,
 }
 
 /// The roots of one [`LocalNetworkState`].
@@ -64,7 +41,7 @@ impl LocalNetworkState {
         StateCommitment {
             exit_root: self.exit_tree.get_root(),
             balance_root: self.balance_tree.root,
-            nullifier_root: self.nullifier_set.root,
+            nullifier_root: self.nullifier_tree.root,
         }
     }
 
@@ -100,7 +77,7 @@ impl LocalNetworkState {
         if self.balance_tree.root != multi_batch_header.prev_balance_root {
             return Err(ProofError::InvalidInitialBalanceRoot);
         }
-        if self.nullifier_set.root != multi_batch_header.prev_nullifier_root {
+        if self.nullifier_tree.root != multi_batch_header.prev_nullifier_root {
             return Err(ProofError::InvalidInitialNullifierRoot);
         }
 
@@ -127,20 +104,6 @@ impl LocalNetworkState {
             return Err(ProofError::InvalidImportedExitsRoot);
         }
 
-        let combined_hash = keccak256_combine([
-            multi_batch_header.target.exit_root.as_slice(),
-            imported_exits_root.as_slice(),
-        ]);
-
-        // Check batch header signature
-        let signer = multi_batch_header
-            .signature
-            .recover_signer(B256::new(combined_hash))
-            .ok_or(ProofError::InvalidSignature)?;
-        if signer != multi_batch_header.signer {
-            return Err(ProofError::InvalidSignature);
-        }
-
         // Apply the imported bridge exits
         for (imported_bridge_exit, nullifier_path) in &multi_batch_header.imported_bridge_exits {
             if imported_bridge_exit.global_index.network_id() == multi_batch_header.origin_network {
@@ -156,12 +119,9 @@ impl LocalNetworkState {
             // Check the inclusion proof
             imported_bridge_exit.verify_path(multi_batch_header.l1_info_root)?;
 
-            // Check the nullifier non-inclusion path and update the nullifier set
-            let nullifier_key = NullifierKey {
-                network_id: imported_bridge_exit.global_index.network_id(),
-                let_index: imported_bridge_exit.global_index.leaf_index,
-            };
-            self.nullifier_set
+            // Check the nullifier non-inclusion path and update the nullifier tree
+            let nullifier_key: NullifierKey = imported_bridge_exit.global_index.into();
+            self.nullifier_tree
                 .verify_and_update(nullifier_key, nullifier_path)?;
 
             // The amount corresponds to L1 ETH if the leaf is a message
@@ -246,6 +206,27 @@ impl LocalNetworkState {
                 .map_err(|_| ProofError::BalanceOverflowInBridgeExit)?;
             self.balance_tree
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
+        }
+
+        // Verify that the signature is valid
+        let combined_hash = signature_commitment(
+            self.exit_tree.get_root(),
+            multi_batch_header
+                .imported_bridge_exits
+                .iter()
+                .map(|(exit, _)| exit),
+        );
+
+        // Check batch header signature
+        let signer = multi_batch_header
+            .signature
+            .recover_signer(B256::new(combined_hash))
+            .ok_or(ProofError::InvalidSignature)?;
+        if signer != multi_batch_header.signer {
+            return Err(ProofError::InvalidSigner {
+                witness: multi_batch_header.signer,
+                recovered: signer,
+            });
         }
 
         Ok(self.roots())

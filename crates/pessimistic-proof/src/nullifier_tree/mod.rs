@@ -15,7 +15,7 @@ pub const NULLIFIER_TREE_DEPTH: usize = 64;
 
 // TODO: This is basically the same as the local balance tree, consider
 // refactoring TODO: Consider using an Indexed Merkle Tree instead of an SMT. See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
-/// A commitment to the set of per-network nullifier sets maintained by the
+/// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -24,7 +24,7 @@ where
     H: Hasher,
     H::Digest: Serialize + for<'a> Deserialize<'a>,
 {
-    /// The Merkle Root of the nullifier set
+    /// The Merkle Root of the nullifier tree
     #[serde_as(as = "_")]
     pub root: H::Digest,
     /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth

@@ -11,10 +11,10 @@ use agglayer_storage::stores::{
     EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochWriter,
     StateReader, StateWriter,
 };
-use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
+use agglayer_types::{Certificate, CertificateId, Height, LocalNetworkStateData, NetworkId, Proof};
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, Stream, StreamExt};
-use pessimistic_proof::{local_state::LocalNetworkStateData, LocalNetworkState, ProofError};
+use pessimistic_proof::ProofError;
 use tokio::{
     sync::mpsc::Receiver,
     task::{JoinHandle, JoinSet},
@@ -144,7 +144,6 @@ where
     /// # use futures_util::future::BoxFuture;
     /// # use tokio_stream::StreamExt;
     /// # use pessimistic_proof::bridge_exit::NetworkId;
-    /// # use pessimistic_proof::local_state::LocalNetworkStateData;
     /// # use agglayer_types::Certificate;
     /// # use agglayer_types::Proof;
     /// # use agglayer_types::Height;
@@ -157,6 +156,7 @@ where
     /// # use agglayer_storage::stores::epochs::EpochsStore;
     /// # use agglayer_storage::stores::state::StateStore;
     /// # use agglayer_storage::stores::EpochStoreReader;
+    /// # use agglayer_types::LocalNetworkStateData;
     ///
     /// # #[derive(Clone)]
     /// # pub struct Empty;
@@ -231,7 +231,7 @@ where
     ///
     ///     let state_store = Arc::new(StateStore::new(state_db.clone()));
     ///     let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
-
+    ///
     ///     CertificateOrchestrator::builder()
     ///         .clock(clock_stream)
     ///         .data_receiver(data_receiver)
@@ -249,7 +249,7 @@ where
     ///     Ok(())
     /// }
     /// ```
-    /// 
+    ///
     /// # Errors
     ///
     /// This function can't fail but returns a Result for convenience and future
@@ -673,7 +673,7 @@ impl CertificateInput for Certificate {
 pub struct CertifierOutput {
     pub certificate: Certificate,
     pub height: Height,
-    pub new_state: LocalNetworkState,
+    pub new_state: LocalNetworkStateData,
     pub network: NetworkId,
 }
 
@@ -703,7 +703,7 @@ pub enum Error {
     ProverExecutionFailed(#[from] anyhow::Error),
     #[error("native execution failed: {0:?}")]
     NativeExecutionFailed(#[from] ProofError),
-    #[error("Type error: {0}")]
+    #[error("type error: {0}")]
     Types(#[from] agglayer_types::Error),
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
