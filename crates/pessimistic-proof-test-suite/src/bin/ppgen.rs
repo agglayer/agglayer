@@ -1,10 +1,8 @@
 use std::{path::PathBuf, time::Instant};
 
+use agglayer_types::Certificate;
 use clap::Parser;
-use pessimistic_proof::{
-    bridge_exit::{BridgeExit, NetworkId},
-    PessimisticProofOutput,
-};
+use pessimistic_proof::{bridge_exit::NetworkId, PessimisticProofOutput};
 use pessimistic_proof_test_suite::{
     forest::Forest,
     runner::Runner,
@@ -20,7 +18,7 @@ use uuid::Uuid;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct PPGenArgs {
-    /// The number of bridge exits.
+    /// The number of bridge exits and imported bridge exits.
     #[clap(long, default_value = "10")]
     n_exits: usize,
 
@@ -87,7 +85,7 @@ pub fn main() {
 
     let vkey = vk.bytes32().to_string();
     let fixture = PessimisticProofFixture {
-        bridge_exits,
+        certificate,
         pp_inputs: new_roots.into(),
         signer: signer,
         vkey: vkey.clone(),
@@ -121,7 +119,7 @@ pub struct VerifierInputs {
     pub prev_local_exit_root: String,
     /// The previous pessimistic root.
     pub prev_pessimistic_root: String,
-    /// The global exit root against which we prove the inclusion of the
+    /// The l1 info root against which we prove the inclusion of the
     /// imported bridge exits.
     pub l1_info_root: String,
     /// The origin network of the pessimistic proof.
@@ -154,7 +152,7 @@ impl From<PessimisticProofOutput> for VerifierInputs {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct PessimisticProofFixture {
-    bridge_exits: Vec<BridgeExit>,
+    certificate: Certificate,
     pp_inputs: VerifierInputs,
     signer: Address,
     vkey: String,
