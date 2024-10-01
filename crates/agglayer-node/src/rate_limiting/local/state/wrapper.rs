@@ -1,6 +1,7 @@
 //! A safer interface to rate limiter state.
 
 use super::RawState;
+use crate::log_assert;
 
 /// A wrapper over the raw state that ensures it's up to date when queried.
 ///
@@ -28,7 +29,7 @@ impl<S: RawState> State<S> {
 
     /// Record a rate-limited event into the rate limiter state.
     pub fn record(&mut self, time: S::Instant) {
-        assert!(
+        log_assert!(
             self.raw.query() < self.raw.max_events(),
             "Recording into a full limiter"
         );
@@ -53,12 +54,12 @@ impl<S: RawState> State<S> {
     /// Remove no longer relevant events.
     fn prune(&mut self, time: S::Instant) {
         let n_before = self.raw.query();
-        assert!(n_before <= self.raw.max_events(), "Limiter overflow");
+        log_assert!(n_before <= self.raw.max_events(), "Limiter overflow");
 
         self.raw.prune(time);
 
         let n_after = self.raw.query();
-        assert!(
+        log_assert!(
             n_after <= n_before,
             "Pruning increased occupancy from {n_before} to {n_after}"
         );

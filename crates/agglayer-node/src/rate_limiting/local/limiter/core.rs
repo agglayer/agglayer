@@ -1,4 +1,5 @@
 use super::{state::State, RawState, SlotTracker};
+use crate::log_assert;
 
 /// Rate limiter with non-trivial state.
 ///
@@ -28,14 +29,14 @@ impl<S: RawState> RateLimiterCore<S> {
     /// Query the total occupancy, including the reserved slots.
     pub fn query(&mut self, time: S::Instant) -> usize {
         let num = self.state.query(time) + self.reserved;
-        assert!(num <= self.state.max_events());
+        log_assert!(num <= self.state.max_events());
         num
     }
 
     /// Reserve a rate limiting slot.
     pub fn reserve(&mut self, time: S::Instant) -> Result<SlotTracker, S::LimitedInfo> {
         let occupancy = self.query(time);
-        assert!(occupancy <= self.state.max_events());
+        log_assert!(occupancy <= self.state.max_events());
 
         if occupancy < self.state.max_events() {
             self.reserved += 1;
@@ -49,13 +50,13 @@ impl<S: RawState> RateLimiterCore<S> {
     pub fn release(&mut self, slot: SlotTracker) {
         let r = &mut self.reserved;
         let n = slot.release();
-        assert!(n <= *r, "Releasing {n} slots but only {r} reserved");
+        log_assert!(n <= *r, "Releasing {n} slots but only {r} reserved");
         *r -= n;
     }
 
     /// Record a rate limiting event.
     pub fn record(&mut self, time: S::Instant, slot: SlotTracker) {
-        assert!(self.state.raw().query() < self.state.max_events());
+        log_assert!(self.state.raw().query() < self.state.max_events());
         self.state.record(time);
         self.release(slot);
     }

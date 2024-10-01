@@ -27,7 +27,7 @@ impl SlotTracker {
 
 impl Drop for SlotTracker {
     fn drop(&mut self) {
-        assert_eq!(self.0, 0, "Invariant error: slots not released");
+        crate::log_assert_eq!(self.0, 0, "slots not released");
     }
 }
 
