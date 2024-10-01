@@ -98,7 +98,7 @@ where
         let multi_batch_header = state.apply_certificate(&certificate, signer)?;
 
         // Perform the native PP execution
-        generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)
+        let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)
             .map_err(Error::NativeExecutionFailed)?;
 
         info!(

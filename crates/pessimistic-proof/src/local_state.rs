@@ -213,11 +213,8 @@ impl LocalNetworkState {
             self.exit_tree.get_root(),
             multi_batch_header
                 .imported_bridge_exits
-                .clone()
-                .into_iter()
-                .map(|(exit, _)| exit)
-                .collect::<Vec<_>>()
-                .as_slice(),
+                .iter()
+                .map(|(exit, _)| exit),
         );
 
         // Check batch header signature
