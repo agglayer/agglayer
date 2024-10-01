@@ -22,9 +22,9 @@ pub struct LocalNetworkState {
     pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// Commitment to the balance for each token.
     pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
-    /// Commitment to the Nullifier Set for the local network, tracks claimed
+    /// Commitment to the Nullifier tree for the local network, tracks claimed
     /// assets on foreign networks
-    pub nullifier_set: NullifierTree<Keccak256Hasher>,
+    pub nullifier_tree: NullifierTree<Keccak256Hasher>,
 }
 
 /// The roots of one [`LocalNetworkState`].
@@ -41,7 +41,7 @@ impl LocalNetworkState {
         StateCommitment {
             exit_root: self.exit_tree.get_root(),
             balance_root: self.balance_tree.root,
-            nullifier_root: self.nullifier_set.root,
+            nullifier_root: self.nullifier_tree.root,
         }
     }
 
@@ -77,7 +77,7 @@ impl LocalNetworkState {
         if self.balance_tree.root != multi_batch_header.prev_balance_root {
             return Err(ProofError::InvalidInitialBalanceRoot);
         }
-        if self.nullifier_set.root != multi_batch_header.prev_nullifier_root {
+        if self.nullifier_tree.root != multi_batch_header.prev_nullifier_root {
             return Err(ProofError::InvalidInitialNullifierRoot);
         }
 
@@ -119,9 +119,9 @@ impl LocalNetworkState {
             // Check the inclusion proof
             imported_bridge_exit.verify_path(multi_batch_header.l1_info_root)?;
 
-            // Check the nullifier non-inclusion path and update the nullifier set
+            // Check the nullifier non-inclusion path and update the nullifier tree
             let nullifier_key: NullifierKey = imported_bridge_exit.global_index.into();
-            self.nullifier_set
+            self.nullifier_tree
                 .verify_and_update(nullifier_key, nullifier_path)?;
 
             // The amount corresponds to L1 ETH if the leaf is a message

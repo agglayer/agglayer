@@ -37,7 +37,7 @@ pub fn empty_state() -> LocalNetworkState {
     LocalNetworkState {
         balance_tree: LocalBalanceTree::new(),
         exit_tree: LocalExitTree::new(),
-        nullifier_set: NullifierTree::new(),
+        nullifier_tree: NullifierTree::new(),
     }
 }
 

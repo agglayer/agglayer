@@ -97,16 +97,17 @@ where
         let initial_state = LocalNetworkState::from(state.clone());
         let multi_batch_header = state.apply_certificate(&certificate, signer)?;
 
-        // Perform the native pp execution
+        // Perform the native PP execution
         generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)
             .map_err(Error::NativeExecutionFailed)?;
 
         info!(
-            "Successfully executed the native pp for the Certificate {:?}",
+            "Successfully executed the native PP for the Certificate {:?}",
             certificate.hash()
         );
 
-        let proving_request = self.prover.prove(initial_state, certificate.clone()); // TODO: should be batch
+        // TODO: Aggregator notifier should take MultiBatchHeader instead of Certificate
+        let proving_request = self.prover.prove(initial_state, certificate.clone());
 
         Ok(Box::pin(async move {
             let proof = proving_request

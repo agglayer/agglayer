@@ -123,8 +123,8 @@ pub struct LocalNetworkStateData {
     pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// The full local balance tree.
     pub balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
-    /// The full nullifier set.
-    pub nullifier_set: Smt<Keccak256Hasher, NULLIFIER_TREE_DEPTH>,
+    /// The full nullifier tree.
+    pub nullifier_tree: Smt<Keccak256Hasher, NULLIFIER_TREE_DEPTH>,
 }
 
 impl From<LocalNetworkStateData> for LocalNetworkState {
@@ -132,7 +132,7 @@ impl From<LocalNetworkStateData> for LocalNetworkState {
         LocalNetworkState {
             exit_tree: state.exit_tree,
             balance_tree: LocalBalanceTree::new_with_root(state.balance_tree.root),
-            nullifier_set: NullifierTree::new_with_root(state.nullifier_set.root),
+            nullifier_tree: NullifierTree::new_with_root(state.nullifier_tree.root),
         }
     }
 }
@@ -146,7 +146,7 @@ impl LocalNetworkStateData {
         signer: Address,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
-        let prev_nullifier_root = self.nullifier_set.root;
+        let prev_nullifier_root = self.nullifier_tree.root;
 
         certificate
             .bridge_exits
@@ -154,13 +154,20 @@ impl LocalNetworkStateData {
             .for_each(|e| self.exit_tree.add_leaf(e.hash()));
 
         let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
+            // Consider all the imported bridge exits
+            let imported_bridge_exits = certificate.imported_bridge_exits.iter();
+            // Consider all the bridge exits except for the native token
+            let bridge_exits = certificate
+                .bridge_exits
+                .iter()
+                .filter(|b| b.token_info.origin_network != certificate.network_id);
+
             // Set of dedup tokens mutated in the transition
             let mutated_tokens: BTreeSet<TokenInfo> = {
-                let imported_tokens = certificate
-                    .imported_bridge_exits
-                    .iter()
+                let imported_tokens = imported_bridge_exits
+                    .clone()
                     .map(|exit| exit.bridge_exit.token_info);
-                let exported_tokens = certificate.bridge_exits.iter().map(|exit| exit.token_info);
+                let exported_tokens = bridge_exits.clone().map(|exit| exit.token_info);
                 imported_tokens.chain(exported_tokens).collect()
             };
 
@@ -174,22 +181,22 @@ impl LocalNetworkStateData {
                 .collect();
 
             let mut new_balances = initial_balances.clone();
-            for ib in certificate.imported_bridge_exits.iter() {
-                let token = ib.bridge_exit.token_info;
+            for imported_bridge_exit in imported_bridge_exits {
+                let token = imported_bridge_exit.bridge_exit.token_info;
                 new_balances.insert(
                     token,
                     new_balances[&token]
-                        .checked_add(ib.bridge_exit.amount)
+                        .checked_add(imported_bridge_exit.bridge_exit.amount)
                         .ok_or(ProofError::BalanceOverflowInBridgeExit)?,
                 );
             }
 
-            for b in certificate.bridge_exits.iter() {
-                let token = b.token_info;
+            for bridge_exit in bridge_exits {
+                let token = bridge_exit.token_info;
                 new_balances.insert(
                     token,
                     new_balances[&token]
-                        .checked_sub(b.amount)
+                        .checked_sub(bridge_exit.amount)
                         .ok_or(ProofError::BalanceUnderflowInBridgeExit)?,
                 );
             }
@@ -236,10 +243,11 @@ impl LocalNetworkStateData {
                 .imported_bridge_exits
                 .iter()
                 .map(|exit| {
-                    let null_key: NullifierKey = exit.global_index.into();
-                    let nullifier_path = self.nullifier_set.get_non_inclusion_proof(null_key)?;
-                    self.nullifier_set
-                        .insert(null_key, Digest::from_bool(true))?;
+                    let nullifier_key: NullifierKey = exit.global_index.into();
+                    let nullifier_path =
+                        self.nullifier_tree.get_non_inclusion_proof(nullifier_key)?;
+                    self.nullifier_tree
+                        .insert(nullifier_key, Digest::from_bool(true))?;
                     Ok((exit.clone(), nullifier_path))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -270,7 +278,7 @@ impl LocalNetworkStateData {
             target: StateCommitment {
                 exit_root: certificate.new_local_exit_root,
                 balance_root: self.balance_tree.root,
-                nullifier_root: self.nullifier_set.root,
+                nullifier_root: self.nullifier_tree.root,
             },
             l1_info_root,
         })

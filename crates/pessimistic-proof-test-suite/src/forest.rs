@@ -67,7 +67,7 @@ impl Forest {
             state_b: LocalNetworkStateData {
                 exit_tree: local_exit_tree,
                 balance_tree: local_balance_tree,
-                nullifier_set: Smt::new(),
+                nullifier_tree: Smt::new(),
             },
         }
     }
@@ -185,7 +185,7 @@ impl Forest {
             output.new_pessimistic_root,
             keccak256_combine([
                 self.state_b.balance_tree.root,
-                self.state_b.nullifier_set.root
+                self.state_b.nullifier_tree.root
             ])
         );
     }

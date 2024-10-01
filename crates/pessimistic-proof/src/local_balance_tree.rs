@@ -16,7 +16,7 @@ use crate::{
 pub const LOCAL_BALANCE_TREE_DEPTH: usize = 192;
 
 // TODO: This is basically the same as the nullifier tree, consider refactoring
-/// A commitment to the set of per-network nullifier sets maintained by the
+/// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -25,7 +25,7 @@ where
     H: Hasher,
     H::Digest: Serialize + DeserializeOwned,
 {
-    /// The Merkle Root of the nullifier set
+    /// The Merkle Root of the nullifier tree
     #[serde_as(as = "_")]
     pub root: H::Digest,
     /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
