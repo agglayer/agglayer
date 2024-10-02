@@ -58,6 +58,10 @@ pub enum Error {
     InvalidMerklePathLERToRER,
     #[error("Invalid merkle path from the GER to the L1 Info Root.")]
     InvalidMerklePathGERToL1Root,
+    /// The provided imported bridge exit does not target the right destination
+    /// network.
+    #[error("Invalid imported bridge exit destination network.")]
+    InvalidExitNetwork,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

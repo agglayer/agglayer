@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     bridge_exit::{LeafType, L1_ETH, L1_NETWORK_ID},
-    imported_bridge_exit::commit_imported_bridge_exits,
+    imported_bridge_exit::{commit_imported_bridge_exits, Error},
     keccak::{Digest, Hash},
     local_balance_tree::LocalBalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
@@ -104,22 +104,27 @@ impl LocalNetworkState {
         );
         if let Some(batch_imported_exits_root) = multi_batch_header.imported_exits_root {
             if imported_exits_root != batch_imported_exits_root {
-                return Err(ProofError::InvalidImportedExitsRoot);
+                return Err(ProofError::InvalidImportedExitsRoot {
+                    declared: batch_imported_exits_root,
+                    computed: imported_exits_root,
+                });
             }
         } else if !multi_batch_header.imported_bridge_exits.is_empty() {
-            return Err(ProofError::InvalidImportedExitsRoot);
+            return Err(ProofError::MismatchImportedExitsRoot);
         }
 
         // Apply the imported bridge exits
         for (imported_bridge_exit, nullifier_path) in &multi_batch_header.imported_bridge_exits {
             if imported_bridge_exit.global_index.network_id() == multi_batch_header.origin_network {
                 // We don't allow a chain to exit to itself
-                return Err(ProofError::ExitToSameNetwork);
+                return Err(ProofError::CannotExitToSameNetwork);
             }
             // Check that the destination network of the bridge exit matches the current
             // network
             if imported_bridge_exit.bridge_exit.dest_network != multi_batch_header.origin_network {
-                return Err(ProofError::InvalidImportedBridgeExitNetwork);
+                return Err(ProofError::InvalidImportedBridgeExit(
+                    Error::InvalidExitNetwork,
+                ));
             }
 
             // Check the inclusion proof
@@ -145,7 +150,7 @@ impl LocalNetworkState {
             let amount = imported_bridge_exit.bridge_exit.amount;
             let entry = new_balances.entry(token_info);
             match entry {
-                Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof),
+                Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
                 Entry::Occupied(mut entry) => {
                     *entry.get_mut() = entry
                         .get()
@@ -159,7 +164,7 @@ impl LocalNetworkState {
         for bridge_exit in &multi_batch_header.bridge_exits {
             if bridge_exit.dest_network == multi_batch_header.origin_network {
                 // We don't allow a chain to exit to itself
-                return Err(ProofError::ExitToSameNetwork);
+                return Err(ProofError::CannotExitToSameNetwork);
             }
             self.exit_tree.add_leaf(bridge_exit.hash());
 
@@ -175,7 +180,7 @@ impl LocalNetworkState {
             if bridge_exit.token_info.origin_token_address.is_zero()
                 && bridge_exit.token_info.origin_network != L1_NETWORK_ID
             {
-                return Err(ProofError::InvalidEthNetwork);
+                return Err(ProofError::InvalidL1TokenInfo(bridge_exit.token_info));
             }
 
             // The amount corresponds to L1 ETH if the leaf is a message
@@ -193,7 +198,7 @@ impl LocalNetworkState {
             let amount = bridge_exit.amount;
             let entry = new_balances.entry(token_info);
             match entry {
-                Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof),
+                Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
                 Entry::Occupied(mut entry) => {
                     *entry.get_mut() = entry
                         .get()
@@ -230,7 +235,7 @@ impl LocalNetworkState {
             .ok_or(ProofError::InvalidSignature)?;
         if signer != multi_batch_header.signer {
             return Err(ProofError::InvalidSigner {
-                witness: multi_batch_header.signer,
+                declared: multi_batch_header.signer,
                 recovered: signer,
             });
         }

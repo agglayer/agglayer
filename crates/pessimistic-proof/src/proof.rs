@@ -13,6 +13,8 @@ use crate::{
     multi_batch_header::MultiBatchHeader,
 };
 
+/// Represents all errors that can occur while generating the proof.
+///
 /// Several commitments are declared either by the chains (e.g., the local exit
 /// root) or by the agglayer (e.g., the balance and nullifier root), and are
 /// later re-computed by the prover to ensure that they match the witness data.
@@ -44,41 +46,58 @@ pub enum ProofError {
     /// one computed by the prover.
     #[error("Invalid new nullifier root. declared: {declared}, computed: {computed}")]
     InvalidNewNullifierRoot { declared: Hash, computed: Hash },
-    #[error("Invalid imported bridge exit merkle path.")]
-    InvalidImportedBridgeExitMerklePath,
-    #[error("Invalid imported bridge exit root.")]
-    InvalidImportedBridgeExitRoot,
-    #[error("Invalid imported bridge exit: {0}")]
+    /// The provided imported bridge exit is invalid.
+    #[error("Invalid imported bridge exit. {0}")]
     InvalidImportedBridgeExit(#[from] imported_bridge_exit::Error),
-    #[error("Missing token balance proof.")]
-    MissingTokenBalanceProof,
+    /// The commitment to the list of imported bridge exits is invalid.
+    #[error(
+        "Invalid commitment on the imported bridge exits. declared: {declared}, computed: \
+         {computed}"
+    )]
+    InvalidImportedExitsRoot { declared: Hash, computed: Hash },
+    /// The commitment to the list of imported bridge exits should be `Some`
+    /// if and only if this list is non-empty, should be `None` otherwise.
+    #[error("Mismatch between the imported bridge exits list and its commitment.")]
+    MismatchImportedExitsRoot,
+    /// The provided nullifier path is invalid.
     #[error("Invalid nullifier path.")]
     InvalidNullifierPath,
+    /// The provided balance path is invalid.
     #[error("Invalid balance path.")]
     InvalidBalancePath,
+    /// The imported bridge exit led to balance overflow.
     #[error("Balance overflow in bridge exit.")]
     BalanceOverflowInBridgeExit,
+    /// The bridge exit led to balance underflow.
     #[error("Balance underflow in bridge exit.")]
     BalanceUnderflowInBridgeExit,
-    #[error("Exit to same network.")]
-    ExitToSameNetwork,
-    #[error("Invalid imported exits root.")]
-    InvalidImportedExitsRoot,
-    #[error("Invalid signature.")]
-    InvalidSignature,
-    #[error("Invalid signer. Witness: {witness:?}, Recovered: {recovered:?}")]
-    InvalidSigner {
-        witness: Address,
-        recovered: Address,
-    },
+    /// The provided bridge exit goes to the sender's own network which is not
+    /// permitted.
+    #[error("Cannot perform bridge exit to the same network as the origin.")]
+    CannotExitToSameNetwork,
+    /// The provided bridge exit message is invalid.
     #[error("Invalid message origin network.")]
     InvalidMessageOriginNetwork,
-    #[error("Invalid ETH network.")]
-    InvalidEthNetwork,
-    #[error("Invalid imported bridge exit network.")]
-    InvalidImportedBridgeExitNetwork,
-    #[error("Duplicate token {0:?} in balance proofs")]
+    /// The token address is zero if and only if it refers to the L1 native eth.
+    #[error("Invalid L1 TokenInfo. TokenInfo: {0:?}")]
+    InvalidL1TokenInfo(TokenInfo),
+    /// The provided token is missing a balance proof.
+    #[error("Missing token balance proof. TokenInfo: {0:?}")]
+    MissingTokenBalanceProof(TokenInfo),
+    /// The provided token comes with multiple balance proofs.
+    #[error("Duplicate token in balance proofs. TokenInfo: {0:?}")]
     DuplicateTokenBalanceProof(TokenInfo),
+    /// The signature on the state transition is invalid.
+    #[error("Invalid signature.")]
+    InvalidSignature,
+    /// The signer recovered from the signature differs from the one declared as
+    /// witness.
+    #[error("Invalid signer. declared: {declared}, recovered: {recovered}")]
+    InvalidSigner {
+        declared: Address,
+        recovered: Address,
+    },
+    /// Unknown error.
     #[error("Unknown error: {0}")]
     Unknown(String),
 }
