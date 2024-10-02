@@ -19,9 +19,8 @@ port = 9090
 host = "0.0.0.0"
 request-timeout = 180
 
-[rate-limiting.send-tx]
-max-per-interval = 1
-time-interval = "1h"
+[rate-limiting]
+send-tx = "unlimited"
 
 [rate-limiting.network]
 

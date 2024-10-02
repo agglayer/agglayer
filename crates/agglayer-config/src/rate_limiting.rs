@@ -24,7 +24,7 @@ pub enum TimeRateLimit {
 impl TimeRateLimit {
     /// Default rate limiting for the `sendTx` call.
     pub const fn send_tx_default() -> Self {
-        Self::limited(1, Duration::from_secs(60 * 60))
+        Self::Unlimited
     }
 
     /// Create a time-based rate limiting
@@ -135,10 +135,7 @@ mod test {
 
     #[test]
     fn default_config() {
-        #[rustfmt::skip]
-        let config_str = "[send-tx]\n\
-            max-per-interval = 1\n\
-            time-interval = \"1h\"\n";
+        let config_str = "send-tx = \"unlimited\"";
         let parsed_default_config: RateLimitingConfig = toml::from_str(config_str).unwrap();
         assert_eq!(parsed_default_config, RateLimitingConfig::DEFAULT);
 
