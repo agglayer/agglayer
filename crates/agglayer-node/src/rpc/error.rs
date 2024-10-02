@@ -26,7 +26,7 @@ pub mod code {
     /// Transaction status retrieval error.
     pub const STATUS_ERROR: i32 = -10005;
 
-    /// Error submitting a ceritficate.
+    /// Error submitting a certificate.
     pub const SEND_CERTIFICATE: i32 = -10006;
 
     /// Transaction settlement has been rate limited.

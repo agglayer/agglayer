@@ -10,7 +10,7 @@ path = "src/bin/ppgen.rs"
 [dependencies]
 agglayer-types = { path = "../agglayer-types" }
 base64.workspace = true
-bincode = "1.3.3"
+bincode.workspace = true
 clap.workspace = true
 ethers-signers.workspace = true
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }

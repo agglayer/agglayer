@@ -4,6 +4,7 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
 };
 use rocksdb::{Direction, ReadOptions};
+use tracing::warn;
 
 use super::{StateReader, StateWriter};
 use crate::{
@@ -121,7 +122,17 @@ impl StateReader for StateStore {
                 height,
             })?
             .map_or(Ok(None), |certificate_id| {
-                self.get_certificate_header(&certificate_id)
+                let result = self.get_certificate_header(&certificate_id);
+
+                if let Ok(None) = result {
+                    warn!(
+                        "Certificate header not found for certificate_id: {} while having a \
+                         reference in the CertificatePerNetworkColumn",
+                        certificate_id
+                    );
+                }
+
+                result
             })
     }
 

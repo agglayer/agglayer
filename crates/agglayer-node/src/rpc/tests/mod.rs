@@ -286,7 +286,7 @@ async fn check_tx_status_fail() {
 }
 
 #[tokio::test]
-async fn get_certificate_header_after_sending_the_certif() {
+async fn get_certificate_header_after_sending_the_certificate() {
     let _ = tracing_subscriber::FmtSubscriber::builder()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .try_init();

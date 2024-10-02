@@ -60,6 +60,8 @@ where
                     )
                     .map_err(|error| {
                         let error_description = error.to_string();
+                        // TODO: Find a better solution than downcasting the error into a
+                        // ProofError.
                         if let Ok(error) = error.downcast::<ProofError>() {
                             error
                         } else {
