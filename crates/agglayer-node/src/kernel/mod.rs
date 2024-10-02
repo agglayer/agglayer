@@ -11,6 +11,7 @@ use crate::{
         polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
         polygon_zk_evm::PolygonZkEvm,
     },
+    rate_limiting::{self, RateLimiter},
     signed_tx::SignedTx,
     zkevm_node_client::ZkevmNodeClient,
 };
@@ -28,6 +29,7 @@ pub(crate) mod tests;
 #[derive(Debug)]
 pub(crate) struct Kernel<RpcProvider> {
     rpc: Arc<RpcProvider>,
+    rate_limiter: RateLimiter,
     config: Arc<Config>,
 }
 
@@ -53,8 +55,13 @@ impl<RpcProvider> Kernel<RpcProvider> {
     pub(crate) fn new(rpc: RpcProvider, config: Arc<Config>) -> Self {
         Self {
             rpc: Arc::new(rpc),
+            rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
             config,
         }
+    }
+
+    pub(crate) fn rate_limiter(&self) -> &RateLimiter {
+        &self.rate_limiter
     }
 
     /// Check if the given rollup id is registered in the configuration.
@@ -169,6 +176,10 @@ where
     ProviderError(ProviderError),
     #[error("contract error: {0}")]
     ContractError(ContractError<RpcProvider>),
+    #[error(transparent)]
+    RateLimited(#[from] crate::rate_limiting::RateLimited),
+    #[error("Settlement timed out after {}s", .0.as_secs())]
+    Timeout(std::time::Duration),
 }
 
 #[derive(Error, Debug)]
@@ -325,10 +336,11 @@ where
     }
 
     /// Settle the given [`SignedTx`] to the rollup manager.
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self, rate_guard), level = "debug")]
     pub(crate) async fn settle(
         &self,
         signed_tx: &SignedTx,
+        rate_guard: rate_limiting::SendTxSlotGuard,
     ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
         let hex_hash = signed_tx.hash();
         let hash = format!("{:?}", hex_hash);
@@ -342,20 +354,44 @@ where
             warn!(hash, "Transaction already settled: {:?}", tx);
         }
 
-        let tx = f
-            .send()
-            .await
-            .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
-            .map_err(SettlementError::ContractError)?
-            .interval(self.config.outbound.rpc.settle.retry_interval)
-            .retries(self.config.outbound.rpc.settle.max_retries)
-            .confirmations(self.config.outbound.rpc.settle.confirmations)
-            .await
-            .map_err(SettlementError::ProviderError)?
-            // If the result is `None`, it means the transaction is no longer in the mempool.
-            .ok_or(SettlementError::NoReceipt)?;
+        // We submit the transaction in a separate task so we can observe the
+        // settlement process even if the client drops the transaction
+        // submission request. This is needed to correctly record the settlement
+        // rate limiting event in case the client drops the request.
+        let receipt = tokio::spawn({
+            let config = Arc::clone(&self.config);
+            async move {
+                let config = &*config;
+                let hash = &hash;
 
-        Ok(tx)
+                let settlement = async move {
+                    f.send()
+                        .await
+                        .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
+                        .map_err(SettlementError::ContractError)?
+                        .interval(config.outbound.rpc.settle.retry_interval)
+                        .retries(config.outbound.rpc.settle.max_retries)
+                        .confirmations(config.outbound.rpc.settle.confirmations)
+                        .await
+                        .map_err(SettlementError::ProviderError)?
+                        // The result of `None` means the transaction is no longer in the mempool.
+                        .ok_or(SettlementError::NoReceipt)
+                };
+
+                let settlement_timeout = config.outbound.rpc.settle.settlement_timeout;
+                let receipt = tokio::time::timeout(settlement_timeout, settlement)
+                    .await
+                    .map_err(|_| {
+                        warn!(hash, "Settlement of {hash} timed out");
+                        SettlementError::Timeout(settlement_timeout)
+                    })??;
+
+                rate_guard.record(tokio::time::Instant::now());
+                Ok(receipt)
+            }
+        });
+
+        receipt.await.map_err(|_| SettlementError::NoReceipt)?
     }
 }
 

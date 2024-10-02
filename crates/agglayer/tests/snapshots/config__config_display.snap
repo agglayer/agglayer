@@ -19,10 +19,17 @@ port = 9090
 host = "0.0.0.0"
 request-timeout = 180
 
+[rate-limiting.send-tx]
+max-per-interval = 1
+time-interval = "1h"
+
+[rate-limiting.network]
+
 [outbound.rpc.settle]
 max-retries = 3
 retry-interval = 7
 confirmations = 1
+settlement-timeout = 1200
 
 [l1]
 chain-id = 1337

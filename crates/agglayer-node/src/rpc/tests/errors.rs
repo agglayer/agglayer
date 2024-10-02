@@ -1,5 +1,7 @@
 //! Tests for rendering RPC errors
 
+use std::time::Duration;
+
 use ethers::{
     providers::ProviderError,
     types::{Bytes, SignatureError as EthSignatureError, H160, H256},
@@ -8,6 +10,7 @@ use jsonrpsee::types::ErrorObjectOwned;
 
 use crate::{
     kernel::{self, ZkevmNodeVerificationError},
+    rate_limiting::{self, component, Component},
     rpc::Error,
 };
 
@@ -15,6 +18,7 @@ type RpcProvider = ethers::providers::Provider<ethers::providers::Http>;
 type ContractError = ethers::contract::ContractError<RpcProvider>;
 type SignatureError = kernel::SignatureVerificationError<RpcProvider>;
 type SettlementError = kernel::SettlementError<RpcProvider>;
+type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 
 #[rstest::rstest]
 #[case("rollup_not_reg", Error::rollup_not_registered(1337))]
@@ -76,6 +80,30 @@ type SettlementError = kernel::SettlementError<RpcProvider>;
     Error::settlement(SettlementError::ContractError(ContractError::Revert(
         Bytes::from_static(b"foo")
     )))
+)]
+#[case(
+    "settle_l1_timeout",
+    Error::settlement(SettlementError::Timeout(Duration::from_secs(30 * 60)))
+)]
+#[case(
+    "rate_disallowed",
+    rate_limiting::RateLimited::SendTxDiabled {}.into()
+)]
+#[case(
+    "rate_sendtx",
+    rate_limiting::RateLimited::SendTxRateLimited(WallClockLimitedInfo {
+        max_per_interval: 3,
+        time_interval: Duration::from_secs(30 * 60),
+        until_next: Some(Duration::from_secs(123)),
+    }).into()
+)]
+#[case(
+    "rate_sendtx_nonext",
+    rate_limiting::RateLimited::SendTxRateLimited(WallClockLimitedInfo {
+        max_per_interval: 4,
+        time_interval: Duration::from_secs(40 * 60),
+        until_next: None,
+    }).into()
 )]
 fn rpc_error_rendering(#[case] name: &str, #[case] err: Error) {
     let debug_str = format!("{err:?}");

@@ -158,19 +158,23 @@ where
             return Err(Error::rollup_not_registered(tx.tx.rollup_id));
         }
 
+        self.kernel.verify_signature(&tx).await.map_err(|e| {
+            error!(error = %e, hash, "Failed to verify the signature of transaction {hash}: {e}");
+            Error::signature_mismatch(e)
+        })?;
+
+        agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
+
+        // Reserve a rate limiting slot.
+        let guard = self
+            .kernel
+            .rate_limiter()
+            .reserve_send_tx(tx.tx.rollup_id, tokio::time::Instant::now())?;
+
         agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
 
         // Run all the verification checks in parallel.
         try_join!(
-            self.kernel
-                .verify_signature(&tx)
-                .map_err(|e| {
-                    error!(error = %e, hash, "Failed to verify the signature of transaction {hash}: {e}");
-                    Error::signature_mismatch(e)
-                })
-                .map_ok(|_| {
-                    agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
-                }),
             self.kernel
                 .verify_proof_eth_call(&tx)
                 .map_err(|e| {
@@ -219,7 +223,7 @@ where
         )?;
 
         // Settle the proof on-chain and return the transaction hash.
-        let receipt = self.kernel.settle(&tx).await.map_err(|e| {
+        let receipt = self.kernel.settle(&tx, guard).await.map_err(|e| {
             error!(
                 error = %e,
                 hash,

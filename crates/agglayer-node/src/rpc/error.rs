@@ -4,7 +4,10 @@ use ethers::{middleware::Middleware, types::H256};
 use jsonrpsee::types::error::ErrorObjectOwned;
 use serde::Serialize;
 
-use crate::kernel::{CheckTxStatusError, SignatureVerificationError, ZkevmNodeVerificationError};
+use crate::{
+    kernel::{CheckTxStatusError, SignatureVerificationError, ZkevmNodeVerificationError},
+    rate_limiting::RateLimited as RateLimitedError,
+};
 
 /// RPC error codes.
 pub mod code {
@@ -25,6 +28,9 @@ pub mod code {
 
     /// Error submitting a ceritficate.
     pub const SEND_CERTIFICATE: i32 = -10006;
+
+    /// Transaction settlement has been rate limited.
+    pub const RATE_LIMITED: i32 = -10007;
 }
 
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
@@ -48,19 +54,6 @@ pub enum SettlementError {
 
     #[error("Contract error")]
     Contract { detail: String },
-}
-
-impl<R: Middleware> From<crate::kernel::SettlementError<R>> for SettlementError {
-    fn from(err: crate::kernel::SettlementError<R>) -> Self {
-        match err {
-            crate::kernel::SettlementError::NoReceipt => Self::NoReceipt,
-            crate::kernel::SettlementError::ProviderError(e) => Self::IoError(e.to_string()),
-            crate::kernel::SettlementError::ContractError(e) => {
-                let detail = e.to_string();
-                Self::Contract { detail }
-            }
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
@@ -122,6 +115,13 @@ pub enum Error {
 
     #[error("Cannot send certificate: {detail}")]
     SendCertificate { detail: String },
+
+    #[error("Rate limited")]
+    #[serde(rename_all = "kebab-case")]
+    RateLimited {
+        detail: String,
+        error: RateLimitedError,
+    },
 }
 
 impl Error {
@@ -144,7 +144,7 @@ impl Error {
     }
 
     pub(crate) fn settlement<R: Middleware>(err: crate::kernel::SettlementError<R>) -> Self {
-        Self::Settlement(err.into())
+        err.into()
     }
 
     pub(crate) fn send_certificate<T>(err: tokio::sync::mpsc::error::SendError<T>) -> Self {
@@ -161,7 +161,31 @@ impl Error {
             Self::Settlement(_) => code::SETTLEMENT_ERROR,
             Self::Status(_) => code::STATUS_ERROR,
             Self::SendCertificate { .. } => code::SEND_CERTIFICATE,
+            Self::RateLimited { .. } => code::RATE_LIMITED,
         }
+    }
+}
+
+impl<R: Middleware> From<crate::kernel::SettlementError<R>> for Error {
+    fn from(err: crate::kernel::SettlementError<R>) -> Self {
+        use crate::kernel::SettlementError as E;
+        match err {
+            E::NoReceipt => SettlementError::NoReceipt.into(),
+            E::ProviderError(e) => SettlementError::IoError(e.to_string()).into(),
+            E::ContractError(e) => {
+                let detail = e.to_string();
+                SettlementError::Contract { detail }.into()
+            }
+            E::RateLimited(e) => e.into(),
+            e @ E::Timeout(_) => SettlementError::IoError(e.to_string()).into(),
+        }
+    }
+}
+
+impl From<RateLimitedError> for Error {
+    fn from(error: RateLimitedError) -> Self {
+        let detail = error.to_string();
+        Self::RateLimited { detail, error }
     }
 }
 

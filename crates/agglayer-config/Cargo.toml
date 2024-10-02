@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 dirs.workspace = true
 ethers.workspace = true
+humantime-serde = "1.1.1"
 jsonrpsee.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
@@ -16,6 +17,7 @@ url = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
+rstest.workspace = true
 serde_json = { workspace = true }
 toml.workspace = true
 

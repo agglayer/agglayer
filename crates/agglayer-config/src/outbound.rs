@@ -40,6 +40,12 @@ pub struct OutboundRpcSettleConfig {
     /// receipt.
     #[serde(default = "default_rpc_confirmations")]
     pub confirmations: usize,
+
+    /// Timeout for the submission of the settlement transaction to L1,
+    /// including the required number of confirmations.
+    #[serde(default = "default_settlement_timeout")]
+    #[serde_as(as = "DurationSeconds")]
+    pub settlement_timeout: Duration,
 }
 
 impl Default for OutboundRpcSettleConfig {
@@ -48,6 +54,7 @@ impl Default for OutboundRpcSettleConfig {
             max_retries: default_rpc_retries(),
             retry_interval: default_rpc_retry_interval(),
             confirmations: default_rpc_confirmations(),
+            settlement_timeout: default_settlement_timeout(),
         }
     }
 }
@@ -67,6 +74,11 @@ const fn default_rpc_retry_interval() -> Duration {
 /// receipt.
 const fn default_rpc_confirmations() -> usize {
     1
+}
+
+/// Default timeout for settlement transaction submission and confirmation.
+const fn default_settlement_timeout() -> Duration {
+    Duration::from_secs(20 * 60)
 }
 
 #[cfg(test)]

@@ -6,7 +6,7 @@ use url::Url;
 
 use crate::{
     outbound::OutboundConfig, shutdown::ShutdownConfig, telemetry::TelemetryConfig, AuthConfig,
-    Epoch, Log, RpcConfig, L1,
+    Epoch, Log, RateLimitingConfig, RpcConfig, L1,
 };
 
 /// The v0.1 Agglayer configuration.
@@ -34,6 +34,9 @@ pub struct Config {
     /// The local RPC server configuration.
     #[serde(alias = "RPC")]
     pub rpc: RpcConfig,
+    /// Rate limiting configuration.
+    #[serde(default)]
+    pub rate_limiting: RateLimitingConfig,
     /// The configuration for every outbound network component.
     #[serde(default)]
     pub outbound: OutboundConfig,
