@@ -42,9 +42,15 @@ pub struct CertificateHeader {
 
 #[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Error {
+    /// The imported bridge exits should refer to one and the same L1 info root.
     #[error("Imported bridge exits refer to multiple L1 info root")]
     MultipleL1InfoRoot,
-    #[error("Computed exit root: {computed:?} differs from certificate exit root: {declared:?}")]
+    /// The certificate refers to a new local exit root which differ from the
+    /// one computed by the agglayer.
+    #[error(
+        "Mismatch on the certificate new local exit root. declared: {declared:?}, computed: \
+         {computed:?}"
+    )]
     MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
     #[error("Overflowed imported bridge exits: {0}")]
     ImportedBridgeExitOverflow(#[from] pessimistic_proof::ProofError),
@@ -54,14 +60,18 @@ pub enum Error {
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
 pub enum CertificateStatusError {
+    /// Failure on the pessimistic proof execution, either natively or in the
+    /// prover.
     #[error("({generation_type}) proof generation error: {}", source.to_string())]
     ProofGenerationError {
         generation_type: GenerationType,
         source: ProofError,
     },
+    /// Failure on the proof verification.
     #[error("proof verification failed")]
     ProofVerificationFailed(#[from] ProofVerificationError),
-
+    /// Failure on the pessimistic proof witness generation from the current
+    /// network state and the provided Certificate.
     #[error(transparent)]
     TypeConversionError(#[from] Error),
 }
