@@ -5,9 +5,9 @@ use thiserror::Error;
 
 use crate::{
     bridge_exit::{NetworkId, TokenInfo},
+    global_index::GlobalIndex,
     imported_bridge_exit,
-    keccak::Hash,
-    keccak::{keccak256_combine, Digest},
+    keccak::{keccak256_combine, Digest, Hash},
     local_exit_tree::hasher::Keccak256Hasher,
     local_state::{LocalNetworkState, StateCommitment},
     multi_batch_header::MultiBatchHeader,
@@ -47,8 +47,11 @@ pub enum ProofError {
     #[error("Invalid new nullifier root. declared: {declared}, computed: {computed}")]
     InvalidNewNullifierRoot { declared: Hash, computed: Hash },
     /// The provided imported bridge exit is invalid.
-    #[error("Invalid imported bridge exit. {0}")]
-    InvalidImportedBridgeExit(#[from] imported_bridge_exit::Error),
+    #[error("Invalid imported bridge exit. global index: {global_index:?}, error: {source}")]
+    InvalidImportedBridgeExit {
+        source: imported_bridge_exit::Error,
+        global_index: GlobalIndex,
+    },
     /// The commitment to the list of imported bridge exits is invalid.
     #[error(
         "Invalid commitment on the imported bridge exits. declared: {declared}, computed: \

@@ -128,7 +128,12 @@ impl LocalNetworkState {
             }
 
             // Check the inclusion proof
-            imported_bridge_exit.verify_path(multi_batch_header.l1_info_root)?;
+            imported_bridge_exit
+                .verify_path(multi_batch_header.l1_info_root)
+                .map_err(|source| ProofError::InvalidImportedBridgeExit {
+                    source,
+                    global_index: imported_bridge_exit.global_index,
+                })?;
 
             // Check the nullifier non-inclusion path and update the nullifier tree
             let nullifier_key: NullifierKey = imported_bridge_exit.global_index.into();
