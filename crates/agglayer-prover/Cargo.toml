@@ -13,11 +13,11 @@ tokio-util.workspace = true
 toml.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 tracing.workspace = true
+tower.workspace = true
+tonic.workspace = true
+tonic-health = "0.12.3"
+tonic-reflection = "0.12.3"
 
 agglayer-config = { path = "../agglayer-config" }
 agglayer-prover-types = { path = "../agglayer-prover-types" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
-tonic = "0.12.2"
-tower.workspace = true
-tonic-health = "0.12.2"
-tonic-reflection = "0.12.2"

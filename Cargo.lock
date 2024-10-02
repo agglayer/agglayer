@@ -207,7 +207,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml 0.8.19",
- "tonic 0.12.2",
+ "tonic 0.12.3",
  "tonic-health",
  "tonic-reflection",
  "tower",
@@ -220,7 +220,7 @@ name = "agglayer-prover-types"
 version = "0.1.0"
 dependencies = [
  "prost 0.13.2",
- "tonic 0.12.2",
+ "tonic 0.12.3",
  "tonic-build",
 ]
 
@@ -3995,7 +3995,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -5479,7 +5479,7 @@ checksum = "f8650aabb6c35b860610e9cff5dc1af886c9e25073b7b1712a68972af4281302"
 dependencies = [
  "bytes",
  "heck",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
@@ -5525,7 +5525,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acf0c195eebb4af52c752bec4f52f645da98b6e92077a04110c7f349477ae5ac"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.77",
@@ -7975,9 +7975,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6f6ba989e4b2c58ae83d862d3a3e27690b6e3ae630d0deb59f3697f32aa88ad"
+checksum = "877c5b330756d856ffcc4553ab34a5684481ade925ecc54bcd1bf02b1d0d4d52"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -8018,28 +8018,28 @@ dependencies = [
 
 [[package]]
 name = "tonic-health"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec0a34e6f706bae26b2b490e1da5c3f6a6ff87cae442bcbc7c881bab9631b5a7"
+checksum = "1eaf34ddb812120f5c601162d5429933c9b527d901ab0e7f930d3147e33a09b2"
 dependencies = [
  "async-stream",
  "prost 0.13.2",
  "tokio",
  "tokio-stream",
- "tonic 0.12.2",
+ "tonic 0.12.3",
 ]
 
 [[package]]
 name = "tonic-reflection"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b56b874eedb04f89907573b408eab1e87c1c1dce43aac6ad63742f57faa99ff"
+checksum = "878d81f52e7fcfd80026b7fdb6a9b578b3c3653ba987f87f0dce4b64043cba27"
 dependencies = [
  "prost 0.13.2",
  "prost-types 0.13.2",
  "tokio",
  "tokio-stream",
- "tonic 0.12.2",
+ "tonic 0.12.3",
 ]
 
 [[package]]
@@ -8688,7 +8688,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
