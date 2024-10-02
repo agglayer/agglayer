@@ -1,16 +1,20 @@
 use std::path::Path;
 
 use iterators::{ColumnIterator, KeysIterator};
-use rocksdb::{
-    ColumnFamilyDescriptor, DBCompressionType, DBPinnableSlice, Direction, Options, ReadOptions,
-};
+use rocksdb::{ColumnFamilyDescriptor, DBPinnableSlice, Direction, Options, ReadOptions};
 
 use crate::{
     columns::{Codec, ColumnSchema},
     error::Error,
 };
 
+pub(crate) mod cf_definitions;
 pub(crate) mod iterators;
+
+pub use cf_definitions::epochs::epochs_db_cf_definitions;
+pub use cf_definitions::metadata::metadata_db_cf_definitions;
+pub use cf_definitions::pending::pending_db_cf_definitions;
+pub use cf_definitions::state::state_db_cf_definitions;
 
 /// A physical storage storage component with an active RocksDB.
 #[derive(Debug)]
@@ -125,75 +129,4 @@ impl DB {
 
         Ok(self.rocksdb.delete_cf(&cf, key)?)
     }
-}
-
-/// Definitions for the column families in the pending queue storage.
-pub fn pending_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    [
-        crate::columns::PENDING_QUEUE_CF,
-        crate::columns::PROOF_PER_CERTIFICATE_CF,
-    ]
-    .iter_mut()
-    .map(|cf| {
-        let mut cfg = rocksdb::Options::default();
-
-        cfg.set_compression_type(DBCompressionType::Lz4);
-        cfg.create_if_missing(true);
-
-        ColumnFamilyDescriptor::new(*cf, cfg)
-    })
-    .collect()
-}
-
-/// Definitions for the column families in the epochs storage.
-pub fn epochs_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    [
-        crate::columns::PER_EPOCH_METADATA_CF,
-        crate::columns::PER_EPOCH_PROOFS_CF,
-        crate::columns::PER_EPOCH_CERTIFICATES_CF,
-    ]
-    .iter_mut()
-    .map(|cf| {
-        let mut cfg = rocksdb::Options::default();
-
-        cfg.set_compression_type(DBCompressionType::Lz4);
-        cfg.create_if_missing(true);
-
-        ColumnFamilyDescriptor::new(*cf, cfg)
-    })
-    .collect()
-}
-
-/// Definitions for the column families in the state storage.
-pub fn state_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    [
-        crate::columns::LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF,
-        crate::columns::CERTIFICATE_PER_NETWORK_CF,
-        crate::columns::CERTIFICATE_HEADER_CF,
-    ]
-    .iter_mut()
-    .map(|cf| {
-        let mut cfg = rocksdb::Options::default();
-
-        cfg.set_compression_type(DBCompressionType::Lz4);
-        cfg.create_if_missing(true);
-
-        ColumnFamilyDescriptor::new(*cf, cfg)
-    })
-    .collect()
-}
-
-/// Definitions for the column families in the metadata storage.
-pub fn metadata_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    [crate::columns::METADATA_CF]
-        .iter_mut()
-        .map(|cf| {
-            let mut cfg = rocksdb::Options::default();
-
-            cfg.set_compression_type(DBCompressionType::Lz4);
-            cfg.create_if_missing(true);
-
-            ColumnFamilyDescriptor::new(*cf, cfg)
-        })
-        .collect()
 }

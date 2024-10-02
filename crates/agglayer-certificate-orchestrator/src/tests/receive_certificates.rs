@@ -49,7 +49,7 @@ async fn receive_certificate_with_height_zero() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_millis(100))]
-async fn receive_certificate_with_previous_proved() {
+async fn receive_certificate_with_previous_proven() {
     let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
 
     let previous = Certificate {
