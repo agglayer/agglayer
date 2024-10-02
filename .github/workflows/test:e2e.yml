@@ -96,7 +96,7 @@ jobs:
   pushing-docker-image:
     name: Docker | Publish image to registry
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || ( github.event_name == 'workflow_dispatch' )
     permissions:
       packages: write
     needs:
