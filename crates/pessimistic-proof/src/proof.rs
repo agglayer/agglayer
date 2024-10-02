@@ -13,21 +13,41 @@ use crate::{
     multi_batch_header::MultiBatchHeader,
 };
 
-/// Represents all errors that can occur while generating the proof.
+/// Several commitments are declared either by the chains (e.g., the local exit
+/// root) or by the agglayer (e.g., the balance and nullifier root), and are
+/// later re-computed by the prover to ensure that they match the witness data.
+/// Consequently, several errors highlight a mismatch between what is *declared*
+/// as witness and what is *computed* by the prover.
 #[derive(Clone, Error, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ProofError {
-    #[error("Invalid initial local exit root. Got: {got}, Expected: {expected}")]
-    InvalidInitialLocalExitRoot { got: Hash, expected: Hash },
-    #[error("Invalid final local exit root.")]
-    InvalidFinalLocalExitRoot,
-    #[error("Invalid initial balance root.")]
-    InvalidInitialBalanceRoot,
-    #[error("Invalid final balance root. Got: {got:?}, Expected: {expected:?}")]
-    InvalidFinalBalanceRoot { got: Digest, expected: Digest },
-    #[error("Invalid initial nullifier root.")]
-    InvalidInitialNullifierRoot,
-    #[error("Invalid final nullifier root.")]
-    InvalidFinalNullifierRoot,
+    /// The previous local exit root declared by the chain does not match the
+    /// one computed by the prover.
+    #[error("Invalid previous local exit root. declared: {declared}, computed: {computed}")]
+    InvalidPreviousLocalExitRoot { declared: Hash, computed: Hash },
+    /// The previous balance root declared by the agglayer does not match the
+    /// one computed by the prover.
+    #[error("Invalid previous balance root. declared: {declared}, computed: {computed}")]
+    InvalidPreviousBalanceRoot { declared: Hash, computed: Hash },
+    /// The previous nullifier root declared by the agglayer does not match the
+    /// one computed by the prover.
+    #[error("Invalid previous nullifier root. declared: {declared}, computed: {computed}")]
+    InvalidPreviousNullifierRoot { declared: Hash, computed: Hash },
+    /// The new local exit root declared by the chain does not match the
+    /// one computed by the prover.
+    #[error("Invalid new local exit root. declared: {declared}, computed: {computed}")]
+    InvalidNewLocalExitRoot { declared: Hash, computed: Hash },
+    /// The new balance root declared by the agglayer does not match the
+    /// one computed by the prover.
+    #[error("Invalid new balance root. declared: {declared}, computed: {computed}")]
+    InvalidNewBalanceRoot { declared: Hash, computed: Hash },
+    /// The new nullifier root declared by the agglayer does not match the
+    /// one computed by the prover.
+    #[error("Invalid new nullifier root. declared: {declared}, computed: {computed}")]
+    InvalidNewNullifierRoot { declared: Hash, computed: Hash },
+    #[error("Invalid imported bridge exit merkle path.")]
+    InvalidImportedBridgeExitMerklePath,
+    #[error("Invalid imported bridge exit root.")]
+    InvalidImportedBridgeExitRoot,
     #[error("Invalid imported bridge exit: {0}")]
     InvalidImportedBridgeExit(#[from] imported_bridge_exit::Error),
     #[error("Missing token balance proof.")]
@@ -121,16 +141,22 @@ pub fn generate_pessimistic_proof(
     let computed_target = network_state.apply_batch_header(batch_header)?;
 
     if computed_target.exit_root != batch_header.target.exit_root {
-        return Err(ProofError::InvalidFinalLocalExitRoot);
+        return Err(ProofError::InvalidNewLocalExitRoot {
+            declared: batch_header.target.exit_root.into(),
+            computed: computed_target.exit_root.into(),
+        });
     }
     if computed_target.balance_root != batch_header.target.balance_root {
-        return Err(ProofError::InvalidFinalBalanceRoot {
-            got: batch_header.target.balance_root,
-            expected: computed_target.balance_root,
+        return Err(ProofError::InvalidNewBalanceRoot {
+            declared: batch_header.target.balance_root.into(),
+            computed: computed_target.balance_root.into(),
         });
     }
     if computed_target.nullifier_root != batch_header.target.nullifier_root {
-        return Err(ProofError::InvalidFinalNullifierRoot);
+        return Err(ProofError::InvalidNewNullifierRoot {
+            declared: batch_header.target.nullifier_root.into(),
+            computed: computed_target.nullifier_root.into(),
+        });
     }
 
     Ok(PessimisticProofOutput {

@@ -69,16 +69,22 @@ impl LocalNetworkState {
         // Check the initial state
         let computed_root = self.exit_tree.get_root();
         if computed_root != multi_batch_header.prev_local_exit_root {
-            return Err(ProofError::InvalidInitialLocalExitRoot {
-                got: Hash(computed_root),
-                expected: Hash(multi_batch_header.prev_local_exit_root),
+            return Err(ProofError::InvalidPreviousLocalExitRoot {
+                computed: Hash(computed_root),
+                declared: Hash(multi_batch_header.prev_local_exit_root),
             });
         }
         if self.balance_tree.root != multi_batch_header.prev_balance_root {
-            return Err(ProofError::InvalidInitialBalanceRoot);
+            return Err(ProofError::InvalidPreviousBalanceRoot {
+                computed: Hash(self.balance_tree.root),
+                declared: Hash(multi_batch_header.prev_balance_root),
+            });
         }
         if self.nullifier_tree.root != multi_batch_header.prev_nullifier_root {
-            return Err(ProofError::InvalidInitialNullifierRoot);
+            return Err(ProofError::InvalidPreviousNullifierRoot {
+                computed: Hash(self.nullifier_tree.root),
+                declared: Hash(multi_batch_header.prev_nullifier_root),
+            });
         }
 
         // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
