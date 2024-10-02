@@ -22,7 +22,7 @@ tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true
 tokio-stream = "0.1.15"
 toml.workspace = true
-tower-http = { version = "0.5.2", features = ["full"] }
+tower-http = { version = "0.6.1", features = ["full"] }
 tower.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 tracing.workspace = true
@@ -39,7 +39,7 @@ agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
 
 [dev-dependencies]
 insta = { version = "1.39.0", features = ["json"] }
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.3" }
+jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.5" }
 rstest.workspace = true
 serde_json.workspace = true
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
