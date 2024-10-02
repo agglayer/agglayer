@@ -25,6 +25,7 @@ pub(crate) mod l2;
 pub mod log;
 pub(crate) mod outbound;
 pub mod proof_signers;
+pub mod rate_limiting;
 pub(crate) mod rpc;
 pub mod shutdown;
 pub(crate) mod telemetry;
@@ -34,6 +35,7 @@ pub use epoch::Epoch;
 pub use l1::L1;
 pub use l2::L2;
 pub use log::Log;
+pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
 
 /// The Agglayer configuration.
@@ -60,6 +62,8 @@ pub struct Config {
     /// The local RPC server configuration.
     #[serde(rename = "RPC")]
     pub rpc: RpcConfig,
+    #[serde(default)]
+    pub rate_limiting: RateLimitingConfig,
     /// The configuration for every outbound network component.
     #[serde(default)]
     pub outbound: OutboundConfig,

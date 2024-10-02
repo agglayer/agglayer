@@ -1,0 +1,13 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "Settlement(IoError(\"Settlement timed out after 1800s\"))"
+---
+{
+  "code": -10004,
+  "data": {
+    "settlement": {
+      "io-error": "Settlement timed out after 1800s"
+    }
+  },
+  "message": "L1 settlement error: IO error"
+}

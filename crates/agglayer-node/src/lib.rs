@@ -9,8 +9,10 @@ use tracing::info;
 mod contracts;
 mod kernel;
 mod logging;
+mod rate_limiting;
 mod rpc;
 mod signed_tx;
+pub mod utils;
 mod zkevm_node_client;
 
 mod node;
