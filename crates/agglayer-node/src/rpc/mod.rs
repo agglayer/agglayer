@@ -277,12 +277,12 @@ where
 
     #[instrument(skip(self), fields(hash, rollup_id = *certificate.network_id), level = "info")]
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
-        let id = format!("{:?}", certificate.hash());
-        tracing::Span::current().record("hash", &id);
+        let hash = certificate.hash();
+        tracing::Span::current().record("hash", hash.to_string());
 
         info!(
-            hash,
-            "Received certificate {id} for rollup {}", *certificate.network_id
+            %hash,
+            "Received certificate {hash} for rollup {}", *certificate.network_id
         );
 
         // TODO: Batch the different queries.
@@ -318,7 +318,7 @@ where
             return Err(Error::send_certificate(error));
         }
 
-        Ok(id)
+        Ok(hash)
     }
 
     async fn get_certificate_header(

@@ -7,12 +7,12 @@ use agglayer_config::certificate_orchestrator::prover::ProverConfig;
 use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
 };
-use agglayer_types::{Certificate, Height, NetworkId, Proof, ProofVerificationError};
+use agglayer_types::{
+    Certificate, Height, LocalNetworkStateData, NetworkId, Proof, ProofVerificationError,
+};
 use error::NotifierError;
 use futures::future::BoxFuture;
-use pessimistic_proof::{
-    local_state::LocalNetworkStateData, Address, LocalNetworkState, ProofError,
-};
+use pessimistic_proof::{generate_pessimistic_proof, Address, LocalNetworkState, ProofError};
 use serde::Serialize;
 use sp1::SP1;
 use sp1_sdk::{CpuProver, MockProver, NetworkProver};
@@ -99,7 +99,13 @@ where
         let signer = Address::new([0; 20]); // TODO: put the trusted sequencer address
 
         let initial_state = LocalNetworkState::from(state.clone());
-        let multi_batch_header = state.apply_certificate(&certificate, signer)?;
+        let multi_batch_header =
+            state
+                .apply_certificate(&certificate, signer)
+                .map_err(|source| Error::Types {
+                    certificate_id,
+                    source,
+                })?;
 
         // Perform the native PP execution
         let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header).map_err(

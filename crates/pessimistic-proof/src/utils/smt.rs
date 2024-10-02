@@ -11,7 +11,7 @@ pub trait ToBits<const NUM_BITS: usize> {
     fn to_bits(&self) -> [bool; NUM_BITS];
 }
 
-#[derive(Error, Debug, Eq, PartialEq)]
+#[derive(Error, Debug, Eq, PartialEq, Serialize, Deserialize, Clone)]
 pub enum SmtError {
     #[error("trying to insert a key already in the SMT")]
     KeyAlreadyPresent,

@@ -7,6 +7,7 @@ use pessimistic_proof::local_exit_tree::LocalExitTree;
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::Smt;
+use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
@@ -16,22 +17,6 @@ use pessimistic_proof::{
     nullifier_tree::{NullifierKey, NullifierPath},
     ProofError,
 };
-use pessimistic_proof::{LocalNetworkState, ProofError};
-use reth_primitives::{Address, Signature};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("Imported bridge exits refer to multiple L1 info root")]
-    MultipleL1InfoRoot,
-    #[error("Computed exit root: {computed:?} differs from certificate exit root: {declared:?}")]
-    MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
-    #[error("Overflowed imported bridge exits: {0}")]
-    ImportedBridgeExitOverflow(#[from] pessimistic_proof::ProofError),
-    #[error("Failed to apply the Certificate on the given state: {0}")]
-    InvalidCertificateProjection(#[from] pessimistic_proof::utils::smt::SmtError),
-}
-
 pub use reth_primitives::U256;
 use reth_primitives::{Address, Signature};
 pub type EpochNumber = u64;
@@ -44,12 +29,6 @@ pub use hash::Hash;
 pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum Error {
-    #[error("Conversion error: {0}")]
-    TypeConversion(String),
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CertificateHeader {
     pub network_id: NetworkId,
@@ -59,6 +38,18 @@ pub struct CertificateHeader {
     pub certificate_id: CertificateId,
     pub new_local_exit_root: Hash,
     pub status: CertificateStatus,
+}
+
+#[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Error {
+    #[error("Imported bridge exits refer to multiple L1 info root")]
+    MultipleL1InfoRoot,
+    #[error("Computed exit root: {computed:?} differs from certificate exit root: {declared:?}")]
+    MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
+    #[error("Overflowed imported bridge exits: {0}")]
+    ImportedBridgeExitOverflow(#[from] pessimistic_proof::ProofError),
+    #[error("Failed to apply the Certificate on the given state: {0}")]
+    InvalidCertificateProjection(#[from] pessimistic_proof::utils::smt::SmtError),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -92,26 +83,37 @@ impl std::fmt::Display for GenerationType {
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
 pub enum ProofVerificationError {
-    #[error("Version mismatch")]
-    VersionMismatch,
-    #[error("Core machine verification error")]
-    Core,
-    #[error("Recursion verification error")]
-    Recursion,
-    #[error("Plonk verification error")]
-    Plonk,
-    #[error("Groth16 verification error")]
-    Groth16,
+    #[error("Version mismatch: {0}")]
+    VersionMismatch(String),
+    #[error("Core machine verification error: {0}")]
+    Core(String),
+    #[error("Recursion verification error: {0}")]
+    Recursion(String),
+    #[error("Plonk verification error: {0}")]
+    Plonk(String),
+    #[error("Groth16 verification error: {0}")]
+    Groth16(String),
+    #[error("Invalid public values")]
+    InvalidPublicValues,
 }
 
 impl From<SP1VerificationError> for ProofVerificationError {
     fn from(err: SP1VerificationError) -> Self {
         match err {
-            SP1VerificationError::VersionMismatch(_) => ProofVerificationError::VersionMismatch,
-            SP1VerificationError::Core(_) => ProofVerificationError::Core,
-            SP1VerificationError::Recursion(_) => ProofVerificationError::Recursion,
-            SP1VerificationError::Plonk(_) => ProofVerificationError::Plonk,
-            SP1VerificationError::Groth16(_) => ProofVerificationError::Groth16,
+            SP1VerificationError::VersionMismatch(version) => {
+                ProofVerificationError::VersionMismatch(version)
+            }
+            SP1VerificationError::Core(core) => ProofVerificationError::Core(core.to_string()),
+            SP1VerificationError::Recursion(recursion) => {
+                ProofVerificationError::Recursion(recursion.to_string())
+            }
+            SP1VerificationError::Plonk(error) => ProofVerificationError::Plonk(error.to_string()),
+            SP1VerificationError::Groth16(error) => {
+                ProofVerificationError::Groth16(error.to_string())
+            }
+            SP1VerificationError::InvalidPublicValues => {
+                ProofVerificationError::InvalidPublicValues
+            }
         }
     }
 }
