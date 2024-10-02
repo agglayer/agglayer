@@ -6,6 +6,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_build::configure()
         .file_descriptor_set_path(descriptor_path)
         .out_dir("src/generated")
-        .compile(&["proto/v1/proof_generation.proto"], &["proto"])?;
+        .compile_protos(&["proto/v1/proof_generation.proto"], &["proto"])?;
     Ok(())
 }

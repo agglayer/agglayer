@@ -25,7 +25,7 @@ sp1-sdk.workspace = true
 [[bench]]
 name = "latest_certificate_bench"
 harness = false
-required-features = ["tests"]
+required-features = ["testutils"]
 
 [features]
 default = []

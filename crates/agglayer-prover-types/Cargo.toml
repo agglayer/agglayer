@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-prost = "0.13.2"
+prost = "0.13.3"
 tonic = { workspace = true, default-features = false, features = [
     "prost",
     "codegen",
