@@ -1,0 +1,17 @@
+---
+source: crates/agglayer-node/src/rpc/tests/get_certificate_header.rs
+expression: "{\n  \"payload\": {\n    \"id\": 0,\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"interop_getCertificateHeader\",\n    \"params\": [\n      \"0x5063586f6efc738b82ab2b3a4acfe5b4cd52b16bd8ba11c3553da34bf7af4f1a\"\n    ]\n  },\n  \"raw_response\": \"{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":0,\\\"result\\\":{\\\"network_id\\\":1,\\\"height\\\":0,\\\"epoch_number\\\":null,\\\"certificate_index\\\":null,\\\"certificate_id\\\":\\\"0x5063586f6efc738b82ab2b3a4acfe5b4cd52b16bd8ba11c3553da34bf7af4f1a\\\",\\\"new_local_exit_root\\\":\\\"0x0000000000000000000000000000000000000000000000000000000000000000\\\",\\\"status\\\":\\\"Pending\\\"}}\"\n}"
+---
+{
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+    "certificate_id": "0x5063586f6efc738b82ab2b3a4acfe5b4cd52b16bd8ba11c3553da34bf7af4f1a",
+    "certificate_index": null,
+    "epoch_number": null,
+    "height": 0,
+    "network_id": 1,
+    "new_local_exit_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "Pending"
+  }
+}
