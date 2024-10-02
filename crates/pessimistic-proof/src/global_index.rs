@@ -9,7 +9,7 @@ use crate::{bridge_exit::NetworkId, nullifier_tree::NullifierKey};
 /// Further defined by the LXLY specifications.
 /// | 191 bits |    1 bit      |    32 bits   |    32 bits   |
 /// |    0     |  mainnet flag | rollup index |  leaf index  |
-#[derive(Debug, Clone, Serialize, Deserialize, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Copy, Default, PartialEq, Eq)]
 pub struct GlobalIndex {
     pub mainnet_flag: bool,
     pub rollup_index: u32,

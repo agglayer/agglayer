@@ -105,8 +105,8 @@ impl LocalNetworkState {
         if let Some(batch_imported_exits_root) = multi_batch_header.imported_exits_root {
             if imported_exits_root != batch_imported_exits_root {
                 return Err(ProofError::InvalidImportedExitsRoot {
-                    declared: batch_imported_exits_root,
-                    computed: imported_exits_root,
+                    declared: Hash(batch_imported_exits_root),
+                    computed: Hash(imported_exits_root),
                 });
             }
         } else if !multi_batch_header.imported_bridge_exits.is_empty() {
@@ -122,9 +122,10 @@ impl LocalNetworkState {
             // Check that the destination network of the bridge exit matches the current
             // network
             if imported_bridge_exit.bridge_exit.dest_network != multi_batch_header.origin_network {
-                return Err(ProofError::InvalidImportedBridgeExit(
-                    Error::InvalidExitNetwork,
-                ));
+                return Err(ProofError::InvalidImportedBridgeExit {
+                    source: Error::InvalidExitNetwork,
+                    global_index: imported_bridge_exit.global_index,
+                });
             }
 
             // Check the inclusion proof
