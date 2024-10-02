@@ -7,9 +7,12 @@ use std::{
 };
 
 use agglayer_clock::Event;
-use agglayer_storage::stores::{
-    EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochWriter,
-    StateReader, StateWriter,
+use agglayer_storage::{
+    columns::latest_proven_certificate_per_network::ProvenCertificate,
+    stores::{
+        EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochWriter,
+        StateReader, StateWriter,
+    },
 };
 use agglayer_types::LocalNetworkStateData;
 use agglayer_types::{
@@ -87,7 +90,7 @@ impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore
         StateStore,
     >
 where
-    StateStore: StateReader,
+    PendingStore: PendingCertificateReader,
 {
     /// Creates a new CertificateOrchestrator instance.
     #[allow(clippy::too_many_arguments)]
@@ -102,10 +105,10 @@ where
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
-        let cursors = state_store
-            .get_current_settled_height()?
+        let cursors = pending_store
+            .get_current_proven_height()?
             .iter()
-            .map(|(network_id, height, _)| (*network_id, *height))
+            .map(|ProvenCertificate(_, network_id, height)| (*network_id, *height))
             .collect();
 
         Ok(Self {
@@ -405,17 +408,104 @@ where
     ) -> Result<(), ()> {
         match certifier_result {
             Ok(CertifierOutput {
-                certificate,
                 height,
                 network,
+                certificate,
                 ..
             }) => {
+                // Context:
+                //
+                // At one point in time, there is at most one certifier task per network
+                // running. The certifier task try to generate a proof based on
+                // a certificate. The certifier task doesn't know about other tasks nor if the
+                // certificate will be included in an epoch. The Orchestrator is the one that is
+                // responsible to decide if a proof is valid and should be included in an epoch.
+                //
+                // Based on the current context of the orchestrator, we can
+                // determine the following:
+                //
+                // - 1. If the state doesn't know the network and the height is 0, we update the
+                //   state. This is the first certificate for this network.
+                // - 2. If the state knows the network and the height is the next one, we update
+                //   the state. This is the next certificate for this network.
+                //
+                // - 3. If the state doesn't know the network and the height is not 0, we ignore
+                //   the proof.
+                // - 4. If the state knows the network and the height is not the next expected
+                //   one, we ignore the proof.
+                //
+                // When a generated proof is accepted:
+                // - We update the cursor for the network.
+                // - We update the latest proven certificate for the network.
+                // - We do not remove the pending certificate. (as it needs to be included in an
+                // epoch)
+                // - We spawn the next certificate for the network.
+
                 let entry = self.cursors.entry(network);
 
                 match entry {
+                    // - 1. If the state doesn't know the network and the height is 0, we update the
+                    //   state. This is the first certificate for this network.
                     Entry::Vacant(entry) if height == 0 => {
                         entry.insert(0);
+                        // TODO: Handle error if fails to set the latest proven certificate
+                        if let Err(error) = self
+                            .pending_store
+                            .set_latest_proven_certificate_per_network(
+                                &network,
+                                &height,
+                                &certificate.hash(),
+                            )
+                        {
+                            error!(
+                                "Failed to set the latest proven certificate per network: {:?}",
+                                error
+                            );
+                        }
+
+                        if let Err(error) = self.state_store.update_certificate_header_status(
+                            &certificate.hash(),
+                            &CertificateStatus::Proven,
+                        ) {
+                            error!(
+                                "Failed to update the certificate header status: {:?}",
+                                error
+                            );
+                        }
                     }
+
+                    // - 2. If the state knows the network and the height is the next one, we update
+                    //   the sate. This is the next certificate for this network.
+                    Entry::Occupied(mut entry) if *entry.get() + 1 == height => {
+                        entry.insert(height);
+                        // TODO: Handle error if fails to set the latest proven certificate
+                        if let Err(error) = self
+                            .pending_store
+                            .set_latest_proven_certificate_per_network(
+                                &network,
+                                &height,
+                                &certificate.hash(),
+                            )
+                        {
+                            error!(
+                                "Failed to set the latest proven certificate per network: {:?}",
+                                error
+                            );
+                        }
+
+                        if let Err(error) = self.state_store.update_certificate_header_status(
+                            &certificate.hash(),
+                            &CertificateStatus::Proven,
+                        ) {
+                            error!(
+                                "Failed to update the certificate header status: {:?}",
+                                error
+                            );
+                        }
+                    }
+
+                    // - 3. If the state doesn't know the network and the height is not 0, we ignore
+                    //   the proof.
                     Entry::Vacant(_) => {
                         warn!(
                             "Received a proof generated for a certificate at height {} for a \
@@ -425,11 +515,9 @@ where
 
                         return Err(());
                     }
-                    // If the certificate is generated for the next height, we
-                    // can update the cursor
-                    Entry::Occupied(mut entry) if *entry.get() + 1 == height => {
-                        entry.insert(height);
-                    }
+
+                    // - 4. If the state knows the network and the height is not the next expected
+                    //   one, we ignore the proof.
                     Entry::Occupied(entry) => {
                         warn!(
                             "Received a certificate with an unexpected height: {} for network {} \
@@ -442,11 +530,6 @@ where
                         return Err(());
                     }
                 }
-                // TODO: Deal with errors
-                self.state_store
-                    .insert_certificate_header(&certificate, CertificateStatus::Pending)
-                    .expect("Failed to insert certificate header");
-
                 self.pending_store
                     .remove_pending_certificate(network, height)
                     .expect("Failed to remove certificate");
@@ -455,6 +538,11 @@ where
 
                 return Ok(());
             }
+
+            // If we received a `CertificateNotFound` error, it means that the certificate was not
+            // found in the pending store. This can happen if we try to certify a certificate that
+            // has not been received yet. When received, the certificate will be stored in the
+            // pending store and the certifier task will be spawned again.
             Err(Error::CertificateNotFound(network_id, height)) => {
                 // TODO: Check if `CertificateHeader` if present, spawn next height
                 warn!(
@@ -463,7 +551,22 @@ where
                     network_id, height
                 );
             }
-            Err(Error::ProofAlreadyExists(network_id, height)) => {
+
+            // If we received a `ProofAlreadyExists` error, it means that the proof has already been
+            // generated for this certificate. This should not happen unless the node crashes in
+            // the middle of the certification process.
+            // If so, we check the current state and decide if:
+            // - 1. The state doesn't know the network and the height is not 0, we remove the proof.
+            // - 2. The state doesn't know the network and the height is 0, if we find the
+            //   certificate in the pending store, we update the state.
+            // - 3. The state knows the network and the height is the current height, we schedule
+            //   the next certificate.
+            // - 4. The state knows the network and the height is the next one, we update the state
+            //   and schedule the next certificate.
+            // - 5. The state knows the network and the height is the previous one, we do nothing.
+            // - 6. The state knows the network and the height is not the next expected one, we
+            //   remove the proof.
+            Err(Error::ProofAlreadyExists(network_id, height, certificate_id)) => {
                 warn!(
                     "Received a proof certification error for a proof that already exists for \
                      network {} at height {}",
@@ -473,6 +576,8 @@ where
                 let entry = self.cursors.entry(network_id);
 
                 match entry {
+                    // - 1. The state doesn't know the network and the height is not 0, we remove
+                    //   the proof.
                     Entry::Vacant(_) if height != 0 => {
                         warn!(
                             "Received a proof generated for a certificate at height {} for a \
@@ -480,9 +585,16 @@ where
                             height, network_id
                         );
 
-                        // TODO: remove the proof?
+                        if let Err(error) =
+                            self.pending_store.remove_generated_proof(&certificate_id)
+                        {
+                            error!("Failed to remove the proof: {:?}", error);
+                        }
+
                         return Err(());
                     }
+                    // - 2. The state doesn't know the network and the height is 0, if we find the
+                    //   certificate in the pending store, we update the state.
                     Entry::Vacant(entry) => {
                         // Context:
                         // | pending certificate  | CertificateHeader | action              |
@@ -505,23 +617,24 @@ where
                                     .expect("Failed to remove certificate");
                             }
                             None => {
-                                if let Some(certificate) = self
+                                if let Some(_certificate) = self
                                     .pending_store
                                     .get_certificate(network_id, height)
                                     .expect("Failed to get certificate")
                                 {
-                                    self.state_store
-                                        .insert_certificate_header(
-                                            &certificate,
-                                            CertificateStatus::Pending,
-                                        )
-                                        .expect("Failed to insert certificate header");
+                                    // self.state_store
+                                    //     .insert_certificate_header(
+                                    //         &certificate,
+                                    //         CertificateStatus::Pending,
+                                    //     )
+                                    //     .expect("Failed to insert certificate
+                                    // header");
                                 } else {
                                     // This should not happen as ProofAlreadyExists should only
                                     // happen if we have a pending certificate.
                                     warn!(
                                         "Failed to find the pending certificate for already \
-                                         proved proof for network {} at height {}",
+                                         proven proof for network {} at height {}",
                                         network_id, height
                                     );
 
@@ -532,6 +645,15 @@ where
                         entry.insert(height);
                         self.spawn_certifier_task(network_id, height + 1);
                     }
+
+                    // - 3. The state knows the network and the height is the current height, we
+                    //   schedule the next certificate.
+                    // - 4. The state knows the network and the height is the next one, we update
+                    //   the state and schedule the next certificate.
+                    // - 5. The state knows the network and the height is the previous one, we do
+                    //   nothing.
+                    // - 6. The state knows the network and the height is not the next expected one,
+                    //   we remove the proof.
                     Entry::Occupied(entry) => {
                         let cursor_height = entry.into_mut();
 
@@ -580,23 +702,24 @@ where
                                     .expect("Failed to remove certificate");
                             }
                             None => {
-                                if let Some(certificate) = self
+                                if let Some(_certificate) = self
                                     .pending_store
                                     .get_certificate(network_id, height)
                                     .expect("Failed to get certificate")
                                 {
-                                    self.state_store
-                                        .insert_certificate_header(
-                                            &certificate,
-                                            CertificateStatus::Pending,
-                                        )
-                                        .expect("Failed to insert certificate header");
+                                    // self.state_store
+                                    //     .insert_certificate_header(
+                                    //         &certificate,
+                                    //         CertificateStatus::Pending,
+                                    //     )
+                                    //     .expect("Failed to insert certificate
+                                    // header");
                                 } else {
                                     // This should not happen as ProofAlreadyExists should only
                                     // happen if we have a pending certificate.
                                     warn!(
                                         "Failed to find the pending certificate for already \
-                                         proved proof for network {} at height {}",
+                                         proven proof for network {} at height {}",
                                         network_id, height
                                     );
 
@@ -819,8 +942,8 @@ use thiserror::Error;
 pub enum Error {
     #[error("certificate not found for network {0} at height {1}")]
     CertificateNotFound(NetworkId, Height),
-    #[error("proof already exists for network {0} at height {1}")]
-    ProofAlreadyExists(NetworkId, Height),
+    #[error("proof already exists for network {0} at height {1} for certificate {2}")]
+    ProofAlreadyExists(NetworkId, Height, CertificateId),
     #[error("proof verification failed")]
     ProofVerificationFailed {
         certificate_id: CertificateId,

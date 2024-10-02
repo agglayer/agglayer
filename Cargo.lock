@@ -104,6 +104,7 @@ dependencies = [
  "futures-util",
  "pessimistic-proof",
  "rstest",
+ "test-log",
  "thiserror",
  "tokio",
  "tokio-stream",
