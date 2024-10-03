@@ -31,7 +31,7 @@ pub use packer::EpochPackerClient;
 /// using a prover that implements the [`AggregatorProver`] trait
 #[derive(Clone)]
 pub struct AggregatorNotifier<I> {
-    _phantom: std::marker::PhantomData<I>,
+    _phantom: std::marker::PhantomData<fn() -> I>,
 }
 
 impl<I> TryFrom<ProverConfig> for AggregatorNotifier<I>
