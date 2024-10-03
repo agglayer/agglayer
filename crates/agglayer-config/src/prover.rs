@@ -30,18 +30,24 @@ pub struct ProverConfig {
     #[serde(default)]
     pub shutdown: ShutdownConfig,
 
+    /// The maximum number of concurrent queries the prover can handle.
     #[serde(default = "default_max_concurrency_limit")]
     pub max_concurrency_limit: usize,
 
+    /// The maximum duration of a request.
     #[serde(default = "default_max_request_duration")]
     #[serde_as(as = "DurationSeconds")]
     pub max_request_duration: Duration,
 
+    /// The maximum number of buffered queries.
     #[serde(default = "default_max_buffered_queries")]
     pub max_buffered_queries: usize,
 
+    /// The CPU prover configuration.
     #[serde(default)]
     pub cpu_prover: CpuProverConfig,
+
+    /// The network prover configuration.
     #[serde(default)]
     pub network_prover: NetworkProverConfig,
 }
@@ -101,6 +107,10 @@ impl Default for NetworkProverConfig {
 }
 const fn default_socket_addr() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)
+}
+
+pub(crate) fn default_prover_entrypoint() -> String {
+    default_socket_addr().to_string()
 }
 
 const fn default_max_concurrency_limit() -> usize {

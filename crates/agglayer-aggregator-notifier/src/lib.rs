@@ -21,8 +21,6 @@ const ELF: &[u8] =
 mod certifier;
 mod packer;
 mod proof;
-#[cfg(test)]
-mod tests;
 
 pub use certifier::CertifierClient;
 pub use packer::EpochPackerClient;

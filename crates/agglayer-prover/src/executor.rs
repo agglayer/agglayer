@@ -170,7 +170,6 @@ impl Service<Request> for Executor {
             }
         };
 
-        // Return the response as an immediate future
         Box::pin(fut)
     }
 }

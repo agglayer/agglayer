@@ -43,6 +43,7 @@ pub use epoch::Epoch;
 pub use l1::L1;
 pub use l2::L2;
 pub use log::Log;
+use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
 
@@ -104,7 +105,8 @@ pub struct Config {
     pub storage: storage::StorageConfig,
 
     /// AggLayer prover entrypoint.
-    #[serde(default)]
+    #[serde(default = "default_prover_entrypoint")]
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub prover_entrypoint: String,
 }
 
