@@ -1,10 +1,11 @@
 ---
 source: crates/agglayer/tests/config.rs
+assertion_line: 26
 expression: sanitize_config_folder_path(result)
 ---
 grpc-endpoint = "127.0.0.1:8080"
 max-concurrency-limit = 100
-max-request-duration = 300
+max-request-duration = "5m"
 max-buffered-queries = 100
 
 [log]
@@ -16,12 +17,12 @@ format = "pretty"
 prometheus-addr = "0.0.0.0:3000"
 
 [shutdown]
-runtime-timeout = 5
+runtime-timeout = "5s"
 
 [cpu-prover]
 max-concurrency-limit = 100
-proving-timeout = 300
+proving-timeout = "5m"
 
 [network-prover]
 enabled = false
-proving-timeout = 300
+proving-timeout = "5m"
