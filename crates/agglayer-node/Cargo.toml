@@ -44,6 +44,7 @@ rstest.workspace = true
 serde_json.workspace = true
 hyper-util = { version = "0.1.6", features = ["client"] }
 http-body-util = "0.1.2"
+test-log.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-capture = "0.1.0"
 

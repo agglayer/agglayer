@@ -51,9 +51,7 @@ async fn executor_fallback_behavior() {
     let network = Executor::build_network_service(
         Duration::from_secs(1),
         service_fn(|_: Request| async {
-            Err(crate::executor::Error::ProverFailed(anyhow::Error::msg(
-                "failure",
-            )))
+            Err(crate::executor::Error::ProverFailed("failure".to_string()))
         }),
     );
 

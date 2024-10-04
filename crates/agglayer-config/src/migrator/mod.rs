@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use crate::certificate_orchestrator::CertificateOrchestrator;
+use crate::{certificate_orchestrator::CertificateOrchestrator, prover::default_prover_entrypoint};
 
 mod v0_1;
 
@@ -46,7 +46,7 @@ impl ConfigMigrator {
                     shutdown,
                     certificate_orchestrator: CertificateOrchestrator::default(),
                     storage: crate::storage::StorageConfig::new_from_path(config_path),
-                    prover_entrypoint: Default::default(),
+                    prover_entrypoint: default_prover_entrypoint(),
                 }
             }
             ConfigMigrator::V0_2(config) => config,

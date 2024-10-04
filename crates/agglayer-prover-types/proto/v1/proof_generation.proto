@@ -14,3 +14,7 @@ message ProofGenerationRequest {
 message ProofGenerationResponse {
     bytes proof = 1;
 }
+
+message ProofGenerationError {
+    bytes error = 1;
+}

@@ -1,6 +1,5 @@
 use std::net::IpAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use agglayer_config::Config;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
@@ -8,24 +7,21 @@ use agglayer_storage::stores::pending::PendingStore;
 use agglayer_storage::stores::state::StateStore;
 use agglayer_storage::stores::{PendingCertificateWriter, StateReader, StateWriter};
 use agglayer_storage::tests::TempDBDir;
-use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Hash, NetworkId,
-};
-use ethers::providers::{self, Http, Middleware, Provider, ProviderExt as _};
-use ethers::types::{TransactionRequest, H256};
-use ethers::utils::Anvil;
+use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId};
+use ethers::providers::{self, MockProvider, Provider};
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::ClientError;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::rpc_params;
+use jsonrpsee::server::ServerHandle;
+use rstest::fixture;
 
-use crate::rpc::{self, TxStatus};
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
 mod errors;
+mod get_certificate_header;
+mod get_tx_status;
+mod send_certificate;
 
 #[tokio::test]
 async fn healthcheck_method_can_be_called() {
@@ -76,280 +72,79 @@ async fn healthcheck_method_can_be_called() {
     assert_eq!(out.as_str(), "{\"health\":true}");
 }
 
-#[tokio::test]
-async fn check_tx_status() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init();
-
-    let anvil = Anvil::new().block_time(1u64).spawn();
-    let client = Provider::<Http>::connect(&anvil.endpoint()).await;
-    let accounts = client.get_accounts().await.unwrap();
-    let from = accounts[0];
-    let to = accounts[1];
-
-    let tx = TransactionRequest::new().to(to).value(1000).from(from);
-
-    let hash = client
-        .send_transaction(tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap()
-        .unwrap()
-        .transaction_hash;
-
-    let mut config = Config::new_for_test();
-    let addr = next_available_addr();
-    if let std::net::IpAddr::V4(ip) = addr.ip() {
-        config.rpc.host = ip;
-    }
-    config.rpc.port = addr.port();
-
-    let config = Arc::new(config);
-
-    let kernel = Kernel::new(client, config.clone());
-
-    let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
-    let _server_handle = AgglayerImpl::new(
-        kernel,
-        certificate_sender,
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-    )
-    .start(config.clone())
-    .await
-    .unwrap();
-
-    let url = format!("http://{}/", config.rpc_addr());
-    let client = HttpClientBuilder::default().build(url).unwrap();
-
-    let res: TxStatus = client
-        .request("interop_getTxStatus", rpc_params![hash])
-        .await
-        .unwrap();
-
-    // The transaction is not yet mined, so we should get a pending status
-    assert_eq!(res, "pending");
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    let res: TxStatus = client
-        .request("interop_getTxStatus", rpc_params![hash])
-        .await
-        .unwrap();
-
-    assert_eq!(res, "done");
+pub(crate) struct RawRpcContext {
+    pub(crate) rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore>,
+    config: Arc<Config>,
+    pub(crate) certificate_receiver:
+        tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
 
-#[tokio::test]
-async fn send_certificate_method_can_be_called() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init();
-
-    let mut config = Config::new_for_test();
-    let addr = next_available_addr();
-    if let IpAddr::V4(ip) = addr.ip() {
-        config.rpc.host = ip;
-    }
-    config.rpc.port = addr.port();
-
-    let config = Arc::new(config);
-
-    let (provider, _mock) = providers::Provider::mocked();
-    let (certificate_sender, mut certificate_receiver) = tokio::sync::mpsc::channel(1);
-
-    let kernel = Kernel::new(provider, config.clone());
-
-    let _server_handle = AgglayerImpl::new(
-        kernel,
-        certificate_sender,
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-    )
-    .start(config.clone())
-    .await
-    .unwrap();
-
-    let url = format!("http://{}/", config.rpc_addr());
-    let client = HttpClientBuilder::default().build(url).unwrap();
-
-    let _: CertificateId = client
-        .request(
-            "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), 0)],
-        )
-        .await
-        .unwrap();
-
-    assert!(certificate_receiver.try_recv().is_ok());
+pub(crate) struct TestContext {
+    pub(crate) _server_handle: ServerHandle,
+    pub(crate) client: jsonrpsee::http_client::HttpClient,
+    pub(crate) certificate_receiver:
+        tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
 
-#[tokio::test]
-async fn send_certificate_method_can_be_called_and_fail() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init();
+impl TestContext {
+    async fn new() -> Self {
+        let raw_rpc = Self::new_raw_rpc().await;
+        let _server_handle = raw_rpc.rpc.start(raw_rpc.config.clone()).await.unwrap();
 
-    let mut config = Config::new_for_test();
-    let addr = next_available_addr();
-    if let IpAddr::V4(ip) = addr.ip() {
-        config.rpc.host = ip;
-    }
-    config.rpc.port = addr.port();
+        let url = format!("http://{}/", raw_rpc.config.rpc_addr());
+        let client = HttpClientBuilder::default().build(url).unwrap();
 
-    let config = Arc::new(config);
-
-    let (provider, _mock) = providers::Provider::mocked();
-    let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
-
-    let kernel = Kernel::new(provider, config.clone());
-
-    let _server_handle = AgglayerImpl::new(
-        kernel,
-        certificate_sender,
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-    )
-    .start(config.clone())
-    .await
-    .unwrap();
-
-    let url = format!("http://{}/", config.rpc_addr());
-    let client = HttpClientBuilder::default().build(url).unwrap();
-
-    drop(certificate_receiver);
-
-    let res: Result<(), _> = client
-        .request(
-            "interop_sendCertificate",
-            rpc_params![Certificate::default()],
-        )
-        .await;
-
-    assert!(res.is_err());
-}
-
-#[tokio::test]
-async fn check_tx_status_fail() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init();
-
-    let anvil = Anvil::new().block_time(1u64).spawn();
-    let client = Provider::<Http>::connect(&anvil.endpoint()).await;
-    let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
-
-    let mut config = Config::new_for_test();
-    let addr = next_available_addr();
-    if let std::net::IpAddr::V4(ip) = addr.ip() {
-        config.rpc.host = ip;
-    }
-    let config = Arc::new(config);
-
-    let kernel = Kernel::new(client, config.clone());
-
-    let tmp = TempDBDir::new();
-    let db = Arc::new(DB::open_cf(tmp.path.as_path(), pending_db_cf_definitions()).unwrap());
-    let tmp = TempDBDir::new();
-    let store_db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
-    let store = Arc::new(PendingStore::new(db));
-    let state = Arc::new(StateStore::new(store_db));
-
-    let _server_handle = AgglayerImpl::new(kernel, certificate_sender, store, state)
-        .start(config.clone())
-        .await
-        .unwrap();
-
-    let url = format!("http://{}/", config.rpc_addr());
-    let client = HttpClientBuilder::default().build(url).unwrap();
-
-    // Try to get status using a non-existent address
-    let fake_tx_hash = H256([0x27; 32]);
-    let result: Result<TxStatus, ClientError> = client
-        .request("interop_getTxStatus", rpc_params![fake_tx_hash])
-        .await;
-
-    match result.unwrap_err() {
-        ClientError::Call(err) => {
-            assert_eq!(err.code(), rpc::error::code::STATUS_ERROR);
-
-            let data_expected = serde_json::json! {
-                { "status": { "tx-not-found": { "hash":  fake_tx_hash} } }
-            };
-            let data = serde_json::to_value(err.data().expect("data should not be empty")).unwrap();
-            assert_eq!(data_expected, data);
+        Self {
+            _server_handle,
+            client,
+            certificate_receiver: raw_rpc.certificate_receiver,
         }
-        _ => panic!("Unexpected error returned"),
+    }
+
+    async fn new_raw_rpc() -> RawRpcContext {
+        let tmp = TempDBDir::new();
+        let mut config = Config::new(&tmp.path);
+        let state_db = Arc::new(
+            DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions()).unwrap(),
+        );
+        let pending_db = Arc::new(
+            DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions()).unwrap(),
+        );
+
+        let state_store = Arc::new(StateStore::new(state_db));
+        let pending_store = Arc::new(PendingStore::new(pending_db));
+
+        let addr = next_available_addr();
+        if let IpAddr::V4(ip) = addr.ip() {
+            config.rpc.host = ip;
+        }
+        config.rpc.port = addr.port();
+
+        let config = Arc::new(config);
+
+        let (provider, _mock) = providers::Provider::mocked();
+        let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
+
+        let kernel = Kernel::new(provider, config.clone());
+
+        let rpc = AgglayerImpl::new(kernel, certificate_sender, pending_store, state_store);
+
+        RawRpcContext {
+            rpc,
+            config,
+            certificate_receiver,
+        }
     }
 }
 
-#[tokio::test]
-async fn get_certificate_header_after_sending_the_certificate() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init();
+#[fixture]
+async fn context() -> TestContext {
+    TestContext::new().await
+}
 
-    let tmp = TempDBDir::new();
-    let mut config = Config::new(&tmp.path);
-    let state_db =
-        Arc::new(DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions()).unwrap());
-    let pending_db = Arc::new(
-        DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions()).unwrap(),
-    );
-
-    let state_store = Arc::new(StateStore::new(state_db));
-    let pending_store = Arc::new(PendingStore::new(pending_db));
-
-    let addr = next_available_addr();
-    if let IpAddr::V4(ip) = addr.ip() {
-        config.rpc.host = ip;
-    }
-    config.rpc.port = addr.port();
-
-    let config = Arc::new(config);
-
-    let (provider, _mock) = providers::Provider::mocked();
-    let (certificate_sender, mut certificate_receiver) = tokio::sync::mpsc::channel(1);
-
-    let kernel = Kernel::new(provider, config.clone());
-
-    let _server_handle = AgglayerImpl::new(kernel, certificate_sender, pending_store, state_store)
-        .start(config.clone())
-        .await
-        .unwrap();
-
-    let url = format!("http://{}/", config.rpc_addr());
-    let client = HttpClientBuilder::default().build(url).unwrap();
-
-    let certificate = Certificate::new_for_test(1.into(), 0);
-    let id = certificate.hash();
-
-    let res: CertificateId = client
-        .request("interop_sendCertificate", rpc_params![certificate])
-        .await
-        .unwrap();
-
-    assert_eq!(id, res);
-    assert!(certificate_receiver.try_recv().is_ok());
-
-    let payload: CertificateHeader = client
-        .request("interop_getCertificateHeader", rpc_params![id])
-        .await
-        .unwrap();
-
-    assert_eq!(payload.certificate_id, id);
-    assert_eq!(payload.status, CertificateStatus::Pending);
-
-    let payload: Result<CertificateHeader, ClientError> = client
-        .request("interop_getCertificateHeader", rpc_params![Hash([0; 32])])
-        .await;
-
-    let error = payload.unwrap_err();
-
-    let expected_message = format!("Resource not found: Certificate({:#})", Hash([0; 32]));
-    assert!(matches!(error, ClientError::Call(obj) if obj.message() == expected_message));
+#[fixture]
+async fn raw_rpc() -> RawRpcContext {
+    TestContext::new_raw_rpc().await
 }
 
 fn next_available_addr() -> std::net::SocketAddr {
