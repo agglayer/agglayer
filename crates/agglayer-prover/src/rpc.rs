@@ -1,4 +1,6 @@
-use agglayer_prover_types::v1::proof_generation_service_server::ProofGenerationService;
+use agglayer_prover_types::{
+    default_bincode_options, v1::proof_generation_service_server::ProofGenerationService, Error,
+};
 use agglayer_telemetry::prover::{
     PROVING_REQUEST_FAILED, PROVING_REQUEST_RECV, PROVING_REQUEST_SUCCEEDED,
 };
@@ -8,9 +10,9 @@ use pessimistic_proof::{
     LocalNetworkState,
 };
 use tower::{buffer::Buffer, util::BoxService, Service, ServiceExt};
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
-use crate::executor::{Error, Request, Response};
+use crate::executor::{Request, Response};
 
 pub struct ProverRPC {
     executor: Buffer<BoxService<Request, Response, Error>, Request>,
@@ -69,10 +71,46 @@ impl ProofGenerationService for ProverRPC {
                 return Ok(tonic::Response::new(response));
             }
             Err(error) => {
-                error!("Failed to generate proof: {:?}", error);
-
                 PROVING_REQUEST_FAILED.add(1, metrics_attrs);
-                return Err(tonic::Status::internal("Failed to generate proof"));
+                if let Some(error) = error.downcast_ref::<Error>() {
+                    error!("Failed to generate proof: {}", error);
+                    let response = match error {
+                        Error::UnableToExecuteProver => {
+                            tonic::Status::internal("Unable to execute prover")
+                        }
+                        Error::ExecutorFailed(error) => {
+                            if let Ok(bytes_error) = default_bincode_options().serialize(&error) {
+                                tonic::Status::with_details(
+                                    tonic::Code::InvalidArgument,
+                                    error.to_string(),
+                                    bytes_error.into(),
+                                )
+                            } else {
+                                warn!("Unable to serialize Execution  error: {}", error);
+                                tonic::Status::invalid_argument(error.to_string())
+                            }
+                        }
+                        Error::ProofVerificationFailed(error) => {
+                            if let Ok(bytes_error) = default_bincode_options().serialize(&error) {
+                                tonic::Status::with_details(
+                                    tonic::Code::InvalidArgument,
+                                    error.to_string(),
+                                    bytes_error.into(),
+                                )
+                            } else {
+                                warn!("Unable to serialize SP1 verification error: {}", error);
+                                tonic::Status::invalid_argument(error.to_string())
+                            }
+                        }
+                        Error::ProverFailed(_) => tonic::Status::internal(error.to_string()),
+                    };
+
+                    return Err(response);
+                } else {
+                    error!("Failed to generate proof: {:?}", error);
+
+                    return Err(tonic::Status::internal("Failed to generate proof"));
+                }
             }
         }
     }

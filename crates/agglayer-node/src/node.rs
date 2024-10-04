@@ -119,10 +119,6 @@ impl Node {
             CertifierClient::try_new(config.prover_entrypoint.clone(), pending_store.clone())
                 .await?;
 
-        let clock_subscription =
-            tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
-                .filter_map(|value| value.ok());
-
         let current_epoch = clock_ref.current_epoch();
 
         let epochs_store = Arc::new(EpochsStore::new(config.clone(), current_epoch, pending_db)?);

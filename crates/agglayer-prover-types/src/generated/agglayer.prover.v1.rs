@@ -11,6 +11,11 @@ pub struct ProofGenerationResponse {
     #[prost(bytes = "vec", tag = "1")]
     pub proof: ::prost::alloc::vec::Vec<u8>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProofGenerationError {
+    #[prost(bytes = "vec", tag = "1")]
+    pub error: ::prost::alloc::vec::Vec<u8>,
+}
 /// Generated client implementations.
 pub mod proof_generation_service_client {
     #![allow(

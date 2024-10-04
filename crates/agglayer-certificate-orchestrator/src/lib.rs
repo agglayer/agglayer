@@ -846,7 +846,13 @@ pub enum Error {
     #[error("internal error")]
     InternalError,
     #[error("Serialize error")]
-    Serialize,
+    Serialize {
+        certificate_id: CertificateId,
+        source: bincode::Error,
+    },
     #[error("Deserialize error")]
-    Deserialize,
+    Deserialize {
+        certificate_id: CertificateId,
+        source: bincode::Error,
+    },
 }

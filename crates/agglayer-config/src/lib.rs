@@ -127,7 +127,7 @@ impl Config {
             epoch: Default::default(),
             shutdown: Default::default(),
             certificate_orchestrator: Default::default(),
-            prover_entrypoint: Default::default(),
+            prover_entrypoint: default_prover_entrypoint(),
         }
     }
 

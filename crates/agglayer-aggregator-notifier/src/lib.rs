@@ -2,15 +2,7 @@
 
 use agglayer_certificate_orchestrator::{EpochPacker, Error};
 use agglayer_config::certificate_orchestrator::prover::ProverConfig;
-use agglayer_storage::stores::{
-    PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
-};
-use agglayer_types::{
-    Certificate, Height, LocalNetworkStateData, NetworkId, Proof, ProofVerificationError,
-};
-use error::NotifierError;
 use futures::future::BoxFuture;
-use pessimistic_proof::{generate_pessimistic_proof, Address, LocalNetworkState, ProofError};
 use serde::Serialize;
 use tracing::debug;
 

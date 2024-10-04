@@ -6,6 +6,7 @@ use std::{
 };
 
 use agglayer_config::prover::ProverConfig;
+use agglayer_prover_types::Error;
 use futures::{Future, TryFutureExt};
 use pessimistic_proof::{
     local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
@@ -50,7 +51,7 @@ impl Executor {
                 .service(service)
                 .map_err(|error| match error.downcast::<Error>() {
                     Ok(error) => *error,
-                    Err(error) => Error::ProverFailed(anyhow::Error::msg(error.to_string())),
+                    Err(error) => Error::ProverFailed(error.to_string()),
                 }),
         )
     }
@@ -71,7 +72,7 @@ impl Executor {
                 .service(service)
                 .map_err(|error| match error.downcast::<Error>() {
                     Ok(error) => *error,
-                    Err(error) => Error::ProverFailed(anyhow::Error::msg(error.to_string())),
+                    Err(error) => Error::ProverFailed(error.to_string()),
                 }),
         )
     }
@@ -134,18 +135,6 @@ pub struct Response {
     pub(crate) proof: SP1ProofWithPublicValues,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("Unable to execute prover")]
-    UnableToExecuteProver,
-
-    #[error("Prover failed to generate proof: {0}")]
-    ProverFailed(#[from] anyhow::Error),
-
-    #[error("Proof verification failed: {0}")]
-    SP1VerificationFailed(#[from] sp1_sdk::SP1VerificationError),
-}
-
 impl Service<Request> for Executor {
     type Response = Response;
     type Error = Error;
@@ -206,9 +195,11 @@ impl Service<Request> for LocalExecutor {
                 let context = SP1Context::default();
                 let proof = prover
                     .prove(&proving_key, stdin, opts, context, kind)
-                    .map_err(Error::ProverFailed)?;
+                    .map_err(|error| Error::ProverFailed(error.to_string()))?;
 
-                prover.verify(&proof, &verification_key)?;
+                prover
+                    .verify(&proof, &verification_key)
+                    .map_err(|error| Error::ProofVerificationFailed(error.into()))?;
 
                 Ok(Response { proof })
             })
@@ -250,9 +241,11 @@ impl Service<Request> for NetworkExecutor {
                     None,
                 )
                 .await
-                .map_err(Error::ProverFailed)?;
+                .map_err(|error| Error::ProverFailed(error.to_string()))?;
 
-            prover.verify(&proof, &verification_key)?;
+            prover
+                .verify(&proof, &verification_key)
+                .map_err(|error| Error::ProofVerificationFailed(error.into()))?;
 
             Ok(Response { proof })
         };
