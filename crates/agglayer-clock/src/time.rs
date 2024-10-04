@@ -121,7 +121,9 @@ impl TimeClock {
                         if current_block % self.epoch_duration == 0 {
                             match self.update_epoch_number() {
                                 Ok(epoch_ended) => {
-                                    _ = sender.send(Event::EpochEnded(epoch_ended));
+                                    if let Err(error) = sender.send(Event::EpochEnded(epoch_ended)) {
+                                        error!("Failed to send EpochEnded event to subscribers: {error}");
+                                    }
                                 }
                                 Err((current_epoch, expected)) => {
                                     error!(

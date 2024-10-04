@@ -6,6 +6,7 @@ use thiserror::Error;
 use crate::{
     bridge_exit::{NetworkId, TokenInfo},
     imported_bridge_exit,
+    keccak::Hash,
     keccak::{keccak256_combine, Digest},
     local_exit_tree::hasher::Keccak256Hasher,
     local_state::{LocalNetworkState, StateCommitment},
@@ -13,10 +14,10 @@ use crate::{
 };
 
 /// Represents all errors that can occur while generating the proof.
-#[derive(Error, Debug)]
+#[derive(Clone, Error, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ProofError {
-    #[error("Invalid initial local exit root. Got: {got:?}, Expected: {expected:?}")]
-    InvalidInitialLocalExitRoot { got: Digest, expected: Digest },
+    #[error("Invalid initial local exit root. Got: {got}, Expected: {expected}")]
+    InvalidInitialLocalExitRoot { got: Hash, expected: Hash },
     #[error("Invalid final local exit root.")]
     InvalidFinalLocalExitRoot,
     #[error("Invalid initial balance root.")]
@@ -58,6 +59,8 @@ pub enum ProofError {
     InvalidImportedBridgeExitNetwork,
     #[error("Duplicate token {0:?} in balance proofs")]
     DuplicateTokenBalanceProof(TokenInfo),
+    #[error("Unknown error: {0}")]
+    Unknown(String),
 }
 
 /// Outputs of the pessimistic proof.

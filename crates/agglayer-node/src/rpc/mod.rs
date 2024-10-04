@@ -2,8 +2,11 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_storage::stores::PendingCertificateWriter;
+use agglayer_storage::stores::StateReader;
+use agglayer_storage::stores::StateWriter;
 use agglayer_telemetry::KeyValue;
-use agglayer_types::{Certificate, CertificateId, Height, NetworkId};
+use agglayer_types::CertificateStatus;
+use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId};
 use ethers::{
     contract::{ContractError, ContractRevert},
     providers::Middleware,
@@ -40,36 +43,45 @@ trait Agglayer {
     async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus>;
 
     #[method(name = "sendCertificate")]
-    async fn send_certificate(&self, certificate: Certificate) -> RpcResult<()>;
+    async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId>;
+
+    #[method(name = "getCertificateHeader")]
+    async fn get_certificate_header(
+        &self,
+        certificate_id: CertificateId,
+    ) -> RpcResult<CertificateHeader>;
 }
 
 /// The RPC agglayer service implementation.
-pub(crate) struct AgglayerImpl<Rpc, PendingStore> {
+pub(crate) struct AgglayerImpl<Rpc, PendingStore, StateStore> {
     kernel: Kernel<Rpc>,
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
-    #[allow(unused)]
     pending_store: Arc<PendingStore>,
+    state: Arc<StateStore>,
 }
 
-impl<Rpc, PendingStore> AgglayerImpl<Rpc, PendingStore> {
+impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore> {
     /// Create an instance of the RPC agglayer service.
     pub(crate) fn new(
         kernel: Kernel<Rpc>,
         certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
         pending_store: Arc<PendingStore>,
+        state: Arc<StateStore>,
     ) -> Self {
         Self {
             kernel,
             certificate_sender,
             pending_store,
+            state,
         }
     }
 }
 
-impl<Rpc, PendingStore> AgglayerImpl<Rpc, PendingStore>
+impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore>
 where
     Rpc: Middleware + 'static,
     PendingStore: PendingCertificateWriter + 'static,
+    StateStore: StateReader + StateWriter + 'static,
 {
     pub(crate) async fn start(self, config: Arc<Config>) -> anyhow::Result<ServerHandle> {
         // Create the RPC service
@@ -134,10 +146,11 @@ where
 }
 
 #[async_trait]
-impl<Rpc, PendingStore> AgglayerServer for AgglayerImpl<Rpc, PendingStore>
+impl<Rpc, PendingStore, StateStore> AgglayerServer for AgglayerImpl<Rpc, PendingStore, StateStore>
 where
     Rpc: Middleware + 'static,
     PendingStore: PendingCertificateWriter + 'static,
+    StateStore: StateReader + StateWriter + 'static,
 {
     #[instrument(skip(self, tx), fields(hash, rollup_id = tx.tx.rollup_id), level = "info")]
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
@@ -263,20 +276,33 @@ where
     }
 
     #[instrument(skip(self), fields(hash, rollup_id = *certificate.network_id), level = "info")]
-    async fn send_certificate(&self, certificate: Certificate) -> RpcResult<()> {
-        let hash = format!("{:?}", certificate.hash());
-        tracing::Span::current().record("hash", &hash);
+    async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
+        let hash = certificate.hash();
+        tracing::Span::current().record("hash", hash.to_string());
 
         info!(
-            hash,
+            %hash,
             "Received certificate {hash} for rollup {}", *certificate.network_id
         );
 
-        _ = self.pending_store.insert_pending_certificate(
-            certificate.network_id,
-            certificate.height,
-            &certificate,
-        );
+        // TODO: Batch the different queries.
+        // Insert the certificate header into the state store.
+        _ = self
+            .state
+            .insert_certificate_header(&certificate, CertificateStatus::Pending)
+            .map_err(|e| {
+                error!("Failed to insert certificate into state store: {e}");
+                Error::internal(e.to_string())
+            })?;
+
+        // Insert the certificate into the pending store.
+        _ = self
+            .pending_store
+            .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
+            .map_err(|e| {
+                error!("Failed to insert certificate into pending store: {e}");
+                Error::internal(e.to_string())
+            })?;
 
         if let Err(error) = self
             .certificate_sender
@@ -292,7 +318,26 @@ where
             return Err(Error::send_certificate(error));
         }
 
-        Ok(())
+        Ok(hash)
+    }
+
+    async fn get_certificate_header(
+        &self,
+        certificate_id: CertificateId,
+    ) -> RpcResult<CertificateHeader> {
+        info!("Received request to get certificate header for certificate {certificate_id}");
+        match self.state.get_certificate_header(&certificate_id) {
+            Ok(Some(header)) => Ok(header),
+            Ok(None) => Err(Error::resource_not_found(format!(
+                "Certificate({})",
+                certificate_id
+            ))),
+            Err(error) => {
+                error!("Failed to get certificate header: {}", error);
+
+                Err(Error::internal("Unable to get certificate header"))
+            }
+        }
     }
 }
 

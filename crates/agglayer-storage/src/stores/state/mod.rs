@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId};
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
+};
 use rocksdb::{Direction, ReadOptions};
+use tracing::warn;
 
 use super::{StateReader, StateWriter};
 use crate::{
     columns::{
+        certificate_header::CertificateHeaderColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
         latest_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
@@ -30,21 +34,54 @@ impl StateStore {
 }
 
 impl StateWriter for StateStore {
-    fn insert_certificate_header(&self, certificate: &Certificate) -> Result<(), Error> {
-        self.db.put::<CertificatePerNetworkColumn>(
-            &certificate_per_network::Key {
-                network_id: *certificate.network_id,
-                height: certificate.height,
-            },
+    fn insert_certificate_header(
+        &self,
+        certificate: &Certificate,
+        status: CertificateStatus,
+    ) -> Result<(), Error> {
+        // TODO: make it a batch write
+        self.db.put::<CertificateHeaderColumn>(
+            &certificate.hash(),
             &CertificateHeader {
                 certificate_id: certificate.hash(),
                 network_id: certificate.network_id,
                 height: certificate.height,
                 epoch_number: None,
                 certificate_index: None,
-                new_local_exit_root: certificate.new_local_exit_root,
+                new_local_exit_root: certificate.new_local_exit_root.into(),
+                status: status.clone(),
             },
-        )
+        )?;
+
+        if let CertificateStatus::Settled = status {
+            // TODO: Check certificate conflict during insert (if conflict it's too late)
+            self.db.put::<CertificatePerNetworkColumn>(
+                &certificate_per_network::Key {
+                    network_id: *certificate.network_id,
+                    height: certificate.height,
+                },
+                &certificate.hash(),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn update_certificate_header_status(
+        &self,
+        certificate_id: &CertificateId,
+        status: &CertificateStatus,
+    ) -> Result<(), Error> {
+        // TODO: make lockguard for certificate_id
+        let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
+
+        if let Some(mut certificate_header) = certificate_header {
+            certificate_header.status = status.clone();
+            self.db
+                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -65,6 +102,15 @@ impl StateReader for StateStore {
             .filter_map(|v| v.ok())
             .collect())
     }
+
+    fn get_certificate_header(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<CertificateHeader>, Error> {
+        tracing::info!("get_certificate_header: {}", certificate_id);
+        self.db.get::<CertificateHeaderColumn>(certificate_id)
+    }
+
     fn get_certificate_header_by_cursor(
         &self,
         network_id: NetworkId,
@@ -74,6 +120,19 @@ impl StateReader for StateStore {
             .get::<CertificatePerNetworkColumn>(&certificate_per_network::Key {
                 network_id: *network_id,
                 height,
+            })?
+            .map_or(Ok(None), |certificate_id| {
+                let result = self.get_certificate_header(&certificate_id);
+
+                if let Ok(None) = result {
+                    warn!(
+                        "Certificate header not found for certificate_id: {} while having a \
+                         reference in the CertificatePerNetworkColumn",
+                        certificate_id
+                    );
+                }
+
+                result
             })
     }
 

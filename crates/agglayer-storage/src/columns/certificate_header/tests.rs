@@ -5,7 +5,7 @@ use crate::columns::Codec as _;
 
 #[test]
 fn can_parse_key() {
-    let key: CertificateId = [1; 32];
+    let key: CertificateId = [1; 32].into();
 
     let encoded = key.encode().expect("Unable to encode key");
 
@@ -18,11 +18,12 @@ fn can_parse_key() {
 fn can_parse_value() {
     let value = Value {
         network_id: 1.into(),
-        certificate_id: [1; 32],
+        certificate_id: [1; 32].into(),
         height: 2,
         epoch_number: Some(3),
         certificate_index: Some(4),
-        new_local_exit_root: [5; 32],
+        new_local_exit_root: [5; 32].into(),
+        status: agglayer_types::CertificateStatus::Pending,
     };
 
     let encoded = value.encode().expect("Unable to encode value");
@@ -56,5 +57,6 @@ fn can_parse_value() {
         ]
     );
 
-    assert!(encoded[94..].is_empty());
+    assert_eq!(encoded[94..98], [0, 0, 0, 0]);
+    assert!(encoded[98..].is_empty());
 }

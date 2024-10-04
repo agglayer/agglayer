@@ -21,11 +21,12 @@ fn can_parse_key() {
 fn can_parse_value() {
     let value = CertificateHeader {
         network_id: 1.into(),
-        certificate_id: [1; 32],
+        certificate_id: [1; 32].into(),
         epoch_number: Some(3),
         certificate_index: Some(4),
         height: 0,
-        new_local_exit_root: [0; 32],
+        new_local_exit_root: [0; 32].into(),
+        status: agglayer_types::CertificateStatus::Pending,
     };
 
     let encoded = value.encode().expect("Unable to encode value");
@@ -59,5 +60,6 @@ fn can_parse_value() {
         ]
     );
 
-    assert!(encoded[94..].is_empty());
+    assert_eq!(encoded[94..98], [0, 0, 0, 0]);
+    assert!(encoded[98..].is_empty());
 }

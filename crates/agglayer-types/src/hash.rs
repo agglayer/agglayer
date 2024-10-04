@@ -1,14 +1,20 @@
 use std::fmt;
 
 use hex::FromHex;
-use reth_primitives::U256;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use tiny_keccak::{Hasher, Keccak};
+use serde::{Deserialize, Serialize};
+use serde::{Deserializer, Serializer};
 
-use crate::{local_balance_tree::FromU256, nullifier_tree::FromBool};
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Hash(pub [u8; 32]);
+
+impl Hash {
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+}
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
@@ -49,7 +55,6 @@ impl fmt::LowerHex for Hash {
         Ok(())
     }
 }
-
 impl<'de> Deserialize<'de> for Hash {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -89,56 +94,4 @@ impl From<[u8; 32]> for Hash {
     fn from(bytes: [u8; 32]) -> Self {
         Hash(bytes)
     }
-}
-
-/// The output type of Keccak hashing.
-pub type Digest = [u8; 32];
-
-impl FromBool for Digest {
-    fn from_bool(b: bool) -> Self {
-        if b {
-            [
-                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ]
-        } else {
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ]
-        }
-    }
-}
-impl FromU256 for Digest {
-    fn from_u256(u: U256) -> Self {
-        u.to_be_bytes()
-    }
-}
-
-/// Hashes the input data using a Keccak hasher with a 256-bit security level.
-pub fn keccak256(data: &[u8]) -> Digest {
-    let mut hasher = Keccak::v256();
-    hasher.update(data);
-
-    let mut output = [0u8; 32];
-    hasher.finalize(&mut output);
-    output
-}
-
-/// Hashes the input items using a Keccak hasher with a 256-bit security level.
-/// Safety: This function should only be called with fixed-size items to avoid
-/// collisions.
-pub fn keccak256_combine<I, T>(items: I) -> Digest
-where
-    I: IntoIterator<Item = T>,
-    T: AsRef<[u8]>,
-{
-    let mut hasher = Keccak::v256();
-    for data in items {
-        hasher.update(data.as_ref());
-    }
-
-    let mut output = [0u8; 32];
-    hasher.finalize(&mut output);
-    output
 }

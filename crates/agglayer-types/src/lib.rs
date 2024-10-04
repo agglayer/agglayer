@@ -1,11 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use ::serde::{Deserialize, Serialize};
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::LocalExitTree;
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::Smt;
+use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
@@ -13,12 +15,32 @@ use pessimistic_proof::{
     local_balance_tree::LocalBalancePath,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
+    ProofError,
 };
-use pessimistic_proof::{LocalNetworkState, ProofError};
+pub use reth_primitives::U256;
 use reth_primitives::{Address, Signature};
-use serde::{Deserialize, Serialize};
+pub type EpochNumber = u64;
+pub type CertificateIndex = u64;
+pub type CertificateId = Hash;
+pub type Height = u64;
 
-#[derive(Debug, thiserror::Error)]
+mod hash;
+pub use hash::Hash;
+pub use pessimistic_proof::bridge_exit::NetworkId;
+use sp1_sdk::SP1VerificationError;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CertificateHeader {
+    pub network_id: NetworkId,
+    pub height: Height,
+    pub epoch_number: Option<EpochNumber>,
+    pub certificate_index: Option<CertificateIndex>,
+    pub certificate_id: CertificateId,
+    pub new_local_exit_root: Hash,
+    pub status: CertificateStatus,
+}
+
+#[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Error {
     #[error("Imported bridge exits refer to multiple L1 info root")]
     MultipleL1InfoRoot,
@@ -30,22 +52,77 @@ pub enum Error {
     InvalidCertificateProjection(#[from] pessimistic_proof::utils::smt::SmtError),
 }
 
-pub use reth_primitives::U256;
-pub type EpochNumber = u64;
-pub type CertificateIndex = u64;
-pub type CertificateId = [u8; 32];
-pub type Hash = [u8; 32];
-pub type Height = u64;
-pub use pessimistic_proof::bridge_exit::NetworkId;
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
+pub enum CertificateStatusError {
+    #[error("({generation_type}) proof generation error: {}", source.to_string())]
+    ProofGenerationError {
+        generation_type: GenerationType,
+        source: ProofError,
+    },
+    #[error("proof verification failed")]
+    ProofVerificationFailed(#[from] ProofVerificationError),
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CertificateHeader {
-    pub network_id: NetworkId,
-    pub height: Height,
-    pub epoch_number: Option<EpochNumber>,
-    pub certificate_index: Option<CertificateIndex>,
-    pub certificate_id: CertificateId,
-    pub new_local_exit_root: Hash,
+    #[error(transparent)]
+    TypeConversionError(#[from] Error),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
+pub enum GenerationType {
+    Native,
+    Prover,
+}
+
+impl std::fmt::Display for GenerationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GenerationType::Native => write!(f, "native"),
+            GenerationType::Prover => write!(f, "prover"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
+pub enum ProofVerificationError {
+    #[error("Version mismatch: {0}")]
+    VersionMismatch(String),
+    #[error("Core machine verification error: {0}")]
+    Core(String),
+    #[error("Recursion verification error: {0}")]
+    Recursion(String),
+    #[error("Plonk verification error: {0}")]
+    Plonk(String),
+    #[error("Groth16 verification error: {0}")]
+    Groth16(String),
+    #[error("Invalid public values")]
+    InvalidPublicValues,
+}
+
+impl From<SP1VerificationError> for ProofVerificationError {
+    fn from(err: SP1VerificationError) -> Self {
+        match err {
+            SP1VerificationError::VersionMismatch(version) => {
+                ProofVerificationError::VersionMismatch(version)
+            }
+            SP1VerificationError::Core(core) => ProofVerificationError::Core(core.to_string()),
+            SP1VerificationError::Recursion(recursion) => {
+                ProofVerificationError::Recursion(recursion.to_string())
+            }
+            SP1VerificationError::Plonk(error) => ProofVerificationError::Plonk(error.to_string()),
+            SP1VerificationError::Groth16(error) => {
+                ProofVerificationError::Groth16(error.to_string())
+            }
+            SP1VerificationError::InvalidPublicValues => {
+                ProofVerificationError::InvalidPublicValues
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CertificateStatus {
+    Pending,
+    InError { error: CertificateStatusError },
+    Settled,
 }
 
 /// Proof is a wrapper around all the different types of proofs that can be
@@ -105,13 +182,14 @@ impl Certificate {
         }
     }
 
-    pub fn hash(&self) -> Digest {
+    pub fn hash(&self) -> CertificateId {
         keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
             self.height.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_slice(),
             self.new_local_exit_root.as_slice(),
         ])
+        .into()
     }
 }
 

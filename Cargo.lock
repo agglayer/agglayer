@@ -256,6 +256,7 @@ dependencies = [
  "serde",
  "sp1-sdk",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -280,10 +281,12 @@ dependencies = [
 name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "hex",
  "pessimistic-proof",
  "reth-primitives",
  "serde",
+ "serde_with",
  "sp1-core-machine",
  "sp1-sdk",
  "thiserror",

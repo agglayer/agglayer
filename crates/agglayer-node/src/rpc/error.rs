@@ -26,11 +26,14 @@ pub mod code {
     /// Transaction status retrieval error.
     pub const STATUS_ERROR: i32 = -10005;
 
-    /// Error submitting a ceritficate.
+    /// Error submitting a certificate.
     pub const SEND_CERTIFICATE: i32 = -10006;
 
     /// Transaction settlement has been rate limited.
     pub const RATE_LIMITED: i32 = -10007;
+
+    /// Resource not found.
+    pub const RESOURCE_NOT_FOUND: i32 = -10008;
 }
 
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
@@ -122,9 +125,23 @@ pub enum Error {
         detail: String,
         error: RateLimitedError,
     },
+
+    #[error("Resource not found: {0}")]
+    ResourceNotFound(String),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 impl Error {
+    pub(crate) fn internal<S: Into<String>>(detail: S) -> Self {
+        Self::Internal(detail.into())
+    }
+
+    pub(crate) fn resource_not_found<S: Into<String>>(resource: S) -> Self {
+        Self::ResourceNotFound(resource.into())
+    }
+
     pub(crate) fn rollup_not_registered(rollup_id: u32) -> Self {
         Self::RollupNotRegistered { rollup_id }
     }
@@ -155,6 +172,8 @@ impl Error {
     /// Get the jsonrpc error code for this error.
     pub fn code(&self) -> i32 {
         match self {
+            Self::Internal(_) => jsonrpsee::types::error::INTERNAL_ERROR_CODE,
+            Self::ResourceNotFound { .. } => code::RESOURCE_NOT_FOUND,
             Self::RollupNotRegistered { .. } => code::ROLLUP_NOT_REGISTERED,
             Self::SignatureMismatch { .. } => code::SIGNATURE_MISMATCH,
             Self::Validation(_) => code::VALIDATION_FAILURE,

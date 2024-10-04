@@ -9,9 +9,13 @@ hex.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
 serde.workspace = true
+serde_with.workspace = true
 sp1-sdk.workspace = true
 sp1-core-machine.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+bincode.workspace = true
 
 [features]
 default = []

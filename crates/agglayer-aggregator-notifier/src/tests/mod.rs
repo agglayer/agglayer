@@ -33,6 +33,14 @@ mod sp1 {
         > {
             todo!()
         }
+
+        fn get_certificate_header(
+            &self,
+            _certificate_id: &agglayer_types::CertificateId,
+        ) -> Result<Option<agglayer_types::CertificateHeader>, agglayer_storage::error::Error>
+        {
+            todo!()
+        }
     }
     impl PendingCertificateReader for DummyStore {
         fn get_certificate(
@@ -72,8 +80,8 @@ mod sp1 {
 
     #[tokio::test]
     #[rstest::rstest]
-    #[case(ProverConfig::SP1Local {})]
-    #[case(ProverConfig::SP1Mock {})]
+    #[case::sp1_local(ProverConfig::SP1Local {})]
+    #[case::sp1_mock(ProverConfig::SP1Mock {})]
     async fn aggregator_notifier_can_be_implemented(#[case] config: ProverConfig) {
         use std::sync::Arc;
 
