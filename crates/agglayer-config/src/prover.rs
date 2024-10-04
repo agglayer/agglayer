@@ -5,12 +5,10 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use serde_with::DurationSeconds;
 
 use crate::{shutdown::ShutdownConfig, telemetry::TelemetryConfig, Log};
 
 /// The Agglayer Prover configuration.
-#[serde_as]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ProverConfig {
@@ -36,7 +34,7 @@ pub struct ProverConfig {
 
     /// The maximum duration of a request.
     #[serde(default = "default_max_request_duration")]
-    #[serde_as(as = "DurationSeconds")]
+    #[serde(with = "crate::with::HumanDuration")]
     pub max_request_duration: Duration,
 
     /// The maximum number of buffered queries.
@@ -75,11 +73,11 @@ pub struct CpuProverConfig {
     #[serde(default = "default_max_concurrency_limit")]
     pub max_concurrency_limit: usize,
 
-    #[serde_as(as = "Option<DurationSeconds>")]
+    #[serde_as(as = "Option<crate::with::HumanDuration>")]
     pub proving_request_timeout: Option<Duration>,
 
     #[serde(default = "default_cpu_proving_timeout")]
-    #[serde_as(as = "DurationSeconds")]
+    #[serde(with = "crate::with::HumanDuration")]
     pub proving_timeout: Duration,
 }
 
@@ -111,11 +109,11 @@ pub struct NetworkProverConfig {
     #[serde(default = "default_activation_network_prover")]
     pub enabled: bool,
 
-    #[serde_as(as = "Option<DurationSeconds>")]
+    #[serde_as(as = "Option<crate::with::HumanDuration>")]
     pub proving_request_timeout: Option<Duration>,
 
     #[serde(default = "default_network_proving_timeout")]
-    #[serde_as(as = "DurationSeconds")]
+    #[serde(with = "crate::with::HumanDuration")]
     pub proving_timeout: Duration,
 }
 

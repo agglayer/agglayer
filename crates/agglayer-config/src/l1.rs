@@ -2,11 +2,9 @@ use std::time::Duration;
 
 use ethers::types::Address;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DurationSeconds};
 use url::Url;
 
 /// The L1 configuration.
-#[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct L1 {
@@ -17,7 +15,7 @@ pub struct L1 {
     #[serde(alias = "RollupManagerContract")]
     pub rollup_manager_contract: Address,
     #[serde(default = "L1::default_rpc_timeout")]
-    #[serde_as(as = "DurationSeconds")]
+    #[serde(with = "crate::with::HumanDuration")]
     pub rpc_timeout: Duration,
 }
 
