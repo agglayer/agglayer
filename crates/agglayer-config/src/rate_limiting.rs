@@ -16,7 +16,8 @@ pub enum TimeRateLimit {
     #[serde(untagged, rename_all = "kebab-case")]
     Limited {
         max_per_interval: u32,
-        #[serde(with = "humantime_serde")]
+
+        #[serde(with = "crate::with::HumanDuration")]
         time_interval: Duration,
     },
 }
