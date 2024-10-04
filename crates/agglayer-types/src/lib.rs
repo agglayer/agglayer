@@ -53,9 +53,12 @@ pub enum Error {
          {computed:?}"
     )]
     MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
-    /// The given token balance got out of bounds.
-    #[error("Token balance got out of bounds.")]
-    BalanceOverflow(#[from] pessimistic_proof::ProofError),
+    /// The given token balance cannot overflow.
+    #[error("Token balance cannot overflow. token: {0:?}")]
+    BalanceOverflow(TokenInfo),
+    /// The given token balance cannot be negative.
+    #[error("Token balance cannot be negative. token: {0:?}")]
+    BalanceUnderflow(TokenInfo),
     /// The balance proof for the given token cannot be generated.
     #[error("Unable to generate the balance proof. token: {token:?}, error: {source}")]
     BalanceProofGenerationFailed {
@@ -85,8 +88,8 @@ pub enum CertificateStatusError {
     /// Failure on the proof verification.
     #[error("proof verification failed")]
     ProofVerificationFailed(#[from] ProofVerificationError),
-    /// Failure on the pessimistic proof witness generation from the current
-    /// network state and the provided Certificate.
+    /// Failure on the pessimistic proof witness generation from the
+    /// [`LocalNetworkStateData`] and the provided [`Certificate`].
     #[error(transparent)]
     TypeConversionError(#[from] Error),
 }
@@ -290,7 +293,7 @@ impl LocalNetworkStateData {
                     token,
                     new_balances[&token]
                         .checked_add(imported_bridge_exit.bridge_exit.amount)
-                        .ok_or(ProofError::BalanceOverflowInBridgeExit)?,
+                        .ok_or(Error::BalanceOverflow(token))?,
                 );
             }
 
@@ -300,7 +303,7 @@ impl LocalNetworkStateData {
                     token,
                     new_balances[&token]
                         .checked_sub(bridge_exit.amount)
-                        .ok_or(ProofError::BalanceUnderflowInBridgeExit)?,
+                        .ok_or(Error::BalanceUnderflow(token))?,
                 );
             }
 
