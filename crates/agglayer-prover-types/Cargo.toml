@@ -5,12 +5,19 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+bincode.workspace = true
 prost = "0.13.3"
+serde.workspace = true
+thiserror.workspace = true
 tonic = { workspace = true, default-features = false, features = [
     "prost",
     "codegen",
     "transport",
 ] }
+
+agglayer-types = { path = "../agglayer-types" }
+pessimistic-proof = { path = "../pessimistic-proof" }
 
 [build-dependencies]
 tonic-build = { version = "0.12", default-features = false, features = [

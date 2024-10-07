@@ -43,6 +43,7 @@ pub use epoch::Epoch;
 pub use l1::L1;
 pub use l2::L2;
 pub use log::Log;
+use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
 
@@ -56,8 +57,10 @@ pub struct Config {
     /// endpoint.
     #[serde(alias = "FullNodeRPCs", deserialize_with = "deserialize_rpc_map")]
     pub full_node_rpcs: HashMap<u32, Url>,
+
     #[serde(default)]
     pub l2: L2,
+
     #[serde(
         alias = "ProofSigners",
         deserialize_with = "deserialize_signers_map",
@@ -100,6 +103,11 @@ pub struct Config {
 
     /// The storage configuration.
     pub storage: storage::StorageConfig,
+
+    /// AggLayer prover entrypoint.
+    #[serde(default = "default_prover_entrypoint")]
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub prover_entrypoint: String,
 }
 
 impl Config {
@@ -119,6 +127,7 @@ impl Config {
             epoch: Default::default(),
             shutdown: Default::default(),
             certificate_orchestrator: Default::default(),
+            prover_entrypoint: default_prover_entrypoint(),
         }
     }
 

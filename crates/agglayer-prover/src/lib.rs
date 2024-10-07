@@ -10,6 +10,7 @@ use tracing::info;
 // TODO: Mutualize with agglayer-node
 mod logging;
 
+mod executor;
 mod prover;
 mod rpc;
 

@@ -6,9 +6,10 @@ use anyhow::Result;
 use tokio::join;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Server;
+use tower::{limit::ConcurrencyLimitLayer, ServiceExt as _};
 use tracing::{debug, error, info};
 
-use crate::rpc::ProverRPC;
+use crate::{executor::Executor, rpc::ProverRPC};
 
 pub(crate) struct Prover {
     handle: tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
@@ -33,7 +34,16 @@ impl Prover {
         config: Arc<ProverConfig>,
         cancellation_token: CancellationToken,
     ) -> Result<Self> {
-        let rpc = ProverRPC::default();
+        let executor = tower::ServiceBuilder::new()
+            .timeout(config.max_request_duration)
+            .layer(ConcurrencyLimitLayer::new(config.max_concurrency_limit))
+            .service(Executor::new(config.as_ref()))
+            .into_inner()
+            .boxed();
+
+        let executor = tower::buffer::Buffer::new(executor, config.max_buffered_queries);
+
+        let rpc = ProverRPC::new(executor);
 
         let svc = ProofGenerationServiceServer::new(rpc);
 
@@ -51,7 +61,6 @@ impl Prover {
             .register_encoded_file_descriptor_set(agglayer_prover_types::FILE_DESCRIPTOR_SET)
             .build_v1alpha()
             .expect("Cannot build gRPC because of FILE_DESCRIPTOR_SET error");
-
         let layer = tower::ServiceBuilder::new().into_inner();
 
         info!("Starting Agglayer Prover on {}", config.grpc_endpoint);
@@ -71,7 +80,6 @@ impl Prover {
 
             Ok(())
         });
-
         Ok(Self { handle })
     }
 
