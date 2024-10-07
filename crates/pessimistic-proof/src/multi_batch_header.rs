@@ -23,53 +23,36 @@ where
     H: Hasher,
     H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned,
 {
-    /// The origin network which emitted this BatchHeader.
-    /// TODO: we should clarify naming. We use origin to refer to the issuing
-    /// network of a token. Could consider using "sending" or "local" to refer
-    /// to the network that created a batch.
+    /// Network that emitted this [`MultiBatchHeader`].
     pub origin_network: NetworkId,
-
-    /// The initial local exit root.
+    /// Previous local exit root.
     #[serde_as(as = "_")]
     pub prev_local_exit_root: H::Digest,
-
-    /// The set of bridge exits created in this batch
-    /// TODO: move out of the header and into a separate struct
-    pub bridge_exits: Vec<BridgeExit>,
-
-    /// The set of imported bridge exits claimed in this batch
-    /// TODO: move out of the header and into a separate struct
-    pub imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<H>)>,
-
-    /// A commitment to the set of imported bridge exits for which the origin
-    /// network is the target.
-    #[serde_as(as = "Option<_>")]
-    pub imported_exits_root: Option<H::Digest>,
-
-    /// The l1 info root against which we import the bridge exits
-    #[serde_as(as = "_")]
-    pub l1_info_root: H::Digest,
-
-    /// A map from token info to the token balance of the origin network before
-    /// any bridge event is processed, along with the Merkle proof of this
-    /// balance in the local balance tree.
-    // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
-    pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
-
-    /// The previous Local Balance Root
+    /// Previous local balance root.
     #[serde_as(as = "_")]
     pub prev_balance_root: H::Digest,
-
-    /// The previous NullifierTree Root
+    /// Previous nullifier tree root.
     #[serde_as(as = "_")]
     pub prev_nullifier_root: H::Digest,
-
-    /// The signer that commits to the bridge exits
+    /// List of bridge exits created in this batch.
+    pub bridge_exits: Vec<BridgeExit>,
+    /// List of imported bridge exits claimed in this batch.
+    pub imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<H>)>,
+    /// Commitment to the imported bridge exits. None if zero imported bridge
+    /// exit.
+    #[serde_as(as = "Option<_>")]
+    pub imported_exits_root: Option<H::Digest>,
+    /// L1 info root used to import bridge exits.
+    #[serde_as(as = "_")]
+    pub l1_info_root: H::Digest,
+    /// Token balances of the origin network before processing bridge events,
+    /// with Merkle proofs of these balances in the local balance tree.
+    pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
+    /// Signer committing to the state transition.
     pub signer: Address,
-    /// The signature that commits to the bridge exits
+    /// Signature committing to the state transition.
     pub signature: Signature,
-
-    /// Target hashes
+    /// State commitment target hashes.
     pub target: StateCommitment,
 }
 

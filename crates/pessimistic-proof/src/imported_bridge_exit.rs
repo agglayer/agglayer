@@ -44,20 +44,35 @@ impl L1InfoTreeLeaf {
 
 #[derive(Clone, Debug, Error, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Error {
+    /// The global index and the inclusion proof do not both correspond to the
+    /// same network type: mainnet or rollup.
     #[error("Mismatch between the global index and the inclusion proof.")]
     MismatchGlobalIndexInclusionProof,
+    /// The provided L1 info root does not match the one provided in the
+    /// inclusion proof.
     #[error("Mismatch between the provided L1 root and the inclusion proof.")]
     MismatchL1Root,
+    /// The provided L1 info leaf does not refer to the same MER as the
+    /// inclusion proof.
     #[error("Mismatch on the MER between the L1 leaf and the inclusion proof.")]
     MismatchMER,
+    /// The provided L1 info leaf does not refer to the same RER as the
+    /// inclusion proof.
     #[error("Mismatch on the RER between the L1 leaf and the inclusion proof.")]
     MismatchRER,
+    /// The inclusion proof from the leaf to the LER is invalid.
     #[error("Invalid merkle path from the leaf to the LER.")]
     InvalidMerklePathLeafToLER,
+    /// The inclusion proof from the LER to the RER is invalid.
     #[error("Invalid merkle path from the LER to the RER.")]
     InvalidMerklePathLERToRER,
+    /// The inclusion proof from the GER to the L1 info Root is invalid.
     #[error("Invalid merkle path from the GER to the L1 Info Root.")]
     InvalidMerklePathGERToL1Root,
+    /// The provided imported bridge exit does not target the right destination
+    /// network.
+    #[error("Invalid imported bridge exit destination network.")]
+    InvalidExitNetwork,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

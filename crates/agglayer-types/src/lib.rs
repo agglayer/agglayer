@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use ::serde::{Deserialize, Serialize};
+use pessimistic_proof::global_index::GlobalIndex;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::LocalExitTree;
@@ -42,26 +43,53 @@ pub struct CertificateHeader {
 
 #[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Error {
+    /// The imported bridge exits should refer to one and the same L1 info root.
     #[error("Imported bridge exits refer to multiple L1 info root")]
     MultipleL1InfoRoot,
-    #[error("Computed exit root: {computed:?} differs from certificate exit root: {declared:?}")]
+    /// The certificate refers to a new local exit root which differ from the
+    /// one computed by the agglayer.
+    #[error(
+        "Mismatch on the certificate new local exit root. declared: {declared:?}, computed: \
+         {computed:?}"
+    )]
     MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
-    #[error("Overflowed imported bridge exits: {0}")]
-    ImportedBridgeExitOverflow(#[from] pessimistic_proof::ProofError),
-    #[error("Failed to apply the Certificate on the given state: {0}")]
-    InvalidCertificateProjection(#[from] pessimistic_proof::utils::smt::SmtError),
+    /// The given token balance cannot overflow.
+    #[error("Token balance cannot overflow. token: {0:?}")]
+    BalanceOverflow(TokenInfo),
+    /// The given token balance cannot be negative.
+    #[error("Token balance cannot be negative. token: {0:?}")]
+    BalanceUnderflow(TokenInfo),
+    /// The balance proof for the given token cannot be generated.
+    #[error("Unable to generate the balance proof. token: {token:?}, error: {source}")]
+    BalanceProofGenerationFailed {
+        source: pessimistic_proof::utils::smt::SmtError,
+        token: TokenInfo,
+    },
+    /// The nullifier path for the given imported bridge exit cannot be
+    /// generated.
+    #[error(
+        "Unable to generate the nullifier path. global_index: {global_index:?}, error: {source}"
+    )]
+    NullifierPathGenerationFailed {
+        source: pessimistic_proof::utils::smt::SmtError,
+        global_index: GlobalIndex,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
 pub enum CertificateStatusError {
+    /// Failure on the pessimistic proof execution, either natively or in the
+    /// prover.
     #[error("({generation_type}) proof generation error: {}", source.to_string())]
     ProofGenerationError {
         generation_type: GenerationType,
         source: ProofError,
     },
+    /// Failure on the proof verification.
     #[error("proof verification failed")]
     ProofVerificationFailed(#[from] ProofVerificationError),
-
+    /// Failure on the pessimistic proof witness generation from the
+    /// [`LocalNetworkStateData`] and the provided [`Certificate`].
     #[error(transparent)]
     TypeConversionError(#[from] Error),
 }
@@ -265,7 +293,7 @@ impl LocalNetworkStateData {
                     token,
                     new_balances[&token]
                         .checked_add(imported_bridge_exit.bridge_exit.amount)
-                        .ok_or(ProofError::BalanceOverflowInBridgeExit)?,
+                        .ok_or(Error::BalanceOverflow(token))?,
                 );
             }
 
@@ -275,7 +303,7 @@ impl LocalNetworkStateData {
                     token,
                     new_balances[&token]
                         .checked_sub(bridge_exit.amount)
-                        .ok_or(ProofError::BalanceUnderflowInBridgeExit)?,
+                        .ok_or(Error::BalanceUnderflow(token))?,
                 );
             }
 
@@ -285,14 +313,22 @@ impl LocalNetworkStateData {
                 .map(|token| {
                     let initial_balance = initial_balances[&token];
 
+                    let balance_proof_error =
+                        |source| Error::BalanceProofGenerationFailed { source, token };
+
                     let path = if initial_balance.is_zero() {
-                        self.balance_tree.get_inclusion_proof_zero(token)?
+                        self.balance_tree
+                            .get_inclusion_proof_zero(token)
+                            .map_err(balance_proof_error)?
                     } else {
-                        self.balance_tree.get_inclusion_proof(token)?
+                        self.balance_tree
+                            .get_inclusion_proof(token)
+                            .map_err(balance_proof_error)?
                     };
 
                     self.balance_tree
-                        .update(token, new_balances[&token].to_be_bytes())?;
+                        .update(token, new_balances[&token].to_be_bytes())
+                        .map_err(balance_proof_error)?;
 
                     Ok((token, (initial_balance, path)))
                 })
@@ -322,10 +358,17 @@ impl LocalNetworkStateData {
                 .iter()
                 .map(|exit| {
                     let nullifier_key: NullifierKey = exit.global_index.into();
-                    let nullifier_path =
-                        self.nullifier_tree.get_non_inclusion_proof(nullifier_key)?;
+                    let nullifier_error = |source| Error::NullifierPathGenerationFailed {
+                        source,
+                        global_index: exit.global_index,
+                    };
+                    let nullifier_path = self
+                        .nullifier_tree
+                        .get_non_inclusion_proof(nullifier_key)
+                        .map_err(nullifier_error)?;
                     self.nullifier_tree
-                        .insert(nullifier_key, Digest::from_bool(true))?;
+                        .insert(nullifier_key, Digest::from_bool(true))
+                        .map_err(nullifier_error)?;
                     Ok((exit.clone(), nullifier_path))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
