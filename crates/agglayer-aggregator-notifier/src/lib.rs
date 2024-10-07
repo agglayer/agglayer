@@ -40,7 +40,7 @@ where
 
 impl<I> EpochPacker for AggregatorNotifier<I>
 where
-    I: Send + Sync + Unpin + Clone + 'static,
+    I: Clone + 'static,
 {
     type Item = I;
     fn pack<T: IntoIterator<Item = Self::Item>>(

@@ -121,6 +121,7 @@ impl From<SP1VerificationError> for ProofVerificationError {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CertificateStatus {
     Pending,
+    Proven,
     InError { error: CertificateStatusError },
     Settled,
 }
