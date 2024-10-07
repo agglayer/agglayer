@@ -13,7 +13,7 @@ hyper = "1.4.1"
 jsonrpsee = { workspace = true, features = ["full"] }
 parking_lot = "0.12.3"
 pin-project = "1.1.5"
-reqwest = "0.11.27"
+reqwest = "0.12.8"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with.workspace = true
