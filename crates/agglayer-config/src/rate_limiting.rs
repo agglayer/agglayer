@@ -52,8 +52,7 @@ pub enum EpochRateLimit {
 impl EpochRateLimit {
     /// Default rate limiting for the `sendCertificate` call.
     pub const fn send_certificate_default() -> Self {
-        // TODO What should the default be? Picked 3 for now by a die roll.
-        Self::limited(3)
+        Self::Unlimited
     }
 
     /// Create a time-based rate limiting
@@ -179,7 +178,7 @@ mod test {
 
     #[test]
     fn default_config() {
-        let config_str = "send-tx = \"unlimited\"";
+        let config_str = "send-tx = \"unlimited\"\nsend-certificate = \"unlimited\"";
         let parsed_default_config: RateLimitingConfig = toml::from_str(config_str).unwrap();
         assert_eq!(parsed_default_config, RateLimitingConfig::DEFAULT);
 
@@ -187,20 +186,12 @@ mod test {
         assert_eq!(empty_config, RateLimitingConfig::DEFAULT);
     }
 
-    #[test]
-    fn unlimited() {
-        let config_str = "send-tx = \"unlimited\"";
-        let config: RateLimitingConfig = toml::from_str(&config_str).unwrap();
-        let expected = RateLimitingConfig::new(TimeRateLimit::Unlimited);
-        assert_eq!(config, expected);
-    }
-
     #[rstest::rstest]
     #[case(4, "1h 20min", 80 * 60)]
     #[case(2, "30min", 1800)]
     #[case(50, "90s", 90)]
     #[case(0, "2min", 120)]
-    fn basic(#[case] limit: u32, #[case] interval_str: String, #[case] interval_secs: u64) {
+    fn basic_send_tx(#[case] limit: u32, #[case] interval_str: String, #[case] interval_secs: u64) {
         #[rustfmt::skip]
         let config_str = format!(
             "[send-tx]\n\
@@ -208,10 +199,13 @@ mod test {
             time-interval = {interval_str:?}\n"
         );
         let config: RateLimitingConfig = toml::from_str(&config_str).unwrap();
-        let expected = RateLimitingConfig::new(TimeRateLimit::Limited {
-            max_per_interval: limit,
-            time_interval: Duration::from_secs(interval_secs),
-        });
+        let expected = RateLimitingConfig::new(
+            TimeRateLimit::Limited {
+                max_per_interval: limit,
+                time_interval: Duration::from_secs(interval_secs),
+            },
+            EpochRateLimit::send_certificate_default(),
+        );
         assert_eq!(config, expected);
     }
 
@@ -221,25 +215,50 @@ mod test {
         let config_str = "[send-tx]\n\
             max-per-interval = 3\n\
             time-interval = \"30min\"\n\
+            \n\
+            [send-certificate]\n\
+            max-per-epoch = 7\n\
+            \n\
             [network.1.send-tx]\n\
             max-per-interval = 4\n\
-            time-interval = \"40min\"\n";
+            time-interval = \"40min\"\n\
+            \n\
+            [network.1.send-certificate]\n\
+            max-per-epoch = 12\n";
         let config: RateLimitingConfig = toml::from_str(&config_str).unwrap();
 
         let default_send_tx_limit = TimeRateLimit::limited(3, Duration::from_secs(1800));
+        let default_send_cert_limit = EpochRateLimit::limited(7);
         let network_1_send_tx_limit = TimeRateLimit::limited(4, Duration::from_secs(2400));
+        let network_1_send_cert_limit = EpochRateLimit::limited(12);
         let network_1_override = RateLimitOverride {
             send_tx: Some(network_1_send_tx_limit.clone()),
+            send_certificate: Some(network_1_send_cert_limit.clone()),
         };
 
         let expected = RateLimitingConfig {
             send_tx: default_send_tx_limit.clone(),
+            send_certificate: default_send_cert_limit.clone(),
             network: PerNetworkRateLimitOverride::from_iter([(1, network_1_override)]),
         };
 
         assert_eq!(config, expected);
+
         assert_eq!(config.config_for(1).send_tx, &network_1_send_tx_limit);
+        assert_eq!(
+            config.config_for(1).send_certificate,
+            &network_1_send_cert_limit
+        );
+
         assert_eq!(config.config_for(2).send_tx, &default_send_tx_limit);
-        assert_eq!(config.config_for(1337).send_tx, &default_send_tx_limit);
+        assert_eq!(
+            config.config_for(2).send_certificate,
+            &default_send_cert_limit
+        );
+
+        assert_eq!(
+            config.config_for(1337).send_certificate,
+            &default_send_cert_limit
+        );
     }
 }
