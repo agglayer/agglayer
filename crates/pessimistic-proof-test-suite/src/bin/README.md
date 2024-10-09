@@ -18,23 +18,15 @@ The local mode requires a large machine with ~128GB RAM.
 
 ### Bridge exits and Imported bridge exits
 
-The transition is given by `--n-exits <number>`. It will generate one Certificate with `<number>` brige exits and `<number>` imported bridge exits.
+The transition is given by:
 
-The imported bridge exits are mirroring the bridge exits. This means that one bridge exit from chain A to chain B will be mirrored in the imported bridge exit as a bridge exit from another arbitrary chain to chain A.
+- The number of bridge exits: `--n-exits <number>`
+- The number of imported bridge exits: `--n-imported-exits <number>`
 
-Example:
+It will generate one Certificate with `--n-exits` brige exits and `--n-imported-exits` imported bridge exits.
 
-```
-bridge exits:
-   A -> B: 2 ETH
-   A -> C: 10 USDT
-
-imported bridge exits:
-   * -> A: 2 ETH
-   * -> A: 10 USDT
-```
-
-The bridge exits are taken from this sample file: [withdrawals.json](../../data/withdrawals.json)
+The events are cyclically taken from the optional sample file given by `--sample-path`.
+If not provided, this default sample file of 200 events is used: [withdrawals.json](../../data/withdrawals.json)
 
 ## Network mode
 

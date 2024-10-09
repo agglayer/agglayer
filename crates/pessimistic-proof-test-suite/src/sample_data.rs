@@ -88,13 +88,13 @@ pub fn sample_state_01() -> Forest {
     Forest::new_with_local_exit_tree(balances, sample_exit_tree_01())
 }
 
-pub fn sample_bridge_exits_01() -> impl Iterator<Item = BridgeExit> {
+pub fn sample_bridge_exits_01() -> impl Iterator<Item = BridgeExit> + Clone {
     load_json_data_file::<Vec<DepositEventData>>("withdrawals.json")
         .into_iter()
         .map(Into::into)
 }
 
-pub fn sample_bridge_exits(sample_path: PathBuf) -> impl Iterator<Item = BridgeExit> {
+pub fn sample_bridge_exits(sample_path: PathBuf) -> impl Iterator<Item = BridgeExit> + Clone {
     parse_json_file::<Vec<DepositEventData>>(sample_path.as_path())
         .into_iter()
         .map(Into::into)
