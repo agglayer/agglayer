@@ -6,20 +6,19 @@ use std::{
     },
 };
 
-use agglayer_types::{Height, NetworkId};
+use agglayer_types::{CertificateIndex, EpochNumber, Height, NetworkId};
 use parking_lot::RwLock;
 use rocksdb::ReadOptions;
 use tracing::{debug, warn};
 
-use super::{interfaces::reader::PerEpochReader, PerEpochWriter};
+use super::{
+    interfaces::reader::PerEpochReader, PendingCertificateReader, PendingCertificateWriter,
+    PerEpochWriter, StateWriter,
+};
 use crate::{
-    columns::{
-        epochs::{
-            certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
-            proofs::ProofPerIndexColumn, start_checkpoint::StartCheckpointColumn,
-        },
-        pending_queue::{PendingQueueColumn, PendingQueueKey},
-        proof_per_certificate::ProofPerCertificateColumn,
+    columns::epochs::{
+        certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
+        proofs::ProofPerIndexColumn, start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
     storage::{epochs_db_cf_definitions, DB},
@@ -28,21 +27,26 @@ use crate::{
 #[cfg(test)]
 mod tests;
 
+const MAX_CERTIFICATE_PER_EPOCH: u64 = 1;
+
 /// A logical store for an Epoch.
-pub struct PerEpochStore {
+pub struct PerEpochStore<PendingStore, StateStore> {
+    epoch_number: Arc<u64>,
     db: Arc<DB>,
-    pending_db: Arc<DB>,
+    pending_store: Arc<PendingStore>,
+    state_store: Arc<StateStore>,
     next_certificate_index: AtomicU64,
     start_checkpoint: BTreeMap<NetworkId, Height>,
     end_checkpoint: RwLock<BTreeMap<NetworkId, Height>>,
     in_packing: AtomicBool,
 }
 
-impl PerEpochStore {
+impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     pub fn try_open(
         config: Arc<agglayer_config::Config>,
         epoch_number: u64,
-        pending_db: Arc<DB>,
+        pending_store: Arc<PendingStore>,
+        state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
         // TODO: refactor this
         let path = config
@@ -94,8 +98,10 @@ impl PerEpochStore {
         };
 
         Ok(Self {
+            epoch_number: Arc::new(epoch_number),
             db,
-            pending_db,
+            pending_store,
+            state_store,
             next_certificate_index: AtomicU64::new(0),
             start_checkpoint,
             end_checkpoint: RwLock::new(end_checkpoint),
@@ -104,8 +110,16 @@ impl PerEpochStore {
     }
 }
 
-impl PerEpochWriter for PerEpochStore {
-    fn add_certificate(&self, network_id: NetworkId, height: Height) -> Result<(), Error> {
+impl<PendingStore, StateStore> PerEpochWriter for PerEpochStore<PendingStore, StateStore>
+where
+    PendingStore: PendingCertificateReader + PendingCertificateWriter,
+    StateStore: StateWriter,
+{
+    fn add_certificate(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+    ) -> Result<(EpochNumber, CertificateIndex), Error> {
         // Check for network rate limiting
         let start_checkpoint = self.start_checkpoint.get(&network_id);
         let mut end_checkpoint = self.end_checkpoint.write();
@@ -154,8 +168,9 @@ impl PerEpochWriter for PerEpochStore {
             }
             // If the network is found in the end checkpoint and the height minus one is equal to
             // the current network height. We can add the certificate.
-            (Some(_start_height), Entry::Occupied(current_height))
-                if *current_height.get() == height - 1 =>
+            (Some(start_height), Entry::Occupied(current_height))
+                if *current_height.get() == height - 1
+                    && start_height - height <= MAX_CERTIFICATE_PER_EPOCH =>
             {
                 debug!(
                     "Certificate candidate for network {} at height {} accepted",
@@ -172,16 +187,17 @@ impl PerEpochWriter for PerEpochStore {
             }
         }
 
+        // Acquire locks
         let certificate = self
-            .pending_db
-            .get::<PendingQueueColumn>(&PendingQueueKey(network_id, height))?
+            .pending_store
+            .get_certificate(network_id, height)?
             .ok_or(Error::NoCertificate)?;
 
         let certificate_id = certificate.hash();
 
         let proof = self
-            .pending_db
-            .get::<ProofPerCertificateColumn>(&certificate_id)?
+            .pending_store
+            .get_proof(certificate_id)?
             .ok_or(Error::NoProof)?;
 
         let certificate_index = self.next_certificate_index.fetch_add(1, Ordering::SeqCst);
@@ -196,13 +212,17 @@ impl PerEpochWriter for PerEpochStore {
             .put::<ProofPerIndexColumn>(&certificate_index, &proof)?;
 
         // Removing the certificate and proof from the pending store
-        self.pending_db
-            .delete::<ProofPerCertificateColumn>(&certificate_id)?;
+        self.pending_store.remove_generated_proof(&certificate_id)?;
 
-        self.pending_db
-            .delete::<PendingQueueColumn>(&PendingQueueKey(network_id, height))?;
+        self.pending_store
+            .remove_pending_certificate(network_id, height)?;
 
-        Ok(())
+        self.state_store.update_certificate_header_status(
+            &certificate_id,
+            &agglayer_types::CertificateStatus::Candidate,
+        )?;
+
+        Ok((*self.epoch_number, certificate_index))
     }
 
     fn start_packing(&self) -> Result<(), Error> {
@@ -214,7 +234,11 @@ impl PerEpochWriter for PerEpochStore {
     }
 }
 
-impl PerEpochReader for PerEpochStore {
+impl<PendingStore, StateStore> PerEpochReader for PerEpochStore<PendingStore, StateStore>
+where
+    PendingStore: Send + Sync,
+    StateStore: Send + Sync,
+{
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {
         &self.start_checkpoint
     }
