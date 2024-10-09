@@ -1,40 +1,42 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     sync::{atomic::Ordering, Arc},
 };
 
 use agglayer_config::Config;
+use agglayer_types::Certificate;
 use agglayer_types::{Height, NetworkId, Proof};
-use rstest::rstest;
+use parking_lot::RwLock;
+use rstest::{fixture, rstest};
 
+use crate::stores::PendingCertificateWriter as _;
 use crate::{
     error::Error,
-    storage::{pending_db_cf_definitions, DB},
-    stores::{pending::PendingStore, per_epoch::PerEpochStore, PerEpochWriter as _},
+    stores::{
+        interfaces::writer::PerEpochWriter, pending::PendingStore, per_epoch::PerEpochStore,
+        state::StateStore,
+    },
     tests::TempDBDir,
 };
 
-#[test]
-fn can_start_packing_an_unpacked_epoch() {
+#[fixture]
+fn store() -> PerEpochStore<PendingStore, StateStore> {
     let tmp = TempDBDir::new();
-    let pending_db =
-        Arc::new(DB::open_cf(tmp.path.as_path(), pending_db_cf_definitions()).unwrap());
-    let config = Arc::new(Config::new_for_test());
+    let config = Arc::new(Config::new(&tmp.path));
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(StateStore::new_with_path(&config.storage.state_db_path).unwrap());
 
-    let store = PerEpochStore::try_open(config, 0, pending_db.clone()).unwrap();
+    PerEpochStore::try_open(config, 0, pending_store, state_store).unwrap()
+}
 
+#[rstest]
+fn can_start_packing_an_unpacked_epoch(store: PerEpochStore<PendingStore, StateStore>) {
     assert!(store.start_packing().is_ok());
 }
 
-#[test]
-fn cant_start_packing_a_packed_epoch() {
-    let tmp = TempDBDir::new();
-    let pending_db =
-        Arc::new(DB::open_cf(tmp.path.as_path(), pending_db_cf_definitions()).unwrap());
-    let config = Arc::new(Config::new(&tmp.path));
-
-    let store = PerEpochStore::try_open(config, 0, pending_db.clone()).unwrap();
-
+#[rstest]
+fn cant_start_packing_a_packed_epoch(store: PerEpochStore<PendingStore, StateStore>) {
     store.in_packing.store(true, Ordering::Relaxed);
 
     assert!(store.start_packing().is_err());
@@ -61,61 +63,117 @@ type EndCheckpointState = CheckpointState;
 #[case::when_state_are_empty(
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
-    |result: Result<(), Error>| result.is_ok(),
+    |result: Result<_, Error>| result.is_ok(),
     0)]
 #[case::when_state_is_incorrect(
     StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 0)]),
     EndCheckpointState::Empty,
-    |result: Result<(), Error>| matches!(result, Err(Error::Unexpected(_))),
+    |result: Result<_, Error>| matches!(result, Err(Error::Unexpected(_))),
     0)]
 #[case::when_certificate_is_unexpected(
     StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
     EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
-    |result: Result<(), Error>| {
+    |result: Result<_, Error>| {
         matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, 0, 1))))
     }, 0)]
 #[case::when_certificate_is_already_present(
     StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
     EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
-    |result: Result<(), Error>| {
+    |result: Result<_, Error>| {
         matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, 1, 1))))
     }, 1)]
 #[case::when_there_is_a_gap(
     StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
     EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
-    |result: Result<(), Error>| {
+    |result: Result<_, Error>| {
         matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, 3, 1))))
     }, 3)]
 fn adding_a_certificate(
+    mut store: PerEpochStore<PendingStore, StateStore>,
     #[case] start_checkpoint: StartCheckpointState,
     #[case] end_checkpoint: EndCheckpointState,
-    #[case] expected_result: impl FnOnce(Result<(), Error>) -> bool,
+    #[case] expected_result: impl FnOnce(Result<(u64, u64), Error>) -> bool,
     #[case] height: Height,
+) {
+    let network_id = 0.into();
+    let certificate = Certificate::new_for_test(network_id, height);
+    let certificate_id = certificate.hash();
+    let pending_store = store.pending_store.clone();
+
+    pending_store
+        .insert_pending_certificate(network_id, height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::new_for_test())
+        .unwrap();
+
+    store.start_checkpoint = start_checkpoint.into();
+    store.end_checkpoint = RwLock::new(end_checkpoint.into());
+
+    assert!(expected_result(store.add_certificate(network_id, height)));
+}
+
+#[rstest]
+#[case::when_state_are_empty(
+    StartCheckpointState::Empty,
+    EndCheckpointState::Empty,
+    VecDeque::from([|result: Result<_, Error>| result.is_ok(), |result: Result<_, Error>| result.is_err()]),
+    0)]
+#[case::when_state_are_empty_and_starting_at_wrong_height(
+    StartCheckpointState::Empty,
+    EndCheckpointState::Empty,
+    VecDeque::from([|result: Result<_, Error>| result.is_err()]),
+    1)]
+#[case::when_state_is_already_full(
+    StartCheckpointState::Empty,
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 0)]),
+    VecDeque::from([|result: Result<_, Error>| result.is_err()]),
+    1)]
+#[case::when_state_contains_other_network(
+    StartCheckpointState::Empty,
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(1), 0)]),
+    VecDeque::from([|result: Result<_, Error>| result.is_ok()]),
+    0)]
+#[case::when_state_contains_other_network_but_wrong_height(
+    StartCheckpointState::Empty,
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(1), 0)]),
+    VecDeque::from([|result: Result<_, Error>| result.is_err()]),
+    1)]
+fn adding_multiple_certificates(
+    mut store: PerEpochStore<PendingStore, StateStore>,
+    #[case] start_checkpoint: StartCheckpointState,
+    #[case] end_checkpoint: EndCheckpointState,
+    #[case] mut expected_results: VecDeque<impl FnOnce(Result<(u64, u64), Error>) -> bool>,
+    #[case] mut height: Height,
 ) {
     use agglayer_types::Certificate;
     use parking_lot::RwLock;
 
     use crate::stores::PendingCertificateWriter as _;
 
-    let tmp = TempDBDir::new();
-    let pending_db =
-        Arc::new(DB::open_cf(tmp.path.as_path(), pending_db_cf_definitions()).unwrap());
-    let config = Arc::new(Config::new(&tmp.path));
-
-    let certificate = Certificate::new_for_test(0.into(), height);
-    let pending_store = PendingStore::new(pending_db.clone());
-    pending_store
-        .insert_pending_certificate(0.into(), height, &certificate)
-        .unwrap();
-
-    pending_store
-        .insert_generated_proof(&certificate.hash(), &Proof::new_for_test())
-        .unwrap();
-
-    let mut store = PerEpochStore::try_open(config, 0, pending_db.clone()).unwrap();
+    let pending_store = store.pending_store.clone();
+    let network = 0.into();
 
     store.start_checkpoint = start_checkpoint.into();
     store.end_checkpoint = RwLock::new(end_checkpoint.into());
 
-    assert!(expected_result(store.add_certificate(0.into(), height)));
+    while let Some(expected_result) = expected_results.pop_front() {
+        let certificate = Certificate::new_for_test(network, height);
+        pending_store
+            .insert_pending_certificate(network, height, &certificate)
+            .unwrap();
+        pending_store
+            .insert_generated_proof(&certificate.hash(), &Proof::new_for_test())
+            .unwrap();
+
+        assert!(
+            expected_result(store.add_certificate(network, height)),
+            "{}:{} failed to pass the test",
+            network,
+            height
+        );
+
+        height += 1;
+    }
 }
