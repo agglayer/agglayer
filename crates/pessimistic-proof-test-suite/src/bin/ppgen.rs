@@ -1,10 +1,12 @@
 use std::{path::PathBuf, time::Instant};
 
-use agglayer_types::Certificate;
+use agglayer_types::{Certificate, U256};
 use clap::Parser;
-use pessimistic_proof::{bridge_exit::NetworkId, PessimisticProofOutput};
+use pessimistic_proof::{
+    bridge_exit::{NetworkId, TokenInfo},
+    PessimisticProofOutput,
+};
 use pessimistic_proof_test_suite::{
-    forest::Forest,
     runner::Runner,
     sample_data::{self as data},
 };
@@ -18,9 +20,13 @@ use uuid::Uuid;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct PPGenArgs {
-    /// The number of bridge exits and imported bridge exits.
+    /// The number of bridge exits.
     #[clap(long, default_value = "10")]
     n_exits: usize,
+
+    /// The number of imported bridge exits.
+    #[clap(long, default_value = "0")]
+    n_imported_exits: usize,
 
     /// The optional output directory to write the proofs in JSON. If not set,
     /// the proof is simply logged.
@@ -32,31 +38,35 @@ struct PPGenArgs {
     sample_path: Option<PathBuf>,
 }
 
+fn get_events(n: usize, path: Option<PathBuf>) -> Vec<(TokenInfo, U256)> {
+    if let Some(p) = path {
+        data::sample_bridge_exits(p)
+            .cycle()
+            .take(n)
+            .map(|e| (e.token_info, e.amount))
+            .collect::<Vec<_>>()
+    } else {
+        data::sample_bridge_exits_01()
+            .cycle()
+            .take(n)
+            .map(|e| (e.token_info, e.amount))
+            .collect::<Vec<_>>()
+    }
+}
+
 pub fn main() {
     sp1_sdk::utils::setup_logger();
 
     let args = PPGenArgs::parse();
 
-    let mut state = Forest::new([]);
-    let bridge_exits = if let Some(p) = args.sample_path {
-        data::sample_bridge_exits(p)
-            .take(args.n_exits)
-            .collect::<Vec<_>>()
-    } else {
-        data::sample_bridge_exits_01()
-            .take(args.n_exits)
-            .collect::<Vec<_>>()
-    };
-
-    let withdrawals = bridge_exits
-        .iter()
-        .map(|be| (be.token_info, be.amount))
-        .collect::<Vec<_>>();
+    let mut state = data::sample_state_01();
 
     let old_state = state.state_b.clone();
 
-    let imported_bridge_events = withdrawals.clone(); // import as much as we withdraw to bypass balance
-    let (certificate, signer) = state.apply_events(&imported_bridge_events, &withdrawals);
+    let bridge_exits = get_events(args.n_exits, args.sample_path.clone());
+    let imported_bridge_exits = get_events(args.n_imported_exits, args.sample_path);
+
+    let (certificate, signer) = state.apply_events(&imported_bridge_exits, &bridge_exits);
 
     info!(
         "Certificate: [{}]",
@@ -68,8 +78,9 @@ pub fn main() {
         .unwrap();
 
     info!(
-        "Generating the proof for {} bridge exits",
-        withdrawals.len()
+        "Generating the proof for {} bridge exit(s) and {} imported bridge exit(s)",
+        bridge_exits.len(),
+        imported_bridge_exits.len()
     );
 
     let start = Instant::now();

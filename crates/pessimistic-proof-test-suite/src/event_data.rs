@@ -53,7 +53,7 @@ pub enum EventData {
     Claim(ClaimEventData),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DepositEventData {
     pub leaf_type: u8,
