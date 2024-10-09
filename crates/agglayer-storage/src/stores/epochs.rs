@@ -41,10 +41,21 @@ impl<PendingStore, StateStore> EpochsStore<PendingStore, StateStore> {
 
 impl<PendingStore, StateStore> EpochStoreWriter for EpochsStore<PendingStore, StateStore>
 where
-    PendingStore: Send + Sync,
-    StateStore: Send + Sync,
+    PendingStore: PendingCertificateWriter + PendingCertificateReader,
+    StateStore: StateWriter,
 {
     type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
+    //
+    // fn pack(
+    //     &self,
+    //     epoch_number: u64,
+    // ) -> Result<Pin<Box<impl Future<Output = Result<(), Error>>>>, Error> {
+    //
+    //     //     Ok(Box::pin(async move {
+    //     //         let current_epoch.start_packing();
+    //     //         Ok(())
+    //     //     }))
+    // }
 
     fn open(&self, epoch_number: u64) -> Result<PerEpochStore<PendingStore, StateStore>, Error> {
         PerEpochStore::try_open(
@@ -76,5 +87,4 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateWriter + MetadataWriter + StateReader,
 {
-    type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
 }

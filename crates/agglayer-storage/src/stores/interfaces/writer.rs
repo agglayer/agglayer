@@ -5,7 +5,7 @@ use agglayer_types::{
     NetworkId, Proof,
 };
 
-use crate::error::Error;
+use crate::{error::Error, stores::PerEpochReader};
 
 pub trait PerEpochWriter: Send + Sync {
     fn add_certificate(
@@ -17,7 +17,7 @@ pub trait PerEpochWriter: Send + Sync {
 }
 
 pub trait EpochStoreWriter: Send + Sync {
-    type PerEpochStore;
+    type PerEpochStore: PerEpochWriter + PerEpochReader;
 
     fn open(&self, epoch_number: u64) -> Result<Self::PerEpochStore, Error>;
     fn open_with_start_checkpoint(
@@ -43,6 +43,13 @@ pub trait StateWriter: Send + Sync {
         &self,
         certificate_id: &CertificateId,
         status: &CertificateStatus,
+    ) -> Result<(), Error>;
+
+    fn set_latest_settled_certificate_for_network(
+        &self,
+        network_id: &NetworkId,
+        certificate_id: &CertificateId,
+        epoch_number: &EpochNumber,
     ) -> Result<(), Error>;
 }
 

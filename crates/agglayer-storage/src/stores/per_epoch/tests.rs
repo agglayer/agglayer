@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, VecDeque},
-    sync::{atomic::Ordering, Arc},
+    sync::Arc,
 };
 
 use agglayer_config::Config;
@@ -37,8 +37,7 @@ fn can_start_packing_an_unpacked_epoch(store: PerEpochStore<PendingStore, StateS
 
 #[rstest]
 fn cant_start_packing_a_packed_epoch(store: PerEpochStore<PendingStore, StateStore>) {
-    store.in_packing.store(true, Ordering::Relaxed);
-
+    let _lock = store.packing_lock.write().insert(0);
     assert!(store.start_packing().is_err());
 }
 

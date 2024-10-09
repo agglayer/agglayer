@@ -75,7 +75,7 @@ pub fn main() {
     );
 
     let multi_batch_header = old_state
-        .make_multi_batch_header(&certificate, signer.clone())
+        .make_multi_batch_header(&certificate, signer)
         .unwrap();
 
     info!(
