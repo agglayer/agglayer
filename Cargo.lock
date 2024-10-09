@@ -71,13 +71,16 @@ version = "0.1.0"
 dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
+ "agglayer-contracts",
  "agglayer-prover-types",
  "agglayer-storage",
  "agglayer-types",
  "anyhow",
  "arc-swap",
  "bincode",
+ "ethers",
  "futures",
+ "mockall",
  "pessimistic-proof",
  "reth-primitives",
  "rstest",
@@ -150,6 +153,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-contracts"
+version = "0.1.0"
+dependencies = [
+ "ethers",
+ "ethers-contract",
+]
+
+[[package]]
 name = "agglayer-gcp-kms"
 version = "0.1.0"
 dependencies = [
@@ -168,15 +179,16 @@ dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-clock",
  "agglayer-config",
+ "agglayer-contracts",
  "agglayer-prover",
  "agglayer-signer",
  "agglayer-storage",
  "agglayer-telemetry",
  "agglayer-types",
  "anyhow",
+ "arc-swap",
  "buildstructor",
  "ethers",
- "ethers-contract",
  "futures",
  "hex",
  "http-body-util",
