@@ -123,7 +123,12 @@ impl Node {
 
         let current_epoch = clock_ref.current_epoch();
 
-        let epochs_store = Arc::new(EpochsStore::new(config.clone(), current_epoch, pending_db)?);
+        let epochs_store = Arc::new(EpochsStore::new(
+            config.clone(),
+            current_epoch,
+            pending_store.clone(),
+            state_store.clone(),
+        )?);
 
         let epoch_packing_aggregator_task: AggregatorNotifier<Certificate, _, _> =
             AggregatorNotifier::try_new(
