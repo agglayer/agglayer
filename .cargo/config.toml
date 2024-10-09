@@ -23,3 +23,6 @@ rustflags = ["-Cinstrument-coverage"]
 
 [profile.codecov.package."*"]
 rustflags = []
+
+[profile.test.package.sp1-sdk]
+debug-assertions = false
