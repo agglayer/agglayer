@@ -17,6 +17,9 @@ opt-level = 3
 debug-assertions = true
 overflow-checks = true
 
+[profile.test.package.sp1-sdk]
+debug-assertions = false
+
 [profile.codecov]
 inherits = "test"
 rustflags = ["-Cinstrument-coverage"]

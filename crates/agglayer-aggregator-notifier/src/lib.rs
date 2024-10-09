@@ -4,7 +4,10 @@ use std::sync::Arc;
 
 use agglayer_certificate_orchestrator::{EpochPacker, Error};
 use agglayer_config::certificate_orchestrator::prover::ProverConfig;
-use agglayer_storage::stores::{EpochStoreReader, PerEpochWriter, StateReader};
+use agglayer_storage::stores::{
+    EpochStoreReader, EpochStoreWriter, PerEpochReader, PerEpochWriter, StateReader,
+};
+use agglayer_types::{CertificateId, CertificateIndex, EpochNumber};
 use futures::future::BoxFuture;
 use serde::Serialize;
 use tracing::debug;
@@ -52,19 +55,38 @@ where
 impl<I, StateStore, EpochsStore> EpochPacker for AggregatorNotifier<I, StateStore, EpochsStore>
 where
     StateStore: StateReader + 'static,
-    EpochsStore: EpochStoreReader + 'static,
+    EpochsStore: EpochStoreWriter + EpochStoreReader + 'static,
     I: Clone + 'static,
 {
-    fn pack(&self, epoch: u64) -> Result<BoxFuture<Result<(), Error>>, Error> {
-        debug!("Start the settlement of the epoch {}", epoch);
+    type PerEpochStore = <EpochsStore as EpochStoreWriter>::PerEpochStore;
 
-        // Selecting the different proof to pack in this epoch
-        let closing_epoch = self.epochs_store.get_current_epoch().load_full();
-        closing_epoch.start_packing()?;
+    fn settle_certificate(
+        &self,
+        epoch_number: EpochNumber,
+        certificate_index: CertificateIndex,
+        certificate_id: CertificateId,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn pack(
+        &self,
+        closing_epoch: Arc<Self::PerEpochStore>,
+    ) -> Result<BoxFuture<Result<(), Error>>, Error> {
+        let epoch_number = closing_epoch.get_epoch_number();
+        debug!("Start the settlement of the epoch {}", epoch_number);
 
         Ok(Box::pin(async move {
-            // TODO: Submit the settlement tx for each proof
             // No aggregation for now, we settle each PP individually
+            let _result: Result<(), Error> = tokio::task::spawn_blocking(move || {
+                closing_epoch.start_packing()?;
+
+                Ok(())
+            })
+            .await
+            // TODO: Handle error in a better way
+            .map_err(|_| Error::InternalError)?;
+
             Ok(())
         }))
     }

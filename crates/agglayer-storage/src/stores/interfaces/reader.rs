@@ -1,18 +1,10 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
-use arc_swap::ArcSwap;
 
-use crate::{
-    columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error,
-    stores::PerEpochWriter,
-};
+use crate::{columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error};
 
-pub trait EpochStoreReader: Send + Sync {
-    type PerEpochStore: PerEpochReader + PerEpochWriter;
-
-    fn get_current_epoch(&self) -> Arc<ArcSwap<Self::PerEpochStore>>;
-}
+pub trait EpochStoreReader: Send + Sync {}
 
 pub trait PendingCertificateReader: Send + Sync {
     fn get_certificate(
@@ -58,6 +50,7 @@ pub trait PerEpochReader: Send + Sync {
     /// Get the starting checkpoint of this epoch
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height>;
 
+    fn get_epoch_number(&self) -> u64;
     /// Get the height of a network's end checkpoint
     fn get_end_checkpoint_height_per_network(
         &self,

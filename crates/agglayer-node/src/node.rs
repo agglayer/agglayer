@@ -8,8 +8,8 @@ use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::DB,
     stores::{
-        epochs::EpochsStore, metadata::MetadataStore, pending::PendingStore, state::StateStore,
-        EpochStoreReader,
+        epochs::EpochsStore, metadata::MetadataStore, pending::PendingStore,
+        per_epoch::PerEpochStore, state::StateStore,
     },
 };
 use agglayer_types::Certificate;
@@ -124,6 +124,13 @@ impl Node {
 
         let current_epoch = clock_ref.current_epoch();
 
+        let current_epoch_store = arc_swap::ArcSwap::new(Arc::new(PerEpochStore::try_open(
+            config.clone(),
+            current_epoch,
+            pending_store.clone(),
+            state_store.clone(),
+        )?));
+
         let epochs_store = Arc::new(EpochsStore::new(
             config.clone(),
             current_epoch,
@@ -155,7 +162,7 @@ impl Node {
             .epoch_packing_task_builder(epoch_packing_aggregator_task)
             .pending_store(pending_store.clone())
             .epochs_store(epochs_store.clone())
-            .current_epoch(epochs_store.get_current_epoch())
+            .current_epoch(current_epoch_store)
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
             .start()

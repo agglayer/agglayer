@@ -12,6 +12,7 @@ mock! {
     pub PerEpochStore {}
 
     impl PerEpochReader for PerEpochStore {
+        fn get_epoch_number(&self) -> u64;
         fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height>;
 
         fn get_end_checkpoint_height_per_network(

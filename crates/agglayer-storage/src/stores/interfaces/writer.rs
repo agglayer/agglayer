@@ -3,7 +3,7 @@ use agglayer_types::{
     NetworkId, Proof,
 };
 
-use crate::error::Error;
+use crate::{error::Error, stores::PerEpochReader};
 
 pub trait PerEpochWriter: Send + Sync {
     fn add_certificate(
@@ -15,7 +15,7 @@ pub trait PerEpochWriter: Send + Sync {
 }
 
 pub trait EpochStoreWriter: Send + Sync {
-    type PerEpochStore;
+    type PerEpochStore: PerEpochWriter + PerEpochReader;
 
     fn open(&self, epoch_number: u64) -> Result<Self::PerEpochStore, Error>;
 }
