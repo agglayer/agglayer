@@ -15,6 +15,7 @@ tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
 agglayer-config = { path = "../agglayer-config" }
+agglayer-contracts = { path = "../agglayer-contracts" }
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-types = { path = "../agglayer-types" }
 agglayer-prover-types = { path = "../agglayer-prover-types" }
@@ -26,7 +27,9 @@ sp1-sdk.workspace = true
 sp1-prover.workspace = true
 
 [dev-dependencies]
+ethers.workspace = true
 rstest.workspace = true
+mockall.workspace = true
 
 [features]
 coverage = []

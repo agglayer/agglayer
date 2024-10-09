@@ -1,17 +1,18 @@
-use std::sync::Arc;
-
-use arc_swap::ArcSwap;
 use mockall::mock;
 
 use super::MockPerEpochStore;
+use crate::error::Error;
 use crate::stores::EpochStoreReader;
+use crate::stores::EpochStoreWriter;
 
 mock! {
     pub EpochsStore {}
 
-    impl EpochStoreReader for EpochsStore {
+    impl EpochStoreWriter for EpochsStore {
         type PerEpochStore = MockPerEpochStore;
 
-        fn get_current_epoch(&self) -> Arc<ArcSwap<MockPerEpochStore>>;
+        fn open(&self, epoch_number: u64) -> Result<MockPerEpochStore, Error>;
     }
+
+    impl EpochStoreReader for EpochsStore {}
 }
