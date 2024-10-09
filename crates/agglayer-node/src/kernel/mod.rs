@@ -3,12 +3,16 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use ethers::prelude::*;
+use ethers::utils::keccak256;
+use pessimistic_proof::PessimisticProofOutput;
 use thiserror::Error;
 use tracing::{info, instrument, warn};
 
 use crate::{
     contracts::{
-        polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
+        polygon_rollup_manager::{
+            PolygonRollupManager, RollupIDToRollupDataReturn, RollupIDToRollupDataV2Return,
+        },
         polygon_zk_evm::PolygonZkEvm,
     },
     rate_limiting::{self, RateLimiter},
@@ -188,6 +192,21 @@ pub(crate) enum CheckTxStatusError<RpcProvider: Middleware> {
     ProviderError(RpcProvider::Error),
 }
 
+#[derive(Debug)]
+#[allow(unused)]
+pub struct PessimisticProof {
+    public_inputs: PessimisticProofOutput,
+    l1_info_leaf_count: u32,
+    proof: Vec<u8>,
+}
+
+impl PessimisticProof {
+    #[allow(unused)]
+    pub fn hash(&self) -> H256 {
+        keccak256(self.proof.as_slice()).into()
+    }
+}
+
 impl<RpcProvider> Kernel<RpcProvider>
 where
     RpcProvider: Middleware + 'static,
@@ -208,6 +227,19 @@ where
             .await?;
 
         Ok(RollupIDToRollupDataReturn { rollup_data })
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    async fn get_rollup_metadata_v2(
+        &self,
+        rollup_id: u32,
+    ) -> Result<RollupIDToRollupDataV2Return, ContractError<RpcProvider>> {
+        let rollup_data = self
+            .get_rollup_manager_contract()
+            .rollup_id_to_rollup_data_v2(rollup_id)
+            .await?;
+
+        Ok(RollupIDToRollupDataV2Return { rollup_data })
     }
 
     /// Get a [`ContractInstance`], [`PolygonZkEvm`], of the rollup contract at
@@ -308,7 +340,7 @@ where
     ///
     /// This involves a contract call to the rollup manager contract. In
     /// particular, it calls `verifyBatchesTrustedAggregator` (`0x1489ed10`) on
-    /// the rollup manager contract to assert validitiy of the proof.
+    /// the rollup manager contract to assert validity of the proof.
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn verify_proof_eth_call(
         &self,
@@ -379,6 +411,67 @@ where
         });
 
         receipt.await.map_err(|_| SettlementError::NoReceipt)?
+    }
+}
+
+// Pessimistic Proof mode
+impl<RpcProvider> Kernel<RpcProvider>
+where
+    RpcProvider: Middleware + 'static,
+{
+    #[instrument(skip(self), level = "debug")]
+    pub(crate) async fn build_verify_pessimistic_trusted_aggregator(
+        &self,
+        pessimistic_proof: &PessimisticProof,
+    ) -> Result<ContractCall<RpcProvider, ()>, ContractError<RpcProvider>> {
+        let rollup_id: u32 = *pessimistic_proof.public_inputs.origin_network;
+
+        let call = self
+            .get_rollup_manager_contract()
+            .verify_pessimistic_trusted_aggregator(
+                rollup_id,
+                pessimistic_proof.l1_info_leaf_count,
+                pessimistic_proof.public_inputs.new_local_exit_root,
+                pessimistic_proof.public_inputs.new_pessimistic_root,
+                pessimistic_proof.proof.clone().into(),
+            );
+
+        Ok(call)
+    }
+
+    /// Settle the given pessimistic proof to the rollup manager.
+    #[instrument(skip(self), level = "debug")]
+    pub(crate) async fn settle_pp(
+        &self,
+        pessimistic_proof: &PessimisticProof,
+    ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
+        let hex_hash = pessimistic_proof.hash();
+        let hash = format!("{:?}", hex_hash);
+
+        // verifyPessimisticTrustedAggregator
+        let f = self
+            .build_verify_pessimistic_trusted_aggregator(pessimistic_proof)
+            .await
+            .map_err(SettlementError::ContractError)?;
+
+        if let Ok(Some(tx)) = self.check_tx_status(hex_hash).await {
+            warn!(hash, "Transaction already settled: {:?}", tx);
+        }
+
+        let tx = f
+            .send()
+            .await
+            .inspect(|tx| info!("Inspect settle transaction: {:?}", tx))
+            .map_err(SettlementError::ContractError)?
+            .interval(self.config.outbound.rpc.settle.retry_interval)
+            .retries(self.config.outbound.rpc.settle.max_retries)
+            .confirmations(self.config.outbound.rpc.settle.confirmations)
+            .await
+            .map_err(SettlementError::ProviderError)?
+            // If the result is `None`, it means the transaction is no longer in the mempool.
+            .ok_or(SettlementError::NoReceipt)?;
+
+        Ok(tx)
     }
 }
 
