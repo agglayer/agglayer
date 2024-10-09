@@ -65,7 +65,7 @@ mod tests {
         let epoch = Epoch::TimeClock(TimeClockConfig::default());
         let serialized = serde_json::to_string(&epoch).unwrap();
 
-        assert_eq!(serialized, r#"{"time-clock":{"epoch-duration":5}}"#);
+        assert_eq!(serialized, r#"{"time-clock":{"epoch-duration":60}}"#);
     }
 
     #[test]
