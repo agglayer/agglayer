@@ -19,7 +19,5 @@ mock! {
         ) -> Result<MockPerEpochStore, Error>;
     }
 
-    impl EpochStoreReader for EpochsStore {
-        type PerEpochStore = MockPerEpochStore;
-    }
+    impl EpochStoreReader for EpochsStore {}
 }

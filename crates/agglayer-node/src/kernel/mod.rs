@@ -52,9 +52,9 @@ pub(crate) enum ZkevmNodeVerificationError {
 }
 
 impl<RpcProvider> Kernel<RpcProvider> {
-    pub(crate) fn new(rpc: RpcProvider, config: Arc<Config>) -> Self {
+    pub(crate) fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> Self {
         Self {
-            rpc: Arc::new(rpc),
+            rpc,
             rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
             config,
         }
@@ -135,7 +135,7 @@ where
     /// The rollup manager contract address is specified by the given
     /// configuration.
     fn get_rollup_manager_contract(&self) -> PolygonRollupManager<RpcProvider> {
-        PolygonRollupManager::new(self.config.l1.rollup_manager_contract, self.rpc.clone())
+        PolygonRollupManager::new(self.config.l1.rollup_manager_contract, self.rpc.clone()).clone()
     }
 }
 

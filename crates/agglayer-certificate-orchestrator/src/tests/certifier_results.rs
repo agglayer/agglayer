@@ -80,15 +80,6 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
         .with(eq(network_id), eq(1), eq(certificate_id2))
         .returning(|_, _, _| Ok(()));
 
-    // We expect one call to the pending store to remove the first pending
-    // certificate. We do not expect the second one to be removed as it is not
-    // part of an epoch yet.
-    pending_store
-        .expect_remove_pending_certificate()
-        .once()
-        .with(eq(network_id), eq(0))
-        .returning(|_, _| Ok(()));
-
     let mut state_store = MockStateStore::new();
 
     // We expect one call to the state store to update the certificate header status
@@ -109,6 +100,7 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
         .returning(|_, _| Ok(()));
 
     let mut current_epoch_store = MockPerEpochStore::new();
+
     // We expect one call to the current epoch store to add the certificate to the
     // current epoch.
     current_epoch_store
@@ -116,6 +108,18 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
         .once()
         .with(eq(network_id), eq(0))
         .returning(|_, _| Ok((0, 0)));
+
+    current_epoch_store
+        .expect_add_certificate()
+        .once()
+        .with(eq(network_id), eq(1))
+        .returning(|network_id, height| {
+            Err(agglayer_storage::error::Error::CertificateCandidateError(
+                agglayer_storage::error::CertificateCandidateError::UnexpectedHeight(
+                    network_id, height, 0,
+                ),
+            ))
+        });
 
     let builder = MockOrchestrator::builder()
         .certifier(certifier_mock)
@@ -657,12 +661,6 @@ async fn certifier_success_with_chain_of_certificates() {
 
     pending_store
         .expect_remove_pending_certificate()
-        .once()
-        .with(eq(network_id), eq(0))
-        .returning(|_, _| Ok(()));
-
-    pending_store
-        .expect_remove_pending_certificate()
         .never()
         .with(eq(network_id), eq(1))
         .returning(|_, _| Ok(()));
@@ -686,6 +684,18 @@ async fn certifier_success_with_chain_of_certificates() {
         .once()
         .with(eq(network_id), eq(0))
         .returning(|_, _| Ok((0, 0)));
+
+    current_epoch_store
+        .expect_add_certificate()
+        .once()
+        .with(eq(network_id), eq(1))
+        .returning(|network_id, height| {
+            Err(agglayer_storage::error::Error::CertificateCandidateError(
+                agglayer_storage::error::CertificateCandidateError::UnexpectedHeight(
+                    network_id, height, 0,
+                ),
+            ))
+        });
 
     let builder = MockOrchestrator::builder()
         .pending_store(pending_store)

@@ -96,6 +96,15 @@ impl StateWriter for StateStore {
 
         Ok(())
     }
+
+    fn set_latest_settled_certificate_for_network(
+        &self,
+        _network_id: &NetworkId,
+        _certificate_id: &CertificateId,
+        _epoch_number: &EpochNumber,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 impl StateReader for StateStore {
