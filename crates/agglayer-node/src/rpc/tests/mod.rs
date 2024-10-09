@@ -42,7 +42,7 @@ async fn healthcheck_method_can_be_called() {
     let (provider, _mock) = providers::Provider::mocked();
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-    let kernel = Kernel::new(provider, config.clone());
+    let kernel = Kernel::new(Arc::new(provider), config.clone());
 
     let _server_handle = AgglayerImpl::new(
         kernel,
@@ -126,7 +126,7 @@ impl TestContext {
         let (provider, _mock) = providers::Provider::mocked();
         let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-        let kernel = Kernel::new(provider, config.clone());
+        let kernel = Kernel::new(Arc::new(provider), config.clone());
 
         let rpc = AgglayerImpl::new(kernel, certificate_sender, pending_store, state_store);
 
@@ -185,6 +185,14 @@ impl StateWriter for DummyStore {
         &self,
         _certificate_id: &agglayer_types::CertificateId,
         _status: &CertificateStatus,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+    fn set_latest_settled_certificate_for_network(
+        &self,
+        _network_id: &NetworkId,
+        _certificate_id: &CertificateId,
+        _epoch_number: &agglayer_types::EpochNumber,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }

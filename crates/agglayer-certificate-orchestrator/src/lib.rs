@@ -10,13 +10,13 @@ use agglayer_clock::Event;
 use agglayer_storage::{
     columns::latest_proven_certificate_per_network::ProvenCertificate,
     stores::{
-        EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochWriter,
-        StateReader, StateWriter,
+        EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
+        PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
 };
 use agglayer_types::{
-    Certificate, CertificateId, CertificateStatus, CertificateStatusError, Height, NetworkId,
-    ProofVerificationError,
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError,
+    Height, NetworkId, ProofVerificationError,
 };
 use agglayer_types::{CertificateHeader, LocalNetworkStateData};
 use arc_swap::ArcSwap;
@@ -55,7 +55,6 @@ pub struct CertificateOrchestrator<
     /// Epoch packing task resolver.
     epoch_packing_tasks: JoinSet<Result<(), Error>>,
     /// Epoch packing task builder.
-    #[allow(unused)]
     epoch_packing_task_builder: Arc<E>,
     /// Certifier task resolver.
     certifier_tasks: JoinSet<Result<CertifierOutput, Error>>,
@@ -77,8 +76,7 @@ pub struct CertificateOrchestrator<
     pending_store: Arc<PendingStore>,
     #[allow(unused)]
     epochs_store: Arc<EpochsStore>,
-    #[allow(unused)]
-    current_epoch: Arc<ArcSwap<PerEpochStore>>,
+    current_epoch: ArcSwap<PerEpochStore>,
 }
 
 impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
@@ -104,7 +102,7 @@ where
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
-        current_epoch: Arc<ArcSwap<PerEpochStore>>,
+        current_epoch: ArcSwap<PerEpochStore>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
         let cursors = pending_store
@@ -145,10 +143,10 @@ impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore
 where
     C: Stream<Item = Event> + Unpin + Send + 'static,
     CertifierClient: Certifier,
-    E: EpochPacker,
+    E: EpochPacker<PerEpochStore = PerEpochStore>,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
-    EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + 'static,
-    PerEpochStore: PerEpochWriter + 'static,
+    EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
@@ -178,7 +176,7 @@ where
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
-        current_epoch: Arc<ArcSwap<PerEpochStore>>,
+        current_epoch: ArcSwap<PerEpochStore>,
         state_store: Arc<StateStore>,
     ) -> anyhow::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
@@ -231,18 +229,34 @@ impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore
     >
 where
     CertifierClient: Certifier,
-    E: EpochPacker,
+    E: EpochPacker<PerEpochStore = PerEpochStore>,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
-    EpochsStore: Send + Sync + 'static,
+    EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
-    PerEpochStore: PerEpochWriter + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
     fn handle_epoch_end(&mut self, epoch: u64) -> Result<(), Error> {
-        debug!("Start the settlement of the epoch {}", epoch);
+        println!("Start the settlement of the epoch {}", epoch);
         let task = self.epoch_packing_task_builder.clone();
 
+        let closing_epoch = self.current_epoch.load_full();
+        // TODO: Check for overflow
+        let next_epoch = epoch + 1;
+
+        match self.epochs_store.open(next_epoch) {
+            Ok(new_epoch) => self.current_epoch.store(Arc::new(new_epoch)),
+            Err(error) => {
+                error!(
+                    "CRITICAL error: Failed to open the next epoch {}: {:?}",
+                    next_epoch, error
+                );
+
+                return Err(Error::InternalError);
+            }
+        }
+
         self.epoch_packing_tasks
-            .spawn(async move { task.pack(epoch)?.await });
+            .spawn(async move { task.pack(closing_epoch)?.await });
 
         Ok(())
     }
@@ -372,9 +386,7 @@ where
                                 error
                             );
                         } else {
-                            self.pending_store
-                                .remove_pending_certificate(network, height)
-                                .expect("Failed to remove certificate");
+                            // TODO: v0.2.0 -> Settle certificate to L1
                         }
                     }
 
@@ -405,6 +417,17 @@ where
                                 "Failed to update the certificate header status: {:?}",
                                 error
                             );
+                        }
+
+                        let current_epoch = self.current_epoch.load_full();
+
+                        if let Err(error) = current_epoch.add_certificate(network, height) {
+                            error!(
+                                "Failed to add the certificate to the current epoch: {}",
+                                error
+                            );
+                        } else {
+                            // TODO: v0.2.0 -> Settle certificate to L1
                         }
                     }
 
@@ -811,11 +834,11 @@ impl<C, E, A, PendingStore, EpochsStore, PerEpochStore, StateStore> Future
 where
     C: Stream<Item = Event> + Send + Unpin + 'static,
     A: Certifier,
-    E: EpochPacker,
+    E: EpochPacker<PerEpochStore = PerEpochStore>,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
-    EpochsStore: Send + Sync + 'static,
+    EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
-    PerEpochStore: PerEpochWriter + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
     type Output = ();
 
@@ -851,15 +874,6 @@ where
             }
             Poll::Ready(Some(Ok(Ok(())))) => {
                 debug!("Successfully settled the epoch");
-                // for (network_id, height) in self.cursors.iter_mut() {
-                //     if *status == SettlementStatus::Settling {
-                //         *status = SettlementStatus::Settled;
-                //         debug!(
-                //             "Settled the proofs for network {} at height {}",
-                //             network_id, height
-                //         );
-                //     }
-                // }
             }
             _ => {}
         }
@@ -893,8 +907,19 @@ where
 /// Epoch Packer used to gather all the proofs generated on-the-go
 /// and to submit them in a settlement tx to the L1.
 pub trait EpochPacker: Unpin + Send + Sync + 'static {
+    type PerEpochStore: PerEpochWriter + PerEpochReader;
     /// Pack an epoch for settlement on the L1
-    fn pack(&self, epoch: u64) -> Result<BoxFuture<Result<(), Error>>, Error>;
+    fn pack(
+        &self,
+        closing_epoch: Arc<Self::PerEpochStore>,
+    ) -> Result<BoxFuture<Result<(), Error>>, Error>;
+
+    fn settle_certificate(
+        &self,
+        related_epoch: Arc<Self::PerEpochStore>,
+        certificate_index: CertificateIndex,
+        certificate_id: CertificateId,
+    ) -> Result<BoxFuture<Result<(), Error>>, Error>;
 }
 
 pub trait CertificateInput: Clone {
@@ -968,5 +993,13 @@ pub enum Error {
     Deserialize {
         certificate_id: CertificateId,
         source: bincode::Error,
+    },
+    #[error("The status of the certificate is invalid")]
+    InvalidCertificateStatus,
+
+    #[error("Failed to settle the certificate {certificate_id}: {error}")]
+    SettlementError {
+        certificate_id: CertificateId,
+        error: String,
     },
 }

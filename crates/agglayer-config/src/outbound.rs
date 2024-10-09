@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use serde::Serialize;
+use serde_with::serde_as;
 
 /// Outbound configuration.
 #[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
@@ -21,7 +22,8 @@ pub struct OutboundRpcConfig {
 
 /// Outbound RPC settle configuration that is used to configure the outbound
 /// RPC settle function call.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename = "settle", rename_all = "kebab-case")]
 pub struct OutboundRpcSettleConfig {
     /// Maximum number of retries for the transaction.
