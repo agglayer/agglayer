@@ -44,8 +44,8 @@ pub struct CertificateHeader {
 pub enum Error {
     #[error("Imported bridge exits refer to multiple L1 info root")]
     MultipleL1InfoRoot,
-    #[error("Computed exit root: {computed:?} differs from certificate exit root: {declared:?}")]
-    MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
+    #[error("Computed exit root: {computed} differs from certificate exit root: {declared}")]
+    MismatchNewLocalExitRoot { computed: Hash, declared: Hash },
     #[error("Overflowed imported bridge exits: {0}")]
     ImportedBridgeExitOverflow(#[from] pessimistic_proof::ProofError),
     #[error("Failed to apply the Certificate on the given state: {0}")]
@@ -122,6 +122,7 @@ impl From<SP1VerificationError> for ProofVerificationError {
 pub enum CertificateStatus {
     Pending,
     Proven,
+    Candidate,
     InError { error: CertificateStatusError },
     Settled,
 }
@@ -338,8 +339,8 @@ impl LocalNetworkStateData {
         let computed = self.exit_tree.get_root();
         if computed != certificate.new_local_exit_root {
             return Err(Error::MismatchNewLocalExitRoot {
-                declared: certificate.new_local_exit_root,
-                computed,
+                declared: certificate.new_local_exit_root.into(),
+                computed: computed.into(),
             });
         }
 

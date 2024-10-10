@@ -24,7 +24,7 @@ pub struct OutboundRpcConfig {
 /// Outbound RPC settle configuration that is used to configure the outbound
 /// RPC settle function call.
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename = "settle", rename_all = "kebab-case")]
 pub struct OutboundRpcSettleConfig {
     /// Maximum number of retries for the transaction.

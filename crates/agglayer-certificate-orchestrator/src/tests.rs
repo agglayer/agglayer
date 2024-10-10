@@ -9,16 +9,18 @@ use std::{
 use agglayer_storage::{
     columns::latest_proven_certificate_per_network::ProvenCertificate,
     stores::{
-        PendingCertificateReader, PendingCertificateWriter, PerEpochWriter, StateReader,
-        StateWriter,
+        EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
+        PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
+    tests::mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height,
-    LocalNetworkStateData, NetworkId, Proof,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, poll, Stream};
+use mocks::{MockCertifier, MockEpochPacker};
 use rstest::fixture;
 use tokio::sync::{broadcast, mpsc};
 use tokio_stream::{wrappers::BroadcastStream, StreamExt as _};
@@ -34,6 +36,7 @@ mod receive_certificates;
 
 #[derive(Default)]
 pub(crate) struct DummyPendingStore {
+    pub(crate) current_epoch: u64,
     pub(crate) pending_certificate: RwLock<BTreeMap<(NetworkId, Height), Certificate>>,
     pub(crate) proofs: RwLock<BTreeMap<CertificateId, Proof>>,
     pub(crate) settled: RwLock<BTreeMap<NetworkId, (Height, CertificateId)>>,
@@ -43,13 +46,45 @@ pub(crate) struct DummyPendingStore {
         RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
 }
 
+impl PerEpochReader for DummyPendingStore {
+    fn get_epoch_number(&self) -> u64 {
+        self.current_epoch
+    }
+    fn get_certificate_at_index(
+        &self,
+        _index: CertificateIndex,
+    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+        todo!()
+    }
+    fn get_proof_at_index(
+        &self,
+        _index: CertificateIndex,
+    ) -> Result<Option<Proof>, agglayer_storage::error::Error> {
+        todo!()
+    }
+    fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {
+        todo!()
+    }
+
+    fn get_end_checkpoint_height_per_network(
+        &self,
+        _network_id: NetworkId,
+    ) -> Result<Option<Height>, agglayer_storage::error::Error> {
+        todo!()
+    }
+}
+
 impl PerEpochWriter for DummyPendingStore {
     fn add_certificate(
         &self,
         _network_id: NetworkId,
         _height: Height,
-    ) -> std::result::Result<(), agglayer_storage::error::Error> {
-        Ok(())
+    ) -> std::result::Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
+        Ok((0, 0))
+    }
+
+    fn start_packing(&self) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
     }
 }
 
@@ -91,6 +126,18 @@ impl StateReader for DummyPendingStore {
             .unwrap()
             .get(&(network_id, height))
             .and_then(|id| self.certificate_headers.read().unwrap().get(id).cloned()))
+    }
+}
+impl EpochStoreReader for DummyPendingStore {}
+
+impl EpochStoreWriter for DummyPendingStore {
+    type PerEpochStore = Self;
+
+    fn open(
+        &self,
+        _epoch_number: u64,
+    ) -> Result<Self::PerEpochStore, agglayer_storage::error::Error> {
+        Ok(DummyPendingStore::default())
     }
 }
 
@@ -203,6 +250,15 @@ impl StateWriter for DummyPendingStore {
 
         Ok(())
     }
+
+    fn set_latest_settled_certificate_for_network(
+        &self,
+        _network_id: &NetworkId,
+        _certificate_id: &CertificateId,
+        _epoch_number: &EpochNumber,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
 }
 
 impl PendingCertificateReader for DummyPendingStore {
@@ -284,7 +340,7 @@ async fn test_certificate_orchestrator_can_stop() {
         check.clone(),
         store.clone(),
         epochs_store,
-        Arc::new(current_epoch),
+        current_epoch,
         store.clone(),
     )
     .expect("Unable to create orchestrator");
@@ -293,27 +349,29 @@ async fn test_certificate_orchestrator_can_stop() {
 
     assert!(matches!(poll!(&mut orchestrator), Poll::Ready(())));
 
-    assert!(orchestrator.cursors.is_empty());
+    assert!(orchestrator.proving_cursors.is_empty());
     assert!(check_receiver.try_recv().is_err());
 }
 
 // Can collect certificates and pack them at the end of an epoch
 #[tokio::test]
-#[ignore]
 async fn test_collect_certificates() {
     let (clock_sender, receiver) = broadcast::channel(1);
     let clock = BroadcastStream::new(receiver).filter_map(|value| value.ok());
     let (data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
 
-    let store = Arc::new(DummyPendingStore::default());
+    let store = DummyPendingStore {
+        current_epoch: 1,
+        ..Default::default()
+    };
 
+    let store = Arc::new(store);
     let (check_sender, mut check_receiver) = mpsc::channel(1);
     let check = Check::builder()
         .pending_store(store.clone())
         .executed(check_sender)
         .expected_epoch(1)
-        .expected_certificates_len(1)
         .build();
 
     let epochs_store = store.clone();
@@ -327,7 +385,7 @@ async fn test_collect_certificates() {
         check.clone(),
         store.clone(),
         epochs_store,
-        Arc::new(current_epoch),
+        current_epoch,
         store.clone(),
     )
     .expect("Unable to create orchestrator");
@@ -337,7 +395,7 @@ async fn test_collect_certificates() {
 
     let _poll = poll!(&mut orchestrator);
 
-    assert!(orchestrator.cursors.is_empty());
+    assert!(orchestrator.proving_cursors.is_empty());
     assert!(check_receiver.recv().await.is_some());
 }
 
@@ -356,7 +414,6 @@ async fn test_collect_certificates_after_epoch() {
         .pending_store(store.clone())
         .executed(check_sender)
         .expected_epoch(1)
-        .expected_certificates_len(0)
         .build();
 
     let epochs_store = store.clone();
@@ -369,7 +426,7 @@ async fn test_collect_certificates_after_epoch() {
         check.clone(),
         store.clone(),
         epochs_store,
-        Arc::new(current_epoch),
+        current_epoch,
         store.clone(),
     )
     .expect("Unable to create orchestrator");
@@ -399,7 +456,6 @@ async fn test_collect_certificates_when_empty() {
         .pending_store(store.clone())
         .executed(check_sender)
         .expected_epoch(1)
-        .expected_certificates_len(0)
         .build();
 
     let epochs_store = store.clone();
@@ -412,7 +468,7 @@ async fn test_collect_certificates_when_empty() {
         check.clone(),
         store.clone(),
         epochs_store,
-        Arc::new(current_epoch),
+        current_epoch,
         store.clone(),
     )
     .expect("Unable to create orchestrator");
@@ -462,6 +518,71 @@ type TestOrchestrator<S> = CertificateOrchestrator<
     DummyPendingStore,
 >;
 
+type IMockOrchestrator<S> = CertificateOrchestrator<
+    S,
+    MockEpochPacker,
+    MockCertifier,
+    MockPendingStore,
+    MockEpochsStore,
+    MockPerEpochStore,
+    MockStateStore,
+>;
+
+mod mocks;
+
+#[derive(Default, buildstructor::Builder)]
+struct MockOrchestrator {
+    certifier: Option<MockCertifier>,
+    epoch_packer: Option<MockEpochPacker>,
+    pending_store: Option<MockPendingStore>,
+    epochs_store: Option<MockEpochsStore>,
+    state_store: Option<MockStateStore>,
+    current_epoch: Option<MockPerEpochStore>,
+}
+
+#[fixture]
+pub(crate) fn create_orchestrator_mock(
+    #[default(MockOrchestrator::default())] builder: MockOrchestrator,
+    clock: (
+        broadcast::Sender<agglayer_clock::Event>,
+        impl Stream<Item = agglayer_clock::Event>,
+    ),
+) -> (
+    mpsc::Sender<(NetworkId, Height, CertificateId)>,
+    IMockOrchestrator<impl Stream<Item = agglayer_clock::Event>>,
+) {
+    let (data_sender, data_receiver) = mpsc::channel(10);
+    let cancellation_token = CancellationToken::new();
+    let pending_store = Arc::new(builder.pending_store.unwrap_or_else(|| {
+        let mut pending_store = MockPendingStore::default();
+
+        pending_store
+            .expect_get_current_proven_height()
+            .returning(|| Ok(vec![]));
+
+        pending_store
+    }));
+    let epochs_store = Arc::new(builder.epochs_store.unwrap_or_default());
+    let current_epoch = ArcSwap::new(Arc::new(builder.current_epoch.unwrap_or_default()));
+    let state_store = Arc::new(builder.state_store.unwrap_or_default());
+
+    (
+        data_sender,
+        CertificateOrchestrator::try_new(
+            clock.1,
+            data_receiver,
+            cancellation_token,
+            builder.epoch_packer.unwrap_or_default(),
+            builder.certifier.unwrap_or_default(),
+            pending_store,
+            epochs_store,
+            current_epoch,
+            state_store,
+        )
+        .expect("Unable to create orchestrator"),
+    )
+}
+
 #[fixture]
 pub(crate) fn create_orchestrator(
     check: (
@@ -495,7 +616,7 @@ pub(crate) fn create_orchestrator(
             check.2.clone(),
             store.clone(),
             epochs_store,
-            Arc::new(current_epoch),
+            current_epoch,
             store.clone(),
         )
         .expect("Unable to create orchestrator"),
@@ -512,7 +633,6 @@ pub(crate) struct Check {
     expected_proof: Option<Proof>,
     executed: mpsc::Sender<CertifierOutput>,
     expected_epoch: Option<u64>,
-    expected_certificates_len: Option<usize>,
 }
 
 #[buildstructor::buildstructor]
@@ -522,7 +642,6 @@ impl Check {
         pending_store: Arc<DummyPendingStore>,
         executed: mpsc::Sender<CertifierOutput>,
         expected_epoch: Option<u64>,
-        expected_certificates_len: Option<usize>,
     ) -> Self {
         Self {
             state_store: pending_store.clone(),
@@ -531,7 +650,6 @@ impl Check {
             expected_certificate: None,
             expected_proof: None,
             expected_epoch,
-            expected_certificates_len,
         }
     }
 
@@ -549,17 +667,24 @@ impl Check {
 }
 
 impl EpochPacker for Check {
-    type Item = (Certificate, Proof);
-    fn pack<T>(&self, epoch: u64, to_pack: T) -> Result<BoxFuture<Result<(), Error>>, Error>
-    where
-        T: IntoIterator<Item = Self::Item>,
-    {
+    type PerEpochStore = DummyPendingStore;
+    fn settle_certificate(
+        &self,
+        _epoch: Arc<Self::PerEpochStore>,
+        _certificate_index: CertificateIndex,
+        _certificate_id: CertificateId,
+    ) -> Result<BoxFuture<Result<(), Error>>, Error> {
+        Ok(Box::pin(async { Ok(()) }))
+    }
+
+    fn pack(&self, epoch: Arc<Self::PerEpochStore>) -> Result<BoxFuture<Result<(), Error>>, Error> {
+        let epoch = epoch.get_epoch_number();
         if let Some(expected_epoch) = self.expected_epoch {
             assert_eq!(epoch, expected_epoch);
         }
-        if let Some(expected_certificates_len) = self.expected_certificates_len {
-            assert!(to_pack.into_iter().count() == expected_certificates_len);
-        }
+        // if let Some(expected_certificates_len) = self.expected_certificates_len {
+        //     assert!(to_pack.into_iter().count() == expected_certificates_len);
+        // }
 
         _ = self.executed.try_send(CertifierOutput {
             certificate: self

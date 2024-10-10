@@ -1,0 +1,12 @@
+[package]
+name = "agglayer-contracts"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ethers.workspace = true
+ethers-contract = "2.0.14"
+
+[build-dependencies]
+ethers-contract = "2.0.14"

@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
+    NetworkId,
 };
 use rocksdb::{Direction, ReadOptions};
 use tracing::warn;
@@ -30,6 +31,15 @@ pub struct StateStore {
 impl StateStore {
     pub fn new(db: Arc<DB>) -> Self {
         Self { db }
+    }
+
+    pub fn new_with_path(path: &Path) -> Result<Self, Error> {
+        let db = Arc::new(DB::open_cf(
+            path,
+            crate::storage::state_db_cf_definitions(),
+        )?);
+
+        Ok(Self { db })
     }
 }
 
@@ -81,6 +91,15 @@ impl StateWriter for StateStore {
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
         }
 
+        Ok(())
+    }
+
+    fn set_latest_settled_certificate_for_network(
+        &self,
+        _network_id: &NetworkId,
+        _certificate_id: &CertificateId,
+        _epoch_number: &EpochNumber,
+    ) -> Result<(), Error> {
         Ok(())
     }
 }

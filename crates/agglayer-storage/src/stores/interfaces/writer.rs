@@ -1,13 +1,21 @@
-use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId, Proof};
+use agglayer_types::{
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
+    NetworkId, Proof,
+};
 
-use crate::error::Error;
+use crate::{error::Error, stores::PerEpochReader};
 
 pub trait PerEpochWriter: Send + Sync {
-    fn add_certificate(&self, network_id: NetworkId, height: Height) -> Result<(), Error>;
+    fn add_certificate(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+    ) -> Result<(EpochNumber, CertificateIndex), Error>;
+    fn start_packing(&self) -> Result<(), Error>;
 }
 
 pub trait EpochStoreWriter: Send + Sync {
-    type PerEpochStore;
+    type PerEpochStore: PerEpochWriter + PerEpochReader;
 
     fn open(&self, epoch_number: u64) -> Result<Self::PerEpochStore, Error>;
 }
@@ -28,6 +36,13 @@ pub trait StateWriter: Send + Sync {
         &self,
         certificate_id: &CertificateId,
         status: &CertificateStatus,
+    ) -> Result<(), Error>;
+
+    fn set_latest_settled_certificate_for_network(
+        &self,
+        network_id: &NetworkId,
+        certificate_id: &CertificateId,
+        epoch_number: &EpochNumber,
     ) -> Result<(), Error>;
 }
 

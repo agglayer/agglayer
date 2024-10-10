@@ -10,15 +10,15 @@ use agglayer_clock::Event;
 use agglayer_storage::{
     columns::latest_proven_certificate_per_network::ProvenCertificate,
     stores::{
-        EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochWriter,
-        StateReader, StateWriter,
+        EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
+        PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
 };
-use agglayer_types::LocalNetworkStateData;
 use agglayer_types::{
-    Certificate, CertificateId, CertificateStatus, CertificateStatusError, Height, NetworkId,
-    Proof, ProofVerificationError,
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError,
+    Height, NetworkId, ProofVerificationError,
 };
+use agglayer_types::{CertificateHeader, LocalNetworkStateData};
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, Stream, StreamExt};
 use pessimistic_proof::ProofError;
@@ -55,7 +55,6 @@ pub struct CertificateOrchestrator<
     /// Epoch packing task resolver.
     epoch_packing_tasks: JoinSet<Result<(), Error>>,
     /// Epoch packing task builder.
-    #[allow(unused)]
     epoch_packing_task_builder: Arc<E>,
     /// Certifier task resolver.
     certifier_tasks: JoinSet<Result<CertifierOutput, Error>>,
@@ -70,13 +69,14 @@ pub struct CertificateOrchestrator<
     /// Cancellation token for graceful shutdown.
     cancellation_token: Pin<Box<WaitForCancellationFutureOwned>>,
 
-    cursors: BTreeMap<NetworkId, Height>,
+    /// Cursors for the proofs that have been generated so far.
+    proving_cursors: BTreeMap<NetworkId, Height>,
+
     state_store: Arc<StateStore>,
     pending_store: Arc<PendingStore>,
     #[allow(unused)]
     epochs_store: Arc<EpochsStore>,
-    #[allow(unused)]
-    current_epoch: Arc<ArcSwap<PerEpochStore>>,
+    current_epoch: ArcSwap<PerEpochStore>,
 }
 
 impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
@@ -102,7 +102,7 @@ where
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
-        current_epoch: Arc<ArcSwap<PerEpochStore>>,
+        current_epoch: ArcSwap<PerEpochStore>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
         let cursors = pending_store
@@ -120,7 +120,7 @@ where
             global_state: Default::default(),
             data_receiver,
             cancellation_token: Box::pin(cancellation_token.cancelled_owned()),
-            cursors,
+            proving_cursors: cursors,
             pending_store,
             epochs_store,
             current_epoch,
@@ -143,10 +143,10 @@ impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore
 where
     C: Stream<Item = Event> + Unpin + Send + 'static,
     CertifierClient: Certifier,
-    E: EpochPacker<Item = (Certificate, Proof)>,
+    E: EpochPacker<PerEpochStore = PerEpochStore>,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
-    EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + 'static,
-    PerEpochStore: PerEpochWriter + 'static,
+    EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
@@ -295,7 +295,7 @@ where
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
-        current_epoch: Arc<ArcSwap<PerEpochStore>>,
+        current_epoch: ArcSwap<PerEpochStore>,
         state_store: Arc<StateStore>,
     ) -> anyhow::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
@@ -311,7 +311,7 @@ where
         )?;
 
         let check_cursor = orchestrator
-            .cursors
+            .proving_cursors
             .iter()
             .map(|(network_id, height)| (*network_id, height + 1))
             .collect::<Vec<_>>();
@@ -348,13 +348,35 @@ impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore
     >
 where
     CertifierClient: Certifier,
-    E: EpochPacker<Item = (Certificate, Proof)>,
+    E: EpochPacker<PerEpochStore = PerEpochStore>,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
-    EpochsStore: Send + Sync + 'static,
+    EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
-    PerEpochStore: PerEpochWriter + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
-    fn handle_epoch_end(&mut self, _epoch: u64) -> Result<(), Error> {
+    fn handle_epoch_end(&mut self, epoch: u64) -> Result<(), Error> {
+        println!("Start the settlement of the epoch {}", epoch);
+        let task = self.epoch_packing_task_builder.clone();
+
+        let closing_epoch = self.current_epoch.load_full();
+        // TODO: Check for overflow
+        let next_epoch = epoch + 1;
+
+        match self.epochs_store.open(next_epoch) {
+            Ok(new_epoch) => self.current_epoch.store(Arc::new(new_epoch)),
+            Err(error) => {
+                error!(
+                    "CRITICAL error: Failed to open the next epoch {}: {:?}",
+                    next_epoch, error
+                );
+
+                return Err(Error::InternalError);
+            }
+        }
+
+        self.epoch_packing_tasks
+            .spawn(async move { task.pack(closing_epoch)?.await });
+
         Ok(())
     }
 
@@ -363,7 +385,7 @@ where
         cursors: &[(NetworkId, Height, CertificateId)],
     ) -> Result<(), Error> {
         for (network_id, height, _) in cursors {
-            let entry = self.cursors.entry(*network_id);
+            let entry = self.proving_cursors.entry(*network_id);
             match entry {
                 Entry::Vacant(entry) if *height == 0 => {
                     entry.insert(*height);
@@ -441,7 +463,9 @@ where
                 // epoch)
                 // - We spawn the next certificate for the network.
 
-                let entry = self.cursors.entry(network);
+                let entry = self.proving_cursors.entry(network);
+
+                let certificate_id = certificate.hash();
 
                 match entry {
                     // - 1. If the state doesn't know the network and the height is 0, we update the
@@ -454,7 +478,7 @@ where
                             .set_latest_proven_certificate_per_network(
                                 &network,
                                 &height,
-                                &certificate.hash(),
+                                &certificate_id,
                             )
                         {
                             error!(
@@ -464,13 +488,24 @@ where
                         }
 
                         if let Err(error) = self.state_store.update_certificate_header_status(
-                            &certificate.hash(),
+                            &certificate_id,
                             &CertificateStatus::Proven,
                         ) {
                             error!(
                                 "Failed to update the certificate header status: {:?}",
                                 error
                             );
+                        }
+
+                        let current_epoch = self.current_epoch.load_full();
+
+                        if let Err(error) = current_epoch.add_certificate(network, height) {
+                            error!(
+                                "Failed to add the certificate to the current epoch: {}",
+                                error
+                            );
+                        } else {
+                            // TODO: v0.2.0 -> Settle certificate to L1
                         }
                     }
 
@@ -484,7 +519,7 @@ where
                             .set_latest_proven_certificate_per_network(
                                 &network,
                                 &height,
-                                &certificate.hash(),
+                                &certificate_id,
                             )
                         {
                             error!(
@@ -494,13 +529,24 @@ where
                         }
 
                         if let Err(error) = self.state_store.update_certificate_header_status(
-                            &certificate.hash(),
+                            &certificate_id,
                             &CertificateStatus::Proven,
                         ) {
                             error!(
                                 "Failed to update the certificate header status: {:?}",
                                 error
                             );
+                        }
+
+                        let current_epoch = self.current_epoch.load_full();
+
+                        if let Err(error) = current_epoch.add_certificate(network, height) {
+                            error!(
+                                "Failed to add the certificate to the current epoch: {}",
+                                error
+                            );
+                        } else {
+                            // TODO: v0.2.0 -> Settle certificate to L1
                         }
                     }
 
@@ -512,6 +558,18 @@ where
                              network that is not being tracked: {}",
                             height, network
                         );
+
+                        if let Err(error) = self
+                            .pending_store
+                            .remove_pending_certificate(network, height)
+                        {
+                            error!("Failed to remove the pending certificate: {:?}", error);
+                        }
+                        if let Err(error) =
+                            self.pending_store.remove_generated_proof(&certificate_id)
+                        {
+                            error!("Failed to remove the generated proof: {:?}", error);
+                        }
 
                         return Err(());
                     }
@@ -530,9 +588,6 @@ where
                         return Err(());
                     }
                 }
-                self.pending_store
-                    .remove_pending_certificate(network, height)
-                    .expect("Failed to remove certificate");
 
                 self.spawn_certifier_task(network, height + 1);
 
@@ -557,8 +612,8 @@ where
             // the middle of the certification process.
             // If so, we check the current state and decide if:
             // - 1. The state doesn't know the network and the height is not 0, we remove the proof.
-            // - 2. The state doesn't know the network and the height is 0, if we find the
-            //   certificate in the pending store, we update the state.
+            // - 2. The state doesn't know the network and the height is 0. We update the state if
+            //   needed.
             // - 3. The state knows the network and the height is the current height, we schedule
             //   the next certificate.
             // - 4. The state knows the network and the height is the next one, we update the state
@@ -573,7 +628,7 @@ where
                     network_id, height
                 );
 
-                let entry = self.cursors.entry(network_id);
+                let entry = self.proving_cursors.entry(network_id);
 
                 match entry {
                     // - 1. The state doesn't know the network and the height is not 0, we remove
@@ -591,16 +646,18 @@ where
                             error!("Failed to remove the proof: {:?}", error);
                         }
 
-                        return Err(());
+                        return Ok(());
                     }
-                    // - 2. The state doesn't know the network and the height is 0, if we find the
-                    //   certificate in the pending store, we update the state.
+                    // - 2. The state doesn't know the network and the height is 0. We update the
+                    //   state if needed.
                     Entry::Vacant(entry) => {
                         // Context:
-                        // | pending certificate  | CertificateHeader | action              |
-                        // |----------------------|-------------------|---------------------|
-                        // | Found                | Not found         | Create the header   |
-                        // | Found                | Found             | Delete the pending  |
+                        // | CertificateHeaderStatus | action                     |
+                        // |-------------------------|----------------------------|
+                        // | Pending                 | Update to Proven           |
+                        // | Proven                  | Do nothing                 |
+                        // | Candiate / Settled      | Remove certificate + proof |
+                        // | InError                 | Update to Proven           |
                         //
                         // ProofAlreadyExists is an error that can happen only if we have a pending
                         // certificate.
@@ -611,35 +668,75 @@ where
                             .get_certificate_header_by_cursor(network_id, height)
                             .expect("Failed to get certificate header by cursor")
                         {
-                            Some(_header) => {
-                                self.pending_store
-                                    .remove_pending_certificate(network_id, height)
-                                    .expect("Failed to remove certificate");
-                            }
-                            None => {
-                                if let Some(_certificate) = self
-                                    .pending_store
-                                    .get_certificate(network_id, height)
-                                    .expect("Failed to get certificate")
+                            Some(CertificateHeader {
+                                certificate_id,
+                                status: CertificateStatus::Pending,
+                                ..
+                            })
+                            | Some(CertificateHeader {
+                                certificate_id,
+                                status: CertificateStatus::InError { .. },
+                                ..
+                            }) => {
+                                if let Err(error) =
+                                    self.state_store.update_certificate_header_status(
+                                        &certificate_id,
+                                        &CertificateStatus::Proven,
+                                    )
                                 {
-                                    // self.state_store
-                                    //     .insert_certificate_header(
-                                    //         &certificate,
-                                    //         CertificateStatus::Pending,
-                                    //     )
-                                    //     .expect("Failed to insert certificate
-                                    // header");
-                                } else {
-                                    // This should not happen as ProofAlreadyExists should only
-                                    // happen if we have a pending certificate.
-                                    warn!(
-                                        "Failed to find the pending certificate for already \
-                                         proven proof for network {} at height {}",
-                                        network_id, height
+                                    error!(
+                                        "Failed to update the certificate header status: {:?}",
+                                        error
                                     );
-
-                                    return Err(());
                                 }
+                            }
+                            Some(CertificateHeader {
+                                certificate_id,
+                                status: CertificateStatus::Candidate,
+                                ..
+                            })
+                            | Some(CertificateHeader {
+                                certificate_id,
+                                status: CertificateStatus::Settled,
+                                ..
+                            }) => {
+                                if let Err(error) = self
+                                    .pending_store
+                                    .remove_pending_certificate(network_id, height)
+                                {
+                                    error!("Failed to remove the pending certificate: {:?}", error);
+                                }
+                                if let Err(error) =
+                                    self.pending_store.remove_generated_proof(&certificate_id)
+                                {
+                                    error!("Failed to remove the proof: {:?}", error);
+                                }
+                            }
+                            Some(CertificateHeader {
+                                status: CertificateStatus::Proven,
+                                ..
+                            }) => {}
+                            None => {
+                                if let Err(error) = self
+                                    .pending_store
+                                    .remove_pending_certificate(network_id, height)
+                                {
+                                    error!("Failed to remove the pending certificate: {:?}", error);
+                                }
+                                if let Err(error) =
+                                    self.pending_store.remove_generated_proof(&certificate_id)
+                                {
+                                    error!("Failed to remove the proof: {:?}", error);
+                                }
+                                // This should not happen as ProofAlreadyExists should only
+                                // happen if we have a pending certificate.
+                                warn!(
+                                    "Failed to find the pending certificate header for proven \
+                                     proof for network {} at height {}",
+                                    network_id, height
+                                );
+
+                                return Ok(());
                             }
                         }
                         entry.insert(height);
@@ -677,8 +774,19 @@ where
                                 height, network_id
                             );
 
-                            // TODO: remove the proof?
-                            return Err(());
+                            if let Err(error) = self
+                                .pending_store
+                                .remove_pending_certificate(network_id, height)
+                            {
+                                error!("Failed to remove the pending certificate: {:?}", error);
+                            }
+                            if let Err(error) =
+                                self.pending_store.remove_generated_proof(&certificate_id)
+                            {
+                                error!("Failed to remove the proof: {:?}", error);
+                            }
+
+                            return Ok(());
                         }
 
                         // Context:
@@ -696,47 +804,78 @@ where
                             .get_certificate_header_by_cursor(network_id, height)
                             .expect("Failed to get certificate header by cursor")
                         {
-                            Some(_header) => {
-                                self.pending_store
-                                    .remove_pending_certificate(network_id, height)
-                                    .expect("Failed to remove certificate");
-                            }
-                            None => {
-                                if let Some(_certificate) = self
-                                    .pending_store
-                                    .get_certificate(network_id, height)
-                                    .expect("Failed to get certificate")
+                            Some(CertificateHeader {
+                                certificate_id,
+                                status: CertificateStatus::Pending,
+                                ..
+                            })
+                            | Some(CertificateHeader {
+                                certificate_id,
+                                status: CertificateStatus::InError { .. },
+                                ..
+                            }) => {
+                                if let Err(error) =
+                                    self.state_store.update_certificate_header_status(
+                                        &certificate_id,
+                                        &CertificateStatus::Proven,
+                                    )
                                 {
-                                    // self.state_store
-                                    //     .insert_certificate_header(
-                                    //         &certificate,
-                                    //         CertificateStatus::Pending,
-                                    //     )
-                                    //     .expect("Failed to insert certificate
-                                    // header");
-                                } else {
-                                    // This should not happen as ProofAlreadyExists should only
-                                    // happen if we have a pending certificate.
-                                    warn!(
-                                        "Failed to find the pending certificate for already \
-                                         proven proof for network {} at height {}",
-                                        network_id, height
+                                    error!(
+                                        "Failed to update the certificate header status: {:?}",
+                                        error
                                     );
-
-                                    return Err(());
                                 }
                             }
-                        }
+                            Some(CertificateHeader {
+                                certificate_id,
+                                status: CertificateStatus::Candidate,
+                                ..
+                            })
+                            | Some(CertificateHeader {
+                                certificate_id,
+                                status: CertificateStatus::Settled,
+                                ..
+                            }) => {
+                                if let Err(error) = self
+                                    .pending_store
+                                    .remove_pending_certificate(network_id, height)
+                                {
+                                    error!("Failed to remove the pending certificate: {:?}", error);
+                                }
+                                if let Err(error) =
+                                    self.pending_store.remove_generated_proof(&certificate_id)
+                                {
+                                    error!("Failed to remove the proof: {:?}", error);
+                                }
+                            }
 
-                        // TODO: How to handle the fact that we do not have a state to update?
-                        //  if let Some(_) =
-                        //      self.global_state.insert(network_id, new_state) {
-                        //          warn!(
-                        //              "A proof has been generated for a
-                        //              certificate at height 0 but the         // \
-                        //              global state was already initialized"
-                        //          );
-                        // }
+                            Some(CertificateHeader {
+                                status: CertificateStatus::Proven,
+                                ..
+                            }) => {}
+                            None => {
+                                if let Err(error) = self
+                                    .pending_store
+                                    .remove_pending_certificate(network_id, height)
+                                {
+                                    error!("Failed to remove the pending certificate: {:?}", error);
+                                }
+                                if let Err(error) =
+                                    self.pending_store.remove_generated_proof(&certificate_id)
+                                {
+                                    error!("Failed to remove the proof: {:?}", error);
+                                }
+                                // This should not happen as ProofAlreadyExists should only
+                                // happen if we have a pending certificate.
+                                warn!(
+                                    "Failed to find the pending certificate header for proven \
+                                     proof for network {} at height {}",
+                                    network_id, height
+                                );
+
+                                return Ok(());
+                            }
+                        }
 
                         return Ok(());
                     }
@@ -814,11 +953,11 @@ impl<C, E, A, PendingStore, EpochsStore, PerEpochStore, StateStore> Future
 where
     C: Stream<Item = Event> + Send + Unpin + 'static,
     A: Certifier,
-    E: EpochPacker<Item = (Certificate, Proof)>,
+    E: EpochPacker<PerEpochStore = PerEpochStore>,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
-    EpochsStore: Send + Sync + 'static,
+    EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
-    PerEpochStore: PerEpochWriter + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
     type Output = ();
 
@@ -854,15 +993,6 @@ where
             }
             Poll::Ready(Some(Ok(Ok(())))) => {
                 debug!("Successfully settled the epoch");
-                // for (network_id, height) in self.cursors.iter_mut() {
-                //     if *status == SettlementStatus::Settling {
-                //         *status = SettlementStatus::Settled;
-                //         debug!(
-                //             "Settled the proofs for network {} at height {}",
-                //             network_id, height
-                //         );
-                //     }
-                // }
             }
             _ => {}
         }
@@ -896,13 +1026,18 @@ where
 /// Epoch Packer used to gather all the proofs generated on-the-go
 /// and to submit them in a settlement tx to the L1.
 pub trait EpochPacker: Unpin + Send + Sync + 'static {
-    type Item;
-
-    /// Pack a set of proofs for settlement on the L1
-    fn pack<T: IntoIterator<Item = Self::Item>>(
+    type PerEpochStore: PerEpochWriter + PerEpochReader;
+    /// Pack an epoch for settlement on the L1
+    fn pack(
         &self,
-        epoch: u64,
-        to_pack: T,
+        closing_epoch: Arc<Self::PerEpochStore>,
+    ) -> Result<BoxFuture<Result<(), Error>>, Error>;
+
+    fn settle_certificate(
+        &self,
+        related_epoch: Arc<Self::PerEpochStore>,
+        certificate_index: CertificateIndex,
+        certificate_id: CertificateId,
     ) -> Result<BoxFuture<Result<(), Error>>, Error>;
 }
 
@@ -924,7 +1059,7 @@ pub struct CertifierOutput {
     pub network: NetworkId,
 }
 
-pub type CertifierResult<'a> = Result<BoxFuture<'a, Result<CertifierOutput, Error>>, Error>;
+pub type CertifierResult = Result<BoxFuture<'static, Result<CertifierOutput, Error>>, Error>;
 
 /// Apply one Certificate on top of a local state and computes one proof.
 pub trait Certifier: Unpin + Send + Sync + 'static {
@@ -977,5 +1112,13 @@ pub enum Error {
     Deserialize {
         certificate_id: CertificateId,
         source: bincode::Error,
+    },
+    #[error("The status of the certificate is invalid")]
+    InvalidCertificateStatus,
+
+    #[error("Failed to settle the certificate {certificate_id}: {error}")]
+    SettlementError {
+        certificate_id: CertificateId,
+        error: String,
     },
 }
