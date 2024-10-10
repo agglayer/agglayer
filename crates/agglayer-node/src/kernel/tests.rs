@@ -16,6 +16,7 @@ use serde_json::json;
 
 use crate::contracts::polygon_rollup_manager::FinalNumBatchBelowLastVerifiedBatch;
 use crate::contracts::polygon_rollup_manager::PolygonRollupManagerErrors;
+use crate::contracts::polygon_rollup_manager::RollupDataReturn;
 use crate::contracts::polygon_rollup_manager::{
     RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
 };
@@ -486,17 +487,19 @@ pub(crate) fn signed_tx() -> SignedTx {
 
 fn rollup_data(l1: &L1) -> RollupIDToRollupDataReturn {
     RollupIDToRollupDataReturn {
-        chain_id: 1,
-        rollup_contract: l1.rollup_manager_contract,
-        verifier: H160::random(),
-        fork_id: 0,
-        last_local_exit_root: [0; 32],
-        last_batch_sequenced: 0,
-        last_verified_batch: 0,
-        last_pending_state: 0,
-        last_pending_state_consolidated: 0,
-        last_verified_batch_before_upgrade: 0,
-        rollup_type_id: 1,
-        rollup_compatibility_id: 0,
+        rollup_data: RollupDataReturn {
+            chain_id: 1,
+            rollup_contract: l1.rollup_manager_contract,
+            verifier: H160::random(),
+            fork_id: 0,
+            last_local_exit_root: [0; 32],
+            last_batch_sequenced: 0,
+            last_verified_batch: 0,
+            last_verified_batch_before_upgrade: 0,
+            legacy_last_pending_state: 0,
+            legacy_last_pending_state_consolidated: 0,
+            rollup_type_id: 1,
+            rollup_verifier_type: 0,
+        },
     }
 }
