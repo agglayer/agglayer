@@ -2,8 +2,6 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::serde_as;
-use serde_with::DurationSeconds;
 
 /// Outbound configuration.
 #[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
@@ -23,7 +21,6 @@ pub struct OutboundRpcConfig {
 
 /// Outbound RPC settle configuration that is used to configure the outbound
 /// RPC settle function call.
-#[serde_as]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename = "settle", rename_all = "kebab-case")]
 pub struct OutboundRpcSettleConfig {
@@ -33,7 +30,7 @@ pub struct OutboundRpcSettleConfig {
 
     /// Interval for the polling of the transaction.
     #[serde(default = "default_rpc_retry_interval")]
-    #[serde_as(as = "DurationSeconds")]
+    #[serde(with = "crate::with::HumanDuration")]
     pub retry_interval: Duration,
 
     /// Number of confirmations required for the transaction to resolve a
@@ -44,7 +41,7 @@ pub struct OutboundRpcSettleConfig {
     /// Timeout for the submission of the settlement transaction to L1,
     /// including the required number of confirmations.
     #[serde(default = "default_settlement_timeout")]
-    #[serde_as(as = "DurationSeconds")]
+    #[serde(with = "crate::with::HumanDuration")]
     pub settlement_timeout: Duration,
 }
 
