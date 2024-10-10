@@ -29,7 +29,7 @@ async fn send_certificate_method_can_be_called() {
     let (provider, _mock) = providers::Provider::mocked();
     let (certificate_sender, mut certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-    let kernel = Kernel::new(provider, config.clone());
+    let kernel = Kernel::new(Arc::new(provider), config.clone());
 
     let _server_handle = AgglayerImpl::new(
         kernel,
@@ -69,7 +69,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
     let (provider, _mock) = providers::Provider::mocked();
     let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-    let kernel = Kernel::new(provider, config.clone());
+    let kernel = Kernel::new(Arc::new(provider), config.clone());
 
     let _server_handle = AgglayerImpl::new(
         kernel,

@@ -16,7 +16,7 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     Certificate, CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError,
-    EpochNumber, Height, NetworkId, ProofVerificationError,
+    Height, NetworkId, ProofVerificationError,
 };
 use agglayer_types::{CertificateHeader, LocalNetworkStateData};
 use arc_swap::ArcSwap;
@@ -1035,10 +1035,10 @@ pub trait EpochPacker: Unpin + Send + Sync + 'static {
 
     fn settle_certificate(
         &self,
-        epoch_number: EpochNumber,
+        related_epoch: Arc<Self::PerEpochStore>,
         certificate_index: CertificateIndex,
         certificate_id: CertificateId,
-    ) -> Result<(), Error>;
+    ) -> Result<BoxFuture<Result<(), Error>>, Error>;
 }
 
 pub trait CertificateInput: Clone {
@@ -1112,5 +1112,13 @@ pub enum Error {
     Deserialize {
         certificate_id: CertificateId,
         source: bincode::Error,
+    },
+    #[error("The status of the certificate is invalid")]
+    InvalidCertificateStatus,
+
+    #[error("Failed to settle the certificate {certificate_id}: {error}")]
+    SettlementError {
+        certificate_id: CertificateId,
+        error: String,
     },
 }

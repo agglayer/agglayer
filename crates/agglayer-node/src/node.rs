@@ -1,9 +1,10 @@
 use std::{num::NonZeroU64, sync::Arc};
 
-use agglayer_aggregator_notifier::{AggregatorNotifier, CertifierClient};
+use agglayer_aggregator_notifier::{CertifierClient, EpochPackerClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
+use agglayer_contracts::{polygon_rollup_manager::PolygonRollupManager, L1RpcClient};
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::DB,
@@ -12,7 +13,6 @@ use agglayer_storage::{
         per_epoch::PerEpochStore, state::StateStore,
     },
 };
-use agglayer_types::Certificate;
 use anyhow::Result;
 use ethers::{
     middleware::MiddlewareBuilder,
@@ -111,12 +111,19 @@ impl Node {
         tracing::info!("Signer address: {:?}", address);
 
         // Create a new L1 RPC provider with the configured signer.
-        let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
-            .with_signer(signer)
-            .nonce_manager(address);
+        let rpc = Arc::new(
+            Provider::<Http>::try_from(config.l1.node_url.as_str())?
+                .with_signer(signer)
+                .nonce_manager(address),
+        );
+
+        let rollup_manager = L1RpcClient::new(PolygonRollupManager::new(
+            config.l1.rollup_manager_contract,
+            rpc.clone(),
+        ));
 
         // Construct the core.
-        let core = Kernel::new(rpc, config.clone());
+        let core = Kernel::new(rpc.clone(), config.clone());
 
         let certifier_client =
             CertifierClient::try_new(config.prover_entrypoint.clone(), pending_store.clone())
@@ -138,12 +145,11 @@ impl Node {
             state_store.clone(),
         )?);
 
-        let epoch_packing_aggregator_task: AggregatorNotifier<Certificate, _, _> =
-            AggregatorNotifier::try_new(
-                &config.certificate_orchestrator.prover,
-                state_store.clone(),
-                epochs_store.clone(),
-            )?;
+        let epoch_packing_aggregator_task = EpochPackerClient::try_new(
+            Arc::new(config.outbound.rpc.settle.clone()),
+            state_store.clone(),
+            Arc::new(rollup_manager),
+        )?;
 
         let (data_sender, data_receiver) = mpsc::channel(
             config

@@ -6,7 +6,6 @@ use node::Node;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-mod contracts;
 mod kernel;
 mod logging;
 mod rate_limiting;

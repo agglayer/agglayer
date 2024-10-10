@@ -50,6 +50,18 @@ impl PerEpochReader for DummyPendingStore {
     fn get_epoch_number(&self) -> u64 {
         self.current_epoch
     }
+    fn get_certificate_at_index(
+        &self,
+        _index: CertificateIndex,
+    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+        todo!()
+    }
+    fn get_proof_at_index(
+        &self,
+        _index: CertificateIndex,
+    ) -> Result<Option<Proof>, agglayer_storage::error::Error> {
+        todo!()
+    }
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {
         todo!()
     }
@@ -236,6 +248,15 @@ impl StateWriter for DummyPendingStore {
             entry.status = status.clone();
         }
 
+        Ok(())
+    }
+
+    fn set_latest_settled_certificate_for_network(
+        &self,
+        _network_id: &NetworkId,
+        _certificate_id: &CertificateId,
+        _epoch_number: &EpochNumber,
+    ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
 }
@@ -649,11 +670,11 @@ impl EpochPacker for Check {
     type PerEpochStore = DummyPendingStore;
     fn settle_certificate(
         &self,
-        epoch_number: EpochNumber,
-        certificate_index: CertificateIndex,
-        certificate_id: CertificateId,
-    ) -> Result<(), Error> {
-        Ok(())
+        _epoch: Arc<Self::PerEpochStore>,
+        _certificate_index: CertificateIndex,
+        _certificate_id: CertificateId,
+    ) -> Result<BoxFuture<Result<(), Error>>, Error> {
+        Ok(Box::pin(async { Ok(()) }))
     }
 
     fn pack(&self, epoch: Arc<Self::PerEpochStore>) -> Result<BoxFuture<Result<(), Error>>, Error> {

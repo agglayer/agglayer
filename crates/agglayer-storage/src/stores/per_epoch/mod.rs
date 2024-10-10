@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use agglayer_types::{CertificateIndex, EpochNumber, Height, NetworkId};
+use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Height, NetworkId, Proof};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::ReadOptions;
 use tracing::{debug, error, warn};
@@ -288,6 +288,16 @@ where
 {
     fn get_epoch_number(&self) -> u64 {
         *self.epoch_number
+    }
+    fn get_certificate_at_index(
+        &self,
+        index: CertificateIndex,
+    ) -> Result<Option<Certificate>, Error> {
+        self.db.get::<CertificatePerIndexColumn>(&index)
+    }
+
+    fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error> {
+        self.db.get::<ProofPerIndexColumn>(&index)
     }
 
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {

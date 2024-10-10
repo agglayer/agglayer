@@ -68,6 +68,28 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("ROLLUP_MANAGER_VERSION"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "ROLLUP_MANAGER_VERSION",
+                            ),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::String,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("string"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("activateEmergencyState"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
@@ -100,7 +122,7 @@ pub mod polygon_rollup_manager {
                                     name: ::std::borrow::ToOwned::to_owned("verifier"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("contract IVerifierRollup"),
+                                        ::std::borrow::ToOwned::to_owned("address"),
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
@@ -118,7 +140,7 @@ pub mod polygon_rollup_manager {
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("genesis"),
+                                    name: ::std::borrow::ToOwned::to_owned("initRoot"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
                                         32usize,
                                     ),
@@ -128,11 +150,22 @@ pub mod polygon_rollup_manager {
                                 },
                                 ::ethers::core::abi::ethabi::Param {
                                     name: ::std::borrow::ToOwned::to_owned(
-                                        "rollupCompatibilityID",
+                                        "rollupVerifierType",
                                     ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint8"),
+                                        ::std::borrow::ToOwned::to_owned(
+                                            "enum IPolygonRollupManager.VerifierType",
+                                        ),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("programVKey"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
                                     ),
                                 },
                             ],
@@ -161,7 +194,7 @@ pub mod polygon_rollup_manager {
                                     name: ::std::borrow::ToOwned::to_owned("verifier"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("contract IVerifierRollup"),
+                                        ::std::borrow::ToOwned::to_owned("address"),
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
@@ -173,11 +206,13 @@ pub mod polygon_rollup_manager {
                                 },
                                 ::ethers::core::abi::ethabi::Param {
                                     name: ::std::borrow::ToOwned::to_owned(
-                                        "rollupCompatibilityID",
+                                        "rollupVerifierType",
                                     ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint8"),
+                                        ::std::borrow::ToOwned::to_owned(
+                                            "enum IPolygonRollupManager.VerifierType",
+                                        ),
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
@@ -194,6 +229,15 @@ pub mod polygon_rollup_manager {
                                     kind: ::ethers::core::abi::ethabi::ParamType::String,
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("string"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("programVKey"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
                                     ),
                                 },
                             ],
@@ -274,35 +318,6 @@ pub mod polygon_rollup_manager {
                             ],
                             constant: ::core::option::Option::None,
                             state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("consolidatePendingState"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "consolidatePendingState",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("pendingStateNum"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
                         },
                     ],
                 ),
@@ -418,6 +433,65 @@ pub mod polygon_rollup_manager {
                                     ),
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("uint256"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("getInputPessimisticBytes"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "getInputPessimisticBytes",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("uint32"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("l1InfoTreeRoot"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("newLocalExitRoot"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "newPessimisticRoot",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes"),
                                     ),
                                 },
                             ],
@@ -619,52 +693,6 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("getRollupPendingStateTransitions"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "getRollupPendingStateTransitions",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("batchNum"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Tuple(
-                                        ::std::vec![
-                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                            ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
-                                            ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
-                                        ],
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned(
-                                            "struct LegacyZKEVMStateVariables.PendingState",
-                                        ),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
                     ::std::borrow::ToOwned::to_owned("getRollupSequencedBatches"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
@@ -804,84 +832,7 @@ pub mod polygon_rollup_manager {
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
                             name: ::std::borrow::ToOwned::to_owned("initialize"),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("trustedAggregator"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("address"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "_pendingStateTimeout",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "_trustedAggregatorTimeout",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("admin"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("address"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("timelock"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("address"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("emergencyCouncil"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("address"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("polygonZkEVM"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned(
-                                            "contract PolygonZkEVMExistentEtrog",
-                                        ),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("zkEVMVerifier"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("contract IVerifierRollup"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("zkEVMForkID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("zkEVMChainID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
+                            inputs: ::std::vec![],
                             outputs: ::std::vec![],
                             constant: ::core::option::Option::None,
                             state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
@@ -894,43 +845,6 @@ pub mod polygon_rollup_manager {
                         ::ethers::core::abi::ethabi::Function {
                             name: ::std::borrow::ToOwned::to_owned("isEmergencyState"),
                             inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Bool,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bool"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("isPendingStateConsolidable"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "isPendingStateConsolidable",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("pendingStateNum"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
                             outputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
                                     name: ::std::string::String::new(),
@@ -983,26 +897,6 @@ pub mod polygon_rollup_manager {
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("multiplierBatchFee"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned("multiplierBatchFee"),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(16usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint16"),
                                     ),
                                 },
                             ],
@@ -1071,112 +965,6 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("overridePendingState"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "overridePendingState",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "initPendingStateNum",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "finalPendingStateNum",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("initNumBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("finalNewBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("newLocalExitRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("newStateRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("proof"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedArray(
-                                        ::std::boxed::Box::new(
-                                            ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
-                                        ),
-                                        24usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32[24]"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("pendingStateTimeout"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "pendingStateTimeout",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
                     ::std::borrow::ToOwned::to_owned("pol"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
@@ -1195,92 +983,6 @@ pub mod polygon_rollup_manager {
                             ],
                             constant: ::core::option::Option::None,
                             state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned(
-                        "proveNonDeterministicPendingState",
-                    ),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "proveNonDeterministicPendingState",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "initPendingStateNum",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "finalPendingStateNum",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("initNumBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("finalNewBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("newLocalExitRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("newStateRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("proof"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedArray(
-                                        ::std::boxed::Box::new(
-                                            ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
-                                        ),
-                                        24usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32[24]"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
                         },
                     ],
                 ),
@@ -1333,6 +1035,35 @@ pub mod polygon_rollup_manager {
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("address"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("rollbackBatches"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("rollbackBatches"),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("rollupContract"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned(
+                                            "contract IPolygonRollupBase",
+                                        ),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("targetBatch"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("uint64"),
                                     ),
                                 },
                             ],
@@ -1408,99 +1139,74 @@ pub mod polygon_rollup_manager {
                             ],
                             outputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupContract"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    name: ::std::borrow::ToOwned::to_owned("rollupData"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Tuple(
+                                        ::std::vec![
+                                            ::ethers::core::abi::ethabi::ParamType::Address,
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Address,
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
+                                        ],
+                                    ),
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned(
-                                            "contract IPolygonRollupBase",
+                                            "struct PolygonRollupManager.RollupDataReturn",
                                         ),
                                     ),
                                 },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("rollupIDToRollupDataV2"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "rollupIDToRollupDataV2",
+                            ),
+                            inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("chainID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
+                                        ::std::borrow::ToOwned::to_owned("uint32"),
                                     ),
                                 },
+                            ],
+                            outputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("verifier"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    name: ::std::borrow::ToOwned::to_owned("rollupData"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Tuple(
+                                        ::std::vec![
+                                            ::ethers::core::abi::ethabi::ParamType::Address,
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Address,
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                            ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
+                                            ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
+                                            ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
+                                        ],
+                                    ),
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("contract IVerifierRollup"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("forkID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("lastLocalExitRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "lastBatchSequenced",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("lastVerifiedBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("lastPendingState"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "lastPendingStateConsolidated",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "lastVerifiedBatchBeforeUpgrade",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupTypeID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "rollupCompatibilityID",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint8"),
+                                        ::std::borrow::ToOwned::to_owned(
+                                            "struct PolygonRollupManager.RollupDataReturnV2",
+                                        ),
                                     ),
                                 },
                             ],
@@ -1557,7 +1263,7 @@ pub mod polygon_rollup_manager {
                                     name: ::std::borrow::ToOwned::to_owned("verifier"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("contract IVerifierRollup"),
+                                        ::std::borrow::ToOwned::to_owned("address"),
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
@@ -1569,11 +1275,13 @@ pub mod polygon_rollup_manager {
                                 },
                                 ::ethers::core::abi::ethabi::Param {
                                     name: ::std::borrow::ToOwned::to_owned(
-                                        "rollupCompatibilityID",
+                                        "rollupVerifierType",
                                     ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint8"),
+                                        ::std::borrow::ToOwned::to_owned(
+                                            "enum IPolygonRollupManager.VerifierType",
+                                        ),
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
@@ -1585,6 +1293,15 @@ pub mod polygon_rollup_manager {
                                 },
                                 ::ethers::core::abi::ethabi::Param {
                                     name: ::std::borrow::ToOwned::to_owned("genesis"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("programVKey"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
                                         32usize,
                                     ),
@@ -1611,102 +1328,6 @@ pub mod polygon_rollup_manager {
                                     ),
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("uint256"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("setMultiplierBatchFee"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "setMultiplierBatchFee",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newMultiplierBatchFee",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(16usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint16"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("setPendingStateTimeout"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "setPendingStateTimeout",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newPendingStateTimeout",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("setTrustedAggregatorTimeout"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "setTrustedAggregatorTimeout",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newTrustedAggregatorTimeout",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("setVerifyBatchTimeTarget"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "setVerifyBatchTimeTarget",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newVerifyBatchTimeTarget",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
                                     ),
                                 },
                             ],
@@ -1761,28 +1382,6 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("trustedAggregatorTimeout"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "trustedAggregatorTimeout",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
                     ::std::borrow::ToOwned::to_owned("updateRollup"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
@@ -1819,96 +1418,27 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("verifyBatchTimeTarget"),
+                    ::std::borrow::ToOwned::to_owned("updateRollupByRollupAdmin"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
                             name: ::std::borrow::ToOwned::to_owned(
-                                "verifyBatchTimeTarget",
+                                "updateRollupByRollupAdmin",
                             ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("verifyBatches"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned("verifyBatches"),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
+                                    name: ::std::borrow::ToOwned::to_owned("rollupContract"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned(
+                                            "contract ITransparentUpgradeableProxy",
+                                        ),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("newRollupTypeID"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("uint32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("pendingStateNum"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("initNumBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("finalNewBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("newLocalExitRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("newStateRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("beneficiary"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("address"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("proof"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedArray(
-                                        ::std::boxed::Box::new(
-                                            ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
-                                        ),
-                                        24usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32[24]"),
                                     ),
                                 },
                             ],
@@ -1998,6 +1528,66 @@ pub mod polygon_rollup_manager {
                         },
                     ],
                 ),
+                (
+                    ::std::borrow::ToOwned::to_owned(
+                        "verifyPessimisticTrustedAggregator",
+                    ),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "verifyPessimisticTrustedAggregator",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("uint32"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "l1InfoTreeLeafCount",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("uint32"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("newLocalExitRoot"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "newPessimisticRoot",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("proof"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                        },
+                    ],
+                ),
             ]),
             events: ::core::convert::From::from([
                 (
@@ -2028,7 +1618,7 @@ pub mod polygon_rollup_manager {
                                 },
                                 ::ethers::core::abi::ethabi::EventParam {
                                     name: ::std::borrow::ToOwned::to_owned(
-                                        "rollupCompatibilityID",
+                                        "rollupVerifierType",
                                     ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
                                     indexed: false,
@@ -2038,6 +1628,13 @@ pub mod polygon_rollup_manager {
                                         "lastVerifiedBatchBeforeUpgrade",
                                     ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                    indexed: false,
+                                },
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned("programVKey"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
                                     indexed: false,
                                 },
                             ],
@@ -2075,7 +1672,7 @@ pub mod polygon_rollup_manager {
                                 },
                                 ::ethers::core::abi::ethabi::EventParam {
                                     name: ::std::borrow::ToOwned::to_owned(
-                                        "rollupCompatibilityID",
+                                        "rollupVerifierType",
                                     ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
                                     indexed: false,
@@ -2092,46 +1689,11 @@ pub mod polygon_rollup_manager {
                                     kind: ::ethers::core::abi::ethabi::ParamType::String,
                                     indexed: false,
                                 },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("ConsolidatePendingState"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "ConsolidatePendingState",
-                            ),
-                            inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
-                                    indexed: true,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("numBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("stateRoot"),
+                                    name: ::std::borrow::ToOwned::to_owned("programVKey"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
                                         32usize,
                                     ),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("exitRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("pendingStateNum"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
                                     indexed: false,
                                 },
                             ],
@@ -2255,77 +1817,6 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("OverridePendingState"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "OverridePendingState",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
-                                    indexed: true,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("numBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("stateRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("exitRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("aggregator"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    indexed: false,
-                                },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned(
-                        "ProveNonDeterministicPendingState",
-                    ),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "ProveNonDeterministicPendingState",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("storedStateRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("provedStateRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    indexed: false,
-                                },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
                     ::std::borrow::ToOwned::to_owned("RoleAdminChanged"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Event {
@@ -2414,6 +1905,36 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("RollbackBatches"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Event {
+                            name: ::std::borrow::ToOwned::to_owned("RollbackBatches"),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
+                                    indexed: true,
+                                },
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned("targetBatch"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                    indexed: true,
+                                },
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "accInputHashToRollback",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    indexed: false,
+                                },
+                            ],
+                            anonymous: false,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("SetBatchFee"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Event {
@@ -2424,46 +1945,6 @@ pub mod polygon_rollup_manager {
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(
                                         256usize,
                                     ),
-                                    indexed: false,
-                                },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SetMultiplierBatchFee"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "SetMultiplierBatchFee",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newMultiplierBatchFee",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(16usize),
-                                    indexed: false,
-                                },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SetPendingStateTimeout"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "SetPendingStateTimeout",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newPendingStateTimeout",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
                                     indexed: false,
                                 },
                             ],
@@ -2484,46 +1965,6 @@ pub mod polygon_rollup_manager {
                                         "newTrustedAggregator",
                                     ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    indexed: false,
-                                },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SetTrustedAggregatorTimeout"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "SetTrustedAggregatorTimeout",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newTrustedAggregatorTimeout",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    indexed: false,
-                                },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SetVerifyBatchTimeTarget"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "SetVerifyBatchTimeTarget",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newVerifyBatchTimeTarget",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
                                     indexed: false,
                                 },
                             ],
@@ -2560,39 +2001,19 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("VerifyBatches"),
+                    ::std::borrow::ToOwned::to_owned("UpdateRollupManagerVersion"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned("VerifyBatches"),
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "UpdateRollupManagerVersion",
+                            ),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("rollupID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
-                                    indexed: true,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("numBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("stateRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "rollupManagerVersion",
                                     ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::String,
                                     indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("exitRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("aggregator"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    indexed: true,
                                 },
                             ],
                             anonymous: false,
@@ -2668,6 +2089,28 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("AllBatchesMustBeVerified"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "AllBatchesMustBeVerified",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("AllSequencedMustBeVerified"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "AllSequencedMustBeVerified",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned(
                         "AllzkEVMSequencedBatchesMustBeVerified",
                     ),
@@ -2690,11 +2133,44 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned(
+                        "CannotUpdateWithUnconsolidatedPendingState",
+                    ),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "CannotUpdateWithUnconsolidatedPendingState",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("ChainIDAlreadyExist"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "ChainIDAlreadyExist",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("ChainIDOutOfRange"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned("ChainIDOutOfRange"),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("EmptyVerifySequencesData"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "EmptyVerifySequencesData",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -2732,6 +2208,32 @@ pub mod polygon_rollup_manager {
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "FinalNumBatchDoesNotMatchPendingState",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned(
+                        "FinalNumSequenceBelowLastVerifiedSequence",
+                    ),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "FinalNumSequenceBelowLastVerifiedSequence",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned(
+                        "FinalNumSequenceDoesNotMatchPendingState",
+                    ),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "FinalNumSequenceDoesNotMatchPendingState",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -2797,6 +2299,43 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned(
+                        "InitSequenceMustMatchCurrentForkID",
+                    ),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "InitSequenceMustMatchCurrentForkID",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned(
+                        "InitSequenceNumDoesNotMatchPendingState",
+                    ),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "InitSequenceNumDoesNotMatchPendingState",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("InvalidPessimisticProof"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "InvalidPessimisticProof",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("InvalidProof"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
@@ -2828,11 +2367,84 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("InvalidRangeMultiplierZkGasPrice"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "InvalidRangeMultiplierZkGasPrice",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("InvalidRangeSequenceTimeTarget"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "InvalidRangeSequenceTimeTarget",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("InvalidRollup"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned("InvalidRollup"),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("InvalidRollupType"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned("InvalidRollupType"),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("InvalidVerifierType"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "InvalidVerifierType",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("L1InfoTreeLeafCountInvalid"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "L1InfoTreeLeafCountInvalid",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("MustSequenceSomeBatch"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "MustSequenceSomeBatch",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("MustSequenceSomeBlob"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "MustSequenceSomeBlob",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -2887,6 +2499,15 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("NotAllowedAddress"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned("NotAllowedAddress"),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("OldAccInputHashDoesNotExist"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
@@ -2909,6 +2530,17 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("OnlyChainsWithPessimisticProofs"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "OnlyChainsWithPessimisticProofs",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("OnlyEmergencyState"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
@@ -2923,6 +2555,26 @@ pub mod polygon_rollup_manager {
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "OnlyNotEmergencyState",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("OnlyRollupAdmin"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned("OnlyRollupAdmin"),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("OnlyStateTransitionChains"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "OnlyStateTransitionChains",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -2962,11 +2614,55 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("PendingStateNumExist"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "PendingStateNumExist",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("RollbackBatchIsNotEndOfSequence"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "RollbackBatchIsNotEndOfSequence",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("RollbackBatchIsNotValid"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "RollbackBatchIsNotValid",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("RollupAddressAlreadyExist"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "RollupAddressAlreadyExist",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("RollupIDNotAscendingOrder"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "RollupIDNotAscendingOrder",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -3048,12 +2744,32 @@ pub mod polygon_rollup_manager {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("UpdateToOldRollupTypeID"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "UpdateToOldRollupTypeID",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("UpdateToSameRollupTypeID"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "UpdateToSameRollupTypeID",
                             ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("zkGasPriceOfRange"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned("zkGasPriceOfRange"),
                             inputs: ::std::vec![],
                         },
                     ],
@@ -3114,6 +2830,14 @@ pub mod polygon_rollup_manager {
                 .method_hash([162, 23, 253, 223], ())
                 .expect("method not found (this should never happen)")
         }
+        ///Calls the contract's `ROLLUP_MANAGER_VERSION` (0xd8905812) function
+        pub fn rollup_manager_version(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<M, ::std::string::String> {
+            self.0
+                .method_hash([216, 144, 88, 18], ())
+                .expect("method not found (this should never happen)")
+        }
         ///Calls the contract's `activateEmergencyState` (0x2072f6c5) function
         pub fn activate_emergency_state(
             &self,
@@ -3122,50 +2846,54 @@ pub mod polygon_rollup_manager {
                 .method_hash([32, 114, 246, 197], ())
                 .expect("method not found (this should never happen)")
         }
-        ///Calls the contract's `addExistingRollup` (0xe0bfd3d2) function
+        ///Calls the contract's `addExistingRollup` (0x97bf07e8) function
         pub fn add_existing_rollup(
             &self,
             rollup_address: ::ethers::core::types::Address,
             verifier: ::ethers::core::types::Address,
             fork_id: u64,
             chain_id: u64,
-            genesis: [u8; 32],
-            rollup_compatibility_id: u8,
+            init_root: [u8; 32],
+            rollup_verifier_type: u8,
+            program_v_key: [u8; 32],
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
                 .method_hash(
-                    [224, 191, 211, 210],
+                    [151, 191, 7, 232],
                     (
                         rollup_address,
                         verifier,
                         fork_id,
                         chain_id,
-                        genesis,
-                        rollup_compatibility_id,
+                        init_root,
+                        rollup_verifier_type,
+                        program_v_key,
                     ),
                 )
                 .expect("method not found (this should never happen)")
         }
-        ///Calls the contract's `addNewRollupType` (0xf34eb8eb) function
+        ///Calls the contract's `addNewRollupType` (0xabcb5198) function
         pub fn add_new_rollup_type(
             &self,
             consensus_implementation: ::ethers::core::types::Address,
             verifier: ::ethers::core::types::Address,
             fork_id: u64,
-            rollup_compatibility_id: u8,
+            rollup_verifier_type: u8,
             genesis: [u8; 32],
             description: ::std::string::String,
+            program_v_key: [u8; 32],
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
                 .method_hash(
-                    [243, 78, 184, 235],
+                    [171, 203, 81, 152],
                     (
                         consensus_implementation,
                         verifier,
                         fork_id,
-                        rollup_compatibility_id,
+                        rollup_verifier_type,
                         genesis,
                         description,
+                        program_v_key,
                     ),
                 )
                 .expect("method not found (this should never happen)")
@@ -3196,16 +2924,6 @@ pub mod polygon_rollup_manager {
         ) -> ::ethers::contract::builders::ContractCall<M, u32> {
             self.0
                 .method_hash([127, 182, 231, 106], chain_id)
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `consolidatePendingState` (0x1608859c) function
-        pub fn consolidate_pending_state(
-            &self,
-            rollup_id: u32,
-            pending_state_num: u64,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash([22, 8, 133, 156], (rollup_id, pending_state_num))
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `createNewRollup` (0x727885e9) function
@@ -3256,6 +2974,29 @@ pub mod polygon_rollup_manager {
         ) -> ::ethers::contract::builders::ContractCall<M, ::ethers::core::types::U256> {
             self.0
                 .method_hash([96, 70, 145, 105], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `getInputPessimisticBytes` (0x9e36c565) function
+        pub fn get_input_pessimistic_bytes(
+            &self,
+            rollup_id: u32,
+            l_1_info_tree_root: [u8; 32],
+            new_local_exit_root: [u8; 32],
+            new_pessimistic_root: [u8; 32],
+        ) -> ::ethers::contract::builders::ContractCall<
+            M,
+            ::ethers::core::types::Bytes,
+        > {
+            self.0
+                .method_hash(
+                    [158, 54, 197, 101],
+                    (
+                        rollup_id,
+                        l_1_info_tree_root,
+                        new_local_exit_root,
+                        new_pessimistic_root,
+                    ),
+                )
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `getInputSnarkBytes` (0x7975fcfe) function
@@ -3321,16 +3062,6 @@ pub mod polygon_rollup_manager {
                 .method_hash([162, 150, 125, 153], ())
                 .expect("method not found (this should never happen)")
         }
-        ///Calls the contract's `getRollupPendingStateTransitions` (0xb99d0ad7) function
-        pub fn get_rollup_pending_state_transitions(
-            &self,
-            rollup_id: u32,
-            batch_num: u64,
-        ) -> ::ethers::contract::builders::ContractCall<M, PendingState> {
-            self.0
-                .method_hash([185, 157, 10, 215], (rollup_id, batch_num))
-                .expect("method not found (this should never happen)")
-        }
         ///Calls the contract's `getRollupSequencedBatches` (0x25280169) function
         pub fn get_rollup_sequenced_batches(
             &self,
@@ -3372,36 +3103,10 @@ pub mod polygon_rollup_manager {
                 .method_hash([145, 209, 72, 84], (role, account))
                 .expect("method not found (this should never happen)")
         }
-        ///Calls the contract's `initialize` (0x0645af09) function
-        pub fn initialize(
-            &self,
-            trusted_aggregator: ::ethers::core::types::Address,
-            pending_state_timeout: u64,
-            trusted_aggregator_timeout: u64,
-            admin: ::ethers::core::types::Address,
-            timelock: ::ethers::core::types::Address,
-            emergency_council: ::ethers::core::types::Address,
-            polygon_zk_evm: ::ethers::core::types::Address,
-            zk_evm_verifier: ::ethers::core::types::Address,
-            zk_evm_fork_id: u64,
-            zk_evm_chain_id: u64,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+        ///Calls the contract's `initialize` (0x8129fc1c) function
+        pub fn initialize(&self) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
-                .method_hash(
-                    [6, 69, 175, 9],
-                    (
-                        trusted_aggregator,
-                        pending_state_timeout,
-                        trusted_aggregator_timeout,
-                        admin,
-                        timelock,
-                        emergency_council,
-                        polygon_zk_evm,
-                        zk_evm_verifier,
-                        zk_evm_fork_id,
-                        zk_evm_chain_id,
-                    ),
-                )
+                .method_hash([129, 41, 252, 28], ())
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `isEmergencyState` (0x15064c96) function
@@ -3410,16 +3115,6 @@ pub mod polygon_rollup_manager {
         ) -> ::ethers::contract::builders::ContractCall<M, bool> {
             self.0
                 .method_hash([21, 6, 76, 150], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `isPendingStateConsolidable` (0x080b3111) function
-        pub fn is_pending_state_consolidable(
-            &self,
-            rollup_id: u32,
-            pending_state_num: u64,
-        ) -> ::ethers::contract::builders::ContractCall<M, bool> {
-            self.0
-                .method_hash([8, 11, 49, 17], (rollup_id, pending_state_num))
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `lastAggregationTimestamp` (0xc1acbc34) function
@@ -3436,14 +3131,6 @@ pub mod polygon_rollup_manager {
         ) -> ::ethers::contract::builders::ContractCall<M, u64> {
             self.0
                 .method_hash([48, 194, 125, 222], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `multiplierBatchFee` (0xafd23cbe) function
-        pub fn multiplier_batch_fee(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, u16> {
-            self.0
-                .method_hash([175, 210, 60, 190], ())
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `obsoleteRollupType` (0x7222020f) function
@@ -3468,42 +3155,6 @@ pub mod polygon_rollup_manager {
                 )
                 .expect("method not found (this should never happen)")
         }
-        ///Calls the contract's `overridePendingState` (0x12b86e19) function
-        pub fn override_pending_state(
-            &self,
-            rollup_id: u32,
-            init_pending_state_num: u64,
-            final_pending_state_num: u64,
-            init_num_batch: u64,
-            final_new_batch: u64,
-            new_local_exit_root: [u8; 32],
-            new_state_root: [u8; 32],
-            proof: [[u8; 32]; 24],
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash(
-                    [18, 184, 110, 25],
-                    (
-                        rollup_id,
-                        init_pending_state_num,
-                        final_pending_state_num,
-                        init_num_batch,
-                        final_new_batch,
-                        new_local_exit_root,
-                        new_state_root,
-                        proof,
-                    ),
-                )
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `pendingStateTimeout` (0xd939b315) function
-        pub fn pending_state_timeout(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, u64> {
-            self.0
-                .method_hash([217, 57, 179, 21], ())
-                .expect("method not found (this should never happen)")
-        }
         ///Calls the contract's `pol` (0xe46761c4) function
         pub fn pol(
             &self,
@@ -3513,34 +3164,6 @@ pub mod polygon_rollup_manager {
         > {
             self.0
                 .method_hash([228, 103, 97, 196], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `proveNonDeterministicPendingState` (0x8bd4f071) function
-        pub fn prove_non_deterministic_pending_state(
-            &self,
-            rollup_id: u32,
-            init_pending_state_num: u64,
-            final_pending_state_num: u64,
-            init_num_batch: u64,
-            final_new_batch: u64,
-            new_local_exit_root: [u8; 32],
-            new_state_root: [u8; 32],
-            proof: [[u8; 32]; 24],
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash(
-                    [139, 212, 240, 113],
-                    (
-                        rollup_id,
-                        init_pending_state_num,
-                        final_pending_state_num,
-                        init_num_batch,
-                        final_new_batch,
-                        new_local_exit_root,
-                        new_state_root,
-                        proof,
-                    ),
-                )
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `renounceRole` (0x36568abe) function
@@ -3561,6 +3184,16 @@ pub mod polygon_rollup_manager {
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
                 .method_hash([213, 71, 116, 31], (role, account))
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `rollbackBatches` (0x8fd88cc2) function
+        pub fn rollback_batches(
+            &self,
+            rollup_contract: ::ethers::core::types::Address,
+            target_batch: u64,
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash([143, 216, 140, 194], (rollup_contract, target_batch))
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `rollupAddressToID` (0xceee281d) function
@@ -3584,25 +3217,18 @@ pub mod polygon_rollup_manager {
         pub fn rollup_id_to_rollup_data(
             &self,
             rollup_id: u32,
-        ) -> ::ethers::contract::builders::ContractCall<
-            M,
-            (
-                ::ethers::core::types::Address,
-                u64,
-                ::ethers::core::types::Address,
-                u64,
-                [u8; 32],
-                u64,
-                u64,
-                u64,
-                u64,
-                u64,
-                u64,
-                u8,
-            ),
-        > {
+        ) -> ::ethers::contract::builders::ContractCall<M, RollupDataReturn> {
             self.0
                 .method_hash([249, 196, 194, 174], rollup_id)
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `rollupIDToRollupDataV2` (0x74d9c244) function
+        pub fn rollup_id_to_rollup_data_v2(
+            &self,
+            rollup_id: u32,
+        ) -> ::ethers::contract::builders::ContractCall<M, RollupDataReturnV2> {
+            self.0
+                .method_hash([116, 217, 194, 68], rollup_id)
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `rollupTypeCount` (0x1796a1ae) function
@@ -3626,6 +3252,7 @@ pub mod polygon_rollup_manager {
                 u8,
                 bool,
                 [u8; 32],
+                [u8; 32],
             ),
         > {
             self.0
@@ -3639,42 +3266,6 @@ pub mod polygon_rollup_manager {
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
                 .method_hash([213, 7, 63, 111], new_batch_fee)
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `setMultiplierBatchFee` (0x1816b7e5) function
-        pub fn set_multiplier_batch_fee(
-            &self,
-            new_multiplier_batch_fee: u16,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash([24, 22, 183, 229], new_multiplier_batch_fee)
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `setPendingStateTimeout` (0x9c9f3dfe) function
-        pub fn set_pending_state_timeout(
-            &self,
-            new_pending_state_timeout: u64,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash([156, 159, 61, 254], new_pending_state_timeout)
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `setTrustedAggregatorTimeout` (0x394218e9) function
-        pub fn set_trusted_aggregator_timeout(
-            &self,
-            new_trusted_aggregator_timeout: u64,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash([57, 66, 24, 233], new_trusted_aggregator_timeout)
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `setVerifyBatchTimeTarget` (0xa066215c) function
-        pub fn set_verify_batch_time_target(
-            &self,
-            new_verify_batch_time_target: u64,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash([160, 102, 33, 92], new_verify_batch_time_target)
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `totalSequencedBatches` (0x066ec012) function
@@ -3693,14 +3284,6 @@ pub mod polygon_rollup_manager {
                 .method_hash([221, 224, 255, 119], ())
                 .expect("method not found (this should never happen)")
         }
-        ///Calls the contract's `trustedAggregatorTimeout` (0x841b24d7) function
-        pub fn trusted_aggregator_timeout(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, u64> {
-            self.0
-                .method_hash([132, 27, 36, 215], ())
-                .expect("method not found (this should never happen)")
-        }
         ///Calls the contract's `updateRollup` (0xc4c928c2) function
         pub fn update_rollup(
             &self,
@@ -3715,40 +3298,14 @@ pub mod polygon_rollup_manager {
                 )
                 .expect("method not found (this should never happen)")
         }
-        ///Calls the contract's `verifyBatchTimeTarget` (0x0a0d9fbe) function
-        pub fn verify_batch_time_target(
+        ///Calls the contract's `updateRollupByRollupAdmin` (0xdfdb8c5e) function
+        pub fn update_rollup_by_rollup_admin(
             &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, u64> {
-            self.0
-                .method_hash([10, 13, 159, 190], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `verifyBatches` (0x87c20c01) function
-        pub fn verify_batches(
-            &self,
-            rollup_id: u32,
-            pending_state_num: u64,
-            init_num_batch: u64,
-            final_new_batch: u64,
-            new_local_exit_root: [u8; 32],
-            new_state_root: [u8; 32],
-            beneficiary: ::ethers::core::types::Address,
-            proof: [[u8; 32]; 24],
+            rollup_contract: ::ethers::core::types::Address,
+            new_rollup_type_id: u32,
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
-                .method_hash(
-                    [135, 194, 12, 1],
-                    (
-                        rollup_id,
-                        pending_state_num,
-                        init_num_batch,
-                        final_new_batch,
-                        new_local_exit_root,
-                        new_state_root,
-                        beneficiary,
-                        proof,
-                    ),
-                )
+                .method_hash([223, 219, 140, 94], (rollup_contract, new_rollup_type_id))
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `verifyBatchesTrustedAggregator` (0x1489ed10) function
@@ -3779,6 +3336,28 @@ pub mod polygon_rollup_manager {
                 )
                 .expect("method not found (this should never happen)")
         }
+        ///Calls the contract's `verifyPessimisticTrustedAggregator` (0x8875f03c) function
+        pub fn verify_pessimistic_trusted_aggregator(
+            &self,
+            rollup_id: u32,
+            l_1_info_tree_leaf_count: u32,
+            new_local_exit_root: [u8; 32],
+            new_pessimistic_root: [u8; 32],
+            proof: ::ethers::core::types::Bytes,
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash(
+                    [136, 117, 240, 60],
+                    (
+                        rollup_id,
+                        l_1_info_tree_leaf_count,
+                        new_local_exit_root,
+                        new_pessimistic_root,
+                        proof,
+                    ),
+                )
+                .expect("method not found (this should never happen)")
+        }
         ///Gets the contract's `AddExistingRollup` event
         pub fn add_existing_rollup_filter(
             &self,
@@ -3796,16 +3375,6 @@ pub mod polygon_rollup_manager {
             ::std::sync::Arc<M>,
             M,
             AddNewRollupTypeFilter,
-        > {
-            self.0.event()
-        }
-        ///Gets the contract's `ConsolidatePendingState` event
-        pub fn consolidate_pending_state_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            ConsolidatePendingStateFilter,
         > {
             self.0.event()
         }
@@ -3869,26 +3438,6 @@ pub mod polygon_rollup_manager {
         > {
             self.0.event()
         }
-        ///Gets the contract's `OverridePendingState` event
-        pub fn override_pending_state_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            OverridePendingStateFilter,
-        > {
-            self.0.event()
-        }
-        ///Gets the contract's `ProveNonDeterministicPendingState` event
-        pub fn prove_non_deterministic_pending_state_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            ProveNonDeterministicPendingStateFilter,
-        > {
-            self.0.event()
-        }
         ///Gets the contract's `RoleAdminChanged` event
         pub fn role_admin_changed_filter(
             &self,
@@ -3919,6 +3468,16 @@ pub mod polygon_rollup_manager {
         > {
             self.0.event()
         }
+        ///Gets the contract's `RollbackBatches` event
+        pub fn rollback_batches_filter(
+            &self,
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            RollbackBatchesFilter,
+        > {
+            self.0.event()
+        }
         ///Gets the contract's `SetBatchFee` event
         pub fn set_batch_fee_filter(
             &self,
@@ -3926,26 +3485,6 @@ pub mod polygon_rollup_manager {
             ::std::sync::Arc<M>,
             M,
             SetBatchFeeFilter,
-        > {
-            self.0.event()
-        }
-        ///Gets the contract's `SetMultiplierBatchFee` event
-        pub fn set_multiplier_batch_fee_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            SetMultiplierBatchFeeFilter,
-        > {
-            self.0.event()
-        }
-        ///Gets the contract's `SetPendingStateTimeout` event
-        pub fn set_pending_state_timeout_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            SetPendingStateTimeoutFilter,
         > {
             self.0.event()
         }
@@ -3959,26 +3498,6 @@ pub mod polygon_rollup_manager {
         > {
             self.0.event()
         }
-        ///Gets the contract's `SetTrustedAggregatorTimeout` event
-        pub fn set_trusted_aggregator_timeout_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            SetTrustedAggregatorTimeoutFilter,
-        > {
-            self.0.event()
-        }
-        ///Gets the contract's `SetVerifyBatchTimeTarget` event
-        pub fn set_verify_batch_time_target_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            SetVerifyBatchTimeTargetFilter,
-        > {
-            self.0.event()
-        }
         ///Gets the contract's `UpdateRollup` event
         pub fn update_rollup_filter(
             &self,
@@ -3989,13 +3508,13 @@ pub mod polygon_rollup_manager {
         > {
             self.0.event()
         }
-        ///Gets the contract's `VerifyBatches` event
-        pub fn verify_batches_filter(
+        ///Gets the contract's `UpdateRollupManagerVersion` event
+        pub fn update_rollup_manager_version_filter(
             &self,
         ) -> ::ethers::contract::builders::Event<
             ::std::sync::Arc<M>,
             M,
-            VerifyBatchesFilter,
+            UpdateRollupManagerVersionFilter,
         > {
             self.0.event()
         }
@@ -4058,6 +3577,35 @@ pub mod polygon_rollup_manager {
         abi = "AddressDoNotHaveRequiredRole()"
     )]
     pub struct AddressDoNotHaveRequiredRole;
+    ///Custom Error type `AllBatchesMustBeVerified` with signature `AllBatchesMustBeVerified()` and selector `0x44541072`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "AllBatchesMustBeVerified", abi = "AllBatchesMustBeVerified()")]
+    pub struct AllBatchesMustBeVerified;
+    ///Custom Error type `AllSequencedMustBeVerified` with signature `AllSequencedMustBeVerified()` and selector `0xcc862d4a`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "AllSequencedMustBeVerified",
+        abi = "AllSequencedMustBeVerified()"
+    )]
+    pub struct AllSequencedMustBeVerified;
     ///Custom Error type `AllzkEVMSequencedBatchesMustBeVerified` with signature `AllzkEVMSequencedBatchesMustBeVerified()` and selector `0x5c998a86`
     #[derive(
         Clone,
@@ -4087,6 +3635,22 @@ pub mod polygon_rollup_manager {
     )]
     #[etherror(name = "BatchFeeOutOfRange", abi = "BatchFeeOutOfRange()")]
     pub struct BatchFeeOutOfRange;
+    ///Custom Error type `CannotUpdateWithUnconsolidatedPendingState` with signature `CannotUpdateWithUnconsolidatedPendingState()` and selector `0x9d59507b`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "CannotUpdateWithUnconsolidatedPendingState",
+        abi = "CannotUpdateWithUnconsolidatedPendingState()"
+    )]
+    pub struct CannotUpdateWithUnconsolidatedPendingState;
     ///Custom Error type `ChainIDAlreadyExist` with signature `ChainIDAlreadyExist()` and selector `0x6f91fc12`
     #[derive(
         Clone,
@@ -4100,6 +3664,32 @@ pub mod polygon_rollup_manager {
     )]
     #[etherror(name = "ChainIDAlreadyExist", abi = "ChainIDAlreadyExist()")]
     pub struct ChainIDAlreadyExist;
+    ///Custom Error type `ChainIDOutOfRange` with signature `ChainIDOutOfRange()` and selector `0x4c753f57`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "ChainIDOutOfRange", abi = "ChainIDOutOfRange()")]
+    pub struct ChainIDOutOfRange;
+    ///Custom Error type `EmptyVerifySequencesData` with signature `EmptyVerifySequencesData()` and selector `0x8a51facb`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "EmptyVerifySequencesData", abi = "EmptyVerifySequencesData()")]
+    pub struct EmptyVerifySequencesData;
     ///Custom Error type `ExceedMaxVerifyBatches` with signature `ExceedMaxVerifyBatches()` and selector `0xb59f753a`
     #[derive(
         Clone,
@@ -4145,6 +3735,38 @@ pub mod polygon_rollup_manager {
         abi = "FinalNumBatchDoesNotMatchPendingState()"
     )]
     pub struct FinalNumBatchDoesNotMatchPendingState;
+    ///Custom Error type `FinalNumSequenceBelowLastVerifiedSequence` with signature `FinalNumSequenceBelowLastVerifiedSequence()` and selector `0x42f31f92`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "FinalNumSequenceBelowLastVerifiedSequence",
+        abi = "FinalNumSequenceBelowLastVerifiedSequence()"
+    )]
+    pub struct FinalNumSequenceBelowLastVerifiedSequence;
+    ///Custom Error type `FinalNumSequenceDoesNotMatchPendingState` with signature `FinalNumSequenceDoesNotMatchPendingState()` and selector `0xb7d5b4a3`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "FinalNumSequenceDoesNotMatchPendingState",
+        abi = "FinalNumSequenceDoesNotMatchPendingState()"
+    )]
+    pub struct FinalNumSequenceDoesNotMatchPendingState;
     ///Custom Error type `FinalPendingStateNumInvalid` with signature `FinalPendingStateNumInvalid()` and selector `0xbfa7079f`
     #[derive(
         Clone,
@@ -4222,6 +3844,51 @@ pub mod polygon_rollup_manager {
         abi = "InitNumBatchDoesNotMatchPendingState()"
     )]
     pub struct InitNumBatchDoesNotMatchPendingState;
+    ///Custom Error type `InitSequenceMustMatchCurrentForkID` with signature `InitSequenceMustMatchCurrentForkID()` and selector `0xf5f2eb13`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "InitSequenceMustMatchCurrentForkID",
+        abi = "InitSequenceMustMatchCurrentForkID()"
+    )]
+    pub struct InitSequenceMustMatchCurrentForkID;
+    ///Custom Error type `InitSequenceNumDoesNotMatchPendingState` with signature `InitSequenceNumDoesNotMatchPendingState()` and selector `0x686446b1`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "InitSequenceNumDoesNotMatchPendingState",
+        abi = "InitSequenceNumDoesNotMatchPendingState()"
+    )]
+    pub struct InitSequenceNumDoesNotMatchPendingState;
+    ///Custom Error type `InvalidPessimisticProof` with signature `InvalidPessimisticProof()` and selector `0x52ad525a`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "InvalidPessimisticProof", abi = "InvalidPessimisticProof()")]
+    pub struct InvalidPessimisticProof;
     ///Custom Error type `InvalidProof` with signature `InvalidProof()` and selector `0x09bde339`
     #[derive(
         Clone,
@@ -4267,6 +3934,93 @@ pub mod polygon_rollup_manager {
         abi = "InvalidRangeMultiplierBatchFee()"
     )]
     pub struct InvalidRangeMultiplierBatchFee;
+    ///Custom Error type `InvalidRangeMultiplierZkGasPrice` with signature `InvalidRangeMultiplierZkGasPrice()` and selector `0x44ceee73`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "InvalidRangeMultiplierZkGasPrice",
+        abi = "InvalidRangeMultiplierZkGasPrice()"
+    )]
+    pub struct InvalidRangeMultiplierZkGasPrice;
+    ///Custom Error type `InvalidRangeSequenceTimeTarget` with signature `InvalidRangeSequenceTimeTarget()` and selector `0xe04b5d74`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "InvalidRangeSequenceTimeTarget",
+        abi = "InvalidRangeSequenceTimeTarget()"
+    )]
+    pub struct InvalidRangeSequenceTimeTarget;
+    ///Custom Error type `InvalidRollup` with signature `InvalidRollup()` and selector `0x43ba19f2`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "InvalidRollup", abi = "InvalidRollup()")]
+    pub struct InvalidRollup;
+    ///Custom Error type `InvalidRollupType` with signature `InvalidRollupType()` and selector `0x63d722e7`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "InvalidRollupType", abi = "InvalidRollupType()")]
+    pub struct InvalidRollupType;
+    ///Custom Error type `InvalidVerifierType` with signature `InvalidVerifierType()` and selector `0xe4ffd914`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "InvalidVerifierType", abi = "InvalidVerifierType()")]
+    pub struct InvalidVerifierType;
+    ///Custom Error type `L1InfoTreeLeafCountInvalid` with signature `L1InfoTreeLeafCountInvalid()` and selector `0xa60721e1`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "L1InfoTreeLeafCountInvalid",
+        abi = "L1InfoTreeLeafCountInvalid()"
+    )]
+    pub struct L1InfoTreeLeafCountInvalid;
     ///Custom Error type `MustSequenceSomeBatch` with signature `MustSequenceSomeBatch()` and selector `0x2590ccf9`
     #[derive(
         Clone,
@@ -4280,6 +4034,19 @@ pub mod polygon_rollup_manager {
     )]
     #[etherror(name = "MustSequenceSomeBatch", abi = "MustSequenceSomeBatch()")]
     pub struct MustSequenceSomeBatch;
+    ///Custom Error type `MustSequenceSomeBlob` with signature `MustSequenceSomeBlob()` and selector `0x562a9374`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "MustSequenceSomeBlob", abi = "MustSequenceSomeBlob()")]
+    pub struct MustSequenceSomeBlob;
     ///Custom Error type `NewAccInputHashDoesNotExist` with signature `NewAccInputHashDoesNotExist()` and selector `0x66385b51`
     #[derive(
         Clone,
@@ -4344,6 +4111,19 @@ pub mod polygon_rollup_manager {
         abi = "NewTrustedAggregatorTimeoutMustBeLower()"
     )]
     pub struct NewTrustedAggregatorTimeoutMustBeLower;
+    ///Custom Error type `NotAllowedAddress` with signature `NotAllowedAddress()` and selector `0x1a06d0fe`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "NotAllowedAddress", abi = "NotAllowedAddress()")]
+    pub struct NotAllowedAddress;
     ///Custom Error type `OldAccInputHashDoesNotExist` with signature `OldAccInputHashDoesNotExist()` and selector `0x6818c29e`
     #[derive(
         Clone,
@@ -4373,6 +4153,22 @@ pub mod polygon_rollup_manager {
     )]
     #[etherror(name = "OldStateRootDoesNotExist", abi = "OldStateRootDoesNotExist()")]
     pub struct OldStateRootDoesNotExist;
+    ///Custom Error type `OnlyChainsWithPessimisticProofs` with signature `OnlyChainsWithPessimisticProofs()` and selector `0x3a64d973`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "OnlyChainsWithPessimisticProofs",
+        abi = "OnlyChainsWithPessimisticProofs()"
+    )]
+    pub struct OnlyChainsWithPessimisticProofs;
     ///Custom Error type `OnlyEmergencyState` with signature `OnlyEmergencyState()` and selector `0x53866981`
     #[derive(
         Clone,
@@ -4399,6 +4195,32 @@ pub mod polygon_rollup_manager {
     )]
     #[etherror(name = "OnlyNotEmergencyState", abi = "OnlyNotEmergencyState()")]
     pub struct OnlyNotEmergencyState;
+    ///Custom Error type `OnlyRollupAdmin` with signature `OnlyRollupAdmin()` and selector `0x696072e9`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "OnlyRollupAdmin", abi = "OnlyRollupAdmin()")]
+    pub struct OnlyRollupAdmin;
+    ///Custom Error type `OnlyStateTransitionChains` with signature `OnlyStateTransitionChains()` and selector `0x90db0d07`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "OnlyStateTransitionChains", abi = "OnlyStateTransitionChains()")]
+    pub struct OnlyStateTransitionChains;
     ///Custom Error type `PendingStateDoesNotExist` with signature `PendingStateDoesNotExist()` and selector `0xbb14c205`
     #[derive(
         Clone,
@@ -4441,6 +4263,48 @@ pub mod polygon_rollup_manager {
         abi = "PendingStateNotConsolidable()"
     )]
     pub struct PendingStateNotConsolidable;
+    ///Custom Error type `PendingStateNumExist` with signature `PendingStateNumExist()` and selector `0x60dbf8ae`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "PendingStateNumExist", abi = "PendingStateNumExist()")]
+    pub struct PendingStateNumExist;
+    ///Custom Error type `RollbackBatchIsNotEndOfSequence` with signature `RollbackBatchIsNotEndOfSequence()` and selector `0x9753965f`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "RollbackBatchIsNotEndOfSequence",
+        abi = "RollbackBatchIsNotEndOfSequence()"
+    )]
+    pub struct RollbackBatchIsNotEndOfSequence;
+    ///Custom Error type `RollbackBatchIsNotValid` with signature `RollbackBatchIsNotValid()` and selector `0xcb23ebdf`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "RollbackBatchIsNotValid", abi = "RollbackBatchIsNotValid()")]
+    pub struct RollbackBatchIsNotValid;
     ///Custom Error type `RollupAddressAlreadyExist` with signature `RollupAddressAlreadyExist()` and selector `0xd409b930`
     #[derive(
         Clone,
@@ -4454,6 +4318,19 @@ pub mod polygon_rollup_manager {
     )]
     #[etherror(name = "RollupAddressAlreadyExist", abi = "RollupAddressAlreadyExist()")]
     pub struct RollupAddressAlreadyExist;
+    ///Custom Error type `RollupIDNotAscendingOrder` with signature `RollupIDNotAscendingOrder()` and selector `0x51fcf62a`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "RollupIDNotAscendingOrder", abi = "RollupIDNotAscendingOrder()")]
+    pub struct RollupIDNotAscendingOrder;
     ///Custom Error type `RollupMustExist` with signature `RollupMustExist()` and selector `0x74a086a3`
     #[derive(
         Clone,
@@ -4551,6 +4428,19 @@ pub mod polygon_rollup_manager {
     )]
     #[etherror(name = "UpdateNotCompatible", abi = "UpdateNotCompatible()")]
     pub struct UpdateNotCompatible;
+    ///Custom Error type `UpdateToOldRollupTypeID` with signature `UpdateToOldRollupTypeID()` and selector `0x3e37e233`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "UpdateToOldRollupTypeID", abi = "UpdateToOldRollupTypeID()")]
+    pub struct UpdateToOldRollupTypeID;
     ///Custom Error type `UpdateToSameRollupTypeID` with signature `UpdateToSameRollupTypeID()` and selector `0x4f61d519`
     #[derive(
         Clone,
@@ -4564,6 +4454,19 @@ pub mod polygon_rollup_manager {
     )]
     #[etherror(name = "UpdateToSameRollupTypeID", abi = "UpdateToSameRollupTypeID()")]
     pub struct UpdateToSameRollupTypeID;
+    ///Custom Error type `zkGasPriceOfRange` with signature `zkGasPriceOfRange()` and selector `0x0c0bbd27`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "zkGasPriceOfRange", abi = "zkGasPriceOfRange()")]
+    pub struct zkGasPriceOfRange;
     ///Container type for all of the contract's custom errors
     #[derive(Clone, ::ethers::contract::EthAbiType, Debug, PartialEq, Eq, Hash)]
     pub enum PolygonRollupManagerErrors {
@@ -4571,33 +4474,64 @@ pub mod polygon_rollup_manager {
             AccessControlOnlyCanRenounceRolesForSelf,
         ),
         AddressDoNotHaveRequiredRole(AddressDoNotHaveRequiredRole),
+        AllBatchesMustBeVerified(AllBatchesMustBeVerified),
+        AllSequencedMustBeVerified(AllSequencedMustBeVerified),
         AllzkEVMSequencedBatchesMustBeVerified(AllzkEVMSequencedBatchesMustBeVerified),
         BatchFeeOutOfRange(BatchFeeOutOfRange),
+        CannotUpdateWithUnconsolidatedPendingState(
+            CannotUpdateWithUnconsolidatedPendingState,
+        ),
         ChainIDAlreadyExist(ChainIDAlreadyExist),
+        ChainIDOutOfRange(ChainIDOutOfRange),
+        EmptyVerifySequencesData(EmptyVerifySequencesData),
         ExceedMaxVerifyBatches(ExceedMaxVerifyBatches),
         FinalNumBatchBelowLastVerifiedBatch(FinalNumBatchBelowLastVerifiedBatch),
         FinalNumBatchDoesNotMatchPendingState(FinalNumBatchDoesNotMatchPendingState),
+        FinalNumSequenceBelowLastVerifiedSequence(
+            FinalNumSequenceBelowLastVerifiedSequence,
+        ),
+        FinalNumSequenceDoesNotMatchPendingState(
+            FinalNumSequenceDoesNotMatchPendingState,
+        ),
         FinalPendingStateNumInvalid(FinalPendingStateNumInvalid),
         HaltTimeoutNotExpired(HaltTimeoutNotExpired),
         InitBatchMustMatchCurrentForkID(InitBatchMustMatchCurrentForkID),
         InitNumBatchAboveLastVerifiedBatch(InitNumBatchAboveLastVerifiedBatch),
         InitNumBatchDoesNotMatchPendingState(InitNumBatchDoesNotMatchPendingState),
+        InitSequenceMustMatchCurrentForkID(InitSequenceMustMatchCurrentForkID),
+        InitSequenceNumDoesNotMatchPendingState(InitSequenceNumDoesNotMatchPendingState),
+        InvalidPessimisticProof(InvalidPessimisticProof),
         InvalidProof(InvalidProof),
         InvalidRangeBatchTimeTarget(InvalidRangeBatchTimeTarget),
         InvalidRangeMultiplierBatchFee(InvalidRangeMultiplierBatchFee),
+        InvalidRangeMultiplierZkGasPrice(InvalidRangeMultiplierZkGasPrice),
+        InvalidRangeSequenceTimeTarget(InvalidRangeSequenceTimeTarget),
+        InvalidRollup(InvalidRollup),
+        InvalidRollupType(InvalidRollupType),
+        InvalidVerifierType(InvalidVerifierType),
+        L1InfoTreeLeafCountInvalid(L1InfoTreeLeafCountInvalid),
         MustSequenceSomeBatch(MustSequenceSomeBatch),
+        MustSequenceSomeBlob(MustSequenceSomeBlob),
         NewAccInputHashDoesNotExist(NewAccInputHashDoesNotExist),
         NewPendingStateTimeoutMustBeLower(NewPendingStateTimeoutMustBeLower),
         NewStateRootNotInsidePrime(NewStateRootNotInsidePrime),
         NewTrustedAggregatorTimeoutMustBeLower(NewTrustedAggregatorTimeoutMustBeLower),
+        NotAllowedAddress(NotAllowedAddress),
         OldAccInputHashDoesNotExist(OldAccInputHashDoesNotExist),
         OldStateRootDoesNotExist(OldStateRootDoesNotExist),
+        OnlyChainsWithPessimisticProofs(OnlyChainsWithPessimisticProofs),
         OnlyEmergencyState(OnlyEmergencyState),
         OnlyNotEmergencyState(OnlyNotEmergencyState),
+        OnlyRollupAdmin(OnlyRollupAdmin),
+        OnlyStateTransitionChains(OnlyStateTransitionChains),
         PendingStateDoesNotExist(PendingStateDoesNotExist),
         PendingStateInvalid(PendingStateInvalid),
         PendingStateNotConsolidable(PendingStateNotConsolidable),
+        PendingStateNumExist(PendingStateNumExist),
+        RollbackBatchIsNotEndOfSequence(RollbackBatchIsNotEndOfSequence),
+        RollbackBatchIsNotValid(RollbackBatchIsNotValid),
         RollupAddressAlreadyExist(RollupAddressAlreadyExist),
+        RollupIDNotAscendingOrder(RollupIDNotAscendingOrder),
         RollupMustExist(RollupMustExist),
         RollupTypeDoesNotExist(RollupTypeDoesNotExist),
         RollupTypeObsolete(RollupTypeObsolete),
@@ -4605,7 +4539,9 @@ pub mod polygon_rollup_manager {
         StoredRootMustBeDifferentThanNewRoot(StoredRootMustBeDifferentThanNewRoot),
         TrustedAggregatorTimeoutNotExpired(TrustedAggregatorTimeoutNotExpired),
         UpdateNotCompatible(UpdateNotCompatible),
+        UpdateToOldRollupTypeID(UpdateToOldRollupTypeID),
         UpdateToSameRollupTypeID(UpdateToSameRollupTypeID),
+        zkGasPriceOfRange(zkGasPriceOfRange),
         /// The standard solidity revert string, with selector
         /// Error(string) -- 0x08c379a0
         RevertString(::std::string::String),
@@ -4630,6 +4566,16 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::AddressDoNotHaveRequiredRole(decoded));
             }
+            if let Ok(decoded) = <AllBatchesMustBeVerified as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::AllBatchesMustBeVerified(decoded));
+            }
+            if let Ok(decoded) = <AllSequencedMustBeVerified as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::AllSequencedMustBeVerified(decoded));
+            }
             if let Ok(decoded) = <AllzkEVMSequencedBatchesMustBeVerified as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -4640,10 +4586,25 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::BatchFeeOutOfRange(decoded));
             }
+            if let Ok(decoded) = <CannotUpdateWithUnconsolidatedPendingState as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::CannotUpdateWithUnconsolidatedPendingState(decoded));
+            }
             if let Ok(decoded) = <ChainIDAlreadyExist as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::ChainIDAlreadyExist(decoded));
+            }
+            if let Ok(decoded) = <ChainIDOutOfRange as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::ChainIDOutOfRange(decoded));
+            }
+            if let Ok(decoded) = <EmptyVerifySequencesData as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::EmptyVerifySequencesData(decoded));
             }
             if let Ok(decoded) = <ExceedMaxVerifyBatches as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -4659,6 +4620,16 @@ pub mod polygon_rollup_manager {
                 data,
             ) {
                 return Ok(Self::FinalNumBatchDoesNotMatchPendingState(decoded));
+            }
+            if let Ok(decoded) = <FinalNumSequenceBelowLastVerifiedSequence as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::FinalNumSequenceBelowLastVerifiedSequence(decoded));
+            }
+            if let Ok(decoded) = <FinalNumSequenceDoesNotMatchPendingState as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::FinalNumSequenceDoesNotMatchPendingState(decoded));
             }
             if let Ok(decoded) = <FinalPendingStateNumInvalid as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -4685,6 +4656,21 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::InitNumBatchDoesNotMatchPendingState(decoded));
             }
+            if let Ok(decoded) = <InitSequenceMustMatchCurrentForkID as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InitSequenceMustMatchCurrentForkID(decoded));
+            }
+            if let Ok(decoded) = <InitSequenceNumDoesNotMatchPendingState as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InitSequenceNumDoesNotMatchPendingState(decoded));
+            }
+            if let Ok(decoded) = <InvalidPessimisticProof as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidPessimisticProof(decoded));
+            }
             if let Ok(decoded) = <InvalidProof as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -4700,10 +4686,45 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::InvalidRangeMultiplierBatchFee(decoded));
             }
+            if let Ok(decoded) = <InvalidRangeMultiplierZkGasPrice as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidRangeMultiplierZkGasPrice(decoded));
+            }
+            if let Ok(decoded) = <InvalidRangeSequenceTimeTarget as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidRangeSequenceTimeTarget(decoded));
+            }
+            if let Ok(decoded) = <InvalidRollup as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidRollup(decoded));
+            }
+            if let Ok(decoded) = <InvalidRollupType as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidRollupType(decoded));
+            }
+            if let Ok(decoded) = <InvalidVerifierType as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidVerifierType(decoded));
+            }
+            if let Ok(decoded) = <L1InfoTreeLeafCountInvalid as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::L1InfoTreeLeafCountInvalid(decoded));
+            }
             if let Ok(decoded) = <MustSequenceSomeBatch as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::MustSequenceSomeBatch(decoded));
+            }
+            if let Ok(decoded) = <MustSequenceSomeBlob as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::MustSequenceSomeBlob(decoded));
             }
             if let Ok(decoded) = <NewAccInputHashDoesNotExist as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -4725,6 +4746,11 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::NewTrustedAggregatorTimeoutMustBeLower(decoded));
             }
+            if let Ok(decoded) = <NotAllowedAddress as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::NotAllowedAddress(decoded));
+            }
             if let Ok(decoded) = <OldAccInputHashDoesNotExist as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -4735,6 +4761,11 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::OldStateRootDoesNotExist(decoded));
             }
+            if let Ok(decoded) = <OnlyChainsWithPessimisticProofs as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OnlyChainsWithPessimisticProofs(decoded));
+            }
             if let Ok(decoded) = <OnlyEmergencyState as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -4744,6 +4775,16 @@ pub mod polygon_rollup_manager {
                 data,
             ) {
                 return Ok(Self::OnlyNotEmergencyState(decoded));
+            }
+            if let Ok(decoded) = <OnlyRollupAdmin as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OnlyRollupAdmin(decoded));
+            }
+            if let Ok(decoded) = <OnlyStateTransitionChains as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OnlyStateTransitionChains(decoded));
             }
             if let Ok(decoded) = <PendingStateDoesNotExist as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -4760,10 +4801,30 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::PendingStateNotConsolidable(decoded));
             }
+            if let Ok(decoded) = <PendingStateNumExist as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::PendingStateNumExist(decoded));
+            }
+            if let Ok(decoded) = <RollbackBatchIsNotEndOfSequence as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::RollbackBatchIsNotEndOfSequence(decoded));
+            }
+            if let Ok(decoded) = <RollbackBatchIsNotValid as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::RollbackBatchIsNotValid(decoded));
+            }
             if let Ok(decoded) = <RollupAddressAlreadyExist as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::RollupAddressAlreadyExist(decoded));
+            }
+            if let Ok(decoded) = <RollupIDNotAscendingOrder as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::RollupIDNotAscendingOrder(decoded));
             }
             if let Ok(decoded) = <RollupMustExist as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -4800,10 +4861,20 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::UpdateNotCompatible(decoded));
             }
+            if let Ok(decoded) = <UpdateToOldRollupTypeID as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::UpdateToOldRollupTypeID(decoded));
+            }
             if let Ok(decoded) = <UpdateToSameRollupTypeID as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::UpdateToSameRollupTypeID(decoded));
+            }
+            if let Ok(decoded) = <zkGasPriceOfRange as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::zkGasPriceOfRange(decoded));
             }
             Err(::ethers::core::abi::Error::InvalidData.into())
         }
@@ -4817,13 +4888,28 @@ pub mod polygon_rollup_manager {
                 Self::AddressDoNotHaveRequiredRole(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::AllBatchesMustBeVerified(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::AllSequencedMustBeVerified(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::AllzkEVMSequencedBatchesMustBeVerified(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::BatchFeeOutOfRange(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::CannotUpdateWithUnconsolidatedPendingState(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::ChainIDAlreadyExist(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::ChainIDOutOfRange(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::EmptyVerifySequencesData(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::ExceedMaxVerifyBatches(element) => {
@@ -4833,6 +4919,12 @@ pub mod polygon_rollup_manager {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::FinalNumBatchDoesNotMatchPendingState(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::FinalNumSequenceBelowLastVerifiedSequence(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::FinalNumSequenceDoesNotMatchPendingState(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::FinalPendingStateNumInvalid(element) => {
@@ -4850,6 +4942,15 @@ pub mod polygon_rollup_manager {
                 Self::InitNumBatchDoesNotMatchPendingState(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::InitSequenceMustMatchCurrentForkID(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InitSequenceNumDoesNotMatchPendingState(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InvalidPessimisticProof(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::InvalidProof(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
@@ -4859,7 +4960,28 @@ pub mod polygon_rollup_manager {
                 Self::InvalidRangeMultiplierBatchFee(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::InvalidRangeMultiplierZkGasPrice(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InvalidRangeSequenceTimeTarget(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InvalidRollup(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InvalidRollupType(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InvalidVerifierType(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::L1InfoTreeLeafCountInvalid(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::MustSequenceSomeBatch(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::MustSequenceSomeBlob(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::NewAccInputHashDoesNotExist(element) => {
@@ -4874,16 +4996,28 @@ pub mod polygon_rollup_manager {
                 Self::NewTrustedAggregatorTimeoutMustBeLower(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::NotAllowedAddress(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::OldAccInputHashDoesNotExist(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::OldStateRootDoesNotExist(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::OnlyChainsWithPessimisticProofs(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::OnlyEmergencyState(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::OnlyNotEmergencyState(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::OnlyRollupAdmin(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::OnlyStateTransitionChains(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::PendingStateDoesNotExist(element) => {
@@ -4895,7 +5029,19 @@ pub mod polygon_rollup_manager {
                 Self::PendingStateNotConsolidable(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::PendingStateNumExist(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::RollbackBatchIsNotEndOfSequence(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::RollbackBatchIsNotValid(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::RollupAddressAlreadyExist(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::RollupIDNotAscendingOrder(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::RollupMustExist(element) => {
@@ -4919,7 +5065,13 @@ pub mod polygon_rollup_manager {
                 Self::UpdateNotCompatible(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::UpdateToOldRollupTypeID(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::UpdateToSameRollupTypeID(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::zkGasPriceOfRange(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::RevertString(s) => ::ethers::core::abi::AbiEncode::encode(s),
@@ -4939,6 +5091,14 @@ pub mod polygon_rollup_manager {
                     true
                 }
                 _ if selector
+                    == <AllBatchesMustBeVerified as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <AllSequencedMustBeVerified as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <AllzkEVMSequencedBatchesMustBeVerified as ::ethers::contract::EthError>::selector() => {
                     true
                 }
@@ -4947,7 +5107,19 @@ pub mod polygon_rollup_manager {
                     true
                 }
                 _ if selector
+                    == <CannotUpdateWithUnconsolidatedPendingState as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <ChainIDAlreadyExist as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <ChainIDOutOfRange as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <EmptyVerifySequencesData as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -4960,6 +5132,14 @@ pub mod polygon_rollup_manager {
                 }
                 _ if selector
                     == <FinalNumBatchDoesNotMatchPendingState as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <FinalNumSequenceBelowLastVerifiedSequence as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <FinalNumSequenceDoesNotMatchPendingState as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -4983,6 +5163,18 @@ pub mod polygon_rollup_manager {
                     true
                 }
                 _ if selector
+                    == <InitSequenceMustMatchCurrentForkID as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InitSequenceNumDoesNotMatchPendingState as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InvalidPessimisticProof as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <InvalidProof as ::ethers::contract::EthError>::selector() => true,
                 _ if selector
                     == <InvalidRangeBatchTimeTarget as ::ethers::contract::EthError>::selector() => {
@@ -4993,7 +5185,35 @@ pub mod polygon_rollup_manager {
                     true
                 }
                 _ if selector
+                    == <InvalidRangeMultiplierZkGasPrice as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InvalidRangeSequenceTimeTarget as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InvalidRollup as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InvalidRollupType as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InvalidVerifierType as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <L1InfoTreeLeafCountInvalid as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <MustSequenceSomeBatch as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <MustSequenceSomeBlob as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -5013,6 +5233,10 @@ pub mod polygon_rollup_manager {
                     true
                 }
                 _ if selector
+                    == <NotAllowedAddress as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <OldAccInputHashDoesNotExist as ::ethers::contract::EthError>::selector() => {
                     true
                 }
@@ -5021,11 +5245,23 @@ pub mod polygon_rollup_manager {
                     true
                 }
                 _ if selector
+                    == <OnlyChainsWithPessimisticProofs as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <OnlyEmergencyState as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
                     == <OnlyNotEmergencyState as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <OnlyRollupAdmin as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <OnlyStateTransitionChains as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -5041,7 +5277,23 @@ pub mod polygon_rollup_manager {
                     true
                 }
                 _ if selector
+                    == <PendingStateNumExist as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <RollbackBatchIsNotEndOfSequence as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <RollbackBatchIsNotValid as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <RollupAddressAlreadyExist as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <RollupIDNotAscendingOrder as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -5073,7 +5325,15 @@ pub mod polygon_rollup_manager {
                     true
                 }
                 _ if selector
+                    == <UpdateToOldRollupTypeID as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <UpdateToSameRollupTypeID as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <zkGasPriceOfRange as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ => false,
@@ -5089,13 +5349,26 @@ pub mod polygon_rollup_manager {
                 Self::AddressDoNotHaveRequiredRole(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::AllBatchesMustBeVerified(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::AllSequencedMustBeVerified(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::AllzkEVMSequencedBatchesMustBeVerified(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::BatchFeeOutOfRange(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::CannotUpdateWithUnconsolidatedPendingState(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::ChainIDAlreadyExist(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::ChainIDOutOfRange(element) => ::core::fmt::Display::fmt(element, f),
+                Self::EmptyVerifySequencesData(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::ExceedMaxVerifyBatches(element) => {
@@ -5105,6 +5378,12 @@ pub mod polygon_rollup_manager {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::FinalNumBatchDoesNotMatchPendingState(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::FinalNumSequenceBelowLastVerifiedSequence(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::FinalNumSequenceDoesNotMatchPendingState(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::FinalPendingStateNumInvalid(element) => {
@@ -5122,6 +5401,15 @@ pub mod polygon_rollup_manager {
                 Self::InitNumBatchDoesNotMatchPendingState(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::InitSequenceMustMatchCurrentForkID(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::InitSequenceNumDoesNotMatchPendingState(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::InvalidPessimisticProof(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::InvalidProof(element) => ::core::fmt::Display::fmt(element, f),
                 Self::InvalidRangeBatchTimeTarget(element) => {
                     ::core::fmt::Display::fmt(element, f)
@@ -5129,7 +5417,24 @@ pub mod polygon_rollup_manager {
                 Self::InvalidRangeMultiplierBatchFee(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::InvalidRangeMultiplierZkGasPrice(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::InvalidRangeSequenceTimeTarget(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::InvalidRollup(element) => ::core::fmt::Display::fmt(element, f),
+                Self::InvalidRollupType(element) => ::core::fmt::Display::fmt(element, f),
+                Self::InvalidVerifierType(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::L1InfoTreeLeafCountInvalid(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::MustSequenceSomeBatch(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::MustSequenceSomeBlob(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::NewAccInputHashDoesNotExist(element) => {
@@ -5144,16 +5449,24 @@ pub mod polygon_rollup_manager {
                 Self::NewTrustedAggregatorTimeoutMustBeLower(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::NotAllowedAddress(element) => ::core::fmt::Display::fmt(element, f),
                 Self::OldAccInputHashDoesNotExist(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::OldStateRootDoesNotExist(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::OnlyChainsWithPessimisticProofs(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::OnlyEmergencyState(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::OnlyNotEmergencyState(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::OnlyRollupAdmin(element) => ::core::fmt::Display::fmt(element, f),
+                Self::OnlyStateTransitionChains(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::PendingStateDoesNotExist(element) => {
@@ -5165,7 +5478,19 @@ pub mod polygon_rollup_manager {
                 Self::PendingStateNotConsolidable(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::PendingStateNumExist(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::RollbackBatchIsNotEndOfSequence(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::RollbackBatchIsNotValid(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::RollupAddressAlreadyExist(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::RollupIDNotAscendingOrder(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::RollupMustExist(element) => ::core::fmt::Display::fmt(element, f),
@@ -5187,9 +5512,13 @@ pub mod polygon_rollup_manager {
                 Self::UpdateNotCompatible(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::UpdateToOldRollupTypeID(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::UpdateToSameRollupTypeID(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::zkGasPriceOfRange(element) => ::core::fmt::Display::fmt(element, f),
                 Self::RevertString(s) => ::core::fmt::Display::fmt(s, f),
             }
         }
@@ -5211,6 +5540,17 @@ pub mod polygon_rollup_manager {
             Self::AddressDoNotHaveRequiredRole(value)
         }
     }
+    impl ::core::convert::From<AllBatchesMustBeVerified> for PolygonRollupManagerErrors {
+        fn from(value: AllBatchesMustBeVerified) -> Self {
+            Self::AllBatchesMustBeVerified(value)
+        }
+    }
+    impl ::core::convert::From<AllSequencedMustBeVerified>
+    for PolygonRollupManagerErrors {
+        fn from(value: AllSequencedMustBeVerified) -> Self {
+            Self::AllSequencedMustBeVerified(value)
+        }
+    }
     impl ::core::convert::From<AllzkEVMSequencedBatchesMustBeVerified>
     for PolygonRollupManagerErrors {
         fn from(value: AllzkEVMSequencedBatchesMustBeVerified) -> Self {
@@ -5222,9 +5562,25 @@ pub mod polygon_rollup_manager {
             Self::BatchFeeOutOfRange(value)
         }
     }
+    impl ::core::convert::From<CannotUpdateWithUnconsolidatedPendingState>
+    for PolygonRollupManagerErrors {
+        fn from(value: CannotUpdateWithUnconsolidatedPendingState) -> Self {
+            Self::CannotUpdateWithUnconsolidatedPendingState(value)
+        }
+    }
     impl ::core::convert::From<ChainIDAlreadyExist> for PolygonRollupManagerErrors {
         fn from(value: ChainIDAlreadyExist) -> Self {
             Self::ChainIDAlreadyExist(value)
+        }
+    }
+    impl ::core::convert::From<ChainIDOutOfRange> for PolygonRollupManagerErrors {
+        fn from(value: ChainIDOutOfRange) -> Self {
+            Self::ChainIDOutOfRange(value)
+        }
+    }
+    impl ::core::convert::From<EmptyVerifySequencesData> for PolygonRollupManagerErrors {
+        fn from(value: EmptyVerifySequencesData) -> Self {
+            Self::EmptyVerifySequencesData(value)
         }
     }
     impl ::core::convert::From<ExceedMaxVerifyBatches> for PolygonRollupManagerErrors {
@@ -5242,6 +5598,18 @@ pub mod polygon_rollup_manager {
     for PolygonRollupManagerErrors {
         fn from(value: FinalNumBatchDoesNotMatchPendingState) -> Self {
             Self::FinalNumBatchDoesNotMatchPendingState(value)
+        }
+    }
+    impl ::core::convert::From<FinalNumSequenceBelowLastVerifiedSequence>
+    for PolygonRollupManagerErrors {
+        fn from(value: FinalNumSequenceBelowLastVerifiedSequence) -> Self {
+            Self::FinalNumSequenceBelowLastVerifiedSequence(value)
+        }
+    }
+    impl ::core::convert::From<FinalNumSequenceDoesNotMatchPendingState>
+    for PolygonRollupManagerErrors {
+        fn from(value: FinalNumSequenceDoesNotMatchPendingState) -> Self {
+            Self::FinalNumSequenceDoesNotMatchPendingState(value)
         }
     }
     impl ::core::convert::From<FinalPendingStateNumInvalid>
@@ -5273,6 +5641,23 @@ pub mod polygon_rollup_manager {
             Self::InitNumBatchDoesNotMatchPendingState(value)
         }
     }
+    impl ::core::convert::From<InitSequenceMustMatchCurrentForkID>
+    for PolygonRollupManagerErrors {
+        fn from(value: InitSequenceMustMatchCurrentForkID) -> Self {
+            Self::InitSequenceMustMatchCurrentForkID(value)
+        }
+    }
+    impl ::core::convert::From<InitSequenceNumDoesNotMatchPendingState>
+    for PolygonRollupManagerErrors {
+        fn from(value: InitSequenceNumDoesNotMatchPendingState) -> Self {
+            Self::InitSequenceNumDoesNotMatchPendingState(value)
+        }
+    }
+    impl ::core::convert::From<InvalidPessimisticProof> for PolygonRollupManagerErrors {
+        fn from(value: InvalidPessimisticProof) -> Self {
+            Self::InvalidPessimisticProof(value)
+        }
+    }
     impl ::core::convert::From<InvalidProof> for PolygonRollupManagerErrors {
         fn from(value: InvalidProof) -> Self {
             Self::InvalidProof(value)
@@ -5290,9 +5675,47 @@ pub mod polygon_rollup_manager {
             Self::InvalidRangeMultiplierBatchFee(value)
         }
     }
+    impl ::core::convert::From<InvalidRangeMultiplierZkGasPrice>
+    for PolygonRollupManagerErrors {
+        fn from(value: InvalidRangeMultiplierZkGasPrice) -> Self {
+            Self::InvalidRangeMultiplierZkGasPrice(value)
+        }
+    }
+    impl ::core::convert::From<InvalidRangeSequenceTimeTarget>
+    for PolygonRollupManagerErrors {
+        fn from(value: InvalidRangeSequenceTimeTarget) -> Self {
+            Self::InvalidRangeSequenceTimeTarget(value)
+        }
+    }
+    impl ::core::convert::From<InvalidRollup> for PolygonRollupManagerErrors {
+        fn from(value: InvalidRollup) -> Self {
+            Self::InvalidRollup(value)
+        }
+    }
+    impl ::core::convert::From<InvalidRollupType> for PolygonRollupManagerErrors {
+        fn from(value: InvalidRollupType) -> Self {
+            Self::InvalidRollupType(value)
+        }
+    }
+    impl ::core::convert::From<InvalidVerifierType> for PolygonRollupManagerErrors {
+        fn from(value: InvalidVerifierType) -> Self {
+            Self::InvalidVerifierType(value)
+        }
+    }
+    impl ::core::convert::From<L1InfoTreeLeafCountInvalid>
+    for PolygonRollupManagerErrors {
+        fn from(value: L1InfoTreeLeafCountInvalid) -> Self {
+            Self::L1InfoTreeLeafCountInvalid(value)
+        }
+    }
     impl ::core::convert::From<MustSequenceSomeBatch> for PolygonRollupManagerErrors {
         fn from(value: MustSequenceSomeBatch) -> Self {
             Self::MustSequenceSomeBatch(value)
+        }
+    }
+    impl ::core::convert::From<MustSequenceSomeBlob> for PolygonRollupManagerErrors {
+        fn from(value: MustSequenceSomeBlob) -> Self {
+            Self::MustSequenceSomeBlob(value)
         }
     }
     impl ::core::convert::From<NewAccInputHashDoesNotExist>
@@ -5319,6 +5742,11 @@ pub mod polygon_rollup_manager {
             Self::NewTrustedAggregatorTimeoutMustBeLower(value)
         }
     }
+    impl ::core::convert::From<NotAllowedAddress> for PolygonRollupManagerErrors {
+        fn from(value: NotAllowedAddress) -> Self {
+            Self::NotAllowedAddress(value)
+        }
+    }
     impl ::core::convert::From<OldAccInputHashDoesNotExist>
     for PolygonRollupManagerErrors {
         fn from(value: OldAccInputHashDoesNotExist) -> Self {
@@ -5330,6 +5758,12 @@ pub mod polygon_rollup_manager {
             Self::OldStateRootDoesNotExist(value)
         }
     }
+    impl ::core::convert::From<OnlyChainsWithPessimisticProofs>
+    for PolygonRollupManagerErrors {
+        fn from(value: OnlyChainsWithPessimisticProofs) -> Self {
+            Self::OnlyChainsWithPessimisticProofs(value)
+        }
+    }
     impl ::core::convert::From<OnlyEmergencyState> for PolygonRollupManagerErrors {
         fn from(value: OnlyEmergencyState) -> Self {
             Self::OnlyEmergencyState(value)
@@ -5338,6 +5772,17 @@ pub mod polygon_rollup_manager {
     impl ::core::convert::From<OnlyNotEmergencyState> for PolygonRollupManagerErrors {
         fn from(value: OnlyNotEmergencyState) -> Self {
             Self::OnlyNotEmergencyState(value)
+        }
+    }
+    impl ::core::convert::From<OnlyRollupAdmin> for PolygonRollupManagerErrors {
+        fn from(value: OnlyRollupAdmin) -> Self {
+            Self::OnlyRollupAdmin(value)
+        }
+    }
+    impl ::core::convert::From<OnlyStateTransitionChains>
+    for PolygonRollupManagerErrors {
+        fn from(value: OnlyStateTransitionChains) -> Self {
+            Self::OnlyStateTransitionChains(value)
         }
     }
     impl ::core::convert::From<PendingStateDoesNotExist> for PolygonRollupManagerErrors {
@@ -5356,10 +5801,32 @@ pub mod polygon_rollup_manager {
             Self::PendingStateNotConsolidable(value)
         }
     }
+    impl ::core::convert::From<PendingStateNumExist> for PolygonRollupManagerErrors {
+        fn from(value: PendingStateNumExist) -> Self {
+            Self::PendingStateNumExist(value)
+        }
+    }
+    impl ::core::convert::From<RollbackBatchIsNotEndOfSequence>
+    for PolygonRollupManagerErrors {
+        fn from(value: RollbackBatchIsNotEndOfSequence) -> Self {
+            Self::RollbackBatchIsNotEndOfSequence(value)
+        }
+    }
+    impl ::core::convert::From<RollbackBatchIsNotValid> for PolygonRollupManagerErrors {
+        fn from(value: RollbackBatchIsNotValid) -> Self {
+            Self::RollbackBatchIsNotValid(value)
+        }
+    }
     impl ::core::convert::From<RollupAddressAlreadyExist>
     for PolygonRollupManagerErrors {
         fn from(value: RollupAddressAlreadyExist) -> Self {
             Self::RollupAddressAlreadyExist(value)
+        }
+    }
+    impl ::core::convert::From<RollupIDNotAscendingOrder>
+    for PolygonRollupManagerErrors {
+        fn from(value: RollupIDNotAscendingOrder) -> Self {
+            Self::RollupIDNotAscendingOrder(value)
         }
     }
     impl ::core::convert::From<RollupMustExist> for PolygonRollupManagerErrors {
@@ -5399,9 +5866,19 @@ pub mod polygon_rollup_manager {
             Self::UpdateNotCompatible(value)
         }
     }
+    impl ::core::convert::From<UpdateToOldRollupTypeID> for PolygonRollupManagerErrors {
+        fn from(value: UpdateToOldRollupTypeID) -> Self {
+            Self::UpdateToOldRollupTypeID(value)
+        }
+    }
     impl ::core::convert::From<UpdateToSameRollupTypeID> for PolygonRollupManagerErrors {
         fn from(value: UpdateToSameRollupTypeID) -> Self {
             Self::UpdateToSameRollupTypeID(value)
+        }
+    }
+    impl ::core::convert::From<zkGasPriceOfRange> for PolygonRollupManagerErrors {
+        fn from(value: zkGasPriceOfRange) -> Self {
+            Self::zkGasPriceOfRange(value)
         }
     }
     #[derive(
@@ -5416,7 +5893,7 @@ pub mod polygon_rollup_manager {
     )]
     #[ethevent(
         name = "AddExistingRollup",
-        abi = "AddExistingRollup(uint32,uint64,address,uint64,uint8,uint64)"
+        abi = "AddExistingRollup(uint32,uint64,address,uint64,uint8,uint64,bytes32)"
     )]
     pub struct AddExistingRollupFilter {
         #[ethevent(indexed)]
@@ -5424,8 +5901,9 @@ pub mod polygon_rollup_manager {
         pub fork_id: u64,
         pub rollup_address: ::ethers::core::types::Address,
         pub chain_id: u64,
-        pub rollup_compatibility_id: u8,
+        pub rollup_verifier_type: u8,
         pub last_verified_batch_before_upgrade: u64,
+        pub program_v_key: [u8; 32],
     }
     #[derive(
         Clone,
@@ -5439,7 +5917,7 @@ pub mod polygon_rollup_manager {
     )]
     #[ethevent(
         name = "AddNewRollupType",
-        abi = "AddNewRollupType(uint32,address,address,uint64,uint8,bytes32,string)"
+        abi = "AddNewRollupType(uint32,address,address,uint64,uint8,bytes32,string,bytes32)"
     )]
     pub struct AddNewRollupTypeFilter {
         #[ethevent(indexed)]
@@ -5447,31 +5925,10 @@ pub mod polygon_rollup_manager {
         pub consensus_implementation: ::ethers::core::types::Address,
         pub verifier: ::ethers::core::types::Address,
         pub fork_id: u64,
-        pub rollup_compatibility_id: u8,
+        pub rollup_verifier_type: u8,
         pub genesis: [u8; 32],
         pub description: ::std::string::String,
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(
-        name = "ConsolidatePendingState",
-        abi = "ConsolidatePendingState(uint32,uint64,bytes32,bytes32,uint64)"
-    )]
-    pub struct ConsolidatePendingStateFilter {
-        #[ethevent(indexed)]
-        pub rollup_id: u32,
-        pub num_batch: u64,
-        pub state_root: [u8; 32],
-        pub exit_root: [u8; 32],
-        pub pending_state_num: u64,
+        pub program_v_key: [u8; 32],
     }
     #[derive(
         Clone,
@@ -5575,46 +6032,6 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     #[ethevent(
-        name = "OverridePendingState",
-        abi = "OverridePendingState(uint32,uint64,bytes32,bytes32,address)"
-    )]
-    pub struct OverridePendingStateFilter {
-        #[ethevent(indexed)]
-        pub rollup_id: u32,
-        pub num_batch: u64,
-        pub state_root: [u8; 32],
-        pub exit_root: [u8; 32],
-        pub aggregator: ::ethers::core::types::Address,
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(
-        name = "ProveNonDeterministicPendingState",
-        abi = "ProveNonDeterministicPendingState(bytes32,bytes32)"
-    )]
-    pub struct ProveNonDeterministicPendingStateFilter {
-        pub stored_state_root: [u8; 32],
-        pub proved_state_root: [u8; 32],
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(
         name = "RoleAdminChanged",
         abi = "RoleAdminChanged(bytes32,bytes32,bytes32)"
     )]
@@ -5674,6 +6091,24 @@ pub mod polygon_rollup_manager {
         Eq,
         Hash
     )]
+    #[ethevent(name = "RollbackBatches", abi = "RollbackBatches(uint32,uint64,bytes32)")]
+    pub struct RollbackBatchesFilter {
+        #[ethevent(indexed)]
+        pub rollup_id: u32,
+        #[ethevent(indexed)]
+        pub target_batch: u64,
+        pub acc_input_hash_to_rollback: [u8; 32],
+    }
+    #[derive(
+        Clone,
+        ::ethers::contract::EthEvent,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
     #[ethevent(name = "SetBatchFee", abi = "SetBatchFee(uint256)")]
     pub struct SetBatchFeeFilter {
         pub new_batch_fee: ::ethers::core::types::U256,
@@ -5688,71 +6123,9 @@ pub mod polygon_rollup_manager {
         Eq,
         Hash
     )]
-    #[ethevent(name = "SetMultiplierBatchFee", abi = "SetMultiplierBatchFee(uint16)")]
-    pub struct SetMultiplierBatchFeeFilter {
-        pub new_multiplier_batch_fee: u16,
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(name = "SetPendingStateTimeout", abi = "SetPendingStateTimeout(uint64)")]
-    pub struct SetPendingStateTimeoutFilter {
-        pub new_pending_state_timeout: u64,
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
     #[ethevent(name = "SetTrustedAggregator", abi = "SetTrustedAggregator(address)")]
     pub struct SetTrustedAggregatorFilter {
         pub new_trusted_aggregator: ::ethers::core::types::Address,
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(
-        name = "SetTrustedAggregatorTimeout",
-        abi = "SetTrustedAggregatorTimeout(uint64)"
-    )]
-    pub struct SetTrustedAggregatorTimeoutFilter {
-        pub new_trusted_aggregator_timeout: u64,
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(
-        name = "SetVerifyBatchTimeTarget",
-        abi = "SetVerifyBatchTimeTarget(uint64)"
-    )]
-    pub struct SetVerifyBatchTimeTargetFilter {
-        pub new_verify_batch_time_target: u64,
     }
     #[derive(
         Clone,
@@ -5782,17 +6155,11 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     #[ethevent(
-        name = "VerifyBatches",
-        abi = "VerifyBatches(uint32,uint64,bytes32,bytes32,address)"
+        name = "UpdateRollupManagerVersion",
+        abi = "UpdateRollupManagerVersion(string)"
     )]
-    pub struct VerifyBatchesFilter {
-        #[ethevent(indexed)]
-        pub rollup_id: u32,
-        pub num_batch: u64,
-        pub state_root: [u8; 32],
-        pub exit_root: [u8; 32],
-        #[ethevent(indexed)]
-        pub aggregator: ::ethers::core::types::Address,
+    pub struct UpdateRollupManagerVersionFilter {
+        pub rollup_manager_version: ::std::string::String,
     }
     #[derive(
         Clone,
@@ -5822,26 +6189,20 @@ pub mod polygon_rollup_manager {
     pub enum PolygonRollupManagerEvents {
         AddExistingRollupFilter(AddExistingRollupFilter),
         AddNewRollupTypeFilter(AddNewRollupTypeFilter),
-        ConsolidatePendingStateFilter(ConsolidatePendingStateFilter),
         CreateNewRollupFilter(CreateNewRollupFilter),
         EmergencyStateActivatedFilter(EmergencyStateActivatedFilter),
         EmergencyStateDeactivatedFilter(EmergencyStateDeactivatedFilter),
         InitializedFilter(InitializedFilter),
         ObsoleteRollupTypeFilter(ObsoleteRollupTypeFilter),
         OnSequenceBatchesFilter(OnSequenceBatchesFilter),
-        OverridePendingStateFilter(OverridePendingStateFilter),
-        ProveNonDeterministicPendingStateFilter(ProveNonDeterministicPendingStateFilter),
         RoleAdminChangedFilter(RoleAdminChangedFilter),
         RoleGrantedFilter(RoleGrantedFilter),
         RoleRevokedFilter(RoleRevokedFilter),
+        RollbackBatchesFilter(RollbackBatchesFilter),
         SetBatchFeeFilter(SetBatchFeeFilter),
-        SetMultiplierBatchFeeFilter(SetMultiplierBatchFeeFilter),
-        SetPendingStateTimeoutFilter(SetPendingStateTimeoutFilter),
         SetTrustedAggregatorFilter(SetTrustedAggregatorFilter),
-        SetTrustedAggregatorTimeoutFilter(SetTrustedAggregatorTimeoutFilter),
-        SetVerifyBatchTimeTargetFilter(SetVerifyBatchTimeTargetFilter),
         UpdateRollupFilter(UpdateRollupFilter),
-        VerifyBatchesFilter(VerifyBatchesFilter),
+        UpdateRollupManagerVersionFilter(UpdateRollupManagerVersionFilter),
         VerifyBatchesTrustedAggregatorFilter(VerifyBatchesTrustedAggregatorFilter),
     }
     impl ::ethers::contract::EthLogDecode for PolygonRollupManagerEvents {
@@ -5853,11 +6214,6 @@ pub mod polygon_rollup_manager {
             }
             if let Ok(decoded) = AddNewRollupTypeFilter::decode_log(log) {
                 return Ok(PolygonRollupManagerEvents::AddNewRollupTypeFilter(decoded));
-            }
-            if let Ok(decoded) = ConsolidatePendingStateFilter::decode_log(log) {
-                return Ok(
-                    PolygonRollupManagerEvents::ConsolidatePendingStateFilter(decoded),
-                );
             }
             if let Ok(decoded) = CreateNewRollupFilter::decode_log(log) {
                 return Ok(PolygonRollupManagerEvents::CreateNewRollupFilter(decoded));
@@ -5881,20 +6237,6 @@ pub mod polygon_rollup_manager {
             if let Ok(decoded) = OnSequenceBatchesFilter::decode_log(log) {
                 return Ok(PolygonRollupManagerEvents::OnSequenceBatchesFilter(decoded));
             }
-            if let Ok(decoded) = OverridePendingStateFilter::decode_log(log) {
-                return Ok(
-                    PolygonRollupManagerEvents::OverridePendingStateFilter(decoded),
-                );
-            }
-            if let Ok(decoded) = ProveNonDeterministicPendingStateFilter::decode_log(
-                log,
-            ) {
-                return Ok(
-                    PolygonRollupManagerEvents::ProveNonDeterministicPendingStateFilter(
-                        decoded,
-                    ),
-                );
-            }
             if let Ok(decoded) = RoleAdminChangedFilter::decode_log(log) {
                 return Ok(PolygonRollupManagerEvents::RoleAdminChangedFilter(decoded));
             }
@@ -5904,41 +6246,24 @@ pub mod polygon_rollup_manager {
             if let Ok(decoded) = RoleRevokedFilter::decode_log(log) {
                 return Ok(PolygonRollupManagerEvents::RoleRevokedFilter(decoded));
             }
+            if let Ok(decoded) = RollbackBatchesFilter::decode_log(log) {
+                return Ok(PolygonRollupManagerEvents::RollbackBatchesFilter(decoded));
+            }
             if let Ok(decoded) = SetBatchFeeFilter::decode_log(log) {
                 return Ok(PolygonRollupManagerEvents::SetBatchFeeFilter(decoded));
-            }
-            if let Ok(decoded) = SetMultiplierBatchFeeFilter::decode_log(log) {
-                return Ok(
-                    PolygonRollupManagerEvents::SetMultiplierBatchFeeFilter(decoded),
-                );
-            }
-            if let Ok(decoded) = SetPendingStateTimeoutFilter::decode_log(log) {
-                return Ok(
-                    PolygonRollupManagerEvents::SetPendingStateTimeoutFilter(decoded),
-                );
             }
             if let Ok(decoded) = SetTrustedAggregatorFilter::decode_log(log) {
                 return Ok(
                     PolygonRollupManagerEvents::SetTrustedAggregatorFilter(decoded),
                 );
             }
-            if let Ok(decoded) = SetTrustedAggregatorTimeoutFilter::decode_log(log) {
-                return Ok(
-                    PolygonRollupManagerEvents::SetTrustedAggregatorTimeoutFilter(
-                        decoded,
-                    ),
-                );
-            }
-            if let Ok(decoded) = SetVerifyBatchTimeTargetFilter::decode_log(log) {
-                return Ok(
-                    PolygonRollupManagerEvents::SetVerifyBatchTimeTargetFilter(decoded),
-                );
-            }
             if let Ok(decoded) = UpdateRollupFilter::decode_log(log) {
                 return Ok(PolygonRollupManagerEvents::UpdateRollupFilter(decoded));
             }
-            if let Ok(decoded) = VerifyBatchesFilter::decode_log(log) {
-                return Ok(PolygonRollupManagerEvents::VerifyBatchesFilter(decoded));
+            if let Ok(decoded) = UpdateRollupManagerVersionFilter::decode_log(log) {
+                return Ok(
+                    PolygonRollupManagerEvents::UpdateRollupManagerVersionFilter(decoded),
+                );
             }
             if let Ok(decoded) = VerifyBatchesTrustedAggregatorFilter::decode_log(log) {
                 return Ok(
@@ -5959,9 +6284,6 @@ pub mod polygon_rollup_manager {
                 Self::AddNewRollupTypeFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::ConsolidatePendingStateFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::CreateNewRollupFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -5978,37 +6300,22 @@ pub mod polygon_rollup_manager {
                 Self::OnSequenceBatchesFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::OverridePendingStateFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::ProveNonDeterministicPendingStateFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::RoleAdminChangedFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::RoleGrantedFilter(element) => ::core::fmt::Display::fmt(element, f),
                 Self::RoleRevokedFilter(element) => ::core::fmt::Display::fmt(element, f),
+                Self::RollbackBatchesFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::SetBatchFeeFilter(element) => ::core::fmt::Display::fmt(element, f),
-                Self::SetMultiplierBatchFeeFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SetPendingStateTimeoutFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::SetTrustedAggregatorFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SetTrustedAggregatorTimeoutFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SetVerifyBatchTimeTargetFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::UpdateRollupFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::VerifyBatchesFilter(element) => {
+                Self::UpdateRollupManagerVersionFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::VerifyBatchesTrustedAggregatorFilter(element) => {
@@ -6025,12 +6332,6 @@ pub mod polygon_rollup_manager {
     impl ::core::convert::From<AddNewRollupTypeFilter> for PolygonRollupManagerEvents {
         fn from(value: AddNewRollupTypeFilter) -> Self {
             Self::AddNewRollupTypeFilter(value)
-        }
-    }
-    impl ::core::convert::From<ConsolidatePendingStateFilter>
-    for PolygonRollupManagerEvents {
-        fn from(value: ConsolidatePendingStateFilter) -> Self {
-            Self::ConsolidatePendingStateFilter(value)
         }
     }
     impl ::core::convert::From<CreateNewRollupFilter> for PolygonRollupManagerEvents {
@@ -6065,18 +6366,6 @@ pub mod polygon_rollup_manager {
             Self::OnSequenceBatchesFilter(value)
         }
     }
-    impl ::core::convert::From<OverridePendingStateFilter>
-    for PolygonRollupManagerEvents {
-        fn from(value: OverridePendingStateFilter) -> Self {
-            Self::OverridePendingStateFilter(value)
-        }
-    }
-    impl ::core::convert::From<ProveNonDeterministicPendingStateFilter>
-    for PolygonRollupManagerEvents {
-        fn from(value: ProveNonDeterministicPendingStateFilter) -> Self {
-            Self::ProveNonDeterministicPendingStateFilter(value)
-        }
-    }
     impl ::core::convert::From<RoleAdminChangedFilter> for PolygonRollupManagerEvents {
         fn from(value: RoleAdminChangedFilter) -> Self {
             Self::RoleAdminChangedFilter(value)
@@ -6092,21 +6381,14 @@ pub mod polygon_rollup_manager {
             Self::RoleRevokedFilter(value)
         }
     }
+    impl ::core::convert::From<RollbackBatchesFilter> for PolygonRollupManagerEvents {
+        fn from(value: RollbackBatchesFilter) -> Self {
+            Self::RollbackBatchesFilter(value)
+        }
+    }
     impl ::core::convert::From<SetBatchFeeFilter> for PolygonRollupManagerEvents {
         fn from(value: SetBatchFeeFilter) -> Self {
             Self::SetBatchFeeFilter(value)
-        }
-    }
-    impl ::core::convert::From<SetMultiplierBatchFeeFilter>
-    for PolygonRollupManagerEvents {
-        fn from(value: SetMultiplierBatchFeeFilter) -> Self {
-            Self::SetMultiplierBatchFeeFilter(value)
-        }
-    }
-    impl ::core::convert::From<SetPendingStateTimeoutFilter>
-    for PolygonRollupManagerEvents {
-        fn from(value: SetPendingStateTimeoutFilter) -> Self {
-            Self::SetPendingStateTimeoutFilter(value)
         }
     }
     impl ::core::convert::From<SetTrustedAggregatorFilter>
@@ -6115,26 +6397,15 @@ pub mod polygon_rollup_manager {
             Self::SetTrustedAggregatorFilter(value)
         }
     }
-    impl ::core::convert::From<SetTrustedAggregatorTimeoutFilter>
-    for PolygonRollupManagerEvents {
-        fn from(value: SetTrustedAggregatorTimeoutFilter) -> Self {
-            Self::SetTrustedAggregatorTimeoutFilter(value)
-        }
-    }
-    impl ::core::convert::From<SetVerifyBatchTimeTargetFilter>
-    for PolygonRollupManagerEvents {
-        fn from(value: SetVerifyBatchTimeTargetFilter) -> Self {
-            Self::SetVerifyBatchTimeTargetFilter(value)
-        }
-    }
     impl ::core::convert::From<UpdateRollupFilter> for PolygonRollupManagerEvents {
         fn from(value: UpdateRollupFilter) -> Self {
             Self::UpdateRollupFilter(value)
         }
     }
-    impl ::core::convert::From<VerifyBatchesFilter> for PolygonRollupManagerEvents {
-        fn from(value: VerifyBatchesFilter) -> Self {
-            Self::VerifyBatchesFilter(value)
+    impl ::core::convert::From<UpdateRollupManagerVersionFilter>
+    for PolygonRollupManagerEvents {
+        fn from(value: UpdateRollupManagerVersionFilter) -> Self {
+            Self::UpdateRollupManagerVersionFilter(value)
         }
     }
     impl ::core::convert::From<VerifyBatchesTrustedAggregatorFilter>
@@ -6156,6 +6427,19 @@ pub mod polygon_rollup_manager {
     )]
     #[ethcall(name = "DEFAULT_ADMIN_ROLE", abi = "DEFAULT_ADMIN_ROLE()")]
     pub struct DefaultAdminRoleCall;
+    ///Container type for all input parameters for the `ROLLUP_MANAGER_VERSION` function with signature `ROLLUP_MANAGER_VERSION()` and selector `0xd8905812`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "ROLLUP_MANAGER_VERSION", abi = "ROLLUP_MANAGER_VERSION()")]
+    pub struct RollupManagerVersionCall;
     ///Container type for all input parameters for the `activateEmergencyState` function with signature `activateEmergencyState()` and selector `0x2072f6c5`
     #[derive(
         Clone,
@@ -6169,7 +6453,7 @@ pub mod polygon_rollup_manager {
     )]
     #[ethcall(name = "activateEmergencyState", abi = "activateEmergencyState()")]
     pub struct ActivateEmergencyStateCall;
-    ///Container type for all input parameters for the `addExistingRollup` function with signature `addExistingRollup(address,address,uint64,uint64,bytes32,uint8)` and selector `0xe0bfd3d2`
+    ///Container type for all input parameters for the `addExistingRollup` function with signature `addExistingRollup(address,address,uint64,uint64,bytes32,uint8,bytes32)` and selector `0x97bf07e8`
     #[derive(
         Clone,
         ::ethers::contract::EthCall,
@@ -6182,17 +6466,18 @@ pub mod polygon_rollup_manager {
     )]
     #[ethcall(
         name = "addExistingRollup",
-        abi = "addExistingRollup(address,address,uint64,uint64,bytes32,uint8)"
+        abi = "addExistingRollup(address,address,uint64,uint64,bytes32,uint8,bytes32)"
     )]
     pub struct AddExistingRollupCall {
         pub rollup_address: ::ethers::core::types::Address,
         pub verifier: ::ethers::core::types::Address,
         pub fork_id: u64,
         pub chain_id: u64,
-        pub genesis: [u8; 32],
-        pub rollup_compatibility_id: u8,
+        pub init_root: [u8; 32],
+        pub rollup_verifier_type: u8,
+        pub program_v_key: [u8; 32],
     }
-    ///Container type for all input parameters for the `addNewRollupType` function with signature `addNewRollupType(address,address,uint64,uint8,bytes32,string)` and selector `0xf34eb8eb`
+    ///Container type for all input parameters for the `addNewRollupType` function with signature `addNewRollupType(address,address,uint64,uint8,bytes32,string,bytes32)` and selector `0xabcb5198`
     #[derive(
         Clone,
         ::ethers::contract::EthCall,
@@ -6205,15 +6490,16 @@ pub mod polygon_rollup_manager {
     )]
     #[ethcall(
         name = "addNewRollupType",
-        abi = "addNewRollupType(address,address,uint64,uint8,bytes32,string)"
+        abi = "addNewRollupType(address,address,uint64,uint8,bytes32,string,bytes32)"
     )]
     pub struct AddNewRollupTypeCall {
         pub consensus_implementation: ::ethers::core::types::Address,
         pub verifier: ::ethers::core::types::Address,
         pub fork_id: u64,
-        pub rollup_compatibility_id: u8,
+        pub rollup_verifier_type: u8,
         pub genesis: [u8; 32],
         pub description: ::std::string::String,
+        pub program_v_key: [u8; 32],
     }
     ///Container type for all input parameters for the `bridgeAddress` function with signature `bridgeAddress()` and selector `0xa3c573eb`
     #[derive(
@@ -6255,25 +6541,6 @@ pub mod polygon_rollup_manager {
     #[ethcall(name = "chainIDToRollupID", abi = "chainIDToRollupID(uint64)")]
     pub struct ChainIDToRollupIDCall {
         pub chain_id: u64,
-    }
-    ///Container type for all input parameters for the `consolidatePendingState` function with signature `consolidatePendingState(uint32,uint64)` and selector `0x1608859c`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "consolidatePendingState",
-        abi = "consolidatePendingState(uint32,uint64)"
-    )]
-    pub struct ConsolidatePendingStateCall {
-        pub rollup_id: u32,
-        pub pending_state_num: u64,
     }
     ///Container type for all input parameters for the `createNewRollup` function with signature `createNewRollup(uint32,uint64,address,address,address,string,string)` and selector `0x727885e9`
     #[derive(
@@ -6338,6 +6605,27 @@ pub mod polygon_rollup_manager {
     )]
     #[ethcall(name = "getForcedBatchFee", abi = "getForcedBatchFee()")]
     pub struct GetForcedBatchFeeCall;
+    ///Container type for all input parameters for the `getInputPessimisticBytes` function with signature `getInputPessimisticBytes(uint32,bytes32,bytes32,bytes32)` and selector `0x9e36c565`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(
+        name = "getInputPessimisticBytes",
+        abi = "getInputPessimisticBytes(uint32,bytes32,bytes32,bytes32)"
+    )]
+    pub struct GetInputPessimisticBytesCall {
+        pub rollup_id: u32,
+        pub l_1_info_tree_root: [u8; 32],
+        pub new_local_exit_root: [u8; 32],
+        pub new_pessimistic_root: [u8; 32],
+    }
     ///Container type for all input parameters for the `getInputSnarkBytes` function with signature `getInputSnarkBytes(uint32,uint64,uint64,bytes32,bytes32,bytes32)` and selector `0x7975fcfe`
     #[derive(
         Clone,
@@ -6423,25 +6711,6 @@ pub mod polygon_rollup_manager {
     )]
     #[ethcall(name = "getRollupExitRoot", abi = "getRollupExitRoot()")]
     pub struct GetRollupExitRootCall;
-    ///Container type for all input parameters for the `getRollupPendingStateTransitions` function with signature `getRollupPendingStateTransitions(uint32,uint64)` and selector `0xb99d0ad7`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "getRollupPendingStateTransitions",
-        abi = "getRollupPendingStateTransitions(uint32,uint64)"
-    )]
-    pub struct GetRollupPendingStateTransitionsCall {
-        pub rollup_id: u32,
-        pub batch_num: u64,
-    }
     ///Container type for all input parameters for the `getRollupSequencedBatches` function with signature `getRollupSequencedBatches(uint32,uint64)` and selector `0x25280169`
     #[derive(
         Clone,
@@ -6506,7 +6775,7 @@ pub mod polygon_rollup_manager {
         pub role: [u8; 32],
         pub account: ::ethers::core::types::Address,
     }
-    ///Container type for all input parameters for the `initialize` function with signature `initialize(address,uint64,uint64,address,address,address,address,address,uint64,uint64)` and selector `0x0645af09`
+    ///Container type for all input parameters for the `initialize` function with signature `initialize()` and selector `0x8129fc1c`
     #[derive(
         Clone,
         ::ethers::contract::EthCall,
@@ -6517,22 +6786,8 @@ pub mod polygon_rollup_manager {
         Eq,
         Hash
     )]
-    #[ethcall(
-        name = "initialize",
-        abi = "initialize(address,uint64,uint64,address,address,address,address,address,uint64,uint64)"
-    )]
-    pub struct InitializeCall {
-        pub trusted_aggregator: ::ethers::core::types::Address,
-        pub pending_state_timeout: u64,
-        pub trusted_aggregator_timeout: u64,
-        pub admin: ::ethers::core::types::Address,
-        pub timelock: ::ethers::core::types::Address,
-        pub emergency_council: ::ethers::core::types::Address,
-        pub polygon_zk_evm: ::ethers::core::types::Address,
-        pub zk_evm_verifier: ::ethers::core::types::Address,
-        pub zk_evm_fork_id: u64,
-        pub zk_evm_chain_id: u64,
-    }
+    #[ethcall(name = "initialize", abi = "initialize()")]
+    pub struct InitializeCall;
     ///Container type for all input parameters for the `isEmergencyState` function with signature `isEmergencyState()` and selector `0x15064c96`
     #[derive(
         Clone,
@@ -6546,25 +6801,6 @@ pub mod polygon_rollup_manager {
     )]
     #[ethcall(name = "isEmergencyState", abi = "isEmergencyState()")]
     pub struct IsEmergencyStateCall;
-    ///Container type for all input parameters for the `isPendingStateConsolidable` function with signature `isPendingStateConsolidable(uint32,uint64)` and selector `0x080b3111`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "isPendingStateConsolidable",
-        abi = "isPendingStateConsolidable(uint32,uint64)"
-    )]
-    pub struct IsPendingStateConsolidableCall {
-        pub rollup_id: u32,
-        pub pending_state_num: u64,
-    }
     ///Container type for all input parameters for the `lastAggregationTimestamp` function with signature `lastAggregationTimestamp()` and selector `0xc1acbc34`
     #[derive(
         Clone,
@@ -6594,19 +6830,6 @@ pub mod polygon_rollup_manager {
         abi = "lastDeactivatedEmergencyStateTimestamp()"
     )]
     pub struct LastDeactivatedEmergencyStateTimestampCall;
-    ///Container type for all input parameters for the `multiplierBatchFee` function with signature `multiplierBatchFee()` and selector `0xafd23cbe`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "multiplierBatchFee", abi = "multiplierBatchFee()")]
-    pub struct MultiplierBatchFeeCall;
     ///Container type for all input parameters for the `obsoleteRollupType` function with signature `obsoleteRollupType(uint32)` and selector `0x7222020f`
     #[derive(
         Clone,
@@ -6638,44 +6861,6 @@ pub mod polygon_rollup_manager {
         pub new_sequenced_batches: u64,
         pub new_acc_input_hash: [u8; 32],
     }
-    ///Container type for all input parameters for the `overridePendingState` function with signature `overridePendingState(uint32,uint64,uint64,uint64,uint64,bytes32,bytes32,bytes32[24])` and selector `0x12b86e19`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "overridePendingState",
-        abi = "overridePendingState(uint32,uint64,uint64,uint64,uint64,bytes32,bytes32,bytes32[24])"
-    )]
-    pub struct OverridePendingStateCall {
-        pub rollup_id: u32,
-        pub init_pending_state_num: u64,
-        pub final_pending_state_num: u64,
-        pub init_num_batch: u64,
-        pub final_new_batch: u64,
-        pub new_local_exit_root: [u8; 32],
-        pub new_state_root: [u8; 32],
-        pub proof: [[u8; 32]; 24],
-    }
-    ///Container type for all input parameters for the `pendingStateTimeout` function with signature `pendingStateTimeout()` and selector `0xd939b315`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "pendingStateTimeout", abi = "pendingStateTimeout()")]
-    pub struct PendingStateTimeoutCall;
     ///Container type for all input parameters for the `pol` function with signature `pol()` and selector `0xe46761c4`
     #[derive(
         Clone,
@@ -6689,31 +6874,6 @@ pub mod polygon_rollup_manager {
     )]
     #[ethcall(name = "pol", abi = "pol()")]
     pub struct PolCall;
-    ///Container type for all input parameters for the `proveNonDeterministicPendingState` function with signature `proveNonDeterministicPendingState(uint32,uint64,uint64,uint64,uint64,bytes32,bytes32,bytes32[24])` and selector `0x8bd4f071`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "proveNonDeterministicPendingState",
-        abi = "proveNonDeterministicPendingState(uint32,uint64,uint64,uint64,uint64,bytes32,bytes32,bytes32[24])"
-    )]
-    pub struct ProveNonDeterministicPendingStateCall {
-        pub rollup_id: u32,
-        pub init_pending_state_num: u64,
-        pub final_pending_state_num: u64,
-        pub init_num_batch: u64,
-        pub final_new_batch: u64,
-        pub new_local_exit_root: [u8; 32],
-        pub new_state_root: [u8; 32],
-        pub proof: [[u8; 32]; 24],
-    }
     ///Container type for all input parameters for the `renounceRole` function with signature `renounceRole(bytes32,address)` and selector `0x36568abe`
     #[derive(
         Clone,
@@ -6745,6 +6905,22 @@ pub mod polygon_rollup_manager {
     pub struct RevokeRoleCall {
         pub role: [u8; 32],
         pub account: ::ethers::core::types::Address,
+    }
+    ///Container type for all input parameters for the `rollbackBatches` function with signature `rollbackBatches(address,uint64)` and selector `0x8fd88cc2`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "rollbackBatches", abi = "rollbackBatches(address,uint64)")]
+    pub struct RollbackBatchesCall {
+        pub rollup_contract: ::ethers::core::types::Address,
+        pub target_batch: u64,
     }
     ///Container type for all input parameters for the `rollupAddressToID` function with signature `rollupAddressToID(address)` and selector `0xceee281d`
     #[derive(
@@ -6787,6 +6963,21 @@ pub mod polygon_rollup_manager {
     )]
     #[ethcall(name = "rollupIDToRollupData", abi = "rollupIDToRollupData(uint32)")]
     pub struct RollupIDToRollupDataCall {
+        pub rollup_id: u32,
+    }
+    ///Container type for all input parameters for the `rollupIDToRollupDataV2` function with signature `rollupIDToRollupDataV2(uint32)` and selector `0x74d9c244`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "rollupIDToRollupDataV2", abi = "rollupIDToRollupDataV2(uint32)")]
+    pub struct RollupIDToRollupDataV2Call {
         pub rollup_id: u32,
     }
     ///Container type for all input parameters for the `rollupTypeCount` function with signature `rollupTypeCount()` and selector `0x1796a1ae`
@@ -6832,72 +7023,6 @@ pub mod polygon_rollup_manager {
     pub struct SetBatchFeeCall {
         pub new_batch_fee: ::ethers::core::types::U256,
     }
-    ///Container type for all input parameters for the `setMultiplierBatchFee` function with signature `setMultiplierBatchFee(uint16)` and selector `0x1816b7e5`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "setMultiplierBatchFee", abi = "setMultiplierBatchFee(uint16)")]
-    pub struct SetMultiplierBatchFeeCall {
-        pub new_multiplier_batch_fee: u16,
-    }
-    ///Container type for all input parameters for the `setPendingStateTimeout` function with signature `setPendingStateTimeout(uint64)` and selector `0x9c9f3dfe`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "setPendingStateTimeout", abi = "setPendingStateTimeout(uint64)")]
-    pub struct SetPendingStateTimeoutCall {
-        pub new_pending_state_timeout: u64,
-    }
-    ///Container type for all input parameters for the `setTrustedAggregatorTimeout` function with signature `setTrustedAggregatorTimeout(uint64)` and selector `0x394218e9`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "setTrustedAggregatorTimeout",
-        abi = "setTrustedAggregatorTimeout(uint64)"
-    )]
-    pub struct SetTrustedAggregatorTimeoutCall {
-        pub new_trusted_aggregator_timeout: u64,
-    }
-    ///Container type for all input parameters for the `setVerifyBatchTimeTarget` function with signature `setVerifyBatchTimeTarget(uint64)` and selector `0xa066215c`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "setVerifyBatchTimeTarget",
-        abi = "setVerifyBatchTimeTarget(uint64)"
-    )]
-    pub struct SetVerifyBatchTimeTargetCall {
-        pub new_verify_batch_time_target: u64,
-    }
     ///Container type for all input parameters for the `totalSequencedBatches` function with signature `totalSequencedBatches()` and selector `0x066ec012`
     #[derive(
         Clone,
@@ -6924,19 +7049,6 @@ pub mod polygon_rollup_manager {
     )]
     #[ethcall(name = "totalVerifiedBatches", abi = "totalVerifiedBatches()")]
     pub struct TotalVerifiedBatchesCall;
-    ///Container type for all input parameters for the `trustedAggregatorTimeout` function with signature `trustedAggregatorTimeout()` and selector `0x841b24d7`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "trustedAggregatorTimeout", abi = "trustedAggregatorTimeout()")]
-    pub struct TrustedAggregatorTimeoutCall;
     ///Container type for all input parameters for the `updateRollup` function with signature `updateRollup(address,uint32,bytes)` and selector `0xc4c928c2`
     #[derive(
         Clone,
@@ -6954,20 +7066,7 @@ pub mod polygon_rollup_manager {
         pub new_rollup_type_id: u32,
         pub upgrade_data: ::ethers::core::types::Bytes,
     }
-    ///Container type for all input parameters for the `verifyBatchTimeTarget` function with signature `verifyBatchTimeTarget()` and selector `0x0a0d9fbe`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "verifyBatchTimeTarget", abi = "verifyBatchTimeTarget()")]
-    pub struct VerifyBatchTimeTargetCall;
-    ///Container type for all input parameters for the `verifyBatches` function with signature `verifyBatches(uint32,uint64,uint64,uint64,bytes32,bytes32,address,bytes32[24])` and selector `0x87c20c01`
+    ///Container type for all input parameters for the `updateRollupByRollupAdmin` function with signature `updateRollupByRollupAdmin(address,uint32)` and selector `0xdfdb8c5e`
     #[derive(
         Clone,
         ::ethers::contract::EthCall,
@@ -6979,18 +7078,12 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     #[ethcall(
-        name = "verifyBatches",
-        abi = "verifyBatches(uint32,uint64,uint64,uint64,bytes32,bytes32,address,bytes32[24])"
+        name = "updateRollupByRollupAdmin",
+        abi = "updateRollupByRollupAdmin(address,uint32)"
     )]
-    pub struct VerifyBatchesCall {
-        pub rollup_id: u32,
-        pub pending_state_num: u64,
-        pub init_num_batch: u64,
-        pub final_new_batch: u64,
-        pub new_local_exit_root: [u8; 32],
-        pub new_state_root: [u8; 32],
-        pub beneficiary: ::ethers::core::types::Address,
-        pub proof: [[u8; 32]; 24],
+    pub struct UpdateRollupByRollupAdminCall {
+        pub rollup_contract: ::ethers::core::types::Address,
+        pub new_rollup_type_id: u32,
     }
     ///Container type for all input parameters for the `verifyBatchesTrustedAggregator` function with signature `verifyBatchesTrustedAggregator(uint32,uint64,uint64,uint64,bytes32,bytes32,address,bytes32[24])` and selector `0x1489ed10`
     #[derive(
@@ -7017,64 +7110,78 @@ pub mod polygon_rollup_manager {
         pub beneficiary: ::ethers::core::types::Address,
         pub proof: [[u8; 32]; 24],
     }
+    ///Container type for all input parameters for the `verifyPessimisticTrustedAggregator` function with signature `verifyPessimisticTrustedAggregator(uint32,uint32,bytes32,bytes32,bytes)` and selector `0x8875f03c`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(
+        name = "verifyPessimisticTrustedAggregator",
+        abi = "verifyPessimisticTrustedAggregator(uint32,uint32,bytes32,bytes32,bytes)"
+    )]
+    pub struct VerifyPessimisticTrustedAggregatorCall {
+        pub rollup_id: u32,
+        pub l_1_info_tree_leaf_count: u32,
+        pub new_local_exit_root: [u8; 32],
+        pub new_pessimistic_root: [u8; 32],
+        pub proof: ::ethers::core::types::Bytes,
+    }
     ///Container type for all of the contract's call
     #[derive(Clone, ::ethers::contract::EthAbiType, Debug, PartialEq, Eq, Hash)]
     pub enum PolygonRollupManagerCalls {
         DefaultAdminRole(DefaultAdminRoleCall),
+        RollupManagerVersion(RollupManagerVersionCall),
         ActivateEmergencyState(ActivateEmergencyStateCall),
         AddExistingRollup(AddExistingRollupCall),
         AddNewRollupType(AddNewRollupTypeCall),
         BridgeAddress(BridgeAddressCall),
         CalculateRewardPerBatch(CalculateRewardPerBatchCall),
         ChainIDToRollupID(ChainIDToRollupIDCall),
-        ConsolidatePendingState(ConsolidatePendingStateCall),
         CreateNewRollup(CreateNewRollupCall),
         DeactivateEmergencyState(DeactivateEmergencyStateCall),
         GetBatchFee(GetBatchFeeCall),
         GetForcedBatchFee(GetForcedBatchFeeCall),
+        GetInputPessimisticBytes(GetInputPessimisticBytesCall),
         GetInputSnarkBytes(GetInputSnarkBytesCall),
         GetLastVerifiedBatch(GetLastVerifiedBatchCall),
         GetRoleAdmin(GetRoleAdminCall),
         GetRollupBatchNumToStateRoot(GetRollupBatchNumToStateRootCall),
         GetRollupExitRoot(GetRollupExitRootCall),
-        GetRollupPendingStateTransitions(GetRollupPendingStateTransitionsCall),
         GetRollupSequencedBatches(GetRollupSequencedBatchesCall),
         GlobalExitRootManager(GlobalExitRootManagerCall),
         GrantRole(GrantRoleCall),
         HasRole(HasRoleCall),
         Initialize(InitializeCall),
         IsEmergencyState(IsEmergencyStateCall),
-        IsPendingStateConsolidable(IsPendingStateConsolidableCall),
         LastAggregationTimestamp(LastAggregationTimestampCall),
         LastDeactivatedEmergencyStateTimestamp(
             LastDeactivatedEmergencyStateTimestampCall,
         ),
-        MultiplierBatchFee(MultiplierBatchFeeCall),
         ObsoleteRollupType(ObsoleteRollupTypeCall),
         OnSequenceBatches(OnSequenceBatchesCall),
-        OverridePendingState(OverridePendingStateCall),
-        PendingStateTimeout(PendingStateTimeoutCall),
         Pol(PolCall),
-        ProveNonDeterministicPendingState(ProveNonDeterministicPendingStateCall),
         RenounceRole(RenounceRoleCall),
         RevokeRole(RevokeRoleCall),
+        RollbackBatches(RollbackBatchesCall),
         RollupAddressToID(RollupAddressToIDCall),
         RollupCount(RollupCountCall),
         RollupIDToRollupData(RollupIDToRollupDataCall),
+        RollupIDToRollupDataV2(RollupIDToRollupDataV2Call),
         RollupTypeCount(RollupTypeCountCall),
         RollupTypeMap(RollupTypeMapCall),
         SetBatchFee(SetBatchFeeCall),
-        SetMultiplierBatchFee(SetMultiplierBatchFeeCall),
-        SetPendingStateTimeout(SetPendingStateTimeoutCall),
-        SetTrustedAggregatorTimeout(SetTrustedAggregatorTimeoutCall),
-        SetVerifyBatchTimeTarget(SetVerifyBatchTimeTargetCall),
         TotalSequencedBatches(TotalSequencedBatchesCall),
         TotalVerifiedBatches(TotalVerifiedBatchesCall),
-        TrustedAggregatorTimeout(TrustedAggregatorTimeoutCall),
         UpdateRollup(UpdateRollupCall),
-        VerifyBatchTimeTarget(VerifyBatchTimeTargetCall),
-        VerifyBatches(VerifyBatchesCall),
+        UpdateRollupByRollupAdmin(UpdateRollupByRollupAdminCall),
         VerifyBatchesTrustedAggregator(VerifyBatchesTrustedAggregatorCall),
+        VerifyPessimisticTrustedAggregator(VerifyPessimisticTrustedAggregatorCall),
     }
     impl ::ethers::core::abi::AbiDecode for PolygonRollupManagerCalls {
         fn decode(
@@ -7085,6 +7192,11 @@ pub mod polygon_rollup_manager {
                 data,
             ) {
                 return Ok(Self::DefaultAdminRole(decoded));
+            }
+            if let Ok(decoded) = <RollupManagerVersionCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::RollupManagerVersion(decoded));
             }
             if let Ok(decoded) = <ActivateEmergencyStateCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -7116,11 +7228,6 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::ChainIDToRollupID(decoded));
             }
-            if let Ok(decoded) = <ConsolidatePendingStateCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::ConsolidatePendingState(decoded));
-            }
             if let Ok(decoded) = <CreateNewRollupCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -7140,6 +7247,11 @@ pub mod polygon_rollup_manager {
                 data,
             ) {
                 return Ok(Self::GetForcedBatchFee(decoded));
+            }
+            if let Ok(decoded) = <GetInputPessimisticBytesCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::GetInputPessimisticBytes(decoded));
             }
             if let Ok(decoded) = <GetInputSnarkBytesCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -7165,11 +7277,6 @@ pub mod polygon_rollup_manager {
                 data,
             ) {
                 return Ok(Self::GetRollupExitRoot(decoded));
-            }
-            if let Ok(decoded) = <GetRollupPendingStateTransitionsCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::GetRollupPendingStateTransitions(decoded));
             }
             if let Ok(decoded) = <GetRollupSequencedBatchesCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -7201,11 +7308,6 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::IsEmergencyState(decoded));
             }
-            if let Ok(decoded) = <IsPendingStateConsolidableCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::IsPendingStateConsolidable(decoded));
-            }
             if let Ok(decoded) = <LastAggregationTimestampCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -7215,11 +7317,6 @@ pub mod polygon_rollup_manager {
                 data,
             ) {
                 return Ok(Self::LastDeactivatedEmergencyStateTimestamp(decoded));
-            }
-            if let Ok(decoded) = <MultiplierBatchFeeCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::MultiplierBatchFee(decoded));
             }
             if let Ok(decoded) = <ObsoleteRollupTypeCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -7231,25 +7328,10 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::OnSequenceBatches(decoded));
             }
-            if let Ok(decoded) = <OverridePendingStateCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::OverridePendingState(decoded));
-            }
-            if let Ok(decoded) = <PendingStateTimeoutCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::PendingStateTimeout(decoded));
-            }
             if let Ok(decoded) = <PolCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::Pol(decoded));
-            }
-            if let Ok(decoded) = <ProveNonDeterministicPendingStateCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::ProveNonDeterministicPendingState(decoded));
             }
             if let Ok(decoded) = <RenounceRoleCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -7260,6 +7342,11 @@ pub mod polygon_rollup_manager {
                 data,
             ) {
                 return Ok(Self::RevokeRole(decoded));
+            }
+            if let Ok(decoded) = <RollbackBatchesCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::RollbackBatches(decoded));
             }
             if let Ok(decoded) = <RollupAddressToIDCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -7276,6 +7363,11 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::RollupIDToRollupData(decoded));
             }
+            if let Ok(decoded) = <RollupIDToRollupDataV2Call as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::RollupIDToRollupDataV2(decoded));
+            }
             if let Ok(decoded) = <RollupTypeCountCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -7291,26 +7383,6 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::SetBatchFee(decoded));
             }
-            if let Ok(decoded) = <SetMultiplierBatchFeeCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SetMultiplierBatchFee(decoded));
-            }
-            if let Ok(decoded) = <SetPendingStateTimeoutCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SetPendingStateTimeout(decoded));
-            }
-            if let Ok(decoded) = <SetTrustedAggregatorTimeoutCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SetTrustedAggregatorTimeout(decoded));
-            }
-            if let Ok(decoded) = <SetVerifyBatchTimeTargetCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SetVerifyBatchTimeTarget(decoded));
-            }
             if let Ok(decoded) = <TotalSequencedBatchesCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -7321,30 +7393,25 @@ pub mod polygon_rollup_manager {
             ) {
                 return Ok(Self::TotalVerifiedBatches(decoded));
             }
-            if let Ok(decoded) = <TrustedAggregatorTimeoutCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::TrustedAggregatorTimeout(decoded));
-            }
             if let Ok(decoded) = <UpdateRollupCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::UpdateRollup(decoded));
             }
-            if let Ok(decoded) = <VerifyBatchTimeTargetCall as ::ethers::core::abi::AbiDecode>::decode(
+            if let Ok(decoded) = <UpdateRollupByRollupAdminCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
-                return Ok(Self::VerifyBatchTimeTarget(decoded));
-            }
-            if let Ok(decoded) = <VerifyBatchesCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::VerifyBatches(decoded));
+                return Ok(Self::UpdateRollupByRollupAdmin(decoded));
             }
             if let Ok(decoded) = <VerifyBatchesTrustedAggregatorCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::VerifyBatchesTrustedAggregator(decoded));
+            }
+            if let Ok(decoded) = <VerifyPessimisticTrustedAggregatorCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::VerifyPessimisticTrustedAggregator(decoded));
             }
             Err(::ethers::core::abi::Error::InvalidData.into())
         }
@@ -7353,6 +7420,9 @@ pub mod polygon_rollup_manager {
         fn encode(self) -> Vec<u8> {
             match self {
                 Self::DefaultAdminRole(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::RollupManagerVersion(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::ActivateEmergencyState(element) => {
@@ -7373,9 +7443,6 @@ pub mod polygon_rollup_manager {
                 Self::ChainIDToRollupID(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::ConsolidatePendingState(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
                 Self::CreateNewRollup(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
@@ -7386,6 +7453,9 @@ pub mod polygon_rollup_manager {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::GetForcedBatchFee(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::GetInputPessimisticBytes(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::GetInputSnarkBytes(element) => {
@@ -7401,9 +7471,6 @@ pub mod polygon_rollup_manager {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::GetRollupExitRoot(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::GetRollupPendingStateTransitions(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::GetRollupSequencedBatches(element) => {
@@ -7422,16 +7489,10 @@ pub mod polygon_rollup_manager {
                 Self::IsEmergencyState(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::IsPendingStateConsolidable(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
                 Self::LastAggregationTimestamp(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::LastDeactivatedEmergencyStateTimestamp(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::MultiplierBatchFee(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::ObsoleteRollupType(element) => {
@@ -7440,20 +7501,14 @@ pub mod polygon_rollup_manager {
                 Self::OnSequenceBatches(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::OverridePendingState(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::PendingStateTimeout(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
                 Self::Pol(element) => ::ethers::core::abi::AbiEncode::encode(element),
-                Self::ProveNonDeterministicPendingState(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
                 Self::RenounceRole(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::RevokeRole(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::RollbackBatches(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::RollupAddressToID(element) => {
@@ -7465,6 +7520,9 @@ pub mod polygon_rollup_manager {
                 Self::RollupIDToRollupData(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::RollupIDToRollupDataV2(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::RollupTypeCount(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
@@ -7474,37 +7532,22 @@ pub mod polygon_rollup_manager {
                 Self::SetBatchFee(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::SetMultiplierBatchFee(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::SetPendingStateTimeout(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::SetTrustedAggregatorTimeout(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::SetVerifyBatchTimeTarget(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
                 Self::TotalSequencedBatches(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::TotalVerifiedBatches(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::TrustedAggregatorTimeout(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
                 Self::UpdateRollup(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::VerifyBatchTimeTarget(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::VerifyBatches(element) => {
+                Self::UpdateRollupByRollupAdmin(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::VerifyBatchesTrustedAggregator(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::VerifyPessimisticTrustedAggregator(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
             }
@@ -7514,6 +7557,9 @@ pub mod polygon_rollup_manager {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
             match self {
                 Self::DefaultAdminRole(element) => ::core::fmt::Display::fmt(element, f),
+                Self::RollupManagerVersion(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::ActivateEmergencyState(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -7524,15 +7570,15 @@ pub mod polygon_rollup_manager {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::ChainIDToRollupID(element) => ::core::fmt::Display::fmt(element, f),
-                Self::ConsolidatePendingState(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::CreateNewRollup(element) => ::core::fmt::Display::fmt(element, f),
                 Self::DeactivateEmergencyState(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::GetBatchFee(element) => ::core::fmt::Display::fmt(element, f),
                 Self::GetForcedBatchFee(element) => ::core::fmt::Display::fmt(element, f),
+                Self::GetInputPessimisticBytes(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::GetInputSnarkBytes(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -7544,9 +7590,6 @@ pub mod polygon_rollup_manager {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::GetRollupExitRoot(element) => ::core::fmt::Display::fmt(element, f),
-                Self::GetRollupPendingStateTransitions(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::GetRollupSequencedBatches(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -7557,69 +7600,45 @@ pub mod polygon_rollup_manager {
                 Self::HasRole(element) => ::core::fmt::Display::fmt(element, f),
                 Self::Initialize(element) => ::core::fmt::Display::fmt(element, f),
                 Self::IsEmergencyState(element) => ::core::fmt::Display::fmt(element, f),
-                Self::IsPendingStateConsolidable(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::LastAggregationTimestamp(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::LastDeactivatedEmergencyStateTimestamp(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::MultiplierBatchFee(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::ObsoleteRollupType(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::OnSequenceBatches(element) => ::core::fmt::Display::fmt(element, f),
-                Self::OverridePendingState(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::PendingStateTimeout(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::Pol(element) => ::core::fmt::Display::fmt(element, f),
-                Self::ProveNonDeterministicPendingState(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::RenounceRole(element) => ::core::fmt::Display::fmt(element, f),
                 Self::RevokeRole(element) => ::core::fmt::Display::fmt(element, f),
+                Self::RollbackBatches(element) => ::core::fmt::Display::fmt(element, f),
                 Self::RollupAddressToID(element) => ::core::fmt::Display::fmt(element, f),
                 Self::RollupCount(element) => ::core::fmt::Display::fmt(element, f),
                 Self::RollupIDToRollupData(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::RollupIDToRollupDataV2(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::RollupTypeCount(element) => ::core::fmt::Display::fmt(element, f),
                 Self::RollupTypeMap(element) => ::core::fmt::Display::fmt(element, f),
                 Self::SetBatchFee(element) => ::core::fmt::Display::fmt(element, f),
-                Self::SetMultiplierBatchFee(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SetPendingStateTimeout(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SetTrustedAggregatorTimeout(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SetVerifyBatchTimeTarget(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::TotalSequencedBatches(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::TotalVerifiedBatches(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::TrustedAggregatorTimeout(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::UpdateRollup(element) => ::core::fmt::Display::fmt(element, f),
-                Self::VerifyBatchTimeTarget(element) => {
+                Self::UpdateRollupByRollupAdmin(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::VerifyBatches(element) => ::core::fmt::Display::fmt(element, f),
                 Self::VerifyBatchesTrustedAggregator(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::VerifyPessimisticTrustedAggregator(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
             }
@@ -7628,6 +7647,11 @@ pub mod polygon_rollup_manager {
     impl ::core::convert::From<DefaultAdminRoleCall> for PolygonRollupManagerCalls {
         fn from(value: DefaultAdminRoleCall) -> Self {
             Self::DefaultAdminRole(value)
+        }
+    }
+    impl ::core::convert::From<RollupManagerVersionCall> for PolygonRollupManagerCalls {
+        fn from(value: RollupManagerVersionCall) -> Self {
+            Self::RollupManagerVersion(value)
         }
     }
     impl ::core::convert::From<ActivateEmergencyStateCall>
@@ -7662,12 +7686,6 @@ pub mod polygon_rollup_manager {
             Self::ChainIDToRollupID(value)
         }
     }
-    impl ::core::convert::From<ConsolidatePendingStateCall>
-    for PolygonRollupManagerCalls {
-        fn from(value: ConsolidatePendingStateCall) -> Self {
-            Self::ConsolidatePendingState(value)
-        }
-    }
     impl ::core::convert::From<CreateNewRollupCall> for PolygonRollupManagerCalls {
         fn from(value: CreateNewRollupCall) -> Self {
             Self::CreateNewRollup(value)
@@ -7687,6 +7705,12 @@ pub mod polygon_rollup_manager {
     impl ::core::convert::From<GetForcedBatchFeeCall> for PolygonRollupManagerCalls {
         fn from(value: GetForcedBatchFeeCall) -> Self {
             Self::GetForcedBatchFee(value)
+        }
+    }
+    impl ::core::convert::From<GetInputPessimisticBytesCall>
+    for PolygonRollupManagerCalls {
+        fn from(value: GetInputPessimisticBytesCall) -> Self {
+            Self::GetInputPessimisticBytes(value)
         }
     }
     impl ::core::convert::From<GetInputSnarkBytesCall> for PolygonRollupManagerCalls {
@@ -7713,12 +7737,6 @@ pub mod polygon_rollup_manager {
     impl ::core::convert::From<GetRollupExitRootCall> for PolygonRollupManagerCalls {
         fn from(value: GetRollupExitRootCall) -> Self {
             Self::GetRollupExitRoot(value)
-        }
-    }
-    impl ::core::convert::From<GetRollupPendingStateTransitionsCall>
-    for PolygonRollupManagerCalls {
-        fn from(value: GetRollupPendingStateTransitionsCall) -> Self {
-            Self::GetRollupPendingStateTransitions(value)
         }
     }
     impl ::core::convert::From<GetRollupSequencedBatchesCall>
@@ -7752,12 +7770,6 @@ pub mod polygon_rollup_manager {
             Self::IsEmergencyState(value)
         }
     }
-    impl ::core::convert::From<IsPendingStateConsolidableCall>
-    for PolygonRollupManagerCalls {
-        fn from(value: IsPendingStateConsolidableCall) -> Self {
-            Self::IsPendingStateConsolidable(value)
-        }
-    }
     impl ::core::convert::From<LastAggregationTimestampCall>
     for PolygonRollupManagerCalls {
         fn from(value: LastAggregationTimestampCall) -> Self {
@@ -7770,11 +7782,6 @@ pub mod polygon_rollup_manager {
             Self::LastDeactivatedEmergencyStateTimestamp(value)
         }
     }
-    impl ::core::convert::From<MultiplierBatchFeeCall> for PolygonRollupManagerCalls {
-        fn from(value: MultiplierBatchFeeCall) -> Self {
-            Self::MultiplierBatchFee(value)
-        }
-    }
     impl ::core::convert::From<ObsoleteRollupTypeCall> for PolygonRollupManagerCalls {
         fn from(value: ObsoleteRollupTypeCall) -> Self {
             Self::ObsoleteRollupType(value)
@@ -7785,25 +7792,9 @@ pub mod polygon_rollup_manager {
             Self::OnSequenceBatches(value)
         }
     }
-    impl ::core::convert::From<OverridePendingStateCall> for PolygonRollupManagerCalls {
-        fn from(value: OverridePendingStateCall) -> Self {
-            Self::OverridePendingState(value)
-        }
-    }
-    impl ::core::convert::From<PendingStateTimeoutCall> for PolygonRollupManagerCalls {
-        fn from(value: PendingStateTimeoutCall) -> Self {
-            Self::PendingStateTimeout(value)
-        }
-    }
     impl ::core::convert::From<PolCall> for PolygonRollupManagerCalls {
         fn from(value: PolCall) -> Self {
             Self::Pol(value)
-        }
-    }
-    impl ::core::convert::From<ProveNonDeterministicPendingStateCall>
-    for PolygonRollupManagerCalls {
-        fn from(value: ProveNonDeterministicPendingStateCall) -> Self {
-            Self::ProveNonDeterministicPendingState(value)
         }
     }
     impl ::core::convert::From<RenounceRoleCall> for PolygonRollupManagerCalls {
@@ -7814,6 +7805,11 @@ pub mod polygon_rollup_manager {
     impl ::core::convert::From<RevokeRoleCall> for PolygonRollupManagerCalls {
         fn from(value: RevokeRoleCall) -> Self {
             Self::RevokeRole(value)
+        }
+    }
+    impl ::core::convert::From<RollbackBatchesCall> for PolygonRollupManagerCalls {
+        fn from(value: RollbackBatchesCall) -> Self {
+            Self::RollbackBatches(value)
         }
     }
     impl ::core::convert::From<RollupAddressToIDCall> for PolygonRollupManagerCalls {
@@ -7831,6 +7827,12 @@ pub mod polygon_rollup_manager {
             Self::RollupIDToRollupData(value)
         }
     }
+    impl ::core::convert::From<RollupIDToRollupDataV2Call>
+    for PolygonRollupManagerCalls {
+        fn from(value: RollupIDToRollupDataV2Call) -> Self {
+            Self::RollupIDToRollupDataV2(value)
+        }
+    }
     impl ::core::convert::From<RollupTypeCountCall> for PolygonRollupManagerCalls {
         fn from(value: RollupTypeCountCall) -> Self {
             Self::RollupTypeCount(value)
@@ -7846,29 +7848,6 @@ pub mod polygon_rollup_manager {
             Self::SetBatchFee(value)
         }
     }
-    impl ::core::convert::From<SetMultiplierBatchFeeCall> for PolygonRollupManagerCalls {
-        fn from(value: SetMultiplierBatchFeeCall) -> Self {
-            Self::SetMultiplierBatchFee(value)
-        }
-    }
-    impl ::core::convert::From<SetPendingStateTimeoutCall>
-    for PolygonRollupManagerCalls {
-        fn from(value: SetPendingStateTimeoutCall) -> Self {
-            Self::SetPendingStateTimeout(value)
-        }
-    }
-    impl ::core::convert::From<SetTrustedAggregatorTimeoutCall>
-    for PolygonRollupManagerCalls {
-        fn from(value: SetTrustedAggregatorTimeoutCall) -> Self {
-            Self::SetTrustedAggregatorTimeout(value)
-        }
-    }
-    impl ::core::convert::From<SetVerifyBatchTimeTargetCall>
-    for PolygonRollupManagerCalls {
-        fn from(value: SetVerifyBatchTimeTargetCall) -> Self {
-            Self::SetVerifyBatchTimeTarget(value)
-        }
-    }
     impl ::core::convert::From<TotalSequencedBatchesCall> for PolygonRollupManagerCalls {
         fn from(value: TotalSequencedBatchesCall) -> Self {
             Self::TotalSequencedBatches(value)
@@ -7879,31 +7858,27 @@ pub mod polygon_rollup_manager {
             Self::TotalVerifiedBatches(value)
         }
     }
-    impl ::core::convert::From<TrustedAggregatorTimeoutCall>
-    for PolygonRollupManagerCalls {
-        fn from(value: TrustedAggregatorTimeoutCall) -> Self {
-            Self::TrustedAggregatorTimeout(value)
-        }
-    }
     impl ::core::convert::From<UpdateRollupCall> for PolygonRollupManagerCalls {
         fn from(value: UpdateRollupCall) -> Self {
             Self::UpdateRollup(value)
         }
     }
-    impl ::core::convert::From<VerifyBatchTimeTargetCall> for PolygonRollupManagerCalls {
-        fn from(value: VerifyBatchTimeTargetCall) -> Self {
-            Self::VerifyBatchTimeTarget(value)
-        }
-    }
-    impl ::core::convert::From<VerifyBatchesCall> for PolygonRollupManagerCalls {
-        fn from(value: VerifyBatchesCall) -> Self {
-            Self::VerifyBatches(value)
+    impl ::core::convert::From<UpdateRollupByRollupAdminCall>
+    for PolygonRollupManagerCalls {
+        fn from(value: UpdateRollupByRollupAdminCall) -> Self {
+            Self::UpdateRollupByRollupAdmin(value)
         }
     }
     impl ::core::convert::From<VerifyBatchesTrustedAggregatorCall>
     for PolygonRollupManagerCalls {
         fn from(value: VerifyBatchesTrustedAggregatorCall) -> Self {
             Self::VerifyBatchesTrustedAggregator(value)
+        }
+    }
+    impl ::core::convert::From<VerifyPessimisticTrustedAggregatorCall>
+    for PolygonRollupManagerCalls {
+        fn from(value: VerifyPessimisticTrustedAggregatorCall) -> Self {
+            Self::VerifyPessimisticTrustedAggregator(value)
         }
     }
     ///Container type for all return fields from the `DEFAULT_ADMIN_ROLE` function with signature `DEFAULT_ADMIN_ROLE()` and selector `0xa217fddf`
@@ -7918,6 +7893,18 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     pub struct DefaultAdminRoleReturn(pub [u8; 32]);
+    ///Container type for all return fields from the `ROLLUP_MANAGER_VERSION` function with signature `ROLLUP_MANAGER_VERSION()` and selector `0xd8905812`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct RollupManagerVersionReturn(pub ::std::string::String);
     ///Container type for all return fields from the `bridgeAddress` function with signature `bridgeAddress()` and selector `0xa3c573eb`
     #[derive(
         Clone,
@@ -7980,6 +7967,18 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     pub struct GetForcedBatchFeeReturn(pub ::ethers::core::types::U256);
+    ///Container type for all return fields from the `getInputPessimisticBytes` function with signature `getInputPessimisticBytes(uint32,bytes32,bytes32,bytes32)` and selector `0x9e36c565`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct GetInputPessimisticBytesReturn(pub ::ethers::core::types::Bytes);
     ///Container type for all return fields from the `getInputSnarkBytes` function with signature `getInputSnarkBytes(uint32,uint64,uint64,bytes32,bytes32,bytes32)` and selector `0x7975fcfe`
     #[derive(
         Clone,
@@ -8040,18 +8039,6 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     pub struct GetRollupExitRootReturn(pub [u8; 32]);
-    ///Container type for all return fields from the `getRollupPendingStateTransitions` function with signature `getRollupPendingStateTransitions(uint32,uint64)` and selector `0xb99d0ad7`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct GetRollupPendingStateTransitionsReturn(pub PendingState);
     ///Container type for all return fields from the `getRollupSequencedBatches` function with signature `getRollupSequencedBatches(uint32,uint64)` and selector `0x25280169`
     #[derive(
         Clone,
@@ -8100,18 +8087,6 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     pub struct IsEmergencyStateReturn(pub bool);
-    ///Container type for all return fields from the `isPendingStateConsolidable` function with signature `isPendingStateConsolidable(uint32,uint64)` and selector `0x080b3111`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct IsPendingStateConsolidableReturn(pub bool);
     ///Container type for all return fields from the `lastAggregationTimestamp` function with signature `lastAggregationTimestamp()` and selector `0xc1acbc34`
     #[derive(
         Clone,
@@ -8136,18 +8111,6 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     pub struct LastDeactivatedEmergencyStateTimestampReturn(pub u64);
-    ///Container type for all return fields from the `multiplierBatchFee` function with signature `multiplierBatchFee()` and selector `0xafd23cbe`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct MultiplierBatchFeeReturn(pub u16);
     ///Container type for all return fields from the `onSequenceBatches` function with signature `onSequenceBatches(uint64,bytes32)` and selector `0x9a908e73`
     #[derive(
         Clone,
@@ -8160,18 +8123,6 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     pub struct OnSequenceBatchesReturn(pub u64);
-    ///Container type for all return fields from the `pendingStateTimeout` function with signature `pendingStateTimeout()` and selector `0xd939b315`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct PendingStateTimeoutReturn(pub u64);
     ///Container type for all return fields from the `pol` function with signature `pol()` and selector `0xe46761c4`
     #[derive(
         Clone,
@@ -8222,18 +8173,21 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     pub struct RollupIDToRollupDataReturn {
-        pub rollup_contract: ::ethers::core::types::Address,
-        pub chain_id: u64,
-        pub verifier: ::ethers::core::types::Address,
-        pub fork_id: u64,
-        pub last_local_exit_root: [u8; 32],
-        pub last_batch_sequenced: u64,
-        pub last_verified_batch: u64,
-        pub last_pending_state: u64,
-        pub last_pending_state_consolidated: u64,
-        pub last_verified_batch_before_upgrade: u64,
-        pub rollup_type_id: u64,
-        pub rollup_compatibility_id: u8,
+        pub rollup_data: RollupDataReturn,
+    }
+    ///Container type for all return fields from the `rollupIDToRollupDataV2` function with signature `rollupIDToRollupDataV2(uint32)` and selector `0x74d9c244`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct RollupIDToRollupDataV2Return {
+        pub rollup_data: RollupDataReturnV2,
     }
     ///Container type for all return fields from the `rollupTypeCount` function with signature `rollupTypeCount()` and selector `0x1796a1ae`
     #[derive(
@@ -8262,9 +8216,10 @@ pub mod polygon_rollup_manager {
         pub consensus_implementation: ::ethers::core::types::Address,
         pub verifier: ::ethers::core::types::Address,
         pub fork_id: u64,
-        pub rollup_compatibility_id: u8,
+        pub rollup_verifier_type: u8,
         pub obsolete: bool,
         pub genesis: [u8; 32],
+        pub program_v_key: [u8; 32],
     }
     ///Container type for all return fields from the `totalSequencedBatches` function with signature `totalSequencedBatches()` and selector `0x066ec012`
     #[derive(
@@ -8290,47 +8245,6 @@ pub mod polygon_rollup_manager {
         Hash
     )]
     pub struct TotalVerifiedBatchesReturn(pub u64);
-    ///Container type for all return fields from the `trustedAggregatorTimeout` function with signature `trustedAggregatorTimeout()` and selector `0x841b24d7`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct TrustedAggregatorTimeoutReturn(pub u64);
-    ///Container type for all return fields from the `verifyBatchTimeTarget` function with signature `verifyBatchTimeTarget()` and selector `0x0a0d9fbe`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct VerifyBatchTimeTargetReturn(pub u64);
-    ///`PendingState(uint64,uint64,bytes32,bytes32)`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct PendingState {
-        pub timestamp: u64,
-        pub last_verified_batch: u64,
-        pub exit_root: [u8; 32],
-        pub state_root: [u8; 32],
-    }
     ///`SequencedBatchData(bytes32,uint64,uint64)`
     #[derive(
         Clone,
@@ -8346,5 +8260,55 @@ pub mod polygon_rollup_manager {
         pub acc_input_hash: [u8; 32],
         pub sequenced_timestamp: u64,
         pub previous_last_batch_sequenced: u64,
+    }
+    ///`RollupDataReturn(address,uint64,address,uint64,bytes32,uint64,uint64,uint64,uint64,uint64,uint64,uint8)`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct RollupDataReturn {
+        pub rollup_contract: ::ethers::core::types::Address,
+        pub chain_id: u64,
+        pub verifier: ::ethers::core::types::Address,
+        pub fork_id: u64,
+        pub last_local_exit_root: [u8; 32],
+        pub last_batch_sequenced: u64,
+        pub last_verified_batch: u64,
+        pub legacy_last_pending_state: u64,
+        pub legacy_last_pending_state_consolidated: u64,
+        pub last_verified_batch_before_upgrade: u64,
+        pub rollup_type_id: u64,
+        pub rollup_verifier_type: u8,
+    }
+    ///`RollupDataReturnV2(address,uint64,address,uint64,bytes32,uint64,uint64,uint64,uint64,uint8,bytes32,bytes32)`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct RollupDataReturnV2 {
+        pub rollup_contract: ::ethers::core::types::Address,
+        pub chain_id: u64,
+        pub verifier: ::ethers::core::types::Address,
+        pub fork_id: u64,
+        pub last_local_exit_root: [u8; 32],
+        pub last_batch_sequenced: u64,
+        pub last_verified_batch: u64,
+        pub last_verified_batch_before_upgrade: u64,
+        pub rollup_type_id: u64,
+        pub rollup_verifier_type: u8,
+        pub last_pessimistic_root: [u8; 32],
+        pub program_v_key: [u8; 32],
     }
 }

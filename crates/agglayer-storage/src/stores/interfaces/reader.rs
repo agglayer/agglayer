@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, Height, NetworkId, Proof,
+};
 
 use crate::{columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error};
 
@@ -49,7 +51,11 @@ pub trait StateReader: Send + Sync {
 pub trait PerEpochReader: Send + Sync {
     /// Get the starting checkpoint of this epoch
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height>;
-
+    fn get_certificate_at_index(
+        &self,
+        index: CertificateIndex,
+    ) -> Result<Option<Certificate>, Error>;
+    fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error>;
     fn get_epoch_number(&self) -> u64;
     /// Get the height of a network's end checkpoint
     fn get_end_checkpoint_height_per_network(

@@ -2,6 +2,13 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_config::L1;
+use agglayer_contracts::polygon_rollup_manager::FinalNumBatchBelowLastVerifiedBatch;
+use agglayer_contracts::polygon_rollup_manager::PolygonRollupManagerErrors;
+use agglayer_contracts::polygon_rollup_manager::RollupDataReturn;
+use agglayer_contracts::polygon_rollup_manager::{
+    RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
+};
+use agglayer_contracts::polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn};
 use ethers::core::utils;
 use ethers::prelude::*;
 use ethers::signers::LocalWallet;
@@ -14,12 +21,6 @@ use ethers::{
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
 use serde_json::json;
 
-use crate::contracts::polygon_rollup_manager::FinalNumBatchBelowLastVerifiedBatch;
-use crate::contracts::polygon_rollup_manager::PolygonRollupManagerErrors;
-use crate::contracts::polygon_rollup_manager::{
-    RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
-};
-use crate::contracts::polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn};
 use crate::{
     kernel::{Kernel, ZkevmNodeVerificationError},
     signed_tx::{Proof, SignedTx, HASH_LENGTH, PROOF_LENGTH},
@@ -65,7 +66,7 @@ async fn interop_executor_check_tx() {
 
     let (provider, _mock) = providers::Provider::mocked();
 
-    let kernel = Kernel::new(provider, Arc::new(config));
+    let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
 
     let mut signed_tx = signed_tx();
 
@@ -92,7 +93,7 @@ async fn interop_executor_verify_zkp() {
     let (provider, mock) = providers::Provider::mocked();
 
     let l1 = config.l1.clone();
-    let kernel = Kernel::new(provider, config);
+    let kernel = Kernel::new(Arc::new(provider), config);
 
     let signed_tx = signed_tx();
 
@@ -149,7 +150,7 @@ async fn interop_executor_verify_zkp_failure() {
     let (provider, mock) = providers::Provider::mocked();
 
     let l1 = config.l1.clone();
-    let kernel = Kernel::new(provider, config);
+    let kernel = Kernel::new(Arc::new(provider), config);
 
     let signed_tx = signed_tx();
 
@@ -221,7 +222,7 @@ async fn interop_executor_verify_signature() {
     let (provider, mock) = providers::Provider::mocked();
 
     let l1 = config.l1.clone();
-    let kernel = Kernel::new(provider, config);
+    let kernel = Kernel::new(Arc::new(provider), config);
 
     let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
     let sequencer_address = sequencer_wallet.address();
@@ -295,7 +296,7 @@ async fn interop_executor_verify_signature_proof_signer() {
     let (provider, mock) = providers::Provider::mocked();
 
     let l1 = config.l1.clone();
-    let kernel = Kernel::new(provider, config);
+    let kernel = Kernel::new(Arc::new(provider), config);
 
     let mut signed_tx = signed_tx();
 
@@ -364,7 +365,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
 
         assert!(kernel.verify_proof_zkevm_node(&signed_tx).await.is_ok());
     }
@@ -389,7 +390,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -421,7 +422,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -454,7 +455,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -486,17 +487,19 @@ pub(crate) fn signed_tx() -> SignedTx {
 
 fn rollup_data(l1: &L1) -> RollupIDToRollupDataReturn {
     RollupIDToRollupDataReturn {
-        chain_id: 1,
-        rollup_contract: l1.rollup_manager_contract,
-        verifier: H160::random(),
-        fork_id: 0,
-        last_local_exit_root: [0; 32],
-        last_batch_sequenced: 0,
-        last_verified_batch: 0,
-        last_pending_state: 0,
-        last_pending_state_consolidated: 0,
-        last_verified_batch_before_upgrade: 0,
-        rollup_type_id: 1,
-        rollup_compatibility_id: 0,
+        rollup_data: RollupDataReturn {
+            chain_id: 1,
+            rollup_contract: l1.rollup_manager_contract,
+            verifier: H160::random(),
+            fork_id: 0,
+            last_local_exit_root: [0; 32],
+            last_batch_sequenced: 0,
+            last_verified_batch: 0,
+            last_verified_batch_before_upgrade: 0,
+            rollup_type_id: 1,
+            legacy_last_pending_state: 0,
+            legacy_last_pending_state_consolidated: 0,
+            rollup_verifier_type: 0,
+        },
     }
 }
