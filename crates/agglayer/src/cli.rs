@@ -27,6 +27,10 @@ pub(crate) enum Commands {
             env = "CONFIG_PATH"
         )]
         base_dir: PathBuf,
+
+        /// Defines if the command is for generating a prover configuration.
+        #[arg(long)]
+        prover: bool,
     },
 
     Prover {
