@@ -197,6 +197,15 @@ pub struct Certificate {
 }
 
 impl Certificate {
+    /// Default L1 Info Tree leaf count used for state transitions without
+    /// imported bridge exits.
+    const DEFAULT_L1_INFO_LEAF_COUNT: u32 = 0;
+    /// Default L1 Info Tree root used for state transitions without imported
+    /// bridge exits.
+    const DEFAULT_L1_INFO_ROOT: Digest = [0; 32];
+}
+
+impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
         Certificate {
@@ -218,6 +227,40 @@ impl Certificate {
             self.new_local_exit_root.as_slice(),
         ])
         .into()
+    }
+
+    /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].
+    /// Corresponds to the highest L1 Info Tree leaf index considered by the
+    /// imported bridge exits.
+    pub fn l1_info_tree_leaf_count(&self) -> u32 {
+        self.imported_bridge_exits
+            .iter()
+            .map(|i| i.l1_leaf_index())
+            .max()
+            .unwrap_or(Self::DEFAULT_L1_INFO_LEAF_COUNT)
+    }
+
+    /// Returns the L1 Info Root considered for this [`Certificate`].
+    /// Fails if multiple L1 Info Root are considered among the inclusion proofs
+    /// of the imported bridge exits.
+    pub fn l1_info_root(&self) -> Result<Digest, Error> {
+        let Some(l1_info_root) = self
+            .imported_bridge_exits
+            .first()
+            .map(|imported_bridge_exit| imported_bridge_exit.l1_info_root())
+        else {
+            return Ok(Self::DEFAULT_L1_INFO_ROOT);
+        };
+
+        if self
+            .imported_bridge_exits
+            .iter()
+            .all(|exit| exit.l1_info_root() == l1_info_root)
+        {
+            Ok(l1_info_root)
+        } else {
+            Err(Error::MultipleL1InfoRoot)
+        }
     }
 }
 
@@ -253,6 +296,8 @@ impl LocalNetworkStateData {
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
+
+        let l1_info_root = certificate.l1_info_root()?;
 
         certificate
             .bridge_exits
@@ -334,23 +379,6 @@ impl LocalNetworkStateData {
                 })
                 .collect::<Result<BTreeMap<_, _>, Error>>()?
         };
-
-        let l1_info_root: Digest = {
-            if let Some(imported_bridge_exit) = certificate.imported_bridge_exits.first() {
-                let l1_root = imported_bridge_exit.l1_root();
-                if certificate
-                    .imported_bridge_exits
-                    .iter()
-                    .all(|exit| exit.l1_root() == l1_root)
-                {
-                    Ok(l1_root)
-                } else {
-                    Err(Error::MultipleL1InfoRoot)
-                }
-            } else {
-                Ok(Digest::default())
-            }
-        }?;
 
         let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> =
             certificate

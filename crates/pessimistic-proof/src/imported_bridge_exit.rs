@@ -235,10 +235,20 @@ impl ImportedBridgeExit {
         }
     }
 
-    pub fn l1_root(&self) -> Digest {
+    /// Returns the considered L1 Info Root against which the claim is done.
+    pub fn l1_info_root(&self) -> Digest {
         match &self.claim_data {
             Claim::Mainnet(claim) => claim.proof_ger_l1root.root,
             Claim::Rollup(claim) => claim.proof_ger_l1root.root,
+        }
+    }
+
+    /// Returns the considered L1 Info Tree leaf index against which the claim
+    /// is done.
+    pub fn l1_leaf_index(&self) -> u32 {
+        match &self.claim_data {
+            Claim::Mainnet(claim) => claim.l1_leaf.l1_info_tree_index,
+            Claim::Rollup(claim) => claim.l1_leaf.l1_info_tree_index,
         }
     }
 
