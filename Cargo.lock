@@ -263,7 +263,7 @@ dependencies = [
 name = "agglayer-telemetry"
 version = "0.1.0"
 dependencies = [
- "axum 0.7.4",
+ "axum 0.7.7",
  "buildstructor",
  "futures",
  "lazy_static",
@@ -927,9 +927,9 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.7.4"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1236b4b292f6c4d6dc34604bb5120d85c3fe1d1aa596bd5cc52ca054d13e7b9e"
+checksum = "504e3947307ac8326a5437504c517c4b56716c9d98fac0028c2acc7ca47d70ae"
 dependencies = [
  "async-trait",
  "axum-core 0.4.5",
@@ -951,9 +951,9 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
- "sync_wrapper 0.1.2",
+ "sync_wrapper 1.0.1",
  "tokio",
- "tower 0.4.13",
+ "tower 0.5.1",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -7991,7 +7991,7 @@ checksum = "877c5b330756d856ffcc4553ab34a5684481ade925ecc54bcd1bf02b1d0d4d52"
 dependencies = [
  "async-stream",
  "async-trait",
- "axum 0.7.4",
+ "axum 0.7.7",
  "base64 0.22.1",
  "bytes",
  "h2 0.4.6",
@@ -8083,8 +8083,10 @@ dependencies = [
  "futures-util",
  "pin-project-lite",
  "sync_wrapper 0.1.2",
+ "tokio",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -8328,7 +8330,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa3161d8eee0abcad4e762f4215381a430cc1281870d575b0f1e4fbfc74b8ce"
 dependencies = [
  "async-trait",
- "axum 0.7.4",
+ "axum 0.7.7",
  "bytes",
  "futures",
  "http 1.1.0",
