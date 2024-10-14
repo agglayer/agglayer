@@ -37,6 +37,7 @@ pub(crate) mod rpc;
 pub mod shutdown;
 pub mod storage;
 pub(crate) mod telemetry;
+mod with;
 
 pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
 pub use epoch::Epoch;
