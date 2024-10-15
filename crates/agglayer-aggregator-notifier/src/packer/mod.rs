@@ -82,8 +82,7 @@ where
         let network_id = certificate.network_id;
         let epoch_number = related_epoch.get_epoch_number();
 
-        // TODO: Get the l1_info_tree_leaf_count from somewhere
-        let l_1_info_tree_leaf_count = 0;
+        let l_1_info_tree_leaf_count = certificate.l1_info_tree_leaf_count();
 
         // Prepare the proof
         let (output, proof) =
