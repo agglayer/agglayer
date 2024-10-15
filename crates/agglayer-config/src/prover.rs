@@ -93,6 +93,8 @@ impl Default for CpuProverConfig {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct NetworkProverConfig {
+    #[serde(default = "default_activation_network_prover")]
+    pub enabled: bool,
     #[serde(default = "default_network_proving_timeout")]
     #[serde_as(as = "DurationSeconds")]
     pub proving_timeout: Duration,
@@ -101,12 +103,17 @@ pub struct NetworkProverConfig {
 impl Default for NetworkProverConfig {
     fn default() -> Self {
         Self {
+            enabled: false,
             proving_timeout: default_network_proving_timeout(),
         }
     }
 }
 const fn default_socket_addr() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)
+}
+
+const fn default_activation_network_prover() -> bool {
+    false
 }
 
 pub(crate) fn default_prover_entrypoint() -> String {

@@ -78,7 +78,7 @@ impl ProofGenerationService for ProverRPC {
                         Error::UnableToExecuteProver => {
                             tonic::Status::internal("Unable to execute prover")
                         }
-                        Error::ExecutorFailed(error) => {
+                        Error::ExecutorFailed(inner_error) => {
                             if let Ok(bytes_error) = default_bincode_options().serialize(&error) {
                                 tonic::Status::with_details(
                                     tonic::Code::InvalidArgument,
@@ -86,11 +86,11 @@ impl ProofGenerationService for ProverRPC {
                                     bytes_error.into(),
                                 )
                             } else {
-                                warn!("Unable to serialize Execution  error: {}", error);
+                                warn!("Unable to serialize Execution  error: {}", inner_error);
                                 tonic::Status::invalid_argument(error.to_string())
                             }
                         }
-                        Error::ProofVerificationFailed(error) => {
+                        Error::NetworkProverDisabled => {
                             if let Ok(bytes_error) = default_bincode_options().serialize(&error) {
                                 tonic::Status::with_details(
                                     tonic::Code::InvalidArgument,
@@ -98,7 +98,22 @@ impl ProofGenerationService for ProverRPC {
                                     bytes_error.into(),
                                 )
                             } else {
-                                warn!("Unable to serialize SP1 verification error: {}", error);
+                                warn!("Unable to serialize NetworkProverDisabled error",);
+                                tonic::Status::invalid_argument(error.to_string())
+                            }
+                        }
+                        Error::ProofVerificationFailed(inner_error) => {
+                            if let Ok(bytes_error) = default_bincode_options().serialize(&error) {
+                                tonic::Status::with_details(
+                                    tonic::Code::InvalidArgument,
+                                    error.to_string(),
+                                    bytes_error.into(),
+                                )
+                            } else {
+                                warn!(
+                                    "Unable to serialize SP1 verification error: {}",
+                                    inner_error
+                                );
                                 tonic::Status::invalid_argument(error.to_string())
                             }
                         }

@@ -7,7 +7,7 @@ use std::{
 
 use agglayer_config::prover::ProverConfig;
 use agglayer_prover_types::Error;
-use futures::{Future, TryFutureExt};
+use futures::{Future, FutureExt, TryFutureExt};
 use pessimistic_proof::{
     local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
@@ -32,7 +32,7 @@ const ELF: &[u8] =
 
 #[derive(Clone)]
 pub struct Executor {
-    network: BoxCloneService<Request, Response, Error>,
+    network: Option<BoxCloneService<Request, Response, Error>>,
     local: BoxCloneService<Request, Response, Error>,
 }
 
@@ -82,19 +82,27 @@ impl Executor {
         network: BoxCloneService<Request, Response, Error>,
         local: BoxCloneService<Request, Response, Error>,
     ) -> Self {
-        Self { network, local }
+        Self {
+            network: Some(network),
+            local,
+        }
     }
 
     pub fn new(config: &ProverConfig) -> Self {
-        let network_prover = NetworkProver::new();
-        let (_proving_key, verification_key) = network_prover.setup(ELF);
-        let network = Self::build_network_service(
-            config.network_prover.proving_timeout,
-            NetworkExecutor {
-                prover: Arc::new(network_prover),
-                verification_key,
-            },
-        );
+        let network = if config.network_prover.enabled {
+            let network_prover = NetworkProver::new();
+            let (_proving_key, verification_key) = network_prover.setup(ELF);
+            Some(Self::build_network_service(
+                config.network_prover.proving_timeout,
+                NetworkExecutor {
+                    prover: Arc::new(network_prover),
+                    verification_key,
+                    timeout: config.network_prover.proving_timeout,
+                },
+            ))
+        } else {
+            None
+        };
 
         let prover = CpuProver::new();
         let (proving_key, verification_key) = prover.setup(ELF);
@@ -106,6 +114,7 @@ impl Executor {
                 prover: Arc::new(prover),
                 proving_key,
                 verification_key,
+                timeout: config.cpu_prover.proving_timeout,
             },
         );
 
@@ -145,7 +154,12 @@ impl Service<Request> for Executor {
     }
 
     fn call(&mut self, req: Request) -> Self::Future {
-        let network = self.network.call(req.clone());
+        let network = if let Some(s) = self.network.as_mut() {
+            s.call(req.clone())
+        } else {
+            async { Err(Error::NetworkProverDisabled) }.boxed()
+        };
+
         let mut local = self.local.clone();
 
         let fut = async move {
@@ -168,6 +182,7 @@ struct LocalExecutor {
     proving_key: SP1ProvingKey,
     verification_key: SP1VerifyingKey,
     prover: Arc<CpuProver>,
+    timeout: Duration,
 }
 
 impl Service<Request> for LocalExecutor {
@@ -184,7 +199,10 @@ impl Service<Request> for LocalExecutor {
     fn call(&mut self, _req: Request) -> Self::Future {
         let prover = self.prover.clone();
         let stdin = SP1Stdin::new();
-        let opts = ProofOpts::default();
+        let opts = ProofOpts {
+            timeout: Some(self.timeout),
+            ..Default::default()
+        };
         let kind = SP1ProofKind::default();
 
         let proving_key = self.proving_key.clone();
@@ -213,6 +231,7 @@ impl Service<Request> for LocalExecutor {
 struct NetworkExecutor {
     prover: Arc<NetworkProver>,
     verification_key: SP1VerifyingKey,
+    timeout: Duration,
 }
 
 impl Service<Request> for NetworkExecutor {
@@ -231,6 +250,7 @@ impl Service<Request> for NetworkExecutor {
         let stdin = req.into();
 
         let verification_key = self.verification_key.clone();
+        let timeout = self.timeout;
 
         let fut = async move {
             let proof = prover
@@ -238,7 +258,7 @@ impl Service<Request> for NetworkExecutor {
                     ELF,
                     stdin,
                     sp1_sdk::proto::network::ProofMode::default(),
-                    None,
+                    Some(timeout),
                 )
                 .await
                 .map_err(|error| Error::ProverFailed(error.to_string()))?;

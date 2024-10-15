@@ -33,4 +33,7 @@ pub enum Error {
 
     #[error("Prover executor failed: {0}")]
     ExecutorFailed(#[from] ProofError),
+
+    #[error("NetworkProver is disabled")]
+    NetworkProverDisabled,
 }

@@ -16,6 +16,7 @@ pub enum ConfigMigrator {
 impl ConfigMigrator {
     pub fn migrate(self, config_path: &Path) -> crate::Config {
         match self {
+            ConfigMigrator::V0_2(config) => config,
             ConfigMigrator::V0_1(v0_1::Config {
                 full_node_rpcs,
                 proof_signers,
@@ -49,7 +50,6 @@ impl ConfigMigrator {
                     prover_entrypoint: default_prover_entrypoint(),
                 }
             }
-            ConfigMigrator::V0_2(config) => config,
         }
         .path_contextualized(config_path)
     }
