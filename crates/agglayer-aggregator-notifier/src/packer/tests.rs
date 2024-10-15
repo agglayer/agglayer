@@ -9,10 +9,9 @@ use ethers::{
     contract::{ContractCall, ContractError},
     middleware::NonceManagerMiddleware,
     providers::{MockProvider, Provider},
-    types::{Address, H160},
+    types::H160,
 };
 use mockall::predicate::eq;
-use pessimistic_proof::generate_pessimistic_proof;
 use rstest::rstest;
 
 use crate::EpochPackerClient;
@@ -82,7 +81,7 @@ fn epoch_packer_can_settle_one_certificate() {
         .returning(move |_| {
             let proof = Proof::new_for_test();
 
-            let state = LocalNetworkStateData::default();
+            let _state = LocalNetworkStateData::default();
             // TODO: generation PP
 
             Ok(Some(proof))

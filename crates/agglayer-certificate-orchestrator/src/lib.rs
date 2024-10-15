@@ -765,6 +765,10 @@ where
                 warn!("Error during certification process: {}", error);
                 let certificate_error: Option<(CertificateId, CertificateStatusError)> = match error
                 {
+                    Error::TrustedSequencerNotFound(certificate_id, network) => Some((
+                        certificate_id,
+                        CertificateStatusError::TrustedSequencerNotFound(network),
+                    )),
                     Error::ProofVerificationFailed {
                         source,
                         certificate_id,
@@ -1001,4 +1005,9 @@ pub enum Error {
         certificate_id: CertificateId,
         error: String,
     },
+    #[error(
+        "Failed to retrieve the trusted sequencer address for network {1} during proving phase \
+         for {0}"
+    )]
+    TrustedSequencerNotFound(CertificateId, NetworkId),
 }
