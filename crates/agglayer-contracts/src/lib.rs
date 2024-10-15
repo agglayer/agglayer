@@ -1,8 +1,11 @@
 //! Agglayer smart-contract bindings.
 
+use std::collections::HashMap;
+
+use ethers::prelude::*;
 use ethers::providers::Middleware;
 use ethers_contract::{ContractCall, ContractError};
-use polygon_rollup_manager::PolygonRollupManagerErrors;
+use polygon_rollup_manager::{PolygonRollupManagerErrors, RollupIDToRollupDataReturn};
 
 #[rustfmt::skip]
 #[allow(warnings)]
@@ -12,18 +15,19 @@ pub mod polygon_rollup_manager;
 #[allow(warnings)]
 pub mod polygon_zk_evm;
 
-pub trait Settler {
-    type M: Middleware;
+pub mod settler;
 
-    fn decode_contract_revert(error: &ContractError<Self::M>) -> Option<String>;
-    fn build_verify_pessimistic_trusted_aggregator_call(
+use polygon_zk_evm::PolygonZkEvm;
+pub use settler::Settler;
+
+#[async_trait::async_trait]
+pub trait RollupContract {
+    type M: Middleware;
+    async fn get_trusted_sequencer_address(
         &self,
         rollup_id: u32,
-        l_1_info_tree_leaf_count: u32,
-        new_local_exit_root: [u8; 32],
-        new_pessimistic_root: [u8; 32],
-        proof: ::ethers::core::types::Bytes,
-    ) -> ContractCall<Self::M, ()>;
+        proof_signers: HashMap<u32, Address>,
+    ) -> Result<Address, ()>;
 }
 
 pub struct L1RpcClient<RpcProvider> {
@@ -33,6 +37,39 @@ pub struct L1RpcClient<RpcProvider> {
 impl<RpcProvider> L1RpcClient<RpcProvider> {
     pub fn new(inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>) -> Self {
         Self { inner }
+    }
+}
+
+#[async_trait::async_trait]
+impl<RpcProvider> RollupContract for L1RpcClient<RpcProvider>
+where
+    RpcProvider: Middleware + 'static,
+{
+    type M = RpcProvider;
+
+    async fn get_trusted_sequencer_address(
+        &self,
+        rollup_id: u32,
+        proof_signers: HashMap<u32, Address>,
+    ) -> Result<Address, ()> {
+        if let Some(addr) = proof_signers.get(&rollup_id) {
+            Ok(*addr)
+        } else {
+            let rollup_data = self
+                .inner
+                .rollup_id_to_rollup_data(rollup_id)
+                .await
+                .map_err(|_| ())?;
+
+            let rollup_metadata = RollupIDToRollupDataReturn { rollup_data };
+            PolygonZkEvm::new(
+                rollup_metadata.rollup_data.rollup_contract,
+                self.inner.client().clone(),
+            )
+            .trusted_sequencer()
+            .await
+            .map_err(|_| ())
+        }
     }
 }
 

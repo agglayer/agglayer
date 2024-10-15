@@ -106,9 +106,6 @@ impl Node {
             }
         };
 
-        let certifier_client =
-            CertifierClient::try_new(config.prover_entrypoint.clone(), pending_store.clone())
-                .await?;
         let signer = ConfiguredSigner::new(config.clone()).await?;
         let address = signer.address();
         tracing::info!("Signer address: {:?}", address);
@@ -120,10 +117,18 @@ impl Node {
                 .nonce_manager(address),
         );
 
-        let rollup_manager = L1RpcClient::new(PolygonRollupManager::new(
+        let rollup_manager = Arc::new(L1RpcClient::new(PolygonRollupManager::new(
             config.l1.rollup_manager_contract,
             rpc.clone(),
-        ));
+        )));
+
+        let certifier_client = CertifierClient::try_new(
+            config.prover_entrypoint.clone(),
+            pending_store.clone(),
+            Arc::clone(&rollup_manager),
+            Arc::clone(&config),
+        )
+        .await?;
 
         // Construct the core.
         let core = Kernel::new(rpc.clone(), config.clone());
@@ -147,7 +152,7 @@ impl Node {
         let epoch_packing_aggregator_task = EpochPackerClient::try_new(
             Arc::new(config.outbound.rpc.settle.clone()),
             state_store.clone(),
-            Arc::new(rollup_manager),
+            Arc::clone(&rollup_manager),
         )?;
 
         let (data_sender, data_receiver) = mpsc::channel(

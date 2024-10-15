@@ -156,8 +156,10 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "ethers",
  "ethers-contract",
+ "reth-primitives",
 ]
 
 [[package]]
@@ -197,8 +199,10 @@ dependencies = [
  "insta",
  "jsonrpsee",
  "jsonrpsee-test-utils",
+ "lazy_static",
  "parking_lot",
  "pessimistic-proof",
+ "pessimistic-proof-test-suite",
  "pin-project 1.1.6",
  "rand",
  "reqwest 0.12.8",
@@ -2545,6 +2549,7 @@ checksum = "e79e5973c26d4baf0ce55520bd732314328cabe53193286671b47144145b9649"
 dependencies = [
  "chrono",
  "ethers-core",
+ "ethers-solc",
  "reqwest 0.11.27",
  "semver 1.0.23",
  "serde",
