@@ -79,6 +79,7 @@ where
                 return Err(Error::InternalError);
             };
 
+        let height = certificate.height;
         let network_id = certificate.network_id;
         let epoch_number = related_epoch.get_epoch_number();
 
@@ -163,6 +164,7 @@ where
                 &network_id,
                 &certificate_id,
                 &epoch_number,
+                &height,
             ) {
                 error!(
                     hash,

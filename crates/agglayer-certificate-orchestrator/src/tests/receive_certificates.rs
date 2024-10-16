@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use agglayer_storage::stores::PendingCertificateReader;
 use agglayer_storage::stores::PendingCertificateWriter;
 use agglayer_storage::stores::StateWriter;
 use agglayer_types::Certificate;
@@ -42,10 +43,11 @@ async fn receive_certificate_with_height_zero() {
     let result = orchestrator.receive_certificates(&[(1.into(), 0, certificate_id)]);
 
     assert!(result.is_ok());
-    assert!(matches!(
-        orchestrator.proving_cursors.get(&1.into()),
-        Some(0)
-    ));
+    assert!(orchestrator
+        .pending_store
+        .get_current_proven_height_for_network(&1.into())
+        .unwrap()
+        .is_none());
     assert!(orchestrator.global_state.contains_key(&1.into()));
     assert!(receiver.recv().await.is_some());
 }
@@ -56,8 +58,9 @@ async fn receive_certificate_with_height_zero() {
 async fn receive_certificate_with_previous_proven() {
     let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
 
+    let network_id = 1.into();
     let previous = Certificate {
-        network_id: 1.into(),
+        network_id,
         height: 0,
         prev_local_exit_root: [0; 32],
         new_local_exit_root: [0; 32],
@@ -77,7 +80,7 @@ async fn receive_certificate_with_previous_proven() {
         .unwrap();
 
     let certificate = Certificate {
-        network_id: 1.into(),
+        network_id,
         height: 1,
         prev_local_exit_root: [0; 32],
         new_local_exit_root: [0; 32],
@@ -93,17 +96,23 @@ async fn receive_certificate_with_previous_proven() {
 
     orchestrator
         .pending_store
-        .insert_pending_certificate(1.into(), 1, &certificate)
+        .insert_pending_certificate(network_id, 1, &certificate)
         .unwrap();
 
-    orchestrator.proving_cursors.insert(1.into(), 0);
+    orchestrator
+        .pending_store
+        .set_latest_proven_certificate_per_network(&network_id, &0, &previous.hash())
+        .unwrap();
 
     let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32].into())]);
 
     assert!(result.is_ok());
     assert!(matches!(
-        orchestrator.proving_cursors.get(&1.into()),
-        Some(1)
+        orchestrator
+            .pending_store
+            .get_current_proven_height_for_network(&1.into())
+            .unwrap(),
+        Some(0)
     ));
     assert!(orchestrator.global_state.contains_key(&1.into()));
     assert!(receiver.recv().await.is_some());
@@ -158,7 +167,6 @@ async fn receive_certificate_with_previous_pending() {
     let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32].into())]);
 
     assert!(result.is_ok());
-    assert!(!orchestrator.proving_cursors.contains_key(&1.into()));
     sleep(Duration::from_millis(10)).await;
 
     assert!(receiver.try_recv().is_err());

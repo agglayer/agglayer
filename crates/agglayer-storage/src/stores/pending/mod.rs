@@ -32,7 +32,7 @@ impl PendingStore {
             crate::storage::pending_db_cf_definitions(),
         )?);
 
-        Ok(Self { db })
+        Ok(Self::new(db))
     }
 }
 
@@ -108,6 +108,15 @@ impl PendingCertificateReader for PendingStore {
             )?
             .filter_map(|v| v.map(|(_, certificate)| certificate).ok())
             .collect())
+    }
+
+    fn get_current_proven_height_for_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<Height>, Error> {
+        self.db
+            .get::<LatestProvenCertificatePerNetworkColumn>(network_id)
+            .map(|v| v.map(|ProvenCertificate(_, _, height)| height))
     }
 
     fn multi_get_certificate(

@@ -193,6 +193,7 @@ impl StateWriter for DummyStore {
         _network_id: &NetworkId,
         _certificate_id: &CertificateId,
         _epoch_number: &agglayer_types::EpochNumber,
+        _height: &Height,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }

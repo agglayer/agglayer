@@ -285,7 +285,6 @@ where
             self.db.put::<EndCheckpointColumn>(&network_id, &height)?;
         }
 
-        Ok((self.epoch_number, certificate_index))
         drop(lock);
 
         Ok((*self.epoch_number, certificate_index))
@@ -325,14 +324,16 @@ where
         //     .assign_certificates_to_epoch(epoch_number, batch_status)?;
 
         _ = *lock.insert(epoch_number);
-        match self.state_store.set_latest_settled_epoch(self.epoch_number) {
+        match self
+            .state_store
+            .set_latest_settled_epoch(*self.epoch_number)
+        {
             Err(Error::UnprocessedAction(error)) => {
                 warn!("Couldn't define the latest settled epoch: {}", error)
             }
             Err(error) => return Err(error),
             Ok(_) => (),
         }
-
 
         drop(lock);
 

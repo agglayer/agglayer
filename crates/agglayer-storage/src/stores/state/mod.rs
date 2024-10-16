@@ -92,6 +92,16 @@ impl StateWriter for StateStore {
             certificate_header.status = status.clone();
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+
+            if let CertificateStatus::Settled = status {
+                self.db.put::<CertificatePerNetworkColumn>(
+                    &certificate_per_network::Key {
+                        network_id: *certificate_header.network_id,
+                        height: certificate_header.height,
+                    },
+                    &certificate_header.certificate_id,
+                )?;
+            }
         }
 
         Ok(())
@@ -99,11 +109,15 @@ impl StateWriter for StateStore {
 
     fn set_latest_settled_certificate_for_network(
         &self,
-        _network_id: &NetworkId,
-        _certificate_id: &CertificateId,
-        _epoch_number: &EpochNumber,
+        network_id: &NetworkId,
+        certificate_id: &CertificateId,
+        epoch_number: &EpochNumber,
+        height: &Height,
     ) -> Result<(), Error> {
-        Ok(())
+        self.db.put::<LatestSettledCertificatePerNetworkColumn>(
+            network_id,
+            &SettledCertificate(*certificate_id, *height, *epoch_number),
+        )
     }
 }
 

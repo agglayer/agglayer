@@ -42,7 +42,7 @@ impl<PendingStore, StateStore> EpochsStore<PendingStore, StateStore> {
 impl<PendingStore, StateStore> EpochStoreWriter for EpochsStore<PendingStore, StateStore>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader,
-    StateStore: StateWriter,
+    StateStore: StateWriter + StateReader + MetadataWriter,
 {
     type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
     //
