@@ -53,7 +53,7 @@ pub enum EpochRateLimit {
 impl EpochRateLimit {
     /// Default rate limiting for the `sendCertificate` call.
     pub const fn send_certificate_default() -> Self {
-        Self::Unlimited
+        Self::limited(1)
     }
 
     /// Create a time-based rate limiting
@@ -179,7 +179,11 @@ mod test {
 
     #[test]
     fn default_config() {
-        let config_str = "send-tx = \"unlimited\"\nsend-certificate = \"unlimited\"";
+        #[rustfmt::skip]
+        let config_str = "send-tx = \"unlimited\"\n\
+            \n\
+            [send-certificate]\n\
+            max-per-epoch = 1\n";
         let parsed_default_config: RateLimitingConfig = toml::from_str(config_str).unwrap();
         assert_eq!(parsed_default_config, RateLimitingConfig::DEFAULT);
 
