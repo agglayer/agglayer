@@ -2,7 +2,7 @@ use std::{num::NonZeroU64, sync::Arc};
 
 use agglayer_aggregator_notifier::{AggregatorNotifier, CertifierClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
-use agglayer_clock::{Clock, TimeClock};
+use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
@@ -16,7 +16,7 @@ use agglayer_types::Certificate;
 use anyhow::Result;
 use ethers::{
     middleware::MiddlewareBuilder,
-    providers::{Http, Provider},
+    providers::{Http, Provider, Ws},
     signers::Signer,
 };
 use tokio::{join, sync::mpsc, task::JoinHandle};
@@ -94,6 +94,12 @@ impl Node {
 
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
+            Epoch::BlockClock(cfg) => {
+                let provider = Provider::<Ws>::connect(config.l1.ws_node_url.as_str()).await?;
+                let clock = BlockClock::new(provider, cfg.genesis_block, cfg.epoch_duration);
+
+                clock.spawn(cancellation_token.clone()).await?
+            }
             Epoch::TimeClock(cfg) => {
                 let duration =
                     NonZeroU64::new(cfg.epoch_duration.as_secs()).ok_or(std::io::Error::new(
