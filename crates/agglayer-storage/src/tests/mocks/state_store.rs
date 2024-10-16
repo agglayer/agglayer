@@ -36,9 +36,8 @@ mock! {
             network_id: &NetworkId,
             certificate_id: &CertificateId,
             epoch_number: &EpochNumber,
-        ) -> Result<(), Error> {
-            Ok(())
-        }
+            height: &Height,
+        ) -> Result<(), Error>;
     }
 
     impl StateReader for StateStore {

@@ -28,6 +28,10 @@ pub trait PendingCertificateReader: Send + Sync {
 
     fn multi_get_proof(&self, keys: &[CertificateId]) -> Result<Vec<Option<Proof>>, Error>;
     fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error>;
+    fn get_current_proven_height_for_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<Height>, Error>;
 }
 
 pub trait MetadataReader: Send + Sync {
