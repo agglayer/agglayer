@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{num::NonZeroU64, time::Duration};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -8,11 +8,31 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub enum Epoch {
     #[serde(alias = "TimeClock")]
     TimeClock(TimeClockConfig),
+    BlockClock(BlockClockConfig),
 }
 
 impl Default for Epoch {
     fn default() -> Self {
-        Self::TimeClock(TimeClockConfig::default())
+        Self::BlockClock(BlockClockConfig::default())
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct BlockClockConfig {
+    #[serde(default = "default_block_epoch_duration")]
+    pub epoch_duration: NonZeroU64,
+
+    #[serde(default = "default_genesis_block")]
+    pub genesis_block: u64,
+}
+
+impl Default for BlockClockConfig {
+    fn default() -> Self {
+        Self {
+            epoch_duration: default_block_epoch_duration(),
+            genesis_block: default_genesis_block(),
+        }
     }
 }
 
@@ -34,6 +54,14 @@ impl Default for TimeClockConfig {
             epoch_duration: default_epoch_duration(),
         }
     }
+}
+
+fn default_block_epoch_duration() -> NonZeroU64 {
+    NonZeroU64::new(8).unwrap()
+}
+
+const fn default_genesis_block() -> u64 {
+    0
 }
 
 fn default_epoch_duration() -> Duration {

@@ -14,6 +14,8 @@ pub struct L1 {
     pub chain_id: u64,
     #[serde(alias = "NodeURL")]
     pub node_url: Url,
+    #[serde(alias = "WSNodeURL")]
+    pub ws_node_url: Url,
     #[serde(alias = "RollupManagerContract")]
     pub rollup_manager_contract: Address,
     #[serde(default = "L1::default_rpc_timeout")]
@@ -33,6 +35,7 @@ impl Default for L1 {
         Self {
             chain_id: 1337,
             node_url: "http://zkevm-mock-l1-network:8545".parse().unwrap(),
+            ws_node_url: "ws://zkevm-mock-l1-network:8546".parse().unwrap(),
             rollup_manager_contract: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
                 .parse()
                 .unwrap(),
