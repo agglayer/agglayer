@@ -50,6 +50,7 @@ pub trait StateWriter: Send + Sync {
         network_id: &NetworkId,
         certificate_id: &CertificateId,
         epoch_number: &EpochNumber,
+        height: &Height,
     ) -> Result<(), Error>;
 }
 

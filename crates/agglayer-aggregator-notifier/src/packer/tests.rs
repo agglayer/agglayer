@@ -53,6 +53,7 @@ fn epoch_packer_can_settle_one_certificate() {
                 certificate_index: Some(0),
                 certificate_id,
                 new_local_exit_root: [0; 32].into(),
+                metadata: [0; 32].into(),
                 status: agglayer_types::CertificateStatus::Candidate,
             }))
         });

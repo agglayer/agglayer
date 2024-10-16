@@ -147,8 +147,8 @@ impl EpochStoreWriter for DummyPendingStore {
 
     fn open_with_start_checkpoint(
         &self,
-        epoch_number: u64,
-        start_checkpoint: BTreeMap<NetworkId, Height>,
+        _epoch_number: u64,
+        _start_checkpoint: BTreeMap<NetworkId, Height>,
     ) -> Result<Self::PerEpochStore, agglayer_storage::error::Error> {
         Ok(DummyPendingStore::default())
     }
@@ -270,6 +270,7 @@ impl StateWriter for DummyPendingStore {
         _network_id: &NetworkId,
         _certificate_id: &CertificateId,
         _epoch_number: &EpochNumber,
+        _height: &Height,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
@@ -286,6 +287,17 @@ impl PendingCertificateReader for DummyPendingStore {
             .values()
             .cloned()
             .collect())
+    }
+    fn get_current_proven_height_for_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<Height>, agglayer_storage::error::Error> {
+        Ok(self
+            .latest_proven_certificate_per_network
+            .read()
+            .unwrap()
+            .get(network_id)
+            .map(|x| x.2))
     }
 
     fn get_certificate(
@@ -363,7 +375,6 @@ async fn test_certificate_orchestrator_can_stop() {
 
     assert!(matches!(poll!(&mut orchestrator), Poll::Ready(())));
 
-    assert!(orchestrator.proving_cursors.is_empty());
     assert!(check_receiver.try_recv().is_err());
 }
 
@@ -409,7 +420,6 @@ async fn test_collect_certificates() {
 
     let _poll = poll!(&mut orchestrator);
 
-    assert!(orchestrator.proving_cursors.is_empty());
     assert!(check_receiver.recv().await.is_some());
 }
 
