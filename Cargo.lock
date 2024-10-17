@@ -147,6 +147,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-contracts"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "ethers",
+ "ethers-contract",
+ "reth-primitives",
+]
+
+[[package]]
 name = "agglayer-gcp-kms"
 version = "0.1.0"
 dependencies = [
@@ -165,6 +175,7 @@ dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-clock",
  "agglayer-config",
+ "agglayer-contracts",
  "agglayer-signer",
  "agglayer-storage",
  "agglayer-telemetry",
@@ -172,7 +183,6 @@ dependencies = [
  "anyhow",
  "buildstructor",
  "ethers",
- "ethers-contract",
  "futures",
  "hex",
  "http-body-util",
