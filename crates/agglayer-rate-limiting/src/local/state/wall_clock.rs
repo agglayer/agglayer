@@ -112,13 +112,8 @@ mod tests {
 
     use tokio::time::Instant;
 
-    use crate::rate_limiting::local::{
-        limiter::RateLimiterCore,
-        state::{
-            wall_clock::{Params, RateLimited, WallClockState},
-            RawState,
-        },
-    };
+    use super::{Params, RateLimited, WallClockState};
+    use crate::local::{limiter::RateLimiterCore, state::RawState};
 
     type TestLimiter = RateLimiterCore<WallClockState>;
 

@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use agglayer_rate_limiting::{self as rate_limiting, component, Component};
 use ethers::{
     providers::ProviderError,
     types::{Bytes, SignatureError as EthSignatureError, H160, H256},
@@ -10,7 +11,6 @@ use jsonrpsee::types::ErrorObjectOwned;
 
 use crate::{
     kernel::{self, ZkevmNodeVerificationError},
-    rate_limiting::{self, component, Component},
     rpc::Error,
 };
 
@@ -19,6 +19,7 @@ type ContractError = ethers::contract::ContractError<RpcProvider>;
 type SignatureError = kernel::SignatureVerificationError<RpcProvider>;
 type SettlementError = kernel::SettlementError<RpcProvider>;
 type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
+type EpochLimitedInfo = <component::SendCertificate as Component>::LimitedInfo;
 
 #[rstest::rstest]
 #[case("rollup_not_reg", Error::rollup_not_registered(1337))]
@@ -86,11 +87,11 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
     Error::settlement(SettlementError::Timeout(Duration::from_secs(30 * 60)))
 )]
 #[case(
-    "rate_disallowed",
+    "rate_sendtx_disallowed",
     rate_limiting::RateLimited::SendTxDiabled {}.into()
 )]
 #[case(
-    "rate_sendtx",
+    "rate_sendtx_limited",
     rate_limiting::RateLimited::SendTxRateLimited(WallClockLimitedInfo {
         max_per_interval: 3,
         time_interval: Duration::from_secs(30 * 60),
@@ -103,6 +104,17 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
         max_per_interval: 4,
         time_interval: Duration::from_secs(40 * 60),
         until_next: None,
+    }).into()
+)]
+#[case(
+    "rate_sendcert_disallowed",
+    rate_limiting::RateLimited::SendCertificateDiabled {}.into()
+)]
+#[case(
+    "rate_sendcert_limited",
+    rate_limiting::RateLimited::SendCertificateRateLimited(EpochLimitedInfo {
+        max_per_epoch: 3,
+        epoch: 1337,
     }).into()
 )]
 fn rpc_error_rendering(#[case] name: &str, #[case] err: Error) {

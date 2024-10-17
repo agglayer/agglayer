@@ -11,7 +11,6 @@ futures.workspace = true
 hex.workspace = true
 hyper = "1.4.1"
 jsonrpsee = { workspace = true, features = ["full"] }
-parking_lot = "0.12.3"
 pin-project = "1.1.6"
 reqwest = "0.12.8"
 serde = { workspace = true, features = ["derive"] }
@@ -29,6 +28,7 @@ tracing.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
 agglayer-clock = { path = "../agglayer-clock" }
+agglayer-rate-limiting = { path = "../agglayer-rate-limiting" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
 agglayer-types = { path = "../agglayer-types" }
 agglayer-signer = { path = "../agglayer-signer" }

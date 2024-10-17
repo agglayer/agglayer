@@ -1,3 +1,5 @@
+use agglayer_utils::log_assert_eq;
+
 /// Represents a single reserved rate limiting slot.
 ///
 /// If this goes out of scope, it checks the tracked slots have been properly
@@ -27,7 +29,7 @@ impl SlotTracker {
 
 impl Drop for SlotTracker {
     fn drop(&mut self) {
-        crate::log_assert_eq!(self.0, 0, "slots not released");
+        log_assert_eq!(self.0, 0, "slots not released");
     }
 }
 

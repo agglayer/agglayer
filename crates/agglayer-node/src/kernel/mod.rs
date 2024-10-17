@@ -2,6 +2,7 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_rate_limiting::{self as rate_limiting, RateLimiter};
 use ethers::prelude::*;
 use thiserror::Error;
 use tracing::{info, instrument, warn};
@@ -11,7 +12,6 @@ use crate::{
         polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
         polygon_zk_evm::PolygonZkEvm,
     },
-    rate_limiting::{self, RateLimiter},
     signed_tx::SignedTx,
     zkevm_node_client::ZkevmNodeClient,
 };
@@ -177,7 +177,7 @@ where
     #[error("contract error: {0}")]
     ContractError(ContractError<RpcProvider>),
     #[error(transparent)]
-    RateLimited(#[from] crate::rate_limiting::RateLimited),
+    RateLimited(#[from] rate_limiting::RateLimited),
     #[error("Settlement timed out after {}s", .0.as_secs())]
     Timeout(std::time::Duration),
 }

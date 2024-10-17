@@ -162,6 +162,7 @@ dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-clock",
  "agglayer-config",
+ "agglayer-rate-limiting",
  "agglayer-signer",
  "agglayer-storage",
  "agglayer-telemetry",
@@ -178,7 +179,6 @@ dependencies = [
  "insta",
  "jsonrpsee",
  "jsonrpsee-test-utils",
- "parking_lot",
  "pessimistic-proof",
  "pin-project 1.1.6",
  "reqwest 0.12.8",
@@ -226,6 +226,20 @@ dependencies = [
  "prost 0.13.3",
  "tonic 0.12.3",
  "tonic-build",
+]
+
+[[package]]
+name = "agglayer-rate-limiting"
+version = "0.1.0"
+dependencies = [
+ "agglayer-config",
+ "agglayer-types",
+ "agglayer-utils",
+ "parking_lot",
+ "serde",
+ "serde_with",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -291,6 +305,13 @@ dependencies = [
  "sp1-core-machine",
  "sp1-sdk",
  "thiserror",
+]
+
+[[package]]
+name = "agglayer-utils"
+version = "0.1.0"
+dependencies = [
+ "tracing",
 ]
 
 [[package]]

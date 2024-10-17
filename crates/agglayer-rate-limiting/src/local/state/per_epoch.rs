@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use crate::{log_assert, log_assert_eq};
+use agglayer_utils::{log_assert, log_assert_eq};
 pub use agglayer_types::EpochNumber;
 
 /// Information tracked by a per-epoch rate limiter.
@@ -67,10 +67,10 @@ impl super::RawState for PerEpochState {
 #[error("Limit reached")]
 pub struct RateLimited {
     /// Maximum number of events per epoch.
-    max_per_epoch: u32,
+    pub max_per_epoch: u32,
 
     /// Current epoch.
-    epoch: EpochNumber,
+    pub epoch: EpochNumber,
 }
 
 #[cfg(test)]
@@ -78,7 +78,7 @@ mod tests {
     use std::num::NonZeroU32;
 
     use super::{EpochNumber, PerEpochState};
-    use crate::rate_limiting::local::{limiter::RateLimiterCore, state::RawState};
+    use crate::local::{limiter::RateLimiterCore, state::RawState};
 
     impl PerEpochState {
         /// Prune the state twice, checking the operation is idempotent.
