@@ -2,6 +2,8 @@
 source: crates/agglayer/tests/config.rs
 expression: sanitize_config_folder_path(result)
 ---
+prover-entrypoint = "127.0.0.1:8080"
+
 [full-node-rpcs]
 
 [l2]

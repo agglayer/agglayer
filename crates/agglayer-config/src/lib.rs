@@ -43,6 +43,7 @@ pub use epoch::Epoch;
 pub use l1::L1;
 pub use l2::L2;
 pub use log::Log;
+use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
 
@@ -56,19 +57,15 @@ pub struct Config {
     /// endpoint.
     #[serde(alias = "FullNodeRPCs", deserialize_with = "deserialize_rpc_map")]
     pub full_node_rpcs: HashMap<u32, Url>,
+
     #[serde(default)]
     pub l2: L2,
-    #[serde(
-        alias = "ProofSigners",
-        deserialize_with = "deserialize_signers_map",
-        default
-    )]
+
+    #[serde(deserialize_with = "deserialize_signers_map", default)]
     pub proof_signers: HashMap<u32, Address>,
     /// The log configuration.
-    #[serde(alias = "Log")]
     pub log: Log,
     /// The local RPC server configuration.
-    #[serde(alias = "RPC")]
     pub rpc: RpcConfig,
     /// Rate limiting configuration.
     #[serde(default)]
@@ -80,10 +77,9 @@ pub struct Config {
     #[serde(alias = "L1")]
     pub l1: L1,
     /// The authentication configuration.
-    #[serde(alias = "EthTxManager", default, deserialize_with = "deserialize_auth")]
+    #[serde(default, deserialize_with = "deserialize_auth")]
     pub auth: AuthConfig,
     /// Telemetry configuration.
-    #[serde(alias = "Telemetry")]
     pub telemetry: TelemetryConfig,
 
     /// The Epoch configuration.
@@ -95,11 +91,16 @@ pub struct Config {
     pub shutdown: ShutdownConfig,
 
     /// The certificate orchestrator configuration.
-    #[serde(alias = "CertificateOrchestrator", default)]
+    #[serde(default)]
     pub certificate_orchestrator: certificate_orchestrator::CertificateOrchestrator,
 
     /// The storage configuration.
     pub storage: storage::StorageConfig,
+
+    /// AggLayer prover entrypoint.
+    #[serde(default = "default_prover_entrypoint")]
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub prover_entrypoint: String,
 }
 
 impl Config {
@@ -119,6 +120,7 @@ impl Config {
             epoch: Default::default(),
             shutdown: Default::default(),
             certificate_orchestrator: Default::default(),
+            prover_entrypoint: default_prover_entrypoint(),
         }
     }
 

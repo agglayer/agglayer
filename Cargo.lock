@@ -71,9 +71,11 @@ version = "0.1.0"
 dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
+ "agglayer-prover-types",
  "agglayer-storage",
  "agglayer-types",
  "anyhow",
+ "bincode",
  "futures",
  "pessimistic-proof",
  "reth-primitives",
@@ -83,6 +85,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror",
  "tokio",
+ "tonic 0.12.3",
  "tracing",
 ]
 
@@ -96,6 +99,7 @@ dependencies = [
  "agglayer-types",
  "anyhow",
  "arc-swap",
+ "bincode",
  "buildstructor",
  "futures-util",
  "pessimistic-proof",
@@ -185,6 +189,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "test-log",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -204,9 +209,15 @@ dependencies = [
  "agglayer-config",
  "agglayer-prover-types",
  "agglayer-telemetry",
+ "agglayer-types",
  "anyhow",
+ "bincode",
  "buildstructor",
  "futures",
+ "pessimistic-proof",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror",
  "tokio",
  "tokio-util",
  "toml 0.8.19",
@@ -222,7 +233,13 @@ dependencies = [
 name = "agglayer-prover-types"
 version = "0.1.0"
 dependencies = [
+ "agglayer-types",
+ "anyhow",
+ "bincode",
+ "pessimistic-proof",
  "prost 0.13.3",
+ "serde",
+ "thiserror",
  "tonic 0.12.3",
  "tonic-build",
 ]
@@ -2269,6 +2286,27 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.79",
+]
+
+[[package]]
+name = "env_filter"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab"
+dependencies = [
+ "log",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "env_filter",
+ "log",
 ]
 
 [[package]]
@@ -7731,6 +7769,28 @@ name = "termtree"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
+
+[[package]]
+name = "test-log"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dffced63c2b5c7be278154d76b479f9f9920ed34e7574201407f0b14e2bbb93"
+dependencies = [
+ "env_logger",
+ "test-log-macros",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "test-log-macros"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5999e24eaa32083191ba4e425deb75cdf25efefabe5aaccb7446dd0d4122a3f5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.79",
+]
 
 [[package]]
 name = "thiserror"
