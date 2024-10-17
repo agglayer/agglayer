@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use ::serde::{Deserialize, Serialize};
 use pessimistic_proof::global_index::GlobalIndex;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
@@ -20,6 +19,7 @@ use pessimistic_proof::{
 };
 pub use reth_primitives::U256;
 use reth_primitives::{Address, Signature};
+use serde::{Deserialize, Serialize};
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Hash;
@@ -52,7 +52,7 @@ pub enum Error {
         "Mismatch on the certificate new local exit root. declared: {declared:?}, computed: \
          {computed:?}"
     )]
-    MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
+    MismatchNewLocalExitRoot { computed: Hash, declared: Hash },
     /// The given token balance cannot overflow.
     #[error("Token balance cannot overflow. token: {0:?}")]
     BalanceOverflow(TokenInfo),
@@ -150,6 +150,7 @@ impl From<SP1VerificationError> for ProofVerificationError {
 pub enum CertificateStatus {
     Pending,
     Proven,
+    Candidate,
     InError { error: CertificateStatusError },
     Settled,
 }
@@ -409,8 +410,8 @@ impl LocalNetworkStateData {
         let computed = self.exit_tree.get_root();
         if computed != certificate.new_local_exit_root {
             return Err(Error::MismatchNewLocalExitRoot {
-                declared: certificate.new_local_exit_root,
-                computed,
+                declared: certificate.new_local_exit_root.into(),
+                computed: computed.into(),
             });
         }
 

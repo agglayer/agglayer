@@ -1,7 +1,10 @@
 #![cfg_attr(feature = "coverage", feature(coverage_attribute))]
 
+use std::sync::Arc;
+
 use agglayer_certificate_orchestrator::{EpochPacker, Error};
 use agglayer_config::certificate_orchestrator::prover::ProverConfig;
+use agglayer_storage::stores::{EpochStoreReader, PerEpochWriter, StateReader};
 use futures::future::BoxFuture;
 use serde::Serialize;
 use tracing::debug;
@@ -20,41 +23,44 @@ pub use packer::EpochPackerClient;
 /// The notifier that will be used to notify the aggregator
 /// using a prover that implements the [`AggregatorProver`] trait
 #[derive(Clone)]
-pub struct AggregatorNotifier<I> {
+pub struct AggregatorNotifier<I, StateStore, EpochsStore> {
     _phantom: std::marker::PhantomData<fn() -> I>,
+    #[allow(unused)]
+    state_store: Arc<StateStore>,
+    #[allow(unused)]
+    epochs_store: Arc<EpochsStore>,
 }
 
-impl<I> TryFrom<ProverConfig> for AggregatorNotifier<I>
+impl<I, StateStore, EpochsStore> AggregatorNotifier<I, StateStore, EpochsStore>
 where
     I: Serialize,
 {
-    type Error = anyhow::Error;
-
-    #[cfg_attr(feature = "coverage", coverage(off))]
-    fn try_from(_config: ProverConfig) -> Result<Self, Self::Error> {
+    /// Try to create a new notifier using the given configuration
+    pub fn try_new(
+        _config: &ProverConfig,
+        state_store: Arc<StateStore>,
+        epochs_store: Arc<EpochsStore>,
+    ) -> Result<Self, Error> {
         Ok(Self {
             _phantom: std::marker::PhantomData,
+            state_store,
+            epochs_store,
         })
     }
 }
 
-impl<I> EpochPacker for AggregatorNotifier<I>
+impl<I, StateStore, EpochsStore> EpochPacker for AggregatorNotifier<I, StateStore, EpochsStore>
 where
+    StateStore: StateReader + 'static,
+    EpochsStore: EpochStoreReader + 'static,
     I: Clone + 'static,
 {
-    type Item = I;
-    fn pack<T: IntoIterator<Item = Self::Item>>(
-        &self,
-        epoch: u64,
-        to_pack: T,
-    ) -> Result<BoxFuture<Result<(), Error>>, Error> {
-        let to_pack = to_pack.into_iter().collect::<Vec<_>>();
+    fn pack(&self, epoch: u64) -> Result<BoxFuture<Result<(), Error>>, Error> {
+        debug!("Start the settlement of the epoch {}", epoch);
 
-        debug!(
-            "Start the settlement for the epoch {} with {} p-proofs",
-            epoch,
-            to_pack.len()
-        );
+        // Selecting the different proof to pack in this epoch
+        let closing_epoch = self.epochs_store.get_current_epoch().load_full();
+        closing_epoch.start_packing()?;
 
         Ok(Box::pin(async move {
             // TODO: Submit the settlement tx for each proof

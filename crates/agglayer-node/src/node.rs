@@ -12,6 +12,7 @@ use agglayer_storage::{
         EpochStoreReader,
     },
 };
+use agglayer_types::Certificate;
 use anyhow::Result;
 use ethers::{
     middleware::MiddlewareBuilder,
@@ -110,6 +111,8 @@ impl Node {
                 .await?;
         let signer = ConfiguredSigner::new(config.clone()).await?;
         let address = signer.address();
+        tracing::info!("Signer address: {:?}", address);
+
         // Create a new L1 RPC provider with the configured signer.
         let rpc = Provider::<Http>::try_from(config.l1.node_url.as_str())?
             .with_signer(signer)
@@ -122,8 +125,12 @@ impl Node {
 
         let epochs_store = Arc::new(EpochsStore::new(config.clone(), current_epoch, pending_db)?);
 
-        let epoch_packing_aggregator_task: AggregatorNotifier<_> =
-            AggregatorNotifier::try_from(config.certificate_orchestrator.prover.clone())?;
+        let epoch_packing_aggregator_task: AggregatorNotifier<Certificate, _, _> =
+            AggregatorNotifier::try_new(
+                &config.certificate_orchestrator.prover,
+                state_store.clone(),
+                epochs_store.clone(),
+            )?;
 
         let (data_sender, data_receiver) = mpsc::channel(
             config
