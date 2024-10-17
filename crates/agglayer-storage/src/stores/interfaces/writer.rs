@@ -1,9 +1,16 @@
-use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId, Proof};
+use agglayer_types::{
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
+    NetworkId, Proof,
+};
 
 use crate::error::Error;
 
 pub trait PerEpochWriter: Send + Sync {
-    fn add_certificate(&self, network_id: NetworkId, height: Height) -> Result<(), Error>;
+    fn add_certificate(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+    ) -> Result<(EpochNumber, CertificateIndex), Error>;
     fn start_packing(&self) -> Result<(), Error>;
 }
 
