@@ -209,12 +209,7 @@ where
     /// # }
     ///
     /// impl EpochPacker for AggregatorNotifier {
-    ///     type Item = (Certificate, Proof);
-    ///     fn pack<T: IntoIterator<Item = (Certificate, Proof)>>(
-    ///         &self,
-    ///         epoch: u64,
-    ///         to_pack: T,
-    ///     ) -> Result<BoxFuture<Result<(), Error>>, Error> {
+    ///     fn pack(&self, epoch: u64) -> Result<BoxFuture<Result<(), Error>>, Error> {
     ///         Ok(Box::pin(async move { Ok(()) }))
     ///     }
     /// }
