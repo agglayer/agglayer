@@ -1,5 +1,6 @@
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    ops::Add,
     time::Duration,
 };
 
@@ -75,6 +76,10 @@ pub struct CpuProverConfig {
     #[serde(default = "default_max_concurrency_limit")]
     pub max_concurrency_limit: usize,
 
+    #[serde(default = "default_cpu_proving_task_timeout")]
+    #[serde_as(as = "DurationSeconds")]
+    pub proving_task_timeout: Duration,
+
     #[serde(default = "default_cpu_proving_timeout")]
     #[serde_as(as = "DurationSeconds")]
     pub proving_timeout: Duration,
@@ -84,6 +89,7 @@ impl Default for CpuProverConfig {
     fn default() -> Self {
         Self {
             max_concurrency_limit: default_max_concurrency_limit(),
+            proving_task_timeout: default_cpu_proving_task_timeout(),
             proving_timeout: default_cpu_proving_timeout(),
         }
     }
@@ -95,6 +101,11 @@ impl Default for CpuProverConfig {
 pub struct NetworkProverConfig {
     #[serde(default = "default_activation_network_prover")]
     pub enabled: bool,
+
+    #[serde(default = "default_network_proving_task_timeout")]
+    #[serde_as(as = "DurationSeconds")]
+    pub proving_task_timeout: Duration,
+
     #[serde(default = "default_network_proving_timeout")]
     #[serde_as(as = "DurationSeconds")]
     pub proving_timeout: Duration,
@@ -104,6 +115,7 @@ impl Default for NetworkProverConfig {
     fn default() -> Self {
         Self {
             enabled: false,
+            proving_task_timeout: default_network_proving_task_timeout(),
             proving_timeout: default_network_proving_timeout(),
         }
     }
@@ -132,8 +144,16 @@ const fn default_max_request_duration() -> Duration {
     Duration::from_secs(60 * 5)
 }
 
+fn default_cpu_proving_task_timeout() -> Duration {
+    default_cpu_proving_timeout().add(Duration::from_secs(1))
+}
+
 const fn default_cpu_proving_timeout() -> Duration {
     Duration::from_secs(60 * 5)
+}
+
+fn default_network_proving_task_timeout() -> Duration {
+    default_network_proving_timeout().add(Duration::from_secs(1))
 }
 
 const fn default_network_proving_timeout() -> Duration {

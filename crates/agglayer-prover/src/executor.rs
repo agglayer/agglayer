@@ -93,7 +93,7 @@ impl Executor {
             let network_prover = NetworkProver::new();
             let (_proving_key, verification_key) = network_prover.setup(ELF);
             Some(Self::build_network_service(
-                config.network_prover.proving_timeout,
+                config.network_prover.proving_task_timeout,
                 NetworkExecutor {
                     prover: Arc::new(network_prover),
                     verification_key,
@@ -108,7 +108,7 @@ impl Executor {
         let (proving_key, verification_key) = prover.setup(ELF);
 
         let local = Self::build_local_service(
-            config.cpu_prover.proving_timeout,
+            config.cpu_prover.proving_task_timeout,
             config.cpu_prover.max_concurrency_limit,
             LocalExecutor {
                 prover: Arc::new(prover),
