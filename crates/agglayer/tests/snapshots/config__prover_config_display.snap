@@ -1,0 +1,16 @@
+---
+source: crates/agglayer/tests/config.rs
+expression: sanitize_config_folder_path(result)
+---
+grpc-endpoint = "127.0.0.1:8080"
+
+[log]
+level = "info"
+outputs = []
+format = "pretty"
+
+[telemetry]
+prometheus-addr = "0.0.0.0:3000"
+
+[shutdown]
+runtime-timeout = 5
