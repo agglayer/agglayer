@@ -1,6 +1,5 @@
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    ops::Add,
     time::Duration,
 };
 
@@ -76,20 +75,30 @@ pub struct CpuProverConfig {
     #[serde(default = "default_max_concurrency_limit")]
     pub max_concurrency_limit: usize,
 
-    #[serde(default = "default_cpu_proving_task_timeout")]
-    #[serde_as(as = "DurationSeconds")]
-    pub proving_task_timeout: Duration,
+    #[serde_as(as = "Option<DurationSeconds>")]
+    pub proving_request_timeout: Option<Duration>,
 
     #[serde(default = "default_cpu_proving_timeout")]
     #[serde_as(as = "DurationSeconds")]
     pub proving_timeout: Duration,
 }
 
+impl CpuProverConfig {
+    // This constant represents the number of second added to the proving_timeout
+    pub const DEFAULT_PROVING_TIMEOUT_PADDING: u64 = 1;
+
+    pub fn get_proving_request_timeout(&self) -> Duration {
+        self.proving_request_timeout.unwrap_or_else(|| {
+            self.proving_timeout + Duration::from_secs(Self::DEFAULT_PROVING_TIMEOUT_PADDING)
+        })
+    }
+}
+
 impl Default for CpuProverConfig {
     fn default() -> Self {
         Self {
             max_concurrency_limit: default_max_concurrency_limit(),
-            proving_task_timeout: default_cpu_proving_task_timeout(),
+            proving_request_timeout: None,
             proving_timeout: default_cpu_proving_timeout(),
         }
     }
@@ -102,20 +111,30 @@ pub struct NetworkProverConfig {
     #[serde(default = "default_activation_network_prover")]
     pub enabled: bool,
 
-    #[serde(default = "default_network_proving_task_timeout")]
-    #[serde_as(as = "DurationSeconds")]
-    pub proving_task_timeout: Duration,
+    #[serde_as(as = "Option<DurationSeconds>")]
+    pub proving_request_timeout: Option<Duration>,
 
     #[serde(default = "default_network_proving_timeout")]
     #[serde_as(as = "DurationSeconds")]
     pub proving_timeout: Duration,
 }
 
+impl NetworkProverConfig {
+    // This constant represents the number of second added to the proving_timeout
+    pub const DEFAULT_PROVING_TIMEOUT_PADDING: u64 = 1;
+
+    pub fn get_proving_request_timeout(&self) -> Duration {
+        self.proving_request_timeout.unwrap_or_else(|| {
+            self.proving_timeout + Duration::from_secs(Self::DEFAULT_PROVING_TIMEOUT_PADDING)
+        })
+    }
+}
+
 impl Default for NetworkProverConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            proving_task_timeout: default_network_proving_task_timeout(),
+            proving_request_timeout: None,
             proving_timeout: default_network_proving_timeout(),
         }
     }
@@ -144,16 +163,8 @@ const fn default_max_request_duration() -> Duration {
     Duration::from_secs(60 * 5)
 }
 
-fn default_cpu_proving_task_timeout() -> Duration {
-    default_cpu_proving_timeout().add(Duration::from_secs(1))
-}
-
 const fn default_cpu_proving_timeout() -> Duration {
     Duration::from_secs(60 * 5)
-}
-
-fn default_network_proving_task_timeout() -> Duration {
-    default_network_proving_timeout().add(Duration::from_secs(1))
 }
 
 const fn default_network_proving_timeout() -> Duration {

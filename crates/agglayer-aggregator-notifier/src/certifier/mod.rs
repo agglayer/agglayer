@@ -130,13 +130,6 @@ where
                                     source: error,
                                 }
                             }
-                            agglayer_prover_types::Error::NetworkProverDisabled => {
-                                warn!(
-                                    "This error shouldn't be propageted to the AggLayer, the \
-                                     prover seems missconfigured"
-                                );
-                                Error::InternalError
-                            }
                             agglayer_prover_types::Error::ExecutorFailed(source) => {
                                 Error::NativeExecutionFailed {
                                     certificate_id,

@@ -5,9 +5,9 @@ use std::{
     time::Duration,
 };
 
-use agglayer_config::prover::ProverConfig;
+use agglayer_config::prover::{NetworkProverConfig, ProverConfig};
 use agglayer_prover_types::Error;
-use futures::{Future, FutureExt, TryFutureExt};
+use futures::{Future, TryFutureExt};
 use pessimistic_proof::{
     local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
@@ -93,7 +93,15 @@ impl Executor {
             let network_prover = NetworkProver::new();
             let (_proving_key, verification_key) = network_prover.setup(ELF);
             Some(Self::build_network_service(
-                config.network_prover.proving_task_timeout,
+                config
+                    .network_prover
+                    .proving_request_timeout
+                    .unwrap_or_else(|| {
+                        config.network_prover.proving_timeout
+                            + Duration::from_secs(
+                                NetworkProverConfig::DEFAULT_PROVING_TIMEOUT_PADDING,
+                            )
+                    }),
                 NetworkExecutor {
                     prover: Arc::new(network_prover),
                     verification_key,
@@ -108,7 +116,7 @@ impl Executor {
         let (proving_key, verification_key) = prover.setup(ELF);
 
         let local = Self::build_local_service(
-            config.cpu_prover.proving_task_timeout,
+            config.network_prover.get_proving_request_timeout(),
             config.cpu_prover.max_concurrency_limit,
             LocalExecutor {
                 prover: Arc::new(prover),
@@ -154,22 +162,22 @@ impl Service<Request> for Executor {
     }
 
     fn call(&mut self, req: Request) -> Self::Future {
-        let network = if let Some(s) = self.network.as_mut() {
-            s.call(req.clone())
-        } else {
-            async { Err(Error::NetworkProverDisabled) }.boxed()
-        };
+        let network = self.network.as_mut().map(|s| s.call(req.clone()));
 
         let mut local = self.local.clone();
 
         let fut = async move {
-            match network.await {
-                Ok(res) => Ok(res),
-                Err(err) => {
-                    error!("Network prover failed: {:?}", err);
+            if let Some(network) = network {
+                match network.await {
+                    Ok(res) => Ok(res),
+                    Err(err) => {
+                        error!("Network prover failed: {:?}", err);
 
-                    local.ready().await?.call(req).await
+                        local.ready().await?.call(req).await
+                    }
                 }
+            } else {
+                local.ready().await?.call(req).await
             }
         };
 
@@ -196,14 +204,14 @@ impl Service<Request> for LocalExecutor {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, _req: Request) -> Self::Future {
+    fn call(&mut self, req: Request) -> Self::Future {
         let prover = self.prover.clone();
-        let stdin = SP1Stdin::new();
+        let stdin = req.into();
         let opts = ProofOpts {
             timeout: Some(self.timeout),
             ..Default::default()
         };
-        let kind = SP1ProofKind::default();
+        let kind = SP1ProofKind::Plonk;
 
         let proving_key = self.proving_key.clone();
         let verification_key = self.verification_key.clone();
@@ -257,7 +265,7 @@ impl Service<Request> for NetworkExecutor {
                 .prove(
                     ELF,
                     stdin,
-                    sp1_sdk::proto::network::ProofMode::default(),
+                    sp1_sdk::proto::network::ProofMode::Plonk,
                     Some(timeout),
                 )
                 .await

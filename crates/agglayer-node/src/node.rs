@@ -22,7 +22,6 @@ use tokio::{join, sync::mpsc, task::JoinHandle};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
-use tracing::info;
 
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
@@ -106,7 +105,6 @@ impl Node {
             }
         };
 
-        info!("prover endpoint: {}", config.prover_entrypoint);
         let certifier_client =
             CertifierClient::try_new(config.prover_entrypoint.clone(), pending_store.clone())
                 .await?;
