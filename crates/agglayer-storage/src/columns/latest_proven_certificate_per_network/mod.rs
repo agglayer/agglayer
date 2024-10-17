@@ -3,9 +3,6 @@ use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, LATEST_PROVEN_CERTIFICATE_PER_NETWORK_CF};
 
-#[cfg(test)]
-mod tests;
-
 /// Column family for the latest proven certificate per network.
 /// The key is the network_id and the value is the certificateID and
 /// the height.

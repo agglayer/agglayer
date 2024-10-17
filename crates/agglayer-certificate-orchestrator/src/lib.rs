@@ -617,19 +617,12 @@ where
                                     .expect("Failed to remove certificate");
                             }
                             None => {
-                                if let Some(_certificate) = self
+                                if self
                                     .pending_store
                                     .get_certificate(network_id, height)
                                     .expect("Failed to get certificate")
+                                    .is_none()
                                 {
-                                    // self.state_store
-                                    //     .insert_certificate_header(
-                                    //         &certificate,
-                                    //         CertificateStatus::Pending,
-                                    //     )
-                                    //     .expect("Failed to insert certificate
-                                    // header");
-                                } else {
                                     // This should not happen as ProofAlreadyExists should only
                                     // happen if we have a pending certificate.
                                     warn!(
@@ -702,19 +695,12 @@ where
                                     .expect("Failed to remove certificate");
                             }
                             None => {
-                                if let Some(_certificate) = self
+                                if self
                                     .pending_store
                                     .get_certificate(network_id, height)
                                     .expect("Failed to get certificate")
+                                    .is_none()
                                 {
-                                    // self.state_store
-                                    //     .insert_certificate_header(
-                                    //         &certificate,
-                                    //         CertificateStatus::Pending,
-                                    //     )
-                                    //     .expect("Failed to insert certificate
-                                    // header");
-                                } else {
                                     // This should not happen as ProofAlreadyExists should only
                                     // happen if we have a pending certificate.
                                     warn!(

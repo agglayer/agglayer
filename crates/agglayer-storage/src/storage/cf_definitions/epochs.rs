@@ -1,4 +1,4 @@
-use rocksdb::{ColumnFamilyDescriptor, DBCompressionType};
+use rocksdb::ColumnFamilyDescriptor;
 
 pub const CFS: [&str; 3] = [
     crate::columns::PER_EPOCH_CERTIFICATES_CF,
@@ -8,14 +8,5 @@ pub const CFS: [&str; 3] = [
 
 /// Definitions for the column families in the epochs storage.
 pub fn epochs_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    CFS.iter()
-        .map(|cf| {
-            let mut cfg = rocksdb::Options::default();
-
-            cfg.set_compression_type(DBCompressionType::Lz4);
-            cfg.create_if_missing(true);
-
-            ColumnFamilyDescriptor::new(*cf, cfg)
-        })
-        .collect()
+    super::default_db_cf_definitions(&CFS)
 }
