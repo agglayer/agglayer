@@ -47,7 +47,7 @@ async fn check_tx_status() {
 
     let config = Arc::new(config);
 
-    let kernel = Kernel::new(client, config.clone());
+    let kernel = Kernel::new(Arc::new(client), config.clone());
 
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
     let _server_handle = AgglayerImpl::new(
@@ -94,7 +94,7 @@ async fn check_tx_status_fail() {
     }
     let config = Arc::new(config);
 
-    let kernel = Kernel::new(client, config.clone());
+    let kernel = Kernel::new(Arc::new(client), config.clone());
 
     let tmp = TempDBDir::new();
     let db = Arc::new(DB::open_cf(tmp.path.as_path(), pending_db_cf_definitions()).unwrap());

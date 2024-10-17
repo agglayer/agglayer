@@ -1,7 +1,8 @@
 use std::{path::Path, sync::Arc};
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
+    NetworkId,
 };
 use rocksdb::{Direction, ReadOptions};
 use tracing::warn;
@@ -88,9 +89,32 @@ impl StateWriter for StateStore {
             certificate_header.status = status.clone();
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+
+            if let CertificateStatus::Settled = status {
+                self.db.put::<CertificatePerNetworkColumn>(
+                    &certificate_per_network::Key {
+                        network_id: *certificate_header.network_id,
+                        height: certificate_header.height,
+                    },
+                    &certificate_header.certificate_id,
+                )?;
+            }
         }
 
         Ok(())
+    }
+
+    fn set_latest_settled_certificate_for_network(
+        &self,
+        network_id: &NetworkId,
+        certificate_id: &CertificateId,
+        epoch_number: &EpochNumber,
+        height: &Height,
+    ) -> Result<(), Error> {
+        self.db.put::<LatestSettledCertificatePerNetworkColumn>(
+            network_id,
+            &SettledCertificate(*certificate_id, *height, *epoch_number),
+        )
     }
 }
 

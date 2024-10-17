@@ -2,15 +2,15 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_contracts::{
+    polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
+    polygon_zk_evm::PolygonZkEvm,
+};
 use ethers::prelude::*;
 use thiserror::Error;
 use tracing::{info, instrument, warn};
 
 use crate::{
-    contracts::{
-        polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
-        polygon_zk_evm::PolygonZkEvm,
-    },
     rate_limiting::{self, RateLimiter},
     signed_tx::SignedTx,
     zkevm_node_client::ZkevmNodeClient,
@@ -52,9 +52,9 @@ pub(crate) enum ZkevmNodeVerificationError {
 }
 
 impl<RpcProvider> Kernel<RpcProvider> {
-    pub(crate) fn new(rpc: RpcProvider, config: Arc<Config>) -> Self {
+    pub(crate) fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> Self {
         Self {
-            rpc: Arc::new(rpc),
+            rpc,
             rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
             config,
         }
@@ -135,7 +135,7 @@ where
     /// The rollup manager contract address is specified by the given
     /// configuration.
     fn get_rollup_manager_contract(&self) -> PolygonRollupManager<RpcProvider> {
-        PolygonRollupManager::new(self.config.l1.rollup_manager_contract, self.rpc.clone())
+        PolygonRollupManager::new(self.config.l1.rollup_manager_contract, self.rpc.clone()).clone()
     }
 }
 
@@ -202,25 +202,12 @@ where
         &self,
         rollup_id: u32,
     ) -> Result<RollupIDToRollupDataReturn, ContractError<RpcProvider>> {
-        let tuple = self
+        let rollup_data = self
             .get_rollup_manager_contract()
             .rollup_id_to_rollup_data(rollup_id)
             .await?;
 
-        Ok(RollupIDToRollupDataReturn {
-            rollup_contract: tuple.0,
-            chain_id: tuple.1,
-            verifier: tuple.2,
-            fork_id: tuple.3,
-            last_local_exit_root: tuple.4,
-            last_batch_sequenced: tuple.5,
-            last_verified_batch: tuple.6,
-            last_pending_state: tuple.7,
-            last_pending_state_consolidated: tuple.8,
-            last_verified_batch_before_upgrade: tuple.9,
-            rollup_type_id: tuple.10,
-            rollup_compatibility_id: tuple.11,
-        })
+        Ok(RollupIDToRollupDataReturn { rollup_data })
     }
 
     /// Get a [`ContractInstance`], [`PolygonZkEvm`], of the rollup contract at
@@ -233,7 +220,7 @@ where
         let rollup_metadata = self.get_rollup_metadata(rollup_id).await?;
 
         Ok(PolygonZkEvm::new(
-            rollup_metadata.rollup_contract,
+            rollup_metadata.rollup_data.rollup_contract,
             self.rpc.clone(),
         ))
     }
