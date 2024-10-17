@@ -5,7 +5,7 @@ use std::{
 };
 
 use agglayer_storage::{
-    columns::latest_certificate_per_network::{
+    columns::latest_settled_certificate_per_network::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     storage::{state_db_cf_definitions, DB},

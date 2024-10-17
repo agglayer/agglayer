@@ -21,6 +21,8 @@ pub const LOCAL_EXIT_TREE_PER_NETWORK_CF: &str = "local_exit_tree_per_network_cf
 
 // Metadata CFs
 pub const CERTIFICATE_HEADER_CF: &str = "certificate_header_cf";
+pub const LATEST_PROVEN_CERTIFICATE_PER_NETWORK_CF: &str =
+    "latest_proven_certificate_per_network_cf";
 pub const LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF: &str =
     "latest_settled_certificate_per_network_cf";
 pub const METADATA_CF: &str = "metadata_cf";
@@ -63,7 +65,8 @@ pub(crate) mod proof_per_certificate;
 
 // Metadata
 pub(crate) mod certificate_header;
-pub mod latest_certificate_per_network;
+pub mod latest_proven_certificate_per_network;
+pub mod latest_settled_certificate_per_network;
 pub(crate) mod metadata;
 
 // PerEpoch

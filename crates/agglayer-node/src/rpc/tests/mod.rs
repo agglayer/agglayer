@@ -5,8 +5,10 @@ use agglayer_config::Config;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::pending::PendingStore;
 use agglayer_storage::stores::state::StateStore;
-use agglayer_storage::stores::{PendingCertificateWriter, StateReader, StateWriter};
-use agglayer_storage::tests::TempDBDir;
+use agglayer_storage::{
+    stores::{PendingCertificateWriter, StateReader, StateWriter},
+    tests::TempDBDir,
+};
 use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId};
 use ethers::providers::{self, MockProvider, Provider};
 use http_body_util::Empty;
@@ -14,7 +16,7 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::ServerHandle;
-use rstest::fixture;
+use rstest::*;
 
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
@@ -23,13 +25,10 @@ mod get_certificate_header;
 mod get_tx_status;
 mod send_certificate;
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn healthcheck_method_can_be_called() {
     use hyper::Request;
 
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init();
     let mut config = Config::new_for_test();
     let addr = next_available_addr();
     if let std::net::IpAddr::V4(ip) = addr.ip() {
@@ -239,12 +238,26 @@ impl PendingCertificateWriter for DummyStore {
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
-
+    fn remove_generated_proof(
+        &self,
+        _certificate_id: &agglayer_types::CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
     fn remove_pending_certificate(
         &self,
         _network_id: agglayer_types::NetworkId,
         _height: agglayer_types::Height,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
+    }
+
+    fn set_latest_proven_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+        _height: &Height,
+        _certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
     }
 }
