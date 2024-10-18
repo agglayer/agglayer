@@ -105,6 +105,15 @@ pub enum ProofError {
     Unknown(String),
 }
 
+/// Inputs of the pessimistic proof.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PessimisticProofInput {
+    /// Initial state
+    pub initial_state: LocalNetworkState,
+    /// Batch headers
+    pub batch_header: MultiBatchHeader<Keccak256Hasher>,
+}
+
 /// Outputs of the pessimistic proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PessimisticProofOutput {

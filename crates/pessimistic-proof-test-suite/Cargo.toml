@@ -27,6 +27,7 @@ hex-literal = "0.4"
 hex.workspace = true
 tracing = "0.1.40"
 uuid = { version = "1.10.0", features = ["v4", "fast-rng"] }
+dotenv = "0.15.0"
 
 [dev-dependencies]
 rstest.workspace = true

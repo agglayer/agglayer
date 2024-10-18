@@ -128,7 +128,7 @@ dependencies = [
  "rand",
  "ruint",
  "serde",
- "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tiny-keccak 2.0.2 (git+https://github.com/0xPolygonHermez/tiny-keccak?branch=edu/zisk)",
 ]
 
 [[package]]
@@ -150,7 +150,7 @@ dependencies = [
  "rand",
  "ruint",
  "serde",
- "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tiny-keccak 2.0.2 (git+https://github.com/0xPolygonHermez/tiny-keccak?branch=edu/zisk)",
 ]
 
 [[package]]
@@ -242,7 +242,7 @@ dependencies = [
  "quote",
  "syn 2.0.69",
  "syn-solidity",
- "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tiny-keccak 2.0.2 (git+https://github.com/0xPolygonHermez/tiny-keccak?branch=edu/zisk)",
 ]
 
 [[package]]
@@ -1665,7 +1665,7 @@ dependencies = [
  "impl-rlp",
  "impl-serde",
  "scale-info",
- "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tiny-keccak 2.0.2 (git+https://github.com/0xPolygonHermez/tiny-keccak?branch=edu/zisk)",
 ]
 
 [[package]]
@@ -1793,7 +1793,7 @@ dependencies = [
  "syn 2.0.69",
  "tempfile",
  "thiserror",
- "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tiny-keccak 2.0.2 (git+https://github.com/0xPolygonHermez/tiny-keccak?branch=edu/zisk)",
  "unicode-xid",
 ]
 
@@ -3476,7 +3476,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c56abdd5a8a780049d2f8e92cea1df57b55a2ef50a40d1103f2732f7a00e4b1"
 dependencies = [
  "p3-symmetric",
- "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tiny-keccak 2.0.2 (git+https://github.com/0xPolygonHermez/tiny-keccak?branch=edu/zisk)",
 ]
 
 [[package]]
@@ -3757,6 +3757,7 @@ dependencies = [
  "pessimistic-proof",
  "sp1-cli",
  "sp1-zkvm",
+ "ziskos",
 ]
 
 [[package]]
@@ -5880,9 +5881,9 @@ dependencies = [
 [[package]]
 name = "tiny-keccak"
 version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
+source = "git+https://github.com/0xPolygonHermez/tiny-keccak?branch=edu/zisk#d2238f64afceeae66cbfbbe3de25b90f2afd8f2a"
 dependencies = [
+ "cfg-if",
  "crunchy",
 ]
 
@@ -6785,6 +6786,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.69",
+]
+
+[[package]]
+name = "ziskos"
+version = "0.1.0"
+source = "git+https://github.com/0xPolygonHermez/zisk.git#01bd0b16cfb0d6948dccf749204af697f64a0a79"
+dependencies = [
+ "getrandom",
+ "lazy_static",
+ "rand",
 ]
 
 [[package]]

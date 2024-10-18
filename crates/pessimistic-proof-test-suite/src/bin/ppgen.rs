@@ -4,7 +4,7 @@ use agglayer_types::{Certificate, U256};
 use clap::Parser;
 use pessimistic_proof::{
     bridge_exit::{NetworkId, TokenInfo},
-    PessimisticProofOutput,
+    PessimisticProofOutput,PessimisticProofInput
 };
 use pessimistic_proof_test_suite::{
     runner::Runner,
@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use sp1_sdk::HashableKey;
 use tracing::{info, warn};
 use uuid::Uuid;
+use bincode;
 
 /// The arguments for the pp generator.
 #[derive(Parser, Debug)]
@@ -55,6 +56,8 @@ fn get_events(n: usize, path: Option<PathBuf>) -> Vec<(TokenInfo, U256)> {
 }
 
 pub fn main() {
+    dotenv::dotenv().ok();
+
     sp1_sdk::utils::setup_logger();
 
     let args = PPGenArgs::parse();
@@ -83,44 +86,57 @@ pub fn main() {
         imported_bridge_exits.len()
     );
 
-    let start = Instant::now();
-    let (proof, vk, new_roots) = Runner::new()
-        .generate_plonk_proof(&old_state.into(), &multi_batch_header)
-        .expect("proving failed");
-    let duration = start.elapsed();
-
-    info!(
-        "Successfully generated the plonk proof with a latency of {:?}",
-        duration
-    );
-
-    let vkey = vk.bytes32().to_string();
-    let fixture = PessimisticProofFixture {
-        certificate,
-        pp_inputs: new_roots.into(),
-        signer: signer,
-        vkey: vkey.clone(),
-        public_values: format!("0x{}", hex::encode(proof.public_values.as_slice())),
-        proof: format!("0x{}", hex::encode(proof.bytes())),
+    let pessimistic_input = PessimisticProofInput{
+        initial_state: old_state.clone().into(),
+        batch_header:multi_batch_header.clone()
     };
-
-    if let Some(proof_dir) = args.proof_dir {
-        // Save the plonk proof to a json file.
-        let proof_path = proof_dir.join(format!(
-            "{}-exits-v{}-{}.json",
-            args.n_exits,
-            &vkey[..8],
-            Uuid::new_v4()
-        ));
-        if let Err(e) = std::fs::create_dir_all(&proof_dir) {
-            warn!("Failed to create directory: {e}");
-        }
-        info!("Writing the proof to {:?}", proof_path);
-        std::fs::write(proof_path, serde_json::to_string_pretty(&fixture).unwrap())
-            .expect("failed to write fixture");
-    } else {
-        info!("Proof: {:?}", fixture);
+    //let input_bytes: Result<Vec<u8>, Box<bincode::ErrorKind>> = bincode::serialize(&pessimistic_input);
+    let input_folder: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pessimistic-proof-program/src/build/");
+    if !input_folder.exists() {
+        std::fs::create_dir_all(&input_folder).expect("failed to create fixture path");
     }
+    let input_path = input_folder.join(format!("input.bin"));
+    let mut cache_file = std::fs::File::create(input_path).expect("failed to create fixture path");
+    bincode::serialize_into(&mut cache_file, &pessimistic_input).expect("failed to serialize");
+
+    // let start = Instant::now();
+    // let (proof, vk, new_roots) = Runner::new()
+    //     .generate_plonk_proof(&old_state.into(), &multi_batch_header)
+    //     .expect("proving failed");
+    // let duration = start.elapsed();
+
+    // info!(
+    //     "Successfully generated the plonk proof with a latency of {:?}",
+    //     duration
+    // );
+
+    // let vkey = vk.bytes32().to_string();
+    // let fixture = PessimisticProofFixture {
+    //     certificate,
+    //     pp_inputs: new_roots.into(),
+    //     signer: signer,
+    //     vkey: vkey.clone(),
+    //     public_values: format!("0x{}", hex::encode(proof.public_values.as_slice())),
+    //     proof: format!("0x{}", hex::encode(proof.bytes())),
+    // };
+
+    // if let Some(proof_dir) = args.proof_dir {
+    //     // Save the plonk proof to a json file.
+    //     let proof_path = proof_dir.join(format!(
+    //         "{}-exits-v{}-{}.json",
+    //         args.n_exits,
+    //         &vkey[..8],
+    //         Uuid::new_v4()
+    //     ));
+    //     if let Err(e) = std::fs::create_dir_all(&proof_dir) {
+    //         warn!("Failed to create directory: {e}");
+    //     }
+    //     info!("Writing the proof to {:?}", proof_path);
+    //     std::fs::write(proof_path, serde_json::to_string_pretty(&fixture).unwrap())
+    //         .expect("failed to write fixture");
+    // } else {
+    //     info!("Proof: {:?}", fixture);
+    // }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
