@@ -86,7 +86,7 @@ impl Forest {
 
         // Append all the leafs in LET A (mainnet)
         for exit in &exits {
-            self.local_exit_tree_data_a.add_leaf(exit.hash());
+            self.local_exit_tree_data_a.add_leaf(exit.hash()).unwrap();
         }
 
         let l1_leaf = L1InfoTreeLeaf {
@@ -100,10 +100,10 @@ impl Forest {
             },
         };
 
-        self.l1_info_tree.add_leaf(l1_leaf.hash());
+        self.l1_info_tree.add_leaf(l1_leaf.hash()).unwrap();
 
         let proof_ger_l1root = MerkleProof {
-            proof: self.l1_info_tree.get_proof(0),
+            proof: self.l1_info_tree.get_proof(0).unwrap(),
             root: self.l1_info_tree.get_root(),
         };
 
@@ -119,7 +119,7 @@ impl Forest {
                 },
                 claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
                     proof_leaf_mer: MerkleProof {
-                        proof: self.local_exit_tree_data_a.get_proof(index),
+                        proof: self.local_exit_tree_data_a.get_proof(index).unwrap(),
                         root: self.local_exit_tree_data_a.get_root(),
                     },
                     proof_ger_l1root: proof_ger_l1root.clone(),

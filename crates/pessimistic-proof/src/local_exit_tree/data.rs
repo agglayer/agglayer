@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::local_exit_tree::LocalExitTreeError;
 use crate::{local_exit_tree::hasher::Hasher, utils::empty_hash::empty_hash_at_height};
 
 /// Represents a local exit tree as defined by the LxLy bridge.
@@ -60,25 +61,29 @@ where
     }
 
     /// Creates a new [`LocalExitTreeData`] and populates its leaves.
-    pub fn from_leaves(leaves: impl Iterator<Item = H::Digest>) -> Self {
+    pub fn from_leaves(
+        leaves: impl Iterator<Item = H::Digest>,
+    ) -> Result<Self, LocalExitTreeError> {
         let mut tree = Self::new();
 
         for leaf in leaves {
-            tree.add_leaf(leaf);
+            tree.add_leaf(leaf)?;
         }
 
-        tree
+        Ok(tree)
     }
 
     /// Appends a leaf to the tree.
-    pub fn add_leaf(&mut self, leaf: H::Digest) -> u32 {
+    pub fn add_leaf(&mut self, leaf: H::Digest) -> Result<u32, LocalExitTreeError> {
         let leaf_index = self.layers[0].len();
-        assert_eq!(leaf_index >> TREE_DEPTH, 0, "Too many leaves.");
+        if leaf_index >> TREE_DEPTH != 0 {
+            return Err(LocalExitTreeError::LeafIndexOverflow);
+        }
         self.layers[0].push(leaf);
         let mut index = leaf_index;
         let mut entry = leaf;
         for height in 0..TREE_DEPTH - 1 {
-            let sibling = self.get(height, index ^ 1);
+            let sibling = self.get(height, index ^ 1)?;
             entry = if index & 1 == 1 {
                 H::merge(&sibling, &entry)
             } else {
@@ -94,14 +99,16 @@ where
 
         leaf_index
             .try_into()
-            .expect("usize expected to be at least 32 bits")
+            .map_err(|_| LocalExitTreeError::LeafIndexOverflow)
     }
 
-    pub fn get(&self, height: usize, index: usize) -> H::Digest {
-        assert!(index < 1 << (TREE_DEPTH - height), "Index out of bounds.");
-        *self.layers[height]
+    pub fn get(&self, height: usize, index: usize) -> Result<H::Digest, LocalExitTreeError> {
+        if index >= 1 << (TREE_DEPTH - height) {
+            return Err(LocalExitTreeError::IndexOutOfBounds);
+        }
+        Ok(*self.layers[height]
             .get(index)
-            .unwrap_or(&self.empty_hash_at_height[height])
+            .unwrap_or(&self.empty_hash_at_height[height]))
     }
 
     pub fn is_empty(&self) -> bool {
@@ -110,27 +117,33 @@ where
 
     /// Returns the root of the tree.
     pub fn get_root(&self) -> H::Digest {
-        let get_last_layer = |i| self.get(TREE_DEPTH - 1, i);
+        let get_last_layer = |i| {
+            self.layers[TREE_DEPTH - 1]
+                .get(i)
+                .unwrap_or(&self.empty_hash_at_height[TREE_DEPTH - 1])
+        };
         H::merge(&get_last_layer(0), &get_last_layer(1))
     }
 
-    pub fn get_proof(&self, leaf_index: u32) -> LETMerkleProof<H, TREE_DEPTH> {
+    pub fn get_proof(
+        &self,
+        leaf_index: u32,
+    ) -> Result<LETMerkleProof<H, TREE_DEPTH>, LocalExitTreeError> {
         let leaf_index: usize = leaf_index
             .try_into()
-            .expect("usize expected to be at least 32 bits");
-        assert!(
-            leaf_index < self.layers[0].len(),
-            "Leaf index out of bounds."
-        );
+            .map_err(|_| LocalExitTreeError::LeafIndexOverflow)?;
+        if leaf_index >= self.layers[0].len() {
+            return Err(LocalExitTreeError::IndexOutOfBounds);
+        }
         let mut siblings = [Default::default(); TREE_DEPTH];
         let mut index = leaf_index;
         for height in 0..TREE_DEPTH {
-            let sibling = self.get(height, index ^ 1);
+            let sibling = self.get(height, index ^ 1)?;
             siblings[height] = sibling;
             index >>= 1;
         }
 
-        LETMerkleProof { siblings }
+        Ok(LETMerkleProof { siblings })
     }
 }
 
@@ -162,7 +175,9 @@ where
 mod tests {
     use rand::{random, thread_rng, Rng};
 
-    use crate::local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree};
+    use crate::local_exit_tree::{
+        data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree, LocalExitTreeError,
+    };
 
     const TREE_DEPTH: usize = 32;
     type H = Keccak256Hasher;
@@ -172,7 +187,7 @@ mod tests {
         let local_exit_tree_frontier: LocalExitTree<H, TREE_DEPTH> =
             LocalExitTree::from_leaves(leaves.iter().cloned());
         let local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
-            LocalExitTreeData::from_leaves(leaves.into_iter());
+            LocalExitTreeData::from_leaves(leaves.into_iter()).unwrap();
         assert_eq!(
             local_exit_tree_frontier.get_root(),
             local_exit_tree_data.get_root()
@@ -191,24 +206,25 @@ mod tests {
     }
 
     #[test]
-    fn test_data_vs_frontier_add_leaf() {
+    fn test_data_vs_frontier_add_leaf() -> Result<(), LocalExitTreeError> {
         let num_leaves = thread_rng().gen_range(1usize..100.min(1 << TREE_DEPTH));
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
         let mut local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
-            LocalExitTreeData::from_leaves(leaves.into_iter());
+            LocalExitTreeData::from_leaves(leaves.into_iter())?;
         let mut local_exit_tree_frontier: LocalExitTree<_, TREE_DEPTH> =
-            (&local_exit_tree_data).into();
+            LocalExitTree::try_from(&local_exit_tree_data)?;
         assert_eq!(
             local_exit_tree_data.get_root(),
             local_exit_tree_frontier.get_root()
         );
         let leaf = random();
-        local_exit_tree_data.add_leaf(leaf);
+        local_exit_tree_data.add_leaf(leaf)?;
         local_exit_tree_frontier.add_leaf(leaf);
         assert_eq!(
             local_exit_tree_data.get_root(),
             local_exit_tree_frontier.get_root()
         );
+        Ok(())
     }
 
     #[test]
@@ -218,9 +234,9 @@ mod tests {
         let leaf_index = thread_rng().gen_range(0..num_leaves);
         let leaf = leaves[leaf_index];
         let local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
-            LocalExitTreeData::from_leaves(leaves.into_iter());
+            LocalExitTreeData::from_leaves(leaves.into_iter()).unwrap();
         let root = local_exit_tree_data.get_root();
-        let proof = local_exit_tree_data.get_proof(leaf_index as u32);
+        let proof = local_exit_tree_data.get_proof(leaf_index as u32).unwrap();
         assert!(proof.verify(leaf, leaf_index as u32, root));
     }
 }
