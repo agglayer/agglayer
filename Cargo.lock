@@ -131,6 +131,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
+ "agglayer-config",
  "dirs",
  "ethers",
  "humantime-serde",
