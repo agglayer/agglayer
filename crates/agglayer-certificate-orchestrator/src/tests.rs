@@ -15,8 +15,8 @@ use agglayer_storage::{
     tests::mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height,
-    LocalNetworkStateData, NetworkId, Proof,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, poll, Stream};
@@ -63,8 +63,8 @@ impl PerEpochWriter for DummyPendingStore {
         &self,
         _network_id: NetworkId,
         _height: Height,
-    ) -> std::result::Result<(), agglayer_storage::error::Error> {
-        Ok(())
+    ) -> std::result::Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
+        Ok((0, 0))
     }
 
     fn start_packing(&self) -> Result<(), agglayer_storage::error::Error> {
