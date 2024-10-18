@@ -1,3 +1,5 @@
+use agglayer_types::{Height, NetworkId};
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("RocksDB error: {0}")]
@@ -19,4 +21,21 @@ pub enum Error {
 
     #[error("No proof found")]
     NoProof,
+
+    #[error("The store is already in packing mode")]
+    AlreadyInPackingMode,
+
+    #[error(transparent)]
+    CertificateCandidateError(#[from] CertificateCandidateError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CertificateCandidateError {
+    #[error("Invalid certificate candidate for network {0} at height {1} for current epoch")]
+    Invalid(NetworkId, Height),
+
+    #[error(
+        "Invalid certificate candidate for network {0}: {1} wasn't expected, current height {2}"
+    )]
+    UnexpectedHeight(NetworkId, Height, Height),
 }

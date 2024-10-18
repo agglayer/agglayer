@@ -24,5 +24,6 @@ futures-util = "0.3.30"
 agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
 agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
+mockall.workspace = true
 rstest.workspace = true
 test-log.workspace = true

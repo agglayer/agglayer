@@ -20,7 +20,7 @@ impl EpochsStore {
         epoch_number: u64,
         pending_db: Arc<DB>,
     ) -> Result<Self, Error> {
-        let current_epoch = Arc::new(ArcSwap::new(Arc::new(PerEpochStore::open(
+        let current_epoch = Arc::new(ArcSwap::new(Arc::new(PerEpochStore::try_open(
             config.clone(),
             epoch_number,
             pending_db.clone(),
@@ -41,7 +41,7 @@ impl EpochStoreWriter for EpochsStore {
     type PerEpochStore = PerEpochStore;
 
     fn open(&self, epoch_number: u64) -> Result<PerEpochStore, Error> {
-        PerEpochStore::open(self.config.clone(), epoch_number, self.pending_db.clone())
+        PerEpochStore::try_open(self.config.clone(), epoch_number, self.pending_db.clone())
     }
 }
 
