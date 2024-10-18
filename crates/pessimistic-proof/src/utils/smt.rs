@@ -19,6 +19,8 @@ pub enum SmtError {
     KeyNotPresent,
     #[error("trying to generate a non-inclusion proof for a key present in the SMT")]
     KeyPresent,
+    #[error("depth out of bounds")]
+    DepthOutOfBounds,
 }
 
 /// A node in an SMT
@@ -170,7 +172,9 @@ where
         // If false, insert the value at the key and error if the key is present.
         update: bool,
     ) -> Result<H::Digest, SmtError> {
-        assert!(depth <= DEPTH, "Depth out of bounds");
+        if depth > DEPTH {
+            return Err(SmtError::DepthOutOfBounds);
+        }
         if depth == DEPTH {
             return if !update && hash != self.empty_hash_at_height[0] {
                 Err(SmtError::KeyAlreadyPresent)
@@ -286,13 +290,6 @@ where
             let node = match node {
                 Some(node) => node,
                 None => {
-                    debug_assert!(
-                        hash == H::merge(
-                            &self.empty_hash_at_height[DEPTH - i - 1],
-                            &self.empty_hash_at_height[DEPTH - i - 1]
-                        ),
-                        "The SMT is messed up"
-                    );
                     return Ok(SmtNonInclusionProof { siblings });
                 }
             };

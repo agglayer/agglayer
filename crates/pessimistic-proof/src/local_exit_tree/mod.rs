@@ -1,5 +1,6 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
+use thiserror::Error;
 
 pub mod hasher;
 use hasher::Hasher;
@@ -22,6 +23,16 @@ where
     leaf_count: u32,
     #[serde_as(as = "[_; TREE_DEPTH]")]
     frontier: [H::Digest; TREE_DEPTH],
+}
+
+#[derive(Clone, Debug, Error, Serialize, Deserialize, PartialEq, Eq)]
+pub enum LocalExitTreeError {
+    #[error("Leaf index overflow")]
+    LeafIndexOverflow,
+    #[error("Index out of bounds")]
+    IndexOutOfBounds,
+    #[error("Frontier index out of bounds")]
+    FrontierIndexOutOfBounds,
 }
 
 impl<H, const TREE_DEPTH: usize> LocalExitTree<H, TREE_DEPTH>
@@ -59,7 +70,7 @@ where
 
     /// Appends a leaf to the tree.
     pub fn add_leaf(&mut self, leaf: H::Digest) {
-        debug_assert!(
+        assert!(
             (self.leaf_count as usize) < (1usize << TREE_DEPTH) - 1,
             "Can have at most {} leaves.",
             (1usize << TREE_DEPTH) - 1
@@ -68,10 +79,7 @@ where
         let frontier_insertion_index: usize = {
             let leaf_count_after_insertion = self.leaf_count + 1;
 
-            leaf_count_after_insertion
-                .trailing_zeros()
-                .try_into()
-                .expect("usize expected to be at least 32 bits")
+            leaf_count_after_insertion.trailing_zeros() as usize
         };
 
         // the new entry to be inserted in the frontier
@@ -123,30 +131,35 @@ fn get_bit_at(target: u32, bit_idx: usize) -> u32 {
     (target >> bit_idx) & 1
 }
 
-impl<H, const TREE_DEPTH: usize> From<&LocalExitTreeData<H, TREE_DEPTH>>
+impl<H, const TREE_DEPTH: usize> TryFrom<&LocalExitTreeData<H, TREE_DEPTH>>
     for LocalExitTree<H, TREE_DEPTH>
 where
     H: Hasher,
     H::Digest: Copy + Default + Serialize + DeserializeOwned,
 {
-    fn from(data: &LocalExitTreeData<H, TREE_DEPTH>) -> Self {
+    type Error = LocalExitTreeError;
+
+    fn try_from(data: &LocalExitTreeData<H, TREE_DEPTH>) -> Result<Self, Self::Error> {
         let leaf_count = data.layers[0].len();
         let mut frontier = [H::Digest::default(); TREE_DEPTH];
         let mut index = leaf_count;
         let mut height = 0;
         while index != 0 {
+            if height >= TREE_DEPTH {
+                return Err(LocalExitTreeError::FrontierIndexOutOfBounds);
+            }
             if index & 1 == 1 {
-                frontier[height] = data.layers[height][index ^ 1];
+                frontier[height] = data.get(height, index ^ 1)?;
             }
             height += 1;
             index >>= 1;
         }
 
-        LocalExitTree::from_parts(
+        Ok(LocalExitTree::from_parts(
             leaf_count
                 .try_into()
-                .expect("usize expected to be at least 32 bits"),
+                .map_err(|_| LocalExitTreeError::LeafIndexOverflow)?,
             frontier,
-        )
+        ))
     }
 }
