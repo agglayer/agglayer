@@ -17,8 +17,9 @@ use pessimistic_proof::{
     nullifier_tree::{NullifierKey, NullifierPath},
     ProofError,
 };
+pub use reth_primitives::address;
 pub use reth_primitives::U256;
-use reth_primitives::{Address, Signature};
+pub use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
@@ -92,6 +93,8 @@ pub enum CertificateStatusError {
     /// [`LocalNetworkStateData`] and the provided [`Certificate`].
     #[error(transparent)]
     TypeConversionError(#[from] Error),
+    #[error("Unknown trusted sequencer address")]
+    TrustedSequencerNotFound(NetworkId),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]

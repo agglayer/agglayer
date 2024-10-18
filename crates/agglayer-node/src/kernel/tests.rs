@@ -66,7 +66,7 @@ async fn interop_executor_check_tx() {
 
     let (provider, _mock) = providers::Provider::mocked();
 
-    let kernel = Kernel::new(provider, Arc::new(config));
+    let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
 
     let mut signed_tx = signed_tx();
 
@@ -93,7 +93,7 @@ async fn interop_executor_verify_zkp() {
     let (provider, mock) = providers::Provider::mocked();
 
     let l1 = config.l1.clone();
-    let kernel = Kernel::new(provider, config);
+    let kernel = Kernel::new(Arc::new(provider), config);
 
     let signed_tx = signed_tx();
 
@@ -150,7 +150,7 @@ async fn interop_executor_verify_zkp_failure() {
     let (provider, mock) = providers::Provider::mocked();
 
     let l1 = config.l1.clone();
-    let kernel = Kernel::new(provider, config);
+    let kernel = Kernel::new(Arc::new(provider), config);
 
     let signed_tx = signed_tx();
 
@@ -222,7 +222,7 @@ async fn interop_executor_verify_signature() {
     let (provider, mock) = providers::Provider::mocked();
 
     let l1 = config.l1.clone();
-    let kernel = Kernel::new(provider, config);
+    let kernel = Kernel::new(Arc::new(provider), config);
 
     let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
     let sequencer_address = sequencer_wallet.address();
@@ -296,7 +296,7 @@ async fn interop_executor_verify_signature_proof_signer() {
     let (provider, mock) = providers::Provider::mocked();
 
     let l1 = config.l1.clone();
-    let kernel = Kernel::new(provider, config);
+    let kernel = Kernel::new(Arc::new(provider), config);
 
     let mut signed_tx = signed_tx();
 
@@ -365,7 +365,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
 
         assert!(kernel.verify_proof_zkevm_node(&signed_tx).await.is_ok());
     }
@@ -390,7 +390,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -422,7 +422,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -455,7 +455,7 @@ mod interop_executor_execute {
 
         let (provider, _mock) = providers::Provider::mocked();
 
-        let kernel = Kernel::new(provider, Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,

@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use agglayer_certificate_orchestrator::{Certifier, CertifierOutput, Error};
+use agglayer_config::Config;
+use agglayer_contracts::RollupContract;
 use agglayer_prover_types::{
     default_bincode_options,
     v1::{
@@ -21,7 +23,7 @@ use tracing::{debug, error, info, warn};
 use crate::ELF;
 
 #[derive(Clone)]
-pub struct CertifierClient<PendingStore> {
+pub struct CertifierClient<PendingStore, L1Rpc> {
     /// The pending store to fetch and store certificates and proofs.
     pending_store: Arc<PendingStore>,
     /// The prover service client.
@@ -30,10 +32,18 @@ pub struct CertifierClient<PendingStore> {
     verifier: Arc<CpuProver>,
     /// The verifying key of the SP1 proof system.
     verifying_key: SP1VerifyingKey,
+    /// The L1 RPC client.
+    l1_rpc: Arc<L1Rpc>,
+    config: Arc<Config>,
 }
 
-impl<PendingStore> CertifierClient<PendingStore> {
-    pub async fn try_new(prover: String, pending_store: Arc<PendingStore>) -> anyhow::Result<Self> {
+impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
+    pub async fn try_new(
+        prover: String,
+        pending_store: Arc<PendingStore>,
+        l1_rpc: Arc<L1Rpc>,
+        config: Arc<Config>,
+    ) -> anyhow::Result<Self> {
         let verifier = CpuProver::new();
         let (_, verifying_key) = verifier.setup(ELF);
 
@@ -42,13 +52,16 @@ impl<PendingStore> CertifierClient<PendingStore> {
             prover: ProofGenerationServiceClient::connect(prover).await?,
             verifier: Arc::new(verifier),
             verifying_key,
+            l1_rpc,
+            config,
         })
     }
 }
 
-impl<PendingStore> Certifier for CertifierClient<PendingStore>
+impl<PendingStore, L1Rpc> Certifier for CertifierClient<PendingStore, L1Rpc>
 where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
+    L1Rpc: RollupContract + Send + Sync + 'static,
 {
     fn certify(
         &self,
@@ -73,53 +86,58 @@ where
                 certificate_id,
             ));
         }
-
-        let signer = Address::new([0; 20]); // TODO: put the trusted sequencer address
-
-        let initial_state = LocalNetworkState::from(state.clone());
-        let multi_batch_header =
-            state
-                .apply_certificate(&certificate, signer)
-                .map_err(|source| Error::Types {
-                    certificate_id,
-                    source,
-                })?;
-
-        // Perform the native PP execution
-        let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header).map_err(
-            |source| Error::NativeExecutionFailed {
-                source,
-                certificate_id,
-            },
-        )?;
-
-        info!(
-            "Successfully executed the native PP for the Certificate {}",
-            certificate_id
-        );
-
-        let request = ProofGenerationRequest {
-            initial_state: default_bincode_options()
-                .serialize(&initial_state)
-                .map_err(|source| Error::Serialize {
-                    certificate_id,
-                    source,
-                })?,
-            batch_header: default_bincode_options()
-                .serialize(&multi_batch_header)
-                .map_err(|source| Error::Serialize {
-                    certificate_id,
-                    source,
-                })?,
-        };
-
         let mut prover_client = self.prover.clone();
 
         let pending_store = self.pending_store.clone();
         let verifier = self.verifier.clone();
         let verifying_key = self.verifying_key.clone();
+        let l1_rpc = self.l1_rpc.clone();
+        let proof_signers = self.config.proof_signers.clone();
 
         Ok(Box::pin(async move {
+            let signer = l1_rpc
+                .get_trusted_sequencer_address(*network_id, proof_signers)
+                .await
+                .map_err(|_| Error::TrustedSequencerNotFound(certificate_id, network_id))?;
+
+            let initial_state = LocalNetworkState::from(state.clone());
+
+            let signer = Address::new(*signer.as_fixed_bytes());
+            let multi_batch_header =
+                state
+                    .apply_certificate(&certificate, signer)
+                    .map_err(|source| Error::Types {
+                        certificate_id,
+                        source,
+                    })?;
+
+            // Perform the native PP execution
+            let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)
+                .map_err(|source| Error::NativeExecutionFailed {
+                    source,
+                    certificate_id,
+                })?;
+
+            info!(
+                "Successfully executed the native PP for the Certificate {}",
+                certificate_id
+            );
+
+            let request = ProofGenerationRequest {
+                initial_state: default_bincode_options()
+                    .serialize(&initial_state)
+                    .map_err(|source| Error::Serialize {
+                        certificate_id,
+                        source,
+                    })?,
+                batch_header: default_bincode_options()
+                    .serialize(&multi_batch_header)
+                    .map_err(|source| Error::Serialize {
+                        certificate_id,
+                        source,
+                    })?,
+            };
+
             let prover_response: tonic::Response<ProofGenerationResponse> = prover_client
                 .generate_proof(request)
                 .await
