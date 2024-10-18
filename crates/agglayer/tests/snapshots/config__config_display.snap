@@ -35,6 +35,7 @@ settlement-timeout = 1200
 [l1]
 chain-id = 1337
 node-url = "http://zkevm-mock-l1-network:8545/"
+ws-node-url = "ws://zkevm-mock-l1-network:8546/"
 rollup-manager-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
 rpc-timeout = 45
 
@@ -44,8 +45,9 @@ private-keys = []
 [telemetry]
 prometheus-addr = "0.0.0.0:3000"
 
-[epoch.time-clock]
-epoch-duration = 5
+[epoch.block-clock]
+epoch-duration = 8
+genesis-block = 0
 
 [shutdown]
 runtime-timeout = 5

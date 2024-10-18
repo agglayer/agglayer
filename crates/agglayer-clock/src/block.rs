@@ -6,7 +6,10 @@ use std::{
     },
 };
 
-use ethers::providers::{Middleware, PubsubClient};
+use ethers::{
+    providers::{Middleware, PubsubClient},
+    types::Block,
+};
 use futures::StreamExt as _;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
@@ -113,8 +116,6 @@ enum BlockClockError {
     GetBlockNumber,
     #[error("Failed to subscribe to the L1 Block stream")]
     SubscribeBlocks,
-    #[error("The current block height is less than the genesis block number: {0} < {1}")]
-    GenesisBlockNumber(u64, u64),
     #[error("The current block height was already set to a non-zero value: {0}")]
     BlockHeightAlreadySet(u64),
     #[error("Failed to set the current block height, already set to: {0}")]
@@ -151,13 +152,16 @@ where
             .await
             .map_err(|_| BlockClockError::SubscribeBlocks)?;
 
-        let current_l1_block = current_l1_block.as_u64();
-        if current_l1_block < self.genesis_block {
-            return Err(BlockClockError::GenesisBlockNumber(
-                current_l1_block,
-                self.genesis_block,
-            ));
-        };
+        let mut current_l1_block = current_l1_block.as_u64();
+        while !current_l1_block < self.genesis_block {
+            if let Some(Block {
+                number: Some(number),
+                ..
+            }) = stream.next().await
+            {
+                current_l1_block = number.as_u64();
+            }
+        }
 
         // Overwrite the block number to simulate an overflow
         // This is used for testing purposes only and doesn't affect the production
@@ -302,26 +306,37 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_block_clock_starting_with_wrong_genesis() {
+    async fn test_block_clock_with_genesis_in_future() {
+        let anvil = Anvil::new().block_time(1u64).spawn();
+        let client = Provider::<Ws>::connect(anvil.ws_endpoint()).await.unwrap();
+
+        let clock = BlockClock::new(client, 2, NonZeroU64::new(3).unwrap());
+        let token = CancellationToken::new();
+        let clock_ref = clock.spawn(token).await.unwrap();
+        assert_eq!(clock_ref.current_epoch(), 0);
+
+        let mut recv = clock_ref.subscribe().unwrap();
+
+        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
+        assert_eq!(clock_ref.current_epoch(), 1);
+        assert!(clock_ref.current_block_height() >= 3);
+    }
+
+    #[tokio::test]
+    async fn test_block_clock_starting_with_genesis_in_future_should_trigger_epoch_0() {
         let anvil = Anvil::new().block_time(1u64).spawn();
         let client = Provider::<Ws>::connect(anvil.ws_endpoint()).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(1)).await;
-        let mut clock = BlockClock::new(client, 2, NonZeroU64::new(3).unwrap());
-        let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
+        let clock = BlockClock::new(client, 2, NonZeroU64::new(3).unwrap());
 
         let token = CancellationToken::new();
-        let handle = tokio::spawn(async move { clock.run(sender, token).await });
+        let clock_ref = clock.spawn(token).await.unwrap();
 
-        let res = tokio::time::timeout(Duration::from_millis(100), handle)
-            .await
-            .expect("Timeout waiting for task to finish")
-            .expect("Task Join error");
-
-        assert!(matches!(
-            res,
-            Err(BlockClockError::GenesisBlockNumber(1, 2))
-        ));
+        let mut recv = clock_ref.subscribe().unwrap();
+        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
+        assert_eq!(clock_ref.current_epoch(), 1);
+        assert!(clock_ref.current_block_height() >= 3);
     }
 
     #[tokio::test]
