@@ -6,6 +6,7 @@ use std::{
     task::Poll,
 };
 
+use agglayer_rate_limiting::SendCertificateSlotGuard;
 use agglayer_storage::{
     columns::latest_proven_certificate_per_network::ProvenCertificate,
     stores::{
@@ -332,7 +333,14 @@ async fn test_collect_certificates() {
     )
     .expect("Unable to create orchestrator");
 
-    _ = data_sender.send((1.into(), 1, [0; 32].into())).await;
+    _ = data_sender
+        .send((
+            1.into(),
+            1,
+            [0; 32].into(),
+            SendCertificateSlotGuard::dummy(),
+        ))
+        .await;
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
 
     let _poll = poll!(&mut orchestrator);
@@ -377,7 +385,14 @@ async fn test_collect_certificates_after_epoch() {
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
     let _poll = poll!(&mut orchestrator);
 
-    _ = data_sender.send((1.into(), 1, [0; 32].into())).await;
+    _ = data_sender
+        .send((
+            1.into(),
+            1,
+            [0; 32].into(),
+            SendCertificateSlotGuard::dummy(),
+        ))
+        .await;
 
     let _poll = poll!(&mut orchestrator);
 
@@ -474,7 +489,7 @@ pub(crate) fn create_orchestrator(
         impl Stream<Item = agglayer_clock::Event>,
     ),
 ) -> (
-    mpsc::Sender<(NetworkId, Height, CertificateId)>,
+    mpsc::Sender<(NetworkId, Height, CertificateId, SendCertificateSlotGuard)>,
     mpsc::Receiver<CertifierOutput>,
     TestOrchestrator<impl Stream<Item = agglayer_clock::Event>>,
 ) {

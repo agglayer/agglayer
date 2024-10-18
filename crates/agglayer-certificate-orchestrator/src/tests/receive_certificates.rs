@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use agglayer_rate_limiting::SendCertificateSlotGuard;
 use agglayer_storage::stores::PendingCertificateWriter;
 use agglayer_storage::stores::StateWriter;
 use agglayer_types::Certificate;
@@ -38,7 +39,12 @@ async fn receive_certificate_with_height_zero() {
         .insert_pending_certificate(1.into(), 0, &certificate)
         .unwrap();
 
-    let result = orchestrator.receive_certificates(&[(1.into(), 0, certificate_id)]);
+    let result = orchestrator.receive_certificates([(
+        1.into(),
+        0,
+        certificate_id,
+        SendCertificateSlotGuard::dummy(),
+    )]);
 
     assert!(result.is_ok());
     assert!(matches!(orchestrator.cursors.get(&1.into()), Some(0)));
@@ -92,7 +98,12 @@ async fn receive_certificate_with_previous_proven() {
 
     orchestrator.cursors.insert(1.into(), 0);
 
-    let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32].into())]);
+    let result = orchestrator.receive_certificates([(
+        1.into(),
+        1,
+        [0; 32].into(),
+        SendCertificateSlotGuard::dummy(),
+    )]);
 
     assert!(result.is_ok());
     assert!(matches!(orchestrator.cursors.get(&1.into()), Some(1)));
@@ -144,7 +155,12 @@ async fn receive_certificate_with_previous_pending() {
         .insert_pending_certificate(1.into(), 1, &certificate)
         .unwrap();
 
-    let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32].into())]);
+    let result = orchestrator.receive_certificates([(
+        1.into(),
+        1,
+        [0; 32].into(),
+        SendCertificateSlotGuard::dummy(),
+    )]);
 
     assert!(result.is_ok());
     assert!(!orchestrator.cursors.contains_key(&1.into()));

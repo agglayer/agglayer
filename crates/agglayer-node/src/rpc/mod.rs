@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
+use agglayer_clock::ClockRef;
 use agglayer_config::Config;
+use agglayer_rate_limiting::RateLimiter;
+use agglayer_rate_limiting::SendCertificateSlotGuard;
 use agglayer_storage::stores::PendingCertificateWriter;
 use agglayer_storage::stores::StateReader;
 use agglayer_storage::stores::StateWriter;
@@ -55,24 +58,35 @@ trait Agglayer {
 /// The RPC agglayer service implementation.
 pub(crate) struct AgglayerImpl<Rpc, PendingStore, StateStore> {
     kernel: Kernel<Rpc>,
-    certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
+    certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId, SendCertificateSlotGuard)>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
+    rate_limiter: RateLimiter,
+    clock_ref: ClockRef,
 }
 
 impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore> {
     /// Create an instance of the RPC agglayer service.
     pub(crate) fn new(
         kernel: Kernel<Rpc>,
-        certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
+        certificate_sender: mpsc::Sender<(
+            NetworkId,
+            Height,
+            CertificateId,
+            SendCertificateSlotGuard,
+        )>,
         pending_store: Arc<PendingStore>,
         state: Arc<StateStore>,
+        rate_limiter: RateLimiter,
+        clock_ref: ClockRef,
     ) -> Self {
         Self {
             kernel,
             certificate_sender,
             pending_store,
             state,
+            rate_limiter,
+            clock_ref,
         }
     }
 }
@@ -180,8 +194,7 @@ where
 
         // Reserve a rate limiting slot.
         let guard = self
-            .kernel
-            .rate_limiter()
+            .rate_limiter
             .reserve_send_tx(tx.tx.rollup_id, tokio::time::Instant::now())?;
 
         agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
@@ -285,6 +298,12 @@ where
             "Received certificate {hash} for rollup {}", *certificate.network_id
         );
 
+        // TODO: The network should be authenticated in some way before applying the
+        // rate limit.
+        let slot_guard = self
+            .rate_limiter
+            .reserve_send_certificate(*certificate.network_id, self.clock_ref.current_epoch())?;
+
         // TODO: Batch the different queries.
         // Insert the certificate header into the state store.
         _ = self
@@ -310,6 +329,7 @@ where
                 certificate.network_id,
                 certificate.height,
                 certificate.hash(),
+                slot_guard,
             ))
             .await
         {

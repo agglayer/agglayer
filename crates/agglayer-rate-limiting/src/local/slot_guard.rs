@@ -14,6 +14,22 @@ pub struct SlotGuard<C: Component> {
 }
 
 impl<C: Component> SlotGuard<C> {
+    /// Dummy rate limiting slot for testing.
+    #[cfg(feature = "testutils")]
+    pub fn dummy() -> Self {
+        let send_tx = agglayer_config::rate_limiting::TimeRateLimit::Unlimited;
+        let send_certificate = agglayer_config::rate_limiting::EpochRateLimit::Unlimited;
+        let config = agglayer_config::rate_limiting::NetworkRateLimitingConfig {
+            send_tx: &send_tx,
+            send_certificate: &send_certificate,
+        };
+        Self {
+            _component: PhantomData,
+            limiter: LocalRateLimiter::from_config(&config),
+            slot: SlotTracker::dummy(),
+        }
+    }
+
     /// New slot guard.
     pub(super) fn new(limiter: &LocalRateLimiter, slot: SlotTracker) -> Self {
         Self {

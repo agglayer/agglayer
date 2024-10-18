@@ -1,7 +1,9 @@
 use std::net::IpAddr;
 use std::sync::Arc;
 
+use agglayer_clock::ClockRef;
 use agglayer_config::Config;
+use agglayer_rate_limiting::{RateLimiter, SendCertificateSlotGuard};
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::pending::PendingStore;
 use agglayer_storage::stores::state::StateStore;
@@ -47,6 +49,8 @@ async fn healthcheck_method_can_be_called() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        RateLimiter::new(Default::default()),
+        ClockRef::for_testing(5, 1000),
     )
     .start(config.clone())
     .await
@@ -75,14 +79,14 @@ pub(crate) struct RawRpcContext {
     pub(crate) rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore>,
     config: Arc<Config>,
     pub(crate) certificate_receiver:
-        tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
+        tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId, SendCertificateSlotGuard)>,
 }
 
 pub(crate) struct TestContext {
     pub(crate) _server_handle: ServerHandle,
     pub(crate) client: jsonrpsee::http_client::HttpClient,
     pub(crate) certificate_receiver:
-        tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
+        tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId, SendCertificateSlotGuard)>,
 }
 
 impl TestContext {
@@ -126,7 +130,14 @@ impl TestContext {
 
         let kernel = Kernel::new(provider, config.clone());
 
-        let rpc = AgglayerImpl::new(kernel, certificate_sender, pending_store, state_store);
+        let rpc = AgglayerImpl::new(
+            kernel,
+            certificate_sender,
+            pending_store,
+            state_store,
+            RateLimiter::new(Default::default()),
+            ClockRef::for_testing(5, 1000),
+        );
 
         RawRpcContext {
             rpc,

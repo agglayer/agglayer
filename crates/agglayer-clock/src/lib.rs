@@ -39,6 +39,19 @@ pub struct ClockRef {
 }
 
 impl ClockRef {
+    /// Mock stationary clock ref for testing.
+    ///
+    /// Only suitable for simple cases with no time advancement.
+    #[cfg(feature = "testutils")]
+    pub fn for_testing(current_epoch: u64, block_height: u64) -> Self {
+        let (sender, _recv) = broadcast::channel(1);
+        Self {
+            sender,
+            current_epoch: AtomicU64::new(current_epoch).into(),
+            block_height: AtomicU64::new(block_height).into(),
+        }
+    }
+
     /// Subscribe to the Clock events.
     ///
     /// # Errors
