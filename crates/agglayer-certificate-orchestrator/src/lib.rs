@@ -475,7 +475,7 @@ where
                     }
 
                     // - 2. If the state knows the network and the height is the next one, we update
-                    //   the sate. This is the next certificate for this network.
+                    //   the state. This is the next certificate for this network.
                     Entry::Occupied(mut entry) if *entry.get() + 1 == height => {
                         entry.insert(height);
                         // TODO: Handle error if fails to set the latest proven certificate
