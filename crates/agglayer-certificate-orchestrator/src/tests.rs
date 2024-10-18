@@ -6,8 +6,12 @@ use std::{
     task::Poll,
 };
 
-use agglayer_storage::stores::{
-    PendingCertificateReader, PendingCertificateWriter, PerEpochWriter, StateReader, StateWriter,
+use agglayer_storage::{
+    columns::latest_proven_certificate_per_network::ProvenCertificate,
+    stores::{
+        PendingCertificateReader, PendingCertificateWriter, PerEpochWriter, StateReader,
+        StateWriter,
+    },
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, Height,
@@ -33,8 +37,10 @@ pub(crate) struct DummyPendingStore {
     pub(crate) pending_certificate: RwLock<BTreeMap<(NetworkId, Height), Certificate>>,
     pub(crate) proofs: RwLock<BTreeMap<CertificateId, Proof>>,
     pub(crate) settled: RwLock<BTreeMap<NetworkId, (Height, CertificateId)>>,
-    pub(crate) certificate_per_network: RwLock<BTreeMap<(NetworkId, Height), CertificateHeader>>,
+    pub(crate) certificate_per_network: RwLock<BTreeMap<(NetworkId, Height), CertificateId>>,
     pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
+    pub(crate) latest_proven_certificate_per_network:
+        RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
 }
 
 impl PerEpochWriter for DummyPendingStore {
@@ -84,9 +90,10 @@ impl StateReader for DummyPendingStore {
             .read()
             .unwrap()
             .get(&(network_id, height))
-            .cloned())
+            .and_then(|id| self.certificate_headers.read().unwrap().get(id).cloned()))
     }
 }
+
 impl PendingCertificateWriter for DummyPendingStore {
     fn insert_pending_certificate(
         &self,
@@ -127,24 +134,53 @@ impl PendingCertificateWriter for DummyPendingStore {
 
         Ok(())
     }
+    fn remove_generated_proof(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        self.proofs.write().unwrap().remove(certificate_id);
+
+        Ok(())
+    }
+    fn set_latest_proven_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+        height: &Height,
+        certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        self.latest_proven_certificate_per_network
+            .write()
+            .unwrap()
+            .insert(
+                *network_id,
+                ProvenCertificate(*certificate_id, *network_id, *height),
+            );
+
+        Ok(())
+    }
 }
 
 impl StateWriter for DummyPendingStore {
     fn insert_certificate_header(
         &self,
         certificate: &Certificate,
-        _status: CertificateStatus,
+        status: CertificateStatus,
     ) -> Result<(), agglayer_storage::error::Error> {
         self.certificate_per_network.write().unwrap().insert(
             (certificate.network_id, certificate.height),
+            certificate.hash(),
+        );
+
+        self.certificate_headers.write().unwrap().insert(
+            certificate.hash(),
             CertificateHeader {
-                certificate_id: certificate.hash(),
                 network_id: certificate.network_id,
                 height: certificate.height,
                 epoch_number: None,
                 certificate_index: None,
+                certificate_id: certificate.hash(),
                 new_local_exit_root: certificate.new_local_exit_root.into(),
-                status: agglayer_types::CertificateStatus::Pending,
+                status,
             },
         );
 
@@ -153,14 +189,35 @@ impl StateWriter for DummyPendingStore {
 
     fn update_certificate_header_status(
         &self,
-        _certificate_id: &CertificateId,
-        _status: &CertificateStatus,
+        certificate_id: &CertificateId,
+        status: &CertificateStatus,
     ) -> Result<(), agglayer_storage::error::Error> {
+        if let Some(entry) = self
+            .certificate_headers
+            .write()
+            .unwrap()
+            .get_mut(certificate_id)
+        {
+            entry.status = status.clone();
+        }
+
         Ok(())
     }
 }
 
 impl PendingCertificateReader for DummyPendingStore {
+    fn get_current_proven_height(
+        &self,
+    ) -> Result<Vec<ProvenCertificate>, agglayer_storage::error::Error> {
+        Ok(self
+            .latest_proven_certificate_per_network
+            .read()
+            .unwrap()
+            .values()
+            .cloned()
+            .collect())
+    }
+
     fn get_certificate(
         &self,
         network_id: NetworkId,

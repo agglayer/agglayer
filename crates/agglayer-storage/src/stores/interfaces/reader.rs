@@ -3,7 +3,7 @@ use std::sync::Arc;
 use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
 use arc_swap::ArcSwap;
 
-use crate::error::Error;
+use crate::{columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error};
 
 pub trait EpochStoreReader: Send + Sync {
     type PerEpochStore;
@@ -26,6 +26,7 @@ pub trait PendingCertificateReader: Send + Sync {
     ) -> Result<Vec<Option<Certificate>>, Error>;
 
     fn multi_get_proof(&self, keys: &[CertificateId]) -> Result<Vec<Option<Proof>>, Error>;
+    fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error>;
 }
 
 pub trait MetadataReader: Send + Sync {

@@ -11,7 +11,7 @@ use crate::{
     columns::{
         certificate_header::CertificateHeaderColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
-        latest_certificate_per_network::{
+        latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
     },

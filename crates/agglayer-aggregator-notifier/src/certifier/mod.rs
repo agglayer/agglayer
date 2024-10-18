@@ -67,7 +67,11 @@ where
         let certificate_id = certificate.hash();
 
         if self.pending_store.get_proof(certificate_id)?.is_some() {
-            return Err(Error::ProofAlreadyExists(network_id, height));
+            return Err(Error::ProofAlreadyExists(
+                network_id,
+                height,
+                certificate_id,
+            ));
         }
 
         let signer = Address::new([0; 20]); // TODO: put the trusted sequencer address
