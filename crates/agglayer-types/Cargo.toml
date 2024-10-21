@@ -13,9 +13,9 @@ serde_with.workspace = true
 sp1-sdk.workspace = true
 sp1-core-machine.workspace = true
 thiserror.workspace = true
+bincode.workspace = true
 
 [dev-dependencies]
-bincode.workspace = true
 
 [features]
 default = []

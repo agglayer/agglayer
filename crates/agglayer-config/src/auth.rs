@@ -18,11 +18,20 @@ use serde_with::{serde_as, NoneAsEmptyString};
 ///   pick up credentials.
 /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment is set, attempt to
 ///   load a service account JSON from this path.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum AuthConfig {
     Local(LocalConfig),
     GcpKms(GcpKmsConfig),
+}
+
+impl<'de> Deserialize<'de> for AuthConfig {
+    fn deserialize<D>(deserializer: D) -> Result<AuthConfig, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserialize_auth(deserializer)
+    }
 }
 
 impl Default for AuthConfig {

@@ -9,11 +9,11 @@ use tracing_subscriber::{fmt::writer::BoxMakeWriter, EnvFilter};
 pub struct Log {
     /// The `RUST_LOG` environment variable will take precedence over the
     /// configuration log level.
-    #[serde(default, alias = "Level")]
+    #[serde(default)]
     pub level: LogLevel,
-    #[serde(alias = "Outputs")]
+    #[serde(default)]
     pub outputs: Vec<LogOutput>,
-    #[serde(default, alias = "Format")]
+    #[serde(default)]
     pub format: LogFormat,
 }
 

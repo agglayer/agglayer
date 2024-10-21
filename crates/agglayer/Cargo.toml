@@ -16,4 +16,4 @@ agglayer-config = { path = "../agglayer-config" }
 
 [dev-dependencies]
 assert_cmd = "2.0.14"
-insta = { version = "1.39.0", features = ["toml", "yaml"] }
+insta.workspace = true

@@ -6,7 +6,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Epoch {
-    #[serde(alias = "TimeClock")]
     TimeClock(TimeClockConfig),
 }
 

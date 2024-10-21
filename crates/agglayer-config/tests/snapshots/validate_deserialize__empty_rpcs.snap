@@ -1,6 +1,6 @@
 ---
-source: crates/agglayer/tests/config.rs
-expression: sanitize_config_folder_path(result)
+source: crates/agglayer-config/tests/validate_deserialize.rs
+expression: config
 ---
 prover-entrypoint = "http://127.0.0.1:8080"
 
@@ -57,4 +57,4 @@ input-backpressure-buffer-size = 1000
 [certificate-orchestrator.prover.sp1-local]
 
 [storage]
-db-path = "/tmp/agglayer-test/storage"
+db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
