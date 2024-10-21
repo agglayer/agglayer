@@ -193,12 +193,12 @@ where
                 .map_err(|e| {
                     let zkevm_error = decode_contract_error::<
                         _,
-                        crate::contracts::polygon_zk_evm::PolygonZkEvmErrors,
+                        agglayer_contracts::polygon_zk_evm::PolygonZkEvmErrors,
                     >(&e);
 
                     let rollup_error = decode_contract_error::<
                         _,
-                        crate::contracts::polygon_rollup_manager::PolygonRollupManagerErrors,
+                        agglayer_contracts::polygon_rollup_manager::PolygonRollupManagerErrors,
                     >(&e);
 
                     let error = match (zkevm_error, rollup_error) {

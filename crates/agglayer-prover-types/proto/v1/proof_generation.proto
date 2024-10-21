@@ -7,7 +7,14 @@ service ProofGenerationService {
 }
 
 message ProofGenerationRequest {
+    bytes initial_state = 1;
+    bytes batch_header = 2;
 }
 
 message ProofGenerationResponse {
+    bytes proof = 1;
+}
+
+message ProofGenerationError {
+    bytes error = 1;
 }

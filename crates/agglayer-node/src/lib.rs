@@ -6,7 +6,6 @@ use node::Node;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-mod contracts;
 mod kernel;
 mod logging;
 mod rate_limiting;
@@ -33,7 +32,8 @@ pub fn main(cfg: PathBuf) -> Result<()> {
     let config: Arc<Config> = if cfg.is_file() {
         let dir = cfg.parent().unwrap();
         // Load the configuration file
-        Arc::new(toml::from_str::<ConfigMigrator>(&std::fs::read_to_string(&cfg)?)?.migrate(dir))
+        let cfg = std::fs::read_to_string(&cfg);
+        Arc::new(toml::from_str::<ConfigMigrator>(&cfg?)?.migrate(dir))
     } else {
         bail!(
             "Provided configuration file path is not a file: {}",

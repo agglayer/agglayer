@@ -1,7 +1,7 @@
 use std::path::Path;
 
 fn main() {
-    let contract_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/contracts");
+    let contract_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
 
     build_contract(
         "polygonzkevm.json",

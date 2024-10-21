@@ -6,8 +6,10 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+bincode.workspace = true
 buildstructor.workspace = true
 futures.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true
 toml.workspace = true
@@ -21,3 +23,10 @@ tonic-reflection = "0.12.3"
 agglayer-config = { path = "../agglayer-config" }
 agglayer-prover-types = { path = "../agglayer-prover-types" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
+pessimistic-proof = { path = "../pessimistic-proof" }
+
+sp1-sdk.workspace = true
+sp1-prover.workspace = true
+
+[dev-dependencies]
+agglayer-types = { path = "../agglayer-types" }

@@ -43,6 +43,11 @@ mod sp1 {
         }
     }
     impl PendingCertificateReader for DummyStore {
+        fn get_current_proven_height(
+            &self,
+        ) -> Result<Vec<ProvenCertificate>, agglayer_storage::error::Error> {
+            todo!()
+        }
         fn get_certificate(
             &self,
             _network_id: agglayer_types::NetworkId,
@@ -74,7 +79,10 @@ mod sp1 {
         }
     }
     use agglayer_certificate_orchestrator::EpochPacker;
-    use agglayer_storage::stores::{PendingCertificateReader, StateReader};
+    use agglayer_storage::{
+        columns::latest_proven_certificate_per_network::ProvenCertificate,
+        stores::{PendingCertificateReader, StateReader},
+    };
 
     use super::*;
 

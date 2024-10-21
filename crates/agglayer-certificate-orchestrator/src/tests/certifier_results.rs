@@ -63,12 +63,30 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
 
     orchestrator
         .state_store
-        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
         .unwrap();
+
+    orchestrator
+        .state_store
+        .insert_certificate_header(&certificate2, CertificateStatus::Pending)
+        .unwrap();
+
+    let header = orchestrator
+        .state_store
+        .get_certificate_header_by_cursor(1.into(), 1)
+        .unwrap();
+
+    assert!(matches!(
+        header,
+        Some(CertificateHeader {
+            status: CertificateStatus::Pending,
+            ..
+        })
+    ));
 
     assert!(orchestrator
         .state_store
-        .get_certificate_header_by_cursor(1.into(), 1)
+        .get_certificate_header_by_cursor(1.into(), 2)
         .unwrap()
         .is_none());
 
@@ -81,11 +99,16 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
     }));
 
     assert!(result.is_ok());
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 1)
-        .unwrap()
-        .is_none());
+    assert!(matches!(
+        orchestrator
+            .state_store
+            .get_certificate_header_by_cursor(1.into(), 1)
+            .unwrap(),
+        Some(CertificateHeader {
+            status: CertificateStatus::Pending,
+            ..
+        })
+    ));
 
     let result = receiver.recv().await.expect("output not present");
 
@@ -156,7 +179,7 @@ async fn certifier_results_for_unknown_network_with_height_not_zero() {
     assert!(receiver.try_recv().is_err());
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn certifier_error_certificate_does_not_exists() {
     let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
 
@@ -172,7 +195,7 @@ async fn certifier_error_certificate_does_not_exists() {
 }
 
 #[rstest]
-#[tokio::test]
+#[test_log::test(tokio::test)]
 #[timeout(Duration::from_millis(100))]
 async fn certifier_error_proof_already_exists_with_height_zero() {
     let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
@@ -217,17 +240,30 @@ async fn certifier_error_proof_already_exists_with_height_zero() {
 
     orchestrator
         .state_store
-        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
         .unwrap();
 
-    assert!(orchestrator
+    orchestrator
         .state_store
-        .get_certificate_header_by_cursor(1.into(), 1)
-        .unwrap()
-        .is_none());
+        .insert_certificate_header(&certificate2, CertificateStatus::Pending)
+        .unwrap();
 
-    let result =
-        orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(1.into(), 0)));
+    assert!(matches!(
+        orchestrator
+            .state_store
+            .get_certificate_header_by_cursor(1.into(), 1)
+            .unwrap(),
+        Some(CertificateHeader {
+            status: CertificateStatus::Pending,
+            ..
+        })
+    ));
+
+    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
+        1.into(),
+        0,
+        certificate_id,
+    )));
 
     assert!(result.is_ok());
     assert!(matches!(orchestrator.cursors.get(&1.into()), Some(0)));
@@ -300,8 +336,11 @@ async fn certifier_error_proof_already_exists_with_height_zero_still_pending() {
         .get_certificate_header_by_cursor(1.into(), 1)
         .unwrap()
         .is_none());
-    let result =
-        orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(1.into(), 0)));
+    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
+        1.into(),
+        0,
+        certificate_id,
+    )));
 
     assert!(result.is_ok());
 
@@ -365,19 +404,31 @@ async fn certifier_error_proof_already_exists_with_height_zero_no_header() {
         .insert_generated_proof(&certificate_id, &proof)
         .unwrap();
 
+    orchestrator
+        .state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .unwrap();
+    orchestrator
+        .state_store
+        .insert_certificate_header(&certificate2, CertificateStatus::Pending)
+        .unwrap();
+
     assert!(orchestrator
         .state_store
         .get_certificate_header_by_cursor(1.into(), 0)
         .unwrap()
-        .is_none());
+        .is_some());
 
     assert!(orchestrator
         .state_store
         .get_certificate_header_by_cursor(1.into(), 1)
         .unwrap()
-        .is_none());
-    let result =
-        orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(1.into(), 0)));
+        .is_some());
+    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
+        1.into(),
+        0,
+        certificate_id,
+    )));
 
     assert!(result.is_ok());
 
@@ -448,8 +499,11 @@ async fn certifier_error_proof_already_exists_with_height_zero_no_header_no_pend
         .unwrap()
         .is_none());
 
-    let result =
-        orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(1.into(), 0)));
+    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
+        1.into(),
+        0,
+        certificate_id,
+    )));
 
     assert!(result.is_err());
     assert!(!orchestrator.cursors.contains_key(&1.into()));
@@ -463,7 +517,7 @@ async fn certifier_error_proof_already_exists_with_height_zero_no_header_no_pend
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_millis(100))]
-async fn certifier_error_proof_already_exists_with_previous_proved() {
+async fn certifier_error_proof_already_exists_with_previous_proven() {
     let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
 
     let certificate = Certificate {
@@ -512,8 +566,11 @@ async fn certifier_error_proof_already_exists_with_previous_proved() {
         .unwrap();
 
     orchestrator.cursors.insert(1.into(), 1);
-    let result =
-        orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(1.into(), 2)));
+    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
+        1.into(),
+        2,
+        certificate_id,
+    )));
 
     assert!(result.is_ok());
     assert!(matches!(orchestrator.cursors.get(&1.into()), Some(&2)));
@@ -524,7 +581,7 @@ async fn certifier_error_proof_already_exists_with_previous_proved() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_millis(100))]
-async fn certifier_error_proof_already_exists_with_previous_proved_no_header() {
+async fn certifier_error_proof_already_exists_with_previous_proven_no_header() {
     let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
 
     let certificate = Certificate {
@@ -569,32 +626,67 @@ async fn certifier_error_proof_already_exists_with_previous_proved_no_header() {
         .unwrap();
 
     orchestrator
+        .state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    orchestrator
+        .state_store
+        .insert_certificate_header(&certificate2, CertificateStatus::Pending)
+        .unwrap();
+
+    orchestrator
         .pending_store
         .insert_generated_proof(&certificate_id, &proof)
         .unwrap();
 
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 2)
-        .unwrap()
-        .is_none());
+    assert!(matches!(
+        orchestrator
+            .state_store
+            .get_certificate_header_by_cursor(1.into(), 2)
+            .unwrap(),
+        Some(CertificateHeader {
+            height: 2,
+            epoch_number: None,
+            certificate_index: None,
+            status: CertificateStatus::Proven,
+            ..
+        })
+    ));
 
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 3)
-        .unwrap()
-        .is_none());
+    assert!(matches!(
+        orchestrator
+            .state_store
+            .get_certificate_header_by_cursor(1.into(), 3)
+            .unwrap(),
+        Some(CertificateHeader {
+            height: 3,
+            epoch_number: None,
+            certificate_index: None,
+            status: CertificateStatus::Pending,
+            ..
+        })
+    ));
+
     orchestrator.cursors.insert(1.into(), 1);
-    let result =
-        orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(1.into(), 2)));
+    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
+        1.into(),
+        2,
+        certificate_id,
+    )));
 
     assert!(result.is_ok());
 
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 2)
-        .unwrap()
-        .is_some());
+    assert!(matches!(
+        orchestrator
+            .state_store
+            .get_certificate_header_by_cursor(1.into(), 2)
+            .unwrap(),
+        Some(CertificateHeader {
+            status: CertificateStatus::Proven,
+            ..
+        })
+    ));
 
     assert!(matches!(orchestrator.cursors.get(&1.into()), Some(&2)));
     assert!(orchestrator.global_state.contains_key(&1.into()));
@@ -665,8 +757,11 @@ async fn certifier_error_proof_already_exists_with_previous_pending() {
         .is_none());
 
     orchestrator.cursors.insert(1.into(), 2);
-    let result =
-        orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(1.into(), 4)));
+    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
+        1.into(),
+        4,
+        certificate_id,
+    )));
 
     assert!(result.is_err());
     assert!(matches!(orchestrator.cursors.get(&1.into()), Some(2)));
@@ -699,10 +794,14 @@ async fn certifier_error_proof_already_exists_with_previous_pending() {
 #[timeout(Duration::from_millis(100))]
 async fn certifier_error_proof_already_exists_but_wrong_height() {
     let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
+    let certificate_id = [0; 32].into();
 
     orchestrator.cursors.insert(1.into(), 1);
-    let result =
-        orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(1.into(), 4)));
+    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
+        1.into(),
+        4,
+        certificate_id,
+    )));
 
     assert!(result.is_err());
     assert!(matches!(orchestrator.cursors.get(&1.into()), Some(1)));
@@ -757,11 +856,36 @@ async fn certifier_success_with_chain_of_certificates() {
         .insert_pending_certificate(1.into(), 1, &certificate2)
         .unwrap();
 
-    assert!(orchestrator
+    _ = orchestrator
+        .state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Pending);
+    _ = orchestrator
+        .state_store
+        .insert_certificate_header(&certificate2, CertificateStatus::Pending);
+
+    let header = orchestrator
         .state_store
         .get_certificate_header_by_cursor(1.into(), 0)
-        .unwrap()
-        .is_none());
+        .unwrap();
+
+    assert!(matches!(
+        header,
+        Some(CertificateHeader {
+            status: CertificateStatus::Pending,
+            ..
+        })
+    ));
+
+    assert!(matches!(
+        orchestrator
+            .state_store
+            .get_certificate_header_by_cursor(1.into(), 1)
+            .unwrap(),
+        Some(CertificateHeader {
+            status: CertificateStatus::Pending,
+            ..
+        })
+    ));
 
     orchestrator.spawn_certifier_task(1.into(), 0);
     let output = receiver.recv().await.expect("output not present");
@@ -769,11 +893,16 @@ async fn certifier_success_with_chain_of_certificates() {
     let result = orchestrator.handle_certifier_result(Ok(output));
 
     assert!(result.is_ok());
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 0)
-        .unwrap()
-        .is_some());
+    assert!(matches!(
+        orchestrator
+            .state_store
+            .get_certificate_header_by_cursor(1.into(), 0)
+            .unwrap(),
+        Some(CertificateHeader {
+            status: CertificateStatus::Proven,
+            ..
+        })
+    ));
 
     assert!(orchestrator
         .pending_store

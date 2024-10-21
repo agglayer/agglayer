@@ -87,7 +87,7 @@ struct IntermediateAuthConfig {
     local: Option<LocalConfig>,
     #[serde(default)]
     gcpkms: Option<GcpKmsConfig>,
-    #[serde(default, rename = "PrivateKeys")]
+    #[serde(default, alias = "PrivateKeys")]
     private_keys: Option<Vec<PrivateKey>>,
     #[serde(flatten)]
     kms: Option<GcpKmsConfig>,

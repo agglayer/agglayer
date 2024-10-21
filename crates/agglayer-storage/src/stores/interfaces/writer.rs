@@ -38,6 +38,8 @@ pub trait PendingCertificateWriter: Send + Sync {
         height: Height,
     ) -> Result<(), Error>;
 
+    fn remove_generated_proof(&self, certificate_id: &CertificateId) -> Result<(), Error>;
+
     fn insert_pending_certificate(
         &self,
         network_id: NetworkId,
@@ -49,5 +51,12 @@ pub trait PendingCertificateWriter: Send + Sync {
         &self,
         certificate_id: &CertificateId,
         proof: &Proof,
+    ) -> Result<(), Error>;
+
+    fn set_latest_proven_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+        height: &Height,
+        certificate_id: &CertificateId,
     ) -> Result<(), Error>;
 }

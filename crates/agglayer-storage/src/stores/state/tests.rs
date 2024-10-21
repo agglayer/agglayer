@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    columns::latest_certificate_per_network::{
+    columns::latest_settled_certificate_per_network::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     storage::{state_db_cf_definitions, DB},

@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 arc-swap.workspace = true
+bincode.workspace = true
 buildstructor.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -24,3 +25,4 @@ agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
 agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
 rstest.workspace = true
+test-log.workspace = true
