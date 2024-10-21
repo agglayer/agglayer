@@ -123,6 +123,8 @@ dependencies = [
  "ethers",
  "fail",
  "futures",
+ "rstest",
+ "test-log",
  "thiserror",
  "tokio",
  "tokio-util",

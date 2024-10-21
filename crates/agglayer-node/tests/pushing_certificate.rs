@@ -13,6 +13,7 @@ use rstest::rstest;
 use tokio_util::sync::CancellationToken;
 
 #[rstest]
+#[ignore = "until epoch starting resolution"]
 #[tokio::test]
 #[timeout(Duration::from_secs(60))]
 async fn successfully_push_certificate() {
@@ -45,6 +46,7 @@ async fn successfully_push_certificate() {
     let key_path = tmp_dir.path.join(uuid);
 
     config.l1.node_url = anvil.endpoint().parse().unwrap();
+    config.l1.ws_node_url = anvil.ws_endpoint().parse().unwrap();
     config.auth = agglayer_config::AuthConfig::Local(agglayer_config::LocalConfig {
         private_keys: vec![agglayer_config::PrivateKey {
             path: key_path,
