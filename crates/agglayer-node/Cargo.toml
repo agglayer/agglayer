@@ -41,7 +41,7 @@ agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
 [dev-dependencies]
 ethers.workspace = true
 insta = { version = "1.39.0", features = ["json"] }
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.6" }
+jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.7" }
 rstest.workspace = true
 serde_json.workspace = true
 hyper-util = { version = "0.1.6", features = ["client"] }
