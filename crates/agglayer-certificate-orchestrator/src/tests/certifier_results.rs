@@ -1,791 +1,524 @@
 use std::time::Duration;
 
-use agglayer_storage::stores::PendingCertificateReader;
-use agglayer_storage::stores::PendingCertificateWriter;
-use agglayer_storage::stores::StateReader;
-use agglayer_storage::stores::StateWriter;
+use agglayer_storage::tests::mocks::MockPendingStore;
+use agglayer_storage::tests::mocks::MockPerEpochStore;
+use agglayer_storage::tests::mocks::MockStateStore;
 use agglayer_types::Certificate;
 use agglayer_types::CertificateHeader;
 use agglayer_types::CertificateStatus;
+use agglayer_types::CertificateStatusError;
 use agglayer_types::LocalNetworkStateData;
-use agglayer_types::Proof;
-use pessimistic_proof::Signature;
-use pessimistic_proof::U256;
+use agglayer_types::NetworkId;
+use mockall::predicate::always;
+use mockall::predicate::eq;
+use mockall::predicate::le;
 use rstest::rstest;
 use tokio::time::sleep;
 
-use crate::tests::create_orchestrator;
+use crate::tests::create_orchestrator_mock;
+use crate::tests::mocks::MockCertifier;
+use crate::tests::MockOrchestrator;
 
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_millis(100))]
 async fn certifier_results_for_unknown_network_with_height_zero() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
+    let network_id: NetworkId = 1.into();
 
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 0,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate2 = Certificate {
-        network_id: 1.into(),
-        height: 1,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
+    let certificate = Certificate::new_for_test(network_id, 0);
+    let certificate2 = Certificate::new_for_test(network_id, 1);
+
     let certificate_id = certificate.hash();
-    let proof = Proof::new_for_test();
+    let certificate_id2 = certificate2.hash();
 
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 1, &certificate2)
-        .unwrap();
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
 
-    orchestrator
-        .pending_store
-        .insert_generated_proof(&certificate_id, &proof)
-        .unwrap();
+    let mut certifier_mock = MockCertifier::new();
 
-    orchestrator
-        .state_store
-        .insert_certificate_header(&certificate, CertificateStatus::Proven)
-        .unwrap();
+    // We expect one call to the certifier for the certificate2 as we forge the
+    // certificate one result.
+    certifier_mock
+        .expect_certify()
+        // Don't check the state as it doesn't implement eq
+        .with(always(), eq(network_id), eq(1))
+        .once()
+        .return_once(move |new_state, network_id, _height| {
+            Ok(Box::pin(async move {
+                let result = crate::CertifierOutput {
+                    certificate: certificate2,
+                    height: 1,
+                    new_state,
+                    network: network_id,
+                };
+                sender.send(result.clone()).await.unwrap();
+                Ok(result)
+            }))
+        });
 
-    orchestrator
-        .state_store
-        .insert_certificate_header(&certificate2, CertificateStatus::Pending)
-        .unwrap();
+    let mut pending_store = MockPendingStore::new();
 
-    let header = orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 1)
-        .unwrap();
+    // We expect one call to the pending store to get the current proven height
+    // it is used when starting the Orchestrator.
+    pending_store
+        .expect_get_current_proven_height()
+        .returning(|| Ok(vec![]));
 
-    assert!(matches!(
-        header,
-        Some(CertificateHeader {
-            status: CertificateStatus::Pending,
-            ..
-        })
-    ));
+    // We expect one call to the pending store to set the latest proven certificate.
+    // Having this execute means that the expected certificate ID as been put as the
+    // latest proven certificate for this network.
+    pending_store
+        .expect_set_latest_proven_certificate_per_network()
+        .once()
+        .with(eq(network_id), eq(0), eq(certificate_id))
+        .returning(|_, _, _| Ok(()));
 
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 2)
-        .unwrap()
-        .is_none());
+    // This one is expected as we spawn the second certificate.
+    // And it validates every steps of the process.
+    pending_store
+        .expect_set_latest_proven_certificate_per_network()
+        .once()
+        .with(eq(network_id), eq(1), eq(certificate_id2))
+        .returning(|_, _, _| Ok(()));
+
+    // We expect one call to the pending store to remove the first pending
+    // certificate. We do not expect the second one to be removed as it is not
+    // part of an epoch yet.
+    pending_store
+        .expect_remove_pending_certificate()
+        .once()
+        .with(eq(network_id), eq(0))
+        .returning(|_, _| Ok(()));
+
+    let mut state_store = MockStateStore::new();
+
+    // We expect one call to the state store to update the certificate header status
+    // to proven. This will change as the `add_certificate` will handle the
+    // decision of move the certificate to the current epoch or not.
+    state_store
+        .expect_update_certificate_header_status()
+        .with(eq(certificate_id), eq(&CertificateStatus::Proven))
+        .once()
+        .returning(|_, _| Ok(()));
+
+    // This status change is expected but as mention above, it'll be removed at some
+    // point.
+    state_store
+        .expect_update_certificate_header_status()
+        .with(eq(certificate_id2), eq(&CertificateStatus::Proven))
+        .once()
+        .returning(|_, _| Ok(()));
+
+    let mut current_epoch_store = MockPerEpochStore::new();
+    // We expect one call to the current epoch store to add the certificate to the
+    // current epoch.
+    current_epoch_store
+        .expect_add_certificate()
+        .once()
+        .with(eq(network_id), eq(0))
+        .returning(|_, _| Ok(()));
+
+    let builder = MockOrchestrator::builder()
+        .certifier(certifier_mock)
+        .pending_store(pending_store)
+        .state_store(state_store)
+        .current_epoch(current_epoch_store)
+        .build();
+
+    let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
 
     let state = LocalNetworkStateData::default();
     let result = orchestrator.handle_certifier_result(Ok(crate::CertifierOutput {
         certificate,
         height: 0,
         new_state: state,
-        network: 1.into(),
+        network: network_id,
     }));
 
     assert!(result.is_ok());
-    assert!(matches!(
-        orchestrator
-            .state_store
-            .get_certificate_header_by_cursor(1.into(), 1)
-            .unwrap(),
-        Some(CertificateHeader {
-            status: CertificateStatus::Pending,
-            ..
-        })
-    ));
 
     let result = receiver.recv().await.expect("output not present");
 
     let result = orchestrator.handle_certifier_result(Ok(result));
 
     assert!(result.is_ok());
-
-    let header = orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 1);
-
-    assert!(
-        matches!(
-            header,
-            Ok(Some(CertificateHeader {
-                network_id,
-                height: 1,
-                epoch_number: None,
-                certificate_index: None,
-                ..
-            })) if network_id == 1.into()
-
-        ),
-        "Certificate header not match {:?}",
-        header
-    );
-
-    assert!(orchestrator
-        .pending_store
-        .get_certificate(1.into(), 1)
-        .unwrap()
-        .is_none());
-
-    assert!(orchestrator.global_state.contains_key(&1.into()));
 }
 
 #[tokio::test]
 async fn certifier_results_for_unknown_network_with_height_not_zero() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
+    let network_id: NetworkId = 1.into();
 
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 1,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
+    let certificate = Certificate::new_for_test(network_id, 1);
+    let certificate_id = certificate.hash();
+
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+    let mut certifier_mock = MockCertifier::new();
+    let mut pending_store = MockPendingStore::new();
+
+    // We do not expect a call to the certifier.
+    certifier_mock
+        .expect_certify()
+        .never()
+        .return_once(move |new_state, network_id, _height| {
+            Ok(Box::pin(async move {
+                let result = crate::CertifierOutput {
+                    certificate: Certificate::new_for_test(network_id, 1),
+                    height: 1,
+                    new_state,
+                    network: network_id,
+                };
+                sender.send(result.clone()).await.unwrap();
+                Ok(result)
+            }))
+        });
+
+    // We expect one call to the pending store to get the current proven height
+    // it is used when starting the Orchestrator.
+    pending_store
+        .expect_get_current_proven_height()
+        .returning(|| Ok(vec![]));
+
+    pending_store
+        .expect_remove_pending_certificate()
+        .once()
+        .with(eq(network_id), eq(1))
+        .returning(|_, _| Ok(()));
+
+    pending_store
+        .expect_remove_generated_proof()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(()));
+
+    let builder = MockOrchestrator::builder()
+        .certifier(certifier_mock)
+        .pending_store(pending_store)
+        .build();
+
+    let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
 
     let state = LocalNetworkStateData::default();
     let result = orchestrator.handle_certifier_result(Ok(crate::CertifierOutput {
         certificate,
         height: 1,
         new_state: state,
-        network: 1.into(),
+        network: network_id,
     }));
 
     assert!(result.is_err());
-    assert!(!orchestrator.cursors.contains_key(&1.into()));
-    assert!(!orchestrator.global_state.contains_key(&1.into()));
-    sleep(Duration::from_millis(10)).await;
+    assert!(!orchestrator.proving_cursors.contains_key(&network_id));
+    assert!(!orchestrator.global_state.contains_key(&network_id));
 
+    sleep(Duration::from_millis(10)).await;
     assert!(receiver.try_recv().is_err());
 }
 
 #[test_log::test(tokio::test)]
 async fn certifier_error_certificate_does_not_exists() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
+    let network_id: NetworkId = 1.into();
+    let mut certifier_mock = MockCertifier::new();
+
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+    // We do not expect a call to the certifier.
+    certifier_mock
+        .expect_certify()
+        .never()
+        .return_once(move |new_state, network_id, _height| {
+            Ok(Box::pin(async move {
+                let result = crate::CertifierOutput {
+                    certificate: Certificate::new_for_test(network_id, 1),
+                    height: 1,
+                    new_state,
+                    network: network_id,
+                };
+                sender.send(result.clone()).await.unwrap();
+                Ok(result)
+            }))
+        });
+
+    let builder = MockOrchestrator::builder()
+        .certifier(certifier_mock)
+        .build();
+
+    let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
 
     let result =
-        orchestrator.handle_certifier_result(Err(crate::Error::CertificateNotFound(1.into(), 0)));
+        orchestrator.handle_certifier_result(Err(crate::Error::CertificateNotFound(network_id, 0)));
 
     assert!(result.is_ok());
-    assert!(!orchestrator.cursors.contains_key(&1.into()));
-    assert!(!orchestrator.global_state.contains_key(&1.into()));
-    sleep(Duration::from_millis(10)).await;
+    assert!(!orchestrator.proving_cursors.contains_key(&network_id));
+    assert!(!orchestrator.global_state.contains_key(&network_id));
 
+    sleep(Duration::from_millis(10)).await;
     assert!(receiver.try_recv().is_err());
 }
 
 #[rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_millis(100))]
-async fn certifier_error_proof_already_exists_with_height_zero() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 0,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate2 = Certificate {
-        network_id: 1.into(),
-        height: 1,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
+async fn certifier_error_proof_already_exists_unknown_network_at_height_0_but_no_header() {
+    let network_id: NetworkId = 1.into();
+    let height = 0;
+    let certificate = Certificate::new_for_test(network_id, height);
     let certificate_id = certificate.hash();
-    let proof = Proof::new_for_test();
 
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 1, &certificate2)
-        .unwrap();
+    let (_sender, mut receiver) = tokio::sync::mpsc::channel::<()>(1);
 
-    orchestrator
-        .pending_store
-        .insert_generated_proof(&certificate_id, &proof)
-        .unwrap();
+    let certifier_mock = MockCertifier::new();
+    let mut pending_store = MockPendingStore::new();
 
-    orchestrator
-        .state_store
-        .insert_certificate_header(&certificate, CertificateStatus::Proven)
-        .unwrap();
+    pending_store
+        .expect_get_current_proven_height()
+        .returning(|| Ok(vec![]));
 
-    orchestrator
-        .state_store
-        .insert_certificate_header(&certificate2, CertificateStatus::Pending)
-        .unwrap();
+    pending_store
+        .expect_remove_pending_certificate()
+        .once()
+        .returning(|_, _| Ok(()));
+    pending_store
+        .expect_remove_generated_proof()
+        .once()
+        .returning(|_| Ok(()));
 
-    assert!(matches!(
-        orchestrator
-            .state_store
-            .get_certificate_header_by_cursor(1.into(), 1)
-            .unwrap(),
-        Some(CertificateHeader {
-            status: CertificateStatus::Pending,
-            ..
-        })
-    ));
+    let mut state_store = MockStateStore::new();
+
+    let network_id: NetworkId = 1.into();
+    state_store
+        .expect_get_certificate_header_by_cursor()
+        .once()
+        .with(eq(network_id), eq(0))
+        .return_once(move |_, _| Ok(None));
+
+    let builder = MockOrchestrator::builder()
+        .pending_store(pending_store)
+        .state_store(state_store)
+        .certifier(certifier_mock)
+        .build();
+
+    let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
 
     let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        1.into(),
+        network_id,
         0,
         certificate_id,
     )));
 
     assert!(result.is_ok());
-    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(0)));
-    assert!(orchestrator.global_state.contains_key(&1.into()));
-    assert!(receiver.recv().await.is_some());
-}
-
-#[rstest]
-#[tokio::test]
-#[timeout(Duration::from_millis(100))]
-async fn certifier_error_proof_already_exists_with_height_zero_still_pending() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 0,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate2 = Certificate {
-        network_id: 1.into(),
-        height: 1,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate_id = certificate.hash();
-    let proof = Proof::new_for_test();
-
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 0, &certificate)
-        .unwrap();
-
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 1, &certificate2)
-        .unwrap();
-
-    orchestrator
-        .state_store
-        .insert_certificate_header(&certificate, CertificateStatus::Pending)
-        .unwrap();
-
-    orchestrator
-        .pending_store
-        .insert_generated_proof(&certificate_id, &proof)
-        .unwrap();
-
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 0)
-        .unwrap()
-        .is_some());
-
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 1)
-        .unwrap()
-        .is_none());
-    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        1.into(),
-        0,
-        certificate_id,
-    )));
-
-    assert!(result.is_ok());
-
-    assert!(orchestrator
-        .pending_store
-        .get_certificate(1.into(), 0)
-        .unwrap()
-        .is_none());
-
-    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(0)));
-    assert!(orchestrator.global_state.contains_key(&1.into()));
-    assert!(receiver.recv().await.is_some());
-}
-
-#[rstest]
-#[tokio::test]
-#[timeout(Duration::from_millis(100))]
-async fn certifier_error_proof_already_exists_with_height_zero_no_header() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 0,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate2 = Certificate {
-        network_id: 1.into(),
-        height: 1,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate_id = certificate.hash();
-    let proof = Proof::new_for_test();
-
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 0, &certificate)
-        .unwrap();
-
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 1, &certificate2)
-        .unwrap();
-
-    orchestrator
-        .pending_store
-        .insert_generated_proof(&certificate_id, &proof)
-        .unwrap();
-
-    orchestrator
-        .state_store
-        .insert_certificate_header(&certificate, CertificateStatus::Pending)
-        .unwrap();
-    orchestrator
-        .state_store
-        .insert_certificate_header(&certificate2, CertificateStatus::Pending)
-        .unwrap();
-
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 0)
-        .unwrap()
-        .is_some());
-
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 1)
-        .unwrap()
-        .is_some());
-    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        1.into(),
-        0,
-        certificate_id,
-    )));
-
-    assert!(result.is_ok());
-
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 0)
-        .unwrap()
-        .is_some());
-
-    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(0)));
-    assert!(orchestrator.global_state.contains_key(&1.into()));
-    assert!(receiver.recv().await.is_some());
-}
-
-#[rstest]
-#[tokio::test]
-#[timeout(Duration::from_millis(100))]
-async fn certifier_error_proof_already_exists_with_height_zero_no_header_no_pending() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 0,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate2 = Certificate {
-        network_id: 1.into(),
-        height: 1,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate_id = certificate.hash();
-    let proof = Proof::new_for_test();
-
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 1, &certificate2)
-        .unwrap();
-
-    orchestrator
-        .pending_store
-        .insert_generated_proof(&certificate_id, &proof)
-        .unwrap();
-
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 0)
-        .unwrap()
-        .is_none());
-
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 1)
-        .unwrap()
-        .is_none());
-
-    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        1.into(),
-        0,
-        certificate_id,
-    )));
-
-    assert!(result.is_err());
-    assert!(!orchestrator.cursors.contains_key(&1.into()));
-    assert!(!orchestrator.global_state.contains_key(&1.into()));
 
     sleep(Duration::from_millis(10)).await;
-
     assert!(receiver.try_recv().is_err());
 }
 
 #[rstest]
-#[tokio::test]
+#[case::unknown_network_height_0_no_header(0, CertificateStatus::Candidate, false)]
+#[case::unknown_network_height_0_candidate(0, CertificateStatus::Candidate, false)]
+#[case::unknown_network_height_0_pending(0, CertificateStatus::Pending, false)]
+#[case::unknown_network_height_0_proven(0, CertificateStatus::Proven, false)]
+#[case::unknown_network_height_0_settled(0, CertificateStatus::Settled, false)]
+#[case::unknown_network_height_0_in_error(0, CertificateStatus::InError {
+    error: CertificateStatusError::TypeConversionError(
+        agglayer_types::Error::MultipleL1InfoRoot,
+)}, false)]
+#[case::known_network_height_not_0_candidate(1, CertificateStatus::Candidate, true)]
+#[case::known_network_height_not_0_pending(1, CertificateStatus::Pending, true)]
+#[case::known_network_height_not_0_proven(1, CertificateStatus::Proven, true)]
+#[case::known_network_height_not_0_settled(1, CertificateStatus::Settled, true)]
+#[case::known_network_height_not_0_in_error(1, CertificateStatus::InError {
+    error: CertificateStatusError::TypeConversionError(
+        agglayer_types::Error::MultipleL1InfoRoot,
+)}, true)]
+#[test_log::test(tokio::test)]
 #[timeout(Duration::from_millis(100))]
-async fn certifier_error_proof_already_exists_with_previous_proven() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
-
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 2,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-
-    let certificate2 = Certificate {
-        network_id: 1.into(),
-        height: 3,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-
+async fn certifier_error_proof_already_exists(
+    #[case] height: u64,
+    #[case] status: CertificateStatus,
+    #[case] known_network: bool,
+    #[values(true, false)] return_header: bool,
+) {
+    let network_id: NetworkId = 1.into();
+    let certificate = Certificate::new_for_test(network_id, height);
     let certificate_id = certificate.hash();
-    let proof = Proof::new_for_test();
 
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 2, &certificate)
-        .unwrap();
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
 
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 3, &certificate2)
-        .unwrap();
-    orchestrator
-        .pending_store
-        .insert_generated_proof(&certificate_id, &proof)
-        .unwrap();
+    let mut certifier_mock = MockCertifier::new();
+    let mut pending_store = MockPendingStore::new();
+    let mut state_store = MockStateStore::new();
 
-    orchestrator.cursors.insert(1.into(), 1);
-    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        1.into(),
-        2,
-        certificate_id,
-    )));
+    pending_store
+        .expect_get_current_proven_height()
+        .returning(|| Ok(vec![]));
 
-    assert!(result.is_ok());
-    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(&2)));
-    assert!(orchestrator.global_state.contains_key(&1.into()));
-    assert!(receiver.recv().await.is_some());
-}
+    if return_header {
+        // We expect one call to the certifier for the certificate at height 2 as we
+        // forge the certificate one result.
+        certifier_mock
+            .expect_certify()
+            // Don't check the state as it doesn't implement eq
+            .with(always(), eq(network_id), eq(height + 1))
+            .once()
+            .return_once(|new_state, network, height| {
+                Ok(Box::pin(async move {
+                    let result = crate::CertifierOutput {
+                        certificate: Certificate::new_for_test(network, height),
+                        height,
+                        new_state,
+                        network,
+                    };
+                    sender.send(result.clone()).await.unwrap();
+                    Ok(result)
+                }))
+            });
 
-#[rstest]
-#[tokio::test]
-#[timeout(Duration::from_millis(100))]
-async fn certifier_error_proof_already_exists_with_previous_proven_no_header() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
+        match status {
+            CertificateStatus::Candidate | CertificateStatus::Settled => {
+                pending_store
+                    .expect_remove_pending_certificate()
+                    .once()
+                    .returning(|_, _| Ok(()));
 
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 2,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
+                pending_store
+                    .expect_remove_generated_proof()
+                    .once()
+                    .returning(|_| Ok(()));
+            }
+            CertificateStatus::InError { .. } | CertificateStatus::Pending => {
+                state_store
+                    .expect_update_certificate_header_status()
+                    .once()
+                    .with(eq(certificate_id), eq(CertificateStatus::Proven))
+                    .returning(|_, _| Ok(()));
+            }
+            _ => {}
+        }
+    } else {
+        pending_store
+            .expect_remove_pending_certificate()
+            .once()
+            .returning(|_, _| Ok(()));
 
-    let certificate2 = Certificate {
-        network_id: 1.into(),
-        height: 3,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
+        pending_store
+            .expect_remove_generated_proof()
+            .once()
+            .returning(|_| Ok(()));
+    }
 
-    let certificate_id = certificate.hash();
-    let proof = Proof::new_for_test();
-
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 2, &certificate)
-        .unwrap();
-
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 3, &certificate2)
-        .unwrap();
-
-    orchestrator
-        .state_store
-        .insert_certificate_header(&certificate, CertificateStatus::Proven)
-        .unwrap();
-
-    orchestrator
-        .state_store
-        .insert_certificate_header(&certificate2, CertificateStatus::Pending)
-        .unwrap();
-
-    orchestrator
-        .pending_store
-        .insert_generated_proof(&certificate_id, &proof)
-        .unwrap();
-
-    assert!(matches!(
-        orchestrator
-            .state_store
-            .get_certificate_header_by_cursor(1.into(), 2)
-            .unwrap(),
-        Some(CertificateHeader {
-            height: 2,
+    let certificate_header = if return_header {
+        Ok(Some(CertificateHeader {
+            certificate_id,
+            network_id,
+            height,
             epoch_number: None,
             certificate_index: None,
-            status: CertificateStatus::Proven,
-            ..
-        })
-    ));
+            new_local_exit_root: [0; 32].into(),
+            status,
+        }))
+    } else {
+        Ok(None)
+    };
 
-    assert!(matches!(
-        orchestrator
-            .state_store
-            .get_certificate_header_by_cursor(1.into(), 3)
-            .unwrap(),
-        Some(CertificateHeader {
-            height: 3,
-            epoch_number: None,
-            certificate_index: None,
-            status: CertificateStatus::Pending,
-            ..
-        })
-    ));
+    state_store
+        .expect_get_certificate_header_by_cursor()
+        .once()
+        .with(eq(network_id), eq(height))
+        .return_once(move |_, _| certificate_header);
 
-    orchestrator.cursors.insert(1.into(), 1);
+    let builder = MockOrchestrator::builder()
+        .pending_store(pending_store)
+        .state_store(state_store)
+        .certifier(certifier_mock)
+        .build();
+
+    let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
+
+    if known_network {
+        *orchestrator.proving_cursors.entry(network_id).or_default() = height;
+    }
     let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        1.into(),
-        2,
+        network_id,
+        height,
         certificate_id,
     )));
 
     assert!(result.is_ok());
 
-    assert!(matches!(
-        orchestrator
-            .state_store
-            .get_certificate_header_by_cursor(1.into(), 2)
-            .unwrap(),
-        Some(CertificateHeader {
-            status: CertificateStatus::Proven,
-            ..
-        })
-    ));
-
-    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(&2)));
-    assert!(orchestrator.global_state.contains_key(&1.into()));
-    assert!(receiver.recv().await.is_some());
+    if return_header {
+        assert!(receiver.recv().await.is_some());
+    } else {
+        sleep(Duration::from_millis(10)).await;
+        assert!(receiver.try_recv().is_err());
+    }
 }
 
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_millis(100))]
 async fn certifier_error_proof_already_exists_with_previous_pending() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
-
-    let previous = Certificate {
-        network_id: 1.into(),
-        height: 3,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 4,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-
+    let network_id: NetworkId = 1.into();
+    let height = 1;
+    let certificate = Certificate::new_for_test(network_id, height);
     let certificate_id = certificate.hash();
-    let proof = Proof::new_for_test();
 
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 3, &previous)
-        .unwrap();
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
 
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 4, &certificate)
-        .unwrap();
+    let mut certifier_mock = MockCertifier::new();
+    let mut pending_store = MockPendingStore::new();
+    let mut state_store = MockStateStore::new();
 
-    orchestrator
-        .pending_store
-        .insert_generated_proof(&certificate_id, &proof)
-        .unwrap();
+    pending_store
+        .expect_get_current_proven_height()
+        .returning(|| Ok(vec![]));
 
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 2)
-        .unwrap()
-        .is_none());
+    // We expect one call to the certifier for the certificate at height 2 as we
+    // forge the certificate one result.
+    certifier_mock
+        .expect_certify()
+        // Don't check the state as it doesn't implement eq
+        .with(always(), eq(network_id), eq(height + 1))
+        .never()
+        .return_once(|new_state, network, height| {
+            Ok(Box::pin(async move {
+                let result = crate::CertifierOutput {
+                    certificate: Certificate::new_for_test(network, height),
+                    height,
+                    new_state,
+                    network,
+                };
+                sender.send(result.clone()).await.unwrap();
+                Ok(result)
+            }))
+        });
 
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 3)
-        .unwrap()
-        .is_none());
+    pending_store
+        .expect_remove_generated_proof()
+        .once()
+        .returning(|_| Ok(()));
 
-    orchestrator.cursors.insert(1.into(), 2);
+    state_store
+        .expect_update_certificate_header_status()
+        .never()
+        .returning(|_, _| Ok(()));
+    state_store
+        .expect_get_certificate_header_by_cursor()
+        .never()
+        .return_once(move |_, _| Ok(None));
+
+    let builder = MockOrchestrator::builder()
+        .pending_store(pending_store)
+        .state_store(state_store)
+        .certifier(certifier_mock)
+        .build();
+
+    let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
+
     let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        1.into(),
-        4,
+        network_id,
+        height,
         certificate_id,
     )));
 
-    assert!(result.is_err());
-    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(2)));
-
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 2)
-        .unwrap()
-        .is_none());
-
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 3)
-        .unwrap()
-        .is_none());
-
-    assert!(orchestrator
-        .pending_store
-        .get_proof(certificate_id)
-        .unwrap()
-        .is_some());
+    assert!(result.is_ok());
 
     sleep(Duration::from_millis(10)).await;
-
     assert!(receiver.try_recv().is_err());
 }
 
@@ -793,18 +526,76 @@ async fn certifier_error_proof_already_exists_with_previous_pending() {
 #[tokio::test]
 #[timeout(Duration::from_millis(100))]
 async fn certifier_error_proof_already_exists_but_wrong_height() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
-    let certificate_id = [0; 32].into();
+    let network_id: NetworkId = 1.into();
+    let height = 4;
+    let certificate = Certificate::new_for_test(network_id, height);
+    let certificate_id = certificate.hash();
 
-    orchestrator.cursors.insert(1.into(), 1);
-    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        1.into(),
-        4,
-        certificate_id,
-    )));
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
 
-    assert!(result.is_err());
-    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(1)));
+    let mut certifier_mock = MockCertifier::new();
+    let mut pending_store = MockPendingStore::new();
+    let mut state_store = MockStateStore::new();
+
+    pending_store
+        .expect_get_current_proven_height()
+        .returning(|| Ok(vec![]));
+
+    // We expect one call to the certifier for the certificate at height 2 as we
+    // forge the certificate one result.
+    certifier_mock
+        .expect_certify()
+        // Don't check the state as it doesn't implement eq
+        .with(always(), eq(network_id), eq(height + 1))
+        .never()
+        .return_once(|new_state, network, height| {
+            Ok(Box::pin(async move {
+                let result = crate::CertifierOutput {
+                    certificate: Certificate::new_for_test(network, height),
+                    height,
+                    new_state,
+                    network,
+                };
+                sender.send(result.clone()).await.unwrap();
+                Ok(result)
+            }))
+        });
+
+    pending_store
+        .expect_remove_generated_proof()
+        .once()
+        .returning(|_| Ok(()));
+
+    pending_store
+        .expect_remove_pending_certificate()
+        .once()
+        .returning(|_, _| Ok(()));
+
+    state_store
+        .expect_update_certificate_header_status()
+        .never()
+        .returning(|_, _| Ok(()));
+    state_store
+        .expect_get_certificate_header_by_cursor()
+        .never()
+        .return_once(move |_, _| Ok(None));
+
+    let builder = MockOrchestrator::builder()
+        .pending_store(pending_store)
+        .state_store(state_store)
+        .certifier(certifier_mock)
+        .build();
+
+    let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
+
+    orchestrator.proving_cursors.insert(1.into(), 1);
+    orchestrator
+        .handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
+            network_id,
+            height,
+            certificate_id,
+        )))
+        .unwrap();
 
     sleep(Duration::from_millis(10)).await;
 
@@ -815,198 +606,99 @@ async fn certifier_error_proof_already_exists_but_wrong_height() {
 #[tokio::test]
 #[timeout(Duration::from_millis(100))]
 async fn certifier_success_with_chain_of_certificates() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
-
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 0,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate2 = Certificate {
-        network_id: 1.into(),
-        height: 1,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
+    let network_id: NetworkId = 1.into();
+    let height = 0;
+    let certificate = Certificate::new_for_test(network_id, height);
+    let certificate2 = Certificate::new_for_test(network_id, height + 1);
     let certificate_id = certificate.hash();
-    let certificate_id2 = certificate.hash();
+    let certificate_id2 = certificate2.hash();
 
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 0, &certificate)
-        .unwrap();
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
 
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 1, &certificate2)
-        .unwrap();
+    let mut certifier_mock = MockCertifier::new();
+    let mut pending_store = MockPendingStore::new();
+    let mut state_store = MockStateStore::new();
 
-    _ = orchestrator
-        .state_store
-        .insert_certificate_header(&certificate, CertificateStatus::Pending);
-    _ = orchestrator
-        .state_store
-        .insert_certificate_header(&certificate2, CertificateStatus::Pending);
+    certifier_mock
+        .expect_certify()
+        // Don't check the state as it doesn't implement eq
+        .with(always(), eq(network_id), le(height + 1))
+        .times(2)
+        .returning(move |new_state, network, height| {
+            let sender = sender.clone();
+            Ok(Box::pin(async move {
+                let result = crate::CertifierOutput {
+                    certificate: Certificate::new_for_test(network, height),
+                    height,
+                    new_state,
+                    network,
+                };
+                sender.send(result.clone()).await.unwrap();
+                Ok(result)
+            }))
+        });
 
-    let header = orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 0)
-        .unwrap();
+    pending_store
+        .expect_get_current_proven_height()
+        .returning(|| Ok(vec![]));
 
-    assert!(matches!(
-        header,
-        Some(CertificateHeader {
-            status: CertificateStatus::Pending,
-            ..
-        })
-    ));
+    pending_store
+        .expect_set_latest_proven_certificate_per_network()
+        .once()
+        .with(eq(network_id), eq(0), eq(certificate_id))
+        .returning(|_, _, _| Ok(()));
 
-    assert!(matches!(
-        orchestrator
-            .state_store
-            .get_certificate_header_by_cursor(1.into(), 1)
-            .unwrap(),
-        Some(CertificateHeader {
-            status: CertificateStatus::Pending,
-            ..
-        })
-    ));
+    pending_store
+        .expect_set_latest_proven_certificate_per_network()
+        .once()
+        .with(eq(network_id), eq(1), eq(certificate_id2))
+        .returning(|_, _, _| Ok(()));
 
-    orchestrator.spawn_certifier_task(1.into(), 0);
+    pending_store
+        .expect_remove_pending_certificate()
+        .once()
+        .with(eq(network_id), eq(0))
+        .returning(|_, _| Ok(()));
+
+    pending_store
+        .expect_remove_pending_certificate()
+        .never()
+        .with(eq(network_id), eq(1))
+        .returning(|_, _| Ok(()));
+
+    state_store
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id), eq(&CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state_store
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id2), eq(&CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    let mut current_epoch_store = MockPerEpochStore::new();
+
+    current_epoch_store
+        .expect_add_certificate()
+        .once()
+        .with(eq(network_id), eq(0))
+        .returning(|_, _| Ok(()));
+
+    let builder = MockOrchestrator::builder()
+        .pending_store(pending_store)
+        .current_epoch(current_epoch_store)
+        .state_store(state_store)
+        .certifier(certifier_mock)
+        .build();
+
+    let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
+    orchestrator.spawn_certifier_task(network_id, height);
+
     let output = receiver.recv().await.expect("output not present");
-
-    let result = orchestrator.handle_certifier_result(Ok(output));
-
-    assert!(result.is_ok());
-    assert!(matches!(
-        orchestrator
-            .state_store
-            .get_certificate_header_by_cursor(1.into(), 0)
-            .unwrap(),
-        Some(CertificateHeader {
-            status: CertificateStatus::Proven,
-            ..
-        })
-    ));
-
-    assert!(orchestrator
-        .pending_store
-        .get_certificate(1.into(), 0)
-        .unwrap()
-        .is_none());
-
-    assert!(orchestrator
-        .pending_store
-        .get_proof(certificate_id)
-        .unwrap()
-        .is_some());
+    orchestrator.handle_certifier_result(Ok(output)).unwrap();
 
     let output = receiver.recv().await.expect("output not present");
-
-    let result = orchestrator.handle_certifier_result(Ok(output));
-    assert!(result.is_ok());
-
-    assert!(matches!(
-        orchestrator
-            .state_store
-            .get_certificate_header_by_cursor(1.into(), 1),
-        Ok(Some(CertificateHeader {
-            network_id,
-            height: 1,
-            epoch_number: None,
-            certificate_index: None,
-            ..
-        })) if network_id == 1.into()
-    ));
-
-    assert!(orchestrator
-        .pending_store
-        .get_certificate(1.into(), 1)
-        .unwrap()
-        .is_none());
-
-    assert!(orchestrator
-        .pending_store
-        .get_proof(certificate_id2)
-        .unwrap()
-        .is_some());
-
-    assert!(orchestrator.cursors.get(&1.into()) == Some(&1));
-    assert!(orchestrator.global_state.contains_key(&1.into()));
-}
-
-#[rstest]
-#[tokio::test]
-#[timeout(Duration::from_millis(100))]
-async fn certifier_success_with_not_chained_certificates() {
-    let (_data_sender, mut receiver, mut orchestrator) = create_orchestrator::default();
-
-    let certificate = Certificate {
-        network_id: 1.into(),
-        height: 2,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-    };
-    let certificate_id = certificate.hash();
-
-    orchestrator.cursors.insert(1.into(), 0);
-    orchestrator
-        .pending_store
-        .insert_pending_certificate(1.into(), 2, &certificate)
-        .unwrap();
-
-    assert!(orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 2)
-        .unwrap()
-        .is_none());
-
-    orchestrator.spawn_certifier_task(1.into(), 2);
-    let output = receiver.recv().await.expect("output not present");
-
-    let result = orchestrator.handle_certifier_result(Ok(output));
-
-    assert!(result.is_err());
-    assert!(orchestrator.cursors.get(&1.into()) == Some(&0));
-
-    let x = orchestrator
-        .state_store
-        .get_certificate_header_by_cursor(1.into(), 2)
-        .unwrap();
-
-    assert!(x.is_none());
-
-    assert!(orchestrator
-        .pending_store
-        .get_certificate(1.into(), 2)
-        .unwrap()
-        .is_some());
-
-    assert!(orchestrator
-        .pending_store
-        .get_proof(certificate_id)
-        .unwrap()
-        .is_some());
+    orchestrator.handle_certifier_result(Ok(output)).unwrap();
 }

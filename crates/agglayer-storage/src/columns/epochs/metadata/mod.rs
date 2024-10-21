@@ -7,9 +7,9 @@ use crate::columns::PER_EPOCH_METADATA_CF;
 /// | key                   | value                   |
 /// | --                    | --                      |
 /// | `PerEpochMetadataKey` | `PerEpochMetadataValue` |
-pub struct ProofPerIndex;
+pub struct PerEpochMetadataColumn;
 
-impl crate::columns::ColumnSchema for ProofPerIndex {
+impl crate::columns::ColumnSchema for PerEpochMetadataColumn {
     type Key = crate::types::PerEpochMetadataKey;
     type Value = crate::types::PerEpochMetadataValue;
 

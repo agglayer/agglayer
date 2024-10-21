@@ -37,7 +37,7 @@ impl Default for TimeClockConfig {
 }
 
 fn default_epoch_duration() -> Duration {
-    Duration::from_secs(5)
+    Duration::from_secs(60)
 }
 
 fn serialize_duration<S>(value: &Duration, s: S) -> Result<S::Ok, S::Error>
@@ -65,7 +65,7 @@ mod tests {
         let epoch = Epoch::TimeClock(TimeClockConfig::default());
         let serialized = serde_json::to_string(&epoch).unwrap();
 
-        assert_eq!(serialized, r#"{"time-clock":{"epoch-duration":5}}"#);
+        assert_eq!(serialized, r#"{"time-clock":{"epoch-duration":60}}"#);
     }
 
     #[test]
