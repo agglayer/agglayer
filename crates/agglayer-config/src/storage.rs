@@ -122,6 +122,20 @@ fn default_db_path() -> PathBuf {
     PathBuf::new().join(STORAGE_DIR)
 }
 
+/// This function is extracted from `cargo`'s internal lib.
+///
+/// Link: https://github.com/rust-lang/cargo/blob/40ff7be1ad10d1947e22dfeb0f9fa8d2c26025a1/crates/cargo-util/src/paths.rs#L84
+///
+/// ## Explanation
+///
+/// Normalize a path, removing things like `.` and `..`.
+///
+/// CAUTION: This does not resolve symlinks (unlike
+/// [`std::fs::canonicalize`]). This may cause incorrect or surprising
+/// behavior at times. This should be used carefully. Unfortunately,
+/// [`std::fs::canonicalize`] can be hard to use correctly, since it can often
+/// fail, or on Windows returns annoying device paths. This is a problem Cargo
+/// needs to improve on.
 pub(crate) fn normalize_path(path: &Path) -> PathBuf {
     let mut components = path.components().peekable();
     let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
