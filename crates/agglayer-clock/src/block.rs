@@ -13,7 +13,7 @@ use ethers::{
 use futures::StreamExt as _;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::{Clock, ClockRef, Error, Event, BROADCAST_CHANNEL_SIZE};
 
@@ -206,7 +206,7 @@ where
         loop {
             tokio::select! {
                 _ = cancellation_token.cancelled() => {
-                    debug!("Clock task cancelled");
+                    warn!("Clock task cancelled");
                     break;
                 }
                 Some(block) = stream.next() => {
@@ -237,6 +237,7 @@ where
                                     return Err(BlockClockError::SetEpochNumber(previous, expected));
                                 }
                                 Ok(epoch_ended) => {
+                                    info!("Clock detected the end of the Epoch: {}", epoch_ended);
                                     _ = sender.send(Event::EpochEnded(epoch_ended));
                                 }
                             }

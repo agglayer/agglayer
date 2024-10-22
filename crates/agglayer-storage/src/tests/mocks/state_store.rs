@@ -1,14 +1,25 @@
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
+    NetworkId,
 };
 use mockall::mock;
 
 use crate::{
     error::Error,
-    stores::{StateReader, StateWriter},
+    stores::{MetadataReader, MetadataWriter, StateReader, StateWriter},
 };
 mock! {
     pub StateStore {}
+    impl MetadataReader for StateStore {
+        fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error>;
+        fn get_latest_opened_epoch(&self) -> Result<Option<u64>, Error>;
+    }
+
+    impl MetadataWriter for StateStore {
+        fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error>;
+        fn set_latest_opened_epoch(&self, value: u64) -> Result<(), Error>;
+    }
+
     impl StateWriter for StateStore {
         fn insert_certificate_header(
             &self,
@@ -36,6 +47,6 @@ mock! {
             network_id: NetworkId,
             height: Height,
         ) -> Result<Option<CertificateHeader>, Error>;
-        fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, Height, CertificateId)>, Error>;
+        fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, Height, CertificateId, EpochNumber)>, Error>;
     }
 }

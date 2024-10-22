@@ -31,7 +31,7 @@ const MAX_CERTIFICATE_PER_EPOCH: u64 = 1;
 
 /// A logical store for an Epoch.
 pub struct PerEpochStore<PendingStore, StateStore> {
-    epoch_number: Arc<u64>,
+    epoch_number: u64,
     db: Arc<DB>,
     pending_store: Arc<PendingStore>,
     state_store: Arc<StateStore>,
@@ -47,6 +47,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         epoch_number: u64,
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
+        optional_start_checkpoint: Option<BTreeMap<NetworkId, Height>>,
     ) -> Result<Self, Error> {
         // TODO: refactor this
         let path = config
@@ -56,9 +57,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
 
         let db = Arc::new(DB::open_cf(&path, epochs_db_cf_definitions())?);
 
-        let start_checkpoint = if epoch_number == 0 {
-            BTreeMap::new()
-        } else {
+        let start_checkpoint = {
             let checkpoint = db
                 .iter_with_direction::<StartCheckpointColumn>(
                     ReadOptions::default(),
@@ -67,17 +66,41 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                 .filter_map(|v| v.ok())
                 .collect::<BTreeMap<NetworkId, Height>>();
 
-            if checkpoint.is_empty() {
-                return Err(Error::Unexpected(format!(
-                    "Epoch {} doesn't seem to have a start checkpoint...",
-                    epoch_number
-                )))?;
+            match optional_start_checkpoint {
+                Some(expected_start_checkpoint) => {
+                    if checkpoint.is_empty() {
+                        db.multi_insert::<StartCheckpointColumn>(&expected_start_checkpoint)?;
+                        expected_start_checkpoint
+                    } else if checkpoint != expected_start_checkpoint {
+                        warn!(
+                            "Start checkpoint doesn't match the expected one, using the one from \
+                             the DB"
+                        );
+                        return Err(Error::Unexpected(
+                            "Start checkpoint doesn't match the expected one, using the one from \
+                             the DB"
+                                .to_string(),
+                        ))?;
+                    } else {
+                        checkpoint
+                    }
+                }
+                None => checkpoint,
             }
-
-            checkpoint
         };
 
         let mut in_packing = false;
+        let next_certificate_index = if let Some(Ok((index, _))) = db
+            .iter_with_direction::<CertificatePerIndexColumn>(
+                ReadOptions::default(),
+                rocksdb::Direction::Reverse,
+            )?
+            .next()
+        {
+            AtomicU64::new(index)
+        } else {
+            AtomicU64::new(0)
+        };
 
         let end_checkpoint = {
             let checkpoint = db
@@ -89,6 +112,13 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                 .collect::<BTreeMap<NetworkId, Height>>();
 
             if checkpoint.is_empty() {
+                if next_certificate_index.load(Ordering::Relaxed) != 0 {
+                    return Err(Error::Unexpected(
+                        "End checkpoint is empty, but there are certificates in the DB".to_string(),
+                    ))?;
+                }
+
+                db.multi_insert::<EndCheckpointColumn>(&start_checkpoint)?;
                 start_checkpoint.clone()
             } else {
                 in_packing = true;
@@ -98,11 +128,11 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         };
 
         Ok(Self {
-            epoch_number: Arc::new(epoch_number),
+            epoch_number,
             db,
-            pending_store,
+            next_certificate_index,
+            pending_db,
             state_store,
-            next_certificate_index: AtomicU64::new(0),
             start_checkpoint,
             end_checkpoint: RwLock::new(end_checkpoint),
             in_packing: AtomicBool::new(in_packing),
@@ -239,8 +269,16 @@ where
     PendingStore: Send + Sync,
     StateStore: Send + Sync,
 {
+    fn get_epoch_number(&self) -> u64 {
+        self.epoch_number
+    }
+
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {
         &self.start_checkpoint
+    }
+
+    fn get_end_checkpoint(&self) -> BTreeMap<NetworkId, Height> {
+        self.end_checkpoint.read().clone()
     }
 
     fn get_end_checkpoint_height_per_network(

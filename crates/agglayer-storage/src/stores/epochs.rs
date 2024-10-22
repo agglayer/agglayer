@@ -1,6 +1,9 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
-use arc_swap::ArcSwap;
+use agglayer_types::{Height, NetworkId};
 use parking_lot::RwLock;
 
 use super::{
@@ -11,7 +14,6 @@ use crate::error::Error;
 
 pub struct EpochsStore<PendingStore, StateStore> {
     config: Arc<agglayer_config::Config>,
-    current_epoch: Arc<ArcSwap<PerEpochStore<PendingStore, StateStore>>>,
     #[allow(dead_code)]
     open_epochs: RwLock<BTreeSet<u64>>,
     pending_store: Arc<PendingStore>,
@@ -25,22 +27,13 @@ impl<PendingStore, StateStore> EpochsStore<PendingStore, StateStore> {
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
-        let current_epoch = Arc::new(ArcSwap::new(Arc::new(PerEpochStore::try_open(
-            config.clone(),
-            epoch_number,
-            pending_store.clone(),
-            state_store.clone(),
-        )?)));
-
         let open_epochs = RwLock::new(BTreeSet::new());
         open_epochs.write().insert(epoch_number);
 
         Ok(Self {
             config,
             open_epochs,
-            current_epoch,
-            pending_store,
-            state_store,
+            pending_db,
         })
     }
 }
@@ -58,6 +51,20 @@ where
             epoch_number,
             self.pending_store.clone(),
             self.state_store.clone(),
+            None,
+        )
+    }
+
+    fn open_with_start_checkpoint(
+        &self,
+        epoch_number: u64,
+        start_checkpoint: BTreeMap<NetworkId, Height>,
+    ) -> Result<Self::PerEpochStore, Error> {
+        PerEpochStore::try_open(
+            self.config.clone(),
+            epoch_number,
+            self.pending_db.clone(),
+            Some(start_checkpoint),
         )
     }
 }
@@ -68,8 +75,4 @@ where
     StateStore: StateWriter,
 {
     type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
-
-    fn get_current_epoch(&self) -> Arc<ArcSwap<Self::PerEpochStore>> {
-        self.current_epoch.clone()
-    }
 }

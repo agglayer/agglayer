@@ -1,7 +1,8 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
-use arc_swap::ArcSwap;
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateId, EpochNumber, Height, NetworkId, Proof,
+};
 
 use crate::{
     columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error,
@@ -10,8 +11,6 @@ use crate::{
 
 pub trait EpochStoreReader: Send + Sync {
     type PerEpochStore: PerEpochReader + PerEpochWriter;
-
-    fn get_current_epoch(&self) -> Arc<ArcSwap<Self::PerEpochStore>>;
 }
 
 pub trait PendingCertificateReader: Send + Sync {
@@ -35,6 +34,8 @@ pub trait PendingCertificateReader: Send + Sync {
 pub trait MetadataReader: Send + Sync {
     /// Get the latest settled epoch.
     fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error>;
+    /// Get the latest opened epoch
+    fn get_latest_opened_epoch(&self) -> Result<Option<u64>, Error>;
 }
 
 pub trait StateReader: Send + Sync {
@@ -51,12 +52,20 @@ pub trait StateReader: Send + Sync {
         network_id: NetworkId,
         height: Height,
     ) -> Result<Option<CertificateHeader>, Error>;
-    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, Height, CertificateId)>, Error>;
+    fn get_current_settled_height(
+        &self,
+    ) -> Result<Vec<(NetworkId, Height, CertificateId, EpochNumber)>, Error>;
 }
 
 pub trait PerEpochReader: Send + Sync {
     /// Get the starting checkpoint of this epoch
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height>;
+
+    /// Get the ending checkpoint of this epoch
+    fn get_end_checkpoint(&self) -> BTreeMap<NetworkId, Height>;
+
+    /// Get epoch number
+    fn get_epoch_number(&self) -> u64;
 
     /// Get the height of a network's end checkpoint
     fn get_end_checkpoint_height_per_network(

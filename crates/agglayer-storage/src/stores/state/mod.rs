@@ -1,12 +1,13 @@
 use std::{path::Path, sync::Arc};
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
+    NetworkId,
 };
 use rocksdb::{Direction, ReadOptions};
 use tracing::warn;
 
-use super::{StateReader, StateWriter};
+use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
     columns::{
         certificate_header::CertificateHeaderColumn,
@@ -14,9 +15,11 @@ use crate::{
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
+        metadata::MetadataColumn,
     },
     error::Error,
     storage::DB,
+    types::{MetadataKey, MetadataValue},
 };
 
 #[cfg(test)]
@@ -145,7 +148,9 @@ impl StateReader for StateStore {
             })
     }
 
-    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, Height, CertificateId)>, Error> {
+    fn get_current_settled_height(
+        &self,
+    ) -> Result<Vec<(NetworkId, Height, CertificateId, EpochNumber)>, Error> {
         Ok(self
             .db
             .iter_with_direction::<LatestSettledCertificatePerNetworkColumn>(
@@ -153,11 +158,56 @@ impl StateReader for StateStore {
                 Direction::Forward,
             )?
             .filter_map(|v| {
-                v.map(|(network_id, SettledCertificate(id, height, _epoch))| {
-                    (network_id, height, id)
+                v.map(|(network_id, SettledCertificate(id, height, epoch))| {
+                    (network_id, height, id, epoch)
                 })
                 .ok()
             })
             .collect())
+    }
+}
+
+impl MetadataWriter for StateStore {
+    fn set_latest_opened_epoch(&self, value: u64) -> Result<(), Error> {
+        self.db
+            .put::<MetadataColumn>(&MetadataKey::OpenEpoch, &MetadataValue::OpenEpoch(value))
+    }
+
+    fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error> {
+        self.db.put::<MetadataColumn>(
+            &MetadataKey::LatestSettledEpoch,
+            &MetadataValue::LatestSettledEpoch(value),
+        )
+    }
+}
+
+impl MetadataReader for StateStore {
+    fn get_latest_opened_epoch(&self) -> Result<Option<u64>, Error> {
+        self.db
+            .get::<MetadataColumn>(&MetadataKey::OpenEpoch)
+            .and_then(|v| {
+                v.map_or(Ok(None), |v| match v {
+                    MetadataValue::OpenEpoch(epoch) => Ok(Some(epoch)),
+                    _ => Err(Error::Unexpected(
+                        "Wrong value type decoded, was expecting OpenEpoch, decoded another type"
+                            .to_string(),
+                    )),
+                })
+            })
+    }
+
+    fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error> {
+        self.db
+            .get::<MetadataColumn>(&MetadataKey::LatestSettledEpoch)
+            .and_then(|v| {
+                v.map_or(Ok(None), |v| match v {
+                    MetadataValue::LatestSettledEpoch(value) => Ok(Some(value)),
+                    _ => Err(Error::Unexpected(
+                        "Wrong value type decoded, was expecting LastSettledEpoch, decoded \
+                         another type"
+                            .to_string(),
+                    )),
+                })
+            })
     }
 }

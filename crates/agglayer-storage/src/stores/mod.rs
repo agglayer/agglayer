@@ -10,7 +10,6 @@ pub use interfaces::{
 };
 
 pub mod epochs;
-pub mod metadata;
 pub mod pending;
 pub mod per_epoch;
 pub mod state;

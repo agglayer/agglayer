@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use agglayer_types::{
     Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
     NetworkId, Proof,
@@ -18,11 +19,18 @@ pub trait EpochStoreWriter: Send + Sync {
     type PerEpochStore;
 
     fn open(&self, epoch_number: u64) -> Result<Self::PerEpochStore, Error>;
+    fn open_with_start_checkpoint(
+        &self,
+        epoch_number: u64,
+        start_checkpoint: BTreeMap<NetworkId, Height>,
+    ) -> Result<Self::PerEpochStore, Error>;
 }
 
 pub trait MetadataWriter: Send + Sync {
     /// Set the latest settled epoch.
     fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error>;
+    /// Set the latest opened epoch.
+    fn set_latest_opened_epoch(&self, value: u64) -> Result<(), Error>;
 }
 
 pub trait StateWriter: Send + Sync {

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+arc-swap.workspace = true
 anyhow.workspace = true
 buildstructor.workspace = true
 ethers.workspace = true
@@ -46,6 +47,7 @@ rstest.workspace = true
 serde_json.workspace = true
 hyper-util = { version = "0.1.6", features = ["client"] }
 http-body-util = "0.1.2"
+mockall.workspace = true
 rand.workspace = true
 test-log.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }

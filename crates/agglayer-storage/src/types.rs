@@ -12,12 +12,14 @@ macro_rules! default_codec_impl {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataKey {
     LatestSettledEpoch,
+    OpenEpoch,
     EpochSynchronization,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataValue {
     LatestSettledEpoch(u64),
+    OpenEpoch(u64),
     EpochSynchronization(u64),
 }
 
