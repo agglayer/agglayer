@@ -27,8 +27,8 @@ use tokio_stream::{wrappers::BroadcastStream, StreamExt as _};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    CertificateInput, CertificateOrchestrator, Certifier, CertifierOutput, CertifierResult,
-    EpochPacker, Error,
+    CertificateInput, CertificateOrchestrator, CertificateRequest, Certifier, CertifierOutput,
+    CertifierResult, EpochPacker, Error,
 };
 
 mod certifier_results;
@@ -46,6 +46,10 @@ pub(crate) struct DummyPendingStore {
 }
 
 impl PerEpochReader for DummyPendingStore {
+    fn epoch_number(&self) -> agglayer_types::EpochNumber {
+        todo!()
+    }
+
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {
         todo!()
     }
@@ -349,7 +353,9 @@ async fn test_collect_certificates() {
     )
     .expect("Unable to create orchestrator");
 
-    _ = data_sender.send((1.into(), 1, [0; 32].into())).await;
+    _ = data_sender
+        .send(CertificateRequest::for_test(1.into(), 1, [0; 32].into()))
+        .await;
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
 
     let _poll = poll!(&mut orchestrator);
@@ -393,7 +399,9 @@ async fn test_collect_certificates_after_epoch() {
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
     let _poll = poll!(&mut orchestrator);
 
-    _ = data_sender.send((1.into(), 1, [0; 32].into())).await;
+    _ = data_sender
+        .send(CertificateRequest::for_test(1.into(), 1, [0; 32].into()))
+        .await;
 
     let _poll = poll!(&mut orchestrator);
 
@@ -507,7 +515,7 @@ pub(crate) fn create_orchestrator_mock(
         impl Stream<Item = agglayer_clock::Event>,
     ),
 ) -> (
-    mpsc::Sender<(NetworkId, Height, CertificateId)>,
+    mpsc::Sender<CertificateRequest>,
     IMockOrchestrator<impl Stream<Item = agglayer_clock::Event>>,
 ) {
     let (data_sender, data_receiver) = mpsc::channel(10);
@@ -554,7 +562,7 @@ pub(crate) fn create_orchestrator(
         impl Stream<Item = agglayer_clock::Event>,
     ),
 ) -> (
-    mpsc::Sender<(NetworkId, Height, CertificateId)>,
+    mpsc::Sender<CertificateRequest>,
     mpsc::Receiver<CertifierOutput>,
     TestOrchestrator<impl Stream<Item = agglayer_clock::Event>>,
 ) {

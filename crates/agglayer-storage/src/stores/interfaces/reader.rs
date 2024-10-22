@@ -1,6 +1,8 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateId, EpochNumber, Height, NetworkId, Proof,
+};
 use arc_swap::ArcSwap;
 
 use crate::{
@@ -55,6 +57,9 @@ pub trait StateReader: Send + Sync {
 }
 
 pub trait PerEpochReader: Send + Sync {
+    /// Get the epoch number
+    fn epoch_number(&self) -> EpochNumber;
+
     /// Get the starting checkpoint of this epoch
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height>;
 

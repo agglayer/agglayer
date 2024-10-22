@@ -10,6 +10,7 @@ use rstest::rstest;
 use tokio::time::sleep;
 
 use crate::tests::create_orchestrator;
+use crate::CertificateRequest;
 
 #[rstest]
 #[tokio::test]
@@ -38,7 +39,11 @@ async fn receive_certificate_with_height_zero() {
         .insert_pending_certificate(1.into(), 0, &certificate)
         .unwrap();
 
-    let result = orchestrator.receive_certificates(&[(1.into(), 0, certificate_id)]);
+    let result = orchestrator.receive_certificates([CertificateRequest::for_test(
+        1.into(),
+        0,
+        certificate_id,
+    )]);
 
     assert!(result.is_ok());
     assert!(matches!(
@@ -95,7 +100,11 @@ async fn receive_certificate_with_previous_proven() {
 
     orchestrator.proving_cursors.insert(1.into(), 0);
 
-    let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32].into())]);
+    let result = orchestrator.receive_certificates([CertificateRequest::for_test(
+        1.into(),
+        1,
+        [0; 32].into(),
+    )]);
 
     assert!(result.is_ok());
     assert!(matches!(
@@ -150,7 +159,11 @@ async fn receive_certificate_with_previous_pending() {
         .insert_pending_certificate(1.into(), 1, &certificate)
         .unwrap();
 
-    let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32].into())]);
+    let result = orchestrator.receive_certificates([CertificateRequest::for_test(
+        1.into(),
+        1,
+        [0; 32].into(),
+    )]);
 
     assert!(result.is_ok());
     assert!(!orchestrator.proving_cursors.contains_key(&1.into()));

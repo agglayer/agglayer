@@ -4,6 +4,7 @@ use agglayer_aggregator_notifier::{AggregatorNotifier, CertifierClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
+use agglayer_rate_limiting::RateLimiter;
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::DB,
@@ -155,12 +156,16 @@ impl Node {
             .start()
             .await?;
 
+        let rate_limiter = RateLimiter::new(config.rate_limiting.clone());
+
         // Bind the core to the RPC server.
         let server_handle = AgglayerImpl::new(
             core,
             data_sender,
             pending_store.clone(),
             state_store.clone(),
+            rate_limiter,
+            clock_ref,
         )
         .start(config)
         .await?;

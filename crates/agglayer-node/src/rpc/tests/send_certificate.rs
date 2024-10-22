@@ -1,6 +1,8 @@
 use std::{net::IpAddr, sync::Arc};
 
+use agglayer_clock::ClockRef;
 use agglayer_config::Config;
+use agglayer_rate_limiting::RateLimiter;
 use agglayer_types::{Certificate, CertificateId};
 use ethers::providers;
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder, rpc_params};
@@ -36,6 +38,8 @@ async fn send_certificate_method_can_be_called() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        RateLimiter::new(Default::default()),
+        ClockRef::for_testing(5, 1000),
     )
     .start(config.clone())
     .await
@@ -76,6 +80,8 @@ async fn send_certificate_method_can_be_called_and_fail() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        RateLimiter::new(Default::default()),
+        ClockRef::for_testing(5, 1000),
     )
     .start(config.clone())
     .await

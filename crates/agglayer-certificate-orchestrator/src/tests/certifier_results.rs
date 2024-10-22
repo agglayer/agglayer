@@ -117,6 +117,8 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
         .with(eq(network_id), eq(0))
         .returning(|_, _| Ok(()));
 
+    current_epoch_store.expect_epoch_number().return_const(0u64);
+
     let builder = MockOrchestrator::builder()
         .certifier(certifier_mock)
         .pending_store(pending_store)
@@ -127,18 +129,21 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
 
     let state = LocalNetworkStateData::default();
-    let result = orchestrator.handle_certifier_result(Ok(crate::CertifierOutput {
-        certificate,
-        height: 0,
-        new_state: state,
-        network: network_id,
-    }));
+    let result = orchestrator.handle_certifier_result(
+        Ok(crate::CertifierOutput {
+            certificate,
+            height: 0,
+            new_state: state,
+            network: network_id,
+        }),
+        None,
+    );
 
     assert!(result.is_ok());
 
     let result = receiver.recv().await.expect("output not present");
 
-    let result = orchestrator.handle_certifier_result(Ok(result));
+    let result = orchestrator.handle_certifier_result(Ok(result), None);
 
     assert!(result.is_ok());
 }
@@ -197,12 +202,15 @@ async fn certifier_results_for_unknown_network_with_height_not_zero() {
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
 
     let state = LocalNetworkStateData::default();
-    let result = orchestrator.handle_certifier_result(Ok(crate::CertifierOutput {
-        certificate,
-        height: 1,
-        new_state: state,
-        network: network_id,
-    }));
+    let result = orchestrator.handle_certifier_result(
+        Ok(crate::CertifierOutput {
+            certificate,
+            height: 1,
+            new_state: state,
+            network: network_id,
+        }),
+        None,
+    );
 
     assert!(result.is_err());
     assert!(!orchestrator.proving_cursors.contains_key(&network_id));
@@ -241,8 +249,8 @@ async fn certifier_error_certificate_does_not_exists() {
 
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
 
-    let result =
-        orchestrator.handle_certifier_result(Err(crate::Error::CertificateNotFound(network_id, 0)));
+    let result = orchestrator
+        .handle_certifier_result(Err(crate::Error::CertificateNotFound(network_id, 0)), None);
 
     assert!(result.is_ok());
     assert!(!orchestrator.proving_cursors.contains_key(&network_id));
@@ -296,11 +304,14 @@ async fn certifier_error_proof_already_exists_unknown_network_at_height_0_but_no
 
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
 
-    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        network_id,
-        0,
-        certificate_id,
-    )));
+    let result = orchestrator.handle_certifier_result(
+        Err(crate::Error::ProofAlreadyExists(
+            network_id,
+            0,
+            certificate_id,
+        )),
+        None,
+    );
 
     assert!(result.is_ok());
 
@@ -433,11 +444,14 @@ async fn certifier_error_proof_already_exists(
     if known_network {
         *orchestrator.proving_cursors.entry(network_id).or_default() = height;
     }
-    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        network_id,
-        height,
-        certificate_id,
-    )));
+    let result = orchestrator.handle_certifier_result(
+        Err(crate::Error::ProofAlreadyExists(
+            network_id,
+            height,
+            certificate_id,
+        )),
+        None,
+    );
 
     assert!(result.is_ok());
 
@@ -510,11 +524,14 @@ async fn certifier_error_proof_already_exists_with_previous_pending() {
 
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
 
-    let result = orchestrator.handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-        network_id,
-        height,
-        certificate_id,
-    )));
+    let result = orchestrator.handle_certifier_result(
+        Err(crate::Error::ProofAlreadyExists(
+            network_id,
+            height,
+            certificate_id,
+        )),
+        None,
+    );
 
     assert!(result.is_ok());
 
@@ -590,11 +607,14 @@ async fn certifier_error_proof_already_exists_but_wrong_height() {
 
     orchestrator.proving_cursors.insert(1.into(), 1);
     orchestrator
-        .handle_certifier_result(Err(crate::Error::ProofAlreadyExists(
-            network_id,
-            height,
-            certificate_id,
-        )))
+        .handle_certifier_result(
+            Err(crate::Error::ProofAlreadyExists(
+                network_id,
+                height,
+                certificate_id,
+            )),
+            None,
+        )
         .unwrap();
 
     sleep(Duration::from_millis(10)).await;
@@ -686,6 +706,8 @@ async fn certifier_success_with_chain_of_certificates() {
         .with(eq(network_id), eq(0))
         .returning(|_, _| Ok(()));
 
+    current_epoch_store.expect_epoch_number().return_const(0u64);
+
     let builder = MockOrchestrator::builder()
         .pending_store(pending_store)
         .current_epoch(current_epoch_store)
@@ -697,8 +719,12 @@ async fn certifier_success_with_chain_of_certificates() {
     orchestrator.spawn_certifier_task(network_id, height);
 
     let output = receiver.recv().await.expect("output not present");
-    orchestrator.handle_certifier_result(Ok(output)).unwrap();
+    orchestrator
+        .handle_certifier_result(Ok(output), None)
+        .unwrap();
 
     let output = receiver.recv().await.expect("output not present");
-    orchestrator.handle_certifier_result(Ok(output)).unwrap();
+    orchestrator
+        .handle_certifier_result(Ok(output), None)
+        .unwrap();
 }
