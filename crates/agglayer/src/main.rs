@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
             toml::to_string_pretty(&agglayer_config::Config::new(&base_dir)).unwrap()
         ),
         cli::Commands::ValidateConfig { path } => {
-            match agglayer_config::Config::try_from(path.as_path()) {
+            match agglayer_config::Config::try_load(path.as_path()) {
                 Ok(config) => {
                     println!("{}", toml::to_string_pretty(&config).unwrap());
                 }

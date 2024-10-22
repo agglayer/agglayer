@@ -7,7 +7,7 @@ use insta::assert_toml_snapshot;
 fn empty_rpcs() {
     let input = "./tests/fixtures/valide_config/empty_rpcs.toml";
 
-    let config = Config::try_from(Path::new(input)).unwrap();
+    let config = Config::try_load(Path::new(input)).unwrap();
 
     assert_toml_snapshot!(config, {
         ".storage.*" => insta::dynamic_redaction(|value, path| {

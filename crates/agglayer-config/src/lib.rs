@@ -105,10 +105,8 @@ pub struct Config {
     pub prover_entrypoint: String,
 }
 
-impl TryFrom<&Path> for Config {
-    type Error = ConfigurationError;
-
-    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+impl Config {
+    pub fn try_load(path: &Path) -> Result<Self, ConfigurationError> {
         let reader = std::fs::read_to_string(path).map_err(|source| {
             ConfigurationError::UnableToReadConfigFile {
                 path: path.to_path_buf(),
@@ -204,18 +202,19 @@ impl<'de, 'a> DeserializeSeed<'de> for ConfigDeserializer<'a> {
     where
         D: serde::Deserializer<'de>,
     {
-        let mut ad_hoc: Config = serde::Deserialize::deserialize(deserializer)?;
+        let mut config_candidate: Config = serde::Deserialize::deserialize(deserializer)?;
 
-        ad_hoc.storage = ad_hoc
-            .storage
-            .path_contextualized(&self.path.canonicalize().map_err(|error| {
-                serde::de::Error::custom(format!(
-                    "Unable to canonicalize the storage path: {}",
-                    error
-                ))
-            })?);
+        config_candidate.storage =
+            config_candidate
+                .storage
+                .path_contextualized(&self.path.canonicalize().map_err(|error| {
+                    serde::de::Error::custom(format!(
+                        "Unable to canonicalize the storage path: {}",
+                        error
+                    ))
+                })?);
 
-        ad_hoc
+        config_candidate
             .validate()
             .map_err(|e| serde::de::Error::custom(e.to_string()))
     }

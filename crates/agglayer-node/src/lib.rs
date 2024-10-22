@@ -30,7 +30,7 @@ pub fn main(cfg: PathBuf) -> Result<()> {
     let cfg = cfg.canonicalize()?;
 
     let config: Arc<Config> = if cfg.is_file() {
-        let config = Config::try_from(cfg.as_path())?;
+        let config = Config::try_load(cfg.as_path())?;
         Arc::new(config)
     } else {
         bail!(
