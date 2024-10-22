@@ -69,7 +69,8 @@ pub fn main() {
     let (certificate, signer) = state.apply_events(&imported_bridge_exits, &bridge_exits);
 
     info!(
-        "Certificate: [{}]",
+        "Certificate {}: [{}]",
+        certificate.hash(),
         serde_json::to_string(&certificate).unwrap()
     );
 
