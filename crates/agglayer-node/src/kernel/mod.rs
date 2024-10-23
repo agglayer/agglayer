@@ -39,16 +39,23 @@ pub(crate) enum ZkevmNodeVerificationError {
     /// The given rollup id is not specified in the configuration.
     #[error("invalid rollup id: {0}")]
     InvalidRollupId(u32),
+
     /// Generic error when communicating with the ZkEVM node.
     #[error("rpc error: {0}")]
     RpcError(#[from] jsonrpsee::core::client::error::Error),
+
     /// The state root in the proof does not match the ZkEVM node's local
     /// record.
     #[error("invalid state root. expected: {expected}, got: {got}")]
     InvalidStateRoot { expected: H256, got: H256 },
+
     /// The exit root in the proof does not match the ZkEVM node's local record.
     #[error("invalid exit root. expected: {expected}, got: {got}")]
     InvalidExitRoot { expected: H256, got: H256 },
+
+    /// Unable to query the state and exit roots.
+    #[error("Unable to query exit and state root for batch {batch_no} (network {network_id})")]
+    RootsNotFound { batch_no: u64, network_id: u32 },
 }
 
 impl<RpcProvider> Kernel<RpcProvider> {
@@ -99,10 +106,16 @@ impl<RpcProvider> Kernel<RpcProvider> {
         &self,
         signed_tx: &SignedTx,
     ) -> Result<(), ZkevmNodeVerificationError> {
-        let client = self.get_zkevm_node_client_for_rollup(signed_tx.tx.rollup_id)?;
+        let network_id = signed_tx.tx.rollup_id;
+        let client = self.get_zkevm_node_client_for_rollup(network_id)?;
+        let batch_no = signed_tx.tx.new_verified_batch.as_u64();
         let batch = client
             .batch_by_number(signed_tx.tx.new_verified_batch.as_u64())
-            .await?;
+            .await?
+            .ok_or(ZkevmNodeVerificationError::RootsNotFound {
+                batch_no,
+                network_id,
+            })?;
 
         if batch.state_root != signed_tx.tx.zkp.new_state_root {
             return Err(ZkevmNodeVerificationError::InvalidStateRoot {

@@ -394,7 +394,7 @@ mod interop_executor_execute {
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
-            Err(ZkevmNodeVerificationError::RpcError(_))
+            Err(ZkevmNodeVerificationError::RootsNotFound { .. })
         ));
     }
 
