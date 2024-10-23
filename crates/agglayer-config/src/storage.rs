@@ -1,10 +1,11 @@
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
 
-const STORAGE_DIR: &str = "storage";
+pub(crate) const STORAGE_DIR: &str = "storage";
 const METADATA_DB_NAME: &str = "metadata";
 const PENDING_DB_NAME: &str = "pending";
 const STATE_DB_NAME: &str = "state";
@@ -13,6 +14,7 @@ const EPOCHS_DB_PATH: &str = "epochs";
 /// Configuration for the storage.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(from = "StorageConfigHelper", into = "StorageConfigHelper")]
+#[serde(default)]
 pub struct StorageConfig {
     /// Custom metadata storage path or inferred from the db path.
     pub metadata_db_path: PathBuf,
@@ -24,12 +26,23 @@ pub struct StorageConfig {
     pub epochs_db_path: PathBuf,
 }
 
+impl Default for StorageConfig {
+    fn default() -> Self {
+        StorageConfig {
+            metadata_db_path: Path::new("./").join(STORAGE_DIR).join(METADATA_DB_NAME),
+            pending_db_path: Path::new("./").join(STORAGE_DIR).join(PENDING_DB_NAME),
+            state_db_path: Path::new("./").join(STORAGE_DIR).join(STATE_DB_NAME),
+            epochs_db_path: Path::new("./").join(STORAGE_DIR).join(EPOCHS_DB_PATH),
+        }
+    }
+}
+
 impl StorageConfig {
     pub fn path_contextualized(mut self, base_path: &Path) -> Self {
-        self.metadata_db_path = base_path.join(&self.metadata_db_path);
-        self.pending_db_path = base_path.join(&self.pending_db_path);
-        self.state_db_path = base_path.join(&self.state_db_path);
-        self.epochs_db_path = base_path.join(&self.epochs_db_path);
+        self.metadata_db_path = normalize_path(&base_path.join(&self.metadata_db_path));
+        self.pending_db_path = normalize_path(&base_path.join(&self.pending_db_path));
+        self.state_db_path = normalize_path(&base_path.join(&self.state_db_path));
+        self.epochs_db_path = normalize_path(&base_path.join(&self.epochs_db_path));
 
         self
     }
@@ -56,6 +69,7 @@ impl StorageConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 struct StorageConfigHelper {
+    #[serde(default = "default_db_path")]
     db_path: PathBuf,
     /// Custom metadata storage path or inferred from the db path.
     pub metadata_db_path: Option<PathBuf>,
@@ -104,6 +118,50 @@ impl From<StorageConfig> for StorageConfigHelper {
     }
 }
 
+fn default_db_path() -> PathBuf {
+    PathBuf::new().join(STORAGE_DIR)
+}
+
+/// This function is extracted from `cargo`'s internal lib.
+///
+/// Link: https://github.com/rust-lang/cargo/blob/40ff7be1ad10d1947e22dfeb0f9fa8d2c26025a1/crates/cargo-util/src/paths.rs#L84
+///
+/// ## Explanation
+///
+/// Normalize a path, removing things like `.` and `..`.
+///
+/// CAUTION: This does not resolve symlinks (unlike
+/// [`std::fs::canonicalize`]). This may cause incorrect or surprising
+/// behavior at times. This should be used carefully. Unfortunately,
+/// [`std::fs::canonicalize`] can be hard to use correctly, since it can often
+/// fail, or on Windows returns annoying device paths. This is a problem Cargo
+/// needs to improve on.
+pub(crate) fn normalize_path(path: &Path) -> PathBuf {
+    let mut components = path.components().peekable();
+    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
+        components.next();
+        PathBuf::from(c.as_os_str())
+    } else {
+        PathBuf::new()
+    };
+
+    for component in components {
+        match component {
+            Component::Prefix(..) => unreachable!(),
+            Component::RootDir => {
+                ret.push(component.as_os_str());
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                ret.pop();
+            }
+            Component::Normal(c) => {
+                ret.push(c);
+            }
+        }
+    }
+    ret
+}
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;

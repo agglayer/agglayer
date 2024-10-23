@@ -62,7 +62,7 @@ dependencies = [
  "dirs",
  "dotenvy",
  "insta",
- "toml 0.8.19",
+ "toml",
 ]
 
 [[package]]
@@ -136,13 +136,15 @@ dependencies = [
  "dirs",
  "ethers",
  "humantime-serde",
+ "insta",
  "jsonrpsee",
  "pretty_assertions",
  "rstest",
  "serde",
  "serde_json",
  "serde_with",
- "toml 0.8.19",
+ "thiserror",
+ "toml",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -209,7 +211,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
- "toml 0.8.19",
+ "toml",
  "tower 0.4.13",
  "tower-http",
  "tracing",
@@ -235,7 +237,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
- "toml 0.8.19",
+ "toml",
  "tonic 0.12.3",
  "tonic-health",
  "tonic-reflection",
@@ -2485,7 +2487,7 @@ dependencies = [
  "serde",
  "serde_json",
  "syn 2.0.82",
- "toml 0.8.19",
+ "toml",
  "walkdir",
 ]
 
@@ -3668,16 +3670,18 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6593a41c7a73841868772495db7dc1e8ecab43bb5c0b6da2059246c4b506ab60"
+version = "1.41.0"
+source = "git+https://github.com/freyskeyd/insta?branch=chore/updating-deps-to-avoid-serialize-error#69c07695a1fb68beafc9b7bd949ab4f9d353b17f"
 dependencies = [
  "console",
  "lazy_static",
  "linked-hash-map",
+ "pest",
+ "pest_derive",
+ "regex",
  "serde",
  "similar",
- "toml 0.5.11",
+ "toml",
 ]
 
 [[package]]
@@ -5242,6 +5246,40 @@ dependencies = [
  "memchr",
  "thiserror",
  "ucd-trie",
+]
+
+[[package]]
+name = "pest_derive"
+version = "2.7.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d3a6e3394ec80feb3b6393c725571754c6188490265c61aaf260810d6b95aa0"
+dependencies = [
+ "pest",
+ "pest_generator",
+]
+
+[[package]]
+name = "pest_generator"
+version = "2.7.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94429506bde1ca69d1b5601962c73f4172ab4726571a59ea95931218cb0e930e"
+dependencies = [
+ "pest",
+ "pest_meta",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.82",
+]
+
+[[package]]
+name = "pest_meta"
+version = "2.7.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac8a071862e93690b6e34e9a5fb8e33ff3734473ac0245b27232222c4906a33f"
+dependencies = [
+ "once_cell",
+ "pest",
+ "sha2",
 ]
 
 [[package]]
@@ -8071,15 +8109,6 @@ dependencies = [
  "futures-sink",
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "toml"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
-dependencies = [
- "serde",
 ]
 
 [[package]]

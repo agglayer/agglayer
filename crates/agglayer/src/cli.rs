@@ -29,6 +29,16 @@ pub(crate) enum Commands {
         base_dir: PathBuf,
     },
 
+    ValidateConfig {
+        /// The path to the agglayer dir.
+        #[arg(
+            long,
+            short,
+            value_hint = ValueHint::DirPath,
+        )]
+        path: PathBuf,
+    },
+
     ProverConfig,
 
     Prover {

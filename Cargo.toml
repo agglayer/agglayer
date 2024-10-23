@@ -25,7 +25,11 @@ ethers-signers = "2.0.14"
 fail = "0.5.1"
 futures = "0.3.31"
 hex = "0.4.3"
-jsonrpsee = { version = "0.24.7", features = ["full"] }
+insta = { git = "https://github.com/freyskeyd/insta", branch = "chore/updating-deps-to-avoid-serialize-error", features = [
+    "toml",
+    "yaml",
+] }
+jsonrpsee = { version = "0.24.6", features = ["full"] }
 lazy_static = "1.5.0"
 mockall = "0.13.0"
 parking_lot = "0.12.3"

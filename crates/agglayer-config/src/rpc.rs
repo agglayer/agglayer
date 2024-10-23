@@ -1,12 +1,8 @@
-use std::{collections::HashMap, net::Ipv4Addr, str::FromStr, time::Duration};
+use std::{net::Ipv4Addr, str::FromStr, time::Duration};
 
 use jsonrpsee::core::TEN_MB_SIZE_BYTES;
-use serde::{
-    de::{MapAccess, Visitor},
-    Deserialize, Deserializer, Serialize,
-};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, DurationSeconds};
-use url::Url;
 
 /// The default port for the local RPC server.
 const DEFAULT_PORT: u16 = 9090;
@@ -18,13 +14,9 @@ const DEFAULT_PORT: u16 = 9090;
 pub struct RpcConfig {
     /// If the `PORT` environment variable is set, it will take precedence over
     /// the configuration file.
-    #[serde(
-        alias = "Port",
-        default = "default_port",
-        deserialize_with = "deserialize_port"
-    )]
+    #[serde(default = "default_port", deserialize_with = "deserialize_port")]
     pub port: u16,
-    #[serde(alias = "Host", default = "default_host")]
+    #[serde(default = "default_host")]
     pub host: Ipv4Addr,
 
     // Skip serialization of these fields as we don't need to expose them in the
@@ -99,38 +91,6 @@ where
     let port = u16::deserialize(deserializer)?;
 
     Ok(from_env_or_default("PORT", port))
-}
-
-/// Deserialize a map of RPCs from a TOML file, where the keys are integers and
-/// the values are URLs.
-pub(crate) fn deserialize_rpc_map<'de, D>(deserializer: D) -> Result<HashMap<u32, Url>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct RpcMapVisitor;
-
-    impl<'de> Visitor<'de> for RpcMapVisitor {
-        type Value = HashMap<u32, Url>;
-
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("a map of string keys to string values")
-        }
-
-        fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
-        where
-            M: MapAccess<'de>,
-        {
-            let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
-            while let Some((key, value)) = access.next_entry::<String, String>()? {
-                let key: u32 = key.parse().map_err(serde::de::Error::custom)?;
-                let value = Url::parse(&value).map_err(serde::de::Error::custom)?;
-                map.insert(key, value);
-            }
-            Ok(map)
-        }
-    }
-
-    deserializer.deserialize_map(RpcMapVisitor)
 }
 
 /// Get an environment variable or a default value if it is not set.

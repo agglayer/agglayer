@@ -7,10 +7,7 @@ pub mod prover;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct CertificateOrchestrator {
-    #[serde(
-        alias = "InputBackpressureBufferSize",
-        default = "default_input_backpressure_buffer_size_default"
-    )]
+    #[serde(default = "default_input_backpressure_buffer_size_default")]
     pub input_backpressure_buffer_size: usize,
 
     #[serde(default = "default_prover_config_default")]
