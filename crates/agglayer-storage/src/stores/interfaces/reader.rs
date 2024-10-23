@@ -5,10 +5,7 @@ use agglayer_types::{
     NetworkId, Proof,
 };
 
-use crate::{
-    columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error,
-    stores::PerEpochWriter,
-};
+use crate::{columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error};
 
 pub trait EpochStoreReader: Send + Sync {}
 

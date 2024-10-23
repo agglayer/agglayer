@@ -147,8 +147,8 @@ impl EpochStoreWriter for DummyPendingStore {
 
     fn open_with_start_checkpoint(
         &self,
-        epoch_number: u64,
-        start_checkpoint: BTreeMap<NetworkId, Height>,
+        _epoch_number: u64,
+        _start_checkpoint: BTreeMap<NetworkId, Height>,
     ) -> Result<Self::PerEpochStore, agglayer_storage::error::Error> {
         Ok(DummyPendingStore::default())
     }
