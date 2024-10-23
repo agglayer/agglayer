@@ -1,3 +1,4 @@
+use data::LETMerkleProof;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -105,6 +106,41 @@ where
         }
 
         root
+    }
+
+    /// Returns true if `other_root` is the root of a LET whose first
+    /// `self.leaf_count` leaves are the same as the leaves of `self`.
+    /// `next_leaf` is the leaf at index `self.leaf_count` in the other tree and
+    /// `proof` is the Merkle proof of `next_leaf`.
+    pub fn is_subtree(
+        &self,
+        other_root: H::Digest,
+        next_leaf: H::Digest,
+        proof: LETMerkleProof<H, TREE_DEPTH>,
+    ) -> bool
+    where
+        H::Digest: Eq + Copy + Default,
+    {
+        // Check that `next_leaf` is the leaf at index `self.leaf_count` in the other
+        // LET.
+        if !proof.verify(next_leaf, self.leaf_count, other_root) {
+            return false;
+        }
+
+        // Check that the frontier is a subset of the Merkle proof.
+        let mut index = self.leaf_count;
+        let mut height = 0;
+        while index != 0 {
+            if index & 1 == 1 {
+                if self.frontier[height] != proof.siblings[height] {
+                    return false;
+                }
+            }
+            height += 1;
+            index >>= 1;
+        }
+
+        true
     }
 }
 
