@@ -39,6 +39,8 @@ pub type LocalBalancePath<H> = SmtMerkleProof<H, LOCAL_BALANCE_TREE_DEPTH>;
 impl ToBits<192> for TokenInfo {
     fn to_bits(&self) -> [bool; 192] {
         let address_bytes = self.origin_token_address.0;
+        // Security: We assume here that `address_bytes` is a fixed-size array of
+        // 20 bytes. The following code could panic otherwise.
         std::array::from_fn(|i| {
             if i < 32 {
                 (*self.origin_network >> i) & 1 == 1
