@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
@@ -30,6 +30,15 @@ pub struct StateStore {
 impl StateStore {
     pub fn new(db: Arc<DB>) -> Self {
         Self { db }
+    }
+
+    pub fn new_with_path(path: &Path) -> Result<Self, Error> {
+        let db = Arc::new(DB::open_cf(
+            path,
+            crate::storage::state_db_cf_definitions(),
+        )?);
+
+        Ok(Self { db })
     }
 }
 

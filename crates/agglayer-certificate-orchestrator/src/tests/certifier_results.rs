@@ -115,7 +115,7 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
         .expect_add_certificate()
         .once()
         .with(eq(network_id), eq(0))
-        .returning(|_, _| Ok(()));
+        .returning(|_, _| Ok((0, 0)));
 
     let builder = MockOrchestrator::builder()
         .certifier(certifier_mock)
@@ -684,7 +684,7 @@ async fn certifier_success_with_chain_of_certificates() {
         .expect_add_certificate()
         .once()
         .with(eq(network_id), eq(0))
-        .returning(|_, _| Ok(()));
+        .returning(|_, _| Ok((0, 0)));
 
     let builder = MockOrchestrator::builder()
         .pending_store(pending_store)
