@@ -222,11 +222,18 @@ impl Certificate {
     }
 
     pub fn hash(&self) -> CertificateId {
+        let commit_bridge_exits =
+            keccak256_combine(self.bridge_exits.iter().map(|exit| exit.hash()));
+        let commit_imported_bridge_exits =
+            keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
+
         keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
             self.height.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_slice(),
             self.new_local_exit_root.as_slice(),
+            commit_bridge_exits.as_slice(),
+            commit_imported_bridge_exits.as_slice(),
         ])
         .into()
     }

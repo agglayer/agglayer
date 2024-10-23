@@ -32,7 +32,7 @@ where
     H::Digest: Serialize + DeserializeOwned,
 {
     #[serde_as(as = "[_; TREE_DEPTH]")]
-    siblings: [H::Digest; TREE_DEPTH],
+    pub(crate) siblings: [H::Digest; TREE_DEPTH],
 }
 
 impl<H, const TREE_DEPTH: usize> Default for LocalExitTreeData<H, TREE_DEPTH>
