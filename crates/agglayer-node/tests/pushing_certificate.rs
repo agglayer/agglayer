@@ -3,9 +3,7 @@ use std::time::Duration;
 use agglayer_config::log::LogLevel;
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::TempDBDir;
-use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatusError, LocalNetworkStateData,
-};
+use agglayer_types::{CertificateHeader, CertificateId, CertificateStatusError};
 use ethers::{signers::LocalWallet, utils::Anvil};
 use jsonrpsee::{core::client::ClientT, rpc_params, ws_client::WsClientBuilder};
 use pessimistic_proof_test_suite::forest::Forest;

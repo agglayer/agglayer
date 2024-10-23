@@ -45,18 +45,6 @@ where
     StateStore: StateWriter + StateReader + MetadataWriter,
 {
     type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
-    //
-    // fn pack(
-    //     &self,
-    //     epoch_number: u64,
-    // ) -> Result<Pin<Box<impl Future<Output = Result<(), Error>>>>, Error> {
-    //
-    //     //     Ok(Box::pin(async move {
-    //     //         let current_epoch.start_packing();
-    //     //         Ok(())
-    //     //     }))
-    // }
-
     fn open(&self, epoch_number: u64) -> Result<PerEpochStore<PendingStore, StateStore>, Error> {
         PerEpochStore::try_open(
             self.config.clone(),
