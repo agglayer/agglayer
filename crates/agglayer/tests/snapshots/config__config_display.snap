@@ -47,8 +47,9 @@ private-keys = []
 [telemetry]
 prometheus-addr = "0.0.0.0:3000"
 
-[epoch.time-clock]
-epoch-duration = "1m"
+[epoch.block-clock]
+epoch-duration = 8
+genesis-block = 0
 
 [shutdown]
 runtime-timeout = "5s"
