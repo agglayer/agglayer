@@ -33,7 +33,8 @@ impl<PendingStore, StateStore> EpochsStore<PendingStore, StateStore> {
         Ok(Self {
             config,
             open_epochs,
-            pending_db,
+            pending_store,
+            state_store,
         })
     }
 }
@@ -63,7 +64,8 @@ where
         PerEpochStore::try_open(
             self.config.clone(),
             epoch_number,
-            self.pending_db.clone(),
+            self.pending_store.clone(),
+            self.state_store.clone(),
             Some(start_checkpoint),
         )
     }

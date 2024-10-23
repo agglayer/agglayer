@@ -107,7 +107,12 @@ impl Node {
 
         let current_epoch = clock_ref.current_epoch();
 
-        let epochs_store = Arc::new(EpochsStore::new(config.clone(), current_epoch, pending_db)?);
+        let epochs_store = Arc::new(EpochsStore::new(
+            config.clone(),
+            current_epoch,
+            pending_store.clone(),
+            state_store.clone(),
+        )?);
 
         let current_epoch =
             EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref.clone())

@@ -131,7 +131,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             epoch_number,
             db,
             next_certificate_index,
-            pending_db,
+            pending_store,
             state_store,
             start_checkpoint,
             end_checkpoint: RwLock::new(end_checkpoint),
@@ -252,7 +252,7 @@ where
             &agglayer_types::CertificateStatus::Candidate,
         )?;
 
-        Ok((*self.epoch_number, certificate_index))
+        Ok((self.epoch_number, certificate_index))
     }
 
     fn start_packing(&self) -> Result<(), Error> {
