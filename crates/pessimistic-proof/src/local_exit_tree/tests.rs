@@ -53,6 +53,21 @@ fn test_local_exit_tree_is_subtree_empty() {
 }
 
 #[test]
+fn test_local_exit_tree_is_subtree_same_tree() {
+    let leaf_count_a = 100;
+    let mut let_a = LocalExitTreeData::<Keccak256Hasher>::new();
+    for _ in 0..leaf_count_a {
+        let_a.add_leaf(random());
+    }
+    let mut let_b = let_a.clone();
+    let_b.add_leaf([0; 32]); // Hack so that `let_b.get_proof(leaf_count_a)` doesn't panic
+
+    let let_a_frontier = LocalExitTree::from(&let_a);
+    let proof = let_b.get_proof(leaf_count_a as u32);
+    assert!(let_a_frontier.is_subtree(let_b.get_root(), let_b.get(0, leaf_count_a), proof));
+}
+
+#[test]
 fn test_local_exit_tree_is_subtree_failing() {
     let leaf_count_a = 100;
     let leaf_count_b = 200;
