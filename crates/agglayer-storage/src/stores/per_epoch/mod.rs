@@ -90,7 +90,6 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         };
 
         let mut closed = None;
-        let mut in_packing = false;
         let next_certificate_index = if let Some(Ok((index, _))) = db
             .iter_with_direction::<CertificatePerIndexColumn>(
                 ReadOptions::default(),
