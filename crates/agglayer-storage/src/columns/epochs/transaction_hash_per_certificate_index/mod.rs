@@ -2,7 +2,7 @@ use agglayer_types::CertificateIndex;
 
 use crate::columns::PER_EPOCH_TRANSACTION_HASH_PER_CERTIFICATE_INDEX;
 
-/// Column family for the transaction hash per certificate in an epoch.
+/// Column family for the transaction hash per certificate index in an epoch.
 ///
 /// ## Column definition
 ///

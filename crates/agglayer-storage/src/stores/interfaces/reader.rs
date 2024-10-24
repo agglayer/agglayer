@@ -34,8 +34,6 @@ pub trait PendingCertificateReader: Send + Sync {
 pub trait MetadataReader: Send + Sync {
     /// Get the latest settled epoch.
     fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error>;
-    /// Get the latest opened epoch
-    fn get_latest_opened_epoch(&self) -> Result<Option<u64>, Error>;
 }
 
 pub trait StateReader: Send + Sync {

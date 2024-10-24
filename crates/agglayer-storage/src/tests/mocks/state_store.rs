@@ -12,12 +12,10 @@ mock! {
     pub StateStore {}
     impl MetadataReader for StateStore {
         fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error>;
-        fn get_latest_opened_epoch(&self) -> Result<Option<u64>, Error>;
     }
 
     impl MetadataWriter for StateStore {
         fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error>;
-        fn set_latest_opened_epoch(&self, value: u64) -> Result<(), Error>;
     }
 
     impl StateWriter for StateStore {

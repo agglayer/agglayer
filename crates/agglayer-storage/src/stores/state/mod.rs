@@ -168,19 +168,6 @@ impl StateReader for StateStore {
 }
 
 impl MetadataWriter for StateStore {
-    fn set_latest_opened_epoch(&self, value: u64) -> Result<(), Error> {
-        if let Some(current_latest_opened_epoch) = self.get_latest_opened_epoch()? {
-            if current_latest_opened_epoch >= value {
-                return Err(Error::UnprocessedAction(
-                    "Tried to set a lower value for latest opened epoch".to_string(),
-                ));
-            }
-        }
-
-        self.db
-            .put::<MetadataColumn>(&MetadataKey::OpenEpoch, &MetadataValue::OpenEpoch(value))
-    }
-
     fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error> {
         if let Some(current_latest_settled_epoch) = self.get_latest_settled_epoch()? {
             if current_latest_settled_epoch >= value {
@@ -198,20 +185,6 @@ impl MetadataWriter for StateStore {
 }
 
 impl MetadataReader for StateStore {
-    fn get_latest_opened_epoch(&self) -> Result<Option<u64>, Error> {
-        self.db
-            .get::<MetadataColumn>(&MetadataKey::OpenEpoch)
-            .and_then(|v| {
-                v.map_or(Ok(None), |v| match v {
-                    MetadataValue::OpenEpoch(epoch) => Ok(Some(epoch)),
-                    _ => Err(Error::Unexpected(
-                        "Wrong value type decoded, was expecting OpenEpoch, decoded another type"
-                            .to_string(),
-                    )),
-                })
-            })
-    }
-
     fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error> {
         self.db
             .get::<MetadataColumn>(&MetadataKey::LatestSettledEpoch)
