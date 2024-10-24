@@ -141,10 +141,14 @@ impl DB {
             .cf_handle(C::COLUMN_FAMILY_NAME)
             .ok_or(Error::ColumnFamilyNotFound)?;
 
-        Ok(ColumnIterator::new(
-            self.rocksdb.raw_iterator_cf_opt(&cf, opts),
-            direction,
-        ))
+        let mut iterator = self.rocksdb.raw_iterator_cf_opt(&cf, opts);
+
+        match direction {
+            Direction::Forward => iterator.seek_to_first(),
+            Direction::Reverse => iterator.seek_to_last(),
+        }
+
+        Ok(ColumnIterator::new(iterator, direction))
     }
 
     pub(crate) fn delete<C: ColumnSchema>(&self, key: &C::Key) -> Result<(), Error> {

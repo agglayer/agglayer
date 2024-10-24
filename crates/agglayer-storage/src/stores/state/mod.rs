@@ -169,11 +169,27 @@ impl StateReader for StateStore {
 
 impl MetadataWriter for StateStore {
     fn set_latest_opened_epoch(&self, value: u64) -> Result<(), Error> {
+        if let Some(current_latest_opened_epoch) = self.get_latest_opened_epoch()? {
+            if current_latest_opened_epoch >= value {
+                return Err(Error::UnprocessedAction(
+                    "Tried to set a lower value for latest opened epoch".to_string(),
+                ));
+            }
+        }
+
         self.db
             .put::<MetadataColumn>(&MetadataKey::OpenEpoch, &MetadataValue::OpenEpoch(value))
     }
 
     fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error> {
+        if let Some(current_latest_settled_epoch) = self.get_latest_settled_epoch()? {
+            if current_latest_settled_epoch >= value {
+                return Err(Error::UnprocessedAction(
+                    "Tried to set a lower value for latest settled epoch".to_string(),
+                ));
+            }
+        }
+
         self.db.put::<MetadataColumn>(
             &MetadataKey::LatestSettledEpoch,
             &MetadataValue::LatestSettledEpoch(value),

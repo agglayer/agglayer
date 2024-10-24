@@ -27,6 +27,9 @@ pub enum Error {
 
     #[error(transparent)]
     CertificateCandidateError(#[from] CertificateCandidateError),
+
+    #[error("Unprocessed action: {0}")]
+    UnprocessedAction(String),
 }
 
 #[derive(Debug, thiserror::Error)]

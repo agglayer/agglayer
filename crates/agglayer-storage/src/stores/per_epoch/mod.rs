@@ -12,8 +12,8 @@ use rocksdb::ReadOptions;
 use tracing::{debug, warn};
 
 use super::{
-    interfaces::reader::PerEpochReader, PendingCertificateReader, PendingCertificateWriter,
-    PerEpochWriter, StateWriter,
+    interfaces::reader::PerEpochReader, MetadataWriter, PendingCertificateReader,
+    PendingCertificateWriter, PerEpochWriter, StateReader, StateWriter,
 };
 use crate::{
     columns::epochs::{
@@ -119,6 +119,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                 }
 
                 db.multi_insert::<EndCheckpointColumn>(&start_checkpoint)?;
+
                 start_checkpoint.clone()
             } else {
                 in_packing = true;
@@ -143,7 +144,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
 impl<PendingStore, StateStore> PerEpochWriter for PerEpochStore<PendingStore, StateStore>
 where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
-    StateStore: StateWriter,
+    StateStore: MetadataWriter + StateWriter + StateReader,
 {
     fn add_certificate(
         &self,
@@ -158,9 +159,12 @@ where
             "Try adding certificate for network {} at height {}",
             network_id, height
         );
+        let end_checkpoint_entry = end_checkpoint.entry(network_id);
+
+        let end_checkpoint_entry_assigment;
 
         // Fetch the network current point for this epoch
-        match (start_checkpoint, end_checkpoint.entry(network_id)) {
+        match (start_checkpoint, &end_checkpoint_entry) {
             // If the network is not found in the end checkpoint, but is present in
             // the start checkpoint, this is an invalid state.
             (Some(_), Entry::Vacant(_)) => {
@@ -175,10 +179,10 @@ where
             }
             // If the network is not found in the end checkpoint and the height is 0,
             // this is the first certificate for this network.
-            (None, Entry::Vacant(entry)) if height == 0 => {
+            (None, Entry::Vacant(_entry)) if height == 0 => {
                 debug!("First certificate for network {}", network_id);
                 // Adding the network to the end checkpoint.
-                entry.insert(0);
+                end_checkpoint_entry_assigment = Some(0);
 
                 // Adding the certificate to the DB
             }
@@ -200,12 +204,14 @@ where
             // the current network height. We can add the certificate.
             (Some(start_height), Entry::Occupied(current_height))
                 if *current_height.get() == height - 1
-                    && start_height - height <= MAX_CERTIFICATE_PER_EPOCH =>
+                    && height - start_height <= MAX_CERTIFICATE_PER_EPOCH =>
             {
                 debug!(
                     "Certificate candidate for network {} at height {} accepted",
                     network_id, height
                 );
+
+                end_checkpoint_entry_assigment = Some(height);
             }
 
             (_, Entry::Occupied(current_height)) => {
@@ -252,6 +258,18 @@ where
             &agglayer_types::CertificateStatus::Candidate,
         )?;
 
+        if let Some(height) = end_checkpoint_entry_assigment {
+            let entry = end_checkpoint_entry.or_default();
+            *entry = height;
+
+            debug!(
+                "Updating end checkpoint for network {} to height {}",
+                network_id, height
+            );
+
+            self.db.put::<EndCheckpointColumn>(&network_id, &height)?;
+        }
+
         Ok((self.epoch_number, certificate_index))
     }
 
@@ -259,6 +277,14 @@ where
         self.in_packing
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
             .map_err(|_| Error::AlreadyInPackingMode)?;
+
+        match self.state_store.set_latest_settled_epoch(self.epoch_number) {
+            Err(Error::UnprocessedAction(error)) => {
+                warn!("Couldn't define the latest settled epoch: {}", error)
+            }
+            Err(error) => return Err(error),
+            Ok(_) => (),
+        }
 
         Ok(())
     }

@@ -9,6 +9,7 @@ use crate::{
 };
 
 mock! {
+    #[derive(Debug)]
     pub PerEpochStore {}
 
     impl PerEpochReader for PerEpochStore {

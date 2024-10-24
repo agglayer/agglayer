@@ -58,13 +58,8 @@ where
     fn pack(&self, epoch: u64) -> Result<BoxFuture<Result<(), Error>>, Error> {
         debug!("Start the settlement of the epoch {}", epoch);
 
-        // Selecting the different proof to pack in this epoch
-
         let state_store = self.state_store.clone();
         Ok(Box::pin(async move {
-            // TODO: Submit the settlement tx for each proof
-            // No aggregation for now, we settle each PP individually
-
             state_store.set_latest_settled_epoch(epoch)?;
 
             Ok(())

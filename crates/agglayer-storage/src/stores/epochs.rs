@@ -7,8 +7,8 @@ use agglayer_types::{Height, NetworkId};
 use parking_lot::RwLock;
 
 use super::{
-    per_epoch::PerEpochStore, EpochStoreReader, EpochStoreWriter, PendingCertificateReader,
-    PendingCertificateWriter, StateWriter,
+    per_epoch::PerEpochStore, EpochStoreReader, EpochStoreWriter, MetadataWriter,
+    PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
 };
 use crate::error::Error;
 
@@ -74,7 +74,7 @@ where
 impl<PendingStore, StateStore> EpochStoreReader for EpochsStore<PendingStore, StateStore>
 where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
-    StateStore: StateWriter,
+    StateStore: StateWriter + MetadataWriter + StateReader,
 {
     type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
 }
