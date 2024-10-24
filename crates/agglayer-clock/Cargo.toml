@@ -9,9 +9,9 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 ethers = { workspace = true, features = ["ws"] }
 fail.workspace = true
 futures.workspace = true
-tokio.workspace = true
-tokio-util.workspace = true
 thiserror.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

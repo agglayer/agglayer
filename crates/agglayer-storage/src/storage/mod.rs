@@ -1,7 +1,9 @@
 use std::path::Path;
 
 use iterators::{ColumnIterator, KeysIterator};
-use rocksdb::{ColumnFamilyDescriptor, DBPinnableSlice, Direction, Options, ReadOptions};
+use rocksdb::{
+    ColumnFamilyDescriptor, DBPinnableSlice, Direction, Options, ReadOptions, WriteBatch,
+};
 
 use crate::{
     columns::{Codec, ColumnSchema},
@@ -12,7 +14,6 @@ pub(crate) mod cf_definitions;
 pub(crate) mod iterators;
 
 pub use cf_definitions::epochs::epochs_db_cf_definitions;
-pub use cf_definitions::metadata::metadata_db_cf_definitions;
 pub use cf_definitions::pending::pending_db_cf_definitions;
 pub use cf_definitions::state::state_db_cf_definitions;
 
@@ -91,6 +92,32 @@ impl DB {
         Ok(())
     }
 
+    pub fn multi_insert<'a, C: ColumnSchema + 'a>(
+        &self,
+        key_val_pairs: impl IntoIterator<Item = (&'a C::Key, &'a C::Value)>,
+    ) -> Result<(), Error> {
+        let cf = self
+            .rocksdb
+            .cf_handle(C::COLUMN_FAMILY_NAME)
+            .ok_or(Error::ColumnFamilyNotFound)?;
+
+        let mut batch = WriteBatch::default();
+
+        key_val_pairs
+            .into_iter()
+            .try_for_each::<_, Result<_, Error>>(|(k, v)| {
+                let k_buf = k.encode()?;
+                let v_buf = v.encode()?;
+
+                batch.put_cf(&cf, k_buf, v_buf);
+                Ok(())
+            })?;
+
+        self.rocksdb.write(batch)?;
+
+        Ok(())
+    }
+
     /// Try to get every key in the column family.
     pub fn keys<C: ColumnSchema>(&self) -> Result<KeysIterator<C>, Error> {
         let cf = self
@@ -114,10 +141,14 @@ impl DB {
             .cf_handle(C::COLUMN_FAMILY_NAME)
             .ok_or(Error::ColumnFamilyNotFound)?;
 
-        Ok(ColumnIterator::new(
-            self.rocksdb.raw_iterator_cf_opt(&cf, opts),
-            direction,
-        ))
+        let mut iterator = self.rocksdb.raw_iterator_cf_opt(&cf, opts);
+
+        match direction {
+            Direction::Forward => iterator.seek_to_first(),
+            Direction::Reverse => iterator.seek_to_last(),
+        }
+
+        Ok(ColumnIterator::new(iterator, direction))
     }
 
     pub(crate) fn delete<C: ColumnSchema>(&self, key: &C::Key) -> Result<(), Error> {

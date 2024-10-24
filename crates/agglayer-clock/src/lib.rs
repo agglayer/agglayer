@@ -28,6 +28,7 @@ pub trait Clock {
 }
 
 /// The ClockRef is a reference to the Clock instance.
+#[derive(Clone)]
 pub struct ClockRef {
     pub(crate) sender: broadcast::Sender<Event>,
     /// The current Epoch number.
@@ -39,6 +40,19 @@ pub struct ClockRef {
 }
 
 impl ClockRef {
+    #[doc(hidden)]
+    pub fn new(
+        sender: broadcast::Sender<Event>,
+        current_epoch: Arc<AtomicU64>,
+        block_height: Arc<AtomicU64>,
+    ) -> Self {
+        Self {
+            sender,
+            current_epoch,
+            block_height,
+        }
+    }
+
     /// Subscribe to the Clock events.
     ///
     /// # Errors

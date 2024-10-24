@@ -54,8 +54,11 @@ impl Default for TimeClockConfig {
     }
 }
 
+// We estimate the block time of L1 to 10min.
+// The goal is to have an epoch duration of 1h.
+// So we need 6 blocks per epoch.
 fn default_block_epoch_duration() -> NonZeroU64 {
-    NonZeroU64::new(8).unwrap()
+    NonZeroU64::new(6).unwrap()
 }
 
 const fn default_genesis_block() -> u64 {

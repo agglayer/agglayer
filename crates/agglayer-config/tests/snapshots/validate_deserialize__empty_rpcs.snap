@@ -1,8 +1,6 @@
 ---
 source: crates/agglayer-config/tests/validate_deserialize.rs
-assertion_line: 12
 expression: config
-snapshot_kind: text
 ---
 prover-entrypoint = "http://127.0.0.1:8080"
 
@@ -48,7 +46,7 @@ private-keys = []
 prometheus-addr = "0.0.0.0:3000"
 
 [epoch.block-clock]
-epoch-duration = 8
+epoch-duration = 6
 genesis-block = 0
 
 [shutdown]

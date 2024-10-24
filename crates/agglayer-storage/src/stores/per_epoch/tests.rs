@@ -27,7 +27,7 @@ fn store() -> PerEpochStore<PendingStore, StateStore> {
         Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
     let state_store = Arc::new(StateStore::new_with_path(&config.storage.state_db_path).unwrap());
 
-    PerEpochStore::try_open(config, 0, pending_store, state_store).unwrap()
+    PerEpochStore::try_open(config, 0, pending_store, state_store, None).unwrap()
 }
 
 #[rstest]

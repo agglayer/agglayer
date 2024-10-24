@@ -1,19 +1,18 @@
 use std::time::Duration;
 
+use agglayer_config::log::LogLevel;
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatusError, GenerationType,
-    LocalNetworkStateData,
+    Certificate, CertificateHeader, CertificateId, CertificateStatusError, LocalNetworkStateData,
 };
 use ethers::{signers::LocalWallet, utils::Anvil};
 use jsonrpsee::{core::client::ClientT, rpc_params, ws_client::WsClientBuilder};
-use pessimistic_proof::ProofError;
 use rstest::rstest;
 use tokio_util::sync::CancellationToken;
 
 #[rstest]
-#[ignore = "until epoch starting resolution"]
+#[ignore = "ignore until signature"]
 #[tokio::test]
 #[timeout(Duration::from_secs(60))]
 async fn successfully_push_certificate() {
@@ -45,6 +44,7 @@ async fn successfully_push_certificate() {
 
     let key_path = tmp_dir.path.join(uuid);
 
+    config.log.level = LogLevel::Debug;
     config.l1.node_url = anvil.endpoint().parse().unwrap();
     config.l1.ws_node_url = anvil.ws_endpoint().parse().unwrap();
     config.auth = agglayer_config::AuthConfig::Local(agglayer_config::LocalConfig {
@@ -113,8 +113,8 @@ async fn successfully_push_certificate() {
             agglayer_types::CertificateStatus::InError {
                 error:
                     CertificateStatusError::ProofGenerationError {
-                        generation_type: GenerationType::Native,
-                        source: ProofError::InvalidSignature,
+                        generation_type: agglayer_types::GenerationType::Native,
+                        source: pessimistic_proof::ProofError::InvalidSignature,
                     },
             } => break,
             agglayer_types::CertificateStatus::InError { error } => {
