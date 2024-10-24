@@ -275,7 +275,7 @@ where
         Ok(status.to_string())
     }
 
-    #[instrument(skip(self), fields(hash, rollup_id = *certificate.network_id), level = "info")]
+    #[instrument(skip(self, certificate), fields(hash, rollup_id = *certificate.network_id), level = "info")]
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
         let hash = certificate.hash();
         tracing::Span::current().record("hash", hash.to_string());

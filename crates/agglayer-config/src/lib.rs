@@ -24,7 +24,7 @@ pub mod epoch;
 pub(crate) mod l1;
 pub(crate) mod l2;
 pub mod log;
-pub(crate) mod outbound;
+pub mod outbound;
 pub mod rate_limiting;
 pub(crate) mod rpc;
 pub mod shutdown;

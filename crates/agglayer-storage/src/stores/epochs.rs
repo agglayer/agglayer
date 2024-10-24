@@ -41,11 +41,10 @@ impl<PendingStore, StateStore> EpochsStore<PendingStore, StateStore> {
 
 impl<PendingStore, StateStore> EpochStoreWriter for EpochsStore<PendingStore, StateStore>
 where
-    PendingStore: Send + Sync,
-    StateStore: Send + Sync,
+    PendingStore: PendingCertificateWriter + PendingCertificateReader,
+    StateStore: StateWriter + StateReader + MetadataWriter,
 {
     type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
-
     fn open(&self, epoch_number: u64) -> Result<PerEpochStore<PendingStore, StateStore>, Error> {
         PerEpochStore::try_open(
             self.config.clone(),
@@ -76,5 +75,4 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateWriter + MetadataWriter + StateReader,
 {
-    type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
 }
