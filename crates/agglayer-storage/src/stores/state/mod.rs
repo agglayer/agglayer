@@ -59,6 +59,7 @@ impl StateWriter for StateStore {
                 certificate_index: None,
                 new_local_exit_root: certificate.new_local_exit_root.into(),
                 status: status.clone(),
+                metadata: certificate.metadata,
             },
         )?;
 

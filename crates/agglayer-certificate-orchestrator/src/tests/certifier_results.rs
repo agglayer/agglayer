@@ -411,6 +411,7 @@ async fn certifier_error_proof_already_exists(
             certificate_index: None,
             new_local_exit_root: [0; 32].into(),
             status,
+            metadata: Default::default(),
         }))
     } else {
         Ok(None)

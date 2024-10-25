@@ -1,13 +1,9 @@
-use bincode::{
-    config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding},
-    DefaultOptions, Options,
-};
+use bincode::{DefaultOptions, Options};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::error::Error;
 
-pub fn default_bincode_options(
-) -> WithOtherIntEncoding<WithOtherEndian<DefaultOptions, BigEndian>, FixintEncoding> {
+pub fn default_bincode_options() -> impl bincode::Options {
     DefaultOptions::new()
         .with_big_endian()
         .with_fixint_encoding()

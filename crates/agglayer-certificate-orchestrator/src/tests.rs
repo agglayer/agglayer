@@ -200,6 +200,7 @@ impl StateWriter for DummyPendingStore {
                 certificate_id: certificate.hash(),
                 new_local_exit_root: certificate.new_local_exit_root.into(),
                 status,
+                metadata: certificate.metadata,
             },
         );
 
