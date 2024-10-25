@@ -197,15 +197,6 @@ pub struct Certificate {
 }
 
 impl Certificate {
-    /// Default L1 Info Tree leaf count used for state transitions without
-    /// imported bridge exits.
-    const DEFAULT_L1_INFO_LEAF_COUNT: u32 = 0;
-    /// Default L1 Info Tree root used for state transitions without imported
-    /// bridge exits.
-    const DEFAULT_L1_INFO_ROOT: Digest = [0; 32];
-}
-
-impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
         Certificate {

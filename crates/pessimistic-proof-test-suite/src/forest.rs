@@ -3,10 +3,7 @@ use ethers_signers::{LocalWallet, Signer};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
     global_index::GlobalIndex,
-    imported_bridge_exit::{
-        Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
-        MerkleProof,
-    },
+    imported_bridge_exit::{ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner, MerkleProof},
     keccak::{keccak256_combine, Digest},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::signature_commitment,
@@ -101,11 +98,6 @@ impl Forest {
         };
 
         self.l1_info_tree.add_leaf(l1_leaf.hash());
-
-        let proof_ger_l1root = MerkleProof {
-            proof: self.l1_info_tree.get_proof(0),
-            root: self.l1_info_tree.get_root(),
-        };
 
         // Generate them as imported bridge exits
         for (idx, exit) in exits.into_iter().enumerate() {
