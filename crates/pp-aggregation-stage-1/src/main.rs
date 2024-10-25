@@ -4,11 +4,9 @@ sp1_zkvm::entrypoint!(main);
 use bincode::Options;
 use pessimistic_proof::aggregation::wrap_stage1_aggregation_proof_output;
 use pessimistic_proof::PessimisticProofOutput;
-// use pessimistic_proof::aggregation::AggregatedPPPublicInputs;
 use sha2::Digest;
 use sha2::Sha256;
 
-// TODO: Do something with the proofs and pis.
 pub fn main() {
     // Read the verification keys.
     let vkey = sp1_zkvm::io::read::<[u32; 8]>();
