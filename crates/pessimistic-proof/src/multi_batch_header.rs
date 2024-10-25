@@ -42,9 +42,6 @@ where
     /// exit.
     #[serde_as(as = "Option<_>")]
     pub imported_exits_root: Option<H::Digest>,
-    /// L1 info root used to import bridge exits.
-    #[serde_as(as = "_")]
-    pub l1_info_root: H::Digest,
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
     pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
@@ -74,7 +71,6 @@ where
         signer: Address,
         signature: Signature,
         target: StateCommitment,
-        l1_info_root: H::Digest,
     ) -> Self {
         Self {
             origin_network,
@@ -88,7 +84,6 @@ where
             signer,
             signature,
             target,
-            l1_info_root,
         }
     }
 }

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 pub use bincode::Options;
 use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
@@ -100,6 +102,9 @@ pub enum ProofError {
         declared: Address,
         recovered: Address,
     },
+    /// The imported bridge exits have inconsistent LERs.
+    #[error("Inconsistent imported LERs.")]
+    InconsistentImportedLERs,
     /// Unknown error.
     #[error("Unknown error: {0}")]
     Unknown(String),
@@ -112,9 +117,9 @@ pub struct PessimisticProofOutput {
     pub prev_local_exit_root: Digest,
     /// The previous pessimistic root.
     pub prev_pessimistic_root: Digest,
-    /// The l1 info root against which we prove the inclusion of the imported
-    /// bridge exits.
-    pub l1_info_root: Digest,
+    /// The local exit roots against which we prove the inclusion of the
+    /// imported bridge exits.
+    pub imported_local_exit_roots: BTreeMap<NetworkId, Digest>,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
     /// The consensus hash.
@@ -159,6 +164,20 @@ pub fn generate_pessimistic_proof(
         batch_header.target.nullifier_root,
     ]);
 
+    let mut imported_local_exit_roots = BTreeMap::new();
+    for (imported_bridge_exit, _) in batch_header.imported_bridge_exits.iter() {
+        let current_ler = imported_local_exit_roots.insert(
+            imported_bridge_exit.global_index.network_id(),
+            imported_bridge_exit.claim_data.root,
+        );
+        if let Some(current_ler) = current_ler {
+            if current_ler != imported_bridge_exit.claim_data.root {
+                // TODO: Should we allow this?
+                return Err(ProofError::InconsistentImportedLERs);
+            }
+        }
+    }
+
     let mut network_state = initial_network_state;
     let computed_target = network_state.apply_batch_header(batch_header)?;
 
@@ -184,10 +203,10 @@ pub fn generate_pessimistic_proof(
     Ok(PessimisticProofOutput {
         prev_local_exit_root: prev_ler,
         prev_pessimistic_root,
-        l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
         consensus_hash,
         new_local_exit_root: batch_header.target.exit_root,
         new_pessimistic_root,
+        imported_local_exit_roots,
     })
 }
