@@ -29,6 +29,7 @@ async fn receive_certificate_with_height_zero() {
             s: U256::ZERO,
             odd_y_parity: false,
         },
+        metadata: Default::default(),
     };
 
     let certificate_id = certificate.hash();
@@ -67,6 +68,7 @@ async fn receive_certificate_with_previous_proven() {
             s: U256::ZERO,
             odd_y_parity: false,
         },
+        metadata: Default::default(),
     };
 
     orchestrator
@@ -86,6 +88,7 @@ async fn receive_certificate_with_previous_proven() {
             s: U256::ZERO,
             odd_y_parity: false,
         },
+        metadata: Default::default(),
     };
 
     orchestrator
@@ -124,6 +127,7 @@ async fn receive_certificate_with_previous_pending() {
             s: U256::ZERO,
             odd_y_parity: false,
         },
+        metadata: Default::default(),
     };
 
     orchestrator
@@ -143,6 +147,7 @@ async fn receive_certificate_with_previous_pending() {
             s: U256::ZERO,
             odd_y_parity: false,
         },
+        metadata: Default::default(),
     };
 
     orchestrator

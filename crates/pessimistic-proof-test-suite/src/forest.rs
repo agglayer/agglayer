@@ -170,6 +170,7 @@ impl Forest {
             bridge_exits,
             imported_bridge_exits,
             signature,
+            metadata: Default::default(),
         };
 
         (certificate, signer)

@@ -24,6 +24,7 @@ fn can_parse_value() {
         certificate_index: Some(4),
         new_local_exit_root: [5; 32].into(),
         status: agglayer_types::CertificateStatus::Pending,
+        metadata: [6; 32].into(),
     };
 
     let encoded = value.encode().expect("Unable to encode value");
@@ -56,7 +57,16 @@ fn can_parse_value() {
             5, 5, 5
         ]
     );
-
+    // certificate status
     assert_eq!(encoded[94..98], [0, 0, 0, 0]);
-    assert!(encoded[98..].is_empty());
+    // metadata
+    assert_eq!(
+        encoded[98..130],
+        [
+            6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+            6, 6, 6
+        ]
+    );
+    // end
+    assert!(encoded[130..].is_empty());
 }
