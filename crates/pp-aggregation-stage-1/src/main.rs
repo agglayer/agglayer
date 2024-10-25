@@ -17,7 +17,7 @@ pub fn main() {
     let public_values = sp1_zkvm::io::read::<Vec<u8>>();
 
     // Verify the proof.
-    let public_values_digest = Sha256::digest(public_values);
+    let public_values_digest = Sha256::digest(&public_values);
     sp1_zkvm::lib::verify::verify_sp1_proof(&vkey, &public_values_digest.into());
 
     let proof_output: PessimisticProofOutput = bincode::DefaultOptions::new()

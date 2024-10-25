@@ -117,14 +117,10 @@ impl Forest {
                     rollup_index: **NETWORK_A,
                     leaf_index: index,
                 },
-                claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
-                    proof_leaf_mer: MerkleProof {
-                        proof: self.local_exit_tree_data_a.get_proof(index),
-                        root: self.local_exit_tree_data_a.get_root(),
-                    },
-                    proof_ger_l1root: proof_ger_l1root.clone(),
-                    l1_leaf: l1_leaf.clone(),
-                })),
+                claim_data: MerkleProof {
+                    proof: self.local_exit_tree_data_a.get_proof(index),
+                    root: self.local_exit_tree_data_a.get_root(),
+                },
             };
             res.push(imported_exit);
         }

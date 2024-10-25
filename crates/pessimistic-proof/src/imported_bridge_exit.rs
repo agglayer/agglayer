@@ -200,15 +200,19 @@ pub struct ImportedBridgeExit {
     /// current network, and that the bridge exit is included in an imported
     /// LER
     pub bridge_exit: BridgeExit,
-    /// The claim data
-    pub claim_data: Claim,
     /// The global index of the imported bridge exit.
     pub global_index: GlobalIndex,
+    /// The Merkle proof up to the LER.
+    pub claim_data: MerkleProof,
 }
 
 impl ImportedBridgeExit {
     /// Creates a new [`ImportedBridgeExit`].
-    pub fn new(bridge_exit: BridgeExit, claim_data: Claim, global_index: GlobalIndex) -> Self {
+    pub fn new(
+        bridge_exit: BridgeExit,
+        claim_data: MerkleProof,
+        global_index: GlobalIndex,
+    ) -> Self {
         Self {
             bridge_exit,
             global_index,
@@ -218,38 +222,13 @@ impl ImportedBridgeExit {
 
     /// Verifies that the provided inclusion path is valid and consistent with
     /// the provided LER
-    pub fn verify_path(&self, l1root: Digest) -> Result<(), Error> {
-        // Check that the inclusion proof and the global index both refer to mainnet or
-        // rollup
-        if self.global_index.mainnet_flag != matches!(self.claim_data, Claim::Mainnet(_)) {
-            return Err(Error::MismatchGlobalIndexInclusionProof);
-        }
-
-        match &self.claim_data {
-            Claim::Mainnet(claim) => {
-                claim.verify(self.bridge_exit.hash(), self.global_index, l1root)
-            }
-            Claim::Rollup(claim) => {
-                claim.verify(self.bridge_exit.hash(), self.global_index, l1root)
-            }
-        }
-    }
-
-    /// Returns the considered L1 Info Root against which the claim is done.
-    pub fn l1_info_root(&self) -> Digest {
-        match &self.claim_data {
-            Claim::Mainnet(claim) => claim.proof_ger_l1root.root,
-            Claim::Rollup(claim) => claim.proof_ger_l1root.root,
-        }
-    }
-
-    /// Returns the considered L1 Info Tree leaf index against which the claim
-    /// is done.
-    pub fn l1_leaf_index(&self) -> u32 {
-        match &self.claim_data {
-            Claim::Mainnet(claim) => claim.l1_leaf.l1_info_tree_index,
-            Claim::Rollup(claim) => claim.l1_leaf.l1_info_tree_index,
-        }
+    pub fn verify_path(&self) -> Result<(), Error> {
+        let ler = self.claim_data.root;
+        self.claim_data
+            .proof
+            .verify(self.bridge_exit.hash(), self.global_index.leaf_index, ler)
+            .then_some(())
+            .ok_or(Error::InvalidMerklePathLeafToLER)
     }
 
     pub fn hash(&self) -> Digest {

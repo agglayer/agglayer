@@ -228,40 +228,6 @@ impl Certificate {
         ])
         .into()
     }
-
-    /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].
-    /// Corresponds to the highest L1 Info Tree leaf index considered by the
-    /// imported bridge exits.
-    pub fn l1_info_tree_leaf_count(&self) -> u32 {
-        self.imported_bridge_exits
-            .iter()
-            .map(|i| i.l1_leaf_index())
-            .max()
-            .unwrap_or(Self::DEFAULT_L1_INFO_LEAF_COUNT)
-    }
-
-    /// Returns the L1 Info Root considered for this [`Certificate`].
-    /// Fails if multiple L1 Info Root are considered among the inclusion proofs
-    /// of the imported bridge exits.
-    pub fn l1_info_root(&self) -> Result<Digest, Error> {
-        let Some(l1_info_root) = self
-            .imported_bridge_exits
-            .first()
-            .map(|imported_bridge_exit| imported_bridge_exit.l1_info_root())
-        else {
-            return Ok(Self::DEFAULT_L1_INFO_ROOT);
-        };
-
-        if self
-            .imported_bridge_exits
-            .iter()
-            .all(|exit| exit.l1_info_root() == l1_info_root)
-        {
-            Ok(l1_info_root)
-        } else {
-            Err(Error::MultipleL1InfoRoot)
-        }
-    }
 }
 
 /// Local state data of one network.
@@ -296,8 +262,6 @@ impl LocalNetworkStateData {
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
-
-        let l1_info_root = certificate.l1_info_root()?;
 
         certificate
             .bridge_exits
@@ -429,7 +393,6 @@ impl LocalNetworkStateData {
                 balance_root: self.balance_tree.root,
                 nullifier_root: self.nullifier_tree.root,
             },
-            l1_info_root,
         })
     }
 

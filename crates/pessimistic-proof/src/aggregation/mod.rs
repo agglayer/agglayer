@@ -18,7 +18,7 @@ pub struct Stage1AggregationProofOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct ImportedLERWitness {
+pub struct ImportedLERWitness {
     old_ler: LocalExitTree<Keccak256Hasher>,
     new_ler: Digest,
     next_leaf: Digest,
