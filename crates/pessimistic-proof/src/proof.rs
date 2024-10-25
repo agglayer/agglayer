@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 pub use bincode::Options;
 use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
@@ -112,9 +114,9 @@ pub struct PessimisticProofOutput {
     pub prev_local_exit_root: Digest,
     /// The previous pessimistic root.
     pub prev_pessimistic_root: Digest,
-    /// The l1 info root against which we prove the inclusion of the imported
-    /// bridge exits.
-    pub l1_info_root: Digest,
+    /// The local exit roots against which we prove the inclusion of the
+    /// imported bridge exits.
+    pub imported_local_exit_roots: BTreeMap<NetworkId, Digest>,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
     /// The consensus hash.
