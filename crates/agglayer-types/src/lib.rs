@@ -39,8 +39,8 @@ pub struct CertificateHeader {
     pub certificate_index: Option<CertificateIndex>,
     pub certificate_id: CertificateId,
     pub new_local_exit_root: Hash,
-    pub status: CertificateStatus,
     pub metadata: Metadata,
+    pub status: CertificateStatus,
 }
 
 #[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]

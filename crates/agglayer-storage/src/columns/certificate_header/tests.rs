@@ -57,16 +57,16 @@ fn can_parse_value() {
             5, 5, 5
         ]
     );
-    // certificate status
-    assert_eq!(encoded[94..98], [0, 0, 0, 0]);
     // metadata
     assert_eq!(
-        encoded[98..130],
+        encoded[94..126],
         [
             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
             6, 6, 6
         ]
     );
+    // certificate status
+    assert_eq!(encoded[126..130], [0, 0, 0, 0]);
     // end
     assert!(encoded[130..].is_empty());
 }
