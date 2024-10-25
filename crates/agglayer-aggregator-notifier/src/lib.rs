@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use agglayer_certificate_orchestrator::{EpochPacker, Error};
 use agglayer_config::certificate_orchestrator::prover::ProverConfig;
-use agglayer_storage::stores::{EpochStoreReader, PerEpochWriter, StateReader};
+use agglayer_storage::stores::{EpochStoreReader, MetadataWriter, StateReader};
 use futures::future::BoxFuture;
 use serde::Serialize;
 use tracing::debug;
@@ -51,20 +51,17 @@ where
 
 impl<I, StateStore, EpochsStore> EpochPacker for AggregatorNotifier<I, StateStore, EpochsStore>
 where
-    StateStore: StateReader + 'static,
+    StateStore: StateReader + MetadataWriter + 'static,
     EpochsStore: EpochStoreReader + 'static,
     I: Clone + 'static,
 {
     fn pack(&self, epoch: u64) -> Result<BoxFuture<Result<(), Error>>, Error> {
         debug!("Start the settlement of the epoch {}", epoch);
 
-        // Selecting the different proof to pack in this epoch
-        let closing_epoch = self.epochs_store.get_current_epoch().load_full();
-        closing_epoch.start_packing()?;
-
+        let state_store = self.state_store.clone();
         Ok(Box::pin(async move {
-            // TODO: Submit the settlement tx for each proof
-            // No aggregation for now, we settle each PP individually
+            state_store.set_latest_settled_epoch(epoch)?;
+
             Ok(())
         }))
     }

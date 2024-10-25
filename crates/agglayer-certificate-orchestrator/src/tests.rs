@@ -46,6 +46,14 @@ pub(crate) struct DummyPendingStore {
 }
 
 impl PerEpochReader for DummyPendingStore {
+    fn get_epoch_number(&self) -> u64 {
+        0
+    }
+
+    fn get_end_checkpoint(&self) -> BTreeMap<NetworkId, Height> {
+        todo!()
+    }
+
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {
         todo!()
     }
@@ -90,12 +98,13 @@ impl StateReader for DummyPendingStore {
     }
     fn get_current_settled_height(
         &self,
-    ) -> Result<Vec<(NetworkId, Height, CertificateId)>, agglayer_storage::error::Error> {
+    ) -> Result<Vec<(NetworkId, Height, CertificateId, EpochNumber)>, agglayer_storage::error::Error>
+    {
         self.settled
             .read()
             .unwrap()
             .iter()
-            .map(|(network_id, (height, id))| Ok((*network_id, *height, *id)))
+            .map(|(network_id, (height, id))| Ok((*network_id, *height, *id, 0)))
             .collect()
     }
 

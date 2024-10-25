@@ -7,13 +7,11 @@ use agglayer_config::{Config, Epoch};
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::DB,
-    stores::{
-        epochs::EpochsStore, metadata::MetadataStore, pending::PendingStore, state::StateStore,
-        EpochStoreReader,
-    },
+    stores::{epochs::EpochsStore, pending::PendingStore, state::StateStore},
 };
 use agglayer_types::Certificate;
 use anyhow::Result;
+use arc_swap::ArcSwap;
 use ethers::{
     middleware::MiddlewareBuilder,
     providers::{Http, Provider, Ws},
@@ -24,7 +22,7 @@ use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
-use crate::{kernel::Kernel, rpc::AgglayerImpl};
+use crate::{epoch_synchronizer::EpochSynchronizer, kernel::Kernel, rpc::AgglayerImpl};
 
 pub(crate) struct Node {
     rpc_handle: JoinHandle<()>,
@@ -75,10 +73,6 @@ impl Node {
         cancellation_token: CancellationToken,
     ) -> Result<Self> {
         // Initializing storage
-        let metadata_db = Arc::new(DB::open_cf(
-            &config.storage.metadata_db_path,
-            agglayer_storage::storage::metadata_db_cf_definitions(),
-        )?);
         let pending_db = Arc::new(DB::open_cf(
             &config.storage.pending_db_path,
             agglayer_storage::storage::pending_db_cf_definitions(),
@@ -88,7 +82,6 @@ impl Node {
             agglayer_storage::storage::state_db_cf_definitions(),
         )?);
 
-        let _metadata_store = Arc::new(MetadataStore::new(metadata_db));
         let state_store = Arc::new(StateStore::new(state_db.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
 
@@ -112,6 +105,19 @@ impl Node {
             }
         };
 
+        let current_epoch = clock_ref.current_epoch();
+
+        let epochs_store = Arc::new(EpochsStore::new(
+            config.clone(),
+            current_epoch,
+            pending_store.clone(),
+            state_store.clone(),
+        )?);
+
+        let current_epoch =
+            EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref.clone())
+                .await?;
+
         let certifier_client =
             CertifierClient::try_new(config.prover_entrypoint.clone(), pending_store.clone())
                 .await?;
@@ -126,16 +132,6 @@ impl Node {
 
         // Construct the core.
         let core = Kernel::new(rpc, config.clone());
-
-        let current_epoch = clock_ref.current_epoch();
-
-        let epochs_store = Arc::new(EpochsStore::new(
-            config.clone(),
-            current_epoch,
-            pending_store.clone(),
-            state_store.clone(),
-        )?);
-
         let epoch_packing_aggregator_task: AggregatorNotifier<Certificate, _, _> =
             AggregatorNotifier::try_new(
                 &config.certificate_orchestrator.prover,
@@ -160,7 +156,7 @@ impl Node {
             .epoch_packing_task_builder(epoch_packing_aggregator_task)
             .pending_store(pending_store.clone())
             .epochs_store(epochs_store.clone())
-            .current_epoch(epochs_store.get_current_epoch())
+            .current_epoch(Arc::new(ArcSwap::new(Arc::new(current_epoch))))
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
             .start()
