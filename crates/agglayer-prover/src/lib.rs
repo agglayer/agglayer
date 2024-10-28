@@ -11,6 +11,8 @@ use tracing::info;
 mod logging;
 
 mod executor;
+#[cfg(feature = "testutils")]
+pub mod fake;
 mod prover;
 mod rpc;
 

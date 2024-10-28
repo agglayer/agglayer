@@ -1,15 +1,13 @@
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DurationSeconds};
 
 /// Configuration of the communication with the L2 nodes.
-#[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct L2 {
+    #[serde(with = "crate::with::HumanDuration")]
     #[serde(default = "L2::default_rpc_timeout")]
-    #[serde_as(as = "DurationSeconds")]
     pub rpc_timeout: Duration,
 }
 

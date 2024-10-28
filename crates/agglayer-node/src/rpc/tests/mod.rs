@@ -9,7 +9,9 @@ use agglayer_storage::{
     stores::{PendingCertificateWriter, StateReader, StateWriter},
     tests::TempDBDir,
 };
-use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId};
+use agglayer_types::{
+    Certificate, CertificateId, CertificateStatus, EpochNumber, Height, NetworkId,
+};
 use ethers::providers::{self, MockProvider, Provider};
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
@@ -215,6 +217,7 @@ impl StateReader for DummyStore {
             NetworkId,
             agglayer_types::Height,
             agglayer_types::CertificateId,
+            EpochNumber,
         )>,
         agglayer_storage::error::Error,
     > {

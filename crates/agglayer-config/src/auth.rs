@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
 
@@ -18,8 +17,9 @@ use serde_with::{serde_as, NoneAsEmptyString};
 ///   pick up credentials.
 /// - If the `GOOGLE_APPLICATION_CREDENTIALS` environment is set, attempt to
 ///   load a service account JSON from this path.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+#[serde(try_from = "IntermediateAuthConfig")]
 pub enum AuthConfig {
     Local(LocalConfig),
     GcpKms(GcpKmsConfig),
@@ -93,21 +93,20 @@ struct IntermediateAuthConfig {
     kms: Option<GcpKmsConfig>,
 }
 
-pub(crate) fn deserialize_auth<'de, D>(deserializer: D) -> Result<AuthConfig, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let intermediate = IntermediateAuthConfig::deserialize(deserializer)?;
+impl TryFrom<IntermediateAuthConfig> for AuthConfig {
+    type Error = &'static str;
 
-    if let Some(local) = intermediate.local {
-        Ok(AuthConfig::Local(local))
-    } else if let Some(gcpkms) = intermediate.gcpkms {
-        Ok(AuthConfig::GcpKms(gcpkms))
-    } else if let Some(private_keys) = intermediate.private_keys {
-        Ok(AuthConfig::Local(LocalConfig { private_keys }))
-    } else if let Some(kms) = intermediate.kms {
-        Ok(AuthConfig::GcpKms(kms))
-    } else {
-        Err(de::Error::custom("Invalid auth configuration"))
+    fn try_from(intermediate: IntermediateAuthConfig) -> Result<Self, Self::Error> {
+        if let Some(local) = intermediate.local {
+            Ok(AuthConfig::Local(local))
+        } else if let Some(gcpkms) = intermediate.gcpkms {
+            Ok(AuthConfig::GcpKms(gcpkms))
+        } else if let Some(private_keys) = intermediate.private_keys {
+            Ok(AuthConfig::Local(LocalConfig { private_keys }))
+        } else if let Some(kms) = intermediate.kms {
+            Ok(AuthConfig::GcpKms(kms))
+        } else {
+            Err("Invalid auth configuration")
+        }
     }
 }

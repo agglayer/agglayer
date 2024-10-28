@@ -9,6 +9,8 @@ use crate::{
     tests::TempDBDir,
 };
 
+mod metadata;
+
 #[test]
 fn can_retrieve_list_of_network() {
     let tmp = TempDBDir::new();

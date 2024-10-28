@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::{
     columns::metadata::MetadataColumn,
-    storage::{metadata_db_cf_definitions, DB},
-    stores::{metadata::MetadataStore, MetadataReader as _, MetadataWriter as _},
+    storage::{state_db_cf_definitions, DB},
+    stores::{state::StateStore, MetadataReader as _, MetadataWriter as _},
     tests::TempDBDir,
     types::{MetadataKey, MetadataValue},
 };
@@ -11,9 +11,9 @@ use crate::{
 #[test]
 fn can_retrieve_the_last_settled_epoch() {
     let tmp = TempDBDir::new();
-    let db = Arc::new(DB::open_cf(tmp.path.as_path(), metadata_db_cf_definitions()).unwrap());
+    let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
 
-    let store = MetadataStore::new(db.clone());
+    let store = StateStore::new(db.clone());
     assert!(store.get_latest_settled_epoch().unwrap().is_none());
 
     db.put::<MetadataColumn>(
@@ -28,9 +28,9 @@ fn can_retrieve_the_last_settled_epoch() {
 #[test]
 fn can_set_the_latest_epoch_settled() {
     let tmp = TempDBDir::new();
-    let db = Arc::new(DB::open_cf(tmp.path.as_path(), metadata_db_cf_definitions()).unwrap());
+    let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
 
-    let store = MetadataStore::new(db.clone());
+    let store = StateStore::new(db.clone());
     assert!(store.get_latest_settled_epoch().unwrap().is_none());
 
     store

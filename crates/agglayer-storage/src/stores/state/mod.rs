@@ -1,12 +1,13 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
+    NetworkId,
 };
 use rocksdb::{Direction, ReadOptions};
 use tracing::warn;
 
-use super::{StateReader, StateWriter};
+use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
     columns::{
         certificate_header::CertificateHeaderColumn,
@@ -14,9 +15,11 @@ use crate::{
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
+        metadata::MetadataColumn,
     },
     error::Error,
     storage::DB,
+    types::{MetadataKey, MetadataValue},
 };
 
 #[cfg(test)]
@@ -30,6 +33,15 @@ pub struct StateStore {
 impl StateStore {
     pub fn new(db: Arc<DB>) -> Self {
         Self { db }
+    }
+
+    pub fn new_with_path(path: &Path) -> Result<Self, Error> {
+        let db = Arc::new(DB::open_cf(
+            path,
+            crate::storage::state_db_cf_definitions(),
+        )?);
+
+        Ok(Self { db })
     }
 }
 
@@ -50,6 +62,7 @@ impl StateWriter for StateStore {
                 certificate_index: None,
                 new_local_exit_root: certificate.new_local_exit_root.into(),
                 status: status.clone(),
+                metadata: certificate.metadata,
             },
         )?;
 
@@ -136,7 +149,9 @@ impl StateReader for StateStore {
             })
     }
 
-    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, Height, CertificateId)>, Error> {
+    fn get_current_settled_height(
+        &self,
+    ) -> Result<Vec<(NetworkId, Height, CertificateId, EpochNumber)>, Error> {
         Ok(self
             .db
             .iter_with_direction::<LatestSettledCertificatePerNetworkColumn>(
@@ -144,11 +159,45 @@ impl StateReader for StateStore {
                 Direction::Forward,
             )?
             .filter_map(|v| {
-                v.map(|(network_id, SettledCertificate(id, height, _epoch))| {
-                    (network_id, height, id)
+                v.map(|(network_id, SettledCertificate(id, height, epoch))| {
+                    (network_id, height, id, epoch)
                 })
                 .ok()
             })
             .collect())
+    }
+}
+
+impl MetadataWriter for StateStore {
+    fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error> {
+        if let Some(current_latest_settled_epoch) = self.get_latest_settled_epoch()? {
+            if current_latest_settled_epoch >= value {
+                return Err(Error::UnprocessedAction(
+                    "Tried to set a lower value for latest settled epoch".to_string(),
+                ));
+            }
+        }
+
+        self.db.put::<MetadataColumn>(
+            &MetadataKey::LatestSettledEpoch,
+            &MetadataValue::LatestSettledEpoch(value),
+        )
+    }
+}
+
+impl MetadataReader for StateStore {
+    fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error> {
+        self.db
+            .get::<MetadataColumn>(&MetadataKey::LatestSettledEpoch)
+            .and_then(|v| {
+                v.map_or(Ok(None), |v| match v {
+                    MetadataValue::LatestSettledEpoch(value) => Ok(Some(value)),
+                    _ => Err(Error::Unexpected(
+                        "Wrong value type decoded, was expecting LastSettledEpoch, decoded \
+                         another type"
+                            .to_string(),
+                    )),
+                })
+            })
     }
 }

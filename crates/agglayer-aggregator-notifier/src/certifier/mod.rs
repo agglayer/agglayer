@@ -55,7 +55,7 @@ where
         mut state: LocalNetworkStateData,
         network_id: NetworkId,
         height: Height,
-    ) -> Result<BoxFuture<Result<CertifierOutput, Error>>, Error> {
+    ) -> Result<BoxFuture<'static, Result<CertifierOutput, Error>>, Error> {
         debug!("Certifying the certificate of network {network_id} at height {height}");
 
         // Fetch certificate from storage
@@ -115,6 +115,10 @@ where
 
         let mut prover_client = self.prover.clone();
 
+        let pending_store = self.pending_store.clone();
+        let verifier = self.verifier.clone();
+        let verifying_key = self.verifying_key.clone();
+
         Ok(Box::pin(async move {
             let prover_response: tonic::Response<ProofGenerationResponse> = prover_client
                 .generate_proof(request)
@@ -157,7 +161,7 @@ where
 
             let Proof::SP1(ref proof_to_verify) = proof;
 
-            if let Err(error) = self.verifier.verify(proof_to_verify, &self.verifying_key) {
+            if let Err(error) = verifier.verify(proof_to_verify, &verifying_key) {
                 error!("Failed to verify the p-proof: {:?}", error);
 
                 Err(Error::ProofVerificationFailed {
@@ -168,8 +172,7 @@ where
                 info!("Successfully generated and verified the p-proof!");
 
                 // TODO: Check if the key already exists
-                self.pending_store
-                    .insert_generated_proof(&certificate.hash(), &proof)?;
+                pending_store.insert_generated_proof(&certificate.hash(), &proof)?;
 
                 Ok(CertifierOutput {
                     certificate,

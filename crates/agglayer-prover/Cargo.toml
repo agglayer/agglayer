@@ -24,9 +24,14 @@ agglayer-config = { path = "../agglayer-config" }
 agglayer-prover-types = { path = "../agglayer-prover-types" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
 pessimistic-proof = { path = "../pessimistic-proof" }
+agglayer-types = { path = "../agglayer-types", optional = true }
 
 sp1-sdk.workspace = true
 sp1-prover.workspace = true
 
 [dev-dependencies]
 agglayer-types = { path = "../agglayer-types" }
+
+[features]
+default = []
+testutils = ["agglayer-types"]

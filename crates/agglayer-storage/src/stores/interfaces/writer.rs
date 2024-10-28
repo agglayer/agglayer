@@ -1,15 +1,30 @@
-use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId, Proof};
+use std::collections::BTreeMap;
+
+use agglayer_types::{
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
+    NetworkId, Proof,
+};
 
 use crate::error::Error;
 
 pub trait PerEpochWriter: Send + Sync {
-    fn add_certificate(&self, network_id: NetworkId, height: Height) -> Result<(), Error>;
+    fn add_certificate(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+    ) -> Result<(EpochNumber, CertificateIndex), Error>;
+    fn start_packing(&self) -> Result<(), Error>;
 }
 
 pub trait EpochStoreWriter: Send + Sync {
     type PerEpochStore;
 
     fn open(&self, epoch_number: u64) -> Result<Self::PerEpochStore, Error>;
+    fn open_with_start_checkpoint(
+        &self,
+        epoch_number: u64,
+        start_checkpoint: BTreeMap<NetworkId, Height>,
+    ) -> Result<Self::PerEpochStore, Error>;
 }
 
 pub trait MetadataWriter: Send + Sync {

@@ -26,7 +26,7 @@ rand.workspace = true
 hex-literal = "0.4"
 hex.workspace = true
 tracing = "0.1.40"
-uuid = { version = "1.10.0", features = ["v4", "fast-rng"] }
+uuid = { version = "1.11.0", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
 rstest.workspace = true

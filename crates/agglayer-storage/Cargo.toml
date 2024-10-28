@@ -8,7 +8,7 @@ license.workspace = true
 arc-swap.workspace = true
 bincode.workspace = true
 hex.workspace = true
-parking_lot = "0.12.3"
+parking_lot.workspace = true
 rand = { version = "0.8.5", optional = true }
 rocksdb = "0.22.0"
 serde.workspace = true
@@ -18,9 +18,12 @@ tracing.workspace = true
 agglayer-config = { path = "../agglayer-config" }
 agglayer-types = { path = "../agglayer-types" }
 
+mockall = { workspace = true, optional = true }
+
 [dev-dependencies]
 criterion = "0.5.1"
 rand.workspace = true
+rstest.workspace = true
 sp1-sdk.workspace = true
 
 [[bench]]
@@ -30,4 +33,4 @@ required-features = ["testutils"]
 
 [features]
 default = []
-testutils = ["rand"]
+testutils = ["rand", "mockall"]

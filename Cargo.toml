@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-anyhow = "1.0.81"
+anyhow = "1.0.89"
 arc-swap = "1.7.1"
 async-trait = "0.1.82"
 base64 = "0.22.0"
@@ -25,12 +25,18 @@ ethers-signers = "2.0.14"
 fail = "0.5.1"
 futures = "0.3.31"
 hex = "0.4.3"
+insta = { git = "https://github.com/freyskeyd/insta", branch = "chore/updating-deps-to-avoid-serialize-error", features = [
+    "toml",
+    "yaml",
+] }
 jsonrpsee = { version = "0.24.6", features = ["full"] }
 lazy_static = "1.5.0"
+mockall = "0.13.0"
+parking_lot = "0.12.3"
 rand = "0.8.5"
 rstest = "0.22.0"
 serde = { version = "1.0.209", features = ["derive"] }
-serde_json = "1.0.128"
+serde_json = "1.0.132"
 serde_with = "3.11.0"
 test-log = "0.2.16"
 thiserror = "1.0.64"

@@ -10,16 +10,18 @@ humantime-serde = "1.1.1"
 jsonrpsee.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
+thiserror.workspace = true
+toml.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 url = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
+insta = { workspace = true, features = ["toml", "redactions", "filters"] }
 pretty_assertions = "1.4.0"
 rstest.workspace = true
 serde_json = { workspace = true }
-toml.workspace = true
 
 [features]
 default = []

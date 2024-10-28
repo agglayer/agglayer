@@ -1,13 +1,12 @@
 use std::borrow::Borrow;
 
-use reth_primitives::U256;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
-    keccak::{keccak256, keccak256_combine, Digest},
+    keccak::{keccak256_combine, Digest},
     local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
 };
 
@@ -82,6 +81,13 @@ pub struct MerkleProof {
 }
 
 impl MerkleProof {
+    pub fn hash(&self) -> Digest {
+        keccak256_combine(&[
+            self.root.as_slice(),
+            self.proof.siblings.concat().as_slice(),
+        ])
+    }
+
     pub fn verify(&self, leaf: Digest, leaf_index: u32) -> bool {
         self.proof.verify(leaf, leaf_index, self.root)
     }
@@ -91,6 +97,15 @@ impl MerkleProof {
 pub enum Claim {
     Mainnet(Box<ClaimFromMainnet>),
     Rollup(Box<ClaimFromRollup>),
+}
+
+impl Claim {
+    pub fn hash(&self) -> Digest {
+        match self {
+            Claim::Mainnet(claim_from_mainnet) => claim_from_mainnet.hash(),
+            Claim::Rollup(claim_from_rollup) => claim_from_rollup.hash(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,6 +119,14 @@ pub struct ClaimFromMainnet {
 }
 
 impl ClaimFromMainnet {
+    pub fn hash(&self) -> Digest {
+        keccak256_combine([
+            self.proof_leaf_mer.hash(),
+            self.proof_ger_l1root.hash(),
+            self.l1_leaf.hash(),
+        ])
+    }
+
     pub fn verify(
         &self,
         leaf: Digest,
@@ -150,6 +173,15 @@ pub struct ClaimFromRollup {
 }
 
 impl ClaimFromRollup {
+    pub fn hash(&self) -> Digest {
+        keccak256_combine([
+            self.proof_leaf_ler.hash(),
+            self.proof_ler_rer.hash(),
+            self.proof_ger_l1root.hash(),
+            self.l1_leaf.hash(),
+        ])
+    }
+
     pub fn verify(
         &self,
         leaf: Digest,
@@ -252,16 +284,20 @@ impl ImportedBridgeExit {
         }
     }
 
+    /// Hash the entire data structure.
     pub fn hash(&self) -> Digest {
-        let global_index: U256 = self.global_index.into();
-        keccak256(global_index.as_le_slice())
+        keccak256_combine([
+            self.bridge_exit.hash(),
+            self.claim_data.hash(),
+            self.global_index.hash(),
+        ])
     }
 }
 
 pub fn commit_imported_bridge_exits<E: Borrow<ImportedBridgeExit>>(
     iter: impl Iterator<Item = E>,
 ) -> Digest {
-    keccak256_combine(iter.map(|exit| exit.borrow().hash()))
+    keccak256_combine(iter.map(|exit| exit.borrow().global_index.hash()))
 }
 
 #[cfg(test)]

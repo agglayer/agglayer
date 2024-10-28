@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use ::serde::{Deserialize, Serialize};
 use pessimistic_proof::global_index::GlobalIndex;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
@@ -20,10 +19,12 @@ use pessimistic_proof::{
 };
 pub use reth_primitives::U256;
 use reth_primitives::{Address, Signature};
+use serde::{Deserialize, Serialize};
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Hash;
 pub type Height = u64;
+pub type Metadata = Hash;
 
 mod hash;
 pub use hash::Hash;
@@ -38,6 +39,7 @@ pub struct CertificateHeader {
     pub certificate_index: Option<CertificateIndex>,
     pub certificate_id: CertificateId,
     pub new_local_exit_root: Hash,
+    pub metadata: Metadata,
     pub status: CertificateStatus,
 }
 
@@ -52,7 +54,7 @@ pub enum Error {
         "Mismatch on the certificate new local exit root. declared: {declared:?}, computed: \
          {computed:?}"
     )]
-    MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
+    MismatchNewLocalExitRoot { computed: Hash, declared: Hash },
     /// The given token balance cannot overflow.
     #[error("Token balance cannot overflow. token: {0:?}")]
     BalanceOverflow(TokenInfo),
@@ -150,6 +152,7 @@ impl From<SP1VerificationError> for ProofVerificationError {
 pub enum CertificateStatus {
     Pending,
     Proven,
+    Candidate,
     InError { error: CertificateStatusError },
     Settled,
 }
@@ -188,13 +191,22 @@ impl Proof {
 /// upon modifying the fields of this structure.
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct Certificate {
+    /// NetworkID of the origin network.
     pub network_id: NetworkId,
+    /// Simple increment to count the Certificate per network.
     pub height: Height,
+    /// Previous local exit root.
     pub prev_local_exit_root: Digest,
+    /// New local exit root.
     pub new_local_exit_root: Digest,
+    /// List of bridge exits included in this state transition.
     pub bridge_exits: Vec<BridgeExit>,
+    /// List of imported bridge exits included in this state transition.
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
+    /// Signature committed to the bridge exits and imported bridge exits.
     pub signature: Signature,
+    /// Fixed size field of arbitrary data for the chain needs.
+    pub metadata: Metadata,
 }
 
 impl Certificate {
@@ -217,15 +229,24 @@ impl Certificate {
             bridge_exits: Vec::new(),
             imported_bridge_exits: Vec::new(),
             signature: Signature::default(),
+            metadata: Default::default(),
         }
     }
 
     pub fn hash(&self) -> CertificateId {
+        let commit_bridge_exits =
+            keccak256_combine(self.bridge_exits.iter().map(|exit| exit.hash()));
+        let commit_imported_bridge_exits =
+            keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
+
         keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
             self.height.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_slice(),
             self.new_local_exit_root.as_slice(),
+            commit_bridge_exits.as_slice(),
+            commit_imported_bridge_exits.as_slice(),
+            self.metadata.as_slice(),
         ])
         .into()
     }
@@ -409,8 +430,8 @@ impl LocalNetworkStateData {
         let computed = self.exit_tree.get_root();
         if computed != certificate.new_local_exit_root {
             return Err(Error::MismatchNewLocalExitRoot {
-                declared: certificate.new_local_exit_root,
-                computed,
+                declared: certificate.new_local_exit_root.into(),
+                computed: computed.into(),
             });
         }
 

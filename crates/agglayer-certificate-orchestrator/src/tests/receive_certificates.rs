@@ -29,6 +29,7 @@ async fn receive_certificate_with_height_zero() {
             s: U256::ZERO,
             odd_y_parity: false,
         },
+        metadata: Default::default(),
     };
 
     let certificate_id = certificate.hash();
@@ -41,7 +42,10 @@ async fn receive_certificate_with_height_zero() {
     let result = orchestrator.receive_certificates(&[(1.into(), 0, certificate_id)]);
 
     assert!(result.is_ok());
-    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(0)));
+    assert!(matches!(
+        orchestrator.proving_cursors.get(&1.into()),
+        Some(0)
+    ));
     assert!(orchestrator.global_state.contains_key(&1.into()));
     assert!(receiver.recv().await.is_some());
 }
@@ -64,6 +68,7 @@ async fn receive_certificate_with_previous_proven() {
             s: U256::ZERO,
             odd_y_parity: false,
         },
+        metadata: Default::default(),
     };
 
     orchestrator
@@ -83,6 +88,7 @@ async fn receive_certificate_with_previous_proven() {
             s: U256::ZERO,
             odd_y_parity: false,
         },
+        metadata: Default::default(),
     };
 
     orchestrator
@@ -90,12 +96,15 @@ async fn receive_certificate_with_previous_proven() {
         .insert_pending_certificate(1.into(), 1, &certificate)
         .unwrap();
 
-    orchestrator.cursors.insert(1.into(), 0);
+    orchestrator.proving_cursors.insert(1.into(), 0);
 
     let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32].into())]);
 
     assert!(result.is_ok());
-    assert!(matches!(orchestrator.cursors.get(&1.into()), Some(1)));
+    assert!(matches!(
+        orchestrator.proving_cursors.get(&1.into()),
+        Some(1)
+    ));
     assert!(orchestrator.global_state.contains_key(&1.into()));
     assert!(receiver.recv().await.is_some());
 }
@@ -118,6 +127,7 @@ async fn receive_certificate_with_previous_pending() {
             s: U256::ZERO,
             odd_y_parity: false,
         },
+        metadata: Default::default(),
     };
 
     orchestrator
@@ -137,6 +147,7 @@ async fn receive_certificate_with_previous_pending() {
             s: U256::ZERO,
             odd_y_parity: false,
         },
+        metadata: Default::default(),
     };
 
     orchestrator
@@ -147,7 +158,7 @@ async fn receive_certificate_with_previous_pending() {
     let result = orchestrator.receive_certificates(&[(1.into(), 1, [0; 32].into())]);
 
     assert!(result.is_ok());
-    assert!(!orchestrator.cursors.contains_key(&1.into()));
+    assert!(!orchestrator.proving_cursors.contains_key(&1.into()));
     sleep(Duration::from_millis(10)).await;
 
     assert!(receiver.try_recv().is_err());

@@ -6,11 +6,14 @@ use std::{
     },
 };
 
-use ethers::providers::{Middleware, PubsubClient};
+use ethers::{
+    providers::{Middleware, PubsubClient},
+    types::Block,
+};
 use futures::StreamExt as _;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error};
+use tracing::{debug, error, info, warn};
 
 use crate::{Clock, ClockRef, Error, Event, BROADCAST_CHANNEL_SIZE};
 
@@ -69,6 +72,12 @@ impl<P> BlockClock<P> {
         }
     }
 
+    /// Reinitialize the current Epoch number based on the current Block height.
+    fn reinitialize_epoch_number(&mut self, current_block: u64) {
+        let current_epoch = self.calculate_epoch_number(current_block);
+        self.current_epoch.store(current_epoch, Ordering::SeqCst);
+    }
+
     /// Updates the current Epoch of this [`BlockClock`].
     ///
     /// This method is used to update the current Epoch number based on the
@@ -113,8 +122,6 @@ enum BlockClockError {
     GetBlockNumber,
     #[error("Failed to subscribe to the L1 Block stream")]
     SubscribeBlocks,
-    #[error("The current block height is less than the genesis block number: {0} < {1}")]
-    GenesisBlockNumber(u64, u64),
     #[error("The current block height was already set to a non-zero value: {0}")]
     BlockHeightAlreadySet(u64),
     #[error("Failed to set the current block height, already set to: {0}")]
@@ -134,15 +141,17 @@ where
         sender: broadcast::Sender<Event>,
         cancellation_token: CancellationToken,
     ) -> Result<(), BlockClockError> {
+        info!("Starting the BlockClock task");
         // Start by setting the current Block height based on the current L1 Block
         // number. If the current L1 Block number is less than the genesis block
-        // number, we exit the process with an println message.
+        // number, we walk the L1 block stream until reaching the genesis block.
         let current_l1_block = self
             .provider
             .get_block_number()
             .await
             .map_err(|_| BlockClockError::GetBlockNumber)?;
 
+        debug!("Current L1 Block number: {}", current_l1_block);
         let provider = self.provider.clone();
 
         // Subscribe to the L1 Block stream.
@@ -151,21 +160,30 @@ where
             .await
             .map_err(|_| BlockClockError::SubscribeBlocks)?;
 
-        let current_l1_block = current_l1_block.as_u64();
-        if current_l1_block < self.genesis_block {
-            return Err(BlockClockError::GenesisBlockNumber(
-                current_l1_block,
-                self.genesis_block,
-            ));
-        };
+        debug!("Successfully subscribed to the L1 Block stream");
+
+        let mut current_l1_block = current_l1_block.as_u64();
+        while current_l1_block < self.genesis_block {
+            if let Some(Block {
+                number: Some(number),
+                ..
+            }) = stream.next().await
+            {
+                current_l1_block = number.as_u64();
+
+                debug!("Current L1 Block number: {}", current_l1_block);
+            }
+        }
+
+        info!("Node reached the genesis L1 block {}", self.genesis_block);
+
+        // Calculate the local Block height based on the current L1 Block number.
+        let current_block = self.calculate_block_number(current_l1_block);
 
         // Overwrite the block number to simulate an overflow
         // This is used for testing purposes only and doesn't affect the production
         // code.
         fail::fail_point!("block_clock::BlockClock::run::overwrite_block_number");
-
-        // Calculate the local Block height based on the current L1 Block number.
-        let current_block = self.calculate_block_number(current_l1_block);
 
         match self.block_height.compare_exchange(
             0,
@@ -175,10 +193,7 @@ where
         ) {
             Ok(0) => {
                 debug!("The current block height was set to: {}", current_block);
-                self.update_epoch_number(current_block)
-                    .map_err(|(previous, expected)| {
-                        BlockClockError::SetEpochNumber(previous, expected)
-                    })?;
+                self.reinitialize_epoch_number(current_block);
             }
             Ok(block) => {
                 return Err(BlockClockError::BlockHeightAlreadySet(block));
@@ -191,7 +206,7 @@ where
         loop {
             tokio::select! {
                 _ = cancellation_token.cancelled() => {
-                    debug!("Clock task cancelled");
+                    warn!("Clock task cancelled");
                     break;
                 }
                 Some(block) = stream.next() => {
@@ -201,6 +216,10 @@ where
                         block.number.unwrap(),
                         block.hash.unwrap()
                     );
+                    // Overwrite the block number to simulate an overflow
+                    // This is used for testing purposes only and doesn't affect the production
+                    // code.
+                    fail::fail_point!("block_clock::BlockClock::run::overwrite_block_number_on_new_block");
 
                     // Increase the Block height by 1. The `fetch_add` method returns the previous
                     // value, so we need to add 1 to it to get the current Block height.
@@ -218,6 +237,7 @@ where
                                     return Err(BlockClockError::SetEpochNumber(previous, expected));
                                 }
                                 Ok(epoch_ended) => {
+                                    info!("Clock detected the end of the Epoch: {}", epoch_ended);
                                     _ = sender.send(Event::EpochEnded(epoch_ended));
                                 }
                             }
@@ -236,10 +256,12 @@ mod tests {
     use std::{num::NonZeroU64, time::Duration};
 
     use ethers::{
-        providers::{Provider, Ws},
+        providers::{Middleware, Provider, Ws},
         utils::Anvil,
     };
     use fail::FailScenario;
+    use futures::StreamExt as _;
+    use rstest::rstest;
     use tokio::sync::broadcast;
     use tokio_util::sync::CancellationToken;
 
@@ -301,27 +323,85 @@ mod tests {
         assert!(clock_ref.current_block_height() >= 3);
     }
 
+    #[test_log::test(tokio::test)]
+    async fn test_block_clock_with_genesis_in_future() {
+        let anvil = Anvil::new().block_time(1u64).spawn();
+        let client = Provider::<Ws>::connect(anvil.ws_endpoint()).await.unwrap();
+
+        let clock = BlockClock::new(client, 10, NonZeroU64::new(2).unwrap());
+        let token = CancellationToken::new();
+        let clock_ref = clock.spawn(token).await.unwrap();
+        assert_eq!(clock_ref.current_epoch(), 0);
+
+        let mut recv = clock_ref.subscribe().unwrap();
+
+        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
+        assert_eq!(clock_ref.current_epoch(), 1);
+        assert!(clock_ref.current_block_height() >= 2);
+    }
+
     #[tokio::test]
-    async fn test_block_clock_starting_with_wrong_genesis() {
+    async fn test_block_clock_starting_with_genesis_in_future_should_trigger_epoch_0() {
         let anvil = Anvil::new().block_time(1u64).spawn();
         let client = Provider::<Ws>::connect(anvil.ws_endpoint()).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(1)).await;
-        let mut clock = BlockClock::new(client, 2, NonZeroU64::new(3).unwrap());
-        let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
+        let clock = BlockClock::new(client, 2, NonZeroU64::new(3).unwrap());
 
         let token = CancellationToken::new();
-        let handle = tokio::spawn(async move { clock.run(sender, token).await });
+        let clock_ref = clock.spawn(token).await.unwrap();
 
-        let res = tokio::time::timeout(Duration::from_millis(100), handle)
-            .await
-            .expect("Timeout waiting for task to finish")
-            .expect("Task Join error");
+        let mut recv = clock_ref.subscribe().unwrap();
+        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
+        assert_eq!(clock_ref.current_epoch(), 1);
+        assert!(clock_ref.current_block_height() >= 3);
+    }
 
-        assert!(matches!(
-            res,
-            Err(BlockClockError::GenesisBlockNumber(1, 2))
-        ));
+    #[tokio::test]
+    async fn test_block_clock_starting_with_genesis() {
+        let anvil = Anvil::new().block_time(1u64).spawn();
+        let client = Provider::<Ws>::connect(anvil.ws_endpoint()).await.unwrap();
+
+        let test_client = client.clone();
+        let mut subscribe = test_client.subscribe_blocks().await.unwrap();
+        let clock = BlockClock::new(client, 10, NonZeroU64::new(1).unwrap());
+
+        let token = CancellationToken::new();
+        let clock_ref = clock.spawn(token).await.unwrap();
+        let mut recv = clock_ref.subscribe().unwrap();
+
+        while let Some(block) = subscribe.next().await {
+            let block_number = block.number.unwrap().as_u64();
+
+            if block_number >= 11 {
+                assert!(matches!(recv.try_recv(), Ok(Event::EpochEnded(0))));
+                assert_eq!(clock_ref.current_epoch(), 1);
+                assert!(clock_ref.current_block_height() >= 1);
+                break;
+            } else {
+                assert!(recv.try_recv().is_err());
+                assert!(clock_ref.current_block_height() == 0);
+            }
+        }
+    }
+
+    #[rstest]
+    #[timeout(Duration::from_secs(13))]
+    #[test_log::test(tokio::test)]
+    async fn test_block_clock_starting_with_genesis_already_passed() {
+        let anvil = Anvil::new().block_time(1u64).spawn();
+        let client = Provider::<Ws>::connect(anvil.ws_endpoint()).await.unwrap();
+
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        let clock = BlockClock::new(client, 0, NonZeroU64::new(3).unwrap());
+
+        let token = CancellationToken::new();
+        let clock_ref = clock.spawn(token).await.unwrap();
+
+        let mut recv = clock_ref.subscribe().unwrap();
+        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(3)));
+        assert_eq!(clock_ref.current_epoch(), 4);
+        assert!(clock_ref.current_block_height() >= 10);
     }
 
     #[tokio::test]
@@ -359,7 +439,7 @@ mod tests {
         scenario.teardown();
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_block_clock_overflow_epoch() {
         let scenario = FailScenario::setup();
         let anvil = Anvil::new().block_time(1u64).spawn();
@@ -372,7 +452,7 @@ mod tests {
 
         let token = CancellationToken::new();
         fail::cfg_callback(
-            "block_clock::BlockClock::run::overwrite_block_number",
+            "block_clock::BlockClock::run::overwrite_block_number_on_new_block",
             move || {
                 // Overflow the current_epoch on next poll
                 epoch.store(u64::MAX, std::sync::atomic::Ordering::SeqCst);

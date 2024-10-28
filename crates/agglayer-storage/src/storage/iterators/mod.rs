@@ -1,3 +1,5 @@
+use tracing::debug;
+
 use crate::{
     columns::{Codec as _, ColumnSchema},
     error::Error,
@@ -88,7 +90,38 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
 
         Ok(key.zip(value))
     }
+
+    /// Seeks to the first key.
+    #[allow(unused)]
+    pub fn seek_to_first(&mut self) {
+        self.iter.seek_to_first();
+    }
+
+    /// Seeks to the last key.
+    #[allow(unused)]
+    pub fn seek_to_last(&mut self) {
+        self.iter.seek_to_last();
+    }
+
+    /// Seeks for the first key (binary equal to or greater)
+    #[allow(unused)]
+    pub fn seek(&mut self, seek_key: &C::Key) -> Result<(), Error> {
+        let key = seek_key.encode()?;
+        self.iter.seek(&key);
+
+        Ok(())
+    }
+
+    /// Seeks for the last key (binary equal to or less)
+    #[allow(unused)]
+    pub fn seek_for_prev(&mut self, seek_key: &C::Key) -> Result<(), Error> {
+        let key = seek_key.encode()?;
+        self.iter.seek_for_prev(&key);
+
+        Ok(())
+    }
 }
+
 impl<'a, C: ColumnSchema> Iterator for ColumnIterator<'a, C> {
     type Item = Result<(C::Key, C::Value), Error>;
 
@@ -110,6 +143,9 @@ impl<'a, C: ColumnSchema> Iterator for ColumnIterator<'a, C> {
         // If the iterator is invalid, return None
         if !self.iter.valid() {
             self.status = IteratorStatus::Done;
+            if let Err(error) = self.iter.status() {
+                debug!("Invalid iterator {}", error);
+            }
 
             return None;
         }

@@ -1,6 +1,6 @@
 use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 
-use agglayer_config::{Config, ConfigMigrator};
+use agglayer_config::Config;
 use anyhow::{bail, Result};
 use node::Node;
 use tokio_util::sync::CancellationToken;
@@ -14,6 +14,7 @@ mod signed_tx;
 pub mod utils;
 mod zkevm_node_client;
 
+mod epoch_synchronizer;
 mod node;
 
 use agglayer_telemetry::ServerBuilder as MetricsBuilder;
@@ -30,10 +31,8 @@ pub fn main(cfg: PathBuf) -> Result<()> {
     let cfg = cfg.canonicalize()?;
 
     let config: Arc<Config> = if cfg.is_file() {
-        let dir = cfg.parent().unwrap();
-        // Load the configuration file
-        let cfg = std::fs::read_to_string(&cfg);
-        Arc::new(toml::from_str::<ConfigMigrator>(&cfg?)?.migrate(dir))
+        let config = Config::try_load(cfg.as_path())?;
+        Arc::new(config)
     } else {
         bail!(
             "Provided configuration file path is not a file: {}",
