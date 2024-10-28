@@ -50,12 +50,10 @@ tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = { version = "2.5.2", features = ["serde"] }
 
-sp1-core-machine = "2.0.0"
-sp1-precompiles = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
-sp1-recursion-compiler = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
-sp1-recursion-core = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
-sp1-sdk = "2.0.0"
-sp1-prover = "2.0.0"
+reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
+sp1-core-machine = "3.0.0"
+sp1-sdk = "3.0.0"
+sp1-prover = "3.0.0"
 
 # A hack to make the resolver pull in the correct sp1 branch when processing the reth and revm deps.
 # This is intended to be a temporary hotfix while the dependency issue in the upstream packages is

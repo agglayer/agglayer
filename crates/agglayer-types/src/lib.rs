@@ -20,6 +20,7 @@ use pessimistic_proof::{
 pub use reth_primitives::U256;
 use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
+use sp1_sdk::SP1PublicValues;
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Hash;
@@ -169,7 +170,7 @@ impl Proof {
         Proof::SP1(sp1_sdk::SP1ProofWithPublicValues {
             proof: sp1_sdk::SP1Proof::Core(Vec::new()),
             stdin: sp1_sdk::SP1Stdin::new(),
-            public_values: sp1_core_machine::io::SP1PublicValues::new(),
+            public_values: SP1PublicValues::new(),
             sp1_version: String::new(),
         })
     }
