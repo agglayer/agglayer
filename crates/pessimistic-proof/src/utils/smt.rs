@@ -178,8 +178,8 @@ where
                 Ok(value)
             };
         }
-        let node = self.tree.get(&hash);
-        let mut node = node.copied().unwrap_or(Node {
+        let node = self.tree.remove(&hash);
+        let mut node = node.unwrap_or(Node {
             left: self.empty_hash_at_height[DEPTH - depth - 1],
             right: self.empty_hash_at_height[DEPTH - depth - 1],
         });
