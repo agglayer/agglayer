@@ -1,11 +1,11 @@
 use std::{path::Path, sync::Arc};
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
-    NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
+    EpochNumber, Hash, Height, NetworkId,
 };
 use rocksdb::{Direction, ReadOptions};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
@@ -46,6 +46,52 @@ impl StateStore {
 }
 
 impl StateWriter for StateStore {
+    fn assign_certificate_to_epoch(
+        &self,
+        certificate_id: &CertificateId,
+        epoch_number: &EpochNumber,
+        certificate_index: &CertificateIndex,
+    ) -> Result<(), Error> {
+        // TODO: make lockguard for certificate_id
+        let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
+
+        if let Some(mut certificate_header) = certificate_header {
+            if certificate_header.epoch_number.is_some()
+                || certificate_header.certificate_index.is_some()
+            {
+                return Err(Error::UnprocessedAction(
+                    "Tried to assign a certificate to an epoch that is already assigned"
+                        .to_string(),
+                ));
+            }
+
+            certificate_header.epoch_number = Some(*epoch_number);
+            certificate_header.certificate_index = Some(*certificate_index);
+            certificate_header.status = CertificateStatus::Candidate;
+
+            self.db
+                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+        }
+
+        Ok(())
+    }
+
+    fn add_tx_hash_to_certificate_header(
+        &self,
+        certificate_id: &CertificateId,
+        tx_hash: Hash,
+    ) -> Result<(), Error> {
+        // TODO: make lockguard for certificate_id
+        let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
+
+        if let Some(mut certificate_header) = certificate_header {
+            certificate_header.tx_hash = Some(tx_hash);
+            self.db
+                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+        }
+
+        Ok(())
+    }
     fn insert_certificate_header(
         &self,
         certificate: &Certificate,
@@ -61,6 +107,7 @@ impl StateWriter for StateStore {
                 epoch_number: None,
                 certificate_index: None,
                 new_local_exit_root: certificate.new_local_exit_root.into(),
+                tx_hash: None,
                 status: status.clone(),
                 metadata: certificate.metadata,
             },
@@ -94,6 +141,7 @@ impl StateWriter for StateStore {
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
 
             if let CertificateStatus::Settled = status {
+                debug!("Updating certificate {} header to settle", certificate_id);
                 self.db.put::<CertificatePerNetworkColumn>(
                     &certificate_per_network::Key {
                         network_id: *certificate_header.network_id,
@@ -137,6 +185,16 @@ impl StateReader for StateStore {
             .keys::<LatestSettledCertificatePerNetworkColumn>()?
             .filter_map(|v| v.ok())
             .collect())
+    }
+
+    fn get_certificate_headers(
+        &self,
+        certificate_ids: &[CertificateId],
+    ) -> Result<Vec<Option<CertificateHeader>>, Error> {
+        certificate_ids
+            .iter()
+            .map(|certificate_id| self.get_certificate_header(certificate_id))
+            .collect::<Result<Vec<_>, _>>()
     }
 
     fn get_certificate_header(

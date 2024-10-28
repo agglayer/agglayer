@@ -40,6 +40,11 @@ pub trait StateReader: Send + Sync {
     /// Get the active networks.
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
 
+    fn get_certificate_headers(
+        &self,
+        certificate_ids: &[CertificateId],
+    ) -> Result<Vec<Option<CertificateHeader>>, Error>;
+
     fn get_certificate_header(
         &self,
         certificate_id: &CertificateId,
@@ -65,6 +70,7 @@ pub trait PerEpochReader: Send + Sync {
     /// Get epoch number
     fn get_epoch_number(&self) -> u64;
 
+    fn get_certificates(&self) -> Result<Vec<(CertificateIndex, Certificate)>, Error>;
     fn get_certificate_at_index(
         &self,
         index: CertificateIndex,

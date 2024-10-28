@@ -87,7 +87,10 @@ impl DB {
             .cf_handle(C::COLUMN_FAMILY_NAME)
             .ok_or(Error::ColumnFamilyNotFound)?;
 
-        self.rocksdb.put_cf(&cf, key, value)?;
+        let mut options = rocksdb::WriteOptions::default();
+        options.set_sync(true);
+
+        self.rocksdb.put_cf_opt(&cf, key, value, &options)?;
 
         Ok(())
     }
@@ -103,6 +106,9 @@ impl DB {
 
         let mut batch = WriteBatch::default();
 
+        let mut options = rocksdb::WriteOptions::default();
+        options.set_sync(true);
+
         key_val_pairs
             .into_iter()
             .try_for_each::<_, Result<_, Error>>(|(k, v)| {
@@ -113,7 +119,7 @@ impl DB {
                 Ok(())
             })?;
 
-        self.rocksdb.write(batch)?;
+        self.rocksdb.write_opt(batch, &options)?;
 
         Ok(())
     }
@@ -158,6 +164,8 @@ impl DB {
             .ok_or(Error::ColumnFamilyNotFound)?;
         let key = key.encode()?;
 
-        Ok(self.rocksdb.delete_cf(&cf, key)?)
+        let mut options = rocksdb::WriteOptions::default();
+        options.set_sync(true);
+        Ok(self.rocksdb.delete_cf_opt(&cf, key, &options)?)
     }
 }

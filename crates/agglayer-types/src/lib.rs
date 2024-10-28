@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use bincode::Options;
 use pessimistic_proof::global_index::GlobalIndex;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
@@ -7,7 +8,6 @@ use pessimistic_proof::local_exit_tree::LocalExitTree;
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::Smt;
-use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
@@ -17,11 +17,13 @@ use pessimistic_proof::{
     nullifier_tree::{NullifierKey, NullifierPath},
     ProofError,
 };
+use pessimistic_proof::{LocalNetworkState, PessimisticProofOutput};
 pub use reth_primitives::address;
 pub use reth_primitives::U256;
 pub use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
-use sp1_sdk::SP1PublicValues;
+use sp1_sdk::{PlonkBn254Proof, SP1PublicValues, SP1VerificationError};
+
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Hash;
@@ -31,7 +33,6 @@ pub type Metadata = Hash;
 mod hash;
 pub use hash::Hash;
 pub use pessimistic_proof::bridge_exit::NetworkId;
-use sp1_sdk::SP1VerificationError;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CertificateHeader {
@@ -42,6 +43,7 @@ pub struct CertificateHeader {
     pub certificate_id: CertificateId,
     pub new_local_exit_root: Hash,
     pub metadata: Metadata,
+    pub tx_hash: Option<Hash>,
     pub status: CertificateStatus,
 }
 
@@ -170,10 +172,27 @@ pub enum Proof {
 
 impl Proof {
     pub fn new_for_test() -> Self {
+        let output = PessimisticProofOutput {
+            prev_local_exit_root: [0; 32],
+            prev_pessimistic_root: [0; 32],
+            l1_info_root: [0; 32],
+            origin_network: NetworkId::new(1),
+            consensus_hash: [0; 32],
+            new_local_exit_root: [0; 32],
+            new_pessimistic_root: [0; 32],
+        };
+        let mut public_values = SP1PublicValues::new();
+        public_values.write_slice(
+            &PessimisticProofOutput::bincode_options()
+                .serialize(&output)
+                .unwrap(),
+        );
+
+        println!("proof output {:?}", public_values);
         Proof::SP1(sp1_sdk::SP1ProofWithPublicValues {
-            proof: sp1_sdk::SP1Proof::Core(Vec::new()),
+            proof: sp1_sdk::SP1Proof::Plonk(PlonkBn254Proof::default()),
             stdin: sp1_sdk::SP1Stdin::new(),
-            public_values: SP1PublicValues::new(),
+            public_values,
             sp1_version: String::new(),
         })
     }

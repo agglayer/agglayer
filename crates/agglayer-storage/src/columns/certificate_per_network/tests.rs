@@ -26,6 +26,7 @@ fn can_parse_value() {
         certificate_index: Some(4),
         height: 0,
         new_local_exit_root: [0; 32].into(),
+        tx_hash: None,
         status: agglayer_types::CertificateStatus::Pending,
         metadata: [6; 32].into(),
     };
@@ -68,8 +69,11 @@ fn can_parse_value() {
             6, 6, 6
         ]
     );
+
+    // tx_hash
+    assert_eq!(encoded[126..127], [0]);
     // certificate status
-    assert_eq!(encoded[126..130], [0, 0, 0, 0]);
+    assert_eq!(encoded[127..131], [0, 0, 0, 0]);
     // end
-    assert!(encoded[130..].is_empty());
+    assert!(encoded[131..].is_empty());
 }

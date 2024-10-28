@@ -113,10 +113,6 @@ impl Node {
             state_store.clone(),
         )?);
 
-        let current_epoch_store =
-            EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref.clone())
-                .await?;
-
         let signer = ConfiguredSigner::new(config.clone()).await?;
         let address = signer.address();
         tracing::info!("Signer address: {:?}", address);
@@ -133,6 +129,20 @@ impl Node {
             rpc.clone(),
         )));
 
+        let epoch_packing_aggregator_task = Arc::new(EpochPackerClient::try_new(
+            Arc::new(config.outbound.rpc.settle.clone()),
+            state_store.clone(),
+            Arc::clone(&rollup_manager),
+        )?);
+
+        let current_epoch_store = EpochSynchronizer::start(
+            state_store.clone(),
+            epochs_store.clone(),
+            clock_ref.clone(),
+            epoch_packing_aggregator_task.clone(),
+        )
+        .await?;
+
         let certifier_client = CertifierClient::try_new(
             config.prover_entrypoint.clone(),
             pending_store.clone(),
@@ -143,12 +153,6 @@ impl Node {
 
         // Construct the core.
         let core = Kernel::new(rpc, config.clone());
-
-        let epoch_packing_aggregator_task = EpochPackerClient::try_new(
-            Arc::new(config.outbound.rpc.settle.clone()),
-            state_store.clone(),
-            Arc::clone(&rollup_manager),
-        )?;
 
         let (data_sender, data_receiver) = mpsc::channel(
             config

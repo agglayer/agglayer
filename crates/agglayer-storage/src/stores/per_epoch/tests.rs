@@ -37,7 +37,7 @@ fn can_start_packing_an_unpacked_epoch(store: PerEpochStore<PendingStore, StateS
 
 #[rstest]
 fn cant_start_packing_a_packed_epoch(store: PerEpochStore<PendingStore, StateStore>) {
-    let _lock = store.packing_lock.write().insert(0);
+    let _lock = store.packing_lock.write().insert([0; 32].into());
     assert!(store.start_packing().is_err());
 }
 

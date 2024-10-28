@@ -1,6 +1,4 @@
-use std::collections::BTreeMap;
-
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
+use agglayer_types::{Certificate, CertificateHeader, CertificateId, NetworkId, Proof};
 use serde::{Deserialize, Serialize};
 
 macro_rules! default_codec_impl {
@@ -24,15 +22,11 @@ pub enum MetadataValue {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PerEpochMetadataKey {
     SettlementTxHash,
-    StartCheckpoint,
-    EndCheckpoint,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PerEpochMetadataValue {
     SettlementTxHash([u8; 32]),
-    StartCheckpoint(BTreeMap<NetworkId, Height>),
-    EndCheckpoint(BTreeMap<NetworkId, Height>),
 }
 
 default_codec_impl!(
