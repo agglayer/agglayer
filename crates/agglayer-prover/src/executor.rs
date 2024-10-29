@@ -12,9 +12,10 @@ use pessimistic_proof::{
     local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
 };
+use sp1_sdk::network::prover::NetworkProver;
 use sp1_sdk::{
-    provers::ProofOpts, CpuProver, NetworkProver, Prover, SP1Context, SP1ProofKind,
-    SP1ProofWithPublicValues, SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
+    provers::ProofOpts, CpuProver, Prover, SP1Context, SP1ProofKind, SP1ProofWithPublicValues,
+    SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
 };
 use tokio::task::spawn_blocking;
 use tower::{
@@ -265,7 +266,7 @@ impl Service<Request> for NetworkExecutor {
                 .prove(
                     ELF,
                     stdin,
-                    sp1_sdk::proto::network::ProofMode::Plonk,
+                    sp1_sdk::network::proto::network::ProofMode::Plonk,
                     Some(timeout),
                 )
                 .await

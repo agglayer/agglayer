@@ -19,7 +19,7 @@ agglayer-storage = { path = "../agglayer-storage" }
 agglayer-types = { path = "../agglayer-types" }
 agglayer-prover-types = { path = "../agglayer-prover-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
-reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
+reth-primitives.workspace = true
 tonic = { workspace = true }
 
 sp1-sdk.workspace = true
