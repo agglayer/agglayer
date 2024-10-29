@@ -196,7 +196,7 @@ struct ConfigDeserializer<'a> {
     path: &'a Path,
 }
 
-impl<'de, 'a> DeserializeSeed<'de> for ConfigDeserializer<'a> {
+impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
     type Value = Config;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>

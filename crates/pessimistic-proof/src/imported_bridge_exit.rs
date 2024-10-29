@@ -82,7 +82,7 @@ pub struct MerkleProof {
 
 impl MerkleProof {
     pub fn hash(&self) -> Digest {
-        keccak256_combine(&[
+        keccak256_combine([
             self.root.as_slice(),
             self.proof.siblings.concat().as_slice(),
         ])

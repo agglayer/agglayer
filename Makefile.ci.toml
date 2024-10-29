@@ -6,6 +6,9 @@ command = "cargo"
 args = ["fmt", "--all", "--check"]
 
 # CI
+[tasks.ci-all]
+dependencies = ["ci-format", "ci-clippy"]
+
 [tasks.ci-format]
 category = "CI - CHECK"
 dependencies = ["cargo-fmt"]

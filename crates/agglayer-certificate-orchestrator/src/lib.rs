@@ -168,6 +168,7 @@ where
     /// This function can't fail but returns a Result for convenience and future
     ///
     /// evolution.
+    #[allow(clippy::too_many_arguments)]
     #[builder(entry = "builder", exit = "start", visibility = "pub")]
     pub async fn start(
         clock: C,

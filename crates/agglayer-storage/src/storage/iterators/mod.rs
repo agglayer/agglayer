@@ -23,6 +23,8 @@ pub struct KeysIterator<'a, C: ColumnSchema> {
     _phantom: std::marker::PhantomData<C>,
 }
 
+// Related issue: https://github.com/rust-lang/rust-clippy/issues/12908
+#[allow(clippy::needless_lifetimes)]
 impl<'a, C: ColumnSchema> KeysIterator<'a, C> {
     /// Creates a new iterator over the keys of a column using the given raw
     /// iterator and a direction.
@@ -36,7 +38,7 @@ impl<'a, C: ColumnSchema> KeysIterator<'a, C> {
     }
 }
 
-impl<'a, C: ColumnSchema> Iterator for KeysIterator<'a, C> {
+impl<C: ColumnSchema> Iterator for KeysIterator<'_, C> {
     type Item = Result<C::Key, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -122,7 +124,7 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
     }
 }
 
-impl<'a, C: ColumnSchema> Iterator for ColumnIterator<'a, C> {
+impl<C: ColumnSchema> Iterator for ColumnIterator<'_, C> {
     type Item = Result<(C::Key, C::Value), Error>;
 
     fn next(&mut self) -> Option<Self::Item> {

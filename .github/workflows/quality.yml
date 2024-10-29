@@ -52,8 +52,6 @@ jobs:
 
   lint:
     name: Lint
-    # Disabled due to: https://github.com/rust-lang/rust-clippy/issues/13458
-    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
