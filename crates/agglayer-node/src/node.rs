@@ -179,8 +179,9 @@ impl Node {
             data_sender,
             pending_store.clone(),
             state_store.clone(),
+            config.clone(),
         )
-        .start(config)
+        .start()
         .await?;
 
         let rpc_handle = tokio::spawn(async move {

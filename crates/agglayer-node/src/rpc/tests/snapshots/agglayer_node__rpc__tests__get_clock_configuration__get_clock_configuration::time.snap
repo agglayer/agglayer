@@ -1,0 +1,15 @@
+---
+source: crates/agglayer-node/src/rpc/tests/get_clock_configuration.rs
+expression: "{\n  \"payload\": {\n    \"id\": 0,\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"interop_getClockConfiguration\",\n    \"params\": []\n  },\n  \"raw_response\": \"{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":0,\\\"error\\\":{\\\"code\\\":-32603,\\\"message\\\":\\\"Internal error: AggLayer isn't configured with a BlockClock configuration, thus no ClockConfiguration is available\\\",\\\"data\\\":{\\\"internal\\\":\\\"AggLayer isn't configured with a BlockClock configuration, thus no ClockConfiguration is available\\\"}}}\"\n}"
+---
+{
+  "error": {
+    "code": -32603,
+    "data": {
+      "internal": "AggLayer isn't configured with a BlockClock configuration, thus no ClockConfiguration is available"
+    },
+    "message": "Internal error: AggLayer isn't configured with a BlockClock configuration, thus no ClockConfiguration is available"
+  },
+  "id": 0,
+  "jsonrpc": "2.0"
+}

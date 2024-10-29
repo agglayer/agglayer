@@ -24,6 +24,7 @@ use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
 mod errors;
 mod get_certificate_header;
+mod get_clock_configuration;
 mod get_tx_status;
 mod send_certificate;
 
@@ -49,8 +50,9 @@ async fn healthcheck_method_can_be_called() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        config.clone(),
     )
-    .start(config.clone())
+    .start()
     .await
     .unwrap();
 
@@ -89,8 +91,13 @@ pub(crate) struct TestContext {
 
 impl TestContext {
     async fn new() -> Self {
-        let raw_rpc = Self::new_raw_rpc().await;
-        let _server_handle = raw_rpc.rpc.start(raw_rpc.config.clone()).await.unwrap();
+        let config = Self::get_default_config();
+        Self::new_with_config(config).await
+    }
+
+    async fn new_with_config(config: Config) -> Self {
+        let raw_rpc = Self::new_raw_rpc_with_config(config).await;
+        let _server_handle = raw_rpc.rpc.start().await.unwrap();
 
         let url = format!("http://{}/", raw_rpc.config.rpc_addr());
         let client = HttpClientBuilder::default().build(url).unwrap();
@@ -102,9 +109,25 @@ impl TestContext {
         }
     }
 
-    async fn new_raw_rpc() -> RawRpcContext {
+    pub(crate) fn get_default_config() -> Config {
         let tmp = TempDBDir::new();
-        let mut config = Config::new(&tmp.path);
+        Config::new(&tmp.path)
+    }
+
+    async fn new_raw_rpc() -> RawRpcContext {
+        let config = Self::get_default_config();
+        Self::new_raw_rpc_with_config(config).await
+    }
+
+    async fn new_raw_rpc_with_config(mut config: Config) -> RawRpcContext {
+        let addr = next_available_addr();
+        if let IpAddr::V4(ip) = addr.ip() {
+            config.rpc.host = ip;
+        }
+        config.rpc.port = addr.port();
+
+        let config = Arc::new(config);
+
         let state_db = Arc::new(
             DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions()).unwrap(),
         );
@@ -114,21 +137,18 @@ impl TestContext {
 
         let state_store = Arc::new(StateStore::new(state_db));
         let pending_store = Arc::new(PendingStore::new(pending_db));
-
-        let addr = next_available_addr();
-        if let IpAddr::V4(ip) = addr.ip() {
-            config.rpc.host = ip;
-        }
-        config.rpc.port = addr.port();
-
-        let config = Arc::new(config);
-
         let (provider, _mock) = providers::Provider::mocked();
         let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
         let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-        let rpc = AgglayerImpl::new(kernel, certificate_sender, pending_store, state_store);
+        let rpc = AgglayerImpl::new(
+            kernel,
+            certificate_sender,
+            pending_store,
+            state_store,
+            config.clone(),
+        );
 
         RawRpcContext {
             rpc,
