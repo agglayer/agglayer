@@ -28,7 +28,12 @@ use agglayer_telemetry::ServerBuilder as MetricsBuilder;
 /// This function returns on fatal error or after graceful shutdown has
 /// completed.
 pub fn main(cfg: PathBuf) -> Result<()> {
-    let cfg = cfg.canonicalize()?;
+    let cfg = cfg.canonicalize().map_err(|_| {
+        anyhow::Error::msg(format!(
+            "Configuration file path must be absolute, given: {}",
+            cfg.display()
+        ))
+    })?;
 
     let config: Arc<Config> = if cfg.is_file() {
         let config = Config::try_load(cfg.as_path())?;
