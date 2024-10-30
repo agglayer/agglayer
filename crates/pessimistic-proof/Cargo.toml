@@ -7,6 +7,7 @@ edition = "2021"
 bincode.workspace = true
 hex.workspace = true
 reth-primitives.workspace = true
+tracing.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 serde_with = { version = "3" }

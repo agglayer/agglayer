@@ -2,6 +2,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use reth_primitives::{alloy_primitives::U512, ruint::UintTryFrom, B256, U256};
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use crate::{
     bridge_exit::{LeafType, L1_ETH, L1_NETWORK_ID},
@@ -74,18 +75,22 @@ impl LocalNetworkState {
                 declared: Hash(multi_batch_header.prev_local_exit_root),
             });
         }
+        debug!("computed_root: {}", Hash(computed_root));
         if self.balance_tree.root != multi_batch_header.prev_balance_root {
             return Err(ProofError::InvalidPreviousBalanceRoot {
                 computed: Hash(self.balance_tree.root),
                 declared: Hash(multi_batch_header.prev_balance_root),
             });
         }
+
+        debug!("balance_tree.root: {}", Hash(self.balance_tree.root));
         if self.nullifier_tree.root != multi_batch_header.prev_nullifier_root {
             return Err(ProofError::InvalidPreviousNullifierRoot {
                 computed: Hash(self.nullifier_tree.root),
                 declared: Hash(multi_batch_header.prev_nullifier_root),
             });
         }
+        debug!("nullifier_tree.root: {}", Hash(self.nullifier_tree.root));
 
         // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
         let mut new_balances = BTreeMap::new();
@@ -102,6 +107,8 @@ impl LocalNetworkState {
                 .iter()
                 .map(|(exit, _)| exit),
         );
+
+        debug!("imported_exits_root: {}", Hash(imported_exits_root));
         if let Some(batch_imported_exits_root) = multi_batch_header.imported_exits_root {
             if imported_exits_root != batch_imported_exits_root {
                 return Err(ProofError::InvalidImportedExitsRoot {
@@ -225,6 +232,10 @@ impl LocalNetworkState {
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
         }
 
+        debug!(
+            "Before signature_commitment: {}",
+            Hash(self.exit_tree.get_root())
+        );
         // Verify that the signature is valid
         let combined_hash = signature_commitment(
             self.exit_tree.get_root(),
@@ -234,11 +245,17 @@ impl LocalNetworkState {
                 .map(|(exit, _)| exit),
         );
 
+        debug!(
+            "signature_commitment outcome: combined_hash: {}",
+            Hash(combined_hash)
+        );
         // Check batch header signature
         let signer = multi_batch_header
             .signature
             .recover_signer(B256::new(combined_hash))
             .ok_or(ProofError::InvalidSignature)?;
+
+        debug!("signer: {}", signer);
         if signer != multi_batch_header.signer {
             return Err(ProofError::InvalidSigner {
                 declared: multi_batch_header.signer,
