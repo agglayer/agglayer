@@ -6,11 +6,16 @@ pub(crate) fn tracing(config: &agglayer_config::Log) {
     let writer = config.outputs.first().cloned().unwrap_or_default();
 
     let layer = match config.format {
-        LogFormat::Pretty => tracing_subscriber::fmt::layer()
-            .pretty()
-            .with_writer(writer.as_make_writer())
-            .with_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into()))
-            .boxed(),
+        LogFormat::Pretty => {
+            let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into());
+            println!("Filter: {:?}", filter);
+
+            tracing_subscriber::fmt::layer()
+                .pretty()
+                .with_writer(writer.as_make_writer())
+                .with_filter(filter)
+                .boxed()
+        }
 
         LogFormat::Json => tracing_subscriber::fmt::layer()
             .json()
