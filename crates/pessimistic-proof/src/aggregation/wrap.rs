@@ -8,13 +8,13 @@ use crate::{
     PessimisticProofOutput,
 };
 
-/// Outputs of the pessimistic proof.
+/// Outputs of the aggregated pessimistic proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WrappedProofOutput {
-    tmp_arer: Digest,
-    tmp_arer_next: Digest,
-    selected_ger: Digest,
-    chain_info_leaf: Digest,
+pub struct AggregationProofOutput {
+    pub(crate) tmp_arer: Digest,
+    pub(crate) tmp_arer_next: Digest,
+    pub(crate) selected_ger: Digest,
+    pub(crate) chain_info_tree_node: Digest,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,7 +33,7 @@ pub fn wrap_proof(
     selected_rer: Digest,
     tmp_arer_proof: SmtMerkleProof<Keccak256Hasher, 32>, // TODO: use constant for depth
     imported_lers_witness: Vec<ImportedLERWitness>,
-) -> WrappedProofOutput {
+) -> AggregationProofOutput {
     let PessimisticProofOutput {
         prev_local_exit_root,
         prev_pessimistic_root,
@@ -88,10 +88,10 @@ pub fn wrap_proof(
         }
     }
 
-    WrappedProofOutput {
+    AggregationProofOutput {
         tmp_arer,
         tmp_arer_next,
         selected_ger: keccak256_combine([selected_mer, selected_rer]),
-        chain_info_leaf,
+        chain_info_tree_node: chain_info_leaf,
     }
 }
