@@ -16,11 +16,16 @@ use bincode::Options as _;
 use futures::future::BoxFuture;
 use pessimistic_proof::{generate_pessimistic_proof, LocalNetworkState};
 use reth_primitives::Address;
-use sp1_sdk::{CpuProver, Prover as _, SP1VerifyingKey};
-use tonic::transport::Channel;
+use sp1_sdk::{
+    CpuProver, MockProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey,
+};
+use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, warn};
 
 use crate::ELF;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone)]
 pub struct CertifierClient<PendingStore, L1Rpc> {
@@ -49,12 +54,36 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
 
         Ok(Self {
             pending_store,
-            prover: ProofGenerationServiceClient::connect(prover).await?,
+            prover: ProofGenerationServiceClient::connect(prover)
+                .await?
+                .send_compressed(CompressionEncoding::Zstd)
+                .accept_compressed(CompressionEncoding::Zstd),
             verifier: Arc::new(verifier),
             verifying_key,
             l1_rpc,
             config,
         })
+    }
+
+    fn verify_proof(
+        verifier: Arc<CpuProver>,
+        verifying_key: &SP1VerifyingKey,
+        proof: &SP1ProofWithPublicValues,
+    ) -> Result<(), SP1VerificationError> {
+        debug!("execute verify");
+        // This fail_point is use to make the verification pass or fail
+        fail::fail_point!(
+            "notifier::certifier::certify::before_verifying_proof",
+            |_| {
+                debug!("Failing before verifying the proof");
+                let verifier = MockProver::new();
+                let (_, verifying_key) = verifier.setup(ELF);
+
+                verifier.verify(proof, &verifying_key)
+            }
+        );
+
+        verifier.verify(proof, verifying_key)
     }
 }
 
@@ -142,6 +171,7 @@ where
                 .generate_proof(request)
                 .await
                 .map_err(|error| {
+                    debug!("Failed to generate the p-proof: {:?}", error);
                     if let Ok(error) = default_bincode_options()
                         .deserialize::<agglayer_prover_types::Error>(error.details())
                     {
@@ -170,8 +200,9 @@ where
                     }
                 })?;
 
+            let proof = prover_response.into_inner().proof;
             let proof: Proof = default_bincode_options()
-                .deserialize(&prover_response.into_inner().proof)
+                .deserialize(&proof)
                 .map_err(|source| Error::Deserialize {
                     certificate_id,
                     source,
@@ -179,7 +210,7 @@ where
 
             let Proof::SP1(ref proof_to_verify) = proof;
 
-            if let Err(error) = verifier.verify(proof_to_verify, &verifying_key) {
+            if let Err(error) = Self::verify_proof(verifier, &verifying_key, proof_to_verify) {
                 error!("Failed to verify the p-proof: {:?}", error);
 
                 Err(Error::ProofVerificationFailed {

@@ -62,9 +62,11 @@ impl ProofGenerationService for ProverRPC {
         {
             Ok(result) => {
                 let response = agglayer_prover_types::v1::ProofGenerationResponse {
-                    proof: bincode::options().serialize(&result.proof).map_err(|_| {
-                        tonic::Status::internal("Unable to serialize generated proof")
-                    })?,
+                    proof: bincode::options()
+                        .serialize(&agglayer_types::Proof::SP1(result.proof))
+                        .map_err(|_| {
+                            tonic::Status::internal("Unable to serialize generated proof")
+                        })?,
                 };
 
                 PROVING_REQUEST_SUCCEEDED.add(1, metrics_attrs);
