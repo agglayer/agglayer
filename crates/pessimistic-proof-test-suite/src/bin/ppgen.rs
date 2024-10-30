@@ -2,6 +2,7 @@ use std::{path::PathBuf, time::Instant};
 
 use agglayer_types::{Certificate, U256};
 use clap::Parser;
+use pessimistic_proof::Address;
 use pessimistic_proof::{
     bridge_exit::{NetworkId, TokenInfo},
     PessimisticProofOutput,
@@ -10,7 +11,6 @@ use pessimistic_proof_test_suite::{
     runner::Runner,
     sample_data::{self as data},
 };
-use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use sp1_sdk::HashableKey;
 use tracing::{info, warn};
@@ -75,7 +75,7 @@ pub fn main() {
     );
 
     let multi_batch_header = old_state
-        .make_multi_batch_header(&certificate, signer.clone())
+        .make_multi_batch_header(&certificate, signer)
         .unwrap();
 
     info!(
@@ -99,7 +99,7 @@ pub fn main() {
     let fixture = PessimisticProofFixture {
         certificate,
         pp_inputs: new_roots.into(),
-        signer: signer,
+        signer,
         vkey: vkey.clone(),
         public_values: format!("0x{}", hex::encode(proof.public_values.as_slice())),
         proof: format!("0x{}", hex::encode(proof.bytes())),

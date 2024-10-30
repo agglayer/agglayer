@@ -60,7 +60,7 @@ impl StateWriter for StateStore {
                 height: certificate.height,
                 epoch_number: None,
                 certificate_index: None,
-                new_local_exit_root: certificate.new_local_exit_root.into(),
+                new_local_exit_root: certificate.new_local_exit_root,
                 status: status.clone(),
                 metadata: certificate.metadata,
             },

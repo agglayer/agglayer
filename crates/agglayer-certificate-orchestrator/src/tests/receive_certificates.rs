@@ -20,15 +20,15 @@ async fn receive_certificate_with_height_zero() {
     let certificate = Certificate {
         network_id: 1.into(),
         height: 0,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
+        prev_local_exit_root: [0; 32].into(),
+        new_local_exit_root: [0; 32].into(),
         bridge_exits: Vec::new(),
         imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
+        signature: Signature::new(
+            U256::ZERO,
+            U256::ZERO,
+            pessimistic_proof::Parity::Parity(false),
+        ),
         metadata: Default::default(),
     };
 
@@ -58,17 +58,7 @@ async fn receive_certificate_with_previous_proven() {
 
     let previous = Certificate {
         network_id: 1.into(),
-        height: 0,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-        metadata: Default::default(),
+        ..Default::default()
     };
 
     orchestrator
@@ -79,16 +69,7 @@ async fn receive_certificate_with_previous_proven() {
     let certificate = Certificate {
         network_id: 1.into(),
         height: 1,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-        metadata: Default::default(),
+        ..Default::default()
     };
 
     orchestrator
@@ -118,16 +99,7 @@ async fn receive_certificate_with_previous_pending() {
     let previous = Certificate {
         network_id: 1.into(),
         height: 0,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-        metadata: Default::default(),
+        ..Default::default()
     };
 
     orchestrator
@@ -138,16 +110,7 @@ async fn receive_certificate_with_previous_pending() {
     let certificate = Certificate {
         network_id: 1.into(),
         height: 1,
-        prev_local_exit_root: [0; 32],
-        new_local_exit_root: [0; 32],
-        bridge_exits: Vec::new(),
-        imported_bridge_exits: Vec::new(),
-        signature: Signature {
-            r: U256::ZERO,
-            s: U256::ZERO,
-            odd_y_parity: false,
-        },
-        metadata: Default::default(),
+        ..Default::default()
     };
 
     orchestrator

@@ -1,28 +1,66 @@
 use std::fmt;
 
+use alloy::primitives::U256;
 use hex::FromHex;
-use reth_primitives::U256;
+#[cfg(test)]
+use rand::distributions::{self, Standard};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tiny_keccak::{Hasher, Keccak};
 
 use crate::{local_balance_tree::FromU256, nullifier_tree::FromBool};
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct Hash(pub [u8; 32]);
+#[derive(Hash, PartialEq, Default, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct Digest(pub [u8; 32]);
 
-impl fmt::Display for Hash {
+#[cfg(test)]
+impl distributions::Distribution<Digest> for Standard {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Digest {
+        let mut result = [0u8; 32];
+
+        rng.fill(&mut result);
+
+        result.into()
+    }
+}
+
+impl fmt::Display for Digest {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:#x}", self)
     }
 }
 
-impl fmt::Debug for Hash {
+impl fmt::Debug for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:x}", self)
     }
 }
+impl Digest {
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+}
 
-impl fmt::UpperHex for Hash {
+// Define an extension trait for arrays of Hashes
+pub(crate) trait HashArrayConcat<const TREE_DEPTH: usize> {
+    fn concat(&self) -> [u8; TREE_DEPTH];
+}
+
+// Implement the trait for `[Hash; 32]`
+impl<const TREE_DEPTH: usize> HashArrayConcat<TREE_DEPTH> for [Digest; 32] {
+    fn concat(&self) -> [u8; TREE_DEPTH] {
+        let mut result = [0u8; TREE_DEPTH];
+
+        // Concatenate each `Hash` into `result`
+        for (i, hash) in self.iter().enumerate() {
+            let start = i * 32;
+            result[start..start + 32].copy_from_slice(&hash.0);
+        }
+
+        result
+    }
+}
+
+impl fmt::UpperHex for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             write!(f, "0x")?;
@@ -36,7 +74,7 @@ impl fmt::UpperHex for Hash {
     }
 }
 
-impl fmt::LowerHex for Hash {
+impl fmt::LowerHex for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             write!(f, "0x")?;
@@ -50,7 +88,7 @@ impl fmt::LowerHex for Hash {
     }
 }
 
-impl<'de> Deserialize<'de> for Hash {
+impl<'de> Deserialize<'de> for Digest {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -61,18 +99,18 @@ impl<'de> Deserialize<'de> for Hash {
             let s = s.trim_start_matches("0x");
             let s = <[u8; 32]>::from_hex(s).map_err(serde::de::Error::custom)?;
 
-            Ok(Hash(s))
+            Ok(Digest(s))
         } else {
             #[derive(::serde::Deserialize)]
             #[serde(rename = "Hash")]
             struct Value([u8; 32]);
 
             let value = Value::deserialize(deserializer)?;
-            Ok(Hash(value.0))
+            Ok(Digest(value.0))
         }
     }
 }
-impl Serialize for Hash {
+impl Serialize for Digest {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -85,15 +123,22 @@ impl Serialize for Hash {
     }
 }
 
-impl From<[u8; 32]> for Hash {
+impl From<[u8; 32]> for Digest {
     fn from(bytes: [u8; 32]) -> Self {
-        Hash(bytes)
+        Digest(bytes)
     }
 }
 
-/// The output type of Keccak hashing.
-pub type Digest = [u8; 32];
-
+impl From<Digest> for [u8; 32] {
+    fn from(hash: Digest) -> [u8; 32] {
+        hash.0
+    }
+}
+impl AsRef<[u8]> for Digest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
 impl FromBool for Digest {
     fn from_bool(b: bool) -> Self {
         if b {
@@ -107,11 +152,12 @@ impl FromBool for Digest {
                 0, 0, 0, 0,
             ]
         }
+        .into()
     }
 }
 impl FromU256 for Digest {
     fn from_u256(u: U256) -> Self {
-        u.to_be_bytes()
+        u.to_be_bytes().into()
     }
 }
 
@@ -122,7 +168,7 @@ pub fn keccak256(data: &[u8]) -> Digest {
 
     let mut output = [0u8; 32];
     hasher.finalize(&mut output);
-    output
+    output.into()
 }
 
 /// Hashes the input items using a Keccak hasher with a 256-bit security level.
@@ -140,5 +186,5 @@ where
 
     let mut output = [0u8; 32];
     hasher.finalize(&mut output);
-    output
+    output.into()
 }

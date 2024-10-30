@@ -21,7 +21,7 @@ fn test_local_exit_root() {
             } => {
                 let computed_root = local_exit_tree.get_root();
 
-                assert_eq!(computed_root, mainnet_exit_root);
+                assert_eq!(computed_root, mainnet_exit_root.into());
             }
             EventData::Deposit(deposit_event_data) => {
                 assert_eq!(deposit_event_data.deposit_count, deposit_count);

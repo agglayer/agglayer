@@ -13,7 +13,7 @@ pub struct TransactionHashPerCertificateIndexColumn;
 
 impl crate::columns::ColumnSchema for TransactionHashPerCertificateIndexColumn {
     type Key = CertificateIndex;
-    type Value = agglayer_types::Hash;
+    type Value = agglayer_types::Digest;
 
     const COLUMN_FAMILY_NAME: &'static str = PER_EPOCH_TRANSACTION_HASH_PER_CERTIFICATE_INDEX;
 }

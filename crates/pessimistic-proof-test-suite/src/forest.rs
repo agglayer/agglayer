@@ -1,4 +1,4 @@
-use agglayer_types::{Certificate, LocalNetworkStateData};
+use agglayer_types::{Certificate, Digest, LocalNetworkStateData};
 use ethers_signers::{LocalWallet, Signer};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
@@ -7,14 +7,14 @@ use pessimistic_proof::{
         Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
         MerkleProof,
     },
-    keccak::{keccak256_combine, Digest},
+    keccak::keccak256_combine,
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::signature_commitment,
     utils::smt::Smt,
     LocalNetworkState, PessimisticProofOutput,
 };
+use pessimistic_proof::{Address, Signature, U256};
 use rand::{random, thread_rng};
-use reth_primitives::{Address, Signature, U256};
 
 use super::sample_data::{NETWORK_A, NETWORK_B};
 
@@ -25,12 +25,12 @@ pub fn compute_signature_info(
     let combined_hash = signature_commitment(new_local_exit_root, imported_bridge_exits);
     let wallet = LocalWallet::new(&mut thread_rng());
     let signer = wallet.address();
-    let signature = wallet.sign_hash(combined_hash.into()).unwrap();
-    let signature = Signature {
-        r: U256::from_limbs(signature.r.0),
-        s: U256::from_limbs(signature.s.0),
-        odd_y_parity: signature.recovery_id().unwrap().is_y_odd(),
-    };
+    let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
+    let signature = Signature::new(
+        U256::from_limbs(signature.r.0),
+        U256::from_limbs(signature.s.0),
+        pessimistic_proof::Parity::Parity(signature.recovery_id().unwrap().is_y_odd()),
+    );
 
     (combined_hash, signer.0.into(), signature)
 }
@@ -57,7 +57,7 @@ impl Forest {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {
             local_balance_tree
-                .insert(token, balance.to_be_bytes())
+                .insert(token, balance.to_be_bytes().into())
                 .unwrap();
         }
 
@@ -193,11 +193,13 @@ impl Forest {
 }
 
 fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeExit {
+    let random: [u8; 20] = random();
+    let dest_address = Address::new(random);
     BridgeExit {
         leaf_type: LeafType::Transfer,
         token_info,
         dest_network,
-        dest_address: random(),
+        dest_address,
         amount,
         metadata: vec![],
     }

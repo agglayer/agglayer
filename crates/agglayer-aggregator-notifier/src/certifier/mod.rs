@@ -12,8 +12,8 @@ use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWrite
 use agglayer_types::{Height, LocalNetworkStateData, NetworkId, Proof};
 use bincode::Options as _;
 use futures::future::BoxFuture;
+use pessimistic_proof::Address;
 use pessimistic_proof::{generate_pessimistic_proof, LocalNetworkState};
-use reth_primitives::Address;
 use sp1_sdk::{CpuProver, Prover as _, SP1VerifyingKey};
 use tonic::transport::Channel;
 use tracing::{debug, error, info, warn};

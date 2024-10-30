@@ -1,4 +1,4 @@
-use agglayer_types::Hash;
+use agglayer_types::Digest;
 
 use super::{Key, KeyType};
 use crate::columns::Codec as _;
@@ -24,7 +24,7 @@ fn can_serialize_a_root_key() {
 fn can_serialize_a_node_key() {
     let key = Key {
         network_id: 1,
-        key_type: KeyType::Node(Hash([1; 32])),
+        key_type: KeyType::Node(Digest([1; 32])),
     };
 
     //                  -> [  network ][ key type ]
@@ -43,7 +43,7 @@ fn can_serialize_a_node_key() {
 fn can_serialize_a_leaf_key() {
     let key = Key {
         network_id: 1,
-        key_type: KeyType::Leaf(Hash([1; 32])),
+        key_type: KeyType::Leaf(Digest([1; 32])),
     };
 
     //                  -> [  network ][ key type ]

@@ -5,8 +5,9 @@ edition = "2021"
 
 [dependencies]
 bincode.workspace = true
+bitvec = "1.0.1"
 hex.workspace = true
-reth-primitives.workspace = true
+alloy = { version = "0.5", features = ["serde", "k256"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 serde_with = { version = "3" }

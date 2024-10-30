@@ -207,7 +207,7 @@ impl StateWriter for DummyPendingStore {
                 epoch_number: None,
                 certificate_index: None,
                 certificate_id: certificate.hash(),
-                new_local_exit_root: certificate.new_local_exit_root.into(),
+                new_local_exit_root: certificate.new_local_exit_root,
                 status,
                 metadata: certificate.metadata,
             },

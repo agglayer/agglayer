@@ -3,6 +3,7 @@ use std::borrow::Borrow;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::keccak::HashArrayConcat;
 use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
@@ -82,9 +83,9 @@ pub struct MerkleProof {
 
 impl MerkleProof {
     pub fn hash(&self) -> Digest {
-        keccak256_combine(&[
+        keccak256_combine([
             self.root.as_slice(),
-            self.proof.siblings.concat().as_slice(),
+            &HashArrayConcat::<1024>::concat(&self.proof.siblings),
         ])
     }
 
@@ -314,34 +315,42 @@ mod tests {
 
         let l1_tree = LocalExitTree::<Keccak256Hasher, 32>::default();
 
-        assert_eq!(empty_l1_info_tree, l1_tree.get_root());
+        assert_eq!(empty_l1_info_tree, l1_tree.get_root().0);
     }
 
     #[test]
     fn can_parse_l1infotree_leaf() {
         assert_eq!(
-            hex!("f62f487534b899b1c362242616725878188ca891fab60854b792ca0628286de7"),
+            Digest::from(hex!(
+                "f62f487534b899b1c362242616725878188ca891fab60854b792ca0628286de7"
+            )),
             L1InfoTreeLeafInner {
                 global_exit_root: hex!(
                     "16994edfddddb9480667b64174fc00d3b6da7290d37b8db3a16571b4ddf0789f"
-                ),
+                )
+                .into(),
                 block_hash: hex!(
                     "24a5871d68723340d9eadc674aa8ad75f3e33b61d5a9db7db92af856a19270bb"
-                ),
+                )
+                .into(),
                 timestamp: 1697231573,
             }
             .hash(),
         );
 
         assert_eq!(
-            hex!("ba9c9985e6c9cee54f57991049af0c42439fa2b2915a0597f4d63f63d31c1d4f"),
+            Digest::from(hex!(
+                "ba9c9985e6c9cee54f57991049af0c42439fa2b2915a0597f4d63f63d31c1d4f"
+            )),
             L1InfoTreeLeafInner {
                 global_exit_root: hex!(
                     "356682567c5d485bbabe89590d3d72b08671a0a07899dcbaddccbe0599491669"
-                ),
+                )
+                .into(),
                 block_hash: hex!(
                     "8f9cfb43c0f6bc7ce9f9e43e8761776a2ef9657ccf87318e2487c313d119b8cf"
-                ),
+                )
+                .into(),
                 timestamp: 658736476,
             }
             .hash(),

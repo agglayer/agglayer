@@ -1,5 +1,5 @@
+use alloy::primitives::Address;
 pub use bincode::Options;
-use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -7,7 +7,7 @@ use crate::{
     bridge_exit::{NetworkId, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit,
-    keccak::{keccak256_combine, Digest, Hash},
+    keccak::{keccak256_combine, Digest},
     local_exit_tree::hasher::Keccak256Hasher,
     local_state::{LocalNetworkState, StateCommitment},
     multi_batch_header::MultiBatchHeader,
@@ -25,27 +25,27 @@ pub enum ProofError {
     /// The previous local exit root declared by the chain does not match the
     /// one computed by the prover.
     #[error("Invalid previous local exit root. declared: {declared}, computed: {computed}")]
-    InvalidPreviousLocalExitRoot { declared: Hash, computed: Hash },
+    InvalidPreviousLocalExitRoot { declared: Digest, computed: Digest },
     /// The previous balance root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid previous balance root. declared: {declared}, computed: {computed}")]
-    InvalidPreviousBalanceRoot { declared: Hash, computed: Hash },
+    InvalidPreviousBalanceRoot { declared: Digest, computed: Digest },
     /// The previous nullifier root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid previous nullifier root. declared: {declared}, computed: {computed}")]
-    InvalidPreviousNullifierRoot { declared: Hash, computed: Hash },
+    InvalidPreviousNullifierRoot { declared: Digest, computed: Digest },
     /// The new local exit root declared by the chain does not match the
     /// one computed by the prover.
     #[error("Invalid new local exit root. declared: {declared}, computed: {computed}")]
-    InvalidNewLocalExitRoot { declared: Hash, computed: Hash },
+    InvalidNewLocalExitRoot { declared: Digest, computed: Digest },
     /// The new balance root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid new balance root. declared: {declared}, computed: {computed}")]
-    InvalidNewBalanceRoot { declared: Hash, computed: Hash },
+    InvalidNewBalanceRoot { declared: Digest, computed: Digest },
     /// The new nullifier root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid new nullifier root. declared: {declared}, computed: {computed}")]
-    InvalidNewNullifierRoot { declared: Hash, computed: Hash },
+    InvalidNewNullifierRoot { declared: Digest, computed: Digest },
     /// The provided imported bridge exit is invalid.
     #[error("Invalid imported bridge exit. global index: {global_index:?}, error: {source}")]
     InvalidImportedBridgeExit {
@@ -57,7 +57,7 @@ pub enum ProofError {
         "Invalid commitment on the imported bridge exits. declared: {declared}, computed: \
          {computed}"
     )]
-    InvalidImportedExitsRoot { declared: Hash, computed: Hash },
+    InvalidImportedExitsRoot { declared: Digest, computed: Digest },
     /// The commitment to the list of imported bridge exits should be `Some`
     /// if and only if this list is non-empty, should be `None` otherwise.
     #[error("Mismatch between the imported bridge exits list and its commitment.")]
@@ -164,20 +164,20 @@ pub fn generate_pessimistic_proof(
 
     if computed_target.exit_root != batch_header.target.exit_root {
         return Err(ProofError::InvalidNewLocalExitRoot {
-            declared: batch_header.target.exit_root.into(),
-            computed: computed_target.exit_root.into(),
+            declared: batch_header.target.exit_root,
+            computed: computed_target.exit_root,
         });
     }
     if computed_target.balance_root != batch_header.target.balance_root {
         return Err(ProofError::InvalidNewBalanceRoot {
-            declared: batch_header.target.balance_root.into(),
-            computed: computed_target.balance_root.into(),
+            declared: batch_header.target.balance_root,
+            computed: computed_target.balance_root,
         });
     }
     if computed_target.nullifier_root != batch_header.target.nullifier_root {
         return Err(ProofError::InvalidNewNullifierRoot {
-            declared: batch_header.target.nullifier_root.into(),
-            computed: computed_target.nullifier_root.into(),
+            declared: batch_header.target.nullifier_root,
+            computed: computed_target.nullifier_root,
         });
     }
 

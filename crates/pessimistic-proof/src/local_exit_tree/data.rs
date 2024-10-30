@@ -122,7 +122,7 @@ where
                 .get(i)
                 .unwrap_or(&self.empty_hash_at_height[TREE_DEPTH - 1])
         };
-        H::merge(&get_last_layer(0), &get_last_layer(1))
+        H::merge(get_last_layer(0), get_last_layer(1))
     }
 
     pub fn get_proof(

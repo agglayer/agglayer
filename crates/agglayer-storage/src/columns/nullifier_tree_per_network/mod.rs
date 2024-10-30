@@ -1,4 +1,4 @@
-use agglayer_types::Hash;
+use agglayer_types::Digest;
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, NULLIFIER_TREE_PER_NETWORK_CF};
@@ -27,15 +27,15 @@ pub struct Key {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum KeyType {
     Root,
-    Node(Hash),
-    Leaf(Hash),
+    Node(Digest),
+    Leaf(Digest),
     Leaves,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Value {
-    Node(Hash, Hash),
-    Leaf(Hash),
+    Node(Digest, Digest),
+    Leaf(Digest),
     LeafData(bool),
 }
 

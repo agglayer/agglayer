@@ -1,11 +1,7 @@
-use reth_primitives::U256;
+use alloy::primitives::U256;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    bridge_exit::NetworkId,
-    keccak::{keccak256, Digest},
-    nullifier_tree::NullifierKey,
-};
+use crate::{bridge_exit::NetworkId, keccak::keccak256, nullifier_tree::NullifierKey};
 
 /// The [`GlobalIndex`] uniquely references one leaf within one Global Exit
 /// Tree.
@@ -32,7 +28,7 @@ impl GlobalIndex {
         .into()
     }
 
-    pub fn hash(&self) -> Digest {
+    pub fn hash(&self) -> crate::keccak::Digest {
         let global_index: U256 = (*self).into();
         keccak256(global_index.as_le_slice())
     }
