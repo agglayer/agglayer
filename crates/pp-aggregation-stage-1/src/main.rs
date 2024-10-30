@@ -2,7 +2,7 @@
 sp1_zkvm::entrypoint!(main);
 
 use bincode::Options;
-use pessimistic_proof::aggregation::wrap_stage1_aggregation_proof_output;
+use pessimistic_proof::aggregation::wrap_proof;
 use pessimistic_proof::PessimisticProofOutput;
 use sha2::Digest;
 use sha2::Sha256;
@@ -28,7 +28,7 @@ pub fn main() {
     let tmp_rer_proof = sp1_zkvm::io::read::<_>();
     let imported_lers_witness = sp1_zkvm::io::read::<_>();
 
-    let stage1_agg_proof_output = wrap_stage1_aggregation_proof_output(
+    let stage1_agg_proof_output = wrap_proof(
         proof_output,
         tmp_rer,
         new_mer,
