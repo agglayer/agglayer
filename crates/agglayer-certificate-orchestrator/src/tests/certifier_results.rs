@@ -458,6 +458,7 @@ async fn certifier_error_proof_already_exists(
                     height,
                     epoch_number: None,
                     certificate_index: None,
+                    tx_hash: None,
                     metadata: [0; 32].into(),
                     new_local_exit_root: [0; 32].into(),
                     status,

@@ -1,6 +1,6 @@
 ---
 source: crates/agglayer-node/src/rpc/tests/get_certificate_header.rs
-expression: "{\n  \"payload\": {\n    \"id\": 0,\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"interop_getCertificateHeader\",\n    \"params\": [\n      \"0x911464a00ada773e3659bc570bfecf0819466498cd534f770dc97a6a59774d28\"\n    ]\n  },\n  \"raw_response\": \"{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":0,\\\"result\\\":{\\\"network_id\\\":1,\\\"height\\\":0,\\\"epoch_number\\\":null,\\\"certificate_index\\\":null,\\\"certificate_id\\\":\\\"0x911464a00ada773e3659bc570bfecf0819466498cd534f770dc97a6a59774d28\\\",\\\"new_local_exit_root\\\":\\\"0x0000000000000000000000000000000000000000000000000000000000000000\\\",\\\"status\\\":\\\"Pending\\\",\\\"metadata\\\":\\\"0x0000000000000000000000000000000000000000000000000000000000000000\\\"}}\"\n}"
+expression: "{\n  \"payload\": {\n    \"id\": 0,\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"interop_getCertificateHeader\",\n    \"params\": [\n      \"0x40c820f9060479ec4c52e0d8ae8d2ae4e32dd65f9e44bc9337fd43717bfe8d70\"\n    ]\n  },\n  \"raw_response\": \"{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":0,\\\"result\\\":{\\\"network_id\\\":1,\\\"height\\\":0,\\\"epoch_number\\\":null,\\\"certificate_index\\\":null,\\\"certificate_id\\\":\\\"0x40c820f9060479ec4c52e0d8ae8d2ae4e32dd65f9e44bc9337fd43717bfe8d70\\\",\\\"new_local_exit_root\\\":\\\"0x0000000000000000000000000000000000000000000000000000000000000000\\\",\\\"tx_hash\\\":null,\\\"status\\\":\\\"Pending\\\"}}\"\n}"
 ---
 {
   "id": 0,
@@ -13,6 +13,7 @@ expression: "{\n  \"payload\": {\n    \"id\": 0,\n    \"jsonrpc\": \"2.0\",\n   
     "metadata": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "network_id": 1,
     "new_local_exit_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "status": "Pending"
+    "status": "Pending",
+    "tx_hash": null
   }
 }

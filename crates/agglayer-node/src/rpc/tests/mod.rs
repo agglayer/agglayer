@@ -10,7 +10,7 @@ use agglayer_storage::{
     tests::TempDBDir,
 };
 use agglayer_types::{
-    Certificate, CertificateId, CertificateStatus, EpochNumber, Height, NetworkId,
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height, NetworkId,
 };
 use ethers::providers::{self, MockProvider, Provider};
 use http_body_util::Empty;
@@ -174,6 +174,21 @@ fn next_available_addr() -> std::net::SocketAddr {
 struct DummyStore {}
 
 impl StateWriter for DummyStore {
+    fn assign_certificate_to_epoch(
+        &self,
+        _certificate_id: &CertificateId,
+        _epoch_number: &EpochNumber,
+        _certificate_index: &CertificateIndex,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+    fn add_tx_hash_to_certificate_header(
+        &self,
+        _certificate_id: &CertificateId,
+        _tx_hash: agglayer_types::Hash,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
     fn insert_certificate_header(
         &self,
         _certificate: &Certificate,
@@ -200,6 +215,13 @@ impl StateWriter for DummyStore {
 }
 
 impl StateReader for DummyStore {
+    fn get_certificate_headers(
+        &self,
+        _certificate_ids: &[CertificateId],
+    ) -> Result<Vec<Option<agglayer_types::CertificateHeader>>, agglayer_storage::error::Error>
+    {
+        Ok(vec![])
+    }
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
         todo!()
     }

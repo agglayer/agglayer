@@ -94,9 +94,15 @@ where
                 {
                     (output, proof.bytes())
                 } else {
+                    debug!(
+                        "Failed to deserialize the proof output {:?}",
+                        proof.public_values
+                    );
                     return Err(Error::InternalError);
                 }
             } else {
+                debug!("Failed to get the proof output");
+
                 return Err(Error::InternalError);
             };
 
@@ -117,8 +123,18 @@ where
             let _tx = contract_call
                 .send()
                 .await
-                .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
-                // .map_err(SettlementError::ContractError)?
+                .inspect(|tx| {
+                    info!(hash, "Inspect settle transaction: {:?}", tx);
+                    if let Err(error) = state_store.add_tx_hash_to_certificate_header(
+                        &certificate_id,
+                        tx.tx_hash().to_fixed_bytes().into(),
+                    ) {
+                        error!(
+                            "Failed to add the tx hash to the certificate header of {}: {}",
+                            certificate_id, error
+                        );
+                    }
+                })
                 .map_err(|e| {
                     let error_str =
                         RollupManagerRpc::decode_contract_revert(&e).unwrap_or(e.to_string());
@@ -148,6 +164,8 @@ where
                     certificate_id,
                     error: "No receipt hash returned, transaction still in mempool".to_string(),
                 })?;
+
+            info!(hash, "Certificate settled");
 
             if let Err(error) = state_store
                 .update_certificate_header_status(&certificate_id, &CertificateStatus::Settled)
@@ -198,7 +216,10 @@ where
             })
             .await
             // TODO: Handle error in a better way
-            .map_err(|_| Error::InternalError)?;
+            .map_err(|e| {
+                debug!("Error in the aggregation: {:?}", e);
+                Error::InternalError
+            })?;
 
             Ok(())
         }))

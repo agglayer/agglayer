@@ -1,6 +1,6 @@
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
-    NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
+    EpochNumber, Hash, Height, NetworkId,
 };
 use mockall::mock;
 
@@ -19,6 +19,18 @@ mock! {
     }
 
     impl StateWriter for StateStore {
+        fn assign_certificate_to_epoch(
+            &self,
+            certificate_id: &CertificateId,
+            epoch_number: &EpochNumber,
+            certificate_index: &CertificateIndex,
+        ) -> Result<(), Error>;
+        fn add_tx_hash_to_certificate_header(
+            &self,
+            certificate_id: &CertificateId,
+            tx_hash: Hash,
+        ) -> Result<(), Error>;
+
         fn insert_certificate_header(
             &self,
             certificate: &Certificate,
@@ -42,6 +54,11 @@ mock! {
 
     impl StateReader for StateStore {
         fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
+
+        fn get_certificate_headers(
+            &self,
+            certificate_ids: &[CertificateId]
+        ) -> Result<Vec<Option<CertificateHeader>>, Error>;
 
         fn get_certificate_header(
             &self,

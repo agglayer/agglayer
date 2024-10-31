@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Hash, Height,
     NetworkId, Proof,
 };
 
@@ -33,6 +33,11 @@ pub trait MetadataWriter: Send + Sync {
 }
 
 pub trait StateWriter: Send + Sync {
+    fn add_tx_hash_to_certificate_header(
+        &self,
+        certificate_id: &CertificateId,
+        tx_hash: Hash,
+    ) -> Result<(), Error>;
     fn insert_certificate_header(
         &self,
         certificate: &Certificate,
@@ -51,6 +56,13 @@ pub trait StateWriter: Send + Sync {
         certificate_id: &CertificateId,
         epoch_number: &EpochNumber,
         height: &Height,
+    ) -> Result<(), Error>;
+
+    fn assign_certificate_to_epoch(
+        &self,
+        certificate_id: &CertificateId,
+        epoch_number: &EpochNumber,
+        certificate_index: &CertificateIndex,
     ) -> Result<(), Error>;
 }
 

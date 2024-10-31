@@ -14,6 +14,7 @@ mock! {
 
     impl PerEpochReader for PerEpochStore {
         fn get_epoch_number(&self) -> u64;
+        fn get_certificates(&self) -> Result<Vec<(CertificateIndex, Certificate)>, Error>;
         fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height>;
         fn get_end_checkpoint(&self) -> BTreeMap<NetworkId, Height>;
         fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error>;

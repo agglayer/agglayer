@@ -47,6 +47,12 @@ pub(crate) struct DummyPendingStore {
 }
 
 impl PerEpochReader for DummyPendingStore {
+    fn get_certificates(
+        &self,
+    ) -> Result<Vec<(CertificateIndex, Certificate)>, agglayer_storage::error::Error> {
+        Ok(vec![])
+    }
+
     fn get_epoch_number(&self) -> u64 {
         self.current_epoch
     }
@@ -93,6 +99,12 @@ impl PerEpochWriter for DummyPendingStore {
 }
 
 impl StateReader for DummyPendingStore {
+    fn get_certificate_headers(
+        &self,
+        _certificate_ids: &[CertificateId],
+    ) -> Result<Vec<Option<CertificateHeader>>, agglayer_storage::error::Error> {
+        Ok(vec![])
+    }
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
         todo!()
     }
@@ -221,6 +233,22 @@ impl PendingCertificateWriter for DummyPendingStore {
 }
 
 impl StateWriter for DummyPendingStore {
+    fn assign_certificate_to_epoch(
+        &self,
+        _certificate_id: &CertificateId,
+        _epoch_number: &EpochNumber,
+        _certificate_index: &CertificateIndex,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
+    fn add_tx_hash_to_certificate_header(
+        &self,
+        _certificate_id: &CertificateId,
+        _tx_hash: agglayer_types::Hash,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
+
     fn insert_certificate_header(
         &self,
         certificate: &Certificate,
@@ -239,6 +267,7 @@ impl StateWriter for DummyPendingStore {
                 epoch_number: None,
                 certificate_index: None,
                 certificate_id: certificate.hash(),
+                tx_hash: None,
                 new_local_exit_root: certificate.new_local_exit_root.into(),
                 status,
                 metadata: certificate.metadata,
@@ -362,7 +391,7 @@ async fn test_certificate_orchestrator_can_stop() {
         clock,
         data_receiver,
         cancellation_token.clone(),
-        check.clone(),
+        Arc::new(check.clone()),
         check.clone(),
         store.clone(),
         epochs_store,
@@ -406,7 +435,7 @@ async fn test_collect_certificates() {
         clock,
         data_receiver,
         cancellation_token,
-        check.clone(),
+        Arc::new(check.clone()),
         check.clone(),
         store.clone(),
         epochs_store,
@@ -446,7 +475,7 @@ async fn test_collect_certificates_after_epoch() {
         clock,
         data_receiver,
         cancellation_token,
-        check.clone(),
+        Arc::new(check.clone()),
         check.clone(),
         store.clone(),
         epochs_store,
@@ -488,7 +517,7 @@ async fn test_collect_certificates_when_empty() {
         clock,
         data_receiver,
         cancellation_token,
-        check.clone(),
+        Arc::new(check.clone()),
         check.clone(),
         store.clone(),
         epochs_store,
@@ -596,7 +625,7 @@ pub(crate) fn create_orchestrator_mock(
             clock.1,
             data_receiver,
             cancellation_token,
-            builder.epoch_packer.unwrap_or_default(),
+            Arc::new(builder.epoch_packer.unwrap_or_default()),
             builder.certifier.unwrap_or_default(),
             pending_store,
             epochs_store,
@@ -636,7 +665,7 @@ pub(crate) fn create_orchestrator(
             clock.1,
             data_receiver,
             cancellation_token,
-            check.2.clone(),
+            Arc::new(check.2.clone()),
             check.2.clone(),
             store.clone(),
             epochs_store,

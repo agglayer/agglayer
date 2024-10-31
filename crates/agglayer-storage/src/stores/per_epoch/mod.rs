@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Height, NetworkId, Proof};
+use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Hash, Height, NetworkId, Proof};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::ReadOptions;
 use tracing::{debug, error, warn};
@@ -18,10 +18,12 @@ use super::{
 use crate::{
     columns::epochs::{
         certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
-        proofs::ProofPerIndexColumn, start_checkpoint::StartCheckpointColumn,
+        metadata::PerEpochMetadataColumn, proofs::ProofPerIndexColumn,
+        start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
     storage::{epochs_db_cf_definitions, DB},
+    types::PerEpochMetadataKey,
 };
 
 #[cfg(test)]
@@ -38,7 +40,7 @@ pub struct PerEpochStore<PendingStore, StateStore> {
     next_certificate_index: AtomicU64,
     start_checkpoint: BTreeMap<NetworkId, Height>,
     end_checkpoint: RwLock<BTreeMap<NetworkId, Height>>,
-    packing_lock: RwLock<Option<EpochNumber>>,
+    packing_lock: RwLock<Option<Hash>>,
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
@@ -69,7 +71,15 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             match optional_start_checkpoint {
                 Some(expected_start_checkpoint) => {
                     if checkpoint.is_empty() {
+                        debug!(
+                            "Start checkpoint of {} is empty, using the expected one",
+                            epoch_number
+                        );
                         db.multi_insert::<StartCheckpointColumn>(&expected_start_checkpoint)?;
+                        debug!(
+                            "using expected start checkpoint: {:?}",
+                            expected_start_checkpoint
+                        );
                         expected_start_checkpoint
                     } else if checkpoint != expected_start_checkpoint {
                         warn!(
@@ -89,7 +99,12 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             }
         };
 
-        let mut closed = None;
+        let closed = db
+            .get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::SettlementTxHash)?
+            .map(|value| match value {
+                crate::types::PerEpochMetadataValue::SettlementTxHash(hash) => hash.into(),
+            });
+
         let next_certificate_index = if let Some(Ok((index, _))) = db
             .iter_with_direction::<CertificatePerIndexColumn>(
                 ReadOptions::default(),
@@ -122,8 +137,6 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
 
                 start_checkpoint.clone()
             } else {
-                closed = Some(epoch_number);
-
                 checkpoint
             }
         };
@@ -140,11 +153,11 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         })
     }
 
-    fn lock_for_adding_certificate(&self) -> RwLockReadGuard<Option<EpochNumber>> {
+    fn lock_for_adding_certificate(&self) -> RwLockReadGuard<Option<Hash>> {
         self.packing_lock.read()
     }
 
-    fn lock_for_packing(&self) -> RwLockWriteGuard<Option<EpochNumber>> {
+    fn lock_for_packing(&self) -> RwLockWriteGuard<Option<Hash>> {
         self.packing_lock.write()
     }
 }
@@ -170,8 +183,8 @@ where
         let mut end_checkpoint = self.end_checkpoint.write();
 
         debug!(
-            "Try adding certificate for network {} at height {}",
-            network_id, height
+            "Try adding certificate for network {} at height {} at epoch {}",
+            network_id, height, self.epoch_number
         );
         let end_checkpoint_entry = end_checkpoint.entry(network_id);
 
@@ -203,7 +216,11 @@ where
             // If the network is not found in the end checkpoint and the height is not 0,
             // this is an invalid certificate candidate and the operation should fail.
             (None, Entry::Vacant(_)) => {
-                return Err(CertificateCandidateError::Invalid(network_id, height))?
+                debug!(
+                    "Invalid certificate candidate for network {} at height {}",
+                    network_id, height
+                );
+                return Err(CertificateCandidateError::Invalid(network_id, height))?;
             }
             // If the network is found in the end checkpoint and the height is 0,
             // this is an invalid certificate candidate and the operation should fail.
@@ -267,9 +284,10 @@ where
         self.pending_store
             .remove_pending_certificate(network_id, height)?;
 
-        self.state_store.update_certificate_header_status(
+        self.state_store.assign_certificate_to_epoch(
             &certificate_id,
-            &agglayer_types::CertificateStatus::Candidate,
+            &self.epoch_number,
+            &certificate_index,
         )?;
 
         if let Some(height) = end_checkpoint_entry_assigment {
@@ -292,8 +310,8 @@ where
     fn start_packing(&self) -> Result<(), Error> {
         let mut lock = self.lock_for_packing();
 
-        if let Some(epoch_number) = *lock {
-            return Err(Error::AlreadyPacked(epoch_number))?;
+        if lock.is_some() {
+            return Err(Error::AlreadyPacked(*self.epoch_number))?;
         }
 
         let epoch_number = *self.epoch_number;
@@ -302,6 +320,7 @@ where
             ReadOptions::default(),
             rocksdb::Direction::Forward,
         )?;
+
         let mut batch_status = Vec::new();
 
         for entry in iterator {
@@ -322,7 +341,7 @@ where
         //     .state_store
         //     .assign_certificates_to_epoch(epoch_number, batch_status)?;
 
-        _ = *lock.insert(epoch_number);
+        _ = *lock.insert([0; 32].into());
         match self
             .state_store
             .set_latest_settled_epoch(*self.epoch_number)
@@ -345,6 +364,16 @@ where
     PendingStore: Send + Sync,
     StateStore: Send + Sync,
 {
+    fn get_certificates(&self) -> Result<Vec<(CertificateIndex, Certificate)>, Error> {
+        Ok(self
+            .db
+            .iter_with_direction::<CertificatePerIndexColumn>(
+                ReadOptions::default(),
+                rocksdb::Direction::Forward,
+            )?
+            .filter_map(|entry| entry.ok())
+            .collect())
+    }
     fn get_epoch_number(&self) -> u64 {
         *self.epoch_number
     }

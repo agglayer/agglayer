@@ -23,6 +23,7 @@ fn can_parse_value() {
         epoch_number: Some(3),
         certificate_index: Some(4),
         new_local_exit_root: [5; 32].into(),
+        tx_hash: None,
         status: agglayer_types::CertificateStatus::Pending,
         metadata: [6; 32].into(),
     };
@@ -30,6 +31,7 @@ fn can_parse_value() {
     let encoded = value.encode().expect("Unable to encode value");
 
     let expected_value = Value::decode(&encoded[..]).expect("Unable to decode value");
+    println!("{:?}", encoded);
 
     assert_eq!(expected_value, value);
 
@@ -65,8 +67,10 @@ fn can_parse_value() {
             6, 6, 6
         ]
     );
+    // tx_hash
+    assert_eq!(encoded[126..127], [0]);
     // certificate status
-    assert_eq!(encoded[126..130], [0, 0, 0, 0]);
+    assert_eq!(encoded[127..131], [0, 0, 0, 0]);
     // end
-    assert!(encoded[130..].is_empty());
+    assert!(encoded[131..].is_empty());
 }

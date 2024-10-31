@@ -71,7 +71,7 @@ pub(crate) mod metadata;
 
 // PerEpoch
 pub mod epochs {
-    pub(crate) mod certificates;
+    pub mod certificates;
     pub mod end_checkpoint;
     pub(crate) mod metadata;
     pub(crate) mod proofs;
