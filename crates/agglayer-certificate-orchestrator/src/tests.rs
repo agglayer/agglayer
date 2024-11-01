@@ -552,6 +552,11 @@ pub(crate) fn create_orchestrator_mock(
     )
 }
 
+type OrchestratorResult<T> = (
+    mpsc::Sender<(NetworkId, Height, CertificateId)>,
+    mpsc::Receiver<CertifierOutput>,
+    TestOrchestrator<T>,
+);
 #[fixture]
 pub(crate) fn create_orchestrator(
     check: (
@@ -563,11 +568,7 @@ pub(crate) fn create_orchestrator(
         broadcast::Sender<agglayer_clock::Event>,
         impl Stream<Item = agglayer_clock::Event>,
     ),
-) -> (
-    mpsc::Sender<(NetworkId, Height, CertificateId)>,
-    mpsc::Receiver<CertifierOutput>,
-    TestOrchestrator<impl Stream<Item = agglayer_clock::Event>>,
-) {
+) -> OrchestratorResult<impl Stream<Item = agglayer_clock::Event>> {
     let (data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
     let store = check.0;

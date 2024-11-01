@@ -147,7 +147,7 @@ mod test {
     #[test]
     fn unlimited() {
         let config_str = "send-tx = \"unlimited\"";
-        let config: RateLimitingConfig = toml::from_str(&config_str).unwrap();
+        let config: RateLimitingConfig = toml::from_str(config_str).unwrap();
         let expected = RateLimitingConfig::new(TimeRateLimit::Unlimited);
         assert_eq!(config, expected);
     }
@@ -181,7 +181,7 @@ mod test {
             [network.1.send-tx]\n\
             max-per-interval = 4\n\
             time-interval = \"40min\"\n";
-        let config: RateLimitingConfig = toml::from_str(&config_str).unwrap();
+        let config: RateLimitingConfig = toml::from_str(config_str).unwrap();
 
         let default_send_tx_limit = TimeRateLimit::limited(3, Duration::from_secs(1800));
         let network_1_send_tx_limit = TimeRateLimit::limited(4, Duration::from_secs(2400));

@@ -6,12 +6,39 @@ command = "cargo"
 args = ["fmt", "--all", "--check"]
 
 # CI
+[tasks.ci-all]
+dependencies = [
+    "ci-format",
+    "ci-clippy",
+    "ci-clippy-program",
+    "ci-format-program",
+]
+
 [tasks.ci-format]
 category = "CI - CHECK"
-dependencies = ["cargo-fmt"]
+dependencies = [{ name = "cargo-fmt" }, { name = "ci-format-program" }]
 
 [tasks.ci-clippy]
+dependencies = [
+    { name = "ci-clippy-workspace" },
+    { name = "ci-clippy-program" },
+]
+
+[tasks.ci-clippy-workspace]
 category = "CI - CHECK"
 toolchain = "nightly"
 command = "cargo"
 args = ["clippy", "--workspace", "--tests", "--", "-D", "warnings"]
+
+[tasks.ci-clippy-program]
+extend = "ci-clippy-workspace"
+category = "CI - CHECK - program"
+cwd = "crates/pessimistic-proof-program"
+args = ["clippy", "--tests", "--", "-D", "warnings"]
+
+[tasks.ci-format-program]
+category = "CI - CHECK - program"
+cwd = "crates/pessimistic-proof-program"
+command = "cargo"
+toolchain = "nightly"
+args = ["fmt", "--all", "--check"]
