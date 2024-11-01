@@ -2,7 +2,6 @@ pub use bincode::Options;
 use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::debug;
 
 use crate::{
     bridge_exit::{NetworkId, TokenInfo},
@@ -149,20 +148,17 @@ pub fn generate_pessimistic_proof(
         nullifier_root: prev_nr,
     } = initial_network_state.roots();
     let prev_pessimistic_root = keccak256_combine([prev_lbr, prev_nr]);
-    debug!("prev_pesssimistic_root: {}", Hash(prev_pessimistic_root));
 
     let consensus_hash = keccak256_combine([
         &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
         batch_header.signer.as_slice(),
     ]);
 
-    debug!("consensus_hash: {}", Hash(consensus_hash));
     let new_pessimistic_root = keccak256_combine([
         batch_header.target.balance_root,
         batch_header.target.nullifier_root,
     ]);
 
-    debug!("new_pessimistic_root: {}", Hash(new_pessimistic_root));
     let mut network_state = initial_network_state;
     let computed_target = network_state.apply_batch_header(batch_header)?;
 
@@ -173,10 +169,6 @@ pub fn generate_pessimistic_proof(
         });
     }
 
-    debug!(
-        "computed_target.exit_root: {}",
-        Hash(computed_target.exit_root)
-    );
     if computed_target.balance_root != batch_header.target.balance_root {
         return Err(ProofError::InvalidNewBalanceRoot {
             declared: batch_header.target.balance_root.into(),
@@ -184,21 +176,12 @@ pub fn generate_pessimistic_proof(
         });
     }
 
-    debug!(
-        "computed_target.balance_root: {}",
-        Hash(computed_target.balance_root)
-    );
     if computed_target.nullifier_root != batch_header.target.nullifier_root {
         return Err(ProofError::InvalidNewNullifierRoot {
             declared: batch_header.target.nullifier_root.into(),
             computed: computed_target.nullifier_root.into(),
         });
     }
-
-    debug!(
-        "computed_target.nullifier_root: {}",
-        Hash(computed_target.nullifier_root)
-    );
 
     Ok(PessimisticProofOutput {
         prev_local_exit_root: prev_ler,

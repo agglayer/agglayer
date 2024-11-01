@@ -318,10 +318,6 @@ where
             batch_status.push((certificate.hash(), index));
         }
 
-        // let batch = self
-        //     .state_store
-        //     .assign_certificates_to_epoch(epoch_number, batch_status)?;
-
         _ = *lock.insert(epoch_number);
         match self
             .state_store

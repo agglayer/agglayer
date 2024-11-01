@@ -96,7 +96,7 @@ pub enum CertificateStatusError {
     /// [`LocalNetworkStateData`] and the provided [`Certificate`].
     #[error(transparent)]
     TypeConversionError(#[from] Error),
-    #[error("Unknown trusted sequencer address")]
+    #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
 }
 

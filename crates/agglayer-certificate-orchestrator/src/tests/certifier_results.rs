@@ -49,8 +49,8 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
         .returning(|_| Ok(None));
 
     // We expect one call to the pending store to set the latest proven certificate.
-    // Having this execute means that the expected certificate ID as been put as the
-    // latest proven certificate for this network.
+    // Having this executed means that the expected certificate ID was set as
+    // the latest proven certificate for this network.
     pending_store
         .expect_set_latest_proven_certificate_per_network()
         .once()

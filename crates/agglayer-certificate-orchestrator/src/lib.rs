@@ -544,7 +544,7 @@ where
             }
 
             // - 2. If the state knows the network and the height is the next one, we update the
-            //   sate. This is the next certificate for this network.
+            //   state. This is the next certificate for this network.
             Some(cursor_height) if cursor_height + 1 == height => {
                 // TODO: Handle error if fails to set the latest proven certificate
                 if let Err(error) = self
@@ -691,7 +691,7 @@ where
                     // This should not happen as ProofAlreadyExists should only
                     // happen if we have a pending certificate.
                     warn!(
-                        "Failed to find the pending certificate header for proven proof for \
+                        "Failed to find the pending certificate header for proven certificate for \
                          network {} at height {}",
                         network_id, height
                     );
@@ -853,11 +853,14 @@ where
                 "Failed to add the certificate to the current epoch: {}",
                 error
             ),
-            Ok((_epoch_number, certificate_index)) => {
+            Ok((epoch_number, certificate_index)) => {
                 if let Err(error) =
                     self.settle_certificate(current_epoch, certificate_index, certificate_id)
                 {
-                    error!("Failed to settle the certificate: {:?}", error);
+                    error!(
+                        "Failed to settle the certificate {} in epoch {}: {:?}",
+                        certificate_id, epoch_number, error
+                    );
                 }
             }
         }
