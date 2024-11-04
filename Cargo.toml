@@ -35,12 +35,12 @@ mockall = "0.13.0"
 parking_lot = "0.12.3"
 rand = "0.8.5"
 rstest = "0.22.0"
-serde = { version = "1.0.209", features = ["derive"] }
+serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.132"
 serde_with = "3.11.0"
 test-log = "0.2.16"
-thiserror = "1.0.64"
-tokio = { version = "1.40.0", features = ["full"] }
+thiserror = "1.0.67"
+tokio = { version = "1.41.0", features = ["full"] }
 tokio-util = "0.7.11"
 toml = "0.8.15"
 tonic = { version = "0.12.3", default-features = false }
@@ -51,9 +51,9 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = { version = "2.5.2", features = ["serde"] }
 
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
-sp1-core-machine = "3.0.0"
+sp1-core-machine = "3.1.0"
 sp1-sdk = "3.0.0"
-sp1-prover = "3.0.0"
+sp1-prover = "3.1.0"
 
 # A hack to make the resolver pull in the correct sp1 branch when processing the reth and revm deps.
 # This is intended to be a temporary hotfix while the dependency issue in the upstream packages is
