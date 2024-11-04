@@ -205,7 +205,7 @@ dependencies = [
  "pessimistic-proof",
  "pin-project 1.1.7",
  "rand",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "rstest",
  "serde",
  "serde_json",
@@ -5989,9 +5989,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.8"
+version = "0.12.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f713147fbe92361e52392c73b8c9e48c04c6625bce969ef54dc901e58e042a7b"
+checksum = "a77c62af46e79de0a562e1a9849205ffcb7fc1238876e9bd743357570e04046f"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -6046,7 +6046,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "http 1.1.0",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "thiserror",
  "tower-service",
@@ -7398,7 +7398,7 @@ dependencies = [
  "p3-field",
  "p3-fri",
  "prost 0.13.3",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "reqwest-middleware",
  "serde",
  "sp1-core-executor",
@@ -8399,7 +8399,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.5.0",
  "prost 0.13.3",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "thiserror",
