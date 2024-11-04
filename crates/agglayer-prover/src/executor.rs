@@ -28,7 +28,7 @@ use tracing::error;
 mod tests;
 
 /// ELF of the pessimistic proof program
-const ELF: &[u8] =
+pub(crate) const ELF: &[u8] =
     include_bytes!("../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");
 
 #[derive(Clone)]

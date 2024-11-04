@@ -71,13 +71,16 @@ version = "0.1.0"
 dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
+ "agglayer-contracts",
  "agglayer-prover-types",
  "agglayer-storage",
  "agglayer-types",
  "anyhow",
  "arc-swap",
  "bincode",
+ "ethers",
  "futures",
+ "mockall",
  "pessimistic-proof",
  "reth-primitives",
  "rstest",
@@ -200,9 +203,11 @@ dependencies = [
  "insta",
  "jsonrpsee",
  "jsonrpsee-test-utils",
+ "lazy_static",
  "mockall",
  "parking_lot",
  "pessimistic-proof",
+ "pessimistic-proof-test-suite",
  "pin-project 1.1.7",
  "rand",
  "reqwest 0.12.9",
@@ -2564,6 +2569,7 @@ checksum = "e79e5973c26d4baf0ce55520bd732314328cabe53193286671b47144145b9649"
 dependencies = [
  "chrono",
  "ethers-core",
+ "ethers-solc",
  "reqwest 0.11.27",
  "semver 1.0.23",
  "serde",
@@ -5367,6 +5373,7 @@ dependencies = [
  "serde_with",
  "thiserror",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?branch=patch-v2.0.2)",
+ "tracing",
 ]
 
 [[package]]

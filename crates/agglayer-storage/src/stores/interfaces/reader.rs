@@ -1,17 +1,13 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, EpochNumber, Height, NetworkId, Proof,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
+    NetworkId, Proof,
 };
 
-use crate::{
-    columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error,
-    stores::PerEpochWriter,
-};
+use crate::{columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error};
 
-pub trait EpochStoreReader: Send + Sync {
-    type PerEpochStore: PerEpochReader + PerEpochWriter;
-}
+pub trait EpochStoreReader: Send + Sync {}
 
 pub trait PendingCertificateReader: Send + Sync {
     fn get_certificate(
@@ -29,6 +25,10 @@ pub trait PendingCertificateReader: Send + Sync {
 
     fn multi_get_proof(&self, keys: &[CertificateId]) -> Result<Vec<Option<Proof>>, Error>;
     fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error>;
+    fn get_current_proven_height_for_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<Height>, Error>;
 }
 
 pub trait MetadataReader: Send + Sync {
@@ -65,6 +65,11 @@ pub trait PerEpochReader: Send + Sync {
     /// Get epoch number
     fn get_epoch_number(&self) -> u64;
 
+    fn get_certificate_at_index(
+        &self,
+        index: CertificateIndex,
+    ) -> Result<Option<Certificate>, Error>;
+    fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error>;
     /// Get the height of a network's end checkpoint
     fn get_end_checkpoint_height_per_network(
         &self,

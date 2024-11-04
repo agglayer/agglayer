@@ -168,12 +168,14 @@ pub fn generate_pessimistic_proof(
             computed: computed_target.exit_root.into(),
         });
     }
+
     if computed_target.balance_root != batch_header.target.balance_root {
         return Err(ProofError::InvalidNewBalanceRoot {
             declared: batch_header.target.balance_root.into(),
             computed: computed_target.balance_root.into(),
         });
     }
+
     if computed_target.nullifier_root != batch_header.target.nullifier_root {
         return Err(ProofError::InvalidNewNullifierRoot {
             declared: batch_header.target.nullifier_root.into(),

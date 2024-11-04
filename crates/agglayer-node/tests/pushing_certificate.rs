@@ -3,11 +3,10 @@ use std::time::Duration;
 use agglayer_config::log::LogLevel;
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::TempDBDir;
-use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatusError, LocalNetworkStateData,
-};
+use agglayer_types::{CertificateHeader, CertificateId, CertificateStatusError};
 use ethers::{signers::LocalWallet, utils::Anvil};
 use jsonrpsee::{core::client::ClientT, rpc_params, ws_client::WsClientBuilder};
+use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 use tokio_util::sync::CancellationToken;
 
@@ -82,11 +81,11 @@ async fn successfully_push_certificate() {
     };
 
     assert!(!handle.is_finished());
+    let state = Forest::new(vec![]);
 
-    let mut certificate = Certificate::new_for_test(1.into(), 0);
-    let state = LocalNetworkStateData::default();
-    certificate.prev_local_exit_root = state.exit_tree.get_root();
-    certificate.new_local_exit_root = state.exit_tree.get_root();
+    let withdrawals = vec![];
+
+    let (certificate, _signer) = state.clone().apply_events(&[], &withdrawals);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -101,21 +100,19 @@ async fn successfully_push_certificate() {
 
         match response.status {
             agglayer_types::CertificateStatus::Pending => {
+                println!("Certificate is pending");
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
             // In success the test is valid
             agglayer_types::CertificateStatus::Proven => {
+                println!("Certificate is proven");
                 break;
             }
 
             // We can't go further than that with the current test setup
             // TODO: Add a way to generate valide certificate here
             agglayer_types::CertificateStatus::InError {
-                error:
-                    CertificateStatusError::ProofGenerationError {
-                        generation_type: agglayer_types::GenerationType::Native,
-                        source: pessimistic_proof::ProofError::InvalidSignature,
-                    },
+                error: CertificateStatusError::TrustedSequencerNotFound(_),
             } => break,
             agglayer_types::CertificateStatus::InError { error } => {
                 panic!("{}", error)

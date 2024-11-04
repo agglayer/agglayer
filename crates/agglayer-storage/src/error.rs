@@ -1,4 +1,4 @@
-use agglayer_types::{Height, NetworkId};
+use agglayer_types::{EpochNumber, Height, NetworkId};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -24,6 +24,9 @@ pub enum Error {
 
     #[error("The store is already in packing mode")]
     AlreadyInPackingMode,
+
+    #[error("The epoch {0} is already finished")]
+    AlreadyPacked(EpochNumber),
 
     #[error(transparent)]
     CertificateCandidateError(#[from] CertificateCandidateError),

@@ -1,15 +1,15 @@
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicU64, Ordering},
         Arc,
     },
 };
 
-use agglayer_types::{CertificateIndex, EpochNumber, Height, NetworkId};
-use parking_lot::RwLock;
+use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Height, NetworkId, Proof};
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::ReadOptions;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 use super::{
     interfaces::reader::PerEpochReader, MetadataWriter, PendingCertificateReader,
@@ -31,14 +31,14 @@ const MAX_CERTIFICATE_PER_EPOCH: u64 = 1;
 
 /// A logical store for an Epoch.
 pub struct PerEpochStore<PendingStore, StateStore> {
-    epoch_number: u64,
+    pub epoch_number: Arc<u64>,
     db: Arc<DB>,
     pending_store: Arc<PendingStore>,
     state_store: Arc<StateStore>,
     next_certificate_index: AtomicU64,
     start_checkpoint: BTreeMap<NetworkId, Height>,
     end_checkpoint: RwLock<BTreeMap<NetworkId, Height>>,
-    in_packing: AtomicBool,
+    packing_lock: RwLock<Option<EpochNumber>>,
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
@@ -89,7 +89,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             }
         };
 
-        let mut in_packing = false;
+        let mut closed = None;
         let next_certificate_index = if let Some(Ok((index, _))) = db
             .iter_with_direction::<CertificatePerIndexColumn>(
                 ReadOptions::default(),
@@ -122,22 +122,30 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
 
                 start_checkpoint.clone()
             } else {
-                in_packing = true;
+                closed = Some(epoch_number);
 
                 checkpoint
             }
         };
 
         Ok(Self {
-            epoch_number,
+            epoch_number: Arc::new(epoch_number),
             db,
             next_certificate_index,
             pending_store,
             state_store,
             start_checkpoint,
             end_checkpoint: RwLock::new(end_checkpoint),
-            in_packing: AtomicBool::new(in_packing),
+            packing_lock: RwLock::new(closed),
         })
+    }
+
+    fn lock_for_adding_certificate(&self) -> RwLockReadGuard<Option<EpochNumber>> {
+        self.packing_lock.read()
+    }
+
+    fn lock_for_packing(&self) -> RwLockWriteGuard<Option<EpochNumber>> {
+        self.packing_lock.write()
     }
 }
 
@@ -151,6 +159,12 @@ where
         network_id: NetworkId,
         height: Height,
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
+        let lock = self.lock_for_adding_certificate();
+
+        if lock.is_some() {
+            return Err(Error::AlreadyPacked(*self.epoch_number))?;
+        }
+
         // Check for network rate limiting
         let start_checkpoint = self.start_checkpoint.get(&network_id);
         let mut end_checkpoint = self.end_checkpoint.write();
@@ -270,21 +284,53 @@ where
             self.db.put::<EndCheckpointColumn>(&network_id, &height)?;
         }
 
-        Ok((self.epoch_number, certificate_index))
+        drop(lock);
+
+        Ok((*self.epoch_number, certificate_index))
     }
 
     fn start_packing(&self) -> Result<(), Error> {
-        self.in_packing
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
-            .map_err(|_| Error::AlreadyInPackingMode)?;
+        let mut lock = self.lock_for_packing();
 
-        match self.state_store.set_latest_settled_epoch(self.epoch_number) {
+        if let Some(epoch_number) = *lock {
+            return Err(Error::AlreadyPacked(epoch_number))?;
+        }
+
+        let epoch_number = *self.epoch_number;
+        // No more certificate can be added
+        let iterator = self.db.iter_with_direction::<CertificatePerIndexColumn>(
+            ReadOptions::default(),
+            rocksdb::Direction::Forward,
+        )?;
+        let mut batch_status = Vec::new();
+
+        for entry in iterator {
+            if let Err(error) = entry {
+                error!(
+                    "CRITICAL error: Epoch {} contains a certificate that is unparsable: {}",
+                    epoch_number, error
+                );
+                return Err(error);
+            }
+
+            let (index, certificate) = entry.unwrap();
+
+            batch_status.push((certificate.hash(), index));
+        }
+
+        _ = *lock.insert(epoch_number);
+        match self
+            .state_store
+            .set_latest_settled_epoch(*self.epoch_number)
+        {
             Err(Error::UnprocessedAction(error)) => {
                 warn!("Couldn't define the latest settled epoch: {}", error)
             }
             Err(error) => return Err(error),
             Ok(_) => (),
         }
+
+        drop(lock);
 
         Ok(())
     }
@@ -296,7 +342,17 @@ where
     StateStore: Send + Sync,
 {
     fn get_epoch_number(&self) -> u64 {
-        self.epoch_number
+        *self.epoch_number
+    }
+    fn get_certificate_at_index(
+        &self,
+        index: CertificateIndex,
+    ) -> Result<Option<Certificate>, Error> {
+        self.db.get::<CertificatePerIndexColumn>(&index)
+    }
+
+    fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error> {
+        self.db.get::<ProofPerIndexColumn>(&index)
     }
 
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {

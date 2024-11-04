@@ -30,6 +30,14 @@ mock! {
             certificate_id: &CertificateId,
             status: &CertificateStatus,
         ) -> Result<(), Error>;
+
+        fn set_latest_settled_certificate_for_network(
+            &self,
+            network_id: &NetworkId,
+            certificate_id: &CertificateId,
+            epoch_number: &EpochNumber,
+            height: &Height,
+        ) -> Result<(), Error>;
     }
 
     impl StateReader for StateStore {
