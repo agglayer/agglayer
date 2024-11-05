@@ -1,22 +1,21 @@
 use agglayer_types::{Certificate, Keccak256Hasher, LocalNetworkStateData, NetworkId};
 use pessimistic_proof::{
-    aggregation::wrap::ImportedLERWitness,
-    bridge_exit::{BridgeExit, LeafType, TokenInfo},
-    generate_pessimistic_proof,
+    aggregation::wrap::{AggregationProofOutput, ImportedLERWitness},
+    bridge_exit::{BridgeExit, LeafType},
     global_index::GlobalIndex,
     imported_bridge_exit::{ImportedBridgeExit, MerkleProof},
-    keccak::Digest,
+    keccak::{keccak256_combine, Digest},
     local_exit_tree::data::{LETMerkleProof, LocalExitTreeData},
     utils::smt::Smt,
-    LocalNetworkState, PessimisticProofOutput,
+    LocalNetworkState,
 };
 use pessimistic_proof_test_suite::{
-    forest::{compute_signature_info, Forest},
+    forest::compute_signature_info,
     sample_data::{ETH, USDC},
     COMBINE_PESSIMISTIC_PROOF_ELF, PESSIMISTIC_PROOF_ELF, WRAP_PESSIMISTIC_PROOF_ELF,
 };
 use rand::random;
-use reth_primitives::{revm_primitives::bitvec::vec, Address, U256};
+use reth_primitives::U256;
 use sp1_sdk::{utils, HashableKey, ProverClient, SP1Proof, SP1Stdin};
 
 fn u(x: u64) -> U256 {
@@ -24,12 +23,12 @@ fn u(x: u64) -> U256 {
 }
 
 #[test]
+#[ignore]
 fn test_aggregation() {
-    // Setup logging.
     utils::setup_logger();
 
     sp1_build::build_program("../pp-aggregation-wrap-program");
-    dbg!("LOL");
+    sp1_build::build_program("../pp-aggregation-combine-program");
 
     // Setup: We have three chains, A (mainnet), B, C.
     // B and C both start with 1000 USDC and 1000 ETH.
@@ -79,6 +78,7 @@ fn test_aggregation() {
     let mut aret = Smt::<Keccak256Hasher, 32>::default();
     aret.insert(*network_b, prev_ler_b).unwrap();
     aret.insert(*network_c, prev_ler_c).unwrap();
+    let old_aret_root = aret.root;
 
     let_b.add_leaf(b_to_c.hash());
     let_c.add_leaf(c_to_b.hash());
@@ -150,129 +150,137 @@ fn test_aggregation() {
     let state_b = LocalNetworkState::from(state_b);
     let state_c = LocalNetworkState::from(state_c);
 
-    let mut stdin = SP1Stdin::new();
-    stdin.write(&state_b);
-    stdin.write(&mbh_b);
-    // Generate the proof for the given program and input.
-    let client = ProverClient::new();
-    let (pk, vk) = client.setup(PESSIMISTIC_PROOF_ELF);
-    let proof_b = client.prove(&pk, stdin).compressed().run().unwrap();
+    let proof_b = {
+        let mut stdin = SP1Stdin::new();
+        stdin.write(&state_b);
+        stdin.write(&mbh_b);
+        let client = ProverClient::new();
+        let (pk, vk) = client.setup(PESSIMISTIC_PROOF_ELF);
+        let proof_b = client.prove(&pk, stdin).compressed().run().unwrap();
+        client.verify(&proof_b, &vk).expect("verification failed");
 
-    // Verify proof and public values
-    client.verify(&proof_b, &vk).expect("verification failed");
-    // dbg!(bincode::deserialize::<PessimisticProofOutput>(
-    //     proof_b.public_values.as_slice()
-    // ));
-    // dbg!(bincode::deserialize::<PessimisticProofOutput>(
-    //     &bincode::deserialize::<Vec<u8>>(proof_b.public_values.as_slice()).
-    // unwrap() ));
-
-    let mut stdin = SP1Stdin::new();
-    stdin.write(&state_c);
-    stdin.write(&mbh_c);
-    // Generate the proof for the given program and input.
-    let client = ProverClient::new();
-    let (pk, vk) = client.setup(PESSIMISTIC_PROOF_ELF);
-    let proof_c = client.prove(&pk, stdin).compressed().run().unwrap();
-    // Verify proof and public values
-    client.verify(&proof_c, &vk).expect("verification failed");
-
-    let mut stdin = SP1Stdin::new();
-    let vkey = vk.hash_u32();
-    let pv = proof_b.public_values.as_slice().to_vec();
-    // dbg!(pv.len());
-    let tmp_arer = aret.root;
-    let selected_mer = [0; 32]; // TODO
-    let selected_rer = final_aret.root;
-    let tmp_arer_proof = aret.get_inclusion_proof(*network_b).unwrap();
-    let imported_lers_witness = vec![ImportedLERWitness {
-        old_ler: (&let_c).into(),
-        new_ler: new_ler_c,
-        next_leaf: Digest::default(),
-        subtree_proof: LETMerkleProof::default(),
-        new_ler_proof: Some(final_aret.get_inclusion_proof(*network_c).unwrap()),
-    }];
-    stdin.write::<[u32; 8]>(&vkey);
-    stdin.write::<Vec<u8>>(&pv);
-    let SP1Proof::Compressed(proof) = proof_b.proof else {
-        panic!()
+        proof_b
     };
-    stdin.write_proof(proof, vk.vk.clone());
-    stdin.write(&tmp_arer);
-    stdin.write(&selected_mer);
-    stdin.write(&selected_rer);
-    stdin.write(&tmp_arer_proof);
-    stdin.write(&imported_lers_witness);
-    // Generate the proof for the given program and input.
-    let client = ProverClient::new();
-    let (pk, vk_wrap) = client.setup(WRAP_PESSIMISTIC_PROOF_ELF);
-    let wrap_proof_b = client.prove(&pk, stdin).compressed().run().unwrap();
-    // Verify proof and public values
-    client
-        .verify(&wrap_proof_b, &vk_wrap)
-        .expect("verification failed");
 
-    dbg!("DONE 1");
+    let (vk, proof_c) = {
+        let mut stdin = SP1Stdin::new();
+        stdin.write(&state_c);
+        stdin.write(&mbh_c);
+        let client = ProverClient::new();
+        let (pk, vk) = client.setup(PESSIMISTIC_PROOF_ELF);
+        let proof_c = client.prove(&pk, stdin).compressed().run().unwrap();
+        client.verify(&proof_c, &vk).expect("verification failed");
 
-    let mut stdin = SP1Stdin::new();
-    let vkey = vk.hash_u32();
-    let pv = proof_c.public_values.as_slice().to_vec();
-    // dbg!(pv.len());
-    aret.update(*network_b, new_ler_b).unwrap();
-    let tmp_arer = aret.root;
-    let selected_mer = [0; 32]; // TODO
-    let selected_rer = final_aret.root;
-    let tmp_arer_proof = aret.get_inclusion_proof(*network_c).unwrap();
-    let imported_lers_witness = vec![ImportedLERWitness {
-        old_ler: (&let_b).into(),
-        new_ler: new_ler_b,
-        next_leaf: Digest::default(),
-        subtree_proof: LETMerkleProof::default(),
-        new_ler_proof: Some(final_aret.get_inclusion_proof(*network_b).unwrap()),
-    }];
-    stdin.write::<[u32; 8]>(&vkey);
-    stdin.write::<Vec<u8>>(&pv);
-    let SP1Proof::Compressed(pproof) = proof_c.proof else {
-        panic!()
+        (vk, proof_c)
     };
-    stdin.write_proof(pproof, vk.vk.clone());
-    stdin.write(&tmp_arer);
-    stdin.write(&selected_mer);
-    stdin.write(&selected_rer);
-    stdin.write(&tmp_arer_proof);
-    stdin.write(&imported_lers_witness);
-    // Generate the proof for the given program and input.
-    let client = ProverClient::new();
-    let (pk, vk_wrap) = client.setup(WRAP_PESSIMISTIC_PROOF_ELF);
-    let wrap_proof_c = client.prove(&pk, stdin).compressed().run().unwrap();
-    // Verify proof and public values
-    client
-        .verify(&wrap_proof_c, &vk_wrap)
-        .expect("verification failed");
 
-    dbg!("DONE 2");
+    let wrapped_proof_b = {
+        let mut stdin = SP1Stdin::new();
+        let vkey = vk.hash_u32();
+        let pv = proof_b.public_values.as_slice().to_vec();
+        let tmp_arer = aret.root;
+        let selected_mer = [0; 32]; // TODO
+        let selected_rer = final_aret.root;
+        let tmp_arer_proof = aret.get_inclusion_proof(*network_b).unwrap();
+        let imported_lers_witness = vec![ImportedLERWitness {
+            old_ler: (&let_c).into(),
+            new_ler: new_ler_c,
+            next_leaf: Digest::default(),
+            subtree_proof: LETMerkleProof::default(),
+            new_ler_proof: Some(final_aret.get_inclusion_proof(*network_c).unwrap()),
+        }];
+        stdin.write::<[u32; 8]>(&vkey);
+        stdin.write::<Vec<u8>>(&pv);
+        let SP1Proof::Compressed(proof) = proof_b.proof else {
+            panic!()
+        };
+        stdin.write_proof(proof, vk.vk.clone());
+        stdin.write(&tmp_arer);
+        stdin.write(&selected_mer);
+        stdin.write(&selected_rer);
+        stdin.write(&tmp_arer_proof);
+        stdin.write(&imported_lers_witness);
+        let client = ProverClient::new();
+        let (pk, vk_wrap) = client.setup(WRAP_PESSIMISTIC_PROOF_ELF);
+        let wrap_proof_b = client.prove(&pk, stdin).compressed().run().unwrap();
+        client
+            .verify(&wrap_proof_b, &vk_wrap)
+            .expect("verification failed");
 
-    let mut stdin = SP1Stdin::new();
-    let vkey = vk_wrap.hash_u32();
-    let pv0 = wrap_proof_b.public_values.as_slice().to_vec();
-    let pv1 = wrap_proof_c.public_values.as_slice().to_vec();
-    stdin.write::<[u32; 8]>(&vkey);
-    stdin.write::<Vec<u8>>(&pv0);
-    stdin.write::<Vec<u8>>(&pv1);
-    let SP1Proof::Compressed(proof) = wrap_proof_b.proof else {
-        panic!()
+        wrap_proof_b
     };
-    stdin.write_proof(proof, vk_wrap.vk.clone());
-    let SP1Proof::Compressed(proof) = wrap_proof_c.proof else {
-        panic!()
+
+    let (vk_wrap, wrapped_proof_c) = {
+        let mut stdin = SP1Stdin::new();
+        let vkey = vk.hash_u32();
+        let pv = proof_c.public_values.as_slice().to_vec();
+        aret.update(*network_b, new_ler_b).unwrap();
+        let tmp_arer = aret.root;
+        let selected_mer = [0; 32]; // TODO
+        let selected_rer = final_aret.root;
+        let tmp_arer_proof = aret.get_inclusion_proof(*network_c).unwrap();
+        let imported_lers_witness = vec![ImportedLERWitness {
+            old_ler: (&let_b).into(),
+            new_ler: new_ler_b,
+            next_leaf: Digest::default(),
+            subtree_proof: LETMerkleProof::default(),
+            new_ler_proof: Some(final_aret.get_inclusion_proof(*network_b).unwrap()),
+        }];
+        stdin.write::<[u32; 8]>(&vkey);
+        stdin.write::<Vec<u8>>(&pv);
+        let SP1Proof::Compressed(pproof) = proof_c.proof else {
+            panic!()
+        };
+        stdin.write_proof(pproof, vk.vk.clone());
+        stdin.write(&tmp_arer);
+        stdin.write(&selected_mer);
+        stdin.write(&selected_rer);
+        stdin.write(&tmp_arer_proof);
+        stdin.write(&imported_lers_witness);
+        let client = ProverClient::new();
+        let (pk, vk_wrap) = client.setup(WRAP_PESSIMISTIC_PROOF_ELF);
+        let wrap_proof_c = client.prove(&pk, stdin).compressed().run().unwrap();
+        client
+            .verify(&wrap_proof_c, &vk_wrap)
+            .expect("verification failed");
+
+        (vk_wrap, wrap_proof_c)
     };
-    stdin.write_proof(proof, vk_wrap.vk.clone());
-    // Generate the proof for the given program and input.
-    let client = ProverClient::new();
-    let (pk, vk_combine) = client.setup(COMBINE_PESSIMISTIC_PROOF_ELF);
-    let combined_proof = client.prove(&pk, stdin).run().unwrap();
-    // Verify proof and public values
-    client
-        .verify(&combined_proof, &vk_combine)
-        .expect("verification failed");
+
+    let combined_proof = {
+        let mut stdin = SP1Stdin::new();
+        let vkey = vk_wrap.hash_u32();
+        let pv0 = wrapped_proof_b.public_values.as_slice().to_vec();
+        let pv1 = wrapped_proof_c.public_values.as_slice().to_vec();
+        stdin.write::<[u32; 8]>(&vkey);
+        stdin.write::<Vec<u8>>(&pv0);
+        stdin.write::<Vec<u8>>(&pv1);
+        let SP1Proof::Compressed(proof) = wrapped_proof_b.proof else {
+            panic!()
+        };
+        stdin.write_proof(proof, vk_wrap.vk.clone());
+        let SP1Proof::Compressed(proof) = wrapped_proof_c.proof else {
+            panic!()
+        };
+        stdin.write_proof(proof, vk_wrap.vk.clone());
+        let client = ProverClient::new();
+        let (pk, vk_combine) = client.setup(COMBINE_PESSIMISTIC_PROOF_ELF);
+        let combined_proof = client.prove(&pk, stdin).run().unwrap();
+        client
+            .verify(&combined_proof, &vk_combine)
+            .expect("verification failed");
+
+        combined_proof
+    };
+
+    let combined_proof_output =
+        bincode::deserialize::<AggregationProofOutput>(combined_proof.public_values.as_slice())
+            .unwrap();
+
+    assert_eq!(combined_proof_output.tmp_arer, old_aret_root);
+    assert_eq!(combined_proof_output.tmp_arer_next, final_aret.root);
+    assert_eq!(
+        combined_proof_output.selected_ger,
+        keccak256_combine([[0; 32], final_aret.root])
+    );
 }

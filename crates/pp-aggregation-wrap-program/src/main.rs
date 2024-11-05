@@ -1,7 +1,8 @@
 #![no_main]
 
-use bincode::Options;
+use bincode::config::Options;
 use pessimistic_proof::aggregation::wrap::wrap_proof;
+use pessimistic_proof::aggregation::wrap::AggregationProofOutput;
 use pessimistic_proof::PessimisticProofOutput;
 use sha2::Digest;
 use sha2::Sha256;
@@ -18,9 +19,9 @@ pub fn main() {
     let public_values_digest = Sha256::digest(&public_values);
     sp1_zkvm::lib::verify::verify_sp1_proof(&vkey, &public_values_digest.into());
 
-    let pp_output: PessimisticProofOutput =
-        bincode::deserialize::<PessimisticProofOutput>(&public_values)
-            .expect("Failed to deserialize");
+    let pp_output: PessimisticProofOutput = PessimisticProofOutput::bincode_options()
+        .deserialize(&public_values)
+        .expect("Failed to deserialize");
 
     let tmp_arer = sp1_zkvm::io::read::<_>();
     let selected_mer = sp1_zkvm::io::read::<_>();
@@ -37,5 +38,9 @@ pub fn main() {
         imported_lers_witness,
     );
 
-    sp1_zkvm::io::commit(&wrapped_proof_output);
+    let wrapped_proof_output = AggregationProofOutput::bincode_options()
+        .serialize(&wrapped_proof_output)
+        .unwrap();
+
+    sp1_zkvm::io::commit_slice(&wrapped_proof_output);
 }

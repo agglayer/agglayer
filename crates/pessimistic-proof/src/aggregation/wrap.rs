@@ -1,3 +1,4 @@
+use bincode::Options;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -11,10 +12,18 @@ use crate::{
 /// Outputs of the aggregated pessimistic proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregationProofOutput {
-    pub(crate) tmp_arer: Digest,
-    pub(crate) tmp_arer_next: Digest,
-    pub(crate) selected_ger: Digest,
-    pub(crate) chain_info_tree_node: Digest,
+    pub tmp_arer: Digest,
+    pub tmp_arer_next: Digest,
+    pub selected_ger: Digest,
+    pub chain_info_tree_node: Digest,
+}
+
+impl AggregationProofOutput {
+    pub fn bincode_options() -> impl bincode::Options {
+        bincode::DefaultOptions::new()
+            .with_big_endian()
+            .with_fixint_encoding()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
