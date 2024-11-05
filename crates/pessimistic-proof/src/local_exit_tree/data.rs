@@ -35,6 +35,18 @@ where
     pub(crate) siblings: [H::Digest; TREE_DEPTH],
 }
 
+impl<H, const TREE_DEPTH: usize> Default for LETMerkleProof<H, TREE_DEPTH>
+where
+    H: Hasher,
+    H::Digest: Copy + Default + Serialize + DeserializeOwned,
+{
+    fn default() -> Self {
+        Self {
+            siblings: [H::Digest::default(); TREE_DEPTH],
+        }
+    }
+}
+
 impl<H, const TREE_DEPTH: usize> Default for LocalExitTreeData<H, TREE_DEPTH>
 where
     H: Hasher,

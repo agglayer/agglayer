@@ -2,7 +2,7 @@
 resolver = "2"
 default-members = ["crates/agglayer"]
 members = ["crates/*", "xtask"]
-exclude = ["crates/pessimistic-proof-program", "crates/pp-aggregation-stage-1"]
+exclude = ["crates/pessimistic-proof-program", "crates/pp-aggregation-wrap-program", "crates/pp-aggregation-combine-program"]
 
 [workspace.package]
 version = "0.1.0"

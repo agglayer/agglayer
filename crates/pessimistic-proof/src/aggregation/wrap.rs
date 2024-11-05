@@ -19,11 +19,11 @@ pub struct AggregationProofOutput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportedLERWitness {
-    old_ler: LocalExitTree<Keccak256Hasher>,
-    new_ler: Digest,
-    next_leaf: Digest,
-    subtree_proof: LETMerkleProof<Keccak256Hasher>,
-    new_ler_proof: Option<SmtMerkleProof<Keccak256Hasher, 32>>,
+    pub old_ler: LocalExitTree<Keccak256Hasher>,
+    pub new_ler: Digest,
+    pub next_leaf: Digest,
+    pub subtree_proof: LETMerkleProof<Keccak256Hasher>,
+    pub new_ler_proof: Option<SmtMerkleProof<Keccak256Hasher, 32>>,
 }
 
 pub fn wrap_proof(
@@ -75,8 +75,10 @@ pub fn wrap_proof(
         } = &imported_lers_witness[i];
         // Check that the LER frontier is consistent with the LER root.
         assert_eq!(old_ler.get_root(), ler);
-        // Check that the LER used is a subtree of the new LER.
-        assert!(old_ler.is_subtree(*new_ler, *next_leaf, subtree_proof.clone()));
+        if ler != *new_ler {
+            // Check that the LER used is a subtree of the new LER.
+            assert!(old_ler.is_subtree(*new_ler, *next_leaf, subtree_proof.clone()));
+        }
         if network_id == NetworkId::new(0) {
             // For mainnet, only need to check that the new LER is the MER.
             assert_eq!(*new_ler, selected_mer);

@@ -31,3 +31,4 @@ uuid = { version = "1.11.0", features = ["v4", "fast-rng"] }
 [dev-dependencies]
 rstest.workspace = true
 tracing.workspace = true
+sp1-build = "2.0.0"
