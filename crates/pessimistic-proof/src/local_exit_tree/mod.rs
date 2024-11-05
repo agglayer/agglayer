@@ -40,6 +40,8 @@ where
     H: Hasher,
     H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a>,
 {
+    const MAX_NUM_LEAVES: u32 = ((1u64 << TREE_DEPTH) - 1) as u32;
+
     /// Creates a new empty [`LocalExitTree`].
     pub fn new() -> Self {
         LocalExitTree {
@@ -72,7 +74,7 @@ where
 
     /// Appends a leaf to the tree.
     pub fn add_leaf(&mut self, leaf: H::Digest) -> Result<u32, LocalExitTreeError> {
-        if self.leaf_count as u64 >> TREE_DEPTH != 0 {
+        if self.leaf_count >= Self::MAX_NUM_LEAVES {
             return Err(LocalExitTreeError::LeafIndexOverflow);
         }
         // the index at which the new entry will be inserted
