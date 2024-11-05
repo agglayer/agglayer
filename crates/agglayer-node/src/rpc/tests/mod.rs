@@ -24,7 +24,7 @@ use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
 mod errors;
 mod get_certificate_header;
-mod get_clock_configuration;
+mod get_epoch_configuration;
 mod get_tx_status;
 mod send_certificate;
 

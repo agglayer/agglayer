@@ -34,7 +34,7 @@ pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ClockConfiguration {
+pub struct EpochConfiguration {
     /// The genesis block where the AggLayer starts.
     pub genesis_block: u64,
     /// The duration of an epoch in blocks.

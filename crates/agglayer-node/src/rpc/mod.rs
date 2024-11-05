@@ -8,7 +8,7 @@ use agglayer_storage::stores::StateReader;
 use agglayer_storage::stores::StateWriter;
 use agglayer_telemetry::KeyValue;
 use agglayer_types::CertificateStatus;
-use agglayer_types::ClockConfiguration;
+use agglayer_types::EpochConfiguration;
 use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId};
 use ethers::{
     contract::{ContractError, ContractRevert},
@@ -54,8 +54,8 @@ trait Agglayer {
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader>;
 
-    #[method(name = "getClockConfiguration")]
-    async fn get_clock_configuration(&self) -> RpcResult<ClockConfiguration>;
+    #[method(name = "getEpochConfiguration")]
+    async fn get_epoch_configuration(&self) -> RpcResult<EpochConfiguration>;
 }
 
 /// The RPC agglayer service implementation.
@@ -350,22 +350,22 @@ where
         }
     }
 
-    async fn get_clock_configuration(&self) -> RpcResult<ClockConfiguration> {
-        info!("Received request to get clock configuration");
+    async fn get_epoch_configuration(&self) -> RpcResult<EpochConfiguration> {
+        info!("Received request to get epoch configuration");
 
         if let Epoch::BlockClock(BlockClockConfig {
             epoch_duration,
             genesis_block,
         }) = self.config.epoch
         {
-            Ok(ClockConfiguration {
+            Ok(EpochConfiguration {
                 epoch_duration: epoch_duration.into(),
                 genesis_block,
             })
         } else {
             Err(Error::internal(
                 "AggLayer isn't configured with a BlockClock configuration, thus no \
-                 ClockConfiguration is available",
+                 EpochConfiguration is available",
             ))
         }
     }
