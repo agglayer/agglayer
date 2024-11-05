@@ -28,7 +28,7 @@ fn test_local_exit_root() {
                 deposit_count += 1;
 
                 let bridge_exit: BridgeExit = deposit_event_data.into();
-                local_exit_tree.add_leaf(bridge_exit.hash());
+                local_exit_tree.add_leaf(bridge_exit.hash()).unwrap();
             }
             EventData::Claim(_) => {
                 // do nothing

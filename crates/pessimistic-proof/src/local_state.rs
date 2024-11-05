@@ -179,7 +179,7 @@ impl LocalNetworkState {
                 // We don't allow a chain to exit to itself
                 return Err(ProofError::CannotExitToSameNetwork);
             }
-            self.exit_tree.add_leaf(bridge_exit.hash());
+            self.exit_tree.add_leaf(bridge_exit.hash())?;
 
             // For message exits, the origin network in token info should be the origin
             // network of the batch header.

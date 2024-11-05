@@ -185,7 +185,7 @@ mod tests {
     fn compare_let_data_let_frontier(num_leaves: usize) {
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
         let local_exit_tree_frontier: LocalExitTree<H, TREE_DEPTH> =
-            LocalExitTree::from_leaves(leaves.iter().cloned());
+            LocalExitTree::from_leaves(leaves.iter().cloned()).unwrap();
         let local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
             LocalExitTreeData::from_leaves(leaves.into_iter()).unwrap();
         assert_eq!(
@@ -219,7 +219,7 @@ mod tests {
         );
         let leaf = random();
         local_exit_tree_data.add_leaf(leaf)?;
-        local_exit_tree_frontier.add_leaf(leaf);
+        local_exit_tree_frontier.add_leaf(leaf)?;
         assert_eq!(
             local_exit_tree_data.get_root(),
             local_exit_tree_frontier.get_root()
