@@ -10,26 +10,27 @@ use agglayer_types::Keccak256Hasher;
 use bincode::Options;
 use pessimistic_proof::multi_batch_header::MultiBatchHeader;
 use pessimistic_proof::LocalNetworkState;
-use sp1_sdk::CpuProver;
+use sp1_sdk::MockProver;
 use sp1_sdk::Prover;
 use sp1_sdk::SP1Context;
 use sp1_sdk::SP1ProofKind;
+use tonic::codec::CompressionEncoding;
 use tonic::transport::Server;
-use tracing::error;
 use tracing::info;
 use tracing::warn;
+use tracing::{debug, error};
 
 use crate::executor::Request;
 use crate::executor::ELF;
 
 pub struct FakeProver {
-    prover: Arc<CpuProver>,
+    prover: Arc<MockProver>,
     proving_key: sp1_sdk::SP1ProvingKey,
 }
 
 impl Default for FakeProver {
     fn default() -> Self {
-        let prover = CpuProver::new();
+        let prover = MockProver::new();
         let (proving_key, _) = prover.setup(ELF);
         Self {
             proving_key,
@@ -44,7 +45,9 @@ impl FakeProver {
         endpoint: SocketAddr,
         cancellation_token: tokio_util::sync::CancellationToken,
     ) -> Result<tokio::task::JoinHandle<Result<(), tonic::transport::Error>>, ()> {
-        let svc = ProofGenerationServiceServer::new(fake_prover);
+        let svc = ProofGenerationServiceServer::new(fake_prover)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -91,6 +94,7 @@ impl ProofGenerationService for FakeProver {
         request: tonic::Request<agglayer_prover_types::v1::ProofGenerationRequest>,
     ) -> Result<tonic::Response<agglayer_prover_types::v1::ProofGenerationResponse>, tonic::Status>
     {
+        debug!("Received proof generation request");
         let request = request.into_inner();
         let initial_state: LocalNetworkState = agglayer_prover_types::default_bincode_options()
             .deserialize(&request.initial_state)
@@ -120,17 +124,19 @@ impl ProofGenerationService for FakeProver {
                 stdin,
                 proof_opts,
                 context,
-                SP1ProofKind::Core,
+                SP1ProofKind::Plonk,
             )
             .map_err(|error| Error::ProverFailed(error.to_string()));
         match result {
-            Ok(proof) => Ok(tonic::Response::new(
-                agglayer_prover_types::v1::ProofGenerationResponse {
-                    proof: agglayer_prover_types::default_bincode_options()
-                        .serialize(&proof)
-                        .unwrap(),
-                },
-            )),
+            Ok(proof) => {
+                let proof = agglayer_prover_types::default_bincode_options()
+                    .serialize(&agglayer_types::Proof::SP1(proof))
+                    .unwrap();
+                debug!("Proof generated successfully, size: {}B", proof.len());
+                Ok(tonic::Response::new(
+                    agglayer_prover_types::v1::ProofGenerationResponse { proof },
+                ))
+            }
             Err(error) => {
                 warn!("FakeProver error: {}", error);
                 Err(tonic::Status::invalid_argument(error.to_string()))

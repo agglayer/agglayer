@@ -29,7 +29,7 @@ pub struct LocalNetworkState {
 }
 
 /// The roots of one [`LocalNetworkState`].
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StateCommitment {
     pub exit_root: Digest,
     pub balance_root: Digest,

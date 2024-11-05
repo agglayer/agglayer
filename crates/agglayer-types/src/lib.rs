@@ -476,4 +476,12 @@ impl LocalNetworkStateData {
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         self.clone().apply_certificate(certificate, signer)
     }
+
+    pub fn get_roots(&self) -> StateCommitment {
+        StateCommitment {
+            exit_root: self.exit_tree.get_root(),
+            balance_root: self.balance_tree.root,
+            nullifier_root: self.nullifier_tree.root,
+        }
+    }
 }
