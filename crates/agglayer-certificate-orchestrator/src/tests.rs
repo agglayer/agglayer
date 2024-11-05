@@ -100,6 +100,16 @@ impl StateReader for DummyPendingStore {
         todo!()
     }
 
+    fn get_latest_settled_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<
+        Option<(NetworkId, Height, CertificateId, EpochNumber)>,
+        agglayer_storage::error::Error,
+    > {
+        todo!()
+    }
+
     fn get_certificate_header(
         &self,
         certificate_id: &CertificateId,
@@ -291,6 +301,19 @@ impl StateWriter for DummyPendingStore {
 }
 
 impl PendingCertificateReader for DummyPendingStore {
+    fn get_latest_proven_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, Height, CertificateId)>, agglayer_storage::error::Error> {
+        todo!()
+    }
+    fn get_latest_pending_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
     fn get_current_proven_height(
         &self,
     ) -> Result<Vec<ProvenCertificate>, agglayer_storage::error::Error> {

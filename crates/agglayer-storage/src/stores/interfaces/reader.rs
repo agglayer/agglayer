@@ -15,6 +15,11 @@ use crate::{
 pub trait EpochStoreReader: Send + Sync {}
 
 pub trait PendingCertificateReader: Send + Sync {
+    fn get_latest_pending_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<Certificate>, Error>;
+
     fn get_certificate(
         &self,
         network_id: NetworkId,
@@ -34,6 +39,11 @@ pub trait PendingCertificateReader: Send + Sync {
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<Height>, Error>;
+
+    fn get_latest_proven_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, Height, CertificateId)>, Error>;
 }
 
 pub trait MetadataReader: Send + Sync {
@@ -57,6 +67,10 @@ pub trait StateReader: Send + Sync {
     ) -> Result<Option<CertificateHeader>, Error>;
 
     fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error>;
+    fn get_latest_settled_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, Height, CertificateId, EpochNumber)>, Error>;
 }
 
 pub trait PerEpochReader: Send + Sync {

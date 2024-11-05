@@ -6,6 +6,7 @@ use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCe
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::pending::PendingStore;
 use agglayer_storage::stores::state::StateStore;
+use agglayer_storage::stores::PendingCertificateReader;
 use agglayer_storage::{
     stores::{PendingCertificateWriter, StateReader, StateWriter},
     tests::TempDBDir,
@@ -24,6 +25,7 @@ use crate::{kernel::Kernel, rpc::AgglayerImpl};
 mod errors;
 mod get_certificate_header;
 mod get_epoch_configuration;
+mod get_latest_known_certificate_header;
 mod get_tx_status;
 mod send_certificate;
 
@@ -231,6 +233,15 @@ impl StateReader for DummyStore {
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
         todo!()
     }
+    fn get_latest_settled_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<
+        Option<(NetworkId, Height, CertificateId, EpochNumber)>,
+        agglayer_storage::error::Error,
+    > {
+        todo!()
+    }
 
     fn get_certificate_header(
         &self,
@@ -290,6 +301,67 @@ impl PendingCertificateWriter for DummyStore {
         _height: &Height,
         _certificate_id: &CertificateId,
     ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
+}
+
+impl PendingCertificateReader for DummyStore {
+    fn get_latest_pending_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn get_certificate(
+        &self,
+        _network_id: NetworkId,
+        _height: Height,
+    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn get_proof(
+        &self,
+        _certificate_id: CertificateId,
+    ) -> Result<Option<agglayer_types::Proof>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn multi_get_certificate(
+        &self,
+        _keys: &[(NetworkId, Height)],
+    ) -> Result<Vec<Option<Certificate>>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn multi_get_proof(
+        &self,
+        _keys: &[CertificateId],
+    ) -> Result<Vec<Option<agglayer_types::Proof>>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn get_current_proven_height(
+        &self,
+    ) -> Result<
+        Vec<agglayer_storage::columns::latest_proven_certificate_per_network::ProvenCertificate>,
+        agglayer_storage::error::Error,
+    > {
+        todo!()
+    }
+
+    fn get_current_proven_height_for_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<Option<Height>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn get_latest_proven_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, Height, CertificateId)>, agglayer_storage::error::Error> {
         todo!()
     }
 }
