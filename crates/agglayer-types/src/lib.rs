@@ -477,11 +477,11 @@ impl LocalNetworkStateData {
         self.clone().apply_certificate(certificate, signer)
     }
 
-    pub fn get_roots(&self) -> Digest {
-        keccak256_combine([
-            self.exit_tree.get_root(),
-            self.balance_tree.root,
-            self.nullifier_tree.root,
-        ])
+    pub fn get_roots(&self) -> StateCommitment {
+        StateCommitment {
+            exit_root: self.exit_tree.get_root(),
+            balance_root: self.balance_tree.root,
+            nullifier_root: self.nullifier_tree.root,
+        }
     }
 }

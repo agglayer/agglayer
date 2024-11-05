@@ -132,7 +132,7 @@ impl ProofGenerationService for FakeProver {
                 let proof = agglayer_prover_types::default_bincode_options()
                     .serialize(&agglayer_types::Proof::SP1(proof))
                     .unwrap();
-                debug!("Proof generated successfully, size: {}", proof.len());
+                debug!("Proof generated successfully, size: {}B", proof.len());
                 Ok(tonic::Response::new(
                     agglayer_prover_types::v1::ProofGenerationResponse { proof },
                 ))
