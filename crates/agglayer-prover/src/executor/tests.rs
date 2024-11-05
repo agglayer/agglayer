@@ -25,7 +25,7 @@ async fn executor_normal_behavior() {
         service_fn(|_: Request| async { panic!("Shouldn't be called") }),
     );
 
-    let mut executor = Executor::new_with_services(network, local);
+    let mut executor = Executor::new_with_services(Some(network), Some(local));
 
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
@@ -47,7 +47,40 @@ async fn executor_normal_behavior() {
 }
 
 #[tokio::test]
-async fn executor_fallback_behavior() {
+async fn executor_normal_behavior_only_network() {
+    let network = Executor::build_network_service(
+        Duration::from_secs(1),
+        service_fn(|_: Request| async {
+            let Proof::SP1(mut proof) = Proof::new_for_test();
+            proof.sp1_version = "from_network".to_string();
+
+            Ok(Response { proof })
+        }),
+    );
+
+    let mut executor = Executor::new_with_services(Some(network), None);
+
+    let signer = pessimistic_proof::Address::new([0; 20]);
+    let mut state = LocalNetworkStateData::default();
+    let certificate = Certificate {
+        new_local_exit_root: state.exit_tree.get_root(),
+        ..Default::default()
+    };
+    let batch_header = state.apply_certificate(&certificate, signer).unwrap();
+
+    let result = executor
+        .call(Request {
+            initial_state: LocalNetworkState::default(),
+            batch_header,
+        })
+        .await;
+
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().proof.sp1_version, "from_network");
+}
+
+#[tokio::test]
+async fn executor_fallback_behavior_cpu() {
     let network = Executor::build_network_service(
         Duration::from_secs(1),
         service_fn(|_: Request| async {
@@ -66,7 +99,7 @@ async fn executor_fallback_behavior() {
         }),
     );
 
-    let mut executor = Executor::new_with_services(network, local);
+    let mut executor = Executor::new_with_services(Some(network), Some(local));
 
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
@@ -88,7 +121,7 @@ async fn executor_fallback_behavior() {
 }
 
 #[tokio::test]
-async fn executor_fallback_because_of_timeout() {
+async fn executor_fallback_because_of_timeout_cpu() {
     let network = Executor::build_network_service(
         Duration::from_millis(100),
         service_fn(|_: Request| async {
@@ -111,7 +144,7 @@ async fn executor_fallback_because_of_timeout() {
         }),
     );
 
-    let mut executor = Executor::new_with_services(network, local);
+    let mut executor = Executor::new_with_services(Some(network), Some(local));
 
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
@@ -133,7 +166,7 @@ async fn executor_fallback_because_of_timeout() {
 }
 
 #[tokio::test]
-async fn executor_fails_because_of_timeout() {
+async fn executor_fails_because_of_timeout_cpu() {
     let network = Executor::build_network_service(
         Duration::from_millis(100),
         service_fn(|_: Request| async {
@@ -159,7 +192,7 @@ async fn executor_fails_because_of_timeout() {
 
     let mut executor = ServiceBuilder::new()
         .layer(TimeoutLayer::new(Duration::from_millis(100)))
-        .service(Executor::new_with_services(network, local));
+        .service(Executor::new_with_services(Some(network), Some(local)));
 
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
@@ -180,7 +213,7 @@ async fn executor_fails_because_of_timeout() {
 }
 
 #[tokio::test]
-async fn executor_fails_because_of_concurrency() {
+async fn executor_fails_because_of_concurrency_cpu() {
     let network = Executor::build_network_service(
         Duration::from_millis(100),
         service_fn(|_: Request| async {
@@ -206,7 +239,7 @@ async fn executor_fails_because_of_concurrency() {
 
     let mut executor = ServiceBuilder::new()
         .layer(TimeoutLayer::new(Duration::from_secs(1)))
-        .service(Executor::new_with_services(network, local));
+        .service(Executor::new_with_services(Some(network), Some(local)));
 
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();

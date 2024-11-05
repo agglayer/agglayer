@@ -55,10 +55,6 @@ impl Prover {
             .set_serving::<ProofGenerationServiceServer<ProverRPC>>()
             .await;
 
-        health_reporter
-            .set_serving::<ProofGenerationServiceServer<ProverRPC>>()
-            .await;
-
         let reflection = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(agglayer_prover_types::FILE_DESCRIPTOR_SET)
             .build_v1alpha()

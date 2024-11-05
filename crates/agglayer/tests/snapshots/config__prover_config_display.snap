@@ -1,6 +1,5 @@
 ---
 source: crates/agglayer/tests/config.rs
-assertion_line: 26
 expression: sanitize_config_folder_path(result)
 ---
 grpc-endpoint = "127.0.0.1:8080"
@@ -20,9 +19,15 @@ prometheus-addr = "0.0.0.0:3000"
 runtime-timeout = "5s"
 
 [cpu-prover]
+enabled = true
 max-concurrency-limit = 100
 proving-timeout = "5m"
 
 [network-prover]
 enabled = false
+proving-timeout = "5m"
+
+[gpu-prover]
+enabled = false
+max-concurrency-limit = 100
 proving-timeout = "5m"
