@@ -34,7 +34,7 @@ pub(crate) const ELF: &[u8] =
 #[derive(Clone)]
 pub struct Executor {
     network: Option<BoxCloneService<Request, Response, Error>>,
-    local: BoxCloneService<Request, Response, Error>,
+    local: Option<BoxCloneService<Request, Response, Error>>,
 }
 
 impl Executor {
@@ -80,13 +80,10 @@ impl Executor {
 
     #[cfg(test)]
     pub fn new_with_services(
-        network: BoxCloneService<Request, Response, Error>,
-        local: BoxCloneService<Request, Response, Error>,
+        network: Option<BoxCloneService<Request, Response, Error>>,
+        local: Option<BoxCloneService<Request, Response, Error>>,
     ) -> Self {
-        Self {
-            network: Some(network),
-            local,
-        }
+        Self { network, local }
     }
 
     pub fn new(config: &ProverConfig) -> Self {
@@ -114,19 +111,27 @@ impl Executor {
             None
         };
 
-        let prover = CpuProver::new();
-        let (proving_key, verification_key) = prover.setup(ELF);
+        let local = if config.cpu_prover.enabled {
+            let prover = CpuProver::new();
+            let (proving_key, verification_key) = prover.setup(ELF);
 
-        let local = Self::build_local_service(
-            config.network_prover.get_proving_request_timeout(),
-            config.cpu_prover.max_concurrency_limit,
-            LocalExecutor {
-                prover: Arc::new(prover),
-                proving_key,
-                verification_key,
-                timeout: config.cpu_prover.proving_timeout,
-            },
-        );
+            Some(Self::build_local_service(
+                config.cpu_prover.get_proving_request_timeout(),
+                config.cpu_prover.max_concurrency_limit,
+                LocalExecutor {
+                    prover: Arc::new(prover),
+                    proving_key,
+                    verification_key,
+                    timeout: config.cpu_prover.proving_timeout,
+                },
+            ))
+        } else {
+            None
+        };
+
+        if network.is_none() && local.is_none() {
+            panic!("No prover enabled");
+        }
 
         Self { network, local }
     }
@@ -166,20 +171,27 @@ impl Service<Request> for Executor {
     fn call(&mut self, req: Request) -> Self::Future {
         let network = self.network.as_mut().map(|s| s.call(req.clone()));
 
-        let mut local = self.local.clone();
+        let local = self.local.clone();
 
         let fut = async move {
-            if let Some(network) = network {
-                match network.await {
+            match (network, local) {
+                (Some(network), None) => match network.await {
                     Ok(res) => Ok(res),
                     Err(err) => {
                         error!("Network prover failed: {:?}", err);
-
+                        Err(err)
+                    }
+                },
+                (Some(network), Some(mut local)) => match network.await {
+                    Ok(res) => Ok(res),
+                    Err(err) => {
+                        error!("Network prover failed: {:?}", err);
                         local.ready().await?.call(req).await
                     }
-                }
-            } else {
-                local.ready().await?.call(req).await
+                },
+
+                (None, Some(mut local)) => local.ready().await?.call(req).await,
+                _ => unreachable!(),
             }
         };
 
