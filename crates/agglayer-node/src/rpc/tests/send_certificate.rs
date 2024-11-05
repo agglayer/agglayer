@@ -36,8 +36,9 @@ async fn send_certificate_method_can_be_called() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        config.clone(),
     )
-    .start(config.clone())
+    .start()
     .await
     .unwrap();
 
@@ -76,8 +77,9 @@ async fn send_certificate_method_can_be_called_and_fail() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        config.clone(),
     )
-    .start(config.clone())
+    .start()
     .await
     .unwrap();
 

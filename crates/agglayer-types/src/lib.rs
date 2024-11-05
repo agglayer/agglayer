@@ -34,6 +34,14 @@ pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EpochConfiguration {
+    /// The genesis block where the AggLayer starts.
+    pub genesis_block: u64,
+    /// The duration of an epoch in blocks.
+    pub epoch_duration: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CertificateHeader {
     pub network_id: NetworkId,
     pub height: Height,

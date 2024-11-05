@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
+use agglayer_config::epoch::BlockClockConfig;
 use agglayer_config::Config;
+use agglayer_config::Epoch;
 use agglayer_storage::stores::PendingCertificateWriter;
 use agglayer_storage::stores::StateReader;
 use agglayer_storage::stores::StateWriter;
 use agglayer_telemetry::KeyValue;
 use agglayer_types::CertificateStatus;
+use agglayer_types::EpochConfiguration;
 use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId};
 use ethers::{
     contract::{ContractError, ContractRevert},
@@ -50,6 +53,9 @@ trait Agglayer {
         &self,
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader>;
+
+    #[method(name = "getEpochConfiguration")]
+    async fn get_epoch_configuration(&self) -> RpcResult<EpochConfiguration>;
 }
 
 /// The RPC agglayer service implementation.
@@ -58,6 +64,7 @@ pub(crate) struct AgglayerImpl<Rpc, PendingStore, StateStore> {
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
+    config: Arc<Config>,
 }
 
 impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore> {
@@ -67,12 +74,14 @@ impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore> 
         certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
         pending_store: Arc<PendingStore>,
         state: Arc<StateStore>,
+        config: Arc<Config>,
     ) -> Self {
         Self {
             kernel,
             certificate_sender,
             pending_store,
             state,
+            config,
         }
     }
 }
@@ -83,8 +92,9 @@ where
     PendingStore: PendingCertificateWriter + 'static,
     StateStore: StateReader + StateWriter + 'static,
 {
-    pub(crate) async fn start(self, config: Arc<Config>) -> anyhow::Result<ServerHandle> {
+    pub(crate) async fn start(self) -> anyhow::Result<ServerHandle> {
         // Create the RPC service
+        let config = self.config.clone();
         let mut service = self.into_rpc();
 
         // Register the system_health method to serve health checks.
@@ -337,6 +347,26 @@ where
 
                 Err(Error::internal("Unable to get certificate header"))
             }
+        }
+    }
+
+    async fn get_epoch_configuration(&self) -> RpcResult<EpochConfiguration> {
+        info!("Received request to get epoch configuration");
+
+        if let Epoch::BlockClock(BlockClockConfig {
+            epoch_duration,
+            genesis_block,
+        }) = self.config.epoch
+        {
+            Ok(EpochConfiguration {
+                epoch_duration: epoch_duration.into(),
+                genesis_block,
+            })
+        } else {
+            Err(Error::internal(
+                "AggLayer isn't configured with a BlockClock configuration, thus no \
+                 EpochConfiguration is available",
+            ))
         }
     }
 }

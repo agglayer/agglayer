@@ -55,8 +55,9 @@ async fn check_tx_status() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        config.clone(),
     )
-    .start(config.clone())
+    .start()
     .await
     .unwrap();
 
@@ -103,10 +104,11 @@ async fn check_tx_status_fail() {
     let store = Arc::new(PendingStore::new(db));
     let state = Arc::new(StateStore::new(store_db));
 
-    let _server_handle = AgglayerImpl::new(kernel, certificate_sender, store, state)
-        .start(config.clone())
-        .await
-        .unwrap();
+    let _server_handle =
+        AgglayerImpl::new(kernel, certificate_sender, store, state, config.clone())
+            .start()
+            .await
+            .unwrap();
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
