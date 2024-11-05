@@ -222,6 +222,17 @@ impl StateReader for StateStore {
             .filter_map(|v| v.ok())
             .collect())
     }
+
+    fn get_latest_settled_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, Height, CertificateId, EpochNumber)>, Error> {
+        self.db
+            .get::<LatestSettledCertificatePerNetworkColumn>(network_id)
+            .map(|v| {
+                v.map(|SettledCertificate(id, height, epoch)| (*network_id, height, id, epoch))
+            })
+    }
 }
 
 impl MetadataWriter for StateStore {

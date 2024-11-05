@@ -52,6 +52,11 @@ mock! {
     impl StateReader for StateStore {
         fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
 
+        fn get_latest_settled_certificate_per_network(
+            &self,
+            network_id: &NetworkId,
+        ) -> Result<Option<(NetworkId, Height, CertificateId, EpochNumber)>, Error>;
+
         fn get_certificate_header(
             &self,
             certificate_id: &CertificateId,
