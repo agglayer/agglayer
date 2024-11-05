@@ -194,7 +194,10 @@ where
                             }
                         }
                     } else {
-                        warn!("Failed to deserialize the error details coming from the prover");
+                        warn!(
+                            "Failed to deserialize the error details coming from the prover: \
+                             {error:?}"
+                        );
 
                         Error::InternalError
                     }
