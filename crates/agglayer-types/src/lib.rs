@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use pessimistic_proof::global_index::GlobalIndex;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
-use pessimistic_proof::local_exit_tree::LocalExitTree;
+use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::Smt;
@@ -86,6 +86,9 @@ pub enum Error {
         source: pessimistic_proof::utils::smt::SmtError,
         global_index: GlobalIndex,
     },
+    /// The operation cannot be applied on the local exit tree.
+    #[error(transparent)]
+    InvalidLocalExitTreeOperation(#[from] LocalExitTreeError),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -333,10 +336,9 @@ impl LocalNetworkStateData {
 
         let l1_info_root = certificate.l1_info_root()?;
 
-        certificate
-            .bridge_exits
-            .iter()
-            .for_each(|e| self.exit_tree.add_leaf(e.hash()));
+        for e in certificate.bridge_exits.iter() {
+            self.exit_tree.add_leaf(e.hash())?;
+        }
 
         let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
             // Consider all the imported bridge exits

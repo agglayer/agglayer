@@ -89,13 +89,14 @@ pub fn main() {
         .generate_plonk_proof(&old_state.into(), &multi_batch_header)
         .expect("proving failed");
     let duration = start.elapsed();
-
     info!(
         "Successfully generated the plonk proof with a latency of {:?}",
         duration
     );
 
     let vkey = vk.bytes32().to_string();
+    info!("vkey: {}", vkey);
+
     let fixture = PessimisticProofFixture {
         certificate,
         pp_inputs: new_roots.into(),

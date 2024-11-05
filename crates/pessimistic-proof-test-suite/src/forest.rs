@@ -137,7 +137,7 @@ impl Forest {
         let mut res = Vec::new();
         for (token, amount) in events {
             let exit = exit_to_a(*token, *amount);
-            self.state_b.exit_tree.add_leaf(exit.hash());
+            self.state_b.exit_tree.add_leaf(exit.hash()).unwrap();
             res.push(exit);
         }
 

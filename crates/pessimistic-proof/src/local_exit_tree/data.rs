@@ -51,6 +51,8 @@ where
     H: Hasher,
     H::Digest: Copy + Default + Serialize + DeserializeOwned,
 {
+    const MAX_NUM_LEAVES: u32 = ((1u64 << TREE_DEPTH) - 1) as u32;
+
     /// Creates a new empty [`LocalExitTreeData`].
     pub fn new() -> Self {
         let empty_hash_at_height = empty_hash_at_height::<H, TREE_DEPTH>();
@@ -76,7 +78,8 @@ where
     /// Appends a leaf to the tree.
     pub fn add_leaf(&mut self, leaf: H::Digest) -> Result<u32, LocalExitTreeError> {
         let leaf_index = self.layers[0].len();
-        if leaf_index >> TREE_DEPTH != 0 {
+
+        if leaf_index >= Self::MAX_NUM_LEAVES as usize {
             return Err(LocalExitTreeError::LeafIndexOverflow);
         }
         self.layers[0].push(leaf);
@@ -185,7 +188,7 @@ mod tests {
     fn compare_let_data_let_frontier(num_leaves: usize) {
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
         let local_exit_tree_frontier: LocalExitTree<H, TREE_DEPTH> =
-            LocalExitTree::from_leaves(leaves.iter().cloned());
+            LocalExitTree::from_leaves(leaves.iter().cloned()).unwrap();
         let local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
             LocalExitTreeData::from_leaves(leaves.into_iter()).unwrap();
         assert_eq!(
@@ -219,7 +222,7 @@ mod tests {
         );
         let leaf = random();
         local_exit_tree_data.add_leaf(leaf)?;
-        local_exit_tree_frontier.add_leaf(leaf);
+        local_exit_tree_frontier.add_leaf(leaf)?;
         assert_eq!(
             local_exit_tree_data.get_root(),
             local_exit_tree_frontier.get_root()

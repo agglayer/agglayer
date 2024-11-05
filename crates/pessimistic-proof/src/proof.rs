@@ -8,7 +8,7 @@ use crate::{
     global_index::GlobalIndex,
     imported_bridge_exit,
     keccak::{keccak256_combine, Digest, Hash},
-    local_exit_tree::hasher::Keccak256Hasher,
+    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTreeError},
     local_state::{LocalNetworkState, StateCommitment},
     multi_batch_header::MultiBatchHeader,
 };
@@ -100,6 +100,9 @@ pub enum ProofError {
         declared: Address,
         recovered: Address,
     },
+    /// The operation cannot be applied on the local exit tree.
+    #[error(transparent)]
+    InvalidLocalExitTreeOperation(#[from] LocalExitTreeError),
     /// Unknown error.
     #[error("Unknown error: {0}")]
     Unknown(String),

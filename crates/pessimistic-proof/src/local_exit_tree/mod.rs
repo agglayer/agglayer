@@ -40,6 +40,8 @@ where
     H: Hasher,
     H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a>,
 {
+    const MAX_NUM_LEAVES: u32 = ((1u64 << TREE_DEPTH) - 1) as u32;
+
     /// Creates a new empty [`LocalExitTree`].
     pub fn new() -> Self {
         LocalExitTree {
@@ -49,14 +51,16 @@ where
     }
 
     /// Creates a new [`LocalExitTree`] and populates its leaves.
-    pub fn from_leaves(leaves: impl Iterator<Item = H::Digest>) -> Self {
+    pub fn from_leaves(
+        leaves: impl Iterator<Item = H::Digest>,
+    ) -> Result<Self, LocalExitTreeError> {
         let mut tree = Self::new();
 
         for leaf in leaves {
-            tree.add_leaf(leaf);
+            tree.add_leaf(leaf)?;
         }
 
-        tree
+        Ok(tree)
     }
 
     /// Creates a new [`LocalExitTree`] from its parts: leaf count, and
@@ -69,12 +73,10 @@ where
     }
 
     /// Appends a leaf to the tree.
-    pub fn add_leaf(&mut self, leaf: H::Digest) {
-        assert!(
-            (self.leaf_count as usize) < (1usize << TREE_DEPTH) - 1,
-            "Can have at most {} leaves.",
-            (1usize << TREE_DEPTH) - 1
-        );
+    pub fn add_leaf(&mut self, leaf: H::Digest) -> Result<u32, LocalExitTreeError> {
+        if self.leaf_count >= Self::MAX_NUM_LEAVES {
+            return Err(LocalExitTreeError::LeafIndexOverflow);
+        }
         // the index at which the new entry will be inserted
         let frontier_insertion_index: usize = {
             let leaf_count_after_insertion = self.leaf_count + 1;
@@ -94,7 +96,12 @@ where
 
         // update tree
         self.frontier[frontier_insertion_index] = new_frontier_entry;
-        self.leaf_count += 1;
+        self.leaf_count = self
+            .leaf_count
+            .checked_add(1)
+            .ok_or(LocalExitTreeError::LeafIndexOverflow)?;
+
+        Ok(self.leaf_count)
     }
 
     /// Computes and returns the root of the tree.
