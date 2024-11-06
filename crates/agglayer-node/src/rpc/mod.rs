@@ -3,6 +3,7 @@ use std::sync::Arc;
 use agglayer_config::epoch::BlockClockConfig;
 use agglayer_config::Config;
 use agglayer_config::Epoch;
+use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCertificate;
 use agglayer_storage::stores::PendingCertificateReader;
 use agglayer_storage::stores::PendingCertificateWriter;
 use agglayer_storage::stores::StateReader;
@@ -394,7 +395,7 @@ where
 
                 Error::internal(e.to_string())
             })?
-            .map(|(_, height, id, _)| (id, height));
+            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
 
         let proven_certificate_id_and_height = self
             .pending_store
