@@ -8,7 +8,10 @@ use std::{
 
 use agglayer_clock::Event;
 use agglayer_storage::{
-    columns::latest_proven_certificate_per_network::ProvenCertificate,
+    columns::{
+        latest_proven_certificate_per_network::ProvenCertificate,
+        latest_settled_certificate_per_network::SettledCertificate,
+    },
     stores::{
         EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
         PerEpochReader, PerEpochWriter, StateReader, StateWriter,
@@ -27,7 +30,7 @@ use tokio::{
     task::{JoinHandle, JoinSet},
 };
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 #[cfg(test)]
 mod tests;
@@ -53,7 +56,7 @@ pub struct CertificateOrchestrator<
     StateStore,
 > {
     /// Certificate settlement task resolver.
-    certificate_settlement_tasks: JoinSet<Result<(), Error>>,
+    certificate_settlement_tasks: JoinSet<Result<(NetworkId, SettledCertificate), Error>>,
     /// Epoch packing task resolver.
     epoch_packing_tasks: JoinSet<Result<(), Error>>,
     /// Epoch packing task builder.
@@ -287,6 +290,21 @@ where
 
         Ok(())
     }
+
+    fn handle_epoch_packing_result(&mut self) {
+        match self.pending_store.get_current_proven_height() {
+            Err(error) => error!(
+                "CRITICAL: Failed to get the current proven height for all networks: {:?}",
+                error
+            ),
+            Ok(certificates) => {
+                // Try to spawn the certifier tasks for the next height of each network
+                for ProvenCertificate(_, network_id, height) in certificates {
+                    self.spawn_certifier_task(network_id, height + 1);
+                }
+            }
+        }
+    }
 }
 
 // This block contains the logic applied to a Certificate.
@@ -360,6 +378,31 @@ where
         );
         self.certifier_tasks
             .spawn(async move { task.certify(local_state, network, height)?.await });
+    }
+
+    fn handle_settlement_result(
+        &mut self,
+        settlement_result: Result<(NetworkId, SettledCertificate), Error>,
+    ) -> Result<(), ()> {
+        match settlement_result {
+            Ok((
+                network_id,
+                SettledCertificate(certificate_id, height, epoch_number, _certificate_index),
+            )) => {
+                info!(
+                    "Certificate {certificate_id} settled on L1 for network {network_id} at \
+                     height {height}",
+                );
+
+                let current_epoch = self.current_epoch.load();
+                if current_epoch.get_epoch_number() == epoch_number + 1 {
+                    self.spawn_certifier_task(network_id, height + 1);
+                }
+            }
+            Err(_) => todo!(),
+        }
+
+        Ok(())
     }
 
     fn handle_certifier_result(
@@ -606,8 +649,6 @@ where
                 return Err(());
             }
         }
-
-        self.spawn_certifier_task(network, height + 1);
 
         Ok(())
     }
@@ -914,7 +955,19 @@ where
             }
 
             Poll::Ready(Some(Err(error))) => {
-                debug!("Critical error during p-proof generation: {:?}", error);
+                warn!("Critical error during p-proof generation: {:?}", error);
+            }
+            Poll::Ready(None) => {}
+            Poll::Pending => {}
+        }
+
+        match self.certificate_settlement_tasks.poll_join_next(cx) {
+            Poll::Ready(Some(Ok(settlement_result))) => {
+                debug!("Certificate settlement task completed");
+                _ = self.handle_settlement_result(settlement_result);
+            }
+            Poll::Ready(Some(Err(error))) => {
+                warn!("Critical error during settlement: {:?}", error);
             }
             Poll::Ready(None) => {}
             Poll::Pending => {}
@@ -930,6 +983,8 @@ where
             }
             Poll::Ready(Some(Ok(Ok(())))) => {
                 debug!("Successfully settled the epoch");
+
+                self.handle_epoch_packing_result();
             }
             _ => {}
         }
@@ -975,8 +1030,10 @@ pub trait EpochPacker: Unpin + Send + Sync + 'static {
         related_epoch: Arc<Self::PerEpochStore>,
         certificate_index: CertificateIndex,
         certificate_id: CertificateId,
-    ) -> Result<BoxFuture<Result<(), Error>>, Error>;
+    ) -> Result<SettlementFuture, Error>;
 }
+
+pub type SettlementFuture<'a> = BoxFuture<'a, Result<(NetworkId, SettledCertificate), Error>>;
 
 pub trait CertificateInput: Clone {
     fn network_id(&self) -> NetworkId;

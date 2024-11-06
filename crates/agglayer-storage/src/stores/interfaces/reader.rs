@@ -1,11 +1,16 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
-    NetworkId, Proof,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, Height, NetworkId, Proof,
 };
 
-use crate::{columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error};
+use crate::{
+    columns::{
+        latest_proven_certificate_per_network::ProvenCertificate,
+        latest_settled_certificate_per_network::SettledCertificate,
+    },
+    error::Error,
+};
 
 pub trait EpochStoreReader: Send + Sync {}
 
@@ -50,9 +55,8 @@ pub trait StateReader: Send + Sync {
         network_id: NetworkId,
         height: Height,
     ) -> Result<Option<CertificateHeader>, Error>;
-    fn get_current_settled_height(
-        &self,
-    ) -> Result<Vec<(NetworkId, Height, CertificateId, EpochNumber)>, Error>;
+
+    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error>;
 }
 
 pub trait PerEpochReader: Send + Sync {

@@ -1,8 +1,8 @@
 use std::{path::Path, sync::Arc};
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
-    NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
+    EpochNumber, Height, NetworkId,
 };
 use rocksdb::{Direction, ReadOptions};
 use tracing::warn;
@@ -110,13 +110,14 @@ impl StateWriter for StateStore {
     fn set_latest_settled_certificate_for_network(
         &self,
         network_id: &NetworkId,
+        height: &Height,
         certificate_id: &CertificateId,
         epoch_number: &EpochNumber,
-        height: &Height,
+        certificate_index: &CertificateIndex,
     ) -> Result<(), Error> {
         self.db.put::<LatestSettledCertificatePerNetworkColumn>(
             network_id,
-            &SettledCertificate(*certificate_id, *height, *epoch_number),
+            &SettledCertificate(*certificate_id, *height, *epoch_number, *certificate_index),
         )
     }
 }
@@ -172,21 +173,14 @@ impl StateReader for StateStore {
             })
     }
 
-    fn get_current_settled_height(
-        &self,
-    ) -> Result<Vec<(NetworkId, Height, CertificateId, EpochNumber)>, Error> {
+    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error> {
         Ok(self
             .db
             .iter_with_direction::<LatestSettledCertificatePerNetworkColumn>(
                 ReadOptions::default(),
                 Direction::Forward,
             )?
-            .filter_map(|v| {
-                v.map(|(network_id, SettledCertificate(id, height, epoch))| {
-                    (network_id, height, id, epoch)
-                })
-                .ok()
-            })
+            .filter_map(|v| v.ok())
             .collect())
     }
 }

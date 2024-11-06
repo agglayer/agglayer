@@ -2,6 +2,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCertificate;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::pending::PendingStore;
 use agglayer_storage::stores::state::StateStore;
@@ -9,9 +10,7 @@ use agglayer_storage::{
     stores::{PendingCertificateWriter, StateReader, StateWriter},
     tests::TempDBDir,
 };
-use agglayer_types::{
-    Certificate, CertificateId, CertificateStatus, EpochNumber, Height, NetworkId,
-};
+use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId};
 use ethers::providers::{self, MockProvider, Provider};
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
@@ -211,9 +210,10 @@ impl StateWriter for DummyStore {
     fn set_latest_settled_certificate_for_network(
         &self,
         _network_id: &NetworkId,
+        _height: &Height,
         _certificate_id: &CertificateId,
         _epoch_number: &agglayer_types::EpochNumber,
-        _height: &Height,
+        _certificate_index: &agglayer_types::CertificateIndex,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
@@ -241,15 +241,7 @@ impl StateReader for DummyStore {
 
     fn get_current_settled_height(
         &self,
-    ) -> Result<
-        Vec<(
-            NetworkId,
-            agglayer_types::Height,
-            agglayer_types::CertificateId,
-            EpochNumber,
-        )>,
-        agglayer_storage::error::Error,
-    > {
+    ) -> Result<Vec<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
         todo!()
     }
 }

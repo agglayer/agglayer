@@ -16,7 +16,7 @@ fn can_parse_key() {
 
 #[test]
 fn can_parse_value() {
-    let value = SettledCertificate([1; 32].into(), 10, 21);
+    let value = SettledCertificate([1; 32].into(), 10, 21, 0);
 
     let encoded = value.encode().expect("Unable to encode value");
 

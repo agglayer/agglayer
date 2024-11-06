@@ -3,9 +3,12 @@ use std::sync::Arc;
 use agglayer_certificate_orchestrator::{EpochPacker, Error};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::Settler;
-use agglayer_storage::stores::{PerEpochReader, PerEpochWriter, StateReader, StateWriter};
+use agglayer_storage::{
+    columns::latest_settled_certificate_per_network::SettledCertificate,
+    stores::{PerEpochReader, PerEpochWriter, StateReader, StateWriter},
+};
 use agglayer_types::{
-    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Proof,
+    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, NetworkId, Proof,
 };
 use bincode::Options;
 use futures::future::BoxFuture;
@@ -55,7 +58,7 @@ where
         related_epoch: Arc<Self::PerEpochStore>,
         certificate_index: CertificateIndex,
         certificate_id: CertificateId,
-    ) -> Result<BoxFuture<Result<(), Error>>, Error> {
+    ) -> Result<BoxFuture<Result<(NetworkId, SettledCertificate), Error>>, Error> {
         let hash = certificate_id.to_string();
         if let Some(CertificateHeader {
             status: CertificateStatus::Candidate,
@@ -162,9 +165,10 @@ where
             }
             if let Err(error) = state_store.set_latest_settled_certificate_for_network(
                 &network_id,
+                &height,
                 &certificate_id,
                 &epoch_number,
-                &height,
+                &certificate_index,
             ) {
                 error!(
                     hash,
@@ -176,7 +180,10 @@ where
                 );
             }
 
-            Ok::<_, Error>(())
+            Ok::<_, Error>((
+                network_id,
+                SettledCertificate(certificate_id, height, epoch_number, certificate_index),
+            ))
         });
 
         Ok(fut)

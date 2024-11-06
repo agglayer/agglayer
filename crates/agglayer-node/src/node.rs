@@ -19,7 +19,7 @@ use ethers::{
 use tokio::{join, sync::mpsc, task::JoinHandle};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::{epoch_synchronizer::EpochSynchronizer, kernel::Kernel, rpc::AgglayerImpl};
 
@@ -83,10 +83,15 @@ impl Node {
 
         let state_store = Arc::new(StateStore::new(state_db.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
+        info!("Storage initialized.");
 
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
             Epoch::BlockClock(cfg) => {
+                info!(
+                    "Starting BlockClock with provider: {}",
+                    config.l1.ws_node_url
+                );
                 let provider = Provider::<Ws>::connect(config.l1.ws_node_url.as_str()).await?;
                 let clock = BlockClock::new(provider, cfg.genesis_block, cfg.epoch_duration);
 
@@ -104,6 +109,7 @@ impl Node {
             }
         };
 
+        info!("Clock started.");
         let current_epoch = clock_ref.current_epoch();
 
         let epochs_store = Arc::new(EpochsStore::new(
@@ -113,9 +119,12 @@ impl Node {
             state_store.clone(),
         )?);
 
+        info!("Epoch synchronization started.");
         let current_epoch_store =
             EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref.clone())
                 .await?;
+
+        info!("Epoch synchronization completed.");
 
         let signer = ConfiguredSigner::new(config.clone()).await?;
         let address = signer.address();
@@ -140,6 +149,7 @@ impl Node {
             Arc::clone(&config),
         )
         .await?;
+        info!("Certifier client created.");
 
         // Construct the core.
         let core = Kernel::new(rpc, config.clone());
@@ -149,6 +159,8 @@ impl Node {
             state_store.clone(),
             Arc::clone(&rollup_manager),
         )?;
+
+        info!("Epoch packing aggregator task created.");
 
         let (data_sender, data_receiver) = mpsc::channel(
             config
@@ -173,6 +185,7 @@ impl Node {
             .start()
             .await?;
 
+        info!("Certificate orchestrator started.");
         // Bind the core to the RPC server.
         let server_handle = AgglayerImpl::new(
             core,

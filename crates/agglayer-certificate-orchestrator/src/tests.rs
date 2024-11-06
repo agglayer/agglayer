@@ -7,7 +7,10 @@ use std::{
 };
 
 use agglayer_storage::{
-    columns::latest_proven_certificate_per_network::ProvenCertificate,
+    columns::{
+        latest_proven_certificate_per_network::ProvenCertificate,
+        latest_settled_certificate_per_network::SettledCertificate,
+    },
     stores::{
         EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
         PerEpochReader, PerEpochWriter, StateReader, StateWriter,
@@ -110,13 +113,14 @@ impl StateReader for DummyPendingStore {
     }
     fn get_current_settled_height(
         &self,
-    ) -> Result<Vec<(NetworkId, Height, CertificateId, EpochNumber)>, agglayer_storage::error::Error>
-    {
+    ) -> Result<Vec<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
         self.settled
             .read()
             .unwrap()
             .iter()
-            .map(|(network_id, (height, id))| Ok((*network_id, *height, *id, 0)))
+            .map(|(network_id, (height, id))| {
+                Ok((*network_id, SettledCertificate(*id, *height, 0, 0)))
+            })
             .collect()
     }
 
@@ -268,9 +272,10 @@ impl StateWriter for DummyPendingStore {
     fn set_latest_settled_certificate_for_network(
         &self,
         _network_id: &NetworkId,
+        _height: &Height,
         _certificate_id: &CertificateId,
         _epoch_number: &EpochNumber,
-        _height: &Height,
+        _certificate_index: &CertificateIndex,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
@@ -596,8 +601,21 @@ pub(crate) fn create_orchestrator_mock(
             clock.1,
             data_receiver,
             cancellation_token,
-            builder.epoch_packer.unwrap_or_default(),
-            builder.certifier.unwrap_or_default(),
+            builder.epoch_packer.unwrap_or_else(|| {
+                let mut epoch_packer = MockEpochPacker::default();
+
+                epoch_packer.expect_settle_certificate().never();
+                epoch_packer.expect_pack().never();
+
+                epoch_packer
+            }),
+            builder.certifier.unwrap_or_else(|| {
+                let mut certifier = MockCertifier::default();
+
+                certifier.expect_certify().never();
+
+                certifier
+            }),
             pending_store,
             epochs_store,
             current_epoch,
@@ -696,10 +714,15 @@ impl EpochPacker for Check {
     fn settle_certificate(
         &self,
         _epoch: Arc<Self::PerEpochStore>,
-        _certificate_index: CertificateIndex,
-        _certificate_id: CertificateId,
-    ) -> Result<BoxFuture<Result<(), Error>>, Error> {
-        Ok(Box::pin(async { Ok(()) }))
+        certificate_index: CertificateIndex,
+        certificate_id: CertificateId,
+    ) -> Result<BoxFuture<Result<(NetworkId, SettledCertificate), Error>>, Error> {
+        Ok(Box::pin(async move {
+            Ok((
+                0.into(),
+                SettledCertificate(certificate_id, 0, 0, certificate_index),
+            ))
+        }))
     }
 
     fn pack(&self, epoch: Arc<Self::PerEpochStore>) -> Result<BoxFuture<Result<(), Error>>, Error> {

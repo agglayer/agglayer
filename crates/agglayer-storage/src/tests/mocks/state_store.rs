@@ -5,6 +5,7 @@ use agglayer_types::{
 use mockall::mock;
 
 use crate::{
+    columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
     stores::{MetadataReader, MetadataWriter, StateReader, StateWriter},
 };
@@ -34,9 +35,10 @@ mock! {
         fn set_latest_settled_certificate_for_network(
             &self,
             network_id: &NetworkId,
+            height: &Height,
             certificate_id: &CertificateId,
             epoch_number: &EpochNumber,
-            height: &Height,
+            certificate_index: &agglayer_types::CertificateIndex
         ) -> Result<(), Error>;
     }
 
@@ -53,6 +55,6 @@ mock! {
             network_id: NetworkId,
             height: Height,
         ) -> Result<Option<CertificateHeader>, Error>;
-        fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, Height, CertificateId, EpochNumber)>, Error>;
+        fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error>;
     }
 }
