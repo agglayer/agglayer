@@ -22,7 +22,7 @@ use tower::{
     limit::ConcurrencyLimitLayer, timeout::TimeoutLayer, util::BoxCloneService, Service,
     ServiceBuilder, ServiceExt,
 };
-use tracing::error;
+use tracing::{debug, error};
 
 #[cfg(test)]
 mod tests;
@@ -91,6 +91,7 @@ impl Executor {
 
     pub fn new(config: &ProverConfig) -> Self {
         let network = if config.network_prover.enabled {
+            debug!("Creating network prover executor...");
             let network_prover = NetworkProver::new();
             let (_proving_key, verification_key) = network_prover.setup(ELF);
             Some(Self::build_network_service(

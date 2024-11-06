@@ -70,7 +70,6 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         verifying_key: &SP1VerifyingKey,
         proof: &SP1ProofWithPublicValues,
     ) -> Result<(), SP1VerificationError> {
-        debug!("execute verify");
         // This fail_point is use to make the verification pass or fail
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
@@ -167,6 +166,7 @@ where
                     })?,
             };
 
+            info!("Sending the Proof generation request to the agglayer-prover service...");
             let prover_response: tonic::Response<ProofGenerationResponse> = prover_client
                 .generate_proof(request)
                 .await
@@ -211,8 +211,11 @@ where
                     source,
                 })?;
 
+            debug!("Proof successfully generated!");
+
             let Proof::SP1(ref proof_to_verify) = proof;
 
+            debug!("Verifying the generated p-proof...");
             if let Err(error) = Self::verify_proof(verifier, &verifying_key, proof_to_verify) {
                 error!("Failed to verify the p-proof: {:?}", error);
 

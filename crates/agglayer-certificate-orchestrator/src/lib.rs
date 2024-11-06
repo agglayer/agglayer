@@ -425,7 +425,7 @@ where
             // pending store and the certifier task will be spawned again.
             Err(Error::CertificateNotFound(network_id, height)) => {
                 // TODO: Check if `CertificateHeader` if present, spawn next height
-                warn!(
+                debug!(
                     "Received a proof certification error for a certificate that is not found for \
                      network {} at {}",
                     network_id, height
