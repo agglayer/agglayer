@@ -46,6 +46,45 @@ impl StateStore {
 }
 
 impl StateWriter for StateStore {
+    fn assign_certificate_to_epoch(
+        &self,
+        certificate_id: &CertificateId,
+        epoch_number: &EpochNumber,
+        certificate_index: &CertificateIndex,
+    ) -> Result<(), Error> {
+        // TODO: make lockguard for certificate_id
+        let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
+
+        if let Some(mut certificate_header) = certificate_header {
+            if certificate_header.epoch_number.is_some()
+                || certificate_header.certificate_index.is_some()
+            {
+                return Err(Error::UnprocessedAction(
+                    "Tried to assign a certificate to an epoch that is already assigned"
+                        .to_string(),
+                ));
+            }
+
+            if certificate_header.status != CertificateStatus::Proven {
+                return Err(Error::UnprocessedAction(format!(
+                    "Tried to assign a certificate to an epoch that is not in the right status \
+                     expect {} found {}",
+                    CertificateStatus::Proven,
+                    certificate_header.status
+                )));
+            }
+
+            certificate_header.status = CertificateStatus::Candidate;
+            certificate_header.epoch_number = Some(*epoch_number);
+            certificate_header.certificate_index = Some(*certificate_index);
+
+            self.db
+                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+        }
+
+        Ok(())
+    }
+
     fn insert_certificate_header(
         &self,
         certificate: &Certificate,

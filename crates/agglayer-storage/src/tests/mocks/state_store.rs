@@ -20,6 +20,13 @@ mock! {
     }
 
     impl StateWriter for StateStore {
+        fn assign_certificate_to_epoch(
+            &self,
+            certificate_id: &CertificateId,
+            epoch_number: &EpochNumber,
+            certificate_index: &agglayer_types::CertificateIndex,
+        ) -> Result<(), Error>;
+
         fn insert_certificate_header(
             &self,
             certificate: &Certificate,

@@ -172,6 +172,18 @@ pub enum CertificateStatus {
     Settled,
 }
 
+impl std::fmt::Display for CertificateStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            CertificateStatus::Pending => write!(f, "Pending"),
+            CertificateStatus::Proven => write!(f, "Proven"),
+            CertificateStatus::Candidate => write!(f, "Candidate"),
+            CertificateStatus::InError { error } => write!(f, "InError: {}", error),
+            CertificateStatus::Settled => write!(f, "Settled"),
+        }
+    }
+}
+
 /// Proof is a wrapper around all the different types of proofs that can be
 /// generated
 #[derive(Debug, Clone, Serialize, Deserialize)]

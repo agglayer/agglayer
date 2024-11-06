@@ -267,9 +267,10 @@ where
         self.pending_store
             .remove_pending_certificate(network_id, height)?;
 
-        self.state_store.update_certificate_header_status(
+        self.state_store.assign_certificate_to_epoch(
             &certificate_id,
-            &agglayer_types::CertificateStatus::Candidate,
+            &self.epoch_number,
+            &certificate_index,
         )?;
 
         if let Some(height) = end_checkpoint_entry_assigment {
