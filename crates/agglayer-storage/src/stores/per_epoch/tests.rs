@@ -9,7 +9,8 @@ use agglayer_types::{Height, NetworkId, Proof};
 use parking_lot::RwLock;
 use rstest::{fixture, rstest};
 
-use crate::stores::PendingCertificateWriter as _;
+use crate::stores::interfaces::writer::StateWriter;
+use crate::stores::{PendingCertificateWriter as _, StateReader};
 use crate::{
     error::Error,
     stores::{
@@ -63,41 +64,50 @@ type EndCheckpointState = CheckpointState;
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
     |result: Result<_, Error>| result.is_ok(),
-    0)]
+    0, Some(0), Some(0))]
 #[case::when_state_is_incorrect(
     StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 0)]),
     EndCheckpointState::Empty,
     |result: Result<_, Error>| matches!(result, Err(Error::Unexpected(_))),
-    0)]
+    0, None, None)]
 #[case::when_certificate_is_unexpected(
     StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
     EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
     |result: Result<_, Error>| {
         matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, 0, 1))))
-    }, 0)]
+    }, 0, None, None)]
 #[case::when_certificate_is_already_present(
     StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
     EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
     |result: Result<_, Error>| {
         matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, 1, 1))))
-    }, 1)]
+    }, 1, None, None)]
 #[case::when_there_is_a_gap(
     StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
     EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
     |result: Result<_, Error>| {
         matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, 3, 1))))
-    }, 3)]
+    }, 3, None, None)]
 fn adding_a_certificate(
     mut store: PerEpochStore<PendingStore, StateStore>,
     #[case] start_checkpoint: StartCheckpointState,
     #[case] end_checkpoint: EndCheckpointState,
     #[case] expected_result: impl FnOnce(Result<(u64, u64), Error>) -> bool,
     #[case] height: Height,
+    #[case] expected_epoch_number: Option<u64>,
+    #[case] expected_certificate_index: Option<u64>,
 ) {
+    use agglayer_types::CertificateStatus;
+
     let network_id = 0.into();
     let certificate = Certificate::new_for_test(network_id, height);
     let certificate_id = certificate.hash();
     let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
 
     pending_store
         .insert_pending_certificate(network_id, height, &certificate)
@@ -111,6 +121,21 @@ fn adding_a_certificate(
     store.end_checkpoint = RwLock::new(end_checkpoint.into());
 
     assert!(expected_result(store.add_certificate(network_id, height)));
+
+    let header = state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(header.epoch_number, expected_epoch_number);
+    assert_eq!(header.certificate_index, expected_certificate_index);
+    assert_eq!(
+        header.status,
+        if expected_certificate_index.is_some() {
+            CertificateStatus::Candidate
+        } else {
+            CertificateStatus::Proven
+        }
+    );
 }
 
 #[rstest]

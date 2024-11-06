@@ -193,6 +193,14 @@ fn next_available_addr() -> std::net::SocketAddr {
 struct DummyStore {}
 
 impl StateWriter for DummyStore {
+    fn assign_certificate_to_epoch(
+        &self,
+        _certificate_id: &CertificateId,
+        _epoch_number: &agglayer_types::EpochNumber,
+        _certificate_index: &agglayer_types::CertificateIndex,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
     fn insert_certificate_header(
         &self,
         _certificate: &Certificate,

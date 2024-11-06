@@ -225,6 +225,15 @@ impl PendingCertificateWriter for DummyPendingStore {
 }
 
 impl StateWriter for DummyPendingStore {
+    fn assign_certificate_to_epoch(
+        &self,
+        _certificate_id: &CertificateId,
+        _epoch_number: &EpochNumber,
+        _certificate_index: &agglayer_types::CertificateIndex,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
+
     fn insert_certificate_header(
         &self,
         certificate: &Certificate,
