@@ -236,10 +236,7 @@ impl StateReader for DummyStore {
     fn get_latest_settled_certificate_per_network(
         &self,
         _network_id: &NetworkId,
-    ) -> Result<
-        Option<(NetworkId, Height, CertificateId, EpochNumber)>,
-        agglayer_storage::error::Error,
-    > {
+    ) -> Result<Option<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
         todo!()
     }
 

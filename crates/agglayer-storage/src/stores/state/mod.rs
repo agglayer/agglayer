@@ -226,12 +226,10 @@ impl StateReader for StateStore {
     fn get_latest_settled_certificate_per_network(
         &self,
         network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, Height, CertificateId, EpochNumber)>, Error> {
+    ) -> Result<Option<(NetworkId, SettledCertificate)>, Error> {
         self.db
             .get::<LatestSettledCertificatePerNetworkColumn>(network_id)
-            .map(|v| {
-                v.map(|SettledCertificate(id, height, epoch)| (*network_id, height, id, epoch))
-            })
+            .map(|v| v.map(|v| (*network_id, v)))
     }
 }
 

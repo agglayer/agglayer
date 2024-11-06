@@ -70,7 +70,7 @@ pub trait StateReader: Send + Sync {
     fn get_latest_settled_certificate_per_network(
         &self,
         network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, Height, CertificateId, EpochNumber)>, Error>;
+    ) -> Result<Option<(NetworkId, SettledCertificate)>, Error>;
 }
 
 pub trait PerEpochReader: Send + Sync {

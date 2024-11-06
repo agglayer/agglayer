@@ -1,24 +1,16 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use agglayer_config::{epoch::TimeClockConfig, Config, Epoch};
+use agglayer_config::Config;
 use agglayer_storage::{
     storage::{pending_db_cf_definitions, state_db_cf_definitions, DB},
     stores::{pending::PendingStore, state::StateStore, PendingCertificateWriter, StateWriter},
     tests::TempDBDir,
 };
-use agglayer_types::{Certificate, CertificateHeader, CertificateStatus, EpochConfiguration};
-use insta::assert_snapshot;
-use jsonrpsee::{
-    core::{client::ClientT, ClientError},
-    rpc_params,
-};
+use agglayer_types::{Certificate, CertificateHeader, CertificateStatus};
+use jsonrpsee::{core::client::ClientT, rpc_params};
 use rstest::*;
-use serde_json::json;
 
-use super::context;
-use super::raw_rpc;
 use super::TestContext;
-use crate::rpc::{tests::RawRpcContext, AgglayerServer};
 
 #[rstest]
 #[test_log::test(tokio::test)]
@@ -56,11 +48,13 @@ async fn returns_the_pending_certificate_header() {
     state_db
         .set_latest_settled_certificate_for_network(
             &network_id,
+            &0,
             &settled_certificate.hash(),
             &0,
             &0,
         )
         .expect("unable to set latest settled certificate");
+
     pending_db
         .set_latest_proven_certificate_per_network(&network_id, &1, &proven_certificate.hash())
         .expect("unable to set latest proven certificate");
@@ -118,6 +112,7 @@ async fn returns_the_proven_certificate_header() {
     state_db
         .set_latest_settled_certificate_for_network(
             &network_id,
+            &settled_certificate.height,
             &settled_certificate.hash(),
             &0,
             &0,
@@ -142,7 +137,7 @@ async fn returns_the_proven_certificate_header() {
         .unwrap();
 
     assert_eq!(payload.certificate_id, proven_certificate.hash());
-    assert_eq!(payload.status, CertificateStatus::Pending);
+    assert_eq!(payload.status, CertificateStatus::Proven);
 }
 
 #[test_log::test(tokio::test)]

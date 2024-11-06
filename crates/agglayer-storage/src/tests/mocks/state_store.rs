@@ -55,7 +55,7 @@ mock! {
         fn get_latest_settled_certificate_per_network(
             &self,
             network_id: &NetworkId,
-        ) -> Result<Option<(NetworkId, Height, CertificateId, EpochNumber)>, Error>;
+        ) -> Result<Option<(NetworkId, SettledCertificate)>, Error>;
 
         fn get_certificate_header(
             &self,
