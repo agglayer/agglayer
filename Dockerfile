@@ -15,7 +15,7 @@ COPY --link Cargo.lock Cargo.lock
 
 RUN cargo chef prepare --recipe-path recipe.json --bin agglayer
 
-FROM golang:1.22 AS go-builder
+FROM --platform=${BUILDPLATFORM} golang:1.22 AS go-builder
 
 FROM chef AS builder
 
