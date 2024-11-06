@@ -1,4 +1,4 @@
-use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
+use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height, NetworkId};
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF};
@@ -17,8 +17,13 @@ mod tests;
 /// | `NetworkId` | (`CertificateId`, `Height`, `EpochNumber`) |
 pub struct LatestSettledCertificatePerNetworkColumn;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SettledCertificate(pub CertificateId, pub Height, pub EpochNumber);
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SettledCertificate(
+    pub CertificateId,
+    pub Height,
+    pub EpochNumber,
+    pub CertificateIndex,
+);
 
 pub type Key = NetworkId;
 

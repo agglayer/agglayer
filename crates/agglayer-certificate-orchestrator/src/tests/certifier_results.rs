@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+use agglayer_storage::columns::latest_proven_certificate_per_network::ProvenCertificate;
+use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCertificate;
+use agglayer_storage::tests::mocks::MockEpochsStore;
 use agglayer_storage::tests::mocks::MockPendingStore;
 use agglayer_storage::tests::mocks::MockPerEpochStore;
 use agglayer_storage::tests::mocks::MockStateStore;
@@ -18,10 +21,11 @@ use tokio::time::sleep;
 
 use crate::tests::create_orchestrator_mock;
 use crate::tests::mocks::MockCertifier;
+use crate::tests::mocks::MockEpochPacker;
 use crate::tests::MockOrchestrator;
 
 #[rstest]
-#[tokio::test]
+#[test_log::test(tokio::test)]
 #[timeout(Duration::from_millis(100))]
 async fn certifier_results_for_unknown_network_with_height_zero() {
     let network_id: NetworkId = 1.into();
@@ -76,6 +80,12 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
         .in_sequence(&mut seq)
         .with(eq(network_id), eq(0))
         .returning(|_, _| Ok((0, 0)));
+
+    current_epoch_store
+        .expect_get_epoch_number()
+        .once()
+        .in_sequence(&mut seq)
+        .returning(|| 1);
 
     // We expect one call to the certifier for the certificate2 as we forge the
     // certificate one result.
@@ -136,11 +146,23 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
             ))
         });
 
+    let mut epoch_packer = MockEpochPacker::new();
+    epoch_packer
+        .expect_settle_certificate()
+        .once()
+        .with(always(), eq(0), eq(certificate_id))
+        .returning(move |_, height, certificate_id| {
+            Ok(Box::pin(async move {
+                Ok((network_id, SettledCertificate(certificate_id, height, 0, 0)))
+            }))
+        });
+
     let builder = MockOrchestrator::builder()
         .certifier(certifier_mock)
         .pending_store(pending_store)
         .state_store(state_store)
         .current_epoch(current_epoch_store)
+        .epoch_packer(epoch_packer)
         .build();
 
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
@@ -152,6 +174,13 @@ async fn certifier_results_for_unknown_network_with_height_zero() {
         new_state: state,
         network: network_id,
     }));
+
+    assert!(result.is_ok());
+
+    let result = orchestrator.handle_settlement_result(Ok((
+        network_id,
+        SettledCertificate(certificate_id, 0, 0, 0),
+    )));
 
     assert!(result.is_ok());
 
@@ -216,6 +245,7 @@ async fn certifier_results_for_unknown_network_with_height_not_zero() {
     let builder = MockOrchestrator::builder()
         .certifier(certifier_mock)
         .pending_store(pending_store)
+        .epoch_packer(MockEpochPacker::new())
         .build();
 
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
@@ -260,6 +290,7 @@ async fn certifier_error_certificate_does_not_exists() {
 
     let builder = MockOrchestrator::builder()
         .certifier(certifier_mock)
+        .epoch_packer(MockEpochPacker::new())
         .build();
 
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
@@ -315,6 +346,7 @@ async fn certifier_error_proof_already_exists_unknown_network_at_height_0_but_no
         .pending_store(pending_store)
         .state_store(state_store)
         .certifier(certifier_mock)
+        .epoch_packer(MockEpochPacker::new())
         .build();
 
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
@@ -509,6 +541,7 @@ async fn certifier_error_proof_already_exists(
         .pending_store(pending_store)
         .state_store(state_store)
         .certifier(certifier_mock)
+        .epoch_packer(MockEpochPacker::new())
         .build();
 
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
@@ -540,11 +573,15 @@ async fn certifier_success_with_chain_of_certificates() {
     let certificate_id2 = certificate2.hash();
 
     let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+    let (sender_settlement, mut receiver_settlement) = tokio::sync::mpsc::channel(2);
 
+    let mut epochs_store = MockEpochsStore::new();
     let mut certifier_mock = MockCertifier::new();
     let mut pending_store = MockPendingStore::new();
     let mut state_store = MockStateStore::new();
     let mut current_epoch_store = MockPerEpochStore::new();
+
+    let mut epoch_packer = MockEpochPacker::new();
     let mut seq = Sequence::new();
 
     certifier_mock
@@ -565,7 +602,6 @@ async fn certifier_success_with_chain_of_certificates() {
                 Ok(result)
             }))
         });
-
     pending_store
         .expect_get_current_proven_height_for_network()
         .once()
@@ -594,6 +630,55 @@ async fn certifier_success_with_chain_of_certificates() {
         .with(eq(network_id), eq(0))
         .returning(|_, _| Ok((0, 0)));
 
+    epoch_packer
+        .expect_settle_certificate()
+        .once()
+        .in_sequence(&mut seq)
+        .with(always(), eq(0), eq(certificate.hash()))
+        .returning(move |_, index, id| {
+            let sender_settlement = sender_settlement.clone();
+            Ok(Box::pin(async move {
+                let result = (1.into(), SettledCertificate(id, 0, 0, index));
+                sender_settlement.send(result.clone()).await.unwrap();
+
+                Ok(result)
+            }))
+        });
+
+    current_epoch_store
+        .expect_get_epoch_number()
+        .once()
+        .in_sequence(&mut seq)
+        .returning(|| 0);
+
+    epochs_store
+        .expect_open()
+        .once()
+        .in_sequence(&mut seq)
+        .with(eq(1))
+        .returning(move |_| {
+            let mut seq = Sequence::new();
+            let mut store = MockPerEpochStore::new();
+            store
+                .expect_add_certificate()
+                .once()
+                .in_sequence(&mut seq)
+                .with(eq(network_id), eq(1))
+                .returning(|network_id, height| Ok(((*network_id).into(), height)));
+
+            Ok(store)
+        });
+
+    epoch_packer
+        .expect_pack()
+        .once()
+        .returning(|_| Ok(Box::pin(async { Ok(()) })));
+
+    pending_store
+        .expect_get_current_proven_height()
+        .once()
+        .returning(move || Ok(vec![ProvenCertificate(certificate_id, network_id, 0)]));
+
     pending_store
         .expect_get_current_proven_height_for_network()
         .once()
@@ -621,24 +706,13 @@ async fn certifier_success_with_chain_of_certificates() {
         .with(eq(certificate_id2), eq(&CertificateStatus::Proven))
         .returning(|_, _| Ok(()));
 
-    current_epoch_store
-        .expect_add_certificate()
-        .once()
-        .in_sequence(&mut seq)
-        .with(eq(network_id), eq(1))
-        .returning(|network_id, height| {
-            Err(agglayer_storage::error::Error::CertificateCandidateError(
-                agglayer_storage::error::CertificateCandidateError::UnexpectedHeight(
-                    network_id, height, 0,
-                ),
-            ))
-        });
-
     let builder = MockOrchestrator::builder()
+        .epochs_store(epochs_store)
         .pending_store(pending_store)
         .current_epoch(current_epoch_store)
         .state_store(state_store)
         .certifier(certifier_mock)
+        .epoch_packer(epoch_packer)
         .build();
 
     let (_data_sender, mut orchestrator) = create_orchestrator_mock::partial_1(builder);
@@ -646,6 +720,16 @@ async fn certifier_success_with_chain_of_certificates() {
 
     let output = receiver.recv().await.expect("output not present");
     orchestrator.handle_certifier_result(Ok(output)).unwrap();
+    let output = receiver_settlement
+        .recv()
+        .await
+        .expect("settlement not present");
+    orchestrator
+        .handle_settlement_result(Ok(output))
+        .expect("settlement failed");
+
+    orchestrator.handle_epoch_end(0).unwrap();
+    orchestrator.handle_epoch_packing_result();
 
     let output = receiver.recv().await.expect("output not present");
     orchestrator.handle_certifier_result(Ok(output)).unwrap();

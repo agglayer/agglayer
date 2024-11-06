@@ -2,7 +2,7 @@ use agglayer_types::{Height, NetworkId};
 use futures_util::future::BoxFuture;
 use mockall::mock;
 
-use crate::{Certifier, CertifierOutput, EpochPacker, Error};
+use crate::{Certifier, CertifierOutput, EpochPacker, Error, SettlementFuture};
 
 mock! {
     pub Certifier {}
@@ -26,6 +26,6 @@ mock! {
             related_epoch: std::sync::Arc<agglayer_storage::tests::mocks::MockPerEpochStore>,
             certificate_index: agglayer_types::CertificateIndex,
             certificate_id: agglayer_types::CertificateId,
-        ) -> Result<BoxFuture<'static, Result<(), Error>>, Error>;
+        ) -> Result<SettlementFuture<'static>, Error>;
     }
 }
