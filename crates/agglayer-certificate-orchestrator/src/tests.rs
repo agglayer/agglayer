@@ -9,6 +9,11 @@ use std::{
 
 use agglayer_clock::ClockRef;
 use agglayer_config::Config;
+use agglayer_storage::stores::LocalNetworkStateWriter;
+use agglayer_storage::stores::{
+    local_network_state::LocalNetworkStateStore, LocalNetworkStateReader,
+};
+use agglayer_storage::tests::mocks::MockLocalNetworkStateStore;
 use agglayer_storage::{
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
@@ -390,6 +395,10 @@ async fn test_certificate_orchestrator_can_stop() {
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
     );
+    let network_state_store = Arc::new(
+        LocalNetworkStateStore::new_with_path(&config.storage.network_state_db_path)
+            .expect("Unable to create store"),
+    );
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
@@ -431,6 +440,7 @@ async fn test_certificate_orchestrator_can_stop() {
         epochs_store,
         current_epoch,
         state_store.clone(),
+        network_state_store,
     )
     .expect("Unable to create orchestrator");
 
@@ -452,6 +462,10 @@ async fn test_collect_certificates() {
     );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+    );
+    let network_state_store = Arc::new(
+        LocalNetworkStateStore::new_with_path(&config.storage.network_state_db_path)
+            .expect("Unable to create store"),
     );
 
     let epochs_store = Arc::new(
@@ -494,6 +508,7 @@ async fn test_collect_certificates() {
         epochs_store,
         current_epoch,
         state_store.clone(),
+        network_state_store,
     )
     .expect("Unable to create orchestrator");
 
@@ -517,6 +532,10 @@ async fn test_collect_certificates_after_epoch() {
     );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+    );
+    let network_state_store = Arc::new(
+        LocalNetworkStateStore::new_with_path(&config.storage.network_state_db_path)
+            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -559,6 +578,7 @@ async fn test_collect_certificates_after_epoch() {
         epochs_store,
         current_epoch,
         state_store.clone(),
+        network_state_store,
     )
     .expect("Unable to create orchestrator");
 
@@ -584,6 +604,10 @@ async fn test_collect_certificates_when_empty() {
     );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+    );
+    let network_state_store = Arc::new(
+        LocalNetworkStateStore::new_with_path(&config.storage.network_state_db_path)
+            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -627,6 +651,7 @@ async fn test_collect_certificates_when_empty() {
         epochs_store,
         current_epoch,
         state_store.clone(),
+        network_state_store,
     )
     .expect("Unable to create orchestrator");
 

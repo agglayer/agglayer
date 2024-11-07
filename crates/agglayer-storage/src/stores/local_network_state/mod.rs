@@ -50,7 +50,7 @@ impl LocalNetworkStateStore {
 }
 
 impl LocalNetworkStateWriter for LocalNetworkStateStore {
-    fn update_local_network_state(
+    fn write_local_network_state(
         &self,
         network_id: &NetworkId,
         new_state: &LocalNetworkStateData,
@@ -63,7 +63,7 @@ impl LocalNetworkStateWriter for LocalNetworkStateStore {
             let new_leaf_count = new_state.exit_tree.leaf_count;
             let start_leaf_count = new_leaf_count - new_leaves.len() as u32;
 
-            if let Some(stored_exit_tree) = self.get_local_exit_tree(network_id.into())? {
+            if let Some(stored_exit_tree) = self.read_local_exit_tree(network_id.into())? {
                 if stored_exit_tree.leaf_count != start_leaf_count {
                     // inconsistent state
                 }
@@ -116,13 +116,13 @@ impl LocalNetworkStateWriter for LocalNetworkStateStore {
         }
 
         // Store the balance tree
-        self.update_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(
+        self.write_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(
             network_id,
             &new_state.balance_tree,
         )?;
 
         // Store the nullifier tree
-        self.update_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(
+        self.write_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(
             network_id,
             &new_state.nullifier_tree,
         )?;
@@ -132,7 +132,7 @@ impl LocalNetworkStateWriter for LocalNetworkStateStore {
 }
 
 impl LocalNetworkStateStore {
-    fn update_smt<C, const DEPTH: usize>(
+    fn write_smt<C, const DEPTH: usize>(
         &self,
         network_id: u32,
         smt: &Smt<Keccak256Hasher, DEPTH>,
@@ -177,7 +177,7 @@ impl LocalNetworkStateStore {
 }
 
 impl LocalNetworkStateStore {
-    fn get_local_exit_tree(
+    fn read_local_exit_tree(
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalExitTree<Keccak256Hasher>>, Error> {
@@ -207,7 +207,7 @@ impl LocalNetworkStateStore {
             })
             .collect::<Result<_, _>>()?;
 
-        let mut frontier = [[0; 32]; 32];
+        let mut frontier = [[0u8; 32]; 32];
         for (i, l) in retrieved_frontier.iter().enumerate() {
             frontier[i] = *l;
         }
@@ -218,7 +218,7 @@ impl LocalNetworkStateStore {
         }))
     }
 
-    fn get_smt<C, const DEPTH: usize>(
+    fn read_smt<C, const DEPTH: usize>(
         &self,
         network_id: NetworkId,
     ) -> Result<Option<Smt<Keccak256Hasher, DEPTH>>, Error>
@@ -278,14 +278,14 @@ impl LocalNetworkStateStore {
 }
 
 impl LocalNetworkStateReader for LocalNetworkStateStore {
-    fn get_local_network_state(
+    fn read_local_network_state(
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error> {
         match (
-            self.get_local_exit_tree(network_id)?,
-            self.get_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(network_id)?,
-            self.get_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(network_id)?,
+            self.read_local_exit_tree(network_id)?,
+            self.read_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(network_id)?,
+            self.read_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(network_id)?,
         ) {
             (None, None, None) => Ok(None), // consistent empty state
             (Some(exit_tree), Some(balance_tree), Some(nullifier_tree)) => {

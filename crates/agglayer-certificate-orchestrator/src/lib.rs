@@ -13,8 +13,9 @@ use agglayer_storage::{
         latest_settled_certificate_per_network::SettledCertificate,
     },
     stores::{
-        EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
-        PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+        EpochStoreReader, EpochStoreWriter, LocalNetworkStateReader, LocalNetworkStateWriter,
+        PendingCertificateReader, PendingCertificateWriter, PerEpochReader, PerEpochWriter,
+        StateReader, StateWriter,
     },
 };
 use agglayer_types::{CertificateId, CertificateIndex, Height, NetworkId};
@@ -67,6 +68,7 @@ pub struct CertificateOrchestrator<
     EpochsStore,
     PerEpochStore,
     StateStore,
+    NetworkStateStore,
 > {
     /// Epoch packing task resolver.
     epoch_packing_tasks: EpochPackingTasks,
@@ -86,6 +88,8 @@ pub struct CertificateOrchestrator<
     cancellation_token: CancellationToken,
 
     /// The state store to access data.
+    #[allow(unused)]
+    network_state_store: Arc<NetworkStateStore>,
     state_store: Arc<StateStore>,
     /// Pending store to access the certificates and proofs.
     pending_store: Arc<PendingStore>,
@@ -116,7 +120,15 @@ pub struct CertificateOrchestrator<
         mpsc::Sender<(oneshot::Sender<SettledCertificate>, ProvenCertificate)>,
 }
 
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<
+        E,
+        CertifierClient,
+        PendingStore,
+        EpochsStore,
+        PerEpochStore,
+        StateStore,
+        NetworkStateStore,
+    >
     CertificateOrchestrator<
         E,
         CertifierClient,
@@ -124,9 +136,12 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        NetworkStateStore,
     >
 where
     PendingStore: PendingCertificateReader,
+    StateStore: StateReader + StateWriter + 'static,
+    NetworkStateStore: LocalNetworkStateReader + LocalNetworkStateWriter + 'static,
 {
     const DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE: usize = 1000;
 
@@ -142,6 +157,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: ArcSwap<PerEpochStore>,
         state_store: Arc<StateStore>,
+        network_state_store: Arc<NetworkStateStore>,
     ) -> Result<Self, Error> {
         let (certification_notification_sender, certification_notification) =
             mpsc::channel(Self::DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE);
@@ -168,12 +184,21 @@ where
             settlement_notifier: Default::default(),
             certification_notification,
             certification_notification_sender,
+            network_state_store,
         })
     }
 }
 
 #[buildstructor::buildstructor]
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<
+        E,
+        CertifierClient,
+        PendingStore,
+        EpochsStore,
+        PerEpochStore,
+        StateStore,
+        NetworkStateStore,
+    >
     CertificateOrchestrator<
         E,
         CertifierClient,
@@ -181,6 +206,7 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        NetworkStateStore,
     >
 where
     CertifierClient: Certifier,
@@ -189,6 +215,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
+    NetworkStateStore: LocalNetworkStateReader + LocalNetworkStateWriter + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
     ///
@@ -219,6 +246,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: ArcSwap<PerEpochStore>,
         state_store: Arc<StateStore>,
+        network_state_store: Arc<NetworkStateStore>,
     ) -> anyhow::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
             clock,
@@ -230,6 +258,7 @@ where
             epochs_store,
             current_epoch,
             state_store,
+            network_state_store,
         )?;
 
         // Try to spawn the certifier tasks for the next height of each network
@@ -245,7 +274,15 @@ where
     }
 }
 
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<
+        E,
+        CertifierClient,
+        PendingStore,
+        EpochsStore,
+        PerEpochStore,
+        StateStore,
+        NetworkStateStore,
+    >
     CertificateOrchestrator<
         E,
         CertifierClient,
@@ -253,6 +290,7 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        NetworkStateStore,
     >
 where
     CertifierClient: Certifier,
@@ -261,6 +299,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    NetworkStateStore: LocalNetworkStateReader + LocalNetworkStateWriter + 'static,
 {
     fn spawn_network_task(&mut self, network_id: NetworkId) -> Result<(), Error> {
         if self.spawned_network_tasks.contains_key(&network_id) {
@@ -403,7 +442,15 @@ where
 //
 // When a Certificate is proven, we try to add it to the current epoch.
 // If we succeed, we try to settle it on L1.
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<
+        E,
+        CertifierClient,
+        PendingStore,
+        EpochsStore,
+        PerEpochStore,
+        StateStore,
+        NetworkStateStore,
+    >
     CertificateOrchestrator<
         E,
         CertifierClient,
@@ -411,6 +458,7 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        NetworkStateStore,
     >
 where
     CertifierClient: Certifier,
@@ -418,6 +466,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateReader + StateWriter,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    NetworkStateStore: LocalNetworkStateReader + LocalNetworkStateWriter + 'static,
 {
     fn handle_settlement_result(
         &mut self,
@@ -534,8 +583,16 @@ where
     }
 }
 
-impl<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore> Future
-    for CertificateOrchestrator<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore, NetworkStateStore> Future
+    for CertificateOrchestrator<
+        E,
+        A,
+        PendingStore,
+        EpochsStore,
+        PerEpochStore,
+        StateStore,
+        NetworkStateStore,
+    >
 where
     A: Certifier,
     E: EpochPacker<PerEpochStore = PerEpochStore>,
@@ -543,6 +600,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    NetworkStateStore: LocalNetworkStateReader + LocalNetworkStateWriter + 'static,
 {
     type Output = ();
 

@@ -2,10 +2,12 @@ mod interfaces;
 
 pub use interfaces::{
     reader::{
-        EpochStoreReader, MetadataReader, PendingCertificateReader, PerEpochReader, StateReader,
+        EpochStoreReader, LocalNetworkStateReader, MetadataReader, PendingCertificateReader,
+        PerEpochReader, StateReader,
     },
     writer::{
-        EpochStoreWriter, MetadataWriter, PendingCertificateWriter, PerEpochWriter, StateWriter,
+        EpochStoreWriter, LocalNetworkStateWriter, MetadataWriter, PendingCertificateWriter,
+        PerEpochWriter, StateWriter,
     },
 };
 

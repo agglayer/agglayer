@@ -49,13 +49,13 @@ fn can_handle_empty_state(
 ) {
     // return none for unknown network
     assert!(matches!(
-        store.get_local_network_state(unknown_network_id),
+        store.read_local_network_state(unknown_network_id),
         Ok(None)
     ));
 
     // can write one state from scratch
     assert!(store
-        .update_local_network_state(&unknown_network_id, &LocalNetworkStateData::default(), &[])
+        .write_local_network_state(&unknown_network_id, &LocalNetworkStateData::default(), &[])
         .is_ok());
 }
 
@@ -65,12 +65,12 @@ fn can_retrieve_state(network_id: NetworkId, store: LocalNetworkStateStore) {
 
     // write arbitrary state
     assert!(store
-        .update_local_network_state(&network_id, &lns, &[])
+        .write_local_network_state(&network_id, &lns, &[])
         .is_ok());
 
     // retrieve it
     assert!(
-        matches!(store.get_local_network_state(network_id), Ok(Some(retrieved)) if equal_state(&lns, &retrieved))
+        matches!(store.read_local_network_state(network_id), Ok(Some(retrieved)) if equal_state(&lns, &retrieved))
     );
 }
 
@@ -80,7 +80,7 @@ fn can_update_existing_state(network_id: NetworkId, store: LocalNetworkStateStor
 
     // write initial state
     assert!(store
-        .update_local_network_state(&0.into(), &lns, &[])
+        .write_local_network_state(&0.into(), &lns, &[])
         .is_ok());
 
     // update state
@@ -89,11 +89,11 @@ fn can_update_existing_state(network_id: NetworkId, store: LocalNetworkStateStor
 
     // write new state
     assert!(store
-        .update_local_network_state(&network_id, &lns, &[Hash(bridge_exit)])
+        .write_local_network_state(&network_id, &lns, &[Hash(bridge_exit)])
         .is_ok());
 
     // retrieve new state
     assert!(
-        matches!(store.get_local_network_state(network_id), Ok(Some(retrieved)) if equal_state(&lns, &retrieved))
+        matches!(store.read_local_network_state(network_id), Ok(Some(retrieved)) if equal_state(&lns, &retrieved))
     );
 }

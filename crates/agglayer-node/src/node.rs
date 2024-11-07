@@ -8,7 +8,10 @@ use agglayer_contracts::{polygon_rollup_manager::PolygonRollupManager, L1RpcClie
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::DB,
-    stores::{epochs::EpochsStore, pending::PendingStore, state::StateStore, PerEpochReader as _},
+    stores::{
+        epochs::EpochsStore, local_network_state::LocalNetworkStateStore, pending::PendingStore,
+        state::StateStore, PerEpochReader as _,
+    },
 };
 use alloy::providers::WsConnect;
 use anyhow::Result;
@@ -85,6 +88,7 @@ impl Node {
             agglayer_storage::storage::local_network_state_db_cf_definitions(),
         )?);
 
+        let network_state_store = Arc::new(LocalNetworkStateStore::new(network_state_db.clone()));
         let state_store = Arc::new(StateStore::new(state_db.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
         info!("Storage initialized.");
@@ -190,6 +194,7 @@ impl Node {
             .epochs_store(epochs_store.clone())
             .current_epoch(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)))
             .state_store(state_store.clone())
+            .network_state_store(network_state_store.clone())
             .certifier_task_builder(certifier_client)
             .start()
             .await?;
