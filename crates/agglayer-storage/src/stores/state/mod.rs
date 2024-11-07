@@ -183,7 +183,6 @@ impl StateReader for StateStore {
         &self,
         certificate_id: &CertificateId,
     ) -> Result<Option<CertificateHeader>, Error> {
-        tracing::info!("get_certificate_header: {}", certificate_id);
         self.db.get::<CertificateHeaderColumn>(certificate_id)
     }
 
