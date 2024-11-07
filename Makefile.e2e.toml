@@ -1,0 +1,8 @@
+[tasks.setup]
+dependencies = ["kurtosis-clone"]
+
+[tasks.kurtosis-clone]
+category = "E2E - SETUP"
+script = '''
+
+'''
