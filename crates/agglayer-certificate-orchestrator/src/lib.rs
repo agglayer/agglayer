@@ -390,6 +390,7 @@ where
                 SettledCertificate(certificate_id, height, epoch_number, _certificate_index),
             )) => {
                 info!(
+                    hash = certificate_id.to_string(),
                     "Certificate {certificate_id} settled on L1 for network {network_id} at \
                      height {height}",
                 );
@@ -434,9 +435,11 @@ where
 
             Err(Error::ProofAlreadyExists(network_id, height, certificate_id)) => {
                 warn!(
+                    hash = certificate_id.to_string(),
                     "Received a proof certification error for a proof that already exists for \
                      network {} at height {}",
-                    network_id, height
+                    network_id,
+                    height
                 );
 
                 self.on_proof_already_exists(network_id, height, certificate_id)?;
@@ -501,6 +504,7 @@ where
                         .is_err()
                     {
                         error!(
+                            hash = certificate_id.to_string(),
                             "Certificate in error and failed to update the certificate header \
                              status"
                         );
@@ -549,8 +553,8 @@ where
             .get_current_proven_height_for_network(&network)
             .map_err(|error| {
                 error!(
-                    "Failed to get the current proven height for network {}: {:?}",
-                    network, error
+                    hash = certificate.hash().to_string(),
+                    "Failed to get the current proven height for network {}: {:?}", network, error
                 );
             })?;
 
@@ -566,8 +570,8 @@ where
                     .set_latest_proven_certificate_per_network(&network, &height, &certificate_id)
                 {
                     error!(
-                        "Failed to set the latest proven certificate per network: {:?}",
-                        error
+                        hash = certificate_id.to_string(),
+                        "Failed to set the latest proven certificate per network: {:?}", error
                     );
                 }
 
@@ -576,8 +580,8 @@ where
                     .update_certificate_header_status(&certificate_id, &CertificateStatus::Proven)
                 {
                     error!(
-                        "Failed to update the certificate header status: {:?}",
-                        error
+                        hash = certificate_id.to_string(),
+                        "Failed to update the certificate header status: {:?}", error
                     );
                 }
 
@@ -595,8 +599,8 @@ where
                     .set_latest_proven_certificate_per_network(&network, &height, &certificate_id)
                 {
                     error!(
-                        "Failed to set the latest proven certificate per network: {:?}",
-                        error
+                        hash = certificate_id.to_string(),
+                        "Failed to set the latest proven certificate per network: {:?}", error
                     );
                 }
 
@@ -605,8 +609,8 @@ where
                     .update_certificate_header_status(&certificate_id, &CertificateStatus::Proven)
                 {
                     error!(
-                        "Failed to update the certificate header status: {:?}",
-                        error
+                        hash = certificate_id.to_string(),
+                        "Failed to update the certificate header status: {:?}", error
                     );
                 }
 
@@ -619,19 +623,27 @@ where
             //   proof.
             None => {
                 warn!(
+                    hash = certificate_id.to_string(),
                     "Received a proof generated for a certificate at height {} for a network that \
                      is not being tracked: {}",
-                    height, network
+                    height,
+                    network
                 );
 
                 if let Err(error) = self
                     .pending_store
                     .remove_pending_certificate(network, height)
                 {
-                    error!("Failed to remove the pending certificate: {:?}", error);
+                    error!(
+                        hash = certificate_id.to_string(),
+                        "Failed to remove the pending certificate: {:?}", error
+                    );
                 }
                 if let Err(error) = self.pending_store.remove_generated_proof(&certificate_id) {
-                    error!("Failed to remove the generated proof: {:?}", error);
+                    error!(
+                        hash = certificate_id.to_string(),
+                        "Failed to remove the generated proof: {:?}", error
+                    );
                 }
 
                 return Err(());
@@ -641,9 +653,12 @@ where
             //   ignore the proof.
             Some(cursor_height) => {
                 warn!(
+                    hash = certificate_id.to_string(),
                     "Received a certificate with an unexpected height: {} for network {} which is \
                      currently at {}",
-                    height, network, cursor_height
+                    height,
+                    network,
+                    cursor_height
                 );
 
                 return Err(());
@@ -681,8 +696,10 @@ where
             .get_current_proven_height_for_network(&network_id)
             .map_err(|error| {
                 error!(
+                    hash = certificate_id.to_string(),
                     "Failed to get the current proven height for network {}: {:?}",
-                    network_id, error
+                    network_id,
+                    error
                 );
             })?;
 
@@ -690,13 +707,18 @@ where
             // 1. The state doesn't know the network and the height is not 0, we remove the proof.
             None if height != 0 => {
                 warn!(
+                    hash = certificate_id.to_string(),
                     "Received a proof generated for a certificate at height {} for a network that \
                      is not being tracked: {}",
-                    height, network_id
+                    height,
+                    network_id
                 );
 
                 if let Err(error) = self.pending_store.remove_generated_proof(&certificate_id) {
-                    error!("Failed to remove the proof: {:?}", error);
+                    error!(
+                        hash = certificate_id.to_string(),
+                        "Failed to remove the proof: {:?}", error
+                    );
                 }
 
                 return Ok(());
@@ -724,17 +746,25 @@ where
                         .pending_store
                         .remove_pending_certificate(network_id, height)
                     {
-                        error!("Failed to remove the pending certificate: {:?}", error);
+                        error!(
+                            hash = certificate_id.to_string(),
+                            "Failed to remove the pending certificate: {:?}", error
+                        );
                     }
                     if let Err(error) = self.pending_store.remove_generated_proof(&certificate_id) {
-                        error!("Failed to remove the proof: {:?}", error);
+                        error!(
+                            hash = certificate_id.to_string(),
+                            "Failed to remove the proof: {:?}", error
+                        );
                     }
                     // This should not happen as ProofAlreadyExists should only
                     // happen if we have a pending certificate.
                     warn!(
+                        hash = certificate_id.to_string(),
                         "Failed to find the pending certificate header for proven certificate for \
                          network {} at height {}",
-                        network_id, height
+                        network_id,
+                        height
                     );
 
                     return Ok(());
@@ -747,8 +777,8 @@ where
                             &CertificateStatus::Proven,
                         ) {
                             error!(
-                                "Failed to update the certificate header status: {:?}",
-                                error
+                                hash = certificate_id.to_string(),
+                                "Failed to update the certificate header status: {:?}", error
                             );
                         }
                         if let Err(error) = self
@@ -760,6 +790,7 @@ where
                             )
                         {
                             error!(
+                                hash = certificate_id.to_string(),
                                 "Failed to set the latest proven certificate per network: {:?}",
                                 error
                             );
@@ -772,13 +803,19 @@ where
                             .pending_store
                             .remove_pending_certificate(network_id, height)
                         {
-                            error!("Failed to remove the pending certificate: {:?}", error);
+                            error!(
+                                hash = certificate_id.to_string(),
+                                "Failed to remove the pending certificate: {:?}", error
+                            );
                         }
 
                         if let Err(error) =
                             self.pending_store.remove_generated_proof(&certificate_id)
                         {
-                            error!("Failed to remove the proof: {:?}", error);
+                            error!(
+                                hash = certificate_id.to_string(),
+                                "Failed to remove the proof: {:?}", error
+                            );
                         }
                     }
                     CertificateStatus::Proven => {}
@@ -813,17 +850,25 @@ where
                         .pending_store
                         .remove_pending_certificate(network_id, height)
                     {
-                        error!("Failed to remove the pending certificate: {:?}", error);
+                        error!(
+                            hash = certificate_id.to_string(),
+                            "Failed to remove the pending certificate: {:?}", error
+                        );
                     }
                     if let Err(error) = self.pending_store.remove_generated_proof(&certificate_id) {
-                        error!("Failed to remove the proof: {:?}", error);
+                        error!(
+                            hash = certificate_id.to_string(),
+                            "Failed to remove the proof: {:?}", error
+                        );
                     }
                     // This should not happen as ProofAlreadyExists should only
                     // happen if we have a pending certificate.
                     warn!(
+                        hash = certificate_id.to_string(),
                         "Failed to find the pending certificate header for proven proof for \
                          network {} at height {}",
-                        network_id, height
+                        network_id,
+                        height
                     );
 
                     return Ok(());
@@ -836,8 +881,8 @@ where
                             &CertificateStatus::Proven,
                         ) {
                             error!(
-                                "Failed to update the certificate header status: {:?}",
-                                error
+                                hash = certificate_id.to_string(),
+                                "Failed to update the certificate header status: {:?}", error
                             );
                         }
                         if cursor_height + 1 == height {
@@ -850,6 +895,7 @@ where
                                 )
                             {
                                 error!(
+                                    hash = certificate_id.to_string(),
                                     "Failed to set the latest proven certificate per network: {:?}",
                                     error
                                 );
@@ -863,12 +909,18 @@ where
                             .pending_store
                             .remove_pending_certificate(network_id, height)
                         {
-                            error!("Failed to remove the pending certificate: {:?}", error);
+                            error!(
+                                hash = certificate_id.to_string(),
+                                "Failed to remove the pending certificate: {:?}", error
+                            );
                         }
                         if let Err(error) =
                             self.pending_store.remove_generated_proof(&certificate_id)
                         {
-                            error!("Failed to remove the proof: {:?}", error);
+                            error!(
+                                hash = certificate_id.to_string(),
+                                "Failed to remove the proof: {:?}", error
+                            );
                         }
                     }
 
@@ -891,16 +943,19 @@ where
     ) {
         match current_epoch.add_certificate(network, height) {
             Err(error) => error!(
-                "Failed to add the certificate to the current epoch: {}",
-                error
+                hash = certificate_id.to_string(),
+                "Failed to add the certificate to the current epoch: {}", error
             ),
             Ok((epoch_number, certificate_index)) => {
                 if let Err(error) =
                     self.settle_certificate(current_epoch, certificate_index, certificate_id)
                 {
                     error!(
+                        hash = certificate_id.to_string(),
                         "Failed to settle the certificate {} in epoch {}: {:?}",
-                        certificate_id, epoch_number, error
+                        certificate_id,
+                        epoch_number,
+                        error
                     );
                 }
             }
@@ -914,7 +969,10 @@ where
         certificate_index: CertificateIndex,
         certificate_id: CertificateId,
     ) -> Result<(), Error> {
-        debug!("Settling the certificate {certificate_id}");
+        debug!(
+            hash = certificate_id.to_string(),
+            "Settling the certificate {certificate_id}"
+        );
 
         let task = self.epoch_packing_task_builder.clone();
         self.certificate_settlement_tasks.spawn(async move {

@@ -300,7 +300,7 @@ where
 
         info!(
             %hash,
-            "Received certificate {hash} for rollup {}", *certificate.network_id
+            "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
         );
 
         // TODO: Batch the different queries.
