@@ -112,6 +112,7 @@ impl Executor {
         };
 
         let local = if config.cpu_prover.enabled {
+            debug!("Creating CPU prover executor...");
             let prover = CpuProver::new();
             let (proving_key, verification_key) = prover.setup(ELF);
 
@@ -230,16 +231,21 @@ impl Service<Request> for LocalExecutor {
         let proving_key = self.proving_key.clone();
         let verification_key = self.verification_key.clone();
 
+        debug!("Proving with CPU prover with timeout: {:?}", self.timeout);
         Box::pin(
             spawn_blocking(move || {
                 let context = SP1Context::default();
+                debug!("Starting the proving of the requested MultiBatchHeader");
                 let proof = prover
                     .prove(&proving_key, stdin, opts, context, kind)
                     .map_err(|error| Error::ProverFailed(error.to_string()))?;
 
+                debug!("Proving completed. Verifying the proof...");
                 prover
                     .verify(&proof, &verification_key)
                     .map_err(|error| Error::ProofVerificationFailed(error.into()))?;
+
+                debug!("Proof verification completed successfully");
 
                 Ok(Response { proof })
             })
@@ -274,7 +280,9 @@ impl Service<Request> for NetworkExecutor {
         let verification_key = self.verification_key.clone();
         let timeout = self.timeout;
 
+        debug!("Proving with network prover with timeout: {:?}", timeout);
         let fut = async move {
+            debug!("Starting the proving of the requested MultiBatchHeader");
             let proof = prover
                 .prove(
                     ELF,
@@ -285,10 +293,12 @@ impl Service<Request> for NetworkExecutor {
                 .await
                 .map_err(|error| Error::ProverFailed(error.to_string()))?;
 
+            debug!("Proving completed. Verifying the proof...");
             prover
                 .verify(&proof, &verification_key)
                 .map_err(|error| Error::ProofVerificationFailed(error.into()))?;
 
+            debug!("Proof verification completed successfully");
             Ok(Response { proof })
         };
 
