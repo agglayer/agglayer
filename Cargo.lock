@@ -304,6 +304,7 @@ dependencies = [
  "hex",
  "mockall",
  "parking_lot",
+ "pessimistic-proof",
  "rand",
  "rocksdb",
  "rstest",

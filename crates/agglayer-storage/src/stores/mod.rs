@@ -10,6 +10,7 @@ pub use interfaces::{
 };
 
 pub mod epochs;
+pub mod local_network_state;
 pub mod pending;
 pub mod per_epoch;
 pub mod state;

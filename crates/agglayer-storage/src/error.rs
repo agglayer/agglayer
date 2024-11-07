@@ -33,6 +33,18 @@ pub enum Error {
 
     #[error("Unprocessed action: {0}")]
     UnprocessedAction(String),
+
+    #[error("Inconsistent state for network: {network_id}")]
+    InconsistentState { network_id: NetworkId },
+
+    #[error("Inconsistent frontier")]
+    InconsistentFrontier,
+
+    #[error("Wrong value type")]
+    WrongValueType,
+
+    #[error("Smt node not found")]
+    SmtNodeNotFound,
 }
 
 #[derive(Debug, thiserror::Error)]

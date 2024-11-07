@@ -17,6 +17,7 @@ pub(crate) mod cf_definitions;
 pub(crate) mod iterators;
 
 pub use cf_definitions::epochs::epochs_db_cf_definitions;
+pub use cf_definitions::local_network_state::local_network_state_db_cf_definitions;
 pub use cf_definitions::pending::pending_db_cf_definitions;
 pub use cf_definitions::state::state_db_cf_definitions;
 

@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
-    NetworkId, Proof,
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Hash, Height,
+    LocalNetworkStateData, NetworkId, Proof,
 };
 
 use crate::{error::Error, stores::PerEpochReader};
@@ -89,5 +89,15 @@ pub trait PendingCertificateWriter: Send + Sync {
         network_id: &NetworkId,
         height: &Height,
         certificate_id: &CertificateId,
+    ) -> Result<(), Error>;
+}
+
+pub trait LocalNetworkStateWriter: Send + Sync {
+    #[allow(dead_code)]
+    fn update_local_network_state(
+        &self,
+        network_id: &NetworkId,
+        new_state: &LocalNetworkStateData,
+        new_leaves: &[Hash],
     ) -> Result<(), Error>;
 }

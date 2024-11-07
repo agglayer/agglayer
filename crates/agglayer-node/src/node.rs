@@ -80,6 +80,10 @@ impl Node {
             &config.storage.state_db_path,
             agglayer_storage::storage::state_db_cf_definitions(),
         )?);
+        let network_state_db = Arc::new(DB::open_cf(
+            &config.storage.network_state_db_path,
+            agglayer_storage::storage::local_network_state_db_cf_definitions(),
+        )?);
 
         let state_store = Arc::new(StateStore::new(state_db.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db.clone()));

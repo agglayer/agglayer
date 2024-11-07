@@ -1,50 +1,19 @@
-use agglayer_types::Hash;
-use serde::{Deserialize, Serialize};
-
-use super::{Codec, ColumnSchema, NULLIFIER_TREE_PER_NETWORK_CF};
-
-#[cfg(test)]
-mod tests;
+use super::{ColumnSchema, NULLIFIER_TREE_PER_NETWORK_CF};
 
 /// Column family for the nullifier tree per network.
 ///
 /// ## Column definition
 ///
-/// | key                            | value                                   |
-/// | ---                            | --                                      |
-/// | (`NetworkId`, `KeyType::Root`) | (`hash(root.left)`, `hash(root.right)`) |
-/// | (`NetworkId`, `hash(node)`)    | (`hash(node.left)`, `hash(node.right)`) |
-/// | (`NetworkId`, `hash(node)`)    | (`hash(leaf)`)                          |
-/// | (`NetworkId`, `KeyType::Leaf`) | [`U256`](type@reth_primitives::U256)    |
+/// | key                               | value                                   |
+/// | ---                               | --                                      |
+/// | (`NetworkId`, `SmtKeyType::Root`) | (`hash(root.left)`, `hash(root.right)`) |
+/// | (`NetworkId`, `hash(node)`)       | (`hash(node.left)`, `hash(node.right)`) |
+/// | (`NetworkId`, `hash(leaf)`)       | (`hash(leaf)`)                          |
 pub struct NullifierTreePerNetworkColumn;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Key {
-    network_id: u32,
-    key_type: KeyType,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum KeyType {
-    Root,
-    Node(Hash),
-    Leaf(Hash),
-    Leaves,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum Value {
-    Node(Hash, Hash),
-    Leaf(Hash),
-    LeafData(bool),
-}
-
-impl Codec for Key {}
-impl Codec for Value {}
-
 impl ColumnSchema for NullifierTreePerNetworkColumn {
-    type Key = Key;
-    type Value = Value;
+    type Key = crate::types::SmtKey;
+    type Value = crate::types::SmtValue;
 
     const COLUMN_FAMILY_NAME: &'static str = NULLIFIER_TREE_PER_NETWORK_CF;
 }
