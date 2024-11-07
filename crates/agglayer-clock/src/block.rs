@@ -13,7 +13,7 @@ use ethers::{
 use futures::StreamExt as _;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::{Clock, ClockRef, Error, Event, BROADCAST_CHANNEL_SIZE};
 
@@ -210,7 +210,7 @@ where
                     break;
                 }
                 Some(block) = stream.next() => {
-                    debug!(
+                    trace!(
                         "L1 Block received: timestamp={}, number={}, hash={}",
                         block.timestamp,
                         block.number.unwrap(),
