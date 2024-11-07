@@ -343,7 +343,7 @@ where
         &self,
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader> {
-        info!("Received request to get certificate header for certificate {certificate_id}");
+        debug!("Received request to get certificate header for certificate {certificate_id}");
         match self.state.get_certificate_header(&certificate_id) {
             Ok(Some(header)) => Ok(header),
             Ok(None) => Err(Error::resource_not_found(format!(
@@ -433,7 +433,10 @@ where
                     certificate_id
                 ))),
                 Err(error) => {
-                    error!("Failed to get certificate header: {}", error);
+                    error!(
+                        hash = certificate_id.to_string(),
+                        "Failed to get certificate header: {}", error
+                    );
 
                     Err(Error::internal("Unable to get certificate header"))
                 }
