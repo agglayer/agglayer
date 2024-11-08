@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     future::Future,
     pin::Pin,
     sync::Arc,
@@ -79,6 +79,8 @@ pub struct CertificateOrchestrator<
     #[allow(unused)]
     epochs_store: Arc<EpochsStore>,
     current_epoch: ArcSwap<PerEpochStore>,
+
+    pending_state_update: HashMap<CertificateId, LocalNetworkStateData>,
 }
 
 impl<C, E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
@@ -121,6 +123,7 @@ where
             epochs_store,
             current_epoch,
             state_store,
+            pending_state_update: Default::default(),
         })
     }
 }
@@ -395,6 +398,32 @@ where
                      height {height}",
                 );
 
+                match self.pending_state_update.remove(&certificate_id) {
+                    Some(state) => {
+                        if let Some(old) = self.global_state.insert(network_id, state.clone()) {
+                            debug!(
+                                "Updated the state for network {} with the new state {} > {}",
+                                network_id,
+                                old.get_roots().display_to_hex(),
+                                state.get_roots().display_to_hex()
+                            );
+                        } else {
+                            debug!(
+                                "Updated the state for network {} with the new state [] > {}",
+                                network_id,
+                                state.get_roots().display_to_hex()
+                            );
+                        }
+                    }
+                    None => {
+                        error!(
+                            "CRITICAL: Failed to find the state for the certificate {} to apply \
+                             on global state",
+                            certificate_id
+                        );
+                        return Err(());
+                    }
+                };
                 let current_epoch = self.current_epoch.load();
                 if current_epoch.get_epoch_number() == epoch_number + 1 {
                     self.spawn_certifier_task(network_id, height + 1);
@@ -415,9 +444,9 @@ where
                 height,
                 network,
                 certificate,
-                ..
+                new_state,
             }) => {
-                self.on_proven_certificate(height, network, certificate)?;
+                self.on_proven_certificate(height, network, certificate, new_state)?;
             }
 
             // If we received a `CertificateNotFound` error, it means that the certificate was not
@@ -547,6 +576,7 @@ where
         height: Height,
         network: NetworkId,
         certificate: Certificate,
+        new_state: LocalNetworkStateData,
     ) -> Result<(), ()> {
         let current_height = self
             .pending_store
@@ -587,7 +617,8 @@ where
 
                 let current_epoch = self.current_epoch.load_full();
 
-                self.try_adding_certifcate(current_epoch, network, height, certificate_id);
+                self.try_adding_certificate(current_epoch, network, height, certificate_id);
+                self.pending_state_update.insert(certificate_id, new_state);
             }
 
             // - 2. If the state knows the network and the height is the next one, we update the
@@ -616,7 +647,8 @@ where
 
                 let current_epoch = self.current_epoch.load_full();
 
-                self.try_adding_certifcate(current_epoch, network, height, certificate_id);
+                self.try_adding_certificate(current_epoch, network, height, certificate_id);
+                self.pending_state_update.insert(certificate_id, new_state);
             }
 
             // - 3. If the state doesn't know the network and the height is not 0, we ignore the
@@ -934,7 +966,7 @@ where
     }
 
     /// Try to add a certificate to the current epoch and settle it on L1.
-    fn try_adding_certifcate(
+    fn try_adding_certificate(
         &mut self,
         current_epoch: Arc<PerEpochStore>,
         network: NetworkId,
