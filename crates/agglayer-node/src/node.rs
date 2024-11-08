@@ -8,7 +8,7 @@ use agglayer_contracts::{polygon_rollup_manager::PolygonRollupManager, L1RpcClie
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::DB,
-    stores::{epochs::EpochsStore, pending::PendingStore, state::StateStore},
+    stores::{epochs::EpochsStore, pending::PendingStore, state::StateStore, PerEpochReader as _},
 };
 use anyhow::Result;
 use ethers::{
@@ -109,8 +109,8 @@ impl Node {
             }
         };
 
-        info!("Clock started.");
         let current_epoch = clock_ref.current_epoch();
+        info!("Clock started, current epoch {current_epoch}");
 
         let epochs_store = Arc::new(EpochsStore::new(
             config.clone(),
@@ -124,7 +124,10 @@ impl Node {
             EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref.clone())
                 .await?;
 
-        info!("Epoch synchronization completed.");
+        info!(
+            "Epoch synchronization completed, active epoch: {}.",
+            current_epoch_store.get_epoch_number()
+        );
 
         let signer = ConfiguredSigner::new(config.clone()).await?;
         let address = signer.address();

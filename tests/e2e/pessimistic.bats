@@ -22,7 +22,7 @@ setup() {
     ether_value=${ETHER_VALUE:-"0.0200000054"}
     amount=$(cast to-wei $ether_value ether)
     readonly native_token_addr=${NATIVE_TOKEN_ADDRESS:-"0x0000000000000000000000000000000000000000"}
-    
+
     # no gas_token_addr
 
     readonly is_forced=${IS_FORCED:-"true"}
@@ -40,7 +40,7 @@ setup() {
 }
 
 @test "transfer L1 to L2 to L1" {
-    
+
     destination_addr=$sender_addr
     destination_net=1
     echo "*** bridgeAsset L1 -> L2 dest: $destination_addr eth:$ether_value" >&3
