@@ -11,7 +11,7 @@ use ethers::{
     types::Block,
 };
 use futures::StreamExt as _;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, trace, warn};
 
@@ -27,7 +27,7 @@ pub struct BlockClock<P> {
     /// The local Block height.
     block_height: Arc<AtomicU64>,
     /// The Epoch duration in Blocks.
-    epoch_duration: NonZeroU64,
+    epoch_duration: Arc<NonZeroU64>,
     /// The current local Epoch number.
     current_epoch: Arc<AtomicU64>,
 }
@@ -43,17 +43,23 @@ where
 
         let clock_ref = ClockRef {
             sender: sender.clone(),
-            current_epoch: self.current_epoch.clone(),
             block_height: self.block_height.clone(),
+            block_per_epoch: self.epoch_duration.clone(),
         };
 
+        let (start_sender, start_receiver) = oneshot::channel();
         // Spawn the Clock task directly
         tokio::spawn(async move {
-            if let Err(error) = self.run(sender, cancellation_token.clone()).await {
+            if let Err(error) = self
+                .run(sender, start_sender, cancellation_token.clone())
+                .await
+            {
                 error!("{}", error);
                 cancellation_token.cancel();
             }
         });
+
+        _ = start_receiver.await.map_err(|_| Error::UnableToStart)?;
 
         Ok(clock_ref)
     }
@@ -67,47 +73,9 @@ impl<P> BlockClock<P> {
             provider: Arc::new(provider),
             genesis_block,
             block_height: Arc::new(AtomicU64::new(0)),
-            epoch_duration,
+            epoch_duration: Arc::new(epoch_duration),
             current_epoch: Arc::new(AtomicU64::new(0)),
         }
-    }
-
-    /// Reinitialize the current Epoch number based on the current Block height.
-    fn reinitialize_epoch_number(&mut self, current_block: u64) {
-        let current_epoch = self.calculate_epoch_number(current_block);
-        self.current_epoch.store(current_epoch, Ordering::SeqCst);
-    }
-
-    /// Updates the current Epoch of this [`BlockClock`].
-    ///
-    /// This method is used to update the current Epoch number based on the
-    /// Block height and the Epoch duration.
-    ///
-    /// To define the current Epoch number, the Epoch duration divides the Block
-    /// height.
-    fn update_epoch_number(&mut self, current_block: u64) -> Result<u64, (u64, u64)> {
-        let current_epoch = self.calculate_epoch_number(current_block);
-        let expected_epoch = current_epoch.saturating_sub(1);
-
-        // Overwrite the current_epoch to simulate an overflow
-        // This is used for testing purposes only and doesn't affect the production
-        // code.
-        fail::fail_point!("block_clock::BlockClock::update_epoch_number::overwrite_epoch");
-
-        match self.current_epoch.compare_exchange(
-            expected_epoch,
-            current_epoch,
-            Ordering::Acquire,
-            Ordering::Relaxed,
-        ) {
-            Ok(previous) => Ok(previous),
-            Err(stored) => Err((stored, expected_epoch)),
-        }
-    }
-
-    /// Calculate an Epoch number based on a Block number.
-    fn calculate_epoch_number(&self, from_block: u64) -> u64 {
-        from_block / self.epoch_duration
     }
 
     /// Calculate a Block number based on an L1 Block number.
@@ -117,7 +85,7 @@ impl<P> BlockClock<P> {
 }
 
 #[derive(Debug, thiserror::Error)]
-enum BlockClockError {
+pub enum BlockClockError {
     #[error("Failed to get the current L1 Block number")]
     GetBlockNumber,
     #[error("Failed to subscribe to the L1 Block stream")]
@@ -128,17 +96,20 @@ enum BlockClockError {
     SetBlockHeight(u64),
     #[error("Failed to set the current Epoch number: previous={0}, expected={1}")]
     SetEpochNumber(u64, u64),
+    #[error("Failed to notify the start of the Clock task")]
+    UnableToNotifyStart,
 }
 
 impl<P> BlockClock<P>
 where
-    P: Middleware,
+    P: Middleware + 'static,
     <P as Middleware>::Provider: PubsubClient,
 {
     /// Run the Clock task.
     async fn run(
         &mut self,
         sender: broadcast::Sender<Event>,
+        start_sender: oneshot::Sender<()>,
         cancellation_token: CancellationToken,
     ) -> Result<(), BlockClockError> {
         info!("Starting the BlockClock task");
@@ -203,6 +174,10 @@ where
             }
         }
 
+        start_sender
+            .send(())
+            .map_err(|_| BlockClockError::UnableToNotifyStart)?;
+
         loop {
             tokio::select! {
                 _ = cancellation_token.cancelled() => {
@@ -231,7 +206,7 @@ where
                         // If the current Block height is a multiple of the Epoch duration, the current
                         // Epoch has ended. In this case, we need to update the new Epoch number and
                         // send an `EpochEnded` event to the subscribers.
-                        if current_block % self.epoch_duration == 0 {
+                        if current_block % *self.epoch_duration == 0 {
                             match self.update_epoch_number(current_block) {
                                 Err((previous, expected)) => {
                                     return Err(BlockClockError::SetEpochNumber(previous, expected));
@@ -248,6 +223,40 @@ where
         }
 
         Ok(())
+    }
+
+    /// Reinitialize the current Epoch number based on the current Block height.
+    fn reinitialize_epoch_number(&mut self, current_block: u64) {
+        let current_epoch =
+            <Self as Clock>::calculate_epoch_number(current_block, *self.epoch_duration);
+        self.current_epoch.store(current_epoch, Ordering::SeqCst);
+    }
+
+    /// Updates the current Epoch of this [`BlockClock`].
+    ///
+    /// This method is used to update the current Epoch number based on the
+    /// Block height and the Epoch duration.
+    ///
+    /// To define the current Epoch number, the Epoch duration divides the Block
+    /// height.
+    fn update_epoch_number(&mut self, current_block: u64) -> Result<u64, (u64, u64)> {
+        let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
+        let expected_epoch = current_epoch.saturating_sub(1);
+
+        // Overwrite the current_epoch to simulate an overflow
+        // This is used for testing purposes only and doesn't affect the production
+        // code.
+        fail::fail_point!("block_clock::BlockClock::update_epoch_number::overwrite_epoch");
+
+        match self.current_epoch.compare_exchange(
+            expected_epoch,
+            current_epoch,
+            Ordering::Acquire,
+            Ordering::Relaxed,
+        ) {
+            Ok(previous) => Ok(previous),
+            Err(stored) => Err((stored, expected_epoch)),
+        }
     }
 }
 
@@ -425,7 +434,8 @@ mod tests {
         )
         .unwrap();
 
-        let handle = tokio::spawn(async move { clock.run(sender, token).await });
+        let (start_sender, _start_receiver) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async move { clock.run(sender, start_sender, token).await });
 
         let res = tokio::time::timeout(Duration::from_secs(10), handle)
             .await
@@ -460,7 +470,8 @@ mod tests {
         )
         .unwrap();
 
-        let handle = tokio::spawn(async move { clock.run(sender, token).await });
+        let (start_sender, _start_receiver) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async move { clock.run(sender, start_sender, token).await });
 
         let res = tokio::time::timeout(Duration::from_secs(10), handle)
             .await

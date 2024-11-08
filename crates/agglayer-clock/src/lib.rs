@@ -3,9 +3,12 @@
 //! The Clock is responsible for providing information about Epoch timing by
 //! exposing references to the data and by broadcasting `EpochChange` events.
 
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
+use std::{
+    num::NonZeroU64,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 use tokio::sync::broadcast;
@@ -25,31 +28,35 @@ const BROADCAST_CHANNEL_SIZE: usize = 100;
 pub trait Clock {
     /// Spawn the Clock task and return a [`ClockRef`] to interact with it.
     async fn spawn(self, cancellation_token: CancellationToken) -> Result<ClockRef, Error>;
+
+    /// Calculate an Epoch number based on a Block number.
+    fn calculate_epoch_number(from_block: u64, epoch_duration: NonZeroU64) -> u64 {
+        from_block / epoch_duration
+    }
 }
 
 /// The ClockRef is a reference to the Clock instance.
 #[derive(Clone)]
 pub struct ClockRef {
     pub(crate) sender: broadcast::Sender<Event>,
-    /// The current Epoch number.
-    /// This value is updated by the Clock task.
-    pub(crate) current_epoch: Arc<AtomicU64>,
     /// The Block height.
     /// This value is updated by the Clock task.
     pub(crate) block_height: Arc<AtomicU64>,
+    /// The number of Blocks per Epoch.
+    block_per_epoch: Arc<NonZeroU64>,
 }
 
 impl ClockRef {
     #[doc(hidden)]
     pub fn new(
         sender: broadcast::Sender<Event>,
-        current_epoch: Arc<AtomicU64>,
         block_height: Arc<AtomicU64>,
+        block_per_epoch: Arc<NonZeroU64>,
     ) -> Self {
         Self {
             sender,
-            current_epoch,
             block_height,
+            block_per_epoch,
         }
     }
 
@@ -65,7 +72,7 @@ impl ClockRef {
 
     /// Returns the current Epoch.
     pub fn current_epoch(&self) -> u64 {
-        self.current_epoch.load(Ordering::Acquire)
+        self.current_block_height() / *self.block_per_epoch
     }
 
     /// Returns the current Block height.
@@ -83,4 +90,9 @@ pub enum Event {
 
 /// Errors that can be returned by the Clock.
 #[derive(Debug, thiserror::Error)]
-pub enum Error {}
+pub enum Error {
+    #[error("The Clock failed to start")]
+    UnableToStart,
+    #[error(transparent)]
+    BlockClock(#[from] block::BlockClockError),
+}
