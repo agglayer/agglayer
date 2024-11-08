@@ -4,7 +4,7 @@ use hex::FromHex;
 use serde::{Deserialize, Serialize};
 use serde::{Deserializer, Serializer};
 
-#[derive(Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Default, std::hash::Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Hash(pub [u8; 32]);
 
 impl Hash {
