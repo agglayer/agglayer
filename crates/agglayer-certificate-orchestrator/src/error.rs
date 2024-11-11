@@ -58,4 +58,17 @@ pub enum Error {
         certificate_id: CertificateId,
         error: String,
     },
+
+    #[error("Certificate submission failed")]
+    CertificateSubmission,
+
+    #[error(
+        "Unexpected certificate height for network {network_id} (got {height}, expected \
+         {expected_height})"
+    )]
+    CertificateHeight {
+        height: u64,
+        expected_height: u64,
+        network_id: NetworkId,
+    },
 }

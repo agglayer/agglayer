@@ -19,6 +19,7 @@ type ContractError = ethers::contract::ContractError<RpcProvider>;
 type SignatureError = kernel::SignatureVerificationError<RpcProvider>;
 type SettlementError = kernel::SettlementError<RpcProvider>;
 type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
+type CertError = agglayer_certificate_orchestrator::Error;
 
 #[rstest::rstest]
 #[case("rollup_not_reg", Error::rollup_not_registered(1337))]
@@ -104,6 +105,18 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
         time_interval: Duration::from_secs(40 * 60),
         until_next: None,
     }).into()
+)]
+#[case(
+    "cert_submission",
+    Error::send_certificate(CertError::CertificateSubmission)
+)]
+#[case(
+    "cert_badheight",
+    Error::send_certificate(CertError::CertificateHeight {
+        height: 55,
+        expected_height: 57,
+        network_id: 1337.into(),
+    })
 )]
 fn rpc_error_rendering(#[case] name: &str, #[case] err: Error) {
     let debug_str = format!("{err:?}");

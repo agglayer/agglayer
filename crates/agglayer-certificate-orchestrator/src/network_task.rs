@@ -16,14 +16,10 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::{error::PreCertificationError, CertificationError, Certifier, CertifierOutput, Error};
-
-/// Message to notify the network task that a new certificate has been received.
-#[derive(Debug)]
-pub(crate) struct NewCertificate {
-    pub(crate) certificate_id: CertificateId,
-    pub(crate) height: Height,
-}
+use crate::{
+    error::PreCertificationError, CertResponse, CertResponseSender, CertificationError, Certifier,
+    CertifierOutput, Error,
+};
 
 /// Network task that is responsible to certify the certificates for a network.
 pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
@@ -46,7 +42,7 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     /// settlement response.
     pending_state: Option<LocalNetworkStateData>,
     /// The stream of new certificates to certify.
-    certificate_stream: mpsc::Receiver<NewCertificate>,
+    certificate_stream: mpsc::Receiver<(Certificate, CertResponseSender)>,
     /// Flag to indicate if the network is at capacity for the current epoch.
     at_capacity_for_epoch: bool,
 }
@@ -69,7 +65,7 @@ where
         )>,
         clock_ref: ClockRef,
         network_id: NetworkId,
-        certificate_stream: mpsc::Receiver<NewCertificate>,
+        certificate_stream: mpsc::Receiver<(Certificate, CertResponseSender)>,
     ) -> Result<Self, Error> {
         info!("Creating a new network task for network {}", network_id);
 
@@ -158,18 +154,24 @@ where
                 self.at_capacity_for_epoch = false;
                 *next_expected_height
             }
-            Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
+            Some((certificate, response_sender)) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
+                let certificate_id = certificate.hash();
+                let height = certificate.height;
                 info!(
                     hash = certificate_id.to_string(),
                     "Received a certificate event for {certificate_id} at height {height}"
                 );
 
-                if *next_expected_height != height {
-                    warn!(
-                        hash = certificate_id.to_string(),
-                        "Received a certificate event for the wrong height");
+                let response = self.process_certificate(&certificate, *next_expected_height);
 
-                    return Ok(());
+                if let Err(err) = &response {
+                    let cert_id = certificate.hash();
+                    warn!("Certificate processing error for {cert_id}: {err}");
+                }
+
+                if let Err(response) = response_sender.send(response) {
+                    let cert_id = certificate.hash();
+                    warn!("Failed to send response ({response:?}) to {cert_id}");
                 }
 
                 *next_expected_height
@@ -416,6 +418,41 @@ where
             }
         }
     }
+
+    /// Process single certificate.
+    ///
+    /// Performs a number of initial checks for the certificate. If these pass,
+    /// the certificate is recorded in persistent storage and the certifier
+    /// task is notified about it for further processing.
+    fn process_certificate(
+        &mut self,
+        certificate: &Certificate,
+        expected_height: u64,
+    ) -> CertResponse {
+        let height = certificate.height;
+        let network_id = certificate.network_id;
+
+        // TODO signature check + other preliminary checks
+
+        if height != expected_height {
+            return Err(Error::CertificateHeight {
+                height,
+                expected_height,
+                network_id,
+            });
+        }
+
+        // TODO: Batch the two queries.
+        // Insert the certificate header into the state store.
+        self.state_store
+            .insert_certificate_header(certificate, CertificateStatus::Pending)?;
+
+        // Insert the certificate into the pending store.
+        self.pending_store
+            .insert_pending_certificate(network_id, height, certificate)?;
+
+        Ok(())
+    }
 }
 
 impl<CertifierClient, PendingStore, StateStore>
@@ -561,6 +598,17 @@ mod tests {
 
         let certificate = Certificate::new_for_test(network_id, 0);
         let certificate_id = certificate.hash();
+
+        state
+            .expect_insert_certificate_header()
+            .once()
+            .returning(|_, _| Ok(()));
+
+        pending
+            .expect_insert_pending_certificate()
+            .once()
+            .returning(|_, _, _| Ok(()));
+
         pending
             .expect_get_certificate()
             .once()
@@ -636,11 +684,9 @@ mod tests {
         let mut epochs = task.clock_ref.subscribe().unwrap();
         let mut next_expected_height = 0;
 
+        let (reply_sx, reply_rx) = oneshot::channel();
         let _ = sender
-            .send(NewCertificate {
-                certificate_id,
-                height: 0,
-            })
+            .send((Certificate::new_for_test(network_id, 0), reply_sx))
             .await;
 
         tokio::spawn(async move {
@@ -654,6 +700,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(next_expected_height, 1);
+
+        assert!(reply_rx.await.unwrap().is_ok());
     }
 
     #[rstest]
@@ -672,6 +720,16 @@ mod tests {
         let certificate2 = Certificate::new_for_test(network_id, 1);
         let certificate_id = certificate.hash();
         let certificate_id2 = certificate2.hash();
+
+        state
+            .expect_insert_certificate_header()
+            .once()
+            .returning(|_, _| Ok(()));
+
+        pending
+            .expect_insert_pending_certificate()
+            .once()
+            .returning(|_, _, _| Ok(()));
 
         pending
             .expect_get_certificate()
@@ -787,19 +845,15 @@ mod tests {
         let mut epochs = task.clock_ref.subscribe().unwrap();
         let mut next_expected_height = 0;
 
+        let (reply0_sx, reply0_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id,
-                height: 0,
-            })
+            .send((Certificate::new_for_test(network_id, 0), reply0_sx))
             .await
             .expect("Failed to send the certificate");
 
+        let (reply1_sx, mut reply1_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id: certificate_id2,
-                height: 1,
-            })
+            .send((Certificate::new_for_test(network_id, 1), reply1_sx))
             .await
             .expect("Failed to send the certificate");
 
@@ -825,6 +879,9 @@ mod tests {
         .expect_err("Should have timed out");
 
         assert_eq!(next_expected_height, 1);
+
+        assert!(reply0_rx.await.unwrap().is_ok());
+        assert!(reply1_rx.try_recv().is_err());
     }
 
     #[rstest]
@@ -843,6 +900,16 @@ mod tests {
         let certificate2 = Certificate::new_for_test(network_id, 1);
         let certificate_id = certificate.hash();
         let certificate_id2 = certificate2.hash();
+
+        state
+            .expect_insert_certificate_header()
+            .once()
+            .returning(|_, _| Ok(()));
+
+        pending
+            .expect_insert_pending_certificate()
+            .once()
+            .returning(|_, _, _| Ok(()));
 
         pending
             .expect_get_certificate()
@@ -972,19 +1039,15 @@ mod tests {
         let mut epochs = task.clock_ref.subscribe().unwrap();
         let mut next_expected_height = 0;
 
+        let (reply0_sx, reply0_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id,
-                height: 0,
-            })
+            .send((Certificate::new_for_test(network_id, 0), reply0_sx))
             .await
             .expect("Failed to send the certificate");
 
+        let (reply1_sx, mut reply1_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id: certificate_id2,
-                height: 1,
-            })
+            .send((Certificate::new_for_test(network_id, 1), reply1_sx))
             .await
             .expect("Failed to send the certificate");
 
@@ -1027,6 +1090,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(next_expected_height, 2);
+
+        assert!(reply0_rx.await.unwrap().is_ok());
+        assert!(reply1_rx.try_recv().is_err());
     }
 
     #[rstest]

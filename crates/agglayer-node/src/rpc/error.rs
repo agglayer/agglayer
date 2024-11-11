@@ -116,7 +116,7 @@ pub enum Error {
     #[error("Status retrieval error: {0}")]
     Status(#[from] StatusError),
 
-    #[error("Cannot send certificate: {detail}")]
+    #[error("Cannot send certificate")]
     SendCertificate { detail: String },
 
     #[error("Rate limited")]
@@ -164,7 +164,7 @@ impl Error {
         err.into()
     }
 
-    pub(crate) fn send_certificate<T>(err: tokio::sync::mpsc::error::SendError<T>) -> Self {
+    pub(crate) fn send_certificate(err: agglayer_certificate_orchestrator::Error) -> Self {
         let detail = err.to_string();
         Self::SendCertificate { detail }
     }

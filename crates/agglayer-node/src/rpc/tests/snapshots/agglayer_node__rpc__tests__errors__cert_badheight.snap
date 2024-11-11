@@ -1,0 +1,15 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+assertion_line: 131
+expression: "SendCertificate { detail: \"Unexpected certificate height for network 1337 (got 55, expected 57)\" }"
+snapshot_kind: text
+---
+{
+  "code": -10006,
+  "data": {
+    "send-certificate": {
+      "detail": "Unexpected certificate height for network 1337 (got 55, expected 57)"
+    }
+  },
+  "message": "Cannot send certificate"
+}

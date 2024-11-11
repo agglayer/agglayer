@@ -30,7 +30,7 @@ async fn fetch_unkown_certificate_header(#[future] context: TestContext) {
 #[rstest]
 #[awt]
 #[test_log::test(tokio::test)]
-async fn fetch_kown_certificate_header(#[future] mut context: TestContext) {
+async fn fetch_kown_certificate_header(#[future] context: TestContext) {
     let certificate = Certificate::new_for_test(1.into(), 0);
     let id = certificate.hash();
 
@@ -41,7 +41,6 @@ async fn fetch_kown_certificate_header(#[future] mut context: TestContext) {
         .unwrap();
 
     assert_eq!(id, res);
-    assert!(context.certificate_receiver.try_recv().is_ok());
 
     let payload: CertificateHeader = context
         .client
@@ -56,7 +55,7 @@ async fn fetch_kown_certificate_header(#[future] mut context: TestContext) {
 #[rstest]
 #[awt]
 #[test_log::test(tokio::test)]
-async fn get_certificate_header_after_sending_the_certificate(#[future] mut context: TestContext) {
+async fn get_certificate_header_after_sending_the_certificate(#[future] context: TestContext) {
     let certificate = Certificate::new_for_test(1.into(), 0);
     let id = certificate.hash();
 
@@ -67,7 +66,7 @@ async fn get_certificate_header_after_sending_the_certificate(#[future] mut cont
         .unwrap();
 
     assert_eq!(id, res);
-    assert!(context.certificate_receiver.try_recv().is_ok());
+    //assert!(context.certificate_receiver.try_recv().is_ok());
 
     let payload: CertificateHeader = context
         .client
