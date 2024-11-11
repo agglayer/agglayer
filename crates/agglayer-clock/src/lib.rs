@@ -60,6 +60,11 @@ impl ClockRef {
         }
     }
 
+    #[cfg(feature = "testutils")]
+    pub fn get_sender(&self) -> broadcast::Sender<Event> {
+        self.sender.clone()
+    }
+
     /// Subscribe to the Clock events.
     ///
     /// # Errors
