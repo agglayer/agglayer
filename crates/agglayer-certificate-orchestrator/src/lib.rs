@@ -290,13 +290,20 @@ where
 
             let sender = sender.clone();
             tokio::spawn(async move {
-                _ = sender
+                if sender
                     .send(NewCertificate {
                         certificate_id,
                         network_id,
                         height,
                     })
-                    .await;
+                    .await
+                    .is_err()
+                {
+                    error!(
+                        "Failed to send the certificate {certificate_id} to the network task for \
+                         network {network_id}",
+                    );
+                }
             });
         }
 
