@@ -128,7 +128,7 @@ where
                 info!("Received an epoch event: {}", epoch);
 
                 let current_epoch = self.clock_ref.current_epoch();
-                if epoch < current_epoch {
+                if epoch != 0 && epoch < (current_epoch - 1) {
                     debug!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
 
                     return Ok(());
