@@ -30,7 +30,7 @@ async fn fetch_unknown_certificate_header(#[future] context: TestContext) {
 #[rstest]
 #[awt]
 #[test_log::test(tokio::test)]
-async fn fetch_known_certificate_header(#[future] mut context: TestContext) {
+async fn fetch_kown_certificate_header(#[future] context: TestContext) {
     let certificate = Certificate::new_for_test(1.into(), 0);
     let id = certificate.hash();
 
@@ -41,7 +41,6 @@ async fn fetch_known_certificate_header(#[future] mut context: TestContext) {
         .unwrap();
 
     assert_eq!(id, res);
-    assert!(context.certificate_receiver.try_recv().is_ok());
 
     let payload: CertificateHeader = context
         .client
@@ -56,7 +55,7 @@ async fn fetch_known_certificate_header(#[future] mut context: TestContext) {
 #[rstest]
 #[awt]
 #[test_log::test(tokio::test)]
-async fn get_certificate_header_after_sending_the_certificate(#[future] mut context: TestContext) {
+async fn get_certificate_header_after_sending_the_certificate(#[future] context: TestContext) {
     let certificate = Certificate::new_for_test(1.into(), 0);
     let id = certificate.hash();
 
@@ -67,7 +66,6 @@ async fn get_certificate_header_after_sending_the_certificate(#[future] mut cont
         .unwrap();
 
     assert_eq!(id, res);
-    assert!(context.certificate_receiver.try_recv().is_ok());
 
     let payload: CertificateHeader = context
         .client
@@ -163,6 +161,7 @@ async fn certificate_header(#[future] raw_rpc: RawRpcContext) {
         .unwrap()
     );
 }
+
 #[rstest]
 #[test_log::test(tokio::test)]
 async fn debug_fetch_unknown_certificate() {
@@ -188,7 +187,7 @@ async fn debug_fetch_known_certificate() {
     let mut config = TestContext::get_default_config();
     config.debug_mode = true;
 
-    let mut context = TestContext::new_with_config(config).await;
+    let context = TestContext::new_with_config(config).await;
 
     let certificate = Certificate::new_for_test(1.into(), 0);
     let id = certificate.hash();
@@ -200,7 +199,6 @@ async fn debug_fetch_known_certificate() {
         .unwrap();
 
     assert_eq!(id, res);
-    assert!(context.certificate_receiver.try_recv().is_ok());
 
     let (recv_cert, header): (Certificate, Option<CertificateHeader>) = context
         .client
@@ -221,7 +219,7 @@ async fn debug_get_certificate_after_sending_the_certificate() {
     let mut config = TestContext::get_default_config();
     config.debug_mode = true;
 
-    let mut context = TestContext::new_with_config(config).await;
+    let context = TestContext::new_with_config(config).await;
 
     let certificate = Certificate::new_for_test(1.into(), 0);
     let id = certificate.hash();
@@ -233,7 +231,6 @@ async fn debug_get_certificate_after_sending_the_certificate() {
         .unwrap();
 
     assert_eq!(id, res);
-    assert!(context.certificate_receiver.try_recv().is_ok());
 
     let (recv_cert, header): (Certificate, Option<CertificateHeader>) = context
         .client
@@ -264,7 +261,7 @@ async fn debug_get_certificate_after_overwrite() {
     let mut config = TestContext::get_default_config();
     config.debug_mode = true;
 
-    let mut context = TestContext::new_with_config(config).await;
+    let context = TestContext::new_with_config(config).await;
 
     let certificate = Certificate::new_for_test(1.into(), 0);
     let id = certificate.hash();
@@ -276,7 +273,6 @@ async fn debug_get_certificate_after_overwrite() {
         .unwrap();
 
     assert_eq!(id, res);
-    assert!(context.certificate_receiver.try_recv().is_ok());
 
     let (recv_cert, header): (Certificate, Option<CertificateHeader>) = context
         .client
@@ -301,7 +297,6 @@ async fn debug_get_certificate_after_overwrite() {
         .unwrap();
 
     assert_eq!(id2, res);
-    assert!(context.certificate_receiver.try_recv().is_ok());
 
     // Retrieve 1
     let (recv_cert, header): (Certificate, Option<CertificateHeader>) = context
@@ -336,7 +331,7 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
     let mut config = TestContext::get_default_config();
     config.debug_mode = false;
 
-    let mut context = TestContext::new_with_config(config).await;
+    let context = TestContext::new_with_config(config).await;
 
     let certificate = Certificate::new_for_test(1.into(), 0);
     let id = certificate.hash();
@@ -348,7 +343,6 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
         .unwrap();
 
     assert_eq!(id, res);
-    assert!(context.certificate_receiver.try_recv().is_ok());
 
     let payload: Result<(Certificate, Option<CertificateHeader>), ClientError> = context
         .client
@@ -371,7 +365,6 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
         .unwrap();
 
     assert_eq!(id2, res);
-    assert!(context.certificate_receiver.try_recv().is_ok());
 
     let payload: Result<(Certificate, Option<CertificateHeader>), ClientError> = context
         .client

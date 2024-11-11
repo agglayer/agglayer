@@ -1,0 +1,15 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+assertion_line: 131
+expression: "SendCertificate { detail: \"Certificate submission failed\" }"
+snapshot_kind: text
+---
+{
+  "code": -10006,
+  "data": {
+    "send-certificate": {
+      "detail": "Certificate submission failed"
+    }
+  },
+  "message": "Cannot send certificate"
+}

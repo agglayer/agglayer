@@ -1,7 +1,29 @@
 use agglayer_types::{
-    CertificateId, CertificateStatusError, Height, NetworkId, ProofVerificationError,
+    CertificateId, CertificateStatus, CertificateStatusError, Height, NetworkId,
+    ProofVerificationError,
 };
 use pessimistic_proof::ProofError;
+
+#[derive(thiserror::Error, Debug)]
+pub enum InitialCheckError {
+    #[error("Storage error: {0}")]
+    Storage(#[from] agglayer_storage::error::Error),
+
+    #[error("Certificate submission failed")]
+    CertificateSubmission,
+
+    #[error("Certificate is in the past (height {height}, expecting {next_height})")]
+    InPast { height: u64, next_height: u64 },
+
+    #[error("Certificate is too far in the future (height {height}, max allowed {max_height})")]
+    FarFuture { height: u64, max_height: u64 },
+
+    #[error("Cannot replace an existing {status} certificate")]
+    IllegalReplacement { status: CertificateStatus },
+
+    #[error("Internal error")]
+    Internal,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum PreCertificationError {

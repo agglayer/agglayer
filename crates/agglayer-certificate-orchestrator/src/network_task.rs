@@ -6,8 +6,8 @@ use agglayer_storage::{
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
 use agglayer_types::{
-    Certificate, CertificateId, CertificateStatus, CertificateStatusError, Height,
-    LocalNetworkStateData, NetworkId,
+    Certificate, CertificateStatus, CertificateStatusError, Height, LocalNetworkStateData,
+    NetworkId,
 };
 use agglayer_types::{CertificateHeader, Digest};
 use pessimistic_proof::utils::Hashable as _;
@@ -15,17 +15,16 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::{CertificationError, Certifier, CertifierOutput, EpochPacker, Error};
+use crate::{
+    CertResponse, CertResponseSender, CertificationError, Certifier, CertifierOutput, EpochPacker,
+    Error, InitialCheckError,
+};
 
 #[cfg(test)]
 mod tests;
 
-/// Message to notify the network task that a new certificate has been received.
-#[derive(Debug)]
-pub(crate) struct NewCertificate {
-    pub(crate) certificate_id: CertificateId,
-    pub(crate) height: Height,
-}
+/// Maximum height distance of future pending certificates.
+const MAX_FUTURE_HEIGHT_DISTANCE: u64 = 10;
 
 /// Network task that is responsible to certify the certificates for a network.
 pub(crate) struct NetworkTask<CertifierClient, SettlementClient, PendingStore, StateStore> {
@@ -49,7 +48,7 @@ pub(crate) struct NetworkTask<CertifierClient, SettlementClient, PendingStore, S
     /// settlement response.
     pending_state: Option<LocalNetworkStateData>,
     /// The stream of new certificates to certify.
-    certificate_stream: mpsc::Receiver<NewCertificate>,
+    certificate_stream: mpsc::Receiver<(Certificate, CertResponseSender)>,
     /// Flag to indicate if the network is at capacity for the current epoch.
     at_capacity_for_epoch: bool,
     /// latest certificate settled
@@ -72,7 +71,7 @@ where
         settlement_client: Arc<SettlementClient>,
         clock_ref: ClockRef,
         network_id: NetworkId,
-        certificate_stream: mpsc::Receiver<NewCertificate>,
+        certificate_stream: mpsc::Receiver<(Certificate, CertResponseSender)>,
     ) -> Result<Self, Error> {
         info!("Creating a new network task for network {}", network_id);
 
@@ -135,7 +134,18 @@ where
                 0
             };
 
-        let mut first_run = true;
+        // Try to process a leftover pending certificate first.
+        if let Err(error) = self
+            .process_next_pending_certificate(&mut next_expected_height)
+            .await
+        {
+            error!("Error during the inital certification process: {}", error);
+
+            match error {
+                Error::InternalError(_) | Error::Storage(_) => return Err(error),
+                _ => {}
+            }
+        }
 
         loop {
             tokio::select! {
@@ -144,7 +154,7 @@ where
                     return Ok(self.network_id);
                 }
 
-                result = self.make_progress(&mut stream_epoch, &mut next_expected_height, &mut first_run) => {
+                result = self.make_progress(&mut stream_epoch, &mut next_expected_height) => {
                     if let Err(error)= result {
                         error!("Error during the certification process: {}", error);
 
@@ -162,69 +172,69 @@ where
         &mut self,
         stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
         next_expected_height: &mut u64,
-        first_run: &mut bool,
     ) -> Result<(), Error> {
-        let height = if *first_run {
-            *first_run = false;
-            *next_expected_height
-        } else {
-            tokio::select! {
-                Ok(agglayer_clock::Event::EpochEnded(epoch)) = stream_epoch.recv() => {
-                    info!("Received an epoch event: {}", epoch);
+        tokio::select! {
+            Ok(agglayer_clock::Event::EpochEnded(epoch)) = stream_epoch.recv() => {
+                info!("Received an epoch event: {}", epoch);
 
-                    let current_epoch = self.clock_ref.current_epoch();
-                    if epoch != 0 && epoch < (current_epoch - 1) {
-                        debug!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
+                let current_epoch = self.clock_ref.current_epoch();
+                if epoch != 0 && epoch < (current_epoch - 1) {
+                    debug!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
 
+                    return Ok(());
+                }
+                match self.latest_settled {
+                    Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
+                        info!("Network {} is at capacity for the epoch {}", self.network_id, current_epoch);
                         return Ok(());
-                    }
-                    match self.latest_settled {
-                        Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
-                            info!("Network {} is at capacity for the epoch {}", self.network_id, current_epoch);
-                            return Ok(());
-                        },
-                        _ => {
-                            self.at_capacity_for_epoch = false;
-                            *next_expected_height
-                        }
+                    },
+                    _ => {
+                        self.at_capacity_for_epoch = false;
                     }
                 }
-                Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
-                    info!(
-                        hash = certificate_id.to_string(),
-                        "Received a certificate event for {certificate_id} at height {height}"
-                    );
+            }
+            Some((certificate, response_sender)) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
+                let certificate_id = certificate.hash();
+                let height = certificate.height;
 
-                    if matches!(
-                        self.latest_settled,
-                        Some(SettledCertificate(settled_id, _, _, _)) if settled_id == certificate_id)
-                    {
-                        return Ok(());
-                    }
+                info!(
+                    hash = certificate_id.to_string(),
+                    "Received a certificate event for {certificate_id} at height {height}"
+                );
 
-                    if *next_expected_height != height {
-                        warn!(
-                            hash = certificate_id.to_string(),
-                            "Received a certificate event for the wrong height");
+                let response = self.run_prechecks(&certificate, *next_expected_height);
+                warn!("============== PRECHECKS FINISHED");
 
-                        return Ok(());
-                    }
+                if let Err(err) = &response {
+                    let cert_id = certificate.hash();
+                    warn!("Certificate processing error for {cert_id}: {err}");
+                }
 
-                    *next_expected_height
+                if let Err(response) = response_sender.send(response) {
+                    let cert_id = certificate.hash();
+                    warn!("Failed to send response ({response:?}) to {cert_id}");
                 }
             }
         };
 
+        self.process_next_pending_certificate(next_expected_height)
+            .await
+    }
+
+    async fn process_next_pending_certificate(
+        &mut self,
+        next_expected_height: &mut u64,
+    ) -> Result<(), Error> {
         // Get the certificate the pending certificate for the network at the height
         let certificate = if let Some(certificate) = self
             .pending_store
-            .get_certificate(self.network_id, height)?
+            .get_certificate(self.network_id, *next_expected_height)?
         {
             certificate
         } else {
             debug!(
                 "No certificate found for network {} at height {}",
-                self.network_id, height
+                self.network_id, *next_expected_height,
             );
             // There is no certificate to certify at this height for now
             return Ok(());
@@ -290,12 +300,70 @@ where
                     "Certificate {certificate_id} is already settled while trying to certify the \
                      certificate for network {} at height {}",
                     self.network_id,
-                    height - 1
+                    *next_expected_height - 1
                 );
 
                 Ok(())
             }
         }
+    }
+
+    /// Run initial checks on a certificate and store it if the checks pass.
+    ///
+    /// Performs a number of initial checks for the certificate. If these pass,
+    /// the certificate is recorded in persistent storage.
+    fn run_prechecks(&mut self, certificate: &Certificate, next_height: u64) -> CertResponse {
+        let height = certificate.height;
+        let network_id = certificate.network_id;
+
+        if let Some(SettledCertificate(settled_id, _, _, _)) = &self.latest_settled {
+            if settled_id == &certificate.hash() {
+                warn!("=============== ALREADY SETTLED");
+                // TODO Return status from the RPC in case of success
+                return Ok(());
+            }
+        }
+
+        if height < next_height {
+            return Err(InitialCheckError::InPast {
+                height,
+                next_height,
+            });
+        }
+
+        let max_height = next_height + MAX_FUTURE_HEIGHT_DISTANCE;
+        if height > max_height {
+            return Err(InitialCheckError::FarFuture { height, max_height });
+        }
+
+        // TODO signature check + rate limit
+
+        let existing_header = self
+            .state_store
+            .get_certificate_header_by_cursor(network_id, height)?;
+
+        if let Some(existing_header) = existing_header {
+            use CertificateStatus as CS;
+
+            let status = existing_header.status;
+            match status {
+                CS::InError { error: _ } => (),
+                status @ (CS::Pending | CS::Proven | CS::Candidate | CS::Settled) => {
+                    return Err(InitialCheckError::IllegalReplacement { status });
+                }
+            }
+        }
+
+        // TODO: Batch the two queries.
+        // Insert the certificate header into the state store.
+        self.state_store
+            .insert_certificate_header(certificate, CertificateStatus::Pending)?;
+
+        // Insert the certificate into the pending store.
+        self.pending_store
+            .insert_pending_certificate(network_id, height, certificate)?;
+
+        Ok(())
     }
 
     async fn handle_candidate(

@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use agglayer_types::CertificateStatus;
 use ethers::{
     providers::ProviderError,
     types::{Bytes, SignatureError as EthSignatureError, H160, H256},
@@ -19,6 +20,7 @@ type ContractError = ethers::contract::ContractError<RpcProvider>;
 type SignatureError = kernel::SignatureVerificationError<RpcProvider>;
 type SettlementError = kernel::SettlementError<RpcProvider>;
 type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
+type CertError = agglayer_certificate_orchestrator::InitialCheckError;
 
 #[rstest::rstest]
 #[case("rollup_not_reg", Error::rollup_not_registered(1337))]
@@ -104,6 +106,30 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
         time_interval: Duration::from_secs(40 * 60),
         until_next: None,
     }).into()
+)]
+#[case(
+    "cert_submission",
+    Error::send_certificate(CertError::CertificateSubmission)
+)]
+#[case(
+    "cert_past",
+    Error::send_certificate(CertError::InPast {
+        height: 55,
+        next_height: 57,
+    })
+)]
+#[case(
+    "cert_future",
+    Error::send_certificate(CertError::FarFuture {
+        height: 153,
+        max_height: 95,
+    })
+)]
+#[case(
+    "cert_replace_candidate",
+    Error::send_certificate(CertError::IllegalReplacement {
+        status: CertificateStatus::Candidate,
+    })
 )]
 fn rpc_error_rendering(#[case] name: &str, #[case] err: Error) {
     let debug_str = format!("{err:?}");

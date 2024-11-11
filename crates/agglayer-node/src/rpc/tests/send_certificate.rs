@@ -1,5 +1,6 @@
 use std::{net::IpAddr, sync::Arc};
 
+use agglayer_certificate_orchestrator::CertificateSubmitter;
 use agglayer_config::Config;
 use agglayer_types::{Certificate, CertificateId};
 use ethers::providers;
@@ -31,12 +32,14 @@ async fn send_certificate_method_can_be_called() {
 
     let kernel = Kernel::new(Arc::new(provider), config.clone());
 
+    let certificate_submitter = CertificateSubmitter::new(certificate_sender);
+
     let _server_handle = AgglayerImpl::new(
         kernel,
-        certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        certificate_submitter,
         config.clone(),
     )
     .start()
@@ -46,15 +49,22 @@ async fn send_certificate_method_can_be_called() {
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
 
-    let _: CertificateId = client
-        .request(
-            "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), 0)],
-        )
-        .await
-        .unwrap();
-
-    assert!(certificate_receiver.try_recv().is_ok());
+    futures::future::join(
+        async {
+            let _: CertificateId = client
+                .request(
+                    "interop_sendCertificate",
+                    rpc_params![Certificate::new_for_test(1.into(), 0)],
+                )
+                .await
+                .unwrap();
+        },
+        async {
+            let (_cert, resp) = certificate_receiver.recv().await.unwrap();
+            let _ = resp.send(Ok(()));
+        },
+    )
+    .await;
 }
 
 #[test_log::test(tokio::test)]
@@ -73,12 +83,14 @@ async fn send_certificate_method_can_be_called_and_fail() {
 
     let kernel = Kernel::new(Arc::new(provider), config.clone());
 
+    let certificate_submitter = CertificateSubmitter::new(certificate_sender);
+
     let _server_handle = AgglayerImpl::new(
         kernel,
-        certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        certificate_submitter,
         config.clone(),
     )
     .start()

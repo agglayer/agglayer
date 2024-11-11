@@ -104,10 +104,8 @@ async fn from_pending_to_settle() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+    task.process_next_pending_certificate(&mut next_expected_height)
         .await
         .unwrap();
 
@@ -210,10 +208,8 @@ async fn from_proven_to_settle() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+    task.process_next_pending_certificate(&mut next_expected_height)
         .await
         .unwrap();
 
@@ -308,10 +304,8 @@ async fn from_candidate_to_settle() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+    task.process_next_pending_certificate(&mut next_expected_height)
         .await
         .unwrap();
 
@@ -369,10 +363,8 @@ async fn from_settle_to_settle() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 1;
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+    task.process_next_pending_certificate(&mut next_expected_height)
         .await
         .unwrap();
 
