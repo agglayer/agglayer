@@ -17,15 +17,12 @@ use agglayer_storage::{
         PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
 };
-use agglayer_types::{CertificateId, CertificateIndex, Height, NetworkId};
+use agglayer_types::{Certificate, CertificateId, CertificateIndex, Height, NetworkId};
 use arc_swap::ArcSwap;
 use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt};
-use network_task::{NetworkTask, NewCertificate};
+use network_task::NetworkTask;
 use tokio::{
-    sync::{
-        mpsc::{self, Receiver},
-        oneshot,
-    },
+    sync::{mpsc, oneshot},
     task::JoinHandle,
 };
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
@@ -36,12 +33,15 @@ mod epoch_packer;
 mod error;
 mod network_task;
 
+mod submitter;
+
 #[cfg(test)]
 mod tests;
 
 pub use certifier::{CertificateInput, Certifier, CertifierOutput, CertifierResult};
 pub use epoch_packer::{EpochPacker, SettlementFuture};
-pub use error::{CertificationError, Error, PreCertificationError};
+pub use error::{CertificationError, Error, InitialCheckError, PreCertificationError};
+pub use submitter::Submitter as CertificateSubmitter;
 
 const MAX_POLL_READS: usize = 1_000;
 
@@ -54,6 +54,12 @@ pub type NetworkTasks =
 pub type SettlementTasks = FuturesUnordered<
     Pin<Box<dyn Future<Output = Result<(NetworkId, SettledCertificate), Error>> + Send + 'static>>,
 >;
+
+/// A response to the certificate submission.
+pub type CertResponse = Result<(), InitialCheckError>;
+
+/// A certificate response sender.
+pub type CertResponseSender = oneshot::Sender<CertResponse>;
 
 /// The Certificate orchestrator receives the certificates from CDKs.
 ///
@@ -78,7 +84,7 @@ pub struct CertificateOrchestrator<
     clock: Pin<Box<dyn Stream<Item = Event> + Send>>,
     clock_ref: ClockRef,
     /// Receiver for certificates coming from CDKs.
-    data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+    data_receiver: mpsc::Receiver<(Certificate, CertResponseSender)>,
     /// Cancellation token future for graceful shutdown.
     cancellation_token_future: Pin<Box<WaitForCancellationFutureOwned>>,
 
@@ -96,7 +102,7 @@ pub struct CertificateOrchestrator<
 
     /// Network tasks that are currently running, with their associated
     /// notifier.
-    spawned_network_tasks: BTreeMap<NetworkId, mpsc::Sender<NewCertificate>>,
+    spawned_network_tasks: BTreeMap<NetworkId, mpsc::Sender<(Certificate, CertResponseSender)>>,
 
     /// Notifiers for the settlement of the certificates.
     settlement_notifier:
@@ -139,7 +145,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn try_new(
         clock: ClockRef,
-        data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+        data_receiver: mpsc::Receiver<(Certificate, CertResponseSender)>,
         cancellation_token: CancellationToken,
         epoch_packing_task_builder: E,
         certifier_task_builder: CertifierClient,
@@ -216,7 +222,7 @@ where
     #[builder(entry = "builder", exit = "start", visibility = "pub")]
     pub async fn start(
         clock: ClockRef,
-        data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+        data_receiver: mpsc::Receiver<(Certificate, CertResponseSender)>,
         cancellation_token: CancellationToken,
         epoch_packing_task_builder: E,
         certifier_task_builder: CertifierClient,
@@ -300,22 +306,22 @@ where
     /// - Spawning the certifier task for the next height of the network.
     fn receive_certificates(
         &mut self,
-        cursors: impl IntoIterator<Item = (NetworkId, Height, CertificateId)>,
+        cursors: impl IntoIterator<Item = (Certificate, CertResponseSender)>,
     ) -> Result<(), Error> {
-        for (network_id, height, certificate_id) in cursors {
+        for (certificate, reply_sender) in cursors {
+            let network_id = certificate.network_id;
             self.spawn_network_task(network_id)?;
 
             if let Some(sender) = self.spawned_network_tasks.get(&network_id) {
                 if let Ok(sender) = sender.try_reserve() {
-                    sender.send(NewCertificate {
-                        certificate_id,
-                        height,
-                    })
+                    sender.send((certificate, reply_sender));
                 } else {
+                    let certificate_id = certificate.hash();
                     error!(
                         "Failed to send the certificate {certificate_id} to the network task for \
                          network {network_id}",
                     );
+                    let _ = reply_sender.send(Err(InitialCheckError::Internal));
                 }
             } else {
                 warn!("Unable to find the network task for network {}", network_id);
