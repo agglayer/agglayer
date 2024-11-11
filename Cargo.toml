@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-anyhow = "1.0.91"
+anyhow = "1.0.93"
 arc-swap = "1.7.1"
 async-trait = "0.1.82"
 base64 = "0.22.0"
@@ -40,19 +40,19 @@ serde_json = "1.0.132"
 serde_with = "3.11.0"
 test-log = "0.2.16"
 thiserror = "1.0.67"
-tokio = { version = "1.41.0", features = ["full"] }
+tokio = { version = "1.41.1", features = ["full"] }
 tokio-util = "0.7.11"
 toml = "0.8.15"
 tonic = { version = "0.12.3", default-features = false }
-tower = "0.4.13"
+tower = "0.5.1"
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = { version = "2.5.2", features = ["serde"] }
 
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
-sp1-core-machine = "3.1.0"
-sp1-sdk = "3.0.0"
+sp1-core-machine = "3.2.1"
+sp1-sdk = "3.2.1"
 sp1-prover = "3.1.0"
 
 # A hack to make the resolver pull in the correct sp1 branch when processing the reth and revm deps.
