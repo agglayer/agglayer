@@ -18,3 +18,7 @@ tracing.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
 rstest.workspace = true
 test-log.workspace = true
+
+[features]
+default = []
+testutils = []

@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use agglayer_certificate_orchestrator::{Certifier, CertifierOutput, Error};
+use agglayer_certificate_orchestrator::{
+    CertificationError, Certifier, CertifierOutput, PreCertificationError,
+};
 use agglayer_config::Config;
 use agglayer_contracts::RollupContract;
 use agglayer_prover_types::{
@@ -16,9 +18,7 @@ use bincode::Options as _;
 use futures::future::BoxFuture;
 use pessimistic_proof::{generate_pessimistic_proof, LocalNetworkState};
 use reth_primitives::Address;
-use sp1_sdk::{
-    CpuProver, MockProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey,
-};
+use sp1_sdk::{CpuProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey};
 use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, warn};
 
@@ -75,7 +75,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
             "notifier::certifier::certify::before_verifying_proof",
             |_| {
                 debug!("Failing before verifying the proof");
-                let verifier = MockProver::new();
+                let verifier = sp1_sdk::MockProver::new();
                 let (_, verifying_key) = verifier.setup(ELF);
 
                 verifier.verify(proof, &verifying_key)
@@ -96,19 +96,24 @@ where
         mut state: LocalNetworkStateData,
         network_id: NetworkId,
         height: Height,
-    ) -> Result<BoxFuture<'static, Result<CertifierOutput, Error>>, Error> {
+    ) -> Result<
+        BoxFuture<'static, Result<CertifierOutput, CertificationError>>,
+        PreCertificationError,
+    > {
         debug!("Certifying the certificate of network {network_id} at height {height}");
 
         // Fetch certificate from storage
         let certificate = self
             .pending_store
             .get_certificate(network_id, height)?
-            .ok_or(Error::CertificateNotFound(network_id, height))?;
+            .ok_or(PreCertificationError::CertificateNotFound(
+                network_id, height,
+            ))?;
 
         let certificate_id = certificate.hash();
 
         if self.pending_store.get_proof(certificate_id)?.is_some() {
-            return Err(Error::ProofAlreadyExists(
+            return Err(PreCertificationError::ProofAlreadyExists(
                 network_id,
                 height,
                 certificate_id,
@@ -126,7 +131,9 @@ where
             let signer = l1_rpc
                 .get_trusted_sequencer_address(*network_id, proof_signers)
                 .await
-                .map_err(|_| Error::TrustedSequencerNotFound(certificate_id, network_id))?;
+                .map_err(|_| {
+                    CertificationError::TrustedSequencerNotFound(certificate_id, network_id)
+                })?;
 
             let initial_state = LocalNetworkState::from(state.clone());
 
@@ -134,14 +141,14 @@ where
             let multi_batch_header =
                 state
                     .apply_certificate(&certificate, signer)
-                    .map_err(|source| Error::Types {
+                    .map_err(|source| CertificationError::Types {
                         certificate_id,
                         source,
                     })?;
 
             // Perform the native PP execution
             let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)
-                .map_err(|source| Error::NativeExecutionFailed {
+                .map_err(|source| CertificationError::NativeExecutionFailed {
                     source,
                     certificate_id,
                 })?;
@@ -154,13 +161,13 @@ where
             let request = ProofGenerationRequest {
                 initial_state: default_bincode_options()
                     .serialize(&initial_state)
-                    .map_err(|source| Error::Serialize {
+                    .map_err(|source| CertificationError::Serialize {
                         certificate_id,
                         source,
                     })?,
                 batch_header: default_bincode_options()
                     .serialize(&multi_batch_header)
-                    .map_err(|source| Error::Serialize {
+                    .map_err(|source| CertificationError::Serialize {
                         certificate_id,
                         source,
                     })?,
@@ -177,17 +184,19 @@ where
                     {
                         match error {
                             agglayer_prover_types::Error::UnableToExecuteProver => {
-                                Error::InternalError
+                                CertificationError::InternalError
                             }
-                            agglayer_prover_types::Error::ProverFailed(_) => Error::InternalError,
+                            agglayer_prover_types::Error::ProverFailed(_) => {
+                                CertificationError::InternalError
+                            }
                             agglayer_prover_types::Error::ProofVerificationFailed(error) => {
-                                Error::ProofVerificationFailed {
+                                CertificationError::ProofVerificationFailed {
                                     certificate_id,
                                     source: error,
                                 }
                             }
                             agglayer_prover_types::Error::ExecutorFailed(source) => {
-                                Error::NativeExecutionFailed {
+                                CertificationError::NativeExecutionFailed {
                                     certificate_id,
                                     source,
                                 }
@@ -199,14 +208,14 @@ where
                              {error:?}"
                         );
 
-                        Error::InternalError
+                        CertificationError::InternalError
                     }
                 })?;
 
             let proof = prover_response.into_inner().proof;
             let proof: Proof = default_bincode_options()
                 .deserialize(&proof)
-                .map_err(|source| Error::Deserialize {
+                .map_err(|source| CertificationError::Deserialize {
                     certificate_id,
                     source,
                 })?;
@@ -219,7 +228,7 @@ where
             if let Err(error) = Self::verify_proof(verifier, &verifying_key, proof_to_verify) {
                 error!("Failed to verify the p-proof: {:?}", error);
 
-                Err(Error::ProofVerificationFailed {
+                Err(CertificationError::ProofVerificationFailed {
                     certificate_id,
                     source: error.into(),
                 })

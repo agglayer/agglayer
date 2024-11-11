@@ -17,7 +17,6 @@ use ethers::{
     signers::Signer,
 };
 use tokio::{join, sync::mpsc, task::JoinHandle};
-use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
@@ -171,12 +170,8 @@ impl Node {
                 .input_backpressure_buffer_size,
         );
 
-        let clock_subscription =
-            tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
-                .filter_map(|value| value.ok());
-
         let certificate_orchestrator_handle = CertificateOrchestrator::builder()
-            .clock(clock_subscription)
+            .clock(clock_ref)
             .data_receiver(data_receiver)
             .cancellation_token(cancellation_token.clone())
             .epoch_packing_task_builder(epoch_packing_aggregator_task)

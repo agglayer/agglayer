@@ -25,6 +25,7 @@ use jsonrpsee::{
 };
 use tokio::{sync::mpsc, try_join};
 use tower_http::cors::CorsLayer;
+use tracing::trace;
 use tracing::{debug, error, info, instrument};
 
 use crate::{
@@ -343,7 +344,7 @@ where
         &self,
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader> {
-        debug!("Received request to get certificate header for certificate {certificate_id}");
+        trace!("Received request to get certificate header for certificate {certificate_id}");
         match self.state.get_certificate_header(&certificate_id) {
             Ok(Some(header)) => Ok(header),
             Ok(None) => Err(Error::resource_not_found(format!(

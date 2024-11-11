@@ -2,7 +2,10 @@ use agglayer_types::{Height, NetworkId};
 use futures_util::future::BoxFuture;
 use mockall::mock;
 
-use crate::{Certifier, CertifierOutput, EpochPacker, Error, SettlementFuture};
+use crate::{
+    error::{CertificationError, PreCertificationError},
+    Certifier, CertifierOutput, EpochPacker, Error, SettlementFuture,
+};
 
 mock! {
     pub Certifier {}
@@ -12,7 +15,7 @@ mock! {
             state: agglayer_types::LocalNetworkStateData,
             network_id: NetworkId,
             height: Height,
-        ) -> Result<BoxFuture<'static, Result<CertifierOutput, Error>>, Error>;
+        ) -> Result<BoxFuture<'static, Result<CertifierOutput, CertificationError>>, PreCertificationError>;
     }
 }
 

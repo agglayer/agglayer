@@ -1,41 +1,46 @@
 use std::{
     collections::BTreeMap,
+    num::NonZeroU64,
     option::Option,
     result::Result,
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicU64, Arc, RwLock},
     task::Poll,
 };
 
+use agglayer_clock::ClockRef;
+use agglayer_config::Config;
 use agglayer_storage::{
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
         latest_settled_certificate_per_network::SettledCertificate,
     },
     stores::{
+        epochs::EpochsStore, pending::PendingStore, per_epoch::PerEpochStore, state::StateStore,
         EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
         PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
-    tests::mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
+    tests::{
+        mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
+        TempDBDir,
+    },
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
     EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 use arc_swap::ArcSwap;
-use futures_util::{future::BoxFuture, poll, Stream};
+use futures_util::{future::BoxFuture, poll};
 use mocks::{MockCertifier, MockEpochPacker};
 use rstest::fixture;
 use tokio::sync::{broadcast, mpsc};
-use tokio_stream::{wrappers::BroadcastStream, StreamExt as _};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
     CertificateInput, CertificateOrchestrator, Certifier, CertifierOutput, CertifierResult,
-    EpochPacker, Error,
+    EpochPacker, Error, PreCertificationError,
 };
 
-mod certifier_results;
-mod receive_certificates;
+pub(crate) mod mocks;
 
 #[derive(Default)]
 pub(crate) struct DummyPendingStore {
@@ -376,21 +381,45 @@ impl PendingCertificateReader for DummyPendingStore {
 // CertificateOrchestrator can be stopped
 #[tokio::test]
 async fn test_certificate_orchestrator_can_stop() {
-    let (_clock_sender, receiver) = broadcast::channel(1);
-    let clock = BroadcastStream::new(receiver).filter_map(|value| value.ok());
+    let path = TempDBDir::new();
+    let config = Config::new(&path.path);
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path)
+            .expect("Unable to create store"),
+    );
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+    );
+    let epochs_store = Arc::new(
+        EpochsStore::new(
+            Arc::new(config),
+            0,
+            pending_store.clone(),
+            state_store.clone(),
+        )
+        .expect("Unable to create store"),
+    );
+
+    let current_epoch = ArcSwap::new(Arc::new(
+        epochs_store.open(0).expect("Unable to open epoch"),
+    ));
+
+    let (clock_sender, _receiver) = broadcast::channel(1);
+    let clock = ClockRef::new(
+        clock_sender,
+        Arc::new(AtomicU64::new(0)),
+        Arc::new(NonZeroU64::new(1).unwrap()),
+    );
 
     let (_data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
-    let store = Arc::new(DummyPendingStore::default());
 
     let (check_sender, mut check_receiver) = mpsc::channel(1);
     let check = Check::builder()
-        .pending_store(store.clone())
+        .pending_store(pending_store.clone())
+        .state_store(state_store.clone())
         .executed(check_sender)
         .build();
-
-    let epochs_store = store.clone();
-    let current_epoch = ArcSwap::new(store.clone());
 
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
@@ -398,10 +427,10 @@ async fn test_certificate_orchestrator_can_stop() {
         cancellation_token.clone(),
         check.clone(),
         check.clone(),
-        store.clone(),
+        pending_store.clone(),
         epochs_store,
         current_epoch,
-        store.clone(),
+        state_store.clone(),
     )
     .expect("Unable to create orchestrator");
 
@@ -415,37 +444,56 @@ async fn test_certificate_orchestrator_can_stop() {
 // Can collect certificates and pack them at the end of an epoch
 #[tokio::test]
 async fn test_collect_certificates() {
-    let (clock_sender, receiver) = broadcast::channel(1);
-    let clock = BroadcastStream::new(receiver).filter_map(|value| value.ok());
+    let path = TempDBDir::new();
+    let config = Config::new(&path.path);
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path)
+            .expect("Unable to create store"),
+    );
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+    );
+
+    let epochs_store = Arc::new(
+        EpochsStore::new(
+            Arc::new(config),
+            0,
+            pending_store.clone(),
+            state_store.clone(),
+        )
+        .expect("Unable to create store"),
+    );
+
+    let current_epoch = ArcSwap::new(Arc::new(
+        epochs_store.open(1).expect("Unable to open epoch"),
+    ));
+    let (clock_sender, _receiver) = broadcast::channel(1);
+    let clock = ClockRef::new(
+        clock_sender.clone(),
+        Arc::new(AtomicU64::new(0)),
+        Arc::new(NonZeroU64::new(1).unwrap()),
+    );
     let (data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
 
-    let store = DummyPendingStore {
-        current_epoch: 1,
-        ..Default::default()
-    };
-
-    let store = Arc::new(store);
     let (check_sender, mut check_receiver) = mpsc::channel(1);
     let check = Check::builder()
-        .pending_store(store.clone())
+        .pending_store(pending_store.clone())
+        .state_store(state_store.clone())
         .executed(check_sender)
         .expected_epoch(1)
         .build();
 
-    let epochs_store = store.clone();
-
-    let current_epoch = ArcSwap::new(store.clone());
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
         data_receiver,
         cancellation_token,
         check.clone(),
         check.clone(),
-        store.clone(),
+        pending_store.clone(),
         epochs_store,
         current_epoch,
-        store.clone(),
+        state_store.clone(),
     )
     .expect("Unable to create orchestrator");
 
@@ -461,31 +509,56 @@ async fn test_collect_certificates() {
 #[tokio::test]
 #[ignore]
 async fn test_collect_certificates_after_epoch() {
-    let (clock_sender, receiver) = broadcast::channel(1);
-    let clock = BroadcastStream::new(receiver).filter_map(|value| value.ok());
+    let path = TempDBDir::new();
+    let config = Config::new(&path.path);
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path)
+            .expect("Unable to create store"),
+    );
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+    );
+    let epochs_store = Arc::new(
+        EpochsStore::new(
+            Arc::new(config),
+            0,
+            pending_store.clone(),
+            state_store.clone(),
+        )
+        .expect("Unable to create store"),
+    );
+
+    let current_epoch = ArcSwap::new(Arc::new(
+        epochs_store.open(0).expect("Unable to open epoch"),
+    ));
+    let (clock_sender, _receiver) = broadcast::channel(1);
+    let clock = ClockRef::new(
+        clock_sender.clone(),
+        Arc::new(AtomicU64::new(0)),
+        Arc::new(NonZeroU64::new(1).unwrap()),
+    );
+
     let (data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
 
-    let store = Arc::new(DummyPendingStore::default());
     let (check_sender, mut check_receiver) = mpsc::channel(1);
     let check = Check::builder()
-        .pending_store(store.clone())
+        .pending_store(pending_store.clone())
+        .state_store(state_store.clone())
         .executed(check_sender)
         .expected_epoch(1)
         .build();
 
-    let epochs_store = store.clone();
-    let current_epoch = ArcSwap::new(store.clone());
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
         data_receiver,
         cancellation_token,
         check.clone(),
         check.clone(),
-        store.clone(),
+        pending_store.clone(),
         epochs_store,
         current_epoch,
-        store.clone(),
+        state_store.clone(),
     )
     .expect("Unable to create orchestrator");
 
@@ -503,31 +576,57 @@ async fn test_collect_certificates_after_epoch() {
 #[tokio::test]
 #[ignore]
 async fn test_collect_certificates_when_empty() {
-    let (clock_sender, receiver) = broadcast::channel(1);
-    let clock = BroadcastStream::new(receiver).filter_map(|value| value.ok());
+    let path = TempDBDir::new();
+    let config = Config::new(&path.path);
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path)
+            .expect("Unable to create store"),
+    );
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+    );
+    let epochs_store = Arc::new(
+        EpochsStore::new(
+            Arc::new(config),
+            0,
+            pending_store.clone(),
+            state_store.clone(),
+        )
+        .expect("Unable to create store"),
+    );
+
+    let current_epoch = ArcSwap::new(Arc::new(
+        epochs_store.open(0).expect("Unable to open epoch"),
+    ));
+    let (clock_sender, _receiver) = broadcast::channel(1);
+
+    let clock = ClockRef::new(
+        clock_sender.clone(),
+        Arc::new(AtomicU64::new(0)),
+        Arc::new(NonZeroU64::new(1).unwrap()),
+    );
+
     let (_data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
 
-    let store = Arc::new(DummyPendingStore::default());
     let (check_sender, mut check_receiver) = mpsc::channel(1);
     let check = Check::builder()
-        .pending_store(store.clone())
+        .pending_store(pending_store.clone())
+        .state_store(state_store.clone())
         .executed(check_sender)
         .expected_epoch(1)
         .build();
 
-    let epochs_store = store.clone();
-    let current_epoch = ArcSwap::new(store.clone());
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
         data_receiver,
         cancellation_token,
         check.clone(),
         check.clone(),
-        store.clone(),
+        pending_store.clone(),
         epochs_store,
         current_epoch,
-        store.clone(),
+        state_store.clone(),
     )
     .expect("Unable to create orchestrator");
 
@@ -538,46 +637,57 @@ async fn test_collect_certificates_when_empty() {
 }
 
 #[fixture]
-fn clock() -> (
-    broadcast::Sender<agglayer_clock::Event>,
-    impl Stream<Item = agglayer_clock::Event>,
-) {
-    let (clock_sender, receiver) = broadcast::channel(1);
-    (
+pub(crate) fn clock() -> ClockRef {
+    let (clock_sender, _receiver) = broadcast::channel(1);
+
+    ClockRef::new(
         clock_sender,
-        BroadcastStream::new(receiver).filter_map(|v| v.ok()),
+        Arc::new(AtomicU64::new(0)),
+        Arc::new(NonZeroU64::new(1).unwrap()),
     )
 }
 
 #[fixture]
 fn check() -> (
-    Arc<DummyPendingStore>,
+    (Arc<PendingStore>, Arc<StateStore>),
     mpsc::Receiver<CertifierOutput>,
     Check,
 ) {
     let (check_sender, check_receiver) = mpsc::channel(1);
-    let store = Arc::new(DummyPendingStore::default());
+    let path = TempDBDir::new();
+    let config = Config::new(&path.path);
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path)
+            .expect("Unable to create store"),
+    );
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+    );
+    let epochs_store = Arc::new(
+        EpochsStore::new(
+            Arc::new(config),
+            0,
+            pending_store.clone(),
+            state_store.clone(),
+        )
+        .expect("Unable to create store"),
+    );
+
+    let _current_epoch = ArcSwap::new(Arc::new(
+        epochs_store.open(0).expect("Unable to open epoch"),
+    ));
+
     let check = Check::builder()
-        .pending_store(store.clone())
+        .pending_store(pending_store.clone())
+        .state_store(state_store.clone())
         .executed(check_sender)
         .expected_epoch(1)
         .build();
 
-    (store, check_receiver, check)
+    ((pending_store, state_store), check_receiver, check)
 }
 
-type TestOrchestrator<S> = CertificateOrchestrator<
-    S,
-    Check,
-    Check,
-    DummyPendingStore,
-    DummyPendingStore,
-    DummyPendingStore,
-    DummyPendingStore,
->;
-
-type IMockOrchestrator<S> = CertificateOrchestrator<
-    S,
+type IMockOrchestrator = CertificateOrchestrator<
     MockEpochPacker,
     MockCertifier,
     MockPendingStore,
@@ -585,8 +695,6 @@ type IMockOrchestrator<S> = CertificateOrchestrator<
     MockPerEpochStore,
     MockStateStore,
 >;
-
-mod mocks;
 
 #[derive(Default, buildstructor::Builder)]
 struct MockOrchestrator {
@@ -598,17 +706,13 @@ struct MockOrchestrator {
     current_epoch: Option<MockPerEpochStore>,
 }
 
+type SenderAndClockRef = (mpsc::Sender<(NetworkId, Height, CertificateId)>, ClockRef);
+
 #[fixture]
 pub(crate) fn create_orchestrator_mock(
     #[default(MockOrchestrator::default())] builder: MockOrchestrator,
-    clock: (
-        broadcast::Sender<agglayer_clock::Event>,
-        impl Stream<Item = agglayer_clock::Event>,
-    ),
-) -> (
-    mpsc::Sender<(NetworkId, Height, CertificateId)>,
-    IMockOrchestrator<impl Stream<Item = agglayer_clock::Event>>,
-) {
+    clock: ClockRef,
+) -> (SenderAndClockRef, IMockOrchestrator) {
     let (data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
     let pending_store = Arc::new(builder.pending_store.unwrap_or_else(|| {
@@ -625,9 +729,9 @@ pub(crate) fn create_orchestrator_mock(
     let state_store = Arc::new(builder.state_store.unwrap_or_default());
 
     (
-        data_sender,
+        (data_sender, clock.clone()),
         CertificateOrchestrator::try_new(
-            clock.1,
+            clock,
             data_receiver,
             cancellation_token,
             builder.epoch_packer.unwrap_or_else(|| {
@@ -654,52 +758,11 @@ pub(crate) fn create_orchestrator_mock(
     )
 }
 
-type OrchestratorResult<T> = (
-    mpsc::Sender<(NetworkId, Height, CertificateId)>,
-    mpsc::Receiver<CertifierOutput>,
-    TestOrchestrator<T>,
-);
-#[fixture]
-pub(crate) fn create_orchestrator(
-    check: (
-        Arc<DummyPendingStore>,
-        mpsc::Receiver<CertifierOutput>,
-        Check,
-    ),
-    clock: (
-        broadcast::Sender<agglayer_clock::Event>,
-        impl Stream<Item = agglayer_clock::Event>,
-    ),
-) -> OrchestratorResult<impl Stream<Item = agglayer_clock::Event>> {
-    let (data_sender, data_receiver) = mpsc::channel(10);
-    let cancellation_token = CancellationToken::new();
-    let store = check.0;
-    let epochs_store = store.clone();
-    let current_epoch = ArcSwap::new(store.clone());
-
-    (
-        data_sender,
-        check.1,
-        CertificateOrchestrator::try_new(
-            clock.1,
-            data_receiver,
-            cancellation_token,
-            check.2.clone(),
-            check.2.clone(),
-            store.clone(),
-            epochs_store,
-            current_epoch,
-            store.clone(),
-        )
-        .expect("Unable to create orchestrator"),
-    )
-}
-
 #[derive(Clone)]
 pub(crate) struct Check {
-    pending_store: Arc<DummyPendingStore>,
+    pending_store: Arc<PendingStore>,
     #[allow(unused)]
-    state_store: Arc<DummyPendingStore>,
+    state_store: Arc<StateStore>,
     expected_certificate: Option<Certificate>,
     #[allow(unused)]
     expected_proof: Option<Proof>,
@@ -711,12 +774,13 @@ pub(crate) struct Check {
 impl Check {
     #[builder]
     pub(crate) fn new(
-        pending_store: Arc<DummyPendingStore>,
+        pending_store: Arc<PendingStore>,
+        state_store: Arc<StateStore>,
         executed: mpsc::Sender<CertifierOutput>,
         expected_epoch: Option<u64>,
     ) -> Self {
         Self {
-            state_store: pending_store.clone(),
+            state_store,
             pending_store,
             executed,
             expected_certificate: None,
@@ -739,7 +803,7 @@ impl Check {
 }
 
 impl EpochPacker for Check {
-    type PerEpochStore = DummyPendingStore;
+    type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
     fn settle_certificate(
         &self,
         _epoch: Arc<Self::PerEpochStore>,
@@ -796,7 +860,9 @@ impl Certifier for Check {
             .pending_store
             .get_certificate(network_id, height)
             .expect("Storage failure: Unable to get certificate")
-            .ok_or(Error::CertificateNotFound(network_id, height))
+            .ok_or(PreCertificationError::CertificateNotFound(
+                network_id, height,
+            ))
             .expect("Certificate not found");
 
         let certificate_id = certificate.hash();
