@@ -37,8 +37,8 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    CertificateInput, CertificateOrchestrator, Certifier, CertifierOutput, CertifierResult,
-    EpochPacker, Error, PreCertificationError,
+    CertResponseSender, CertificateInput, CertificateOrchestrator, Certifier, CertifierOutput,
+    CertifierResult, EpochPacker, Error, PreCertificationError,
 };
 
 pub(crate) mod mocks;
@@ -586,7 +586,9 @@ async fn test_collect_certificates() {
     )
     .expect("Unable to create orchestrator");
 
-    _ = data_sender.send((1.into(), 1, [0; 32].into())).await;
+    let cert = Certificate::new_for_test(1.into(), 1);
+    let res_send = oneshot::channel().0;
+    _ = data_sender.send((cert, res_send)).await;
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
 
     let _poll = poll!(&mut orchestrator);
@@ -654,7 +656,9 @@ async fn test_collect_certificates_after_epoch() {
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
     let _poll = poll!(&mut orchestrator);
 
-    _ = data_sender.send((1.into(), 1, [0; 32].into())).await;
+    let cert = Certificate::new_for_test(1.into(), 1);
+    let res_send = oneshot::channel().0;
+    _ = data_sender.send((cert, res_send)).await;
 
     let _poll = poll!(&mut orchestrator);
 
@@ -795,7 +799,7 @@ struct MockOrchestrator {
     current_epoch: Option<MockPerEpochStore>,
 }
 
-type SenderAndClockRef = (mpsc::Sender<(NetworkId, Height, CertificateId)>, ClockRef);
+type SenderAndClockRef = (mpsc::Sender<(Certificate, CertResponseSender)>, ClockRef);
 
 #[fixture]
 pub(crate) fn create_orchestrator_mock(
