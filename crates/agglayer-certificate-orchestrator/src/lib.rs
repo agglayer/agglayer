@@ -82,7 +82,9 @@ pub struct CertificateOrchestrator<
     /// Cancellation token for graceful shutdown.
     cancellation_token: Pin<Box<WaitForCancellationFutureOwned>>,
 
+    /// The state store to access data.
     state_store: Arc<StateStore>,
+    /// Pending store to access the certificates and proofs.
     pending_store: Arc<PendingStore>,
     /// Epochs store to manage epoch transitions.
     epochs_store: Arc<EpochsStore>,
