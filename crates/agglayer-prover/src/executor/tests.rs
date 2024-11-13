@@ -33,7 +33,13 @@ async fn executor_normal_behavior() {
         new_local_exit_root: state.exit_tree.get_root(),
         ..Default::default()
     };
-    let batch_header = state.apply_certificate(&certificate, signer).unwrap();
+    let batch_header = state
+        .apply_certificate(
+            &certificate,
+            signer,
+            certificate.l1_info_root().unwrap().unwrap_or_default(),
+        )
+        .unwrap();
 
     let result = executor
         .call(Request {
@@ -66,7 +72,13 @@ async fn executor_normal_behavior_only_network() {
         new_local_exit_root: state.exit_tree.get_root(),
         ..Default::default()
     };
-    let batch_header = state.apply_certificate(&certificate, signer).unwrap();
+    let batch_header = state
+        .apply_certificate(
+            &certificate,
+            signer,
+            certificate.l1_info_root().unwrap().unwrap_or_default(),
+        )
+        .unwrap();
 
     let result = executor
         .call(Request {
@@ -107,7 +119,13 @@ async fn executor_fallback_behavior_cpu() {
         new_local_exit_root: state.exit_tree.get_root(),
         ..Default::default()
     };
-    let batch_header = state.apply_certificate(&certificate, signer).unwrap();
+    let batch_header = state
+        .apply_certificate(
+            &certificate,
+            signer,
+            certificate.l1_info_root().unwrap().unwrap_or_default(),
+        )
+        .unwrap();
 
     let result = executor
         .call(Request {
@@ -152,7 +170,13 @@ async fn executor_fallback_because_of_timeout_cpu() {
         new_local_exit_root: state.exit_tree.get_root(),
         ..Default::default()
     };
-    let batch_header = state.apply_certificate(&certificate, signer).unwrap();
+    let batch_header = state
+        .apply_certificate(
+            &certificate,
+            signer,
+            certificate.l1_info_root().unwrap().unwrap_or_default(),
+        )
+        .unwrap();
 
     let result = executor
         .call(Request {
@@ -200,7 +224,13 @@ async fn executor_fails_because_of_timeout_cpu() {
         new_local_exit_root: state.exit_tree.get_root(),
         ..Default::default()
     };
-    let batch_header = state.apply_certificate(&certificate, signer).unwrap();
+    let batch_header = state
+        .apply_certificate(
+            &certificate,
+            signer,
+            certificate.l1_info_root().unwrap().unwrap_or_default(),
+        )
+        .unwrap();
 
     let result = executor
         .call(Request {
@@ -247,7 +277,13 @@ async fn executor_fails_because_of_concurrency_cpu() {
         new_local_exit_root: state.exit_tree.get_root(),
         ..Default::default()
     };
-    let batch_header = state.apply_certificate(&certificate, signer).unwrap();
+    let batch_header = state
+        .apply_certificate(
+            &certificate,
+            signer,
+            certificate.l1_info_root().unwrap().unwrap_or_default(),
+        )
+        .unwrap();
 
     let mut executor2 = executor.clone();
     let batch_header2 = batch_header.clone();

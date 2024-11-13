@@ -15,6 +15,12 @@ fn main() {
         "PolygonRollupManager",
         &contract_dir,
     );
+    build_contract(
+        "polygonzkevmglobalexitrootv2.json",
+        "polygon_zkevm_global_exit_root_v2.rs",
+        "PolygonZkEVMGlobalExitRootV2",
+        &contract_dir,
+    );
 }
 
 fn build_contract(source: &str, destination: &str, struct_name: &str, contract_dir: &Path) {

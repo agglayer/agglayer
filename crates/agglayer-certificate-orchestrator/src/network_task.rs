@@ -344,6 +344,9 @@ where
                         CertificateStatusError::TrustedSequencerNotFound(network)
                     }
                     CertificationError::ProofVerificationFailed { source } => source.into(),
+                    CertificationError::L1InfoRootNotFound(_certificate_id, l1_leaf_count) => {
+                        CertificateStatusError::L1InfoRootNotFound(l1_leaf_count)
+                    }
 
                     CertificationError::ProverExecutionFailed { source } => {
                         CertificateStatusError::ProofGenerationError {

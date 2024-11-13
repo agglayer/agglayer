@@ -7,6 +7,7 @@ use ethers::providers::Middleware;
 use ethers_contract::{ContractCall, ContractError};
 use polygon_rollup_manager::{PolygonRollupManagerErrors, RollupIDToRollupDataReturn};
 
+
 #[rustfmt::skip]
 #[allow(warnings)]
 pub mod polygon_rollup_manager;
@@ -14,6 +15,10 @@ pub mod polygon_rollup_manager;
 #[rustfmt::skip]
 #[allow(warnings)]
 pub mod polygon_zk_evm;
+
+#[rustfmt::skip]
+#[allow(warnings)]
+pub mod polygon_zkevm_global_exit_root_v2;
 
 pub mod settler;
 
@@ -28,15 +33,24 @@ pub trait RollupContract {
         rollup_id: u32,
         proof_signers: HashMap<u32, Address>,
     ) -> Result<Address, ()>;
+
+    async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()>;
 }
 
 pub struct L1RpcClient<RpcProvider> {
     inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
+    l1_info_tree: polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2<RpcProvider>,
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider> {
-    pub fn new(inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>) -> Self {
-        Self { inner }
+    pub fn new(
+        inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
+        l1_info_tree: polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2<RpcProvider>,
+    ) -> Self {
+        Self {
+            inner,
+            l1_info_tree,
+        }
     }
 }
 
@@ -46,6 +60,13 @@ where
     RpcProvider: Middleware + 'static,
 {
     type M = RpcProvider;
+
+    async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()> {
+        self.l1_info_tree
+            .l_1_info_root_map(l1_leaf_count)
+            .await
+            .map_err(|_| ())
+    }
 
     async fn get_trusted_sequencer_address(
         &self,
