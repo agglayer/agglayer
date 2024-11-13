@@ -135,16 +135,45 @@ where
                     CertificationError::TrustedSequencerNotFound(certificate_id, network_id)
                 })?;
 
-            let initial_state = LocalNetworkState::from(state.clone());
+            let l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
 
-            let signer = Address::new(*signer.as_fixed_bytes());
-            let multi_batch_header =
-                state
-                    .apply_certificate(&certificate, signer)
+            let l1_info_root = l1_rpc
+                .get_l1_info_root(l1_info_leaf_count)
+                .await
+                .map_err(|_| {
+                    CertificationError::L1InfoRootNotFound(certificate_id, l1_info_leaf_count)
+                })?;
+
+            let declared_l1_info_root =
+                certificate
+                    .l1_info_root()
                     .map_err(|source| CertificationError::Types {
                         certificate_id,
                         source,
                     })?;
+
+            if let Some(declared) = declared_l1_info_root {
+                if declared != l1_info_root {
+                    return Err(CertificationError::Types {
+                        certificate_id,
+                        source: agglayer_types::Error::L1InfoRootIncorrect {
+                            declared: declared.into(),
+                            retrieved: l1_info_root.into(),
+                            leaf_count: l1_info_leaf_count,
+                        },
+                    });
+                }
+            }
+
+            let initial_state = LocalNetworkState::from(state.clone());
+
+            let signer = Address::new(*signer.as_fixed_bytes());
+            let multi_batch_header = state
+                .apply_certificate(&certificate, signer, l1_info_root)
+                .map_err(|source| CertificationError::Types {
+                    certificate_id,
+                    source,
+                })?;
 
             // Perform the native PP execution
             let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)

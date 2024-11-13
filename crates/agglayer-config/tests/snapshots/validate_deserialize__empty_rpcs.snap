@@ -37,6 +37,7 @@ chain-id = 1337
 node-url = "http://zkevm-mock-l1-network:8545/"
 ws-node-url = "ws://zkevm-mock-l1-network:8546/"
 rollup-manager-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
+polygon-zkevm-global-exit-root-v2-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
 rpc-timeout = "45s"
 
 [auth.local]

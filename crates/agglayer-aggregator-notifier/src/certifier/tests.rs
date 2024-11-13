@@ -72,6 +72,11 @@ async fn happy_path() {
         .return_once(|_, _| Ok(()));
 
     l1_rpc
+        .expect_get_l1_info_root()
+        .once()
+        .returning(move |_| Ok(Default::default()));
+
+    l1_rpc
         .expect_get_trusted_sequencer_address()
         .once()
         .returning(move |_, _| Ok(signer));
@@ -107,12 +112,14 @@ mockall::mock! {
     #[async_trait::async_trait]
     impl agglayer_contracts::RollupContract for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
+
         async fn get_trusted_sequencer_address(
             &self,
             rollup_id: u32,
             proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
         ) -> Result<ethers::types::Address, ()>;
 
+        async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()>;
     }
     impl Settler for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;

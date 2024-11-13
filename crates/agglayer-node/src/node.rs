@@ -4,7 +4,10 @@ use agglayer_aggregator_notifier::{CertifierClient, EpochPackerClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{Config, Epoch};
-use agglayer_contracts::{polygon_rollup_manager::PolygonRollupManager, L1RpcClient};
+use agglayer_contracts::{
+    polygon_rollup_manager::PolygonRollupManager,
+    polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
+};
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::DB,
@@ -139,10 +142,13 @@ impl Node {
                 .nonce_manager(address),
         );
 
-        let rollup_manager = Arc::new(L1RpcClient::new(PolygonRollupManager::new(
-            config.l1.rollup_manager_contract,
-            rpc.clone(),
-        )));
+        let rollup_manager = Arc::new(L1RpcClient::new(
+            PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
+            PolygonZkEVMGlobalExitRootV2::new(
+                config.l1.polygon_zkevm_global_exit_root_v2_contract,
+                rpc.clone(),
+            ),
+        ));
 
         let certifier_client = CertifierClient::try_new(
             config.prover_entrypoint.clone(),

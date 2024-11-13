@@ -23,8 +23,9 @@ fn e2e_local_pp_simple_helper(
     let mut forest = Forest::new(initial_balances);
     let initial_state = forest.state_b.clone();
     let (certificate, signer) = forest.apply_events(&imported_events, &events);
+    let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, signer)
+        .make_multi_batch_header(&certificate, signer, l1_info_root)
         .unwrap();
 
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
@@ -86,8 +87,9 @@ fn e2e_local_pp_random() {
 
     let initial_state = forest.state_b.clone();
     let (certificate, signer) = forest.apply_events(&imported_bridge_events, &bridge_events);
+    let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, signer)
+        .make_multi_batch_header(&certificate, signer, l1_info_root)
         .unwrap();
 
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
@@ -106,8 +108,9 @@ fn test_sp1_simple() {
 
     let initial_state = forest.state_b.clone();
     let (certificate, signer) = forest.apply_events(&imported_bridge_events, &bridge_events);
+    let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, signer)
+        .make_multi_batch_header(&certificate, signer, l1_info_root)
         .unwrap();
 
     let initial_state = LocalNetworkState::from(initial_state);

@@ -14,6 +14,8 @@ pub struct L1 {
     pub ws_node_url: Url,
     #[serde(alias = "RollupManagerContract")]
     pub rollup_manager_contract: Address,
+    #[serde(alias = "PolygonZkEVMGlobalExitRootV2Contract")]
+    pub polygon_zkevm_global_exit_root_v2_contract: Address,
     #[serde(default = "L1::default_rpc_timeout")]
     #[serde(with = "crate::with::HumanDuration")]
     pub rpc_timeout: Duration,
@@ -35,6 +37,10 @@ impl Default for L1 {
             rollup_manager_contract: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
                 .parse()
                 .unwrap(),
+            polygon_zkevm_global_exit_root_v2_contract:
+                "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
+                    .parse()
+                    .unwrap(),
             rpc_timeout: Self::default_rpc_timeout(),
         }
     }

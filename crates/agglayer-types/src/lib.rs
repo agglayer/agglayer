@@ -89,6 +89,16 @@ pub enum Error {
     /// The operation cannot be applied on the local exit tree.
     #[error(transparent)]
     InvalidLocalExitTreeOperation(#[from] LocalExitTreeError),
+    #[error(
+        "Incorrect L1 Info Root for the leaf count {leaf_count}. declared: {declared}, retrieved \
+         from L1: {retrieved}"
+    )]
+    /// Invalid or unsettled L1 Info Root
+    L1InfoRootIncorrect {
+        leaf_count: u32,
+        declared: Hash,
+        retrieved: Hash,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -109,6 +119,8 @@ pub enum CertificateStatusError {
     TypeConversionError(#[from] Error),
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
+    #[error("L1 Info root not found for l1 leaf count: {0}")]
+    L1InfoRootNotFound(u32),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -239,10 +251,7 @@ pub struct Certificate {
 impl Certificate {
     /// Default L1 Info Tree leaf count used for state transitions without
     /// imported bridge exits.
-    const DEFAULT_L1_INFO_LEAF_COUNT: u32 = 0;
-    /// Default L1 Info Tree root used for state transitions without imported
-    /// bridge exits.
-    const DEFAULT_L1_INFO_ROOT: Digest = [0; 32];
+    const DEFAULT_L1_INFO_LEAF_COUNT: u32 = 1;
 }
 
 impl Certificate {
@@ -292,13 +301,13 @@ impl Certificate {
     /// Returns the L1 Info Root considered for this [`Certificate`].
     /// Fails if multiple L1 Info Root are considered among the inclusion proofs
     /// of the imported bridge exits.
-    pub fn l1_info_root(&self) -> Result<Digest, Error> {
+    pub fn l1_info_root(&self) -> Result<Option<Digest>, Error> {
         let Some(l1_info_root) = self
             .imported_bridge_exits
             .first()
             .map(|imported_bridge_exit| imported_bridge_exit.l1_info_root())
         else {
-            return Ok(Self::DEFAULT_L1_INFO_ROOT);
+            return Ok(None);
         };
 
         if self
@@ -306,7 +315,7 @@ impl Certificate {
             .iter()
             .all(|exit| exit.l1_info_root() == l1_info_root)
         {
-            Ok(l1_info_root)
+            Ok(Some(l1_info_root))
         } else {
             Err(Error::MultipleL1InfoRoot)
         }
@@ -342,11 +351,10 @@ impl LocalNetworkStateData {
         &mut self,
         certificate: &Certificate,
         signer: Address,
+        l1_info_root: Digest,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
-
-        let l1_info_root = certificate.l1_info_root()?;
 
         for e in certificate.bridge_exits.iter() {
             self.exit_tree.add_leaf(e.hash())?;
@@ -487,8 +495,10 @@ impl LocalNetworkStateData {
         &self,
         certificate: &Certificate,
         signer: Address,
+        l1_info_root: Digest,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
-        self.clone().apply_certificate(certificate, signer)
+        self.clone()
+            .apply_certificate(certificate, signer, l1_info_root)
     }
 
     pub fn get_roots(&self) -> StateCommitment {

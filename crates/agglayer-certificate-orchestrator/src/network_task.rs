@@ -311,6 +311,12 @@ where
                             CertificateStatusError::TrustedSequencerNotFound(network),
                         ))
                     }
+                    CertificationError::L1InfoRootNotFound(certificate_id, l1_leaf_count) => {
+                        Some((
+                            certificate_id,
+                            CertificateStatusError::L1InfoRootNotFound(l1_leaf_count),
+                        ))
+                    }
                     CertificationError::ProofVerificationFailed {
                         source,
                         certificate_id,
@@ -337,7 +343,6 @@ where
                             source,
                         },
                     )),
-
                     CertificationError::Types {
                         source,
                         certificate_id,
