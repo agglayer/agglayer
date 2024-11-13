@@ -254,9 +254,9 @@ pub struct Certificate {
 }
 
 impl Certificate {
-    /// Default L1 Info Tree leaf count used for state transitions without
+    /// Default L1 Info Tree leaf index used for state transitions without
     /// imported bridge exits.
-    const DEFAULT_L1_INFO_LEAF_COUNT: u32 = 1;
+    const DEFAULT_L1_INFO_LEAF_INDEX: u32 = 1;
 }
 
 impl Certificate {
@@ -300,7 +300,8 @@ impl Certificate {
             .iter()
             .map(|i| i.l1_leaf_index())
             .max()
-            .unwrap_or(Self::DEFAULT_L1_INFO_LEAF_COUNT)
+            .unwrap_or(Self::DEFAULT_L1_INFO_LEAF_INDEX)
+            + 1
     }
 
     /// Returns the L1 Info Root considered for this [`Certificate`].
