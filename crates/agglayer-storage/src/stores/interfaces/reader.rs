@@ -15,7 +15,7 @@ use crate::{
 pub trait EpochStoreReader: Send + Sync {}
 
 pub trait PendingCertificateReader: Send + Sync {
-    fn get_latest_pending_certificate_per_network(
+    fn get_latest_pending_certificate_for_network(
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<Certificate>, Error>;

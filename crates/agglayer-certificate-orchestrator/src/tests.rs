@@ -309,7 +309,7 @@ impl PendingCertificateReader for DummyPendingStore {
     ) -> Result<Option<(NetworkId, Height, CertificateId)>, agglayer_storage::error::Error> {
         todo!()
     }
-    fn get_latest_pending_certificate_per_network(
+    fn get_latest_pending_certificate_for_network(
         &self,
         _network_id: &NetworkId,
     ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {

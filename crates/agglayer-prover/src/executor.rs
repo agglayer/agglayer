@@ -97,9 +97,7 @@ impl Executor {
                     .proving_request_timeout
                     .unwrap_or_else(|| {
                         config.network_prover.proving_timeout
-                            + Duration::from_secs(
-                                NetworkProverConfig::DEFAULT_PROVING_TIMEOUT_PADDING,
-                            )
+                            + NetworkProverConfig::DEFAULT_PROVING_TIMEOUT_PADDING
                     }),
                 NetworkExecutor {
                     prover: Arc::new(network_prover),

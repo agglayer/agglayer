@@ -20,7 +20,7 @@ mock! {
             &self,
             network_id: &NetworkId,
         ) -> Result<Option<(NetworkId, Height, CertificateId)>, Error>;
-        fn get_latest_pending_certificate_per_network(
+        fn get_latest_pending_certificate_for_network(
             &self,
             network_id: &NetworkId,
         ) -> Result<Option<Certificate>, Error>;

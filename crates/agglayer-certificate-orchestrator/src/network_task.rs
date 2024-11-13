@@ -13,6 +13,7 @@ use agglayer_types::{
     LocalNetworkStateData, NetworkId,
 };
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{error::PreCertificationError, CertificationError, Certifier, CertifierOutput, Error};
@@ -85,7 +86,10 @@ where
         })
     }
 
-    pub(crate) async fn run(mut self) -> Result<NetworkId, Error> {
+    pub(crate) async fn run(
+        mut self,
+        cancellation_token: CancellationToken,
+    ) -> Result<NetworkId, Error> {
         info!("Starting the network task for network {}", self.network_id);
 
         let mut stream_epoch = self.clock_ref.subscribe()?;
@@ -113,8 +117,20 @@ where
             };
 
         loop {
-            self.make_progress(&mut stream_epoch, &mut next_expected_height)
-                .await?;
+            tokio::select! {
+                _ = cancellation_token.cancelled() => {
+                    debug!("Network task for network {} has been cancelled", self.network_id);
+                    return Ok(self.network_id);
+                }
+
+                result = self.make_progress(&mut stream_epoch, &mut next_expected_height) => {
+                    if let Err(error)= result {
+                        error!("Error during the certification process: {}", error);
+
+                        return Err(error)
+                    }
+                }
+            }
         }
     }
 
@@ -194,8 +210,8 @@ where
 
                 error!(
                     hash = certificate_id.to_string(),
-                    "CRITICAL: Certificate {certificate_id} is already proven or candidate while \
-                     but we do not have the new_state anymore...",
+                    "CRITICAL: Certificate {certificate_id} is already proven or candidate but we \
+                     do not have the new_state anymore...",
                 );
 
                 return Ok(());

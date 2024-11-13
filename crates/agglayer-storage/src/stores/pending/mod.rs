@@ -86,7 +86,7 @@ impl PendingCertificateWriter for PendingStore {
 }
 
 impl PendingCertificateReader for PendingStore {
-    fn get_latest_pending_certificate_per_network(
+    fn get_latest_pending_certificate_for_network(
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<Certificate>, Error> {

@@ -79,8 +79,11 @@ pub struct CertificateOrchestrator<
     clock_ref: ClockRef,
     /// Receiver for certificates coming from CDKs.
     data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+    /// Cancellation token future for graceful shutdown.
+    cancellation_token_future: Pin<Box<WaitForCancellationFutureOwned>>,
+
     /// Cancellation token for graceful shutdown.
-    cancellation_token: Pin<Box<WaitForCancellationFutureOwned>>,
+    cancellation_token: CancellationToken,
 
     /// The state store to access data.
     state_store: Arc<StateStore>,
@@ -125,6 +128,8 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
 where
     PendingStore: PendingCertificateReader,
 {
+    const DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE: usize = 1000;
+
     /// Creates a new CertificateOrchestrator instance.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn try_new(
@@ -138,7 +143,8 @@ where
         current_epoch: ArcSwap<PerEpochStore>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
-        let (certification_notification_sender, certification_notification) = mpsc::channel(1000);
+        let (certification_notification_sender, certification_notification) =
+            mpsc::channel(Self::DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE);
 
         Ok(Self {
             epoch_packing_tasks: FuturesUnordered::new(),
@@ -150,7 +156,8 @@ where
             epoch_packing_task_builder: Arc::new(epoch_packing_task_builder),
             certifier_task_builder: Arc::new(certifier_task_builder),
             data_receiver,
-            cancellation_token: Box::pin(cancellation_token.cancelled_owned()),
+            cancellation_token: cancellation_token.clone(),
+            cancellation_token_future: Box::pin(cancellation_token.cancelled_owned()),
             pending_store,
             epochs_store,
             current_epoch,
@@ -273,7 +280,8 @@ where
             receiver,
         )?;
 
-        self.network_tasks.push(task.run().boxed());
+        self.network_tasks
+            .push(task.run(self.cancellation_token.clone()).boxed());
 
         self.spawned_network_tasks.insert(network_id, sender);
 
@@ -288,31 +296,25 @@ where
         &mut self,
         cursors: impl IntoIterator<Item = (NetworkId, Height, CertificateId)>,
     ) -> Result<(), Error> {
-        for (network_id, height, certificate_id) in cursors.into_iter() {
+        for (network_id, height, certificate_id) in cursors {
             self.spawn_network_task(network_id)?;
-            let sender = if let Some(sender) = self.spawned_network_tasks.get(&network_id) {
-                sender.clone()
-            } else {
-                warn!("Unable to find the network task for network {}", network_id);
-                continue;
-            };
 
-            let sender = sender.clone();
-            tokio::spawn(async move {
-                if sender
-                    .send(NewCertificate {
+            if let Some(sender) = self.spawned_network_tasks.get(&network_id) {
+                if let Ok(sender) = sender.try_reserve() {
+                    sender.send(NewCertificate {
                         certificate_id,
                         height,
                     })
-                    .await
-                    .is_err()
-                {
+                } else {
                     error!(
                         "Failed to send the certificate {certificate_id} to the network task for \
                          network {network_id}",
                     );
                 }
-            });
+            } else {
+                warn!("Unable to find the network task for network {}", network_id);
+                continue;
+            };
         }
 
         Ok(())
@@ -447,7 +449,9 @@ where
                     warn!("No notifier found for network {}", network_id);
                 }
             }
-            Err(_) => todo!(),
+            Err(error) => {
+                error!("Error during certificate settlement: {:?}", error);
+            }
         }
 
         Ok(())
@@ -543,7 +547,7 @@ where
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // Check if the orchestrator has been cancelled and should shutdown.
-        if self.cancellation_token.as_mut().poll(cx).is_ready() {
+        if self.cancellation_token_future.as_mut().poll(cx).is_ready() {
             debug!("Certificate orchestrator cancelled by token");
 
             return Poll::Ready(());

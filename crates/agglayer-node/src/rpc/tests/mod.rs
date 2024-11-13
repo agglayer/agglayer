@@ -303,7 +303,7 @@ impl PendingCertificateWriter for DummyStore {
 }
 
 impl PendingCertificateReader for DummyStore {
-    fn get_latest_pending_certificate_per_network(
+    fn get_latest_pending_certificate_for_network(
         &self,
         _network_id: &NetworkId,
     ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {

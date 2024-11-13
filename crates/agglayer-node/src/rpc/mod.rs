@@ -409,7 +409,7 @@ where
 
         let pending_certificate_id_and_height = self
             .pending_store
-            .get_latest_pending_certificate_per_network(&network_id)
+            .get_latest_pending_certificate_for_network(&network_id)
             .map_err(|e| {
                 error!("Failed to get latest pending certificate: {e}");
                 Error::internal(e.to_string())

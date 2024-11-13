@@ -12,9 +12,9 @@ mod tests;
 ///
 /// ## Column definition
 ///
-/// | key         | value                                      |
-/// | --          | --                                         |
-/// | `NetworkId` | (`CertificateId`, `Height`, `EpochNumber`) |
+/// | key         | value                                                          |
+/// | --          | --                                                             |
+/// | `NetworkId` | (`CertificateId`, `Height`, `EpochNumber`, `CertificateIndex`) |
 pub struct LatestSettledCertificatePerNetworkColumn;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

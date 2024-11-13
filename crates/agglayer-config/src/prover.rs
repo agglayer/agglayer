@@ -91,12 +91,11 @@ pub struct CpuProverConfig {
 
 impl CpuProverConfig {
     // This constant represents the number of second added to the proving_timeout
-    pub const DEFAULT_PROVING_TIMEOUT_PADDING: u64 = 1;
+    pub const DEFAULT_PROVING_TIMEOUT_PADDING: Duration = Duration::from_secs(1);
 
     pub fn get_proving_request_timeout(&self) -> Duration {
-        self.proving_request_timeout.unwrap_or_else(|| {
-            self.proving_timeout + Duration::from_secs(Self::DEFAULT_PROVING_TIMEOUT_PADDING)
-        })
+        self.proving_request_timeout
+            .unwrap_or_else(|| self.proving_timeout + Self::DEFAULT_PROVING_TIMEOUT_PADDING)
     }
 }
 
@@ -128,12 +127,11 @@ pub struct NetworkProverConfig {
 
 impl NetworkProverConfig {
     // This constant represents the number of second added to the proving_timeout
-    pub const DEFAULT_PROVING_TIMEOUT_PADDING: u64 = 1;
+    pub const DEFAULT_PROVING_TIMEOUT_PADDING: Duration = Duration::from_secs(1);
 
     pub fn get_proving_request_timeout(&self) -> Duration {
-        self.proving_request_timeout.unwrap_or_else(|| {
-            self.proving_timeout + Duration::from_secs(Self::DEFAULT_PROVING_TIMEOUT_PADDING)
-        })
+        self.proving_request_timeout
+            .unwrap_or_else(|| self.proving_timeout + Self::DEFAULT_PROVING_TIMEOUT_PADDING)
     }
 }
 
@@ -167,12 +165,11 @@ pub struct GpuProverConfig {
 
 impl GpuProverConfig {
     // This constant represents the number of second added to the proving_timeout
-    pub const DEFAULT_PROVING_TIMEOUT_PADDING: u64 = 1;
+    pub const DEFAULT_PROVING_TIMEOUT_PADDING: Duration = Duration::from_secs(1);
 
     pub fn get_proving_request_timeout(&self) -> Duration {
-        self.proving_request_timeout.unwrap_or_else(|| {
-            self.proving_timeout + Duration::from_secs(Self::DEFAULT_PROVING_TIMEOUT_PADDING)
-        })
+        self.proving_request_timeout
+            .unwrap_or_else(|| self.proving_timeout + Self::DEFAULT_PROVING_TIMEOUT_PADDING)
     }
 }
 
