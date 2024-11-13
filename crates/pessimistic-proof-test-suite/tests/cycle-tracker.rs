@@ -42,7 +42,11 @@ fn cycles_on_sample_inputs_inner(
 
     let multi_batch_header = state
         .state_b
-        .apply_certificate(&certificate, signer)
+        .apply_certificate(
+            &certificate,
+            signer,
+            certificate.l1_info_root().unwrap().unwrap_or_default(),
+        )
         .unwrap();
 
     let (new_roots, stats) = Runner::new()

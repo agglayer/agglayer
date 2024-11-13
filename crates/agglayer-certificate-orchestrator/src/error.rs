@@ -17,6 +17,8 @@ pub enum CertificationError {
         "Failed to retrieve the trusted sequencer address for network {0} during proving phase"
     )]
     TrustedSequencerNotFound(NetworkId),
+    #[error("Failed to retrieve the l1 info root for the l1 leaf count: {1} for certificate {0}")]
+    L1InfoRootNotFound(CertificateId, u32),
     #[error("proof verification failed")]
     ProofVerificationFailed { source: ProofVerificationError },
     #[error("prover execution failed: {source}")]
