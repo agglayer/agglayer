@@ -112,7 +112,7 @@ where
     /// `self.leaf_count` leaves are the same as the leaves of `self`.
     /// `next_leaf` is the leaf at index `self.leaf_count` in the other tree and
     /// `proof` is the Merkle proof of `next_leaf`.
-    pub fn is_subtree(
+    pub fn is_subtree_of(
         &self,
         other_root: H::Digest,
         next_leaf: H::Digest,

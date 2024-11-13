@@ -39,7 +39,7 @@ fn local_exit_tree_is_subtree(leaf_count_a: usize, leaf_count_b: usize) {
 
     let let_a_frontier = LocalExitTree::from(&let_a);
     let proof = let_b.get_proof(leaf_count_a as u32);
-    assert!(let_a_frontier.is_subtree(let_b.get_root(), let_b.get(0, leaf_count_a), proof));
+    assert!(let_a_frontier.is_subtree_of(let_b.get_root(), let_b.get(0, leaf_count_a), proof));
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn test_local_exit_tree_is_subtree_same_tree() {
 
     let let_a_frontier = LocalExitTree::from(&let_a);
     let proof = let_b.get_proof(leaf_count_a as u32);
-    assert!(let_a_frontier.is_subtree(let_b.get_root(), let_b.get(0, leaf_count_a), proof));
+    assert!(let_a_frontier.is_subtree_of(let_b.get_root(), let_b.get(0, leaf_count_a), proof));
 }
 
 #[test]
@@ -86,7 +86,7 @@ fn test_local_exit_tree_is_subtree_failing() {
 
     let let_a_frontier = LocalExitTree::from(&let_a);
     let proof = let_b.get_proof(leaf_count_a as u32);
-    assert!(!let_a_frontier.is_subtree(let_b.get_root(), let_b.get(0, leaf_count_a), proof));
+    assert!(!let_a_frontier.is_subtree_of(let_b.get_root(), let_b.get(0, leaf_count_a), proof));
 }
 
 #[derive(Clone, Debug)]
