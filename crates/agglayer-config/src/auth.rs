@@ -58,23 +58,23 @@ pub struct PrivateKey {
 #[cfg_attr(any(test, feature = "testutils"), derive(Default))]
 #[serde(rename_all = "kebab-case")]
 pub struct GcpKmsConfig {
-    #[serde(rename = "ProjectId")]
+    #[serde(alias = "ProjectId")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub project_id: Option<String>,
-    #[serde(rename = "Location")]
+    #[serde(alias = "Location")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub location: Option<String>,
-    #[serde(rename = "Keyring")]
+    #[serde(alias = "Keyring")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub keyring: Option<String>,
-    #[serde(rename = "KeyName")]
+    #[serde(alias = "KeyName")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub key_name: Option<String>,
-    #[serde(rename = "KeyVersion")]
+    #[serde(alias = "KeyVersion")]
     #[serde(default)]
     pub key_version: Option<u64>,
 }
