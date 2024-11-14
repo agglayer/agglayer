@@ -19,6 +19,7 @@ use hyper_util::rt::TokioExecutor;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::ServerHandle;
 use rstest::*;
+use tracing::debug;
 
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
@@ -84,7 +85,7 @@ pub(crate) struct RawRpcContext {
 }
 
 pub(crate) struct TestContext {
-    pub(crate) _server_handle: ServerHandle,
+    pub(crate) server_handle: ServerHandle,
     pub(crate) client: jsonrpsee::http_client::HttpClient,
     pub(crate) certificate_receiver:
         tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
@@ -98,13 +99,13 @@ impl TestContext {
 
     async fn new_with_config(config: Config) -> Self {
         let raw_rpc = Self::new_raw_rpc_with_config(config).await;
-        let _server_handle = raw_rpc.rpc.start().await.unwrap();
+        let server_handle = raw_rpc.rpc.start().await.unwrap();
 
         let url = format!("http://{}/", raw_rpc.config.rpc_addr());
         let client = HttpClientBuilder::default().build(url).unwrap();
 
         Self {
-            _server_handle,
+            server_handle,
             client,
             certificate_receiver: raw_rpc.certificate_receiver,
         }
@@ -156,6 +157,12 @@ impl TestContext {
             config,
             certificate_receiver,
         }
+    }
+}
+
+impl Drop for TestContext {
+    fn drop(&mut self) {
+        _ = self.server_handle.stop();
     }
 }
 

@@ -95,6 +95,12 @@ impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore> 
     }
 }
 
+impl<Rpc, PendingStore, StateStore> Drop for AgglayerImpl<Rpc, PendingStore, StateStore> {
+    fn drop(&mut self) {
+        info!("Shutting down the agglayer service");
+    }
+}
+
 impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore>
 where
     Rpc: Middleware + 'static,
