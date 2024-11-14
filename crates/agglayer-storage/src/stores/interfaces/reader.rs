@@ -98,7 +98,6 @@ pub trait PerEpochReader: Send + Sync {
 
 pub trait LocalNetworkStateReader: Send + Sync {
     /// Get the local network state.
-    #[allow(dead_code)]
     fn read_local_network_state(
         &self,
         network_id: NetworkId,

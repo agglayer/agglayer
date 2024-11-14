@@ -93,7 +93,6 @@ pub trait PendingCertificateWriter: Send + Sync {
 }
 
 pub trait LocalNetworkStateWriter: Send + Sync {
-    #[allow(dead_code)]
     fn write_local_network_state(
         &self,
         network_id: &NetworkId,

@@ -59,8 +59,8 @@ pub type SettlementTasks = FuturesUnordered<
 /// The Certificate orchestrator receives the certificates from CDKs.
 ///
 /// Each certificate reception triggers the generation of a pessimistic proof.
-/// At the end of the epoch, the Certificate Orchestrator collects a set of
-/// pessimistic proofs generated so far and settles them on the L1.
+/// The Certificate Orchestrator collects the generated proofs and settles
+/// them on the L1 on the go.
 pub struct CertificateOrchestrator<
     E,
     CertifierClient,
@@ -87,9 +87,9 @@ pub struct CertificateOrchestrator<
     /// Cancellation token for graceful shutdown.
     cancellation_token: CancellationToken,
 
-    /// The state store to access data.
-    #[allow(unused)]
+    /// Store for the local network state of each chain.
     network_state_store: Arc<NetworkStateStore>,
+    /// The state store to access data.
     state_store: Arc<StateStore>,
     /// Pending store to access the certificates and proofs.
     pending_store: Arc<PendingStore>,
@@ -313,6 +313,7 @@ where
         let task = NetworkTask::new(
             self.pending_store.clone(),
             self.state_store.clone(),
+            self.network_state_store.clone(),
             self.certifier_task_builder.clone(),
             self.certification_notification_sender.clone(),
             self.clock_ref.clone(),

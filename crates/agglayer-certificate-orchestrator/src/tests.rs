@@ -59,6 +59,26 @@ pub(crate) struct DummyPendingStore {
         RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
 }
 
+impl LocalNetworkStateReader for DummyPendingStore {
+    fn read_local_network_state(
+        &self,
+        _network_id: NetworkId,
+    ) -> Result<Option<LocalNetworkStateData>, agglayer_storage::error::Error> {
+        todo!()
+    }
+}
+
+impl LocalNetworkStateWriter for DummyPendingStore {
+    fn write_local_network_state(
+        &self,
+        _network_id: &NetworkId,
+        _new_state: &LocalNetworkStateData,
+        _new_leaves: &[agglayer_types::Hash],
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
+}
+
 impl PerEpochReader for DummyPendingStore {
     fn get_epoch_number(&self) -> u64 {
         self.current_epoch
@@ -107,7 +127,7 @@ impl PerEpochWriter for DummyPendingStore {
 
 impl StateReader for DummyPendingStore {
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
-        todo!()
+        Ok(vec![])
     }
 
     fn get_latest_settled_certificate_per_network(
@@ -719,6 +739,7 @@ type IMockOrchestrator = CertificateOrchestrator<
     MockEpochsStore,
     MockPerEpochStore,
     MockStateStore,
+    MockLocalNetworkStateStore,
 >;
 
 #[derive(Default, buildstructor::Builder)]
@@ -728,6 +749,7 @@ struct MockOrchestrator {
     pending_store: Option<MockPendingStore>,
     epochs_store: Option<MockEpochsStore>,
     state_store: Option<MockStateStore>,
+    network_state_store: Option<MockLocalNetworkStateStore>,
     current_epoch: Option<MockPerEpochStore>,
 }
 
@@ -752,6 +774,7 @@ pub(crate) fn create_orchestrator_mock(
     let epochs_store = Arc::new(builder.epochs_store.unwrap_or_default());
     let current_epoch = ArcSwap::new(Arc::new(builder.current_epoch.unwrap_or_default()));
     let state_store = Arc::new(builder.state_store.unwrap_or_default());
+    let network_state_store = Arc::new(builder.network_state_store.unwrap_or_default());
 
     (
         (data_sender, clock.clone()),
@@ -778,6 +801,7 @@ pub(crate) fn create_orchestrator_mock(
             epochs_store,
             current_epoch,
             state_store,
+            network_state_store,
         )
         .expect("Unable to create orchestrator"),
     )

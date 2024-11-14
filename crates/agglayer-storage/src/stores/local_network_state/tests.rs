@@ -85,7 +85,7 @@ fn can_update_existing_state(network_id: NetworkId, store: LocalNetworkStateStor
 
     // update state
     let bridge_exit = Digest::default();
-    lns.exit_tree.add_leaf(bridge_exit);
+    lns.exit_tree.add_leaf(bridge_exit).unwrap();
 
     // write new state
     assert!(store
