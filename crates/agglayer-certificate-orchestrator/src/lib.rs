@@ -269,7 +269,8 @@ where
             return Ok(());
         }
 
-        let (sender, receiver) = mpsc::channel(1000);
+        let (sender, receiver) =
+            mpsc::channel(Self::DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE);
         let task = NetworkTask::new(
             self.pending_store.clone(),
             self.state_store.clone(),
