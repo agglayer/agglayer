@@ -19,7 +19,6 @@ use hyper_util::rt::TokioExecutor;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::ServerHandle;
 use rstest::*;
-use tracing::debug;
 
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
