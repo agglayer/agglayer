@@ -2,16 +2,16 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCertificate;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::pending::PendingStore;
 use agglayer_storage::stores::state::StateStore;
+use agglayer_storage::stores::PendingCertificateReader;
 use agglayer_storage::{
     stores::{PendingCertificateWriter, StateReader, StateWriter},
     tests::TempDBDir,
 };
-use agglayer_types::{
-    Certificate, CertificateId, CertificateStatus, EpochNumber, Height, NetworkId,
-};
+use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId};
 use ethers::providers::{self, MockProvider, Provider};
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
@@ -25,6 +25,7 @@ use crate::{kernel::Kernel, rpc::AgglayerImpl};
 mod errors;
 mod get_certificate_header;
 mod get_epoch_configuration;
+mod get_latest_known_certificate_header;
 mod get_tx_status;
 mod send_certificate;
 
@@ -83,7 +84,7 @@ pub(crate) struct RawRpcContext {
 }
 
 pub(crate) struct TestContext {
-    pub(crate) _server_handle: ServerHandle,
+    pub(crate) server_handle: ServerHandle,
     pub(crate) client: jsonrpsee::http_client::HttpClient,
     pub(crate) certificate_receiver:
         tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
@@ -97,13 +98,13 @@ impl TestContext {
 
     async fn new_with_config(config: Config) -> Self {
         let raw_rpc = Self::new_raw_rpc_with_config(config).await;
-        let _server_handle = raw_rpc.rpc.start().await.unwrap();
+        let server_handle = raw_rpc.rpc.start().await.unwrap();
 
         let url = format!("http://{}/", raw_rpc.config.rpc_addr());
         let client = HttpClientBuilder::default().build(url).unwrap();
 
         Self {
-            _server_handle,
+            server_handle,
             client,
             certificate_receiver: raw_rpc.certificate_receiver,
         }
@@ -158,6 +159,12 @@ impl TestContext {
     }
 }
 
+impl Drop for TestContext {
+    fn drop(&mut self) {
+        _ = self.server_handle.stop();
+    }
+}
+
 #[fixture]
 async fn context() -> TestContext {
     TestContext::new().await
@@ -194,6 +201,14 @@ fn next_available_addr() -> std::net::SocketAddr {
 struct DummyStore {}
 
 impl StateWriter for DummyStore {
+    fn assign_certificate_to_epoch(
+        &self,
+        _certificate_id: &CertificateId,
+        _epoch_number: &agglayer_types::EpochNumber,
+        _certificate_index: &agglayer_types::CertificateIndex,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
     fn insert_certificate_header(
         &self,
         _certificate: &Certificate,
@@ -211,9 +226,10 @@ impl StateWriter for DummyStore {
     fn set_latest_settled_certificate_for_network(
         &self,
         _network_id: &NetworkId,
+        _height: &Height,
         _certificate_id: &CertificateId,
         _epoch_number: &agglayer_types::EpochNumber,
-        _height: &Height,
+        _certificate_index: &agglayer_types::CertificateIndex,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
@@ -221,6 +237,12 @@ impl StateWriter for DummyStore {
 
 impl StateReader for DummyStore {
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
+        todo!()
+    }
+    fn get_latest_settled_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
         todo!()
     }
 
@@ -241,15 +263,7 @@ impl StateReader for DummyStore {
 
     fn get_current_settled_height(
         &self,
-    ) -> Result<
-        Vec<(
-            NetworkId,
-            agglayer_types::Height,
-            agglayer_types::CertificateId,
-            EpochNumber,
-        )>,
-        agglayer_storage::error::Error,
-    > {
+    ) -> Result<Vec<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
         todo!()
     }
 }
@@ -290,6 +304,67 @@ impl PendingCertificateWriter for DummyStore {
         _height: &Height,
         _certificate_id: &CertificateId,
     ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
+}
+
+impl PendingCertificateReader for DummyStore {
+    fn get_latest_pending_certificate_for_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn get_certificate(
+        &self,
+        _network_id: NetworkId,
+        _height: Height,
+    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn get_proof(
+        &self,
+        _certificate_id: CertificateId,
+    ) -> Result<Option<agglayer_types::Proof>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn multi_get_certificate(
+        &self,
+        _keys: &[(NetworkId, Height)],
+    ) -> Result<Vec<Option<Certificate>>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn multi_get_proof(
+        &self,
+        _keys: &[CertificateId],
+    ) -> Result<Vec<Option<agglayer_types::Proof>>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn get_current_proven_height(
+        &self,
+    ) -> Result<
+        Vec<agglayer_storage::columns::latest_proven_certificate_per_network::ProvenCertificate>,
+        agglayer_storage::error::Error,
+    > {
+        todo!()
+    }
+
+    fn get_current_proven_height_for_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<Option<Height>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn get_latest_proven_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, Height, CertificateId)>, agglayer_storage::error::Error> {
         todo!()
     }
 }

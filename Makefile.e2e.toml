@@ -1,0 +1,27 @@
+[tasks.e2e]
+dependencies = ["kurtosis-clone", "spawn-network"]
+
+[tasks.kurtosis-clone]
+category = "E2E - SETUP"
+script = '''
+REPOSRC=https://github.com/0xPolygon/kurtosis-cdk
+LOCALREPO=tests/kurtosis
+
+LOCALREPO_VC_DIR=$LOCALREPO/.git
+
+if [ ! -d $LOCALREPO_VC_DIR ]
+then
+    git clone --depth 1 $REPOSRC $LOCALREPO
+else
+    cd $LOCALREPO
+    git pull $REPOSRC
+fi
+'''
+
+[tasks.spawn-network]
+category = "E2E - PREPARE"
+cwd = "tests/kurtosis"
+script = '''
+kurtosis clean --all
+kurtosis run --enclave cdk --args-file .github/tests/fork12-pessimistic.yml --image-download always . '{"args": {"agglayer_prover_sp1_key": "\'$AGGLAYER_PROVER_SP1_KEY'"}}'
+'''

@@ -86,6 +86,20 @@ impl PendingCertificateWriter for PendingStore {
 }
 
 impl PendingCertificateReader for PendingStore {
+    fn get_latest_pending_certificate_for_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<Certificate>, Error> {
+        Ok(self
+            .db
+            .prefix_itererator_with_direction::<PendingQueueColumn, NetworkId>(
+                network_id,
+                Direction::Reverse,
+            )?
+            .filter_map(|v| v.map(|(_, certificate)| certificate).ok())
+            .next())
+    }
+
     fn get_certificate(
         &self,
         network_id: NetworkId,
@@ -114,9 +128,17 @@ impl PendingCertificateReader for PendingStore {
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<Height>, Error> {
+        self.get_latest_proven_certificate_per_network(network_id)
+            .map(|v| v.map(|(_network, height, _id)| height))
+    }
+
+    fn get_latest_proven_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, Height, CertificateId)>, Error> {
         self.db
             .get::<LatestProvenCertificatePerNetworkColumn>(network_id)
-            .map(|v| v.map(|ProvenCertificate(_, _, height)| height))
+            .map(|v| v.map(|ProvenCertificate(id, network, height)| (network, height, id)))
     }
 
     fn multi_get_certificate(

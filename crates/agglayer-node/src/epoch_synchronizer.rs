@@ -5,6 +5,7 @@ use agglayer_storage::stores::{
     EpochStoreWriter, MetadataReader, MetadataWriter, PerEpochReader, PerEpochWriter, StateReader,
 };
 use anyhow::Result;
+use tracing::debug;
 
 pub(crate) struct EpochSynchronizer {}
 
@@ -51,6 +52,7 @@ impl EpochSynchronizer {
         // Get the latest settled epoch
         let lse_number = state_store.get_latest_settled_epoch()?;
 
+        debug!("synchronizer: Current epoch: {}", current_epoch_number);
         let opened_epoch = match lse_number {
             // No LSE, we start from epoch 0
             None => epochs_store.open(0)?,
@@ -75,7 +77,7 @@ impl EpochSynchronizer {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, sync::atomic::AtomicU64};
+    use std::{collections::BTreeMap, num::NonZeroU64, sync::atomic::AtomicU64};
 
     use agglayer_config::Config;
     use agglayer_storage::{
@@ -150,11 +152,11 @@ mod tests {
                 Ok(mock)
             });
         let (sender, _receiver) = tokio::sync::broadcast::channel(1);
-        let current_epoch = AtomicU64::new(10);
+        let current_block = AtomicU64::new(10);
         let clock_ref = ClockRef::new(
             sender,
-            Arc::new(current_epoch),
-            Arc::new(Default::default()),
+            Arc::new(current_block),
+            Arc::new(NonZeroU64::new(1).unwrap()),
         );
 
         let result =
@@ -230,11 +232,11 @@ mod tests {
             });
 
         let (sender, _receiver) = tokio::sync::broadcast::channel(1);
-        let current_epoch = AtomicU64::new(15);
+        let current_block = AtomicU64::new(15);
         let clock_ref = ClockRef::new(
             sender,
-            Arc::new(current_epoch),
-            Arc::new(Default::default()),
+            Arc::new(current_block),
+            Arc::new(NonZeroU64::new(1).unwrap()),
         );
 
         let result =
@@ -318,11 +320,11 @@ mod tests {
         state_store.set_latest_settled_epoch(10).unwrap();
 
         let (sender, _receiver) = tokio::sync::broadcast::channel(1);
-        let current_epoch = AtomicU64::new(15);
+        let current_block = AtomicU64::new(15);
         let clock_ref = ClockRef::new(
             sender,
-            Arc::new(current_epoch),
-            Arc::new(Default::default()),
+            Arc::new(current_block),
+            Arc::new(NonZeroU64::new(1).unwrap()),
         );
 
         let result = EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref)

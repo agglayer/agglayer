@@ -45,12 +45,20 @@ pub trait StateWriter: Send + Sync {
         status: &CertificateStatus,
     ) -> Result<(), Error>;
 
+    fn assign_certificate_to_epoch(
+        &self,
+        certificate_id: &CertificateId,
+        epoch_number: &EpochNumber,
+        certificate_index: &CertificateIndex,
+    ) -> Result<(), Error>;
+
     fn set_latest_settled_certificate_for_network(
         &self,
         network_id: &NetworkId,
+        height: &Height,
         certificate_id: &CertificateId,
         epoch_number: &EpochNumber,
-        height: &Height,
+        certificate_index: &CertificateIndex,
     ) -> Result<(), Error>;
 }
 

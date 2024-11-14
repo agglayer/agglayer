@@ -1,4 +1,4 @@
-extend = [{ path = "Makefile.ci.toml" }]
+extend = [{ path = "Makefile.ci.toml" }, { path = "Makefile.e2e.toml" }]
 
 [config]
 skip_core_tasks = true

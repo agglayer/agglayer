@@ -1,15 +1,25 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
-    NetworkId, Proof,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, Height, NetworkId, Proof,
 };
 
-use crate::{columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error};
+use crate::{
+    columns::{
+        latest_proven_certificate_per_network::ProvenCertificate,
+        latest_settled_certificate_per_network::SettledCertificate,
+    },
+    error::Error,
+};
 
 pub trait EpochStoreReader: Send + Sync {}
 
 pub trait PendingCertificateReader: Send + Sync {
+    fn get_latest_pending_certificate_for_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<Certificate>, Error>;
+
     fn get_certificate(
         &self,
         network_id: NetworkId,
@@ -29,6 +39,11 @@ pub trait PendingCertificateReader: Send + Sync {
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<Height>, Error>;
+
+    fn get_latest_proven_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, Height, CertificateId)>, Error>;
 }
 
 pub trait MetadataReader: Send + Sync {
@@ -50,9 +65,12 @@ pub trait StateReader: Send + Sync {
         network_id: NetworkId,
         height: Height,
     ) -> Result<Option<CertificateHeader>, Error>;
-    fn get_current_settled_height(
+
+    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error>;
+    fn get_latest_settled_certificate_per_network(
         &self,
-    ) -> Result<Vec<(NetworkId, Height, CertificateId, EpochNumber)>, Error>;
+        network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, SettledCertificate)>, Error>;
 }
 
 pub trait PerEpochReader: Send + Sync {

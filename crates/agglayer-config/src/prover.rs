@@ -48,6 +48,10 @@ pub struct ProverConfig {
     /// The network prover configuration.
     #[serde(default)]
     pub network_prover: NetworkProverConfig,
+
+    /// The GPU prover configuration.
+    #[serde(default)]
+    pub gpu_prover: GpuProverConfig,
 }
 
 impl Default for ProverConfig {
@@ -62,6 +66,7 @@ impl Default for ProverConfig {
             max_buffered_queries: default_max_buffered_queries(),
             cpu_prover: CpuProverConfig::default(),
             network_prover: NetworkProverConfig::default(),
+            gpu_prover: GpuProverConfig::default(),
         }
     }
 }
@@ -70,6 +75,9 @@ impl Default for ProverConfig {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct CpuProverConfig {
+    #[serde(default = "default_activation_cpu_prover")]
+    pub enabled: bool,
+
     #[serde(default = "default_max_concurrency_limit")]
     pub max_concurrency_limit: usize,
 
@@ -83,18 +91,18 @@ pub struct CpuProverConfig {
 
 impl CpuProverConfig {
     // This constant represents the number of second added to the proving_timeout
-    pub const DEFAULT_PROVING_TIMEOUT_PADDING: u64 = 1;
+    pub const DEFAULT_PROVING_TIMEOUT_PADDING: Duration = Duration::from_secs(1);
 
     pub fn get_proving_request_timeout(&self) -> Duration {
-        self.proving_request_timeout.unwrap_or_else(|| {
-            self.proving_timeout + Duration::from_secs(Self::DEFAULT_PROVING_TIMEOUT_PADDING)
-        })
+        self.proving_request_timeout
+            .unwrap_or_else(|| self.proving_timeout + Self::DEFAULT_PROVING_TIMEOUT_PADDING)
     }
 }
 
 impl Default for CpuProverConfig {
     fn default() -> Self {
         Self {
+            enabled: default_activation_cpu_prover(),
             max_concurrency_limit: default_max_concurrency_limit(),
             proving_request_timeout: None,
             proving_timeout: default_cpu_proving_timeout(),
@@ -119,29 +127,76 @@ pub struct NetworkProverConfig {
 
 impl NetworkProverConfig {
     // This constant represents the number of second added to the proving_timeout
-    pub const DEFAULT_PROVING_TIMEOUT_PADDING: u64 = 1;
+    pub const DEFAULT_PROVING_TIMEOUT_PADDING: Duration = Duration::from_secs(1);
 
     pub fn get_proving_request_timeout(&self) -> Duration {
-        self.proving_request_timeout.unwrap_or_else(|| {
-            self.proving_timeout + Duration::from_secs(Self::DEFAULT_PROVING_TIMEOUT_PADDING)
-        })
+        self.proving_request_timeout
+            .unwrap_or_else(|| self.proving_timeout + Self::DEFAULT_PROVING_TIMEOUT_PADDING)
     }
 }
 
 impl Default for NetworkProverConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: default_activation_network_prover(),
             proving_request_timeout: None,
             proving_timeout: default_network_proving_timeout(),
         }
     }
 }
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct GpuProverConfig {
+    #[serde(default = "default_activation_gpu_prover")]
+    pub enabled: bool,
+
+    #[serde(default = "default_max_concurrency_limit")]
+    pub max_concurrency_limit: usize,
+
+    #[serde_as(as = "Option<crate::with::HumanDuration>")]
+    pub proving_request_timeout: Option<Duration>,
+
+    #[serde(default = "default_cpu_proving_timeout")]
+    #[serde(with = "crate::with::HumanDuration")]
+    pub proving_timeout: Duration,
+}
+
+impl GpuProverConfig {
+    // This constant represents the number of second added to the proving_timeout
+    pub const DEFAULT_PROVING_TIMEOUT_PADDING: Duration = Duration::from_secs(1);
+
+    pub fn get_proving_request_timeout(&self) -> Duration {
+        self.proving_request_timeout
+            .unwrap_or_else(|| self.proving_timeout + Self::DEFAULT_PROVING_TIMEOUT_PADDING)
+    }
+}
+
+impl Default for GpuProverConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_activation_gpu_prover(),
+            max_concurrency_limit: default_max_concurrency_limit(),
+            proving_request_timeout: None,
+            proving_timeout: default_cpu_proving_timeout(),
+        }
+    }
+}
+
 const fn default_socket_addr() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)
 }
 
+const fn default_activation_cpu_prover() -> bool {
+    true
+}
+
 const fn default_activation_network_prover() -> bool {
+    false
+}
+
+const fn default_activation_gpu_prover() -> bool {
     false
 }
 

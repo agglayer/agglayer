@@ -1,0 +1,18 @@
+---
+source: crates/agglayer-node/src/rpc/tests/get_latest_known_certificate_header.rs
+expression: json
+---
+{
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+    "certificate_id": "0x911464a00ada773e3659bc570bfecf0819466498cd534f770dc97a6a59774d28",
+    "certificate_index": null,
+    "epoch_number": null,
+    "height": 0,
+    "metadata": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "network_id": 1,
+    "new_local_exit_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "Settled"
+  }
+}

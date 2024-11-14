@@ -16,6 +16,15 @@ mock! {
             height: Height,
         ) -> Result<Option<Certificate>, Error>;
 
+        fn get_latest_proven_certificate_per_network(
+            &self,
+            network_id: &NetworkId,
+        ) -> Result<Option<(NetworkId, Height, CertificateId)>, Error>;
+        fn get_latest_pending_certificate_for_network(
+            &self,
+            network_id: &NetworkId,
+        ) -> Result<Option<Certificate>, Error>;
+
         fn get_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error>;
 
         fn multi_get_certificate(

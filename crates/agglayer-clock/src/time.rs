@@ -24,7 +24,7 @@ use crate::{Clock, ClockRef, Error, Event, BROADCAST_CHANNEL_SIZE};
 pub struct TimeClock {
     genesis: DateTime<Utc>,
     current_block: Arc<AtomicU64>,
-    epoch_duration: NonZeroU64,
+    epoch_duration: Arc<NonZeroU64>,
     current_epoch: Arc<AtomicU64>,
 }
 
@@ -35,8 +35,8 @@ impl Clock for TimeClock {
 
         let clock_ref = ClockRef {
             sender: sender.clone(),
-            current_epoch: self.current_epoch.clone(),
             block_height: self.current_block.clone(),
+            block_per_epoch: self.epoch_duration.clone(),
         };
 
         // Spawn the Clock task directly
@@ -61,7 +61,7 @@ impl TimeClock {
         Self {
             genesis,
             current_block: Arc::new(AtomicU64::new(0)),
-            epoch_duration,
+            epoch_duration: Arc::new(epoch_duration),
             current_epoch: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -76,7 +76,7 @@ impl TimeClock {
 
         // Compute the current Block height and Epoch number
         let current_block = self.update_block_height();
-        let current_epoch = self.calculate_epoch_number(current_block);
+        let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
 
         // Use compare_exchange to ensure the initial current_epoch is 0
         if let Err(stored_value) = self.current_epoch.compare_exchange(
@@ -118,7 +118,7 @@ impl TimeClock {
                         // If the current Block height is a multiple of the Epoch duration,
                         // the current Epoch has ended. In this case, we need to update the
                         // new Epoch number and send an `EpochEnded` event to the subscribers.
-                        if current_block % self.epoch_duration == 0 {
+                        if current_block % *self.epoch_duration == 0 {
                             match self.update_epoch_number() {
                                 Ok(epoch_ended) => {
                                     if let Err(error) = sender.send(Event::EpochEnded(epoch_ended)) {
@@ -172,7 +172,7 @@ impl TimeClock {
     fn update_epoch_number(&mut self) -> Result<u64, (u64, u64)> {
         let current_block = self.current_block.load(Ordering::Acquire);
 
-        let current_epoch = self.calculate_epoch_number(current_block);
+        let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
         let expected_epoch = current_epoch.saturating_sub(1);
 
         match self.current_epoch.compare_exchange(
@@ -184,11 +184,6 @@ impl TimeClock {
             Ok(previous) => Ok(previous),
             Err(stored) => Err((stored, expected_epoch)),
         }
-    }
-
-    /// Calculate an Epoch number based on a Block number.
-    fn calculate_epoch_number(&self, from_block: u64) -> u64 {
-        from_block / self.epoch_duration
     }
 
     /// Calculate the Block height.
@@ -268,8 +263,8 @@ mod tests {
 
         let clock_ref = ClockRef {
             sender: sender.clone(),
-            current_epoch: clock.current_epoch.clone(),
             block_height: clock.current_block.clone(),
+            block_per_epoch: clock.epoch_duration.clone(),
         };
 
         let token = CancellationToken::new();

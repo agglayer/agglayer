@@ -3,6 +3,8 @@ use std::sync::Arc;
 use agglayer_config::epoch::BlockClockConfig;
 use agglayer_config::Config;
 use agglayer_config::Epoch;
+use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCertificate;
+use agglayer_storage::stores::PendingCertificateReader;
 use agglayer_storage::stores::PendingCertificateWriter;
 use agglayer_storage::stores::StateReader;
 use agglayer_storage::stores::StateWriter;
@@ -23,6 +25,7 @@ use jsonrpsee::{
 };
 use tokio::{sync::mpsc, try_join};
 use tower_http::cors::CorsLayer;
+use tracing::trace;
 use tracing::{debug, error, info, instrument};
 
 use crate::{
@@ -56,6 +59,12 @@ trait Agglayer {
 
     #[method(name = "getEpochConfiguration")]
     async fn get_epoch_configuration(&self) -> RpcResult<EpochConfiguration>;
+
+    #[method(name = "getLatestKnownCertificateHeader")]
+    async fn get_latest_known_certificate_header(
+        &self,
+        network_id: NetworkId,
+    ) -> RpcResult<Option<CertificateHeader>>;
 }
 
 /// The RPC agglayer service implementation.
@@ -86,10 +95,16 @@ impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore> 
     }
 }
 
+impl<Rpc, PendingStore, StateStore> Drop for AgglayerImpl<Rpc, PendingStore, StateStore> {
+    fn drop(&mut self) {
+        info!("Shutting down the agglayer service");
+    }
+}
+
 impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore>
 where
     Rpc: Middleware + 'static,
-    PendingStore: PendingCertificateWriter + 'static,
+    PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
 {
     pub(crate) async fn start(self) -> anyhow::Result<ServerHandle> {
@@ -159,7 +174,7 @@ where
 impl<Rpc, PendingStore, StateStore> AgglayerServer for AgglayerImpl<Rpc, PendingStore, StateStore>
 where
     Rpc: Middleware + 'static,
-    PendingStore: PendingCertificateWriter + 'static,
+    PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
 {
     #[instrument(skip(self, tx), fields(hash, rollup_id = tx.tx.rollup_id), level = "info")]
@@ -292,7 +307,7 @@ where
 
         info!(
             %hash,
-            "Received certificate {hash} for rollup {}", *certificate.network_id
+            "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
         );
 
         // TODO: Batch the different queries.
@@ -335,7 +350,7 @@ where
         &self,
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader> {
-        info!("Received request to get certificate header for certificate {certificate_id}");
+        trace!("Received request to get certificate header for certificate {certificate_id}");
         match self.state.get_certificate_header(&certificate_id) {
             Ok(Some(header)) => Ok(header),
             Ok(None) => Err(Error::resource_not_found(format!(
@@ -367,6 +382,74 @@ where
                 "AggLayer isn't configured with a BlockClock configuration, thus no \
                  EpochConfiguration is available",
             ))
+        }
+    }
+
+    async fn get_latest_known_certificate_header(
+        &self,
+        network_id: NetworkId,
+    ) -> RpcResult<Option<CertificateHeader>> {
+        debug!(
+            "Received request to get the latest known certificate header for rollup {}",
+            network_id
+        );
+
+        let settled_certificate_id_and_height = self
+            .state
+            .get_latest_settled_certificate_per_network(&network_id)
+            .map_err(|e| {
+                error!("Failed to get latest settled certificate: {e}");
+
+                Error::internal(e.to_string())
+            })?
+            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
+
+        let proven_certificate_id_and_height = self
+            .pending_store
+            .get_latest_proven_certificate_per_network(&network_id)
+            .map_err(|e| {
+                error!("Failed to get latest proven certificate: {e}");
+                Error::internal(e.to_string())
+            })?
+            .map(|(_, height, id)| (id, height));
+
+        let pending_certificate_id_and_height = self
+            .pending_store
+            .get_latest_pending_certificate_for_network(&network_id)
+            .map_err(|e| {
+                error!("Failed to get latest pending certificate: {e}");
+                Error::internal(e.to_string())
+            })?
+            .map(|c| (c.hash(), c.height));
+
+        let certificate_id = [
+            settled_certificate_id_and_height,
+            proven_certificate_id_and_height,
+            pending_certificate_id_and_height,
+        ]
+        .into_iter()
+        .flatten()
+        .max_by(|x, y| x.1.cmp(&y.1))
+        .map(|v| v.0);
+
+        if let Some(certificate_id) = certificate_id {
+            match self.state.get_certificate_header(&certificate_id) {
+                Ok(Some(header)) => Ok(Some(header)),
+                Ok(None) => Err(Error::resource_not_found(format!(
+                    "Certificate({})",
+                    certificate_id
+                ))),
+                Err(error) => {
+                    error!(
+                        hash = certificate_id.to_string(),
+                        "Failed to get certificate header: {}", error
+                    );
+
+                    Err(Error::internal("Unable to get certificate header"))
+                }
+            }
+        } else {
+            Ok(None)
         }
     }
 }

@@ -15,6 +15,8 @@ COPY --link Cargo.lock Cargo.lock
 
 RUN cargo chef prepare --recipe-path recipe.json --bin agglayer
 
+FROM --platform=${BUILDPLATFORM} golang:1.22 AS go-builder
+
 FROM chef AS builder
 
 RUN apt-get update && \
@@ -28,6 +30,9 @@ RUN ARCHITECTURE=$(uname -m | sed -e "s/arm64/arm_64/g" | sed -e "s/aarch64/aarc
     && chmod +x "/usr/local/bin/protoc" \
     && rm "protoc-${PROTOC_VERSION}-linux-$ARCHITECTURE.zip"
 
+# Install Go 1.22
+COPY --from=go-builder /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:$PATH"
 
 COPY --from=planner /app/recipe.json recipe.json
 # Notice that we are specifying the --target flag!

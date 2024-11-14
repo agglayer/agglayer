@@ -1,8 +1,11 @@
+use std::time::Duration;
+
 use pessimistic_proof::bridge_exit::BridgeExit;
 use pessimistic_proof_test_suite::{forest::Forest, runner::Runner, sample_data as data};
 use tracing::{debug, info};
 
 #[rstest::rstest]
+#[timeout(Duration::from_secs(30))]
 #[case::empty(Forest::new([]), std::iter::empty())]
 fn sanity_check(#[case] state: Forest, #[case] bridge_exits: impl Iterator<Item = BridgeExit>) {
     cycles_on_sample_inputs_inner(state, bridge_exits);

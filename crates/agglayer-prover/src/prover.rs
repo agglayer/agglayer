@@ -5,7 +5,7 @@ use agglayer_prover_types::v1::proof_generation_service_server::ProofGenerationS
 use anyhow::Result;
 use tokio::join;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Server;
+use tonic::{codec::CompressionEncoding, transport::Server};
 use tower::{limit::ConcurrencyLimitLayer, ServiceExt as _};
 use tracing::{debug, error, info};
 
@@ -45,13 +45,11 @@ impl Prover {
 
         let rpc = ProverRPC::new(executor);
 
-        let svc = ProofGenerationServiceServer::new(rpc);
+        let svc = ProofGenerationServiceServer::new(rpc)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
-
-        health_reporter
-            .set_serving::<ProofGenerationServiceServer<ProverRPC>>()
-            .await;
 
         health_reporter
             .set_serving::<ProofGenerationServiceServer<ProverRPC>>()

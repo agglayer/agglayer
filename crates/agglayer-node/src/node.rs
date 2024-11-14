@@ -8,7 +8,7 @@ use agglayer_contracts::{polygon_rollup_manager::PolygonRollupManager, L1RpcClie
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::DB,
-    stores::{epochs::EpochsStore, pending::PendingStore, state::StateStore},
+    stores::{epochs::EpochsStore, pending::PendingStore, state::StateStore, PerEpochReader as _},
 };
 use anyhow::Result;
 use ethers::{
@@ -17,9 +17,8 @@ use ethers::{
     signers::Signer,
 };
 use tokio::{join, sync::mpsc, task::JoinHandle};
-use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::{epoch_synchronizer::EpochSynchronizer, kernel::Kernel, rpc::AgglayerImpl};
 
@@ -83,10 +82,15 @@ impl Node {
 
         let state_store = Arc::new(StateStore::new(state_db.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
+        info!("Storage initialized.");
 
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
             Epoch::BlockClock(cfg) => {
+                info!(
+                    "Starting BlockClock with provider: {}",
+                    config.l1.ws_node_url
+                );
                 let provider = Provider::<Ws>::connect(config.l1.ws_node_url.as_str()).await?;
                 let clock = BlockClock::new(provider, cfg.genesis_block, cfg.epoch_duration);
 
@@ -105,6 +109,7 @@ impl Node {
         };
 
         let current_epoch = clock_ref.current_epoch();
+        info!("Clock started, current epoch {current_epoch}");
 
         let epochs_store = Arc::new(EpochsStore::new(
             config.clone(),
@@ -113,9 +118,15 @@ impl Node {
             state_store.clone(),
         )?);
 
+        info!("Epoch synchronization started.");
         let current_epoch_store =
             EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref.clone())
                 .await?;
+
+        info!(
+            "Epoch synchronization completed, active epoch: {}.",
+            current_epoch_store.get_epoch_number()
+        );
 
         let signer = ConfiguredSigner::new(config.clone()).await?;
         let address = signer.address();
@@ -140,6 +151,7 @@ impl Node {
             Arc::clone(&config),
         )
         .await?;
+        info!("Certifier client created.");
 
         // Construct the core.
         let core = Kernel::new(rpc, config.clone());
@@ -150,18 +162,16 @@ impl Node {
             Arc::clone(&rollup_manager),
         )?;
 
+        info!("Epoch packing aggregator task created.");
+
         let (data_sender, data_receiver) = mpsc::channel(
             config
                 .certificate_orchestrator
                 .input_backpressure_buffer_size,
         );
 
-        let clock_subscription =
-            tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
-                .filter_map(|value| value.ok());
-
         let certificate_orchestrator_handle = CertificateOrchestrator::builder()
-            .clock(clock_subscription)
+            .clock(clock_ref)
             .data_receiver(data_receiver)
             .cancellation_token(cancellation_token.clone())
             .epoch_packing_task_builder(epoch_packing_aggregator_task)
@@ -173,6 +183,7 @@ impl Node {
             .start()
             .await?;
 
+        info!("Certificate orchestrator started.");
         // Bind the core to the RPC server.
         let server_handle = AgglayerImpl::new(
             core,
