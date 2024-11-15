@@ -12,6 +12,11 @@ pub struct L1 {
     pub node_url: Url,
     #[serde(default = "default_ws_node_url")]
     pub ws_node_url: Url,
+    #[serde(
+        default = "default_max_reconnection_elapsed_time",
+        with = "crate::with::HumanDuration"
+    )]
+    pub max_reconnection_elapsed_time: Duration,
     #[serde(alias = "RollupManagerContract")]
     pub rollup_manager_contract: Address,
     #[serde(default = "L1::default_rpc_timeout")]
@@ -31,6 +36,7 @@ impl Default for L1 {
         Self {
             chain_id: 1337,
             node_url: "http://zkevm-mock-l1-network:8545".parse().unwrap(),
+            max_reconnection_elapsed_time: default_max_reconnection_elapsed_time(),
             ws_node_url: default_ws_node_url(),
             rollup_manager_contract: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
                 .parse()
@@ -42,4 +48,8 @@ impl Default for L1 {
 
 fn default_ws_node_url() -> Url {
     "ws://zkevm-mock-l1-network:8546".parse().unwrap()
+}
+
+const fn default_max_reconnection_elapsed_time() -> Duration {
+    Duration::from_secs(10)
 }

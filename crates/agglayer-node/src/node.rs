@@ -10,10 +10,11 @@ use agglayer_storage::{
     storage::DB,
     stores::{epochs::EpochsStore, pending::PendingStore, state::StateStore, PerEpochReader as _},
 };
+use alloy::providers::WsConnect;
 use anyhow::Result;
 use ethers::{
     middleware::MiddlewareBuilder,
-    providers::{Http, Provider, Ws},
+    providers::{Http, Provider},
     signers::Signer,
 };
 use tokio::{join, sync::mpsc, task::JoinHandle};
@@ -91,8 +92,14 @@ impl Node {
                     "Starting BlockClock with provider: {}",
                     config.l1.ws_node_url
                 );
-                let provider = Provider::<Ws>::connect(config.l1.ws_node_url.as_str()).await?;
-                let clock = BlockClock::new(provider, cfg.genesis_block, cfg.epoch_duration);
+
+                let clock = BlockClock::new_with_ws(
+                    WsConnect::new(config.l1.ws_node_url.as_str()),
+                    cfg.genesis_block,
+                    cfg.epoch_duration,
+                    config.l1.max_reconnection_elapsed_time,
+                )
+                .await?;
 
                 clock.spawn(cancellation_token.clone()).await?
             }
