@@ -18,8 +18,11 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     error::PreCertificationError, CertResponse, CertResponseSender, CertificationError, Certifier,
-    CertifierOutput, Error,
+    CertifierOutput, Error, InitialCheckError,
 };
+
+/// Maximum height distance of future pending certificates.
+const MAX_FUTURE_HEIGHT_DISTANCE: u64 = 10;
 
 /// Network task that is responsible to certify the certificates for a network.
 pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
@@ -181,6 +184,7 @@ where
             //     break;
             // }
         };
+
         // Get the certificate the pending certificate for the network at the height
         let certificate = if let Some(certificate) = self
             .pending_store
@@ -422,24 +426,39 @@ where
     /// Process single certificate.
     ///
     /// Performs a number of initial checks for the certificate. If these pass,
-    /// the certificate is recorded in persistent storage and the certifier
-    /// task is notified about it for further processing.
-    fn process_certificate(
-        &mut self,
-        certificate: &Certificate,
-        expected_height: u64,
-    ) -> CertResponse {
+    /// the certificate is recorded in persistent storage.
+    fn process_certificate(&mut self, certificate: &Certificate, next_height: u64) -> CertResponse {
         let height = certificate.height;
         let network_id = certificate.network_id;
 
-        // TODO signature check + other preliminary checks
-
-        if height != expected_height {
-            return Err(Error::CertificateHeight {
+        if height < next_height {
+            return Err(InitialCheckError::InPast {
                 height,
-                expected_height,
-                network_id,
+                next_height,
             });
+        }
+
+        let max_height = next_height + MAX_FUTURE_HEIGHT_DISTANCE;
+        if height > max_height {
+            return Err(InitialCheckError::FarFuture { height, max_height });
+        }
+
+        // TODO signature check + rate limit
+
+        let existing_header = self
+            .state_store
+            .get_certificate_header_by_cursor(network_id, height)?;
+
+        if let Some(existing_header) = existing_header {
+            use CertificateStatus as CS;
+
+            let status = existing_header.status;
+            match status {
+                CS::InError { error: _ } => (),
+                status @ (CS::Pending | CS::Proven | CS::Candidate | CS::Settled) => {
+                    return Err(InitialCheckError::IllegalReplacement { status });
+                }
+            }
         }
 
         // TODO: Batch the two queries.
@@ -600,6 +619,12 @@ mod tests {
         let certificate_id = certificate.hash();
 
         state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(0))
+            .returning(|_, _| Ok(None));
+
+        state
             .expect_insert_certificate_header()
             .once()
             .returning(|_, _| Ok(()));
@@ -720,6 +745,12 @@ mod tests {
         let certificate2 = Certificate::new_for_test(network_id, 1);
         let certificate_id = certificate.hash();
         let certificate_id2 = certificate2.hash();
+
+        state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(0))
+            .returning(|_, _| Ok(None));
 
         state
             .expect_insert_certificate_header()
@@ -900,6 +931,12 @@ mod tests {
         let certificate2 = Certificate::new_for_test(network_id, 1);
         let certificate_id = certificate.hash();
         let certificate_id2 = certificate2.hash();
+
+        state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(0))
+            .returning(|_, _| Ok(None));
 
         state
             .expect_insert_certificate_header()

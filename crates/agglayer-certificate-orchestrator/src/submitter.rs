@@ -1,6 +1,6 @@
 use tokio::sync::{mpsc, oneshot};
 
-use crate::{CertResponseSender, Certificate, Error};
+use crate::{CertResponseSender, Certificate, InitialCheckError as Error};
 
 /// An entry point to submit certificates to the orchestrator.
 #[derive(Debug, Clone)]
@@ -21,6 +21,6 @@ impl Submitter {
             .await
             .map_err(|_| Error::CertificateSubmission)?;
 
-        resp_recv.await.map_err(|_| Error::InternalError)?
+        resp_recv.await.map_err(|_| Error::Internal)?
     }
 }

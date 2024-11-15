@@ -164,7 +164,9 @@ impl Error {
         err.into()
     }
 
-    pub(crate) fn send_certificate(err: agglayer_certificate_orchestrator::Error) -> Self {
+    pub(crate) fn send_certificate(
+        err: agglayer_certificate_orchestrator::InitialCheckError,
+    ) -> Self {
         let detail = err.to_string();
         Self::SendCertificate { detail }
     }

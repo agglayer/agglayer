@@ -1,0 +1,15 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+assertion_line: 144
+expression: "SendCertificate { detail: \"Certificate is in the past (height 55, expecting 57)\" }"
+snapshot_kind: text
+---
+{
+  "code": -10006,
+  "data": {
+    "send-certificate": {
+      "detail": "Certificate is in the past (height 55, expecting 57)"
+    }
+  },
+  "message": "Cannot send certificate"
+}
