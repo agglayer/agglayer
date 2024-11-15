@@ -8,7 +8,7 @@ use crate::{
     storage::{local_network_state_db_cf_definitions, DB},
     stores::{
         interfaces::{reader::LocalNetworkStateReader, writer::LocalNetworkStateWriter},
-        local_network_state::LocalNetworkStateStore,
+        local_network_state::{Error, LocalNetworkStateStore},
     },
     tests::TempDBDir,
 };
@@ -96,4 +96,24 @@ fn can_update_existing_state(network_id: NetworkId, store: LocalNetworkStateStor
     assert!(
         matches!(store.read_local_network_state(network_id), Ok(Some(retrieved)) if equal_state(&lns, &retrieved))
     );
+}
+
+#[rstest]
+fn can_detect_inconsistent_state(network_id: NetworkId, store: LocalNetworkStateStore) {
+    let mut lns = LocalNetworkStateData::default();
+
+    // write initial state
+    assert!(store
+        .write_local_network_state(&0.into(), &lns, &[])
+        .is_ok());
+
+    // update state
+    let bridge_exit = Digest::default();
+    lns.exit_tree.add_leaf(bridge_exit).unwrap();
+
+    // write new state with missing leaves
+    assert!(matches!(
+        store.write_local_network_state(&network_id, &lns, &[]),
+        Err(Error::InconsistentState { .. })
+    ));
 }

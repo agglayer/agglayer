@@ -140,8 +140,6 @@ impl<
     >
 where
     PendingStore: PendingCertificateReader,
-    StateStore: StateReader + StateWriter + 'static,
-    NetworkStateStore: LocalNetworkStateReader + LocalNetworkStateWriter + 'static,
 {
     const DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE: usize = 1000;
 

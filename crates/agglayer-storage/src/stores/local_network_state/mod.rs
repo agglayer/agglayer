@@ -65,13 +65,15 @@ impl LocalNetworkStateWriter for LocalNetworkStateStore {
 
             if let Some(stored_exit_tree) = self.read_local_exit_tree(network_id.into())? {
                 if stored_exit_tree.leaf_count != start_leaf_count {
-                    // inconsistent state
+                    return Err(Error::InconsistentState {
+                        network_id: network_id.into(),
+                    });
                 }
             } else {
-                // state from scratch
+                // state from scratch, nothing to do
             }
 
-            // TODO: check how to make atomic the whole state update across the cfs
+            // TODO: make batch write across the 3 cfs
             let atomic_batch_write = {
                 let mut writes = BTreeMap::new();
 

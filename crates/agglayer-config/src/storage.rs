@@ -25,7 +25,7 @@ pub struct StorageConfig {
     pub state_db_path: PathBuf,
     /// Custom epochs storage path or inferred from the db path.
     pub epochs_db_path: PathBuf,
-    /// Custom epochs storage path or inferred from the db path.
+    /// Custom network storage path or inferred from the db path.
     pub network_state_db_path: PathBuf,
 }
 
