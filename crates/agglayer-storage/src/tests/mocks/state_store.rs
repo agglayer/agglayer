@@ -1,6 +1,6 @@
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
-    NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Hash, Height,
+    LocalNetworkStateData, NetworkId,
 };
 use mockall::mock;
 
@@ -47,6 +47,13 @@ mock! {
             epoch_number: &EpochNumber,
             certificate_index: &agglayer_types::CertificateIndex
         ) -> Result<(), Error>;
+
+        fn write_local_network_state(
+            &self,
+            network_id: &NetworkId,
+            new_state: &LocalNetworkStateData,
+            new_leaves: &[Hash],
+        ) -> Result<(), Error>;
     }
 
     impl StateReader for StateStore {
@@ -68,5 +75,10 @@ mock! {
             height: Height,
         ) -> Result<Option<CertificateHeader>, Error>;
         fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error>;
+
+        fn read_local_network_state(
+            &self,
+            network_id: NetworkId,
+        ) -> Result<Option<LocalNetworkStateData>, Error>;
     }
 }

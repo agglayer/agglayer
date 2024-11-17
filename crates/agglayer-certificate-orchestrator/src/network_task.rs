@@ -6,10 +6,7 @@ use agglayer_storage::{
         latest_proven_certificate_per_network::ProvenCertificate,
         latest_settled_certificate_per_network::SettledCertificate,
     },
-    stores::{
-        LocalNetworkStateReader, LocalNetworkStateWriter, PendingCertificateReader,
-        PendingCertificateWriter, StateReader, StateWriter,
-    },
+    stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
 use agglayer_types::{
     Certificate, CertificateId, CertificateStatus, CertificateStatusError, Hash, Height,
@@ -29,17 +26,15 @@ pub(crate) struct NewCertificate {
 }
 
 /// Network task that is responsible to certify the certificates for a network.
-pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore, NetworkStateStore> {
+pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     /// The network id for the network task.
     network_id: NetworkId,
     /// The pending store to read and write the pending certificates.
     pending_store: Arc<PendingStore>,
-    /// The state store to read and write the state of the network
+    /// The state store to read and write the state of the network.
     state_store: Arc<StateStore>,
     /// The certifier client to certify the certificates.
     certifier_client: Arc<CertifierClient>,
-    /// The network state store to read and write the local network state.
-    network_state_store: Arc<NetworkStateStore>,
     /// The local network state of the network task.
     local_state: LocalNetworkStateData,
     /// The sender to notify that a certificate has been proven.
@@ -56,19 +51,17 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore, Network
     at_capacity_for_epoch: bool,
 }
 
-impl<CertifierClient, PendingStore, StateStore, NetworkStateStore>
-    NetworkTask<CertifierClient, PendingStore, StateStore, NetworkStateStore>
+impl<CertifierClient, PendingStore, StateStore>
+    NetworkTask<CertifierClient, PendingStore, StateStore>
 where
     CertifierClient: Certifier,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateReader + StateWriter,
-    NetworkStateStore: LocalNetworkStateReader + LocalNetworkStateWriter,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
-        network_state_store: Arc<NetworkStateStore>,
         certifier_client: Arc<CertifierClient>,
         certification_notifier: mpsc::Sender<(
             oneshot::Sender<SettledCertificate>,
@@ -80,20 +73,21 @@ where
     ) -> Result<Self, Error> {
         info!("Creating a new network task for network {}", network_id);
 
+        let local_state = state_store
+            .read_local_network_state(network_id)?
+            .unwrap_or_default();
+
         Ok(Self {
             network_id,
             pending_store,
             state_store,
             certifier_client,
-            local_state: network_state_store
-                .read_local_network_state(network_id)?
-                .unwrap_or_default(),
+            local_state,
             certification_notifier,
             clock_ref,
             pending_state: None,
             certificate_stream,
             at_capacity_for_epoch: false,
-            network_state_store,
         })
     }
 
@@ -448,13 +442,12 @@ where
     }
 }
 
-impl<CertifierClient, PendingStore, StateStore, NetworkStateStore>
-    NetworkTask<CertifierClient, PendingStore, StateStore, NetworkStateStore>
+impl<CertifierClient, PendingStore, StateStore>
+    NetworkTask<CertifierClient, PendingStore, StateStore>
 where
     CertifierClient: Certifier,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateWriter,
-    NetworkStateStore: LocalNetworkStateReader + LocalNetworkStateWriter,
 {
     /// Context:
     ///
@@ -555,7 +548,7 @@ where
                 .map(|exit| exit.hash().into())
                 .collect::<Vec<Hash>>();
 
-            _ = self.network_state_store.write_local_network_state(
+            _ = self.state_store.write_local_network_state(
                 &certificate.network_id,
                 &self.local_state,
                 new_leaves.as_slice(),
@@ -571,7 +564,7 @@ mod tests {
     use std::time::Duration;
 
     use agglayer_storage::tests::mocks::{
-        MockLocalNetworkStateStore, MockPendingStore, MockStateStore,
+         MockPendingStore, MockStateStore,
     };
     use mockall::predicate::{always, eq};
     use rstest::rstest;
@@ -585,7 +578,6 @@ mod tests {
     async fn start_from_zero() {
         let mut pending = MockPendingStore::new();
         let mut state = MockStateStore::new();
-        let mut network_state = MockLocalNetworkStateStore::new();
         let mut certifier = MockCertifier::new();
         let (certification_notifier, mut receiver) = mpsc::channel(1);
         let clock_ref = clock();
@@ -636,11 +628,11 @@ mod tests {
                 }))
             });
 
-        network_state
+        state
             .expect_read_local_network_state()
             .returning(|_| Ok(Default::default()));
 
-        network_state
+        state
             .expect_write_local_network_state()
             .returning(|_, _, _| Ok(()));
 
@@ -658,7 +650,6 @@ mod tests {
         let mut task = NetworkTask::new(
             Arc::new(pending),
             Arc::new(state),
-            Arc::new(network_state),
             Arc::new(certifier),
             certification_notifier,
             clock_ref,
@@ -696,7 +687,6 @@ mod tests {
     async fn one_per_epoch() {
         let mut pending = MockPendingStore::new();
         let mut state = MockStateStore::new();
-        let mut network_state = MockLocalNetworkStateStore::new();
         let mut certifier = MockCertifier::new();
         let (certification_notifier, mut receiver) = mpsc::channel(1);
         let clock_ref = clock();
@@ -773,11 +763,11 @@ mod tests {
                 }))
             });
 
-        network_state
+        state
             .expect_read_local_network_state()
             .returning(|_| Ok(Default::default()));
 
-        network_state
+        state
             .expect_write_local_network_state()
             .returning(|_, _, _| Ok(()));
 
@@ -811,7 +801,6 @@ mod tests {
         let mut task = NetworkTask::new(
             Arc::new(pending),
             Arc::new(state),
-            Arc::new(network_state),
             Arc::new(certifier),
             certification_notifier,
             clock_ref,
@@ -869,7 +858,6 @@ mod tests {
     async fn changing_epoch_triggers_certify() {
         let mut pending = MockPendingStore::new();
         let mut state = MockStateStore::new();
-        let mut network_state = MockLocalNetworkStateStore::new();
         let mut certifier = MockCertifier::new();
         let (certification_notifier, mut receiver) = mpsc::channel(1);
         let clock_ref = clock();
@@ -897,11 +885,11 @@ mod tests {
                 Ok(Some(Certificate::new_for_test(network_id, height)))
             });
 
-        network_state
+        state
             .expect_read_local_network_state()
             .returning(|_| Ok(Default::default()));
 
-        network_state
+        state
             .expect_write_local_network_state()
             .returning(|_, _, _| Ok(()));
 
@@ -998,7 +986,6 @@ mod tests {
         let mut task = NetworkTask::new(
             Arc::new(pending),
             Arc::new(state),
-            Arc::new(network_state),
             Arc::new(certifier),
             certification_notifier,
             clock_ref.clone(),

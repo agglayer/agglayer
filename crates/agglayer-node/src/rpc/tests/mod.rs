@@ -233,6 +233,15 @@ impl StateWriter for DummyStore {
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
+
+    fn write_local_network_state(
+        &self,
+        _network_id: &NetworkId,
+        _new_state: &agglayer_types::LocalNetworkStateData,
+        _new_leaves: &[agglayer_types::Hash],
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
 }
 
 impl StateReader for DummyStore {
@@ -264,6 +273,13 @@ impl StateReader for DummyStore {
     fn get_current_settled_height(
         &self,
     ) -> Result<Vec<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn read_local_network_state(
+        &self,
+        _network_id: NetworkId,
+    ) -> Result<Option<agglayer_types::LocalNetworkStateData>, agglayer_storage::error::Error> {
         todo!()
     }
 }

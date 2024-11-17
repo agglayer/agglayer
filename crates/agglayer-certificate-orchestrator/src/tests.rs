@@ -9,11 +9,6 @@ use std::{
 
 use agglayer_clock::ClockRef;
 use agglayer_config::Config;
-use agglayer_storage::stores::LocalNetworkStateWriter;
-use agglayer_storage::stores::{
-    local_network_state::LocalNetworkStateStore, LocalNetworkStateReader,
-};
-use agglayer_storage::tests::mocks::MockLocalNetworkStateStore;
 use agglayer_storage::{
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
@@ -57,26 +52,6 @@ pub(crate) struct DummyPendingStore {
     pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
     pub(crate) latest_proven_certificate_per_network:
         RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
-}
-
-impl LocalNetworkStateReader for DummyPendingStore {
-    fn read_local_network_state(
-        &self,
-        _network_id: NetworkId,
-    ) -> Result<Option<LocalNetworkStateData>, agglayer_storage::error::Error> {
-        todo!()
-    }
-}
-
-impl LocalNetworkStateWriter for DummyPendingStore {
-    fn write_local_network_state(
-        &self,
-        _network_id: &NetworkId,
-        _new_state: &LocalNetworkStateData,
-        _new_leaves: &[agglayer_types::Hash],
-    ) -> Result<(), agglayer_storage::error::Error> {
-        todo!()
-    }
 }
 
 impl PerEpochReader for DummyPendingStore {
@@ -172,6 +147,13 @@ impl StateReader for DummyPendingStore {
             .unwrap()
             .get(&(network_id, height))
             .and_then(|id| self.certificate_headers.read().unwrap().get(id).cloned()))
+    }
+
+    fn read_local_network_state(
+        &self,
+        _network_id: NetworkId,
+    ) -> Result<Option<LocalNetworkStateData>, agglayer_storage::error::Error> {
+        todo!()
     }
 }
 impl EpochStoreReader for DummyPendingStore {}
@@ -325,6 +307,15 @@ impl StateWriter for DummyPendingStore {
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
+
+    fn write_local_network_state(
+        &self,
+        _network_id: &NetworkId,
+        _new_state: &LocalNetworkStateData,
+        _new_leaves: &[agglayer_types::Hash],
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
 }
 
 impl PendingCertificateReader for DummyPendingStore {
@@ -415,10 +406,6 @@ async fn test_certificate_orchestrator_can_stop() {
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
     );
-    let network_state_store = Arc::new(
-        LocalNetworkStateStore::new_with_path(&config.storage.network_state_db_path)
-            .expect("Unable to create store"),
-    );
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
@@ -460,7 +447,6 @@ async fn test_certificate_orchestrator_can_stop() {
         epochs_store,
         current_epoch,
         state_store.clone(),
-        network_state_store,
     )
     .expect("Unable to create orchestrator");
 
@@ -482,10 +468,6 @@ async fn test_collect_certificates() {
     );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
-    );
-    let network_state_store = Arc::new(
-        LocalNetworkStateStore::new_with_path(&config.storage.network_state_db_path)
-            .expect("Unable to create store"),
     );
 
     let epochs_store = Arc::new(
@@ -528,7 +510,6 @@ async fn test_collect_certificates() {
         epochs_store,
         current_epoch,
         state_store.clone(),
-        network_state_store,
     )
     .expect("Unable to create orchestrator");
 
@@ -552,10 +533,6 @@ async fn test_collect_certificates_after_epoch() {
     );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
-    );
-    let network_state_store = Arc::new(
-        LocalNetworkStateStore::new_with_path(&config.storage.network_state_db_path)
-            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -598,7 +575,6 @@ async fn test_collect_certificates_after_epoch() {
         epochs_store,
         current_epoch,
         state_store.clone(),
-        network_state_store,
     )
     .expect("Unable to create orchestrator");
 
@@ -624,10 +600,6 @@ async fn test_collect_certificates_when_empty() {
     );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
-    );
-    let network_state_store = Arc::new(
-        LocalNetworkStateStore::new_with_path(&config.storage.network_state_db_path)
-            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -671,7 +643,6 @@ async fn test_collect_certificates_when_empty() {
         epochs_store,
         current_epoch,
         state_store.clone(),
-        network_state_store,
     )
     .expect("Unable to create orchestrator");
 
@@ -739,7 +710,6 @@ type IMockOrchestrator = CertificateOrchestrator<
     MockEpochsStore,
     MockPerEpochStore,
     MockStateStore,
-    MockLocalNetworkStateStore,
 >;
 
 #[derive(Default, buildstructor::Builder)]
@@ -749,7 +719,6 @@ struct MockOrchestrator {
     pending_store: Option<MockPendingStore>,
     epochs_store: Option<MockEpochsStore>,
     state_store: Option<MockStateStore>,
-    network_state_store: Option<MockLocalNetworkStateStore>,
     current_epoch: Option<MockPerEpochStore>,
 }
 
@@ -774,7 +743,6 @@ pub(crate) fn create_orchestrator_mock(
     let epochs_store = Arc::new(builder.epochs_store.unwrap_or_default());
     let current_epoch = ArcSwap::new(Arc::new(builder.current_epoch.unwrap_or_default()));
     let state_store = Arc::new(builder.state_store.unwrap_or_default());
-    let network_state_store = Arc::new(builder.network_state_store.unwrap_or_default());
 
     (
         (data_sender, clock.clone()),
@@ -801,7 +769,6 @@ pub(crate) fn create_orchestrator_mock(
             epochs_store,
             current_epoch,
             state_store,
-            network_state_store,
         )
         .expect("Unable to create orchestrator"),
     )

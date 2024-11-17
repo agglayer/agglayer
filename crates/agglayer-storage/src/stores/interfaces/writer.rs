@@ -60,6 +60,13 @@ pub trait StateWriter: Send + Sync {
         epoch_number: &EpochNumber,
         certificate_index: &CertificateIndex,
     ) -> Result<(), Error>;
+
+    fn write_local_network_state(
+        &self,
+        network_id: &NetworkId,
+        new_state: &LocalNetworkStateData,
+        new_leaves: &[Hash],
+    ) -> Result<(), Error>;
 }
 
 pub trait PendingCertificateWriter: Send + Sync {
@@ -89,14 +96,5 @@ pub trait PendingCertificateWriter: Send + Sync {
         network_id: &NetworkId,
         height: &Height,
         certificate_id: &CertificateId,
-    ) -> Result<(), Error>;
-}
-
-pub trait LocalNetworkStateWriter: Send + Sync {
-    fn write_local_network_state(
-        &self,
-        network_id: &NetworkId,
-        new_state: &LocalNetworkStateData,
-        new_leaves: &[Hash],
     ) -> Result<(), Error>;
 }
