@@ -6,7 +6,7 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-cargo_metadata = "0.18.1"
+cargo_metadata = "0.19.0"
 clap.workspace = true
 nu-ansi-term = "0.50.1"
-which = "6.0.2"
+which = "7.0.0"
