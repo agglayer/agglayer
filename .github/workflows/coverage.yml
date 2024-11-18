@@ -79,7 +79,7 @@ jobs:
             -Dsonar.scm.revision=${{ github.event.pull_request.head.sha }}
 
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         continue-on-error: true
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
