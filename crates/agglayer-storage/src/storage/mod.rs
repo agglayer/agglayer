@@ -164,7 +164,7 @@ impl DB {
         Ok(self.rocksdb.delete_cf(&cf, key)?)
     }
 
-    pub(crate) fn prefix_itererator_with_direction<C: ColumnSchema, P: Serialize>(
+    pub(crate) fn prefix_iterator_with_direction<C: ColumnSchema, P: Serialize>(
         &self,
         prefix: &P,
         direction: Direction,

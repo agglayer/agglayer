@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use agglayer_types::{Hash, LocalNetworkStateData, NetworkId};
-use pessimistic_proof::keccak::Digest;
 use rstest::{fixture, rstest};
 
 use crate::{
@@ -33,6 +32,7 @@ fn can_retrieve_list_of_network() {
 
 fn equal_state(lhs: &LocalNetworkStateData, rhs: &LocalNetworkStateData) -> bool {
     // local exit tree
+    assert_eq!(lhs.exit_tree.leaf_count, rhs.exit_tree.leaf_count);
     assert_eq!(lhs.exit_tree.get_root(), rhs.exit_tree.get_root());
 
     // balance tree
@@ -75,11 +75,15 @@ fn can_handle_empty_state(#[from(network_id)] unknown_network_id: NetworkId, sto
 
 #[rstest]
 fn can_retrieve_state(network_id: NetworkId, store: StateStore) {
-    let lns = LocalNetworkStateData::default();
-
     // write arbitrary state
+    let mut lns = LocalNetworkStateData::default();
+    let leaves = (0..10).map(|_| Hash([5u8; 32])).collect::<Vec<_>>();
+    for l in &leaves {
+        lns.exit_tree.add_leaf(l.0).unwrap();
+    }
+
     assert!(store
-        .write_local_network_state(&network_id, &lns, &[])
+        .write_local_network_state(&network_id, &lns, leaves.as_slice())
         .is_ok());
 
     // retrieve it
@@ -94,11 +98,11 @@ fn can_update_existing_state(network_id: NetworkId, store: StateStore) {
 
     // write initial state
     assert!(store
-        .write_local_network_state(&0.into(), &lns, &[])
+        .write_local_network_state(&network_id, &lns, &[])
         .is_ok());
 
     // update state
-    let bridge_exit = Digest::default();
+    let bridge_exit = [5u8; 32];
     lns.exit_tree.add_leaf(bridge_exit).unwrap();
 
     // write new state
@@ -118,11 +122,11 @@ fn can_detect_inconsistent_state(network_id: NetworkId, store: StateStore) {
 
     // write initial state
     assert!(store
-        .write_local_network_state(&0.into(), &lns, &[])
+        .write_local_network_state(&network_id, &lns, &[])
         .is_ok());
 
     // update state
-    let bridge_exit = Digest::default();
+    let bridge_exit = [5u8; 32];
     lns.exit_tree.add_leaf(bridge_exit).unwrap();
 
     // write new state with missing leaves

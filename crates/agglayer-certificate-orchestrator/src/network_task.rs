@@ -533,26 +533,27 @@ where
                 );
 
                 self.local_state = new;
+
+                // Store the current state
+                let new_leaves = certificate
+                    .bridge_exits
+                    .iter()
+                    .map(|exit| exit.hash().into())
+                    .collect::<Vec<Hash>>();
+
+                _ = self.state_store.write_local_network_state(
+                    &certificate.network_id,
+                    &self.local_state,
+                    new_leaves.as_slice(),
+                );
             } else {
-                debug!(
-                    "Updated the state for network {} with the new state [] > {}",
+                error!(
+                    "Missing pending state for network {} needed upon settlement, current state: \
+                     {}",
                     self.network_id,
                     self.local_state.get_roots().display_to_hex()
                 );
             }
-
-            // Store the current state
-            let new_leaves = certificate
-                .bridge_exits
-                .iter()
-                .map(|exit| exit.hash().into())
-                .collect::<Vec<Hash>>();
-
-            _ = self.state_store.write_local_network_state(
-                &certificate.network_id,
-                &self.local_state,
-                new_leaves.as_slice(),
-            );
         }
 
         Ok(())
@@ -563,9 +564,7 @@ where
 mod tests {
     use std::time::Duration;
 
-    use agglayer_storage::tests::mocks::{
-         MockPendingStore, MockStateStore,
-    };
+    use agglayer_storage::tests::mocks::{MockPendingStore, MockStateStore};
     use mockall::predicate::{always, eq};
     use rstest::rstest;
 

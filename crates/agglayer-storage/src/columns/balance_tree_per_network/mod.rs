@@ -11,7 +11,7 @@ mod tests;
 /// | ---                               | --                                      |
 /// | (`NetworkId`, `SmtKeyType::Root`) | (`hash(root.left)`, `hash(root.right)`) |
 /// | (`NetworkId`, `hash(node)`)       | (`hash(node.left)`, `hash(node.right)`) |
-/// | (`NetworkId`, `hash(leaf)`)       | (`hash(leaf)`)                          |
+/// | (`NetworkId`, `hash(node)`)       | (`hash(leaf)`)                          |
 pub struct BalanceTreePerNetworkColumn;
 
 impl ColumnSchema for BalanceTreePerNetworkColumn {

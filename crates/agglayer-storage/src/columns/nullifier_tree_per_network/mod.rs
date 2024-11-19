@@ -8,7 +8,7 @@ use super::{ColumnSchema, NULLIFIER_TREE_PER_NETWORK_CF};
 /// | ---                               | --                                      |
 /// | (`NetworkId`, `SmtKeyType::Root`) | (`hash(root.left)`, `hash(root.right)`) |
 /// | (`NetworkId`, `hash(node)`)       | (`hash(node.left)`, `hash(node.right)`) |
-/// | (`NetworkId`, `hash(leaf)`)       | (`hash(leaf)`)                          |
+/// | (`NetworkId`, `hash(node)`)       | (`hash(leaf)`)                          |
 pub struct NullifierTreePerNetworkColumn;
 
 impl ColumnSchema for NullifierTreePerNetworkColumn {

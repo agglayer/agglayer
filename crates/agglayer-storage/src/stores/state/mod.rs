@@ -1,11 +1,18 @@
-use std::{collections::{BTreeMap, VecDeque}, path::Path, sync::Arc};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    path::Path,
+    sync::Arc,
+};
 
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
     EpochNumber, Hash, Height, Keccak256Hasher, LocalNetworkStateData, NetworkId,
 };
 use pessimistic_proof::{
-    local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, local_exit_tree::LocalExitTree, nullifier_tree::NULLIFIER_TREE_DEPTH, utils::smt::{Node, Smt}
+    local_balance_tree::LOCAL_BALANCE_TREE_DEPTH,
+    local_exit_tree::LocalExitTree,
+    nullifier_tree::NULLIFIER_TREE_DEPTH,
+    utils::smt::{Node, Smt},
 };
 use rocksdb::{Direction, ReadOptions};
 use tracing::warn;
@@ -216,7 +223,7 @@ impl StateWriter for StateStore {
                     });
 
                 // Write frontier
-                (1..32).for_each(|layer| {
+                (0..32).for_each(|layer| {
                     writes.insert(
                         LET::Key {
                             network_id,
@@ -312,7 +319,7 @@ impl StateStore {
 
         let retrieved_frontier: Vec<_> = self
             .db
-            .multi_get::<LocalExitTreePerNetworkColumn>((1..32).map(|layer| LET::Key {
+            .multi_get::<LocalExitTreePerNetworkColumn>((0..32).map(|layer| LET::Key {
                 network_id: network_id.into(),
                 key_type: LET::KeyType::Frontier(layer),
             }))?
