@@ -14,7 +14,7 @@ use pessimistic_proof::{
     nullifier_tree::NULLIFIER_TREE_DEPTH,
     utils::smt::{Node, Smt},
 };
-use rocksdb::{Direction, ReadOptions};
+use rocksdb::{Direction, ReadOptions, WriteBatch};
 use tracing::warn;
 
 use self::LET::LocalExitTreePerNetworkColumn;
@@ -183,6 +183,7 @@ impl StateWriter for StateStore {
     ) -> Result<(), Error> {
         let network_id: u32 = (*network_id).into();
 
+        let mut atomic_batch = WriteBatch::default();
         // Store the LET
         {
             let new_leaf_count = new_state.exit_tree.leaf_count;
@@ -196,8 +197,8 @@ impl StateWriter for StateStore {
                 }
             }
 
-            // TODO: make batch write across the 3 cfs
-            let atomic_batch_write = {
+            // Collect the exit tree writes
+            let exit_tree_writes = {
                 let mut writes = BTreeMap::new();
 
                 // Write new leaf count
@@ -237,20 +238,28 @@ impl StateWriter for StateStore {
             };
 
             self.db
-                .multi_insert::<LocalExitTreePerNetworkColumn>(atomic_batch_write.iter())?;
+                .multi_insert_batch::<LocalExitTreePerNetworkColumn>(
+                    exit_tree_writes.iter(),
+                    &mut atomic_batch,
+                )?;
         }
 
-        // Store the balance tree
+        // Collect the balance tree writes
         self.write_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(
             network_id,
             &new_state.balance_tree,
+            &mut atomic_batch,
         )?;
 
-        // Store the nullifier tree
+        // Collect nullifier tree writes
         self.write_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(
             network_id,
             &new_state.nullifier_tree,
+            &mut atomic_batch,
         )?;
+
+        // Atomic write across the 3 cfs
+        self.db.write_batch(atomic_batch)?;
 
         Ok(())
     }
@@ -261,6 +270,7 @@ impl StateStore {
         &self,
         network_id: u32,
         smt: &Smt<Keccak256Hasher, DEPTH>,
+        batch: &mut WriteBatch,
     ) -> Result<(), Error>
     where
         C: ColumnSchema<Key = SmtKey, Value = SmtValue>,
@@ -295,7 +305,7 @@ impl StateStore {
                 });
         });
 
-        self.db.multi_insert::<C>(&kv)?;
+        self.db.multi_insert_batch::<C>(&kv, batch)?;
 
         Ok(())
     }
