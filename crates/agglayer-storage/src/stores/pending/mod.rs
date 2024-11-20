@@ -92,7 +92,7 @@ impl PendingCertificateReader for PendingStore {
     ) -> Result<Option<Certificate>, Error> {
         Ok(self
             .db
-            .prefix_itererator_with_direction::<PendingQueueColumn, NetworkId>(
+            .prefix_iterator_with_direction::<PendingQueueColumn, NetworkId>(
                 network_id,
                 Direction::Reverse,
             )?

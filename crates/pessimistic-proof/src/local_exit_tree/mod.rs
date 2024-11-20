@@ -20,9 +20,9 @@ where
     H::Digest: Serialize + for<'a> Deserialize<'a>,
 {
     /// The number of inserted (non-empty) leaves.
-    leaf_count: u32,
+    pub leaf_count: u32,
     #[serde_as(as = "[_; TREE_DEPTH]")]
-    frontier: [H::Digest; TREE_DEPTH],
+    pub frontier: [H::Digest; TREE_DEPTH],
 }
 
 #[derive(Clone, Debug, Error, Serialize, Deserialize, PartialEq, Eq)]

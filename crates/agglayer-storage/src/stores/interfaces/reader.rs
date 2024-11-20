@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, Height, NetworkId, Proof,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, Height, LocalNetworkStateData,
+    NetworkId, Proof,
 };
 
 use crate::{
@@ -71,6 +72,12 @@ pub trait StateReader: Send + Sync {
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<(NetworkId, SettledCertificate)>, Error>;
+
+    /// Get the local network state.
+    fn read_local_network_state(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<LocalNetworkStateData>, Error>;
 }
 
 pub trait PerEpochReader: Send + Sync {

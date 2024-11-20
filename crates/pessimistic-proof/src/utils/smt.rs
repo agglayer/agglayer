@@ -25,16 +25,16 @@ pub enum SmtError {
 
 /// A node in an SMT
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Node<H>
 where
     H: Hasher,
     H::Digest: Serialize + DeserializeOwned,
 {
     #[serde_as(as = "_")]
-    left: H::Digest,
+    pub left: H::Digest,
     #[serde_as(as = "_")]
-    right: H::Digest,
+    pub right: H::Digest,
 }
 
 impl<H> Clone for Node<H>
@@ -77,7 +77,7 @@ where
     pub root: H::Digest,
     /// A map from node hash to node
     #[serde_as(as = "HashMap<_, _>")]
-    tree: HashMap<H::Digest, Node<H>>,
+    pub tree: HashMap<H::Digest, Node<H>>,
     /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
     /// `i`.
     #[serde_as(as = "[_; DEPTH]")]
@@ -126,14 +126,21 @@ where
         H::Digest: Default,
     {
         let empty_hash_at_height = empty_hash_at_height::<H, DEPTH>();
-        let root = H::merge(
-            &empty_hash_at_height[DEPTH - 1],
-            &empty_hash_at_height[DEPTH - 1],
-        );
-        let tree = HashMap::new();
+        let root = Node {
+            left: empty_hash_at_height[DEPTH - 1],
+            right: empty_hash_at_height[DEPTH - 1],
+        };
+        Self::new_with_nodes(root.hash(), &[root])
+    }
+
+    pub fn new_with_nodes(root: H::Digest, nodes: &[Node<H>]) -> Self
+    where
+        H::Digest: Default,
+    {
+        let empty_hash_at_height = empty_hash_at_height::<H, DEPTH>();
         Smt {
             root,
-            tree,
+            tree: nodes.iter().map(|n| (n.hash(), *n)).collect(),
             empty_hash_at_height,
         }
     }

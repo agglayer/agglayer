@@ -95,16 +95,21 @@ impl DB {
         Ok(())
     }
 
-    pub fn multi_insert<'a, C: ColumnSchema + 'a>(
+    pub fn write_batch(&self, batch: WriteBatch) -> Result<(), Error> {
+        self.rocksdb.write(batch)?;
+
+        Ok(())
+    }
+
+    pub fn multi_insert_batch<'a, C: ColumnSchema + 'a>(
         &self,
         key_val_pairs: impl IntoIterator<Item = (&'a C::Key, &'a C::Value)>,
+        batch: &mut WriteBatch,
     ) -> Result<(), Error> {
         let cf = self
             .rocksdb
             .cf_handle(C::COLUMN_FAMILY_NAME)
             .ok_or(Error::ColumnFamilyNotFound)?;
-
-        let mut batch = WriteBatch::default();
 
         key_val_pairs
             .into_iter()
@@ -116,7 +121,16 @@ impl DB {
                 Ok(())
             })?;
 
-        self.rocksdb.write(batch)?;
+        Ok(())
+    }
+
+    pub fn multi_insert<'a, C: ColumnSchema + 'a>(
+        &self,
+        key_val_pairs: impl IntoIterator<Item = (&'a C::Key, &'a C::Value)>,
+    ) -> Result<(), Error> {
+        let mut batch = WriteBatch::default();
+        self.multi_insert_batch::<C>(key_val_pairs, &mut batch)?;
+        self.write_batch(batch)?;
 
         Ok(())
     }
@@ -164,7 +178,7 @@ impl DB {
         Ok(self.rocksdb.delete_cf(&cf, key)?)
     }
 
-    pub(crate) fn prefix_itererator_with_direction<C: ColumnSchema, P: Serialize>(
+    pub(crate) fn prefix_iterator_with_direction<C: ColumnSchema, P: Serialize>(
         &self,
         prefix: &P,
         direction: Direction,

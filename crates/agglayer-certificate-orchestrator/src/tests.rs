@@ -102,7 +102,7 @@ impl PerEpochWriter for DummyPendingStore {
 
 impl StateReader for DummyPendingStore {
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
-        todo!()
+        Ok(vec![])
     }
 
     fn get_latest_settled_certificate_per_network(
@@ -147,6 +147,13 @@ impl StateReader for DummyPendingStore {
             .unwrap()
             .get(&(network_id, height))
             .and_then(|id| self.certificate_headers.read().unwrap().get(id).cloned()))
+    }
+
+    fn read_local_network_state(
+        &self,
+        _network_id: NetworkId,
+    ) -> Result<Option<LocalNetworkStateData>, agglayer_storage::error::Error> {
+        todo!()
     }
 }
 impl EpochStoreReader for DummyPendingStore {}
@@ -299,6 +306,15 @@ impl StateWriter for DummyPendingStore {
         _certificate_index: &CertificateIndex,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
+    }
+
+    fn write_local_network_state(
+        &self,
+        _network_id: &NetworkId,
+        _new_state: &LocalNetworkStateData,
+        _new_leaves: &[agglayer_types::Hash],
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
     }
 }
 

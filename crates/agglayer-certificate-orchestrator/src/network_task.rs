@@ -9,7 +9,7 @@ use agglayer_storage::{
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
 use agglayer_types::{
-    Certificate, CertificateId, CertificateStatus, CertificateStatusError, Height,
+    Certificate, CertificateId, CertificateStatus, CertificateStatusError, Hash, Height,
     LocalNetworkStateData, NetworkId,
 };
 use tokio::sync::{mpsc, oneshot};
@@ -31,7 +31,7 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     network_id: NetworkId,
     /// The pending store to read and write the pending certificates.
     pending_store: Arc<PendingStore>,
-    /// The state store to read and write the state of the network
+    /// The state store to read and write the state of the network.
     state_store: Arc<StateStore>,
     /// The certifier client to certify the certificates.
     certifier_client: Arc<CertifierClient>,
@@ -58,6 +58,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateReader + StateWriter,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
@@ -72,12 +73,16 @@ where
     ) -> Result<Self, Error> {
         info!("Creating a new network task for network {}", network_id);
 
+        let local_state = state_store
+            .read_local_network_state(network_id)?
+            .unwrap_or_default();
+
         Ok(Self {
             network_id,
             pending_store,
             state_store,
             certifier_client,
-            local_state: LocalNetworkStateData::default(),
+            local_state,
             certification_notifier,
             clock_ref,
             pending_state: None,
@@ -528,9 +533,23 @@ where
                 );
 
                 self.local_state = new;
+
+                // Store the current state
+                let new_leaves = certificate
+                    .bridge_exits
+                    .iter()
+                    .map(|exit| exit.hash().into())
+                    .collect::<Vec<Hash>>();
+
+                _ = self.state_store.write_local_network_state(
+                    &certificate.network_id,
+                    &self.local_state,
+                    new_leaves.as_slice(),
+                );
             } else {
-                debug!(
-                    "Updated the state for network {} with the new state [] > {}",
+                error!(
+                    "Missing pending state for network {} needed upon settlement, current state: \
+                     {}",
                     self.network_id,
                     self.local_state.get_roots().display_to_hex()
                 );
@@ -607,6 +626,14 @@ mod tests {
                     Ok(result)
                 }))
             });
+
+        state
+            .expect_read_local_network_state()
+            .returning(|_| Ok(Default::default()));
+
+        state
+            .expect_write_local_network_state()
+            .returning(|_, _, _| Ok(()));
 
         pending
             .expect_set_latest_proven_certificate_per_network()
@@ -735,6 +762,14 @@ mod tests {
                 }))
             });
 
+        state
+            .expect_read_local_network_state()
+            .returning(|_| Ok(Default::default()));
+
+        state
+            .expect_write_local_network_state()
+            .returning(|_, _, _| Ok(()));
+
         certifier
             .expect_certify()
             .never()
@@ -848,6 +883,15 @@ mod tests {
             .returning(|network_id, height| {
                 Ok(Some(Certificate::new_for_test(network_id, height)))
             });
+
+        state
+            .expect_read_local_network_state()
+            .returning(|_| Ok(Default::default()));
+
+        state
+            .expect_write_local_network_state()
+            .returning(|_, _, _| Ok(()));
+
         state
             .expect_get_certificate_header()
             .once()

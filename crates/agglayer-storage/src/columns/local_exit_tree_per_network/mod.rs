@@ -6,19 +6,32 @@ use super::{Codec, ColumnSchema, LOCAL_EXIT_TREE_PER_NETWORK_CF};
 ///
 /// ## Column definition
 ///
-/// | key                             | value   |
-/// | --                              | --      |
-/// | (`NetworkId`, `Layer`, `Index`) | `Bytes` |
+/// | key                                       | value    |
+/// | --                                        | --       |
+/// | (`NetworkId`, `KeyType::LeafCount`)       | (`u32`)  |
+/// | (`NetworkId`, `KeyType::Leaf(index)`)     | (`Hash`) |
+/// | (`NetworkId`, `KeyType::Frontier(layer)`) | (`Hash`) |
 pub struct LocalExitTreePerNetworkColumn;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Key {
-    network_id: u32,
-    layer: u32,
-    index: u64,
+    pub(crate) network_id: u32,
+    pub(crate) key_type: KeyType,
 }
 
-pub type Value = Vec<[u8; 32]>;
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub enum KeyType {
+    LeafCount,
+    Leaf(u32),
+    Frontier(u32),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Value {
+    LeafCount(u32),
+    Leaf([u8; 32]),
+    Frontier([u8; 32]),
+}
 
 impl Codec for Key {}
 impl Codec for Value {}
