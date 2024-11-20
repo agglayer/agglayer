@@ -120,6 +120,8 @@ async fn test_block_clock_starting_with_genesis_in_future_should_trigger_epoch_0
     assert!(clock_ref.current_block_height() >= 3);
 }
 
+#[rstest]
+#[timeout(Duration::from_secs(15))]
 #[test_log::test(tokio::test)]
 async fn test_block_clock_starting_with_genesis() {
     let anvil = Anvil::new().block_time(1u64).spawn();
@@ -148,7 +150,7 @@ async fn test_block_clock_starting_with_genesis() {
         let block_number = block.number;
 
         if block_number >= 11 {
-            assert!(matches!(recv.try_recv(), Ok(Event::EpochEnded(0))));
+            assert!(matches!(recv.recv().await, Ok(Event::EpochEnded(0))));
             assert_eq!(clock_ref.current_epoch(), 1);
             assert!(clock_ref.current_block_height() >= 1);
             break;
