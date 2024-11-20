@@ -3,6 +3,9 @@ name = "agglayer-node"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 alloy = { version = "0.6.4", features = ["full"] }
 anyhow.workspace = true

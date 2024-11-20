@@ -3,6 +3,9 @@ name = "agglayer-certificate-orchestrator"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 arc-swap.workspace = true
