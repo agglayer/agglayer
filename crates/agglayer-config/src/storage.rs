@@ -9,7 +9,6 @@ pub(crate) const STORAGE_DIR: &str = "storage";
 const METADATA_DB_NAME: &str = "metadata";
 const PENDING_DB_NAME: &str = "pending";
 const STATE_DB_NAME: &str = "state";
-const NETWORK_STATE_DB_NAME: &str = "network_state";
 const EPOCHS_DB_PATH: &str = "epochs";
 
 /// Configuration for the storage.
@@ -25,8 +24,6 @@ pub struct StorageConfig {
     pub state_db_path: PathBuf,
     /// Custom epochs storage path or inferred from the db path.
     pub epochs_db_path: PathBuf,
-    /// Custom network storage path or inferred from the db path.
-    pub network_state_db_path: PathBuf,
 }
 
 impl Default for StorageConfig {
@@ -36,9 +33,6 @@ impl Default for StorageConfig {
             pending_db_path: Path::new("./").join(STORAGE_DIR).join(PENDING_DB_NAME),
             state_db_path: Path::new("./").join(STORAGE_DIR).join(STATE_DB_NAME),
             epochs_db_path: Path::new("./").join(STORAGE_DIR).join(EPOCHS_DB_PATH),
-            network_state_db_path: Path::new("./")
-                .join(STORAGE_DIR)
-                .join(NETWORK_STATE_DB_NAME),
         }
     }
 }
@@ -67,7 +61,6 @@ impl StorageConfig {
             pending_db_path: db_path.join(PENDING_DB_NAME),
             state_db_path: db_path.join(STATE_DB_NAME),
             epochs_db_path: db_path.join(EPOCHS_DB_PATH),
-            network_state_db_path: db_path.join(NETWORK_STATE_DB_NAME),
         }
     }
 }
@@ -86,8 +79,6 @@ struct StorageConfigHelper {
     pub state_db_path: Option<PathBuf>,
     /// Custom epochs storage path or inferred from the db path.
     pub epochs_db_path: Option<PathBuf>,
-    /// Custom state storage path or inferred from the db path.
-    pub network_state_db_path: Option<PathBuf>,
 }
 
 impl From<StorageConfigHelper> for StorageConfig {
@@ -105,9 +96,6 @@ impl From<StorageConfigHelper> for StorageConfig {
             epochs_db_path: value
                 .epochs_db_path
                 .unwrap_or_else(|| value.db_path.join(EPOCHS_DB_PATH)),
-            network_state_db_path: value
-                .network_state_db_path
-                .unwrap_or_else(|| value.db_path.join(NETWORK_STATE_DB_NAME)),
         }
     }
 }
@@ -126,7 +114,6 @@ impl From<StorageConfig> for StorageConfigHelper {
             pending_db_path: None,
             state_db_path: None,
             epochs_db_path: None,
-            network_state_db_path: None,
         }
     }
 }
@@ -193,10 +180,6 @@ mod tests {
         assert_eq!(config.metadata_db_path, PathBuf::from("/tmp/base/metadata"));
         assert_eq!(config.pending_db_path, PathBuf::from("/tmp/base/pending"));
         assert_eq!(config.state_db_path, PathBuf::from("/tmp/base/state"));
-        assert_eq!(
-            config.network_state_db_path,
-            PathBuf::from("/tmp/base/network_state")
-        );
         assert_eq!(config.epochs_db_path, PathBuf::from("/tmp/base/epochs"));
     }
 }
