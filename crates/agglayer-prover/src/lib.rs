@@ -13,7 +13,7 @@ mod logging;
 mod executor;
 #[cfg(feature = "testutils")]
 pub mod fake;
-mod prover;
+pub mod prover;
 mod rpc;
 
 /// This is the main prover entrypoint.
@@ -92,4 +92,16 @@ pub fn main(cfg: PathBuf) -> Result<()> {
     metrics_runtime.shutdown_timeout(config.shutdown.runtime_timeout);
 
     Ok(())
+}
+
+#[cfg(feature = "testutils")]
+#[tokio::main]
+pub async fn start_prover(config: Arc<ProverConfig>, global_cancellation_token: CancellationToken) {
+    let prover = Prover::builder()
+        .config(config)
+        .cancellation_token(global_cancellation_token)
+        .start()
+        .await
+        .unwrap();
+    prover.await_shutdown().await;
 }
