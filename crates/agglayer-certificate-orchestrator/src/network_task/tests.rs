@@ -1,7 +1,9 @@
 use std::time::Duration;
 
+use agglayer_contracts::mocks::MockL1Rpc;
 use agglayer_storage::tests::mocks::{MockPendingStore, MockStateStore};
 use agglayer_types::CertificateHeader;
+use ethers_signers::Signer as _;
 use mockall::predicate::{always, eq};
 use rstest::rstest;
 
@@ -15,6 +17,7 @@ async fn start_from_zero() {
     let mut pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
+    let mut l1_rpc = MockL1Rpc::new();
     let (certification_notifier, mut receiver) = mpsc::channel(1);
     let clock_ref = clock();
     let network_id = 1.into();
@@ -22,6 +25,11 @@ async fn start_from_zero() {
 
     let certificate = Certificate::new_for_test(network_id, 0);
     let certificate_id = certificate.hash();
+
+    l1_rpc
+        .expect_get_trusted_sequencer_address()
+        .once()
+        .returning(move |_, _| Ok(Certificate::wallet_for_test(network_id).address()));
 
     state
         .expect_get_certificate_header_by_cursor()
@@ -102,6 +110,7 @@ async fn start_from_zero() {
         Arc::new(pending),
         Arc::new(state),
         Arc::new(certifier),
+        Arc::new(l1_rpc),
         certification_notifier,
         clock_ref,
         network_id,
@@ -139,6 +148,7 @@ async fn one_per_epoch() {
     let mut pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
+    let mut l1_rpc = MockL1Rpc::new();
     let (certification_notifier, mut receiver) = mpsc::channel(1);
     let clock_ref = clock();
     let network_id = 1.into();
@@ -148,6 +158,11 @@ async fn one_per_epoch() {
     let certificate2 = Certificate::new_for_test(network_id, 1);
     let certificate_id = certificate.hash();
     let certificate_id2 = certificate2.hash();
+
+    l1_rpc
+        .expect_get_trusted_sequencer_address()
+        .once()
+        .returning(move |_, _| Ok(Certificate::wallet_for_test(network_id).address()));
 
     state
         .expect_get_certificate_header_by_cursor()
@@ -265,6 +280,7 @@ async fn one_per_epoch() {
         Arc::new(pending),
         Arc::new(state),
         Arc::new(certifier),
+        Arc::new(l1_rpc),
         certification_notifier,
         clock_ref,
         network_id,
@@ -321,6 +337,7 @@ async fn changing_epoch_triggers_certify() {
     let mut pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
+    let mut l1_rpc = MockL1Rpc::new();
     let (certification_notifier, mut receiver) = mpsc::channel(1);
     let clock_ref = clock();
     let network_id = 1.into();
@@ -330,6 +347,11 @@ async fn changing_epoch_triggers_certify() {
     let certificate2 = Certificate::new_for_test(network_id, 1);
     let certificate_id = certificate.hash();
     let certificate_id2 = certificate2.hash();
+
+    l1_rpc
+        .expect_get_trusted_sequencer_address()
+        .once()
+        .returning(move |_, _| Ok(Certificate::wallet_for_test(network_id).address()));
 
     state
         .expect_get_certificate_header_by_cursor()
@@ -461,6 +483,7 @@ async fn changing_epoch_triggers_certify() {
         Arc::new(pending),
         Arc::new(state),
         Arc::new(certifier),
+        Arc::new(l1_rpc),
         certification_notifier,
         clock_ref.clone(),
         network_id,
@@ -560,10 +583,16 @@ async fn process_certificate_ok(#[case] existing_cert_header: Option<Certificate
     let mut pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
     let certifier = MockCertifier::new();
+    let mut l1_rpc = MockL1Rpc::new();
     let (certification_notifier, mut _receiver) = mpsc::channel(1);
     let clock_ref = clock();
     let network_id = 1.into();
     let (_sender, certificate_stream) = mpsc::channel(100);
+
+    l1_rpc
+        .expect_get_trusted_sequencer_address()
+        .once()
+        .returning(move |_, _| Ok(Certificate::wallet_for_test(network_id).address()));
 
     state
         .expect_get_certificate_header_by_cursor()
@@ -593,6 +622,7 @@ async fn process_certificate_ok(#[case] existing_cert_header: Option<Certificate
         Arc::new(pending),
         Arc::new(state),
         Arc::new(certifier),
+        Arc::new(l1_rpc),
         certification_notifier,
         clock_ref.clone(),
         network_id,
@@ -601,7 +631,7 @@ async fn process_certificate_ok(#[case] existing_cert_header: Option<Certificate
     .expect("Failed to create a new network task");
 
     let certificate = Certificate::new_for_test(network_id, 0);
-    let result = task.process_certificate(&certificate, 0);
+    let result = task.process_certificate(&certificate, 0).await;
     assert!(result.is_ok());
 }
 
@@ -616,10 +646,16 @@ async fn replace_certificate_illegally(#[case] cur_cert_status: CertificateStatu
     let pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
     let certifier = MockCertifier::new();
+    let mut l1_rpc = MockL1Rpc::new();
     let (certification_notifier, mut _receiver) = mpsc::channel(1);
     let clock_ref = clock();
     let network_id = 1.into();
     let (_sender, certificate_stream) = mpsc::channel(100);
+
+    l1_rpc
+        .expect_get_trusted_sequencer_address()
+        .once()
+        .returning(move |_, _| Ok(Certificate::wallet_for_test(network_id).address()));
 
     state
         .expect_get_certificate_header_by_cursor()
@@ -641,6 +677,7 @@ async fn replace_certificate_illegally(#[case] cur_cert_status: CertificateStatu
         Arc::new(pending),
         Arc::new(state),
         Arc::new(certifier),
+        Arc::new(l1_rpc),
         certification_notifier,
         clock_ref.clone(),
         network_id,
@@ -649,10 +686,58 @@ async fn replace_certificate_illegally(#[case] cur_cert_status: CertificateStatu
     .expect("Failed to create a new network task");
 
     let certificate = Certificate::new_for_test(network_id, 0);
-    let result = task.process_certificate(&certificate, 0);
+    let result = task.process_certificate(&certificate, 0).await;
     assert!(matches!(
         result.unwrap_err(),
         InitialCheckError::IllegalReplacement { .. }
+    ));
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(1))]
+async fn certificate_invalid_signature() {
+    let pending = MockPendingStore::new();
+    let mut state = MockStateStore::new();
+    let certifier = MockCertifier::new();
+    let mut l1_rpc = MockL1Rpc::new();
+    let (certification_notifier, mut _receiver) = mpsc::channel(1);
+    let clock_ref = clock();
+    let network_id = 1.into();
+    let (_sender, certificate_stream) = mpsc::channel(100);
+
+    l1_rpc
+        .expect_get_trusted_sequencer_address()
+        .once()
+        .returning(move |_, _| Ok(Certificate::wallet_for_test(network_id).address()));
+
+    state
+        .expect_read_local_network_state()
+        .returning(|_| Ok(Default::default()));
+
+    let mut task = NetworkTask::new(
+        Arc::new(pending),
+        Arc::new(state),
+        Arc::new(certifier),
+        Arc::new(l1_rpc),
+        certification_notifier,
+        clock_ref.clone(),
+        network_id,
+        certificate_stream,
+    )
+    .expect("Failed to create a new network task");
+
+    let certificate = {
+        let certificate_from_different_network = Certificate::new_for_test(43.into(), 0);
+        let mut certificate = Certificate::new_for_test(network_id, 0);
+        certificate.signature = certificate_from_different_network.signature;
+        certificate
+    };
+
+    let result = task.process_certificate(&certificate, 0).await;
+    assert!(matches!(
+        result.unwrap_err(),
+        InitialCheckError::SignatureVerificationFailed { .. }
     ));
 }
 
@@ -663,6 +748,7 @@ async fn timeout_certifier() {
     let mut pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
+    let mut l1_rpc = MockL1Rpc::new();
     let (certification_notifier, mut receiver) = mpsc::channel(1);
     let clock_ref = clock();
     let network_id = 1.into();
@@ -670,6 +756,11 @@ async fn timeout_certifier() {
 
     let certificate = Certificate::new_for_test(network_id, 0);
     let certificate_id = certificate.hash();
+
+    l1_rpc
+        .expect_get_trusted_sequencer_address()
+        .once()
+        .returning(move |_, _| Ok(Certificate::wallet_for_test(network_id).address()));
 
     state
         .expect_get_certificate_header_by_cursor()
@@ -744,6 +835,7 @@ async fn timeout_certifier() {
         Arc::new(pending),
         Arc::new(state),
         Arc::new(certifier),
+        Arc::new(l1_rpc),
         certification_notifier,
         clock_ref.clone(),
         network_id,

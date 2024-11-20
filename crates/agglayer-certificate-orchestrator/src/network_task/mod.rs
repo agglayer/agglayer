@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_clock::ClockRef;
+use agglayer_contracts::RollupContract;
 use agglayer_storage::{
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
@@ -9,8 +10,8 @@ use agglayer_storage::{
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
 use agglayer_types::{
-    Certificate, CertificateStatus, CertificateStatusError, Hash, Height, LocalNetworkStateData,
-    NetworkId,
+    Address, Certificate, CertificateStatus, CertificateStatusError, Hash, Height,
+    LocalNetworkStateData, NetworkId,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -25,7 +26,7 @@ use crate::{
 const MAX_FUTURE_HEIGHT_DISTANCE: u64 = 10;
 
 /// Network task that is responsible to certify the certificates for a network.
-pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
+pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore, L1Rpc> {
     /// The network id for the network task.
     network_id: NetworkId,
     /// The pending store to read and write the pending certificates.
@@ -34,6 +35,8 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     state_store: Arc<StateStore>,
     /// The certifier client to certify the certificates.
     certifier_client: Arc<CertifierClient>,
+    /// The L1 RPC client.
+    l1_rpc: Arc<L1Rpc>,
     /// The local network state of the network task.
     local_state: LocalNetworkStateData,
     /// The sender to notify that a certificate has been proven.
@@ -50,18 +53,20 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     at_capacity_for_epoch: bool,
 }
 
-impl<CertifierClient, PendingStore, StateStore>
-    NetworkTask<CertifierClient, PendingStore, StateStore>
+impl<CertifierClient, PendingStore, StateStore, L1Rpc>
+    NetworkTask<CertifierClient, PendingStore, StateStore, L1Rpc>
 where
     CertifierClient: Certifier,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateReader + StateWriter,
+    L1Rpc: RollupContract,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         certifier_client: Arc<CertifierClient>,
+        l1_rpc: Arc<L1Rpc>,
         certification_notifier: mpsc::Sender<(
             oneshot::Sender<SettledCertificate>,
             ProvenCertificate,
@@ -82,6 +87,7 @@ where
             state_store,
             certifier_client,
             local_state,
+            l1_rpc,
             certification_notifier,
             clock_ref,
             pending_state: None,
@@ -165,7 +171,7 @@ where
                     "Received a certificate event for {certificate_id} at height {height}"
                 );
 
-                let response = self.process_certificate(&certificate, *next_expected_height);
+                let response = self.process_certificate(&certificate, *next_expected_height).await;
 
                 if let Err(err) = &response {
                     let cert_id = certificate.hash();
@@ -427,7 +433,11 @@ where
     ///
     /// Performs a number of initial checks for the certificate. If these pass,
     /// the certificate is recorded in persistent storage.
-    fn process_certificate(&mut self, certificate: &Certificate, next_height: u64) -> CertResponse {
+    async fn process_certificate(
+        &mut self,
+        certificate: &Certificate,
+        next_height: u64,
+    ) -> CertResponse {
         let height = certificate.height;
         let network_id = certificate.network_id;
 
@@ -443,7 +453,7 @@ where
             return Err(InitialCheckError::FarFuture { height, max_height });
         }
 
-        // TODO signature check + rate limit
+        self.check_certificate_signature(certificate).await?;
 
         let existing_header = self
             .state_store
@@ -472,10 +482,38 @@ where
 
         Ok(())
     }
+
+    pub async fn check_certificate_signature(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<(), InitialCheckError> {
+        let network_id = certificate.network_id;
+
+        // TODO load this from config
+        let proof_signers = Default::default();
+
+        // TODO signature check + rate limit
+        let trusted_signer: Address = self
+            .l1_rpc
+            .get_trusted_sequencer_address(*network_id, proof_signers)
+            .await
+            .map_err(|_| InitialCheckError::TrustedSequencerNotFound { network_id })?
+            .as_fixed_bytes()
+            .into();
+
+        let signer = certificate
+            .signature
+            .recover_signer(certificate.signature_commitment_unchecked().into())
+            .ok_or(InitialCheckError::CannotRecoverSigner)?;
+
+        (trusted_signer == signer)
+            .then_some(())
+            .ok_or(InitialCheckError::SignatureVerificationFailed { trusted_signer })
+    }
 }
 
-impl<CertifierClient, PendingStore, StateStore>
-    NetworkTask<CertifierClient, PendingStore, StateStore>
+impl<CertifierClient, PendingStore, StateStore, L1Rpc>
+    NetworkTask<CertifierClient, PendingStore, StateStore, L1Rpc>
 where
     CertifierClient: Certifier,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,

@@ -7,6 +7,7 @@ use std::{
 };
 
 use agglayer_clock::{ClockRef, Event};
+use agglayer_contracts::RollupContract;
 use agglayer_storage::{
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
@@ -73,6 +74,7 @@ pub struct CertificateOrchestrator<
     EpochsStore,
     PerEpochStore,
     StateStore,
+    L1Rpc,
 > {
     /// Epoch packing task resolver.
     epoch_packing_tasks: EpochPackingTasks,
@@ -112,6 +114,9 @@ pub struct CertificateOrchestrator<
     /// Certificate settlement task future resolver.
     settlement_tasks: SettlementTasks,
 
+    /// The L1 RPC client.
+    l1_rpc: Arc<L1Rpc>,
+
     /// Channel to receive notifications of proven certificatesa in order to
     /// settle them.
     certification_notification:
@@ -122,7 +127,7 @@ pub struct CertificateOrchestrator<
         mpsc::Sender<(oneshot::Sender<SettledCertificate>, ProvenCertificate)>,
 }
 
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
     CertificateOrchestrator<
         E,
         CertifierClient,
@@ -130,6 +135,7 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        L1Rpc,
     >
 where
     PendingStore: PendingCertificateReader,
@@ -148,6 +154,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: ArcSwap<PerEpochStore>,
         state_store: Arc<StateStore>,
+        l1_rpc: Arc<L1Rpc>,
     ) -> Result<Self, Error> {
         let (certification_notification_sender, certification_notification) =
             mpsc::channel(Self::DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE);
@@ -174,12 +181,13 @@ where
             settlement_notifier: Default::default(),
             certification_notification,
             certification_notification_sender,
+            l1_rpc,
         })
     }
 }
 
 #[buildstructor::buildstructor]
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
     CertificateOrchestrator<
         E,
         CertifierClient,
@@ -187,6 +195,7 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        L1Rpc,
     >
 where
     CertifierClient: Certifier,
@@ -195,6 +204,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
+    L1Rpc: RollupContract + Send + Sync + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
     ///
@@ -225,6 +235,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: ArcSwap<PerEpochStore>,
         state_store: Arc<StateStore>,
+        l1_rpc: Arc<L1Rpc>,
     ) -> anyhow::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
             clock,
@@ -236,6 +247,7 @@ where
             epochs_store,
             current_epoch,
             state_store,
+            l1_rpc,
         )?;
 
         // Try to spawn the certifier tasks for the next height of each network
@@ -251,7 +263,7 @@ where
     }
 }
 
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
     CertificateOrchestrator<
         E,
         CertifierClient,
@@ -259,6 +271,7 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        L1Rpc,
     >
 where
     CertifierClient: Certifier,
@@ -267,6 +280,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    L1Rpc: RollupContract + Send + Sync + 'static,
 {
     fn spawn_network_task(&mut self, network_id: NetworkId) -> Result<(), Error> {
         if self.spawned_network_tasks.contains_key(&network_id) {
@@ -281,6 +295,7 @@ where
             self.pending_store.clone(),
             self.state_store.clone(),
             self.certifier_task_builder.clone(),
+            self.l1_rpc.clone(),
             self.certification_notification_sender.clone(),
             self.clock_ref.clone(),
             network_id,
@@ -409,7 +424,7 @@ where
 //
 // When a Certificate is proven, we try to add it to the current epoch.
 // If we succeed, we try to settle it on L1.
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
     CertificateOrchestrator<
         E,
         CertifierClient,
@@ -417,6 +432,7 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        L1Rpc,
     >
 where
     CertifierClient: Certifier,
@@ -424,6 +440,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateReader + StateWriter,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    L1Rpc: Send + Sync + 'static,
 {
     fn handle_settlement_result(
         &mut self,
@@ -540,8 +557,8 @@ where
     }
 }
 
-impl<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore> Future
-    for CertificateOrchestrator<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc> Future
+    for CertificateOrchestrator<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
 where
     A: Certifier,
     E: EpochPacker<PerEpochStore = PerEpochStore>,
@@ -549,6 +566,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    L1Rpc: RollupContract + Send + Sync + 'static,
 {
     type Output = ();
 

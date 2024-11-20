@@ -105,12 +105,14 @@ version = "0.1.0"
 dependencies = [
  "agglayer-clock",
  "agglayer-config",
+ "agglayer-contracts",
  "agglayer-storage",
  "agglayer-types",
  "anyhow",
  "arc-swap",
  "bincode",
  "buildstructor",
+ "ethers-signers",
  "futures-util",
  "mockall",
  "pessimistic-proof",
@@ -171,6 +173,7 @@ dependencies = [
  "async-trait",
  "ethers",
  "ethers-contract",
+ "mockall",
  "reth-primitives",
 ]
 
@@ -297,6 +300,7 @@ name = "agglayer-storage"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-storage",
  "agglayer-types",
  "arc-swap",
  "bincode",
@@ -337,6 +341,7 @@ name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "ethers-signers",
  "hex",
  "pessimistic-proof",
  "reth-primitives",
