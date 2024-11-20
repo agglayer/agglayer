@@ -9,6 +9,11 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(feature, values("cargo-clippy"))',
+] }
+
 [workspace.dependencies]
 anyhow = "1.0.91"
 arc-swap = "1.7.1"
