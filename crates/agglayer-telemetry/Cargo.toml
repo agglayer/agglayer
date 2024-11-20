@@ -7,13 +7,13 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-axum = "=0.7.7"
+axum = "=0.7.9"
 buildstructor.workspace = true
 futures.workspace = true
 lazy_static.workspace = true
-opentelemetry = { version = "0.24.0", features = ["metrics"] }
+opentelemetry = { version = "0.27.0", features = ["metrics"] }
 opentelemetry-prometheus = "0.17.0"
-opentelemetry_sdk = { version = "0.24.1", features = ["metrics"] }
+opentelemetry_sdk = { version = "0.27.0", features = ["metrics"] }
 prometheus = "0.13.3"
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
