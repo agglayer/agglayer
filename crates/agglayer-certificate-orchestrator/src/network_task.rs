@@ -336,105 +336,81 @@ where
                     hash = certificate_id.to_string(),
                     "Error during certification process of {certificate_id}: {}", error
                 );
-                let certificate_error: Option<(CertificateId, CertificateStatusError)> = match error
-                {
-                    CertificationError::TrustedSequencerNotFound(certificate_id, network) => {
-                        Some((
-                            certificate_id,
-                            CertificateStatusError::TrustedSequencerNotFound(network),
-                        ))
+                let error: CertificateStatusError = match error {
+                    CertificationError::TrustedSequencerNotFound(network) => {
+                        CertificateStatusError::TrustedSequencerNotFound(network)
                     }
-                    CertificationError::ProofVerificationFailed {
-                        source,
-                        certificate_id,
-                    } => Some((certificate_id, source.into())),
+                    CertificationError::ProofVerificationFailed { source } => source.into(),
 
-                    CertificationError::ProverExecutionFailed {
-                        source,
-                        certificate_id,
-                    } => Some((
-                        certificate_id,
+                    CertificationError::ProverExecutionFailed { source } => {
                         CertificateStatusError::ProofGenerationError {
                             generation_type: agglayer_types::GenerationType::Prover,
                             source,
-                        },
-                    )),
-
-                    CertificationError::NativeExecutionFailed {
-                        source,
-                        certificate_id,
-                    } => Some((
-                        certificate_id,
+                        }
+                    }
+                    CertificationError::NativeExecutionFailed { source } => {
                         CertificateStatusError::ProofGenerationError {
                             generation_type: agglayer_types::GenerationType::Native,
                             source,
-                        },
-                    )),
+                        }
+                    }
 
-                    CertificationError::Types {
-                        source,
-                        certificate_id,
-                    } => Some((certificate_id, source.into())),
+                    CertificationError::Types { source } => source.into(),
 
                     CertificationError::Storage(error) => {
-                        warn!(
-                            hash = certificate_id.to_string(),
+                        let error = format!(
                             "Storage error happened in the certification process of \
                              {certificate_id}: {:?}",
                             error
                         );
-                        None
+                        warn!(hash = certificate_id.to_string(), error);
+
+                        CertificateStatusError::InternalError(error)
                     }
-                    CertificationError::Serialize {
-                        certificate_id,
-                        source,
-                    } => {
-                        warn!(
-                            hash = certificate_id.to_string(),
+                    CertificationError::Serialize { source } => {
+                        let error = format!(
                             "Serialization error happened in the certification process of \
                              {certificate_id}: {:?}",
                             source
                         );
-                        None
+                        warn!(hash = certificate_id.to_string(), error);
+
+                        CertificateStatusError::InternalError(error)
                     }
-                    CertificationError::Deserialize {
-                        certificate_id,
-                        source,
-                    } => {
-                        warn!(
-                            hash = certificate_id.to_string(),
+                    CertificationError::Deserialize { source } => {
+                        let error = format!(
                             "Deserialization error happened in the certification process of \
                              {certificate_id}: {:?}",
                             source
                         );
-                        None
+                        warn!(hash = certificate_id.to_string(), error);
+                        CertificateStatusError::InternalError(error)
                     }
-                    CertificationError::InternalError => {
-                        warn!(
-                            hash = certificate_id.to_string(),
+                    CertificationError::InternalError(error) => {
+                        let error = format!(
                             "Internal error happened in the certification process of \
-                             {certificate_id}"
+                             {certificate_id}: {}",
+                            error
                         );
+                        warn!(hash = certificate_id.to_string(), error);
 
-                        return Err(Error::InternalError);
+                        CertificateStatusError::InternalError(error)
                     }
                 };
 
-                if let Some((certificate_id, error)) = certificate_error {
-                    if self
-                        .state_store
-                        .update_certificate_header_status(
-                            &certificate_id,
-                            &CertificateStatus::InError { error },
-                        )
-                        .is_err()
-                    {
-                        error!(
-                            hash = certificate_id.to_string(),
-                            "Certificate {certificate_id} in error and failed to update the \
-                             certificate header status"
-                        );
-                    }
+                if self
+                    .state_store
+                    .update_certificate_header_status(
+                        &certificate_id,
+                        &CertificateStatus::InError { error },
+                    )
+                    .is_err()
+                {
+                    error!(
+                        hash = certificate_id.to_string(),
+                        "Certificate {certificate_id} in error and failed to update the \
+                         certificate header status"
+                    );
                 }
                 Ok(())
             }
@@ -1051,5 +1027,112 @@ mod tests {
             .unwrap();
 
         assert_eq!(next_expected_height, 2);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    #[timeout(Duration::from_secs(1))]
+    async fn timeout_certifier() {
+        let mut pending = MockPendingStore::new();
+        let mut state = MockStateStore::new();
+        let mut certifier = MockCertifier::new();
+        let (certification_notifier, mut receiver) = mpsc::channel(1);
+        let clock_ref = clock();
+        let network_id = 1.into();
+        let (sender, certificate_stream) = mpsc::channel(100);
+
+        let certificate = Certificate::new_for_test(network_id, 0);
+        let certificate_id = certificate.hash();
+
+        pending
+            .expect_get_certificate()
+            .once()
+            .with(eq(network_id), eq(0))
+            .returning(|network_id, height| {
+                Ok(Some(Certificate::new_for_test(network_id, height)))
+            });
+
+        state
+            .expect_get_certificate_header()
+            .once()
+            .with(eq(certificate_id))
+            .returning(|certificate_id| {
+                Ok(Some(agglayer_types::CertificateHeader {
+                    network_id: 1.into(),
+                    height: 0,
+                    epoch_number: None,
+                    certificate_index: None,
+                    certificate_id: *certificate_id,
+                    new_local_exit_root: [0; 32].into(),
+                    metadata: [0; 32].into(),
+                    status: CertificateStatus::Pending,
+                }))
+            });
+
+        certifier
+            .expect_certify()
+            .once()
+            .with(always(), eq(network_id), eq(0))
+            .return_once(move |_new_state, _network_id, _height| {
+                Ok(Box::pin(async move {
+                    Err(CertificationError::InternalError("TimedOut".to_string()))
+                }))
+            });
+
+        let expected_error = "Internal error happened in the certification process of \
+                              0x911464a00ada773e3659bc570bfecf0819466498cd534f770dc97a6a59774d28: \
+                              TimedOut"
+            .to_string();
+
+        state
+            .expect_update_certificate_header_status()
+            .once()
+            .with(
+                eq(certificate_id),
+                eq(CertificateStatus::InError {
+                    error: CertificateStatusError::InternalError(expected_error),
+                }),
+            )
+            .returning(|_, _| Ok(()));
+
+        state
+            .expect_read_local_network_state()
+            .returning(|_| Ok(Default::default()));
+
+        let mut task = NetworkTask::new(
+            Arc::new(pending),
+            Arc::new(state),
+            Arc::new(certifier),
+            certification_notifier,
+            clock_ref.clone(),
+            network_id,
+            certificate_stream,
+        )
+        .expect("Failed to create a new network task");
+
+        let mut epochs = task.clock_ref.subscribe().unwrap();
+        let mut next_expected_height = 0;
+
+        sender
+            .send(NewCertificate {
+                certificate_id,
+                height: 0,
+            })
+            .await
+            .expect("Failed to send the certificate");
+
+        tokio::spawn(async move {
+            let (sender, cert) = receiver.recv().await.unwrap();
+
+            sender
+                .send(SettledCertificate(cert.0, cert.2, 0, 0))
+                .expect("Failed to send");
+        });
+
+        task.make_progress(&mut epochs, &mut next_expected_height)
+            .await
+            .unwrap();
+
+        assert_eq!(next_expected_height, 0);
     }
 }

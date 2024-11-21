@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, thread, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
 use agglayer_config::Config;
@@ -102,6 +102,98 @@ async fn happy_path() {
     scenario.teardown();
 }
 
+#[rstest::rstest]
+#[test_log::test(tokio::test)]
+#[timeout(Duration::from_secs(10))]
+async fn prover_timeout() {
+    let scenario = FailScenario::setup();
+    let base_path = TempDBDir::new();
+    let mut config = Config::new(&base_path.path);
+
+    let mut pending_store = MockPendingStore::new();
+    let mut l1_rpc = MockL1Rpc::new();
+    let prover_config = agglayer_config::prover::ProverConfig {
+        grpc_endpoint: next_available_addr(),
+        cpu_prover: agglayer_config::prover::CpuProverConfig {
+            proving_timeout: Duration::from_secs(1),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    config.prover_entrypoint = format!("http://127.0.0.1:{}", prover_config.grpc_endpoint.port());
+
+    let prover_config = Arc::new(prover_config);
+
+    let cancellation = CancellationToken::new();
+    let prover_cancellation_token = cancellation.clone();
+
+    thread::spawn(move || {
+        agglayer_prover::start_prover(prover_config, prover_cancellation_token);
+    });
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    let local_state = LocalNetworkStateData::default();
+    let network: NetworkId = 1.into();
+    let height = 0;
+
+    let state = Forest::new(vec![]);
+
+    let withdrawals = vec![];
+
+    let (certificate, signer) = state.clone().apply_events(&[], &withdrawals);
+
+    let signer: H160 = H160(**signer);
+    let certificate_id = certificate.hash();
+
+    pending_store
+        .expect_get_certificate()
+        .once()
+        .with(eq(network), eq(height))
+        .return_once(|_, _| Ok(Some(certificate)));
+
+    pending_store
+        .expect_get_proof()
+        .once()
+        .with(eq(certificate_id))
+        .return_once(|_| Ok(None));
+
+    pending_store
+        .expect_insert_generated_proof()
+        .never()
+        .with(eq(certificate_id), always())
+        .return_once(|_, _| Ok(()));
+
+    l1_rpc
+        .expect_get_trusted_sequencer_address()
+        .once()
+        .returning(move |_, _| Ok(signer));
+
+    fail::cfg(
+        "notifier::certifier::certify::before_verifying_proof",
+        "return()",
+    )
+    .unwrap();
+
+    let certifier = CertifierClient::try_new(
+        config.prover_entrypoint.clone(),
+        Arc::new(pending_store),
+        Arc::new(l1_rpc),
+        Arc::new(config),
+    )
+    .await
+    .unwrap();
+
+    let result = certifier
+        .certify(local_state.clone(), network, height)
+        .unwrap()
+        .await;
+
+    assert!(result.is_err());
+
+    scenario.teardown();
+}
+
 mockall::mock! {
     L1Rpc {}
     #[async_trait::async_trait]
@@ -127,4 +219,26 @@ mockall::mock! {
             proof: ::ethers::core::types::Bytes,
         ) -> ethers::contract::ContractCall<NonceManagerMiddleware<Provider<MockProvider> > ,()> ;
     }
+}
+fn next_available_addr() -> std::net::SocketAddr {
+    use std::net::{TcpListener, TcpStream};
+
+    assert!(
+        std::env::var("NEXTEST").is_ok(),
+        "Due to concurrency issues, the rpc tests have to be run under `cargo nextest`",
+    );
+
+    let host = "127.0.0.1";
+    // Request a random available port from the OS
+    let listener = TcpListener::bind((host, 0)).expect("Can't bind to an available port");
+    let addr = listener.local_addr().expect("Can't find an available port");
+
+    // Create and accept a connection (which we'll promptly drop) in order to force
+    // the port into the TIME_WAIT state, ensuring that the port will be
+    // reserved from some limited amount of time (roughly 60s on some Linux
+    // systems)
+    let _sender = TcpStream::connect(addr).expect("Can't connect to an available port");
+    let _incoming = listener.accept().expect("Can't accept an available port");
+
+    addr
 }

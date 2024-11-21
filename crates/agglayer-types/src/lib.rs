@@ -109,6 +109,8 @@ pub enum CertificateStatusError {
     TypeConversionError(#[from] Error),
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
+    #[error("Internal error")]
+    InternalError(String),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]

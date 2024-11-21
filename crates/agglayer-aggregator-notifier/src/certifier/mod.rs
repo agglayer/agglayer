@@ -131,27 +131,18 @@ where
             let signer = l1_rpc
                 .get_trusted_sequencer_address(*network_id, proof_signers)
                 .await
-                .map_err(|_| {
-                    CertificationError::TrustedSequencerNotFound(certificate_id, network_id)
-                })?;
+                .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
 
             let initial_state = LocalNetworkState::from(state.clone());
 
             let signer = Address::new(*signer.as_fixed_bytes());
-            let multi_batch_header =
-                state
-                    .apply_certificate(&certificate, signer)
-                    .map_err(|source| CertificationError::Types {
-                        certificate_id,
-                        source,
-                    })?;
+            let multi_batch_header = state
+                .apply_certificate(&certificate, signer)
+                .map_err(|source| CertificationError::Types { source })?;
 
             // Perform the native PP execution
             let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)
-                .map_err(|source| CertificationError::NativeExecutionFailed {
-                    source,
-                    certificate_id,
-                })?;
+                .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
             info!(
                 "Successfully executed the native PP for the Certificate {}",
@@ -161,16 +152,10 @@ where
             let request = ProofGenerationRequest {
                 initial_state: default_bincode_options()
                     .serialize(&initial_state)
-                    .map_err(|source| CertificationError::Serialize {
-                        certificate_id,
-                        source,
-                    })?,
+                    .map_err(|source| CertificationError::Serialize { source })?,
                 batch_header: default_bincode_options()
                     .serialize(&multi_batch_header)
-                    .map_err(|source| CertificationError::Serialize {
-                        certificate_id,
-                        source,
-                    })?,
+                    .map_err(|source| CertificationError::Serialize { source })?,
             };
 
             info!("Sending the Proof generation request to the agglayer-prover service...");
@@ -184,22 +169,16 @@ where
                     {
                         match error {
                             agglayer_prover_types::Error::UnableToExecuteProver => {
-                                CertificationError::InternalError
+                                CertificationError::InternalError("Unable to execute prover".into())
                             }
-                            agglayer_prover_types::Error::ProverFailed(_) => {
-                                CertificationError::InternalError
+                            agglayer_prover_types::Error::ProverFailed(error) => {
+                                CertificationError::InternalError(error)
                             }
                             agglayer_prover_types::Error::ProofVerificationFailed(error) => {
-                                CertificationError::ProofVerificationFailed {
-                                    certificate_id,
-                                    source: error,
-                                }
+                                CertificationError::ProofVerificationFailed { source: error }
                             }
                             agglayer_prover_types::Error::ExecutorFailed(source) => {
-                                CertificationError::NativeExecutionFailed {
-                                    certificate_id,
-                                    source,
-                                }
+                                CertificationError::NativeExecutionFailed { source }
                             }
                         }
                     } else {
@@ -208,17 +187,14 @@ where
                              {error:?}"
                         );
 
-                        CertificationError::InternalError
+                        CertificationError::InternalError(error.message().to_string())
                     }
                 })?;
 
             let proof = prover_response.into_inner().proof;
             let proof: Proof = default_bincode_options()
                 .deserialize(&proof)
-                .map_err(|source| CertificationError::Deserialize {
-                    certificate_id,
-                    source,
-                })?;
+                .map_err(|source| CertificationError::Deserialize { source })?;
 
             debug!("Proof successfully generated!");
 
@@ -229,7 +205,6 @@ where
                 error!("Failed to verify the p-proof: {:?}", error);
 
                 Err(CertificationError::ProofVerificationFailed {
-                    certificate_id,
                     source: error.into(),
                 })
             } else {

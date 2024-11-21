@@ -14,42 +14,23 @@ pub enum PreCertificationError {
 #[derive(thiserror::Error, Debug)]
 pub enum CertificationError {
     #[error(
-        "Failed to retrieve the trusted sequencer address for network {1} during proving phase \
-         for {0}"
+        "Failed to retrieve the trusted sequencer address for network {0} during proving phase"
     )]
-    TrustedSequencerNotFound(CertificateId, NetworkId),
+    TrustedSequencerNotFound(NetworkId),
     #[error("proof verification failed")]
-    ProofVerificationFailed {
-        certificate_id: CertificateId,
-        source: ProofVerificationError,
-    },
+    ProofVerificationFailed { source: ProofVerificationError },
     #[error("prover execution failed: {source}")]
-    ProverExecutionFailed {
-        certificate_id: CertificateId,
-        source: ProofError,
-    },
+    ProverExecutionFailed { source: ProofError },
     #[error("native execution failed: {source:?}")]
-    NativeExecutionFailed {
-        certificate_id: CertificateId,
-        source: ProofError,
-    },
+    NativeExecutionFailed { source: ProofError },
     #[error("Type error: {source}")]
-    Types {
-        certificate_id: CertificateId,
-        source: agglayer_types::Error,
-    },
+    Types { source: agglayer_types::Error },
     #[error("Serialize error")]
-    Serialize {
-        certificate_id: CertificateId,
-        source: bincode::Error,
-    },
+    Serialize { source: bincode::Error },
     #[error("Deserialize error")]
-    Deserialize {
-        certificate_id: CertificateId,
-        source: bincode::Error,
-    },
-    #[error("internal error")]
-    InternalError,
+    Deserialize { source: bincode::Error },
+    #[error("internal error: {0}")]
+    InternalError(String),
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
 }
