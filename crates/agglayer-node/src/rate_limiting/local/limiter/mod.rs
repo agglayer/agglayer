@@ -1,4 +1,5 @@
 use super::state::{self, RawState};
+use crate::log_assert;
 
 mod core;
 mod slot_tracker;
@@ -43,18 +44,22 @@ impl<S: RawState> RateLimiter<S> {
     /// Release a rate limiting slot.
     pub fn release(&mut self, slot: SlotTracker) {
         match self {
-            Self::Disabled => panic!("Release a slot in a disabled rate limiter"),
             Self::Limited(inner) => inner.release(slot),
             Self::Unlimited => drop(slot.release()),
+            Self::Disabled => {
+                log_assert!(slot.release() == 0, "Event in disabled rate limiter");
+            }
         }
     }
 
     /// Record a rate limiting event.
     pub fn record(&mut self, time: S::Instant, slot: SlotTracker) {
         match self {
-            Self::Disabled => panic!("Record an event in a disabled rate limiter"),
             Self::Limited(inner) => inner.record(time, slot),
             Self::Unlimited => drop(slot.release()),
+            Self::Disabled => {
+                log_assert!(slot.release() == 0, "Event in disabled rate limiter");
+            }
         }
     }
 }
