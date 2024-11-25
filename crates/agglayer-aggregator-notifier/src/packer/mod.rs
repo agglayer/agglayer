@@ -13,7 +13,8 @@ use agglayer_types::{
 use bincode::Options;
 use futures::future::BoxFuture;
 use pessimistic_proof::PessimisticProofOutput;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
+use tracing::{Instrument, Span};
 
 #[cfg(test)]
 mod tests;
@@ -113,78 +114,90 @@ where
                 proof.into(),
             );
 
+        let span = Span::current();
+        span.record("certificate_id", hash.clone());
+        span.record("network_id", *network_id);
+        if let Ok(data) = serde_json::to_string(&contract_call.function.inputs) {
+            span.record("call_data", data);
+        } else {
+            warn!("Failed to serialize contract call data for {}", hash);
+        }
+
         let state_store = self.state_store.clone();
         let config = self.config.clone();
         // Call the Provider
-        let fut = Box::pin(async move {
-            let _tx = contract_call
-                .send()
-                .await
-                .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
-                // .map_err(SettlementError::ContractError)?
-                .map_err(|e| {
-                    let error_str =
-                        RollupManagerRpc::decode_contract_revert(&e).unwrap_or(e.to_string());
+        let fut = Box::pin(
+            async move {
+                let _tx = contract_call
+                    .send()
+                    .await
+                    .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
+                    // .map_err(SettlementError::ContractError)?
+                    .map_err(|e| {
+                        let error_str =
+                            RollupManagerRpc::decode_contract_revert(&e).unwrap_or(e.to_string());
 
-                    error!(
+                        error!(
                         error_code = %e,
                         error = error_str,
                         hash,
                             "Failed to settle the certificate {certificate_id}: {}", error_str);
 
-                    Error::SettlementError {
+                        Error::SettlementError {
+                            certificate_id,
+                            error: error_str,
+                        }
+                    })?
+                    .interval(config.retry_interval)
+                    .retries(config.max_retries)
+                    .confirmations(config.confirmations)
+                    .await
+                    .map_err(|error| Error::SettlementError {
                         certificate_id,
-                        error: error_str,
-                    }
-                })?
-                .interval(config.retry_interval)
-                .retries(config.max_retries)
-                .confirmations(config.confirmations)
-                .await
-                .map_err(|error| Error::SettlementError {
-                    certificate_id,
-                    error: error.to_string(),
-                })?
-                // If the result is `None`, it means the transaction is no longer
-                // in the mempool.
-                .ok_or(Error::SettlementError {
-                    certificate_id,
-                    error: "No receipt hash returned, transaction still in mempool".to_string(),
-                })?;
+                        error: error.to_string(),
+                    })?
+                    // If the result is `None`, it means the transaction is no longer
+                    // in the mempool.
+                    .ok_or(Error::SettlementError {
+                        certificate_id,
+                        error: "No receipt hash returned, transaction still in mempool".to_string(),
+                    })?;
 
-            if let Err(error) = state_store
-                .update_certificate_header_status(&certificate_id, &CertificateStatus::Settled)
-            {
-                error!(
-                    hash,
-                    "Certificate settled but failed to update the certificate status of {} due \
-                     to: {}",
-                    certificate_id,
-                    error
-                );
-            }
-            if let Err(error) = state_store.set_latest_settled_certificate_for_network(
-                &network_id,
-                &height,
-                &certificate_id,
-                &epoch_number,
-                &certificate_index,
-            ) {
-                error!(
-                    hash,
-                    "Certificate settled but failed to update the latest settled certificate for \
-                     network {} with {} due to: {}",
+                if let Err(error) = state_store
+                    .update_certificate_header_status(&certificate_id, &CertificateStatus::Settled)
+                {
+                    error!(
+                        hash,
+                        "Certificate settled but failed to update the certificate status of {} \
+                         due to: {}",
+                        certificate_id,
+                        error
+                    );
+                }
+                if let Err(error) = state_store.set_latest_settled_certificate_for_network(
+                    &network_id,
+                    &height,
+                    &certificate_id,
+                    &epoch_number,
+                    &certificate_index,
+                ) {
+                    error!(
+                        hash,
+                        "Certificate settled but failed to update the latest settled certificate \
+                         for network {} with {} due to: {}",
+                        network_id,
+                        certificate_id,
+                        error
+                    );
+                }
+
+                Ok::<_, Error>((
                     network_id,
-                    certificate_id,
-                    error
-                );
+                    SettledCertificate(certificate_id, height, epoch_number, certificate_index),
+                ))
             }
-
-            Ok::<_, Error>((
-                network_id,
-                SettledCertificate(certificate_id, height, epoch_number, certificate_index),
-            ))
-        });
+            .in_current_span(),
+        );
 
         Ok(fut)
     }
