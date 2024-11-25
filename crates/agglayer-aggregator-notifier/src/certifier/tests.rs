@@ -174,6 +174,11 @@ async fn prover_timeout() {
         .once()
         .returning(move |_, _| Ok(signer));
 
+    l1_rpc
+        .expect_get_l1_info_root()
+        .once()
+        .returning(move |_| Ok(Default::default()));
+
     fail::cfg(
         "notifier::certifier::certify::before_verifying_proof",
         "return()",
