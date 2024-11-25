@@ -6,13 +6,14 @@ expression: json
   "id": 0,
   "jsonrpc": "2.0",
   "result": {
-    "certificate_id": "0x457c191a3eac88c944380a62ffcd6a8b558ec5739d4003a6b38039b6a934ce5b",
+    "certificate_id": "0xdd5dc1e27997feb46da34f0bbf412c0f7f501119954c5e1639c948ccc7f0d92f",
     "certificate_index": null,
     "epoch_number": null,
     "height": 2,
     "metadata": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "network_id": 1,
-    "new_local_exit_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "new_local_exit_root": "0x0101010101010101010101010101010101010101010101010101010101010101",
+    "prev_local_exit_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "status": "Pending"
   }
 }

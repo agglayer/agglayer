@@ -52,6 +52,7 @@ fn epoch_packer_can_settle_one_certificate() {
                 epoch_number: Some(0),
                 certificate_index: Some(0),
                 certificate_id,
+                prev_local_exit_root: [1; 32].into(),
                 new_local_exit_root: [0; 32].into(),
                 metadata: [0; 32].into(),
                 status: agglayer_types::CertificateStatus::Candidate,
