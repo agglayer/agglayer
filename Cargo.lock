@@ -89,6 +89,7 @@ dependencies = [
  "reth-primitives",
  "rstest",
  "serde",
+ "serde_json",
  "sp1-prover",
  "sp1-sdk",
  "test-log",
