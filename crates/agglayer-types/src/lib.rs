@@ -112,6 +112,8 @@ pub enum CertificateStatusError {
     TrustedSequencerNotFound(NetworkId),
     #[error("Internal error")]
     InternalError(String),
+    #[error("Settlement error: {0}")]
+    SettlementError(String),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]

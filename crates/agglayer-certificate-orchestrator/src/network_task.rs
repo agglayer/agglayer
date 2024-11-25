@@ -38,7 +38,10 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     /// The local network state of the network task.
     local_state: LocalNetworkStateData,
     /// The sender to notify that a certificate has been proven.
-    certification_notifier: mpsc::Sender<(oneshot::Sender<SettledCertificate>, ProvenCertificate)>,
+    certification_notifier: mpsc::Sender<(
+        oneshot::Sender<Result<SettledCertificate, String>>,
+        ProvenCertificate,
+    )>,
     /// The clock reference to subscribe to the epoch events and check for
     /// current epoch.
     clock_ref: ClockRef,
@@ -64,7 +67,7 @@ where
         state_store: Arc<StateStore>,
         certifier_client: Arc<CertifierClient>,
         certification_notifier: mpsc::Sender<(
-            oneshot::Sender<SettledCertificate>,
+            oneshot::Sender<Result<SettledCertificate, String>>,
             ProvenCertificate,
         )>,
         clock_ref: ClockRef,
@@ -495,40 +498,67 @@ where
             error!("Failed to send the proven certificate notification");
         }
 
-        if let Ok(SettledCertificate(certificate_id, _height, _epoch, _index)) = receiver.await {
-            info!(
-                hash = certificate_id.to_string(),
-                "Received a certificate settlement notification"
-            );
-            if let Some(new) = self.pending_state.take() {
-                debug!(
-                    "Updated the state for network {} with the new state {} > {}",
-                    self.network_id,
-                    self.local_state.get_roots().display_to_hex(),
-                    new.get_roots().display_to_hex()
-                );
+        if let Ok(result) = receiver.await {
+            match result {
+                Ok(SettledCertificate(certificate_id, _height, _epoch, _index)) => {
+                    info!(
+                        hash = certificate_id.to_string(),
+                        "Received a certificate settlement notification"
+                    );
+                    if let Some(new) = self.pending_state.take() {
+                        debug!(
+                            "Updated the state for network {} with the new state {} > {}",
+                            self.network_id,
+                            self.local_state.get_roots().display_to_hex(),
+                            new.get_roots().display_to_hex()
+                        );
 
-                self.local_state = new;
+                        self.local_state = new;
 
-                // Store the current state
-                let new_leaves = certificate
-                    .bridge_exits
-                    .iter()
-                    .map(|exit| exit.hash().into())
-                    .collect::<Vec<Hash>>();
+                        // Store the current state
+                        let new_leaves = certificate
+                            .bridge_exits
+                            .iter()
+                            .map(|exit| exit.hash().into())
+                            .collect::<Vec<Hash>>();
 
-                _ = self.state_store.write_local_network_state(
-                    &certificate.network_id,
-                    &self.local_state,
-                    new_leaves.as_slice(),
-                );
-            } else {
-                error!(
-                    "Missing pending state for network {} needed upon settlement, current state: \
-                     {}",
-                    self.network_id,
-                    self.local_state.get_roots().display_to_hex()
-                );
+                        _ = self.state_store.write_local_network_state(
+                            &certificate.network_id,
+                            &self.local_state,
+                            new_leaves.as_slice(),
+                        );
+                    } else {
+                        error!(
+                            "Missing pending state for network {} needed upon settlement, current \
+                             state: {}",
+                            self.network_id,
+                            self.local_state.get_roots().display_to_hex()
+                        );
+                    }
+                }
+                Err(error) => {
+                    error!(
+                        hash = certificate_id.to_string(),
+                        "Failed to settle the certificate: {}", error
+                    );
+
+                    if self
+                        .state_store
+                        .update_certificate_header_status(
+                            &certificate_id,
+                            &CertificateStatus::InError {
+                                error: CertificateStatusError::SettlementError(error),
+                            },
+                        )
+                        .is_err()
+                    {
+                        error!(
+                            hash = certificate_id.to_string(),
+                            "Certificate {certificate_id} in error and failed to update the \
+                             certificate header status"
+                        );
+                    }
+                }
             }
         }
 
@@ -647,7 +677,7 @@ mod tests {
         tokio::spawn(async move {
             let (sender, cert) = receiver.recv().await.unwrap();
 
-            _ = sender.send(SettledCertificate(cert.0, cert.2, 0, 0));
+            _ = sender.send(Ok(SettledCertificate(cert.0, cert.2, 0, 0)));
         });
 
         task.make_progress(&mut epochs, &mut next_expected_height)
@@ -810,7 +840,7 @@ mod tests {
             let (sender, cert) = receiver.recv().await.unwrap();
 
             sender
-                .send(SettledCertificate(cert.0, cert.2, 0, 0))
+                .send(Ok(SettledCertificate(cert.0, cert.2, 0, 0)))
                 .expect("Failed to send");
         });
 
@@ -997,13 +1027,13 @@ mod tests {
             let (sender, cert) = receiver.recv().await.unwrap();
 
             sender
-                .send(SettledCertificate(cert.0, cert.2, 0, 0))
+                .send(Ok(SettledCertificate(cert.0, cert.2, 0, 0)))
                 .expect("Failed to send");
 
             let (sender, cert) = receiver.recv().await.unwrap();
 
             sender
-                .send(SettledCertificate(cert.0, cert.2, 1, 0))
+                .send(Ok(SettledCertificate(cert.0, cert.2, 1, 0)))
                 .expect("Failed to send");
         });
 
@@ -1131,7 +1161,7 @@ mod tests {
             let (sender, cert) = receiver.recv().await.unwrap();
 
             sender
-                .send(SettledCertificate(cert.0, cert.2, 0, 0))
+                .send(Ok(SettledCertificate(cert.0, cert.2, 0, 0)))
                 .expect("Failed to send");
         });
 
