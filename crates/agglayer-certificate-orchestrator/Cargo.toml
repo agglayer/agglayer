@@ -17,6 +17,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 
 agglayer-clock = { path = "../agglayer-clock" }
+agglayer-contracts = { path = "../agglayer-contracts" }
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-types = { path = "../agglayer-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
@@ -25,9 +26,12 @@ futures-util = "0.3.30"
 
 [dev-dependencies]
 agglayer-clock = { path = "../agglayer-clock", features = ["testutils"] }
+agglayer-contracts = { path = "../agglayer-contracts", features = ["testutils"] }
 agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
 agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
+
 mockall.workspace = true
 rstest.workspace = true
+ethers-signers.workspace = true
 test-log.workspace = true

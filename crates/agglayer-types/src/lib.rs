@@ -5,6 +5,7 @@ use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
+use pessimistic_proof::multi_batch_header::signature_commitment;
 use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::Smt;
 use pessimistic_proof::LocalNetworkState;
@@ -259,8 +260,25 @@ impl Certificate {
 
 impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
+    pub fn wallet_for_test(network_id: NetworkId) -> ethers_signers::LocalWallet {
+        let fake_private_key = keccak256_combine([network_id.to_be_bytes()]);
+        ethers_signers::LocalWallet::from_bytes(&fake_private_key).unwrap()
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn sign(&mut self, wallet: ethers_signers::LocalWallet) {
+        let sighash = self.signature_commitment_unchecked().into();
+        let signature = wallet.sign_hash(sighash).unwrap();
+        self.signature = Signature {
+            r: U256::from_limbs(signature.r.0),
+            s: U256::from_limbs(signature.s.0),
+            odd_y_parity: signature.recovery_id().unwrap().is_y_odd(),
+        };
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
-        Certificate {
+        let mut this = Certificate {
             network_id,
             height,
             prev_local_exit_root: [0; 32],
@@ -269,14 +287,22 @@ impl Certificate {
             imported_bridge_exits: Vec::new(),
             signature: Signature::default(),
             metadata: Default::default(),
-        }
+        };
+        this.sign(Self::wallet_for_test(network_id));
+        this
+    }
+
+    pub fn bridge_exit_hashes(&self) -> impl ExactSizeIterator<Item = Digest> + '_ {
+        self.bridge_exits.iter().map(|exit| exit.hash())
+    }
+
+    pub fn imported_bridge_exit_hashes(&self) -> impl ExactSizeIterator<Item = Digest> + '_ {
+        self.imported_bridge_exits.iter().map(|exit| exit.hash())
     }
 
     pub fn hash(&self) -> CertificateId {
-        let commit_bridge_exits =
-            keccak256_combine(self.bridge_exits.iter().map(|exit| exit.hash()));
-        let commit_imported_bridge_exits =
-            keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
+        let commit_bridge_exits = keccak256_combine(self.bridge_exit_hashes());
+        let commit_imported_bridge_exits = keccak256_combine(self.imported_bridge_exit_hashes());
 
         keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
@@ -288,6 +314,12 @@ impl Certificate {
             self.metadata.as_slice(),
         ])
         .into()
+    }
+
+    /// Get signature commitment without checking that the declared state
+    /// matches the calculated state.
+    pub fn signature_commitment_unchecked(&self) -> Digest {
+        signature_commitment(self.new_local_exit_root, self.imported_bridge_exits.iter())
     }
 
     /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].

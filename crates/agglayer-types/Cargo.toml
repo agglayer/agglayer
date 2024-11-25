@@ -5,8 +5,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-hex.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
+
+ethers-signers = { workspace = true, optional = true }
+hex.workspace = true
 reth-primitives.workspace = true
 serde.workspace = true
 serde_with.workspace = true
@@ -15,6 +17,9 @@ sp1-core-machine.workspace = true
 thiserror.workspace = true
 bincode.workspace = true
 
+[dev-dependencies]
+ethers-signers.workspace = true
+
 [features]
 default = []
-testutils = []
+testutils = ["ethers-signers"]

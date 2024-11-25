@@ -1,4 +1,6 @@
-use agglayer_types::{CertificateId, CertificateStatus, Height, NetworkId, ProofVerificationError};
+use agglayer_types::{
+    Address, CertificateId, CertificateStatus, Height, NetworkId, ProofVerificationError,
+};
 use pessimistic_proof::ProofError;
 
 #[derive(thiserror::Error, Debug)]
@@ -17,6 +19,15 @@ pub enum InitialCheckError {
 
     #[error("Cannot replace an existing {status} certificate")]
     IllegalReplacement { status: CertificateStatus },
+
+    #[error("Trusted sequencer not found for network {network_id}")]
+    TrustedSequencerNotFound { network_id: NetworkId },
+
+    #[error("Cannot recover signer from signature")]
+    CannotRecoverSigner,
+
+    #[error("Cannot verify signature")]
+    SignatureVerificationFailed { trusted_signer: Address },
 
     #[error("Internal error")]
     Internal,

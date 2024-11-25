@@ -2,36 +2,15 @@ use std::sync::Arc;
 
 use agglayer_certificate_orchestrator::EpochPacker;
 use agglayer_config::outbound::OutboundRpcSettleConfig;
-use agglayer_contracts::Settler;
+use agglayer_contracts::mocks::MockL1Rpc;
 use agglayer_storage::tests::mocks::{MockPerEpochStore, MockStateStore};
 use agglayer_types::{Certificate, CertificateHeader, LocalNetworkStateData, Proof};
-use ethers::{
-    contract::{ContractCall, ContractError},
-    middleware::NonceManagerMiddleware,
-    providers::{MockProvider, Provider},
-    types::H160,
-};
+use ethers::{middleware::NonceManagerMiddleware, providers::Provider, types::H160};
 use mockall::predicate::eq;
 use rstest::rstest;
 
 use crate::EpochPackerClient;
 
-mockall::mock! {
-    L1Rpc {}
-    impl Settler for L1Rpc {
-        type M = NonceManagerMiddleware<Provider<MockProvider>>;
-
-        fn decode_contract_revert(error: &ContractError<NonceManagerMiddleware<Provider<MockProvider>>>) -> Option<String>;
-        fn build_verify_pessimistic_trusted_aggregator_call(
-            &self,
-            rollup_id: u32,
-            l_1_info_tree_leaf_count: u32,
-            new_local_exit_root: [u8; 32],
-            new_pessimistic_root: [u8; 32],
-            proof: ::ethers::core::types::Bytes,
-        ) -> ContractCall<NonceManagerMiddleware<Provider<MockProvider>>, ()>;
-    }
-}
 #[rstest]
 fn epoch_packer_can_settle_one_certificate() {
     let network_id = 1.into();

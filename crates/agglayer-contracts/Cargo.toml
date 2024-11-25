@@ -9,6 +9,11 @@ async-trait.workspace = true
 ethers.workspace = true
 ethers-contract = "2.0.14"
 reth-primitives.workspace = true
+mockall = { workspace = true, optional = true }
 
 [build-dependencies]
 ethers-contract = "2.0.14"
+
+[features]
+default = []
+testutils = ["mockall"]

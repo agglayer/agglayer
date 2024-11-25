@@ -161,7 +161,7 @@ impl Node {
         info!("Certifier client created.");
 
         // Construct the core.
-        let core = Kernel::new(rpc, config.clone());
+        let core = Kernel::new(rpc.clone(), config.clone());
 
         let epoch_packing_aggregator_task = EpochPackerClient::try_new(
             Arc::new(config.outbound.rpc.settle.clone()),
@@ -187,6 +187,7 @@ impl Node {
             .current_epoch(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)))
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
+            .l1_rpc(rollup_manager)
             .start()
             .await?;
 

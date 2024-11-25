@@ -9,6 +9,7 @@ use std::{
 
 use agglayer_clock::ClockRef;
 use agglayer_config::Config;
+use agglayer_contracts::mocks::MockL1Rpc;
 use agglayer_storage::{
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
@@ -437,6 +438,8 @@ async fn test_certificate_orchestrator_can_stop() {
         .executed(check_sender)
         .build();
 
+    let l1_rpc = MockL1Rpc::new();
+
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
         data_receiver,
@@ -447,6 +450,7 @@ async fn test_certificate_orchestrator_can_stop() {
         epochs_store,
         current_epoch,
         state_store.clone(),
+        Arc::new(l1_rpc),
     )
     .expect("Unable to create orchestrator");
 
@@ -500,6 +504,13 @@ async fn test_collect_certificates() {
         .expected_epoch(1)
         .build();
 
+    let mut l1_rpc = MockL1Rpc::new();
+
+    l1_rpc
+        .expect_get_trusted_sequencer_address()
+        .once()
+        .returning(|_, _| Ok([0x01; 20].into()));
+
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
         data_receiver,
@@ -510,6 +521,7 @@ async fn test_collect_certificates() {
         epochs_store,
         current_epoch,
         state_store.clone(),
+        Arc::new(l1_rpc),
     )
     .expect("Unable to create orchestrator");
 
@@ -567,6 +579,8 @@ async fn test_collect_certificates_after_epoch() {
         .expected_epoch(1)
         .build();
 
+    let l1_rpc = MockL1Rpc::new();
+
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
         data_receiver,
@@ -577,6 +591,7 @@ async fn test_collect_certificates_after_epoch() {
         epochs_store,
         current_epoch,
         state_store.clone(),
+        Arc::new(l1_rpc),
     )
     .expect("Unable to create orchestrator");
 
@@ -637,6 +652,8 @@ async fn test_collect_certificates_when_empty() {
         .expected_epoch(1)
         .build();
 
+    let l1_rpc = MockL1Rpc::new();
+
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
         data_receiver,
@@ -647,6 +664,7 @@ async fn test_collect_certificates_when_empty() {
         epochs_store,
         current_epoch,
         state_store.clone(),
+        Arc::new(l1_rpc),
     )
     .expect("Unable to create orchestrator");
 
@@ -714,6 +732,7 @@ type IMockOrchestrator = CertificateOrchestrator<
     MockEpochsStore,
     MockPerEpochStore,
     MockStateStore,
+    MockL1Rpc,
 >;
 
 #[derive(Default, buildstructor::Builder)]
@@ -747,6 +766,7 @@ pub(crate) fn create_orchestrator_mock(
     let epochs_store = Arc::new(builder.epochs_store.unwrap_or_default());
     let current_epoch = ArcSwap::new(Arc::new(builder.current_epoch.unwrap_or_default()));
     let state_store = Arc::new(builder.state_store.unwrap_or_default());
+    let l1_rpc = MockL1Rpc::new();
 
     (
         (data_sender, clock.clone()),
@@ -773,6 +793,7 @@ pub(crate) fn create_orchestrator_mock(
             epochs_store,
             current_epoch,
             state_store,
+            Arc::new(l1_rpc),
         )
         .expect("Unable to create orchestrator"),
     )

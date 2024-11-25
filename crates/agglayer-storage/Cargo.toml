@@ -27,6 +27,9 @@ rand.workspace = true
 rstest.workspace = true
 sp1-sdk.workspace = true
 
+agglayer-storage = { path = ".", features = ["testutils"] }
+agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
+
 [[bench]]
 name = "latest_certificate_bench"
 harness = false

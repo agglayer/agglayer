@@ -17,6 +17,9 @@ pub mod polygon_zk_evm;
 
 pub mod settler;
 
+#[cfg(feature = "testutils")]
+pub mod mocks;
+
 use polygon_zk_evm::PolygonZkEvm;
 pub use settler::Settler;
 
