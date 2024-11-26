@@ -12,12 +12,12 @@ use agglayer_prover_types::{
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{Certificate, Height, LocalNetworkStateData, NetworkId, Proof};
+use alloy_primitives::Address;
 use bincode::Options as _;
 use pessimistic_proof::{
     generate_pessimistic_proof, local_exit_tree::hasher::Keccak256Hasher,
     multi_batch_header::MultiBatchHeader, LocalNetworkState,
 };
-use reth_primitives::Address;
 use sp1_sdk::{CpuProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey};
 use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, instrument, warn};
