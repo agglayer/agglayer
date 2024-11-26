@@ -1,5 +1,6 @@
-use digest::Digest;
 use tiny_keccak::{Hasher, Keccak};
+
+use digest::Digest;
 
 pub mod digest;
 
