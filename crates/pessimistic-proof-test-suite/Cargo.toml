@@ -8,16 +8,14 @@ name = "ppgen"
 path = "src/bin/ppgen.rs"
 
 [dependencies]
-agglayer-types = { path = "../agglayer-types" }
+alloy-primitives.workspace = true
 base64.workspace = true
 bincode.workspace = true
 clap.workspace = true
 ethers-signers.workspace = true
-reth-primitives.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-pessimistic-proof = { path = "../pessimistic-proof" }
 sp1-sdk = { workspace = true }
 sp1-core-machine.workspace = true
 lazy_static.workspace = true
@@ -27,6 +25,9 @@ hex-literal = "0.4"
 hex.workspace = true
 tracing = "0.1.40"
 uuid = { version = "1.11.0", features = ["v4", "fast-rng"] }
+
+agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
+pessimistic-proof = { path = "../pessimistic-proof" }
 
 [dev-dependencies]
 rstest.workspace = true

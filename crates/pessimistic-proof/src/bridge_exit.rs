@@ -2,7 +2,7 @@
 
 use std::{fmt::Display, ops::Deref};
 
-use reth_primitives::{address, revm_primitives::bitvec::view::BitViewSized, Address, U256};
+use alloy_primitives::{address, Address, U256};
 use serde::{Deserialize, Serialize};
 
 use crate::keccak::{keccak256, keccak256_combine, Digest as KeccakDigest};
@@ -103,7 +103,7 @@ impl BridgeExit {
     /// [`crate::local_exit_tree::LocalExitTree`].
     pub fn hash(&self) -> KeccakDigest {
         keccak256_combine([
-            (self.leaf_type as u8).as_raw_slice(),
+            [self.leaf_type as u8].as_slice(),
             &u32::to_be_bytes(self.token_info.origin_network.into()),
             self.token_info.origin_token_address.as_slice(),
             &u32::to_be_bytes(self.dest_network.into()),

@@ -1,7 +1,7 @@
 use std::fmt;
 
+use alloy_primitives::U256;
 use hex::FromHex;
-use reth_primitives::U256;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tiny_keccak::{Hasher, Keccak};
 

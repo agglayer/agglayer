@@ -1,3 +1,4 @@
+use alloy_primitives::U256;
 use pessimistic_proof::{bridge_exit::TokenInfo, generate_pessimistic_proof, LocalNetworkState};
 use pessimistic_proof_test_suite::{
     forest::Forest,
@@ -5,7 +6,6 @@ use pessimistic_proof_test_suite::{
     PESSIMISTIC_PROOF_ELF,
 };
 use rand::random;
-use reth_primitives::U256;
 use sp1_sdk::{utils, ProverClient, SP1Stdin};
 
 fn u(x: u64) -> U256 {

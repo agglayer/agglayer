@@ -11,3 +11,14 @@ sp1-zkvm = "1.1.1"
 
 [build-dependencies]
 sp1-cli = "1.1.1"
+
+# Inject sp1-friendly versions of the relevant crypto packages.
+
+[patch.crates-io.ecdsa-core]
+git = "https://github.com/sp1-patches/signatures"
+package = "ecdsa"
+tag = "ecdsa-v0.16.9-patch-v1"
+
+[patch.crates-io.tiny-keccak]
+git = "https://github.com/sp1-patches/tiny-keccak"
+tag = "tiny_keccak-v2.0.2-patch-v1"

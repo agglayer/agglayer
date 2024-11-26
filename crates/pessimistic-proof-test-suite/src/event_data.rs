@@ -1,8 +1,8 @@
 use std::{fs::File, io::BufReader};
 
+use alloy_primitives::U256;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use pessimistic_proof::bridge_exit::{BridgeExit, TokenInfo};
-use reth_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Deserializer};
 use serde_json::Number;
 
