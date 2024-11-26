@@ -10,6 +10,7 @@ workspace = true
 alloy = { version = "0.6.4", features = ["full"] }
 anyhow.workspace = true
 arc-swap.workspace = true
+buildstructor.workspace = true
 ethers = { workspace = true, features = ["solc"] }
 futures.workspace = true
 hex.workspace = true

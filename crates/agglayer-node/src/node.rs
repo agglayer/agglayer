@@ -28,6 +28,7 @@ pub(crate) struct Node {
     certificate_orchestrator_handle: JoinHandle<()>,
 }
 
+#[buildstructor::buildstructor]
 impl Node {
     /// Function that setups and starts the Agglayer node.
     ///
@@ -65,6 +66,7 @@ impl Node {
     /// - The configured signer is invalid.
     /// - The RPC server failed to start.
     /// - The [`TimeClock`] failed to start.
+    #[builder(entry = "builder", exit = "start", visibility = "pub(crate)")]
     pub(crate) async fn start(
         config: Arc<Config>,
         cancellation_token: CancellationToken,
@@ -175,18 +177,19 @@ impl Node {
                 .input_backpressure_buffer_size,
         );
 
-        let certificate_orchestrator_handle = CertificateOrchestrator::start(
-            clock_ref,
-            data_receiver,
-            cancellation_token.clone(),
-            epoch_packing_aggregator_task,
-            certifier_client,
-            pending_store.clone(),
-            epochs_store.clone(),
-            arc_swap::ArcSwap::new(Arc::new(current_epoch_store)),
-            state_store.clone(),
-        )
-        .await?;
+        let certificate_orchestrator_handle = CertificateOrchestrator::builder()
+            .clock(clock_ref)
+            .data_receiver(data_receiver)
+            .cancellation_token(cancellation_token.clone())
+            .epoch_packing_task_builder(epoch_packing_aggregator_task)
+            .pending_store(pending_store.clone())
+            .epochs_store(epochs_store.clone())
+            .current_epoch(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)))
+            .state_store(state_store.clone())
+            .certifier_task_builder(certifier_client)
+            .start()
+            .await?;
+
         info!("Certificate orchestrator started.");
         // Bind the core to the RPC server.
         let server_handle = AgglayerImpl::new(

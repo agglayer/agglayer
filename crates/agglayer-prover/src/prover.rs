@@ -15,6 +15,7 @@ pub(crate) struct Prover {
     handle: tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
 }
 
+#[buildstructor::buildstructor]
 impl Prover {
     /// Function that setups and starts the Agglayer Prover.
     ///
@@ -28,6 +29,7 @@ impl Prover {
     ///
     /// This function will return an error if:
     /// - The gRPC server failed to start.
+    #[builder(entry = "builder", exit = "start", visibility = "pub(crate)")]
     pub(crate) async fn start(
         config: Arc<ProverConfig>,
         cancellation_token: CancellationToken,

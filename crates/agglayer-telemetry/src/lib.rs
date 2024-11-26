@@ -91,6 +91,7 @@ pub mod prover {
 
 pub struct ServerBuilder {}
 
+#[buildstructor::buildstructor]
 impl ServerBuilder {
     /// Function that builds a new Metrics server and returns a
     /// [`WithGracefulShutdown`] instance ready to be spawn.
@@ -131,6 +132,7 @@ impl ServerBuilder {
     /// # Errors
     ///
     /// This function will return an error if the provided addr is invalid
+    #[builder(entry = "builder", exit = "build", visibility = "pub")]
     pub async fn serve(
         addr: SocketAddr,
         registry: Option<Registry>,
@@ -139,7 +141,7 @@ impl ServerBuilder {
         WithGracefulShutdown<
             axum::routing::IntoMakeService<Router>,
             axum::Router,
-            impl std::future::Future<Output = ()>,
+            impl futures::Future<Output = ()>,
         >,
         Error,
     > {
