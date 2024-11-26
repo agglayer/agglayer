@@ -1,6 +1,7 @@
 use std::{path::PathBuf, time::Instant};
 
 use agglayer_types::{Certificate, U256};
+use alloy_primitives::Address;
 use clap::Parser;
 use pessimistic_proof::{
     bridge_exit::{NetworkId, TokenInfo},
@@ -10,7 +11,6 @@ use pessimistic_proof_test_suite::{
     runner::Runner,
     sample_data::{self as data},
 };
-use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use sp1_sdk::HashableKey;
 use tracing::{info, warn};
