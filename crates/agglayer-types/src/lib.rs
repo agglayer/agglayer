@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+pub use alloy_primitives::{address, Address, Signature, B256, U256};
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -19,10 +20,6 @@ use pessimistic_proof::{
     nullifier_tree::{NullifierKey, NullifierPath},
     ProofError,
 };
-pub use reth_primitives::address;
-use reth_primitives::B256;
-pub use reth_primitives::U256;
-pub use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
 use sp1_sdk::SP1PublicValues;
 pub type EpochNumber = u64;
@@ -237,7 +234,7 @@ impl Proof {
 ///
 /// Note: be mindful to update the [`Self::hash`] method accordingly
 /// upon modifying the fields of this structure.
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Certificate {
     /// NetworkID of the origin network.
     pub network_id: NetworkId,
@@ -267,9 +264,15 @@ impl Certificate {
             new_local_exit_root: [1; 32].into(),
             bridge_exits: Vec::new(),
             imported_bridge_exits: Vec::new(),
-            signature: Signature::default(),
+            signature: Signature::new(U256::default(), U256::default(), Default::default()),
             metadata: Default::default(),
         }
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn with_new_local_exit_root(mut self, new_local_exit_root: Digest) -> Self {
+        self.new_local_exit_root = new_local_exit_root;
+        self
     }
 
     pub fn hash(&self) -> CertificateId {
@@ -327,7 +330,9 @@ impl Certificate {
         let combined_hash =
             signature_commitment(self.new_local_exit_root, &self.imported_bridge_exits);
 
-        self.signature.recover_signer(B256::new(combined_hash.0))
+        self.signature
+            .recover_address_from_prehash(&B256::new(combined_hash.0))
+            .ok()
     }
 }
 
