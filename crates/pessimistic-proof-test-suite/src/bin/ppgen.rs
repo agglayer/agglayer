@@ -59,7 +59,7 @@ pub fn main() {
 
     let args = PPGenArgs::parse();
 
-    let mut state = data::sample_state_01();
+    let mut state = data::sample_state_00();
 
     let old_state = state.state_b.clone();
 

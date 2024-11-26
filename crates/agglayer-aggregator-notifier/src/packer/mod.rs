@@ -131,8 +131,9 @@ where
         );
 
         info!(
-            "Initializing the settlement of the certificate {} on L1",
-            certificate_id
+            "Initializing the settlement of the certificate {} on L1 with public inputs: {}",
+            certificate_id,
+            output.display_to_hex()
         );
 
         let state_store = self.state_store.clone();

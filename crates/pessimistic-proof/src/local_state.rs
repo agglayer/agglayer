@@ -34,13 +34,14 @@ pub struct StateCommitment {
     pub balance_root: Digest,
     pub nullifier_root: Digest,
 }
+
 impl StateCommitment {
     pub fn display_to_hex(&self) -> String {
         format!(
             "exit_root: {}, balance_root: {}, nullifier_root: {}",
             Hash(self.exit_root),
             Hash(self.balance_root),
-            Hash(self.nullifier_root)
+            Hash(self.nullifier_root),
         )
     }
 }
