@@ -432,11 +432,12 @@ async fn test_certificate_orchestrator_can_stop() {
     let cancellation_token = CancellationToken::new();
 
     let (check_sender, mut check_receiver) = mpsc::channel(1);
-    let check = Check::builder()
-        .pending_store(pending_store.clone())
-        .state_store(state_store.clone())
-        .executed(check_sender)
-        .build();
+    let check = Check::new(
+        pending_store.clone(),
+        state_store.clone(),
+        check_sender,
+        Some(1),
+    );
 
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
@@ -494,12 +495,12 @@ async fn test_collect_certificates() {
     let cancellation_token = CancellationToken::new();
 
     let (check_sender, mut check_receiver) = mpsc::channel(1);
-    let check = Check::builder()
-        .pending_store(pending_store.clone())
-        .state_store(state_store.clone())
-        .executed(check_sender)
-        .expected_epoch(1)
-        .build();
+    let check = Check::new(
+        pending_store.clone(),
+        state_store.clone(),
+        check_sender,
+        Some(1),
+    );
 
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
@@ -559,12 +560,12 @@ async fn test_collect_certificates_after_epoch() {
     let cancellation_token = CancellationToken::new();
 
     let (check_sender, mut check_receiver) = mpsc::channel(1);
-    let check = Check::builder()
-        .pending_store(pending_store.clone())
-        .state_store(state_store.clone())
-        .executed(check_sender)
-        .expected_epoch(1)
-        .build();
+    let check = Check::new(
+        pending_store.clone(),
+        state_store.clone(),
+        check_sender,
+        Some(1),
+    );
 
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
@@ -627,13 +628,12 @@ async fn test_collect_certificates_when_empty() {
     let cancellation_token = CancellationToken::new();
 
     let (check_sender, mut check_receiver) = mpsc::channel(1);
-    let check = Check::builder()
-        .pending_store(pending_store.clone())
-        .state_store(state_store.clone())
-        .executed(check_sender)
-        .expected_epoch(1)
-        .build();
-
+    let check = Check::new(
+        pending_store.clone(),
+        state_store.clone(),
+        check_sender,
+        Some(1),
+    );
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock,
         data_receiver,
@@ -694,12 +694,12 @@ fn check() -> (
         epochs_store.open(0).expect("Unable to open epoch"),
     ));
 
-    let check = Check::builder()
-        .pending_store(pending_store.clone())
-        .state_store(state_store.clone())
-        .executed(check_sender)
-        .expected_epoch(1)
-        .build();
+    let check = Check::new(
+        pending_store.clone(),
+        state_store.clone(),
+        check_sender,
+        Some(1),
+    );
 
     ((pending_store, state_store), check_receiver, check)
 }
@@ -713,7 +713,7 @@ type IMockOrchestrator = CertificateOrchestrator<
     MockStateStore,
 >;
 
-#[derive(Default, buildstructor::Builder)]
+#[derive(Default)]
 struct MockOrchestrator {
     certifier: Option<MockCertifier>,
     epoch_packer: Option<MockEpochPacker>,
@@ -787,9 +787,7 @@ pub(crate) struct Check {
     expected_epoch: Option<u64>,
 }
 
-#[buildstructor::buildstructor]
 impl Check {
-    #[builder]
     pub(crate) fn new(
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
