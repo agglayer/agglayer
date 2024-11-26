@@ -1,25 +1,22 @@
-use std::{fs::File, io::BufReader};
+use std::{fs::File, io::BufReader, path::Path};
 
+use alloy_primitives::U256;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use pessimistic_proof::{
-    bridge_exit::{BridgeExit, TokenInfo},
-    keccak::keccak256,
-};
-use reth_primitives::U256;
+use pessimistic_proof::bridge_exit::{BridgeExit, TokenInfo};
 use serde::{de::DeserializeOwned, Deserialize, Deserializer};
 use serde_json::Number;
 
 /// Load a data file from the test suite data folder. It is expected to be
 /// a json representation of an object of type `T`.
-pub fn load_json_data_file<T: DeserializeOwned>(filename: impl AsRef<str>) -> T {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+pub fn load_json_data_file<T: DeserializeOwned>(filename: impl AsRef<Path>) -> T {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("data")
         .join(filename.as_ref());
     parse_json_file(path)
 }
 
 /// Load a json file from the specified path.
-pub fn parse_json_file<T>(json_file_path: impl AsRef<std::path::Path>) -> T
+pub fn parse_json_file<T>(json_file_path: impl AsRef<Path>) -> T
 where
     T: DeserializeOwned,
 {
@@ -85,7 +82,7 @@ impl From<DepositEventData> for BridgeExit {
                 .decode(deposit_event_data.metadata)
                 .ok()
                 .as_ref()
-                .map(|data| keccak256(data)),
+                .map(|data| pessimistic_proof::keccak::keccak256(data)),
         }
     }
 }

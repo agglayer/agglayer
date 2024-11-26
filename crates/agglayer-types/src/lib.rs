@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+pub use alloy_primitives::{address, Address, Signature, B256, U256};
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -19,10 +20,6 @@ use pessimistic_proof::{
     nullifier_tree::{NullifierKey, NullifierPath},
     ProofError,
 };
-pub use reth_primitives::address;
-use reth_primitives::B256;
-pub use reth_primitives::U256;
-pub use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
 use sp1_sdk::SP1PublicValues;
 pub type EpochNumber = u64;
@@ -237,7 +234,7 @@ impl Proof {
 ///
 /// Note: be mindful to update the [`Self::hash`] method accordingly
 /// upon modifying the fields of this structure.
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Certificate {
     /// NetworkID of the origin network.
     pub network_id: NetworkId,
@@ -259,17 +256,42 @@ pub struct Certificate {
 
 impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
+    pub fn wallet_for_test(network_id: NetworkId) -> ethers_signers::LocalWallet {
+        let fake_priv_key = keccak256_combine([b"FAKEKEY:", network_id.to_be_bytes().as_slice()]);
+        ethers_signers::LocalWallet::from_bytes(fake_priv_key.as_bytes()).unwrap()
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn sign(&mut self, wallet: &ethers_signers::LocalWallet) {
+        let sighash = self.signature_commitment_unchecked().0.into();
+        let signature = wallet.sign_hash(sighash).unwrap();
+        self.signature = Signature::new(
+            U256::from_limbs(signature.r.0),
+            U256::from_limbs(signature.s.0),
+            signature.recovery_id().unwrap().into(),
+        );
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
-        Certificate {
+        let mut this = Certificate {
             network_id,
             height,
             prev_local_exit_root: [0; 32].into(),
             new_local_exit_root: [1; 32].into(),
             bridge_exits: Vec::new(),
             imported_bridge_exits: Vec::new(),
-            signature: Signature::default(),
+            signature: Signature::new(U256::default(), U256::default(), Default::default()),
             metadata: Default::default(),
-        }
+        };
+        this.sign(&Self::wallet_for_test(network_id));
+        this
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn with_new_local_exit_root(mut self, new_local_exit_root: Digest) -> Self {
+        self.new_local_exit_root = new_local_exit_root;
+        self
     }
 
     pub fn hash(&self) -> CertificateId {
@@ -297,6 +319,12 @@ impl Certificate {
             .iter()
             .map(|i| i.l1_leaf_index() + 1)
             .max()
+    }
+
+    /// Get signature commitment without checking that the declared state
+    /// matches the calculated state.
+    pub fn signature_commitment_unchecked(&self) -> Digest {
+        signature_commitment(self.new_local_exit_root, self.imported_bridge_exits.iter())
     }
 
     /// Returns the L1 Info Root considered for this [`Certificate`].
@@ -327,7 +355,9 @@ impl Certificate {
         let combined_hash =
             signature_commitment(self.new_local_exit_root, &self.imported_bridge_exits);
 
-        self.signature.recover_signer(B256::new(combined_hash.0))
+        self.signature
+            .recover_address_from_prehash(&B256::new(combined_hash.0))
+            .ok()
     }
 }
 
