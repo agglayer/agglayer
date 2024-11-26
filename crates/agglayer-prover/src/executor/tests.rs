@@ -158,10 +158,8 @@ async fn executor_fallback_because_of_timeout_cpu() {
 
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
-    let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
-        ..Default::default()
-    };
+    let certificate =
+        Certificate::new_for_test(0.into(), 0).with_new_local_exit_root(state.exit_tree.get_root());
     let batch_header = state
         .apply_certificate(
             &certificate,
@@ -212,10 +210,8 @@ async fn executor_fails_because_of_timeout_cpu() {
 
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
-    let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
-        ..Default::default()
-    };
+    let certificate =
+        Certificate::new_for_test(0.into(), 0).with_new_local_exit_root(state.exit_tree.get_root());
     let batch_header = state
         .apply_certificate(
             &certificate,
@@ -265,10 +261,8 @@ async fn executor_fails_because_of_concurrency_cpu() {
 
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
-    let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
-        ..Default::default()
-    };
+    let certificate =
+        Certificate::new_for_test(0.into(), 0).with_new_local_exit_root(state.exit_tree.get_root());
     let batch_header = state
         .apply_certificate(
             &certificate,
