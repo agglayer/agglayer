@@ -237,3 +237,22 @@ pub fn generate_pessimistic_proof(
         new_pessimistic_root,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_tree_roots() {
+        let empty_state = LocalNetworkState::default();
+
+        let ler = empty_state.exit_tree.get_root();
+        let ppr = keccak256_combine([
+            empty_state.balance_tree.root,
+            empty_state.nullifier_tree.root,
+        ]);
+
+        assert_eq!(EMPTY_LER, ler);
+        assert_eq!(EMPTY_PP_ROOT, ppr);
+    }
+}
