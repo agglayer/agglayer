@@ -22,6 +22,7 @@ fn can_parse_value() {
         height: 2,
         epoch_number: Some(3),
         certificate_index: Some(4),
+        prev_local_exit_root: [4; 32].into(),
         new_local_exit_root: [5; 32].into(),
         status: agglayer_types::CertificateStatus::Pending,
         metadata: [6; 32].into(),
@@ -49,9 +50,17 @@ fn can_parse_value() {
             1, 1, 1
         ]
     );
-    // new_local_exit_root
+    // prev_local_exit_root
     assert_eq!(
         encoded[62..94],
+        [
+            4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+            4, 4, 4
+        ]
+    );
+    // new_local_exit_root
+    assert_eq!(
+        encoded[94..126],
         [
             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
             5, 5, 5
@@ -59,14 +68,14 @@ fn can_parse_value() {
     );
     // metadata
     assert_eq!(
-        encoded[94..126],
+        encoded[126..158],
         [
             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
             6, 6, 6
         ]
     );
     // certificate status
-    assert_eq!(encoded[126..130], [0, 0, 0, 0]);
+    assert_eq!(encoded[158..162], [0, 0, 0, 0]);
     // end
-    assert!(encoded[130..].is_empty());
+    assert!(encoded[162..].is_empty());
 }
