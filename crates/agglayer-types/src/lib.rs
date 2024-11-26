@@ -373,6 +373,16 @@ impl Certificate {
     }
 
     #[cfg(any(test, feature = "testutils"))]
+    pub fn refresh_signature(&mut self, wallet: &ethers::signers::LocalWallet) {
+        let (_digest, signature) = compute_signature_info(
+            self.new_local_exit_root,
+            &self.imported_bridge_exits,
+            wallet,
+        );
+        self.signature = signature;
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
     pub fn with_new_local_exit_root(mut self, new_local_exit_root: Digest) -> Self {
         self.new_local_exit_root = new_local_exit_root;
         self
