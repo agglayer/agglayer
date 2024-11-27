@@ -104,6 +104,10 @@ pub struct Config {
     #[serde(default = "default_prover_entrypoint")]
     #[serde(skip_serializing_if = "String::is_empty")]
     pub prover_entrypoint: String,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "<&bool as std::ops::Not>::not")]
+    pub debug_mode: bool,
 }
 
 impl Config {
@@ -153,6 +157,7 @@ impl Config {
             shutdown: Default::default(),
             certificate_orchestrator: Default::default(),
             prover_entrypoint: default_prover_entrypoint(),
+            debug_mode: false,
         }
     }
 

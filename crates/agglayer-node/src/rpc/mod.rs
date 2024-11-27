@@ -4,6 +4,8 @@ use agglayer_config::epoch::BlockClockConfig;
 use agglayer_config::Config;
 use agglayer_config::Epoch;
 use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCertificate;
+use agglayer_storage::stores::DebugReader;
+use agglayer_storage::stores::DebugWriter;
 use agglayer_storage::stores::PendingCertificateReader;
 use agglayer_storage::stores::PendingCertificateWriter;
 use agglayer_storage::stores::StateReader;
@@ -65,24 +67,34 @@ trait Agglayer {
         &self,
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>>;
+
+    #[method(name = "debugGetCertificate")]
+    async fn debug_get_certificate(
+        &self,
+        certificate_id: CertificateId,
+    ) -> RpcResult<(Certificate, Option<CertificateHeader>)>;
 }
 
 /// The RPC agglayer service implementation.
-pub(crate) struct AgglayerImpl<Rpc, PendingStore, StateStore> {
+pub(crate) struct AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore> {
     kernel: Kernel<Rpc>,
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
+    debug_store: Arc<DebugStore>,
     config: Arc<Config>,
 }
 
-impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore> {
+impl<Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
+{
     /// Create an instance of the RPC agglayer service.
     pub(crate) fn new(
         kernel: Kernel<Rpc>,
         certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
         pending_store: Arc<PendingStore>,
         state: Arc<StateStore>,
+        debug_store: Arc<DebugStore>,
         config: Arc<Config>,
     ) -> Self {
         Self {
@@ -90,22 +102,27 @@ impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore> 
             certificate_sender,
             pending_store,
             state,
+            debug_store,
             config,
         }
     }
 }
 
-impl<Rpc, PendingStore, StateStore> Drop for AgglayerImpl<Rpc, PendingStore, StateStore> {
+impl<Rpc, PendingStore, StateStore, DebugStore> Drop
+    for AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
+{
     fn drop(&mut self) {
         info!("Shutting down the agglayer service");
     }
 }
 
-impl<Rpc, PendingStore, StateStore> AgglayerImpl<Rpc, PendingStore, StateStore>
+impl<Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
 where
     Rpc: Middleware + 'static,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
+    DebugStore: DebugReader + DebugWriter + 'static,
 {
     pub(crate) async fn start(self) -> anyhow::Result<ServerHandle> {
         // Create the RPC service
@@ -171,11 +188,13 @@ where
 }
 
 #[async_trait]
-impl<Rpc, PendingStore, StateStore> AgglayerServer for AgglayerImpl<Rpc, PendingStore, StateStore>
+impl<Rpc, PendingStore, StateStore, DebugStore> AgglayerServer
+    for AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
 where
     Rpc: Middleware + 'static,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
+    DebugStore: DebugReader + DebugWriter + 'static,
 {
     #[instrument(skip(self, tx), fields(hash, rollup_id = tx.tx.rollup_id), level = "info")]
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
@@ -329,6 +348,11 @@ where
                 Error::internal(e.to_string())
             })?;
 
+        _ = self.debug_store.add_certificate(&certificate).map_err(|e| {
+            error!("Failed to insert certificate into debug store: {e}");
+            Error::internal(e.to_string())
+        });
+
         if let Err(error) = self
             .certificate_sender
             .send((
@@ -450,6 +474,35 @@ where
             }
         } else {
             Ok(None)
+        }
+    }
+
+    async fn debug_get_certificate(
+        &self,
+        certificate_id: CertificateId,
+    ) -> RpcResult<(Certificate, Option<CertificateHeader>)> {
+        trace!("Received request to get certificate for id {certificate_id}");
+        match self.debug_store.get_certificate(&certificate_id) {
+            Ok(Some(cert)) => match self
+                .state
+                .get_certificate_header(&certificate_id)
+                .map(|header| (cert, header))
+            {
+                Ok(result) => Ok(result),
+                Err(error) => {
+                    error!("Failed to get certificate header: {}", error);
+                    Err(Error::internal("Unable to get certificate header"))
+                }
+            },
+            Ok(None) => Err(Error::resource_not_found(format!(
+                "Certificate({})",
+                certificate_id
+            ))),
+            Err(error) => {
+                error!("Failed to get certificate: {}", error);
+
+                Err(Error::internal("Unable to get certificate"))
+            }
         }
     }
 }

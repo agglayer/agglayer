@@ -13,6 +13,11 @@ use crate::{
     error::Error,
 };
 
+pub trait DebugReader: Send + Sync {
+    fn get_certificate(&self, certificate_id: &CertificateId)
+        -> Result<Option<Certificate>, Error>;
+}
+
 pub trait EpochStoreReader: Send + Sync {}
 
 pub trait PendingCertificateReader: Send + Sync {
