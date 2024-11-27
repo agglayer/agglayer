@@ -99,7 +99,8 @@ pub struct CertificateOrchestrator<
     spawned_network_tasks: BTreeMap<NetworkId, mpsc::Sender<NewCertificate>>,
 
     /// Notifiers for the settlement of the certificates.
-    settlement_notifier: HashMap<CertificateId, oneshot::Sender<SettledCertificate>>,
+    settlement_notifier:
+        HashMap<CertificateId, oneshot::Sender<Result<SettledCertificate, String>>>,
 
     /// Network task future resolver.
     network_tasks: NetworkTasks,
@@ -108,12 +109,16 @@ pub struct CertificateOrchestrator<
 
     /// Channel to receive notifications of proven certificatesa in order to
     /// settle them.
-    certification_notification:
-        mpsc::Receiver<(oneshot::Sender<SettledCertificate>, ProvenCertificate)>,
+    certification_notification: mpsc::Receiver<(
+        oneshot::Sender<Result<SettledCertificate, String>>,
+        ProvenCertificate,
+    )>,
     /// Channel to pass to NetworkTask for them to send notifications of proven
     /// certificates.
-    certification_notification_sender:
-        mpsc::Sender<(oneshot::Sender<SettledCertificate>, ProvenCertificate)>,
+    certification_notification_sender: mpsc::Sender<(
+        oneshot::Sender<Result<SettledCertificate, String>>,
+        ProvenCertificate,
+    )>,
 }
 
 impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
@@ -440,7 +445,7 @@ where
                 );
 
                 if let Some(notifier) = self.settlement_notifier.remove(&certificate_id) {
-                    if notifier.send(settled).is_err() {
+                    if notifier.send(Ok(settled)).is_err() {
                         warn!(
                             "Unable to notify the settlement of the certificate {}",
                             certificate_id
@@ -448,6 +453,26 @@ where
                     }
                 } else {
                     warn!("No notifier found for network {}", network_id);
+                }
+            }
+            Err(Error::SettlementError {
+                certificate_id,
+                error,
+            }) => {
+                error!("Error during certificate settlement: {:?}", error);
+                if let Some(notifier) = self.settlement_notifier.remove(&certificate_id) {
+                    if notifier.send(Err(error)).is_err() {
+                        warn!(
+                            hash = certificate_id.to_string(),
+                            "Unable to notify the settlement error of the certificate {}",
+                            certificate_id
+                        );
+                    }
+                } else {
+                    warn!(
+                        hash = certificate_id.to_string(),
+                        "No notifier found for network {}", certificate_id
+                    );
                 }
             }
             Err(error) => {
@@ -461,7 +486,7 @@ where
     fn handle_proven_certificate(
         &mut self,
         (response, ProvenCertificate(certificate_id, network, height)): (
-            oneshot::Sender<SettledCertificate>,
+            oneshot::Sender<Result<SettledCertificate, String>>,
             ProvenCertificate,
         ),
     ) {

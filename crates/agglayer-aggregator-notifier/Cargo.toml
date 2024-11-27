@@ -23,6 +23,7 @@ agglayer-prover-types = { path = "../agglayer-prover-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
 reth-primitives.workspace = true
 tonic = { workspace = true, features = ["zstd"] }
+serde_json.workspace = true
 
 sp1-sdk.workspace = true
 sp1-prover.workspace = true
