@@ -1,18 +1,19 @@
 ---
 source: crates/agglayer-node/src/rpc/tests/get_certificate_header.rs
-expression: "{\n  \"payload\": {\n    \"id\": 0,\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"interop_getCertificateHeader\",\n    \"params\": [\n      \"0x911464a00ada773e3659bc570bfecf0819466498cd534f770dc97a6a59774d28\"\n    ]\n  },\n  \"raw_response\": \"{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":0,\\\"result\\\":{\\\"network_id\\\":1,\\\"height\\\":0,\\\"epoch_number\\\":null,\\\"certificate_index\\\":null,\\\"certificate_id\\\":\\\"0x911464a00ada773e3659bc570bfecf0819466498cd534f770dc97a6a59774d28\\\",\\\"new_local_exit_root\\\":\\\"0x0000000000000000000000000000000000000000000000000000000000000000\\\",\\\"status\\\":\\\"Pending\\\",\\\"metadata\\\":\\\"0x0000000000000000000000000000000000000000000000000000000000000000\\\"}}\"\n}"
+expression: "{\n  \"payload\": {\n    \"id\": 0,\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"interop_getCertificateHeader\",\n    \"params\": [\n      \"0xa68dc90fbf6055e0c747b63410172bb615b973ae65ec3bba93197f0282ef37e6\"\n    ]\n  },\n  \"raw_response\": \"{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":0,\\\"result\\\":{\\\"network_id\\\":1,\\\"height\\\":0,\\\"epoch_number\\\":null,\\\"certificate_index\\\":null,\\\"certificate_id\\\":\\\"0xa68dc90fbf6055e0c747b63410172bb615b973ae65ec3bba93197f0282ef37e6\\\",\\\"prev_local_exit_root\\\":\\\"0x0000000000000000000000000000000000000000000000000000000000000000\\\",\\\"new_local_exit_root\\\":\\\"0x0101010101010101010101010101010101010101010101010101010101010101\\\",\\\"metadata\\\":\\\"0x0000000000000000000000000000000000000000000000000000000000000000\\\",\\\"status\\\":\\\"Pending\\\"}}\"\n}"
 ---
 {
   "id": 0,
   "jsonrpc": "2.0",
   "result": {
-    "certificate_id": "0x911464a00ada773e3659bc570bfecf0819466498cd534f770dc97a6a59774d28",
+    "certificate_id": "0xa68dc90fbf6055e0c747b63410172bb615b973ae65ec3bba93197f0282ef37e6",
     "certificate_index": null,
     "epoch_number": null,
     "height": 0,
     "metadata": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "network_id": 1,
-    "new_local_exit_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "new_local_exit_root": "0x0101010101010101010101010101010101010101010101010101010101010101",
+    "prev_local_exit_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "status": "Pending"
   }
 }

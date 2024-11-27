@@ -580,6 +580,7 @@ mod tests {
                     epoch_number: None,
                     certificate_index: None,
                     certificate_id: *certificate_id,
+                    prev_local_exit_root: [1; 32].into(),
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
@@ -699,6 +700,7 @@ mod tests {
                     epoch_number: None,
                     certificate_index: None,
                     certificate_id: *certificate_id,
+                    prev_local_exit_root: [1; 32].into(),
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
@@ -716,6 +718,7 @@ mod tests {
                     epoch_number: None,
                     certificate_index: None,
                     certificate_id: *certificate_id,
+                    prev_local_exit_root: [1; 32].into(),
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
@@ -880,6 +883,7 @@ mod tests {
                     certificate_index: None,
                     certificate_id: *certificate_id,
                     new_local_exit_root: [0; 32].into(),
+                    prev_local_exit_root: [1; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
                 }))
@@ -896,6 +900,7 @@ mod tests {
                     epoch_number: None,
                     certificate_index: None,
                     certificate_id: *certificate_id,
+                    prev_local_exit_root: [1; 32].into(),
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
@@ -1063,6 +1068,7 @@ mod tests {
                     epoch_number: None,
                     certificate_index: None,
                     certificate_id: *certificate_id,
+                    prev_local_exit_root: [1; 32].into(),
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
@@ -1079,10 +1085,10 @@ mod tests {
                 }))
             });
 
-        let expected_error = "Internal error happened in the certification process of \
-                              0x911464a00ada773e3659bc570bfecf0819466498cd534f770dc97a6a59774d28: \
-                              TimedOut"
-            .to_string();
+        let expected_error = format!(
+            "Internal error happened in the certification process of {}: TimedOut",
+            certificate_id
+        );
 
         state
             .expect_update_certificate_header_status()
