@@ -23,5 +23,5 @@ category = "E2E - PREPARE"
 cwd = "tests/kurtosis"
 script = '''
 kurtosis clean --all
-kurtosis run --enclave cdk --args-file .github/tests/fork12-pessimistic.yml --image-download always . '{"args": {"agglayer_prover_sp1_key": "\'$AGGLAYER_PROVER_SP1_KEY'"}}'
+kurtosis run --enclave cdk --args-file .github/tests/fork12-pessimistic.yml --image-download always . '{"args": {"agglayer_prover_sp1_key": "'$AGGLAYER_PROVER_SP1_KEY'"}}'
 '''
