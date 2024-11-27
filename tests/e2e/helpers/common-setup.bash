@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 
 _common_setup() {
-    bats_load_library 'bats-support'
-    bats_load_library 'bats-assert'
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      # Mac OSX
+      bats_load_library 'bats-support'
+      bats_load_library 'bats-assert'
+    else
+      . "$BATS_TEST_DIRNAME/helpers/bats-support/load.bash"
+      . "$BATS_TEST_DIRNAME/helpers/bats-assert/load.bash"
+    fi
 
     # get the containing directory of this file
     # use $BATS_TEST_FILENAME instead of ${BASH_SOURCE[0]} or $0,
