@@ -110,7 +110,8 @@ impl ServerBuilder {
     ///         "127.0.0.1".parse()?,
     ///         None,
     ///         tokio_util::sync::CancellationToken::new(),
-    ///     ).await?;
+    ///     )
+    ///     .await?;
     ///     Ok(())
     /// }
     /// ```
