@@ -1,7 +1,9 @@
 #![allow(clippy::needless_range_loop)]
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
-use reth_primitives::revm_primitives::HashSet;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
@@ -240,7 +242,7 @@ where
     ) -> Result<(), SmtError> {
         nodes.insert(hash);
 
-        #[allow(clippy::comparison_chain)] // Stupid lint.
+        #[allow(clippy::comparison_chain)] // Cleaner as an if-else.
         if depth > DEPTH {
             return Err(SmtError::DepthOutOfBounds);
         } else if depth == DEPTH {
@@ -259,7 +261,7 @@ where
         Ok(())
     }
 
-    /// Traverse the SMT and prune all the stale nodes.
+    /// Traverse the SMT and prune all stale nodes.
     pub fn traverse_and_prune(&mut self) -> Result<(), SmtError>
     where
         H::Digest: Eq + Hash,
@@ -735,10 +737,8 @@ mod tests {
             smt1.insert(key, value).unwrap();
         }
 
-        dbg!(smt1.tree.len());
         smt0.traverse_and_prune().unwrap();
         smt1.traverse_and_prune().unwrap();
-        dbg!(smt1.tree.len());
 
         assert_eq!(smt0.root, smt1.root);
         assert_eq!(smt0.tree, smt1.tree);
