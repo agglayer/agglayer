@@ -16,7 +16,7 @@ tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "pa
     "keccak",
 ] }
 sp1-zkvm = { version = "3.0.0", features = ["verify"] }
-sp1-sdk = { version = "3.0.0" }
+#sp1-sdk = "3.0.0"
 sha2 = "0.10.8"
 
 [dev-dependencies]

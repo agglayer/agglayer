@@ -5792,7 +5792,6 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sha2",
- "sp1-sdk",
  "sp1-zkvm",
  "thiserror 1.0.69",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?branch=patch-v2.0.2)",
