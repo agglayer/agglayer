@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
 use agglayer_clock::ClockRef;
-use agglayer_storage::stores::{
-    EpochStoreWriter, MetadataReader, MetadataWriter, PerEpochReader, PerEpochWriter, StateReader,
+use agglayer_storage::{
+    error::Error as StorageError,
+    stores::{
+        EpochStoreWriter, MetadataReader, MetadataWriter, PerEpochReader, PerEpochWriter,
+        StateReader,
+    },
 };
 use anyhow::Result;
-use tracing::debug;
+use tracing::{debug, error, info};
 
 pub(crate) struct EpochSynchronizer {}
 
@@ -21,7 +25,24 @@ impl EpochSynchronizer {
         EpochsStore::PerEpochStore: PerEpochReader + PerEpochWriter,
     {
         while opened_epoch.get_epoch_number() < current_epoch_number {
-            opened_epoch.start_packing()?;
+            match opened_epoch.start_packing() {
+                Err(StorageError::AlreadyPacked(_)) => {
+                    info!(
+                        "Epoch {} already packed, continue",
+                        opened_epoch.get_epoch_number()
+                    );
+                }
+                Err(error) => {
+                    error!(
+                        "Error starting packing for epoch {}: {:?}",
+                        opened_epoch.get_epoch_number(),
+                        error
+                    );
+
+                    return Err(error.into());
+                }
+                Ok(_) => {}
+            }
             opened_epoch = epochs_store.open_with_start_checkpoint(
                 opened_epoch.get_epoch_number() + 1,
                 opened_epoch.get_end_checkpoint(),
