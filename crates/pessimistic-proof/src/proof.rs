@@ -189,8 +189,9 @@ pub fn generate_pessimistic_proof(
 
     println!(
         "native prover execution: {:?}",
-        network_state.balance_tree.root
+        Hash(network_state.balance_tree.root)
     );
+
     if computed_target.exit_root != batch_header.target.exit_root {
         return Err(ProofError::InvalidNewLocalExitRoot {
             declared: batch_header.target.exit_root.into(),

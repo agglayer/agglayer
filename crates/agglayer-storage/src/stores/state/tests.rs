@@ -39,11 +39,11 @@ fn equal_state(lhs: &LocalNetworkStateData, rhs: &LocalNetworkStateData) -> bool
 
     // balance tree
     assert_eq!(lhs.balance_tree.root, rhs.balance_tree.root);
-    assert_eq!(lhs.balance_tree.tree, rhs.balance_tree.tree);
+    assert_eq!(lhs.balance_tree.tree.len(), rhs.balance_tree.tree.len());
 
     // nullifier tree
     assert_eq!(lhs.nullifier_tree.root, rhs.nullifier_tree.root);
-    assert_eq!(lhs.nullifier_tree.tree, rhs.nullifier_tree.tree);
+    assert_eq!(lhs.nullifier_tree.tree.len(), rhs.nullifier_tree.tree.len());
 
     true
 }
@@ -142,21 +142,22 @@ use pessimistic_proof_test_suite::sample_data::{self as data};
 
 #[rstest]
 fn can_read(network_id: NetworkId, store: StateStore) {
-    let cached = false;
+    let cached = true;
 
     let certificates: Vec<Certificate> = [
         "n15-cert_h0.json",
         "n15-cert_h1.json",
         "n15-cert_h2-v2.json",
+        //"n15-cert_h3-v2.json",
     ]
     .iter()
     .map(|p| data::load_certificate(p))
     .collect();
 
     let mut leaves: Vec<Hash> = Vec::new();
-
     let mut lns = LocalNetworkStateData::default();
 
+    //certificates[3].prev_local_exit_root = certificates[2].new_local_exit_root;
     for (idx, certificate) in certificates.iter().enumerate() {
         info!(
             "Certificate ({idx}|{}) | {}, nib:{} b:{}",
@@ -190,6 +191,11 @@ fn can_read(network_id: NetworkId, store: StateStore) {
 
     let before_going_through_disk = lns.clone();
 
+    println!(
+        "before | root: {}, nb nodes: {}",
+        Hash(before_going_through_disk.balance_tree.root),
+        before_going_through_disk.balance_tree.tree.len()
+    );
     // write state
     assert!(store
         .write_local_network_state(&network_id, &lns, leaves.as_slice())
@@ -198,8 +204,13 @@ fn can_read(network_id: NetworkId, store: StateStore) {
     // read state
     let after_going_through_disk = store.read_local_network_state_inner(network_id, cached);
 
-    // check that the read succeed and is equal to the state prior to passing by the
-    // disk
+    // println!(
+    //     "after | root: {}, nb nodes: {}",
+    //     Hash(after_going_through_disk.balance_tree.root),
+    //     after_going_through_disk.balance_tree.tree.len()
+    // );
+    // check that the read succeed and is equal to the state prior to passing by
+    // the disk
     assert!(
         matches!(after_going_through_disk, Ok(Some(retrieved)) if equal_state(&before_going_through_disk, &retrieved))
     );

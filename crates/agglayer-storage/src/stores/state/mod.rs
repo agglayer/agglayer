@@ -418,7 +418,6 @@ impl StateStore {
                 }
             }
         } else {
-            //let mut prev = None;
             while let Some(key) = keys.pop_front() {
                 debug!("Reading key: {:?}", key);
                 let value = self
@@ -428,12 +427,6 @@ impl StateStore {
                         key_type: key.clone(),
                     })?
                     .ok_or(Error::SmtNodeNotFound)?;
-
-                // debug!("Value: {:?}", value);
-                // if prev.is_some() && prev.as_ref() == Some(&value) {
-                //     return Err(Error::InconsistentFrontier);
-                // }
-                // prev = Some(value.clone());
                 match value {
                     SmtValue::Node(left, right) => {
                         nodes.push(Node {
