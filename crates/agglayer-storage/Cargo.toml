@@ -26,6 +26,7 @@ criterion = "0.5.1"
 rand.workspace = true
 rstest.workspace = true
 sp1-sdk.workspace = true
+pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
 [[bench]]
 name = "latest_certificate_bench"

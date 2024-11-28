@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
-use agglayer_types::{Hash, LocalNetworkStateData, NetworkId};
+use agglayer_types::{Certificate, Hash, LocalNetworkStateData, NetworkId};
+use pessimistic_proof::{generate_pessimistic_proof, LocalNetworkState};
 use rstest::{fixture, rstest};
+use tracing::info;
 
 use crate::{
     columns::latest_settled_certificate_per_network::{
@@ -134,4 +136,71 @@ fn can_detect_inconsistent_state(network_id: NetworkId, store: StateStore) {
         store.write_local_network_state(&network_id, &lns, &[]),
         Err(Error::InconsistentState { .. })
     ));
+}
+
+use pessimistic_proof_test_suite::sample_data::{self as data};
+
+#[rstest]
+fn can_read(network_id: NetworkId, store: StateStore) {
+    let cached = false;
+
+    let certificates: Vec<Certificate> = [
+        "n15-cert_h0.json",
+        "n15-cert_h1.json",
+        "n15-cert_h2-v2.json",
+    ]
+    .iter()
+    .map(|p| data::load_certificate(p))
+    .collect();
+
+    let mut leaves: Vec<Hash> = Vec::new();
+
+    let mut lns = LocalNetworkStateData::default();
+
+    for (idx, certificate) in certificates.iter().enumerate() {
+        info!(
+            "Certificate ({idx}|{}) | {}, nib:{} b:{}",
+            certificate.height,
+            certificate.hash(),
+            certificate.imported_bridge_exits.len(),
+            certificate.bridge_exits.len(),
+        );
+
+        let signer = certificate.signer().unwrap();
+        let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
+
+        let multi_batch_header = lns
+            .make_multi_batch_header(&certificate, signer, l1_info_root)
+            .unwrap();
+
+        info!("Certificate {idx}: successful witness generation");
+
+        let initial_state = LocalNetworkState::from(lns.clone());
+
+        generate_pessimistic_proof(initial_state, &multi_batch_header).unwrap();
+        info!("Certificate {idx}: successful native execution");
+
+        for b in &certificate.bridge_exits {
+            leaves.push(Hash(b.hash()));
+        }
+        lns.apply_certificate(&certificate, signer, l1_info_root)
+            .unwrap();
+        info!("Certificate {idx}: successful state transition, waiting for the next");
+    }
+
+    let before_going_through_disk = lns.clone();
+
+    // write state
+    assert!(store
+        .write_local_network_state(&network_id, &lns, leaves.as_slice())
+        .is_ok());
+
+    // read state
+    let after_going_through_disk = store.read_local_network_state_inner(network_id, cached);
+
+    // check that the read succeed and is equal to the state prior to passing by the
+    // disk
+    assert!(
+        matches!(after_going_through_disk, Ok(Some(retrieved)) if equal_state(&before_going_through_disk, &retrieved))
+    );
 }

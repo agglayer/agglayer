@@ -5,6 +5,7 @@ use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
+use pessimistic_proof::multi_batch_header::signature_commitment;
 use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::Smt;
 use pessimistic_proof::LocalNetworkState;
@@ -18,6 +19,7 @@ use pessimistic_proof::{
     ProofError,
 };
 pub use reth_primitives::address;
+use reth_primitives::B256;
 pub use reth_primitives::U256;
 pub use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
@@ -325,6 +327,14 @@ impl Certificate {
         } else {
             Err(Error::MultipleL1InfoRoot)
         }
+    }
+
+    pub fn signer(&self) -> Option<Address> {
+        // retrieve signer
+        let combined_hash =
+            signature_commitment(self.new_local_exit_root, &self.imported_bridge_exits);
+
+        self.signature.recover_signer(B256::new(combined_hash))
     }
 }
 

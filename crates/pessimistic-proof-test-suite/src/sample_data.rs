@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use agglayer_types::Certificate;
 use hex_literal::hex;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
@@ -102,4 +103,8 @@ pub fn sample_bridge_exits(sample_path: PathBuf) -> impl Iterator<Item = BridgeE
     parse_json_file::<Vec<DepositEventData>>(sample_path.as_path())
         .into_iter()
         .map(Into::into)
+}
+
+pub fn load_certificate(cert_path: &str) -> Certificate {
+    load_json_data_file::<Certificate>(cert_path)
 }

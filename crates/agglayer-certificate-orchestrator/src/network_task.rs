@@ -80,6 +80,11 @@ where
             .read_local_network_state(network_id)?
             .unwrap_or_default();
 
+        debug!(
+            "Local state for network {}: {}",
+            network_id,
+            local_state.get_roots().display_to_hex()
+        );
         Ok(Self {
             network_id,
             pending_store,
