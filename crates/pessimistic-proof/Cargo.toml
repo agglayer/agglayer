@@ -15,6 +15,9 @@ thiserror.workspace = true
 tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "patch-v2.0.2", features = [
     "keccak",
 ] }
+sp1-zkvm = { version = "3.0.0", features = ["verify"] }
+sp1-sdk = { version = "3.0.0" }
+sha2 = "0.10.8"
 
 [dev-dependencies]
 hex = "0.4.3"

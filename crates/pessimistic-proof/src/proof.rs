@@ -1,6 +1,7 @@
 use alloy_primitives::Address;
 pub use bincode::Options;
 use serde::{Deserialize, Serialize};
+use sp1_zkvm::lib::utils::words_to_bytes_le;
 use thiserror::Error;
 
 use crate::{
@@ -154,7 +155,8 @@ pub fn generate_pessimistic_proof(
 
     let consensus_hash = keccak256_combine([
         &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
-        batch_header.signer.as_slice(),
+        words_to_bytes_le(&batch_header.vkey).as_slice(),
+        batch_header.consensus_config.as_slice(),
     ]);
 
     let new_pessimistic_root = keccak256_combine([

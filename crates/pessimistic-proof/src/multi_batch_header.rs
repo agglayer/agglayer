@@ -5,6 +5,7 @@ use alloy_primitives::{Address, Signature, U256};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
+// use sp1_sdk::SP1Proof;
 use crate::{
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
@@ -48,10 +49,12 @@ where
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
     pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
-    /// Signer committing to the state transition.
-    pub signer: Address,
-    /// Signature committing to the state transition.
-    pub signature: Signature,
+    /// SP1 verification key for the consensus proof.
+    pub vkey: [u32; 8],
+    /// Consensus config.
+    pub consensus_config: Digest,
+    /// Consensus proof.
+    pub consensus_proof: (),
     /// State commitment target hashes.
     pub target: StateCommitment,
 }
@@ -71,8 +74,9 @@ where
         balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
         prev_balance_root: H::Digest,
         prev_nullifier_root: H::Digest,
-        signer: Address,
-        signature: Signature,
+        vkey: [u32; 8],
+        consensus_config: Digest,
+        consensus_proof: (),
         target: StateCommitment,
         l1_info_root: H::Digest,
     ) -> Self {
@@ -85,8 +89,9 @@ where
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
-            signer,
-            signature,
+            vkey,
+            consensus_config,
+            consensus_proof,
             target,
             l1_info_root,
         }

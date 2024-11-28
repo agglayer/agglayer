@@ -19,7 +19,7 @@ use pessimistic_proof::{
     ProofError,
 };
 use serde::{Deserialize, Serialize};
-use sp1_sdk::SP1PublicValues;
+use sp1_sdk::{SP1Proof, SP1PublicValues};
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Hash;
@@ -233,8 +233,8 @@ pub struct Certificate {
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits included in this state transition.
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
-    /// Signature committed to the bridge exits and imported bridge exits.
-    pub signature: Signature,
+    /// Consensus proof.
+    pub consensus_proof: SP1Proof,
     /// Fixed size field of arbitrary data for the chain needs.
     pub metadata: Metadata,
 }
@@ -350,7 +350,8 @@ impl LocalNetworkStateData {
     pub fn apply_certificate(
         &mut self,
         certificate: &Certificate,
-        signer: Address,
+        vkey: [u32; 8],
+        consensus_config: Digest,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
@@ -478,8 +479,9 @@ impl LocalNetworkStateData {
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
-            signer,
-            signature: certificate.signature,
+            vkey,
+            consensus_config,
+            consensus_proof: certificate.consensus_proof.clone(),
             imported_exits_root: Some(imported_hash),
             target: StateCommitment {
                 exit_root: certificate.new_local_exit_root,
@@ -495,9 +497,11 @@ impl LocalNetworkStateData {
     pub fn make_multi_batch_header(
         &self,
         certificate: &Certificate,
-        signer: Address,
+        vkey: [u32; 8],
+        consensus_config: Digest,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
-        self.clone().apply_certificate(certificate, signer)
+        self.clone()
+            .apply_certificate(certificate, vkey, consensus_config)
     }
 
     pub fn get_roots(&self) -> StateCommitment {

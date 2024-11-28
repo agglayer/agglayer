@@ -2,6 +2,8 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use alloy_primitives::{ruint::UintTryFrom, B256, U256, U512};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest as Sha256Digest, Sha256};
+use sp1_zkvm::lib::verify::verify_sp1_proof;
 
 use crate::{
     bridge_exit::{LeafType, L1_ETH, L1_NETWORK_ID},
@@ -239,6 +241,7 @@ impl LocalNetworkState {
         }
 
         // Verify that the signature is valid
+        // TODO: change this to SHA2 ?
         let combined_hash = signature_commitment(
             self.exit_tree.get_root(),
             multi_batch_header
@@ -247,18 +250,30 @@ impl LocalNetworkState {
                 .map(|(exit, _)| exit),
         );
 
-        // Check batch header signature
-        let signer = multi_batch_header
-            .signature
-            .recover_address_from_prehash(&B256::new(combined_hash))
-            .map_err(|_| ProofError::InvalidSignature)?;
+        // // Check batch header signature
+        // let signer = multi_batch_header
+        //     .signature
+        //     .recover_address_from_prehash(&B256::new(combined_hash))
+        //     .map_err(|_| ProofError::InvalidSignature)?;
+        //
+        // if signer != multi_batch_header.signer {
+        //     return Err(ProofError::InvalidSigner {
+        //         declared: multi_batch_header.signer,
+        //         recovered: signer,
+        //     });
+        // }
 
-        if signer != multi_batch_header.signer {
-            return Err(ProofError::InvalidSigner {
-                declared: multi_batch_header.signer,
-                recovered: signer,
-            });
-        }
+        // TODO: figure out what else needs to be a pv in the consensus proof.
+        let consensus_public_values = [
+            combined_hash.as_slice(),
+            multi_batch_header.consensus_config.as_slice(),
+        ]
+        .concat();
+
+        let vkey = multi_batch_header.vkey;
+        let public_values_digest = Sha256::digest(&consensus_public_values);
+        #[cfg(target_os = "zkvm")] // TODO: add a native verify otherwise.
+        verify_sp1_proof(&vkey, &public_values_digest.into());
 
         Ok(self.roots())
     }
