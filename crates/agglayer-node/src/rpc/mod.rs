@@ -13,7 +13,7 @@ use agglayer_storage::stores::StateReader;
 use agglayer_storage::stores::StateWriter;
 use agglayer_telemetry::KeyValue;
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, NetworkId,
 };
 use ethers::{
     contract::{ContractError, ContractRevert},
@@ -26,13 +26,8 @@ use jsonrpsee::{
     proc_macros::rpc,
     server::{middleware::http::ProxyGetRequestLayer, PingConfig, ServerBuilder, ServerHandle},
 };
-<<<<<<< HEAD
-use tokio::{sync::mpsc, try_join};
-use tower_http::compression::CompressionLayer;
-=======
 use tokio::try_join;
->>>>>>> 8556b2c (feat: orchestrator response)
-use tower_http::cors::CorsLayer;
+use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::trace;
 use tracing::{debug, error, info, instrument};
 
@@ -500,7 +495,7 @@ where
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>> {
         let id = match self
-            .state
+            .state_store
             .get_latest_settled_certificate_per_network(&network_id)
         {
             Ok(Some((_, SettledCertificate(id, _, _, _)))) => id,
@@ -513,7 +508,7 @@ where
             }
         };
 
-        match self.state.get_certificate_header(&id) {
+        match self.state_store.get_certificate_header(&id) {
             Ok(Some(header)) => Ok(Some(header)),
             Ok(None) => Err(Error::resource_not_found(format!("Certificate({})", id))),
             Err(e) => {
@@ -541,7 +536,7 @@ where
             }
         };
 
-        match self.state.get_certificate_header(&id) {
+        match self.state_store.get_certificate_header(&id) {
             Ok(Some(CertificateHeader {
                 status: CertificateStatus::Settled,
                 ..
