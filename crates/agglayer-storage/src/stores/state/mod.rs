@@ -356,7 +356,6 @@ impl StateStore {
     fn read_smt<C, const DEPTH: usize>(
         &self,
         network_id: NetworkId,
-        cached: bool,
     ) -> Result<Option<Smt<Keccak256Hasher, DEPTH>>, Error>
     where
         C: ColumnSchema<Key = SmtKey, Value = SmtValue>,
@@ -382,63 +381,35 @@ impl StateStore {
 
         let mut nodes: Vec<Node<Keccak256Hasher>> = Vec::new();
         nodes.push(root_node);
-        debug!("Root node left: {}", Hash(root_node.left));
-        debug!("Root node right: {}", Hash(root_node.right));
-        debug!("Nodes: {:?}", nodes);
 
-        if cached {
-            let mut already_read = BTreeSet::new();
-            while let Some(key) = keys.pop_front() {
-                let value = self
-                    .db
-                    .get::<C>(&SmtKey {
-                        network_id: network_id.into(),
-                        key_type: key.clone(),
-                    })?
-                    .ok_or(Error::SmtNodeNotFound)?;
+        let mut already_read = BTreeSet::new();
+        while let Some(key) = keys.pop_front() {
+            let value = self
+                .db
+                .get::<C>(&SmtKey {
+                    network_id: network_id.into(),
+                    key_type: key.clone(),
+                })?
+                .ok_or(Error::SmtNodeNotFound)?;
 
-                match value {
-                    SmtValue::Node(left, right) => {
-                        nodes.push(Node {
-                            left: *left.as_bytes(),
-                            right: *right.as_bytes(),
-                        });
-                        // update here
-                        if !already_read.contains(&left) {
-                            already_read.insert(left);
-                            keys.push_back(SmtKeyType::Node(left));
-                        }
-                        if !already_read.contains(&right) {
-                            already_read.insert(right);
-                            keys.push_back(SmtKeyType::Node(right));
-                        }
-                        // update end
-                    }
-                    SmtValue::Leaf(_) => {} // nothing to do
-                }
-            }
-        } else {
-            while let Some(key) = keys.pop_front() {
-                debug!("Reading key: {:?}", key);
-                let value = self
-                    .db
-                    .get::<C>(&SmtKey {
-                        network_id: network_id.into(),
-                        key_type: key.clone(),
-                    })?
-                    .ok_or(Error::SmtNodeNotFound)?;
-                match value {
-                    SmtValue::Node(left, right) => {
-                        nodes.push(Node {
-                            left: *left.as_bytes(),
-                            right: *right.as_bytes(),
-                        });
-
+            match value {
+                SmtValue::Node(left, right) => {
+                    nodes.push(Node {
+                        left: *left.as_bytes(),
+                        right: *right.as_bytes(),
+                    });
+                    // update here
+                    if !already_read.contains(&left) {
+                        already_read.insert(left);
                         keys.push_back(SmtKeyType::Node(left));
+                    }
+                    if !already_read.contains(&right) {
+                        already_read.insert(right);
                         keys.push_back(SmtKeyType::Node(right));
                     }
-                    SmtValue::Leaf(_) => {} // nothing to do
+                    // update end
                 }
+                SmtValue::Leaf(_) => {} // nothing to do
             }
         }
 
@@ -446,39 +417,6 @@ impl StateStore {
             root_node.hash(),
             nodes.as_slice(),
         )))
-    }
-
-    fn read_local_network_state_inner(
-        &self,
-        network_id: NetworkId,
-        cached: bool,
-    ) -> Result<Option<LocalNetworkStateData>, Error> {
-        debug!("Reading local network state for network_id: {}", network_id);
-        debug!("Fetching local exit tree");
-        let local_exit_tree = self.read_local_exit_tree(network_id)?;
-        debug!("Local exit tree fetched");
-        debug!("Fetching balance tree");
-        let balance_tree = self.read_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(
-            network_id, cached,
-        )?;
-        debug!("Balance tree fetched");
-        debug!("Fetching nullifier tree");
-
-        let nullifier_tree = self
-            .read_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(network_id, cached)?;
-        debug!("Nullifier tree fetched");
-
-        match (local_exit_tree, balance_tree, nullifier_tree) {
-            (None, None, None) => Ok(None), // consistent empty state
-            (Some(exit_tree), Some(balance_tree), Some(nullifier_tree)) => {
-                Ok(Some(LocalNetworkStateData {
-                    exit_tree,
-                    balance_tree,
-                    nullifier_tree,
-                }))
-            }
-            _ => Err(Error::InconsistentState { network_id }),
-        }
     }
 }
 
@@ -556,7 +494,31 @@ impl StateReader for StateStore {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error> {
-        self.read_local_network_state_inner(network_id, true)
+        debug!("Reading local network state for network_id: {}", network_id);
+        debug!("Fetching local exit tree");
+        let local_exit_tree = self.read_local_exit_tree(network_id)?;
+        debug!("Local exit tree fetched");
+        debug!("Fetching balance tree");
+        let balance_tree =
+            self.read_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(network_id)?;
+        debug!("Balance tree fetched");
+        debug!("Fetching nullifier tree");
+
+        let nullifier_tree =
+            self.read_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(network_id)?;
+        debug!("Nullifier tree fetched");
+
+        match (local_exit_tree, balance_tree, nullifier_tree) {
+            (None, None, None) => Ok(None), // consistent empty state
+            (Some(exit_tree), Some(balance_tree), Some(nullifier_tree)) => {
+                Ok(Some(LocalNetworkStateData {
+                    exit_tree,
+                    balance_tree,
+                    nullifier_tree,
+                }))
+            }
+            _ => Err(Error::InconsistentState { network_id }),
+        }
     }
 }
 

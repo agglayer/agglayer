@@ -7,7 +7,7 @@ use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::multi_batch_header::signature_commitment;
 use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
-use pessimistic_proof::utils::smt::Smt;
+use pessimistic_proof::utils::smt::{Smt, SmtError};
 use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
@@ -102,6 +102,9 @@ pub enum Error {
         declared: Hash,
         retrieved: Hash,
     },
+    /// The operation cannot be applied on the smt.
+    #[error(transparent)]
+    InvalidSmtOperation(#[from] SmtError),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -361,6 +364,14 @@ impl From<LocalNetworkStateData> for LocalNetworkState {
 }
 
 impl LocalNetworkStateData {
+    /// Prune the SMTs
+    pub fn prune_stale_nodes(&mut self) -> Result<(), Error> {
+        self.balance_tree.traverse_and_prune()?;
+        self.nullifier_tree.traverse_and_prune()?;
+
+        Ok(())
+    }
+
     /// Apply the [`Certificate`] on the current state and returns the
     /// [`MultiBatchHeader`] associated to the state transition.
     pub fn apply_certificate(

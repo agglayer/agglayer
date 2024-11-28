@@ -60,4 +60,10 @@ pub enum Error {
         certificate_id: CertificateId,
         error: String,
     },
+
+    #[error("Failed to persist the state after {certificate_id}: {error}")]
+    PersistenceError {
+        certificate_id: CertificateId,
+        error: String,
+    },
 }

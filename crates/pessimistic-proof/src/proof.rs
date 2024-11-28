@@ -187,11 +187,6 @@ pub fn generate_pessimistic_proof(
     let mut network_state = initial_network_state;
     let computed_target = network_state.apply_batch_header(batch_header)?;
 
-    println!(
-        "native prover execution: {:?}",
-        Hash(network_state.balance_tree.root)
-    );
-
     if computed_target.exit_root != batch_header.target.exit_root {
         return Err(ProofError::InvalidNewLocalExitRoot {
             declared: batch_header.target.exit_root.into(),

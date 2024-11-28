@@ -513,13 +513,20 @@ where
                         hash = certificate_id.to_string(),
                         "Received a certificate settlement notification"
                     );
-                    if let Some(new) = self.pending_state.take() {
+                    if let Some(mut new) = self.pending_state.take() {
                         debug!(
                             "Updated the state for network {} with the new state {} > {}",
                             self.network_id,
                             self.local_state.get_roots().display_to_hex(),
                             new.get_roots().display_to_hex()
                         );
+
+                        // Prune the SMTs of the state
+                        new.prune_stale_nodes()
+                            .map_err(|e| Error::PersistenceError {
+                                certificate_id,
+                                error: e.to_string(),
+                            })?;
 
                         self.local_state = new;
 
@@ -530,11 +537,16 @@ where
                             .map(|exit| exit.hash().into())
                             .collect::<Vec<Hash>>();
 
-                        _ = self.state_store.write_local_network_state(
-                            &certificate.network_id,
-                            &self.local_state,
-                            new_leaves.as_slice(),
-                        );
+                        self.state_store
+                            .write_local_network_state(
+                                &certificate.network_id,
+                                &self.local_state,
+                                new_leaves.as_slice(),
+                            )
+                            .map_err(|e| Error::PersistenceError {
+                                certificate_id,
+                                error: e.to_string(),
+                            })?;
                     } else {
                         error!(
                             "Missing pending state for network {} needed upon settlement, current \
