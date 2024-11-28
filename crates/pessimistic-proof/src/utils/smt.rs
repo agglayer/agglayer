@@ -1,6 +1,7 @@
 #![allow(clippy::needless_range_loop)]
 use std::{collections::HashMap, hash::Hash};
 
+use reth_primitives::revm_primitives::HashSet;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
@@ -227,6 +228,55 @@ where
     {
         let new_root = self.insert_helper(self.root, 0, &key.to_bits(), value, true)?;
         self.root = new_root;
+
+        Ok(())
+    }
+
+    fn traverse_helper(
+        &self,
+        hash: H::Digest,
+        depth: usize,
+        nodes: &mut HashSet<H::Digest>,
+    ) -> Result<(), SmtError> {
+        nodes.insert(hash);
+
+        #[allow(clippy::comparison_chain)] // Stupid lint.
+        if depth > DEPTH {
+            return Err(SmtError::DepthOutOfBounds);
+        } else if depth == DEPTH {
+            // We've reached a leaf.
+            return Ok(());
+        }
+
+        let node = self.tree.get(&hash).ok_or(SmtError::KeyNotPresent)?;
+        if node.left != self.empty_hash_at_height[DEPTH - depth - 1] {
+            self.traverse_helper(node.left, depth + 1, nodes)?;
+        }
+        if node.right != self.empty_hash_at_height[DEPTH - depth - 1] {
+            self.traverse_helper(node.right, depth + 1, nodes)?;
+        }
+
+        Ok(())
+    }
+
+    /// Traverse the SMT and prune all the stale nodes.
+    pub fn traverse_and_prune(&mut self) -> Result<(), SmtError>
+    where
+        H::Digest: Eq + Hash,
+    {
+        let mut seen_nodes = HashSet::new();
+        self.traverse_helper(self.root, 0, &mut seen_nodes)?;
+
+        let unseen_nodes = self
+            .tree
+            .keys()
+            .copied()
+            .filter(|k| !seen_nodes.contains(k))
+            .collect::<Vec<_>>();
+
+        for node in unseen_nodes {
+            self.tree.remove(&node);
+        }
 
         Ok(())
     }
@@ -659,5 +709,38 @@ mod tests {
         let proof = smt.get_inclusion_proof_zero(key);
         assert!(proof.is_err(), "The key is in the SMT");
         assert_eq!(root, smt.root, "The SMT should not be updated");
+    }
+
+    #[test]
+    fn test_traverse_and_prune() {
+        let mut rng = thread_rng();
+        let num_keys = rng.gen_range(0..100);
+        let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
+        check_no_duplicates(&kvs);
+
+        let mut smt0 = Smt::<H, DEPTH>::new();
+        let mut smt1 = Smt::<H, DEPTH>::new();
+        for (key, value) in kvs {
+            smt0.insert(key, value).unwrap();
+            smt1.insert(key, value).unwrap();
+        }
+
+        smt0.traverse_and_prune().unwrap();
+
+        let other_kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
+        check_no_duplicates(&other_kvs);
+
+        for (key, value) in other_kvs {
+            smt0.insert(key, value).unwrap();
+            smt1.insert(key, value).unwrap();
+        }
+
+        dbg!(smt1.tree.len());
+        smt0.traverse_and_prune().unwrap();
+        smt1.traverse_and_prune().unwrap();
+        dbg!(smt1.tree.len());
+
+        assert_eq!(smt0.root, smt1.root);
+        assert_eq!(smt0.tree, smt1.tree);
     }
 }
