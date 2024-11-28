@@ -39,7 +39,7 @@ impl EpochSynchronizer {
                         error
                     );
 
-                    return Err(error)?;
+                    return Err(error.into());
                 }
                 Ok(_) => {}
             }
