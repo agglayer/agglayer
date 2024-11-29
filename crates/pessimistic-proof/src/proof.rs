@@ -1,4 +1,5 @@
 pub use bincode::Options;
+use hex_literal::hex;
 use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -135,9 +136,30 @@ impl PessimisticProofOutput {
             .with_big_endian()
             .with_fixint_encoding()
     }
+
+    pub fn display_to_hex(&self) -> String {
+        format!(
+            "prev_local_exit_root: {}, prev_pessimistic_root: {}, l1_info_root: {}, \
+             origin_network: {}, consensus_hash: {}, new_local_exit_root: {}, \
+             new_pessimistic_root: {}",
+            Hash(self.prev_local_exit_root),
+            Hash(self.prev_pessimistic_root),
+            Hash(self.l1_info_root),
+            self.origin_network,
+            Hash(self.consensus_hash),
+            Hash(self.new_local_exit_root),
+            Hash(self.new_pessimistic_root),
+        )
+    }
 }
 
 const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;
+
+const EMPTY_LER: [u8; 32] =
+    hex!("27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757");
+
+const EMPTY_PP_ROOT: [u8; 32] =
+    hex!("2152f3808cb81b33b5a47a7a256d61ab9ea916c66030c405ca9b2aaad3b00f0a");
 
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
 /// [`LocalNetworkState`].
@@ -186,8 +208,27 @@ pub fn generate_pessimistic_proof(
         });
     }
 
+    // NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
+    // empty roots of the different trees involved. Therefore, we do
+    // one mapping of empty tree hash <> 0x00..0 on the public inputs.
+    let (prev_local_exit_root, prev_pessimistic_root) = {
+        let prev_ler = if prev_ler == EMPTY_LER {
+            [0; 32]
+        } else {
+            prev_ler
+        };
+
+        let prev_pp_root = if prev_pessimistic_root == EMPTY_PP_ROOT {
+            [0; 32]
+        } else {
+            prev_pessimistic_root
+        };
+
+        (prev_ler, prev_pp_root)
+    };
+
     Ok(PessimisticProofOutput {
-        prev_local_exit_root: prev_ler,
+        prev_local_exit_root,
         prev_pessimistic_root,
         l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
@@ -195,4 +236,23 @@ pub fn generate_pessimistic_proof(
         new_local_exit_root: batch_header.target.exit_root,
         new_pessimistic_root,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_tree_roots() {
+        let empty_state = LocalNetworkState::default();
+
+        let ler = empty_state.exit_tree.get_root();
+        let ppr = keccak256_combine([
+            empty_state.balance_tree.root,
+            empty_state.nullifier_tree.root,
+        ]);
+
+        assert_eq!(EMPTY_LER, ler);
+        assert_eq!(EMPTY_PP_ROOT, ppr);
+    }
 }
