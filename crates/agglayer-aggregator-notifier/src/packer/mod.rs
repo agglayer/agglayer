@@ -13,8 +13,8 @@ use agglayer_types::{
 use bincode::Options;
 use futures::future::BoxFuture;
 use pessimistic_proof::PessimisticProofOutput;
-use tracing::{debug, error, info, warn};
-use tracing::{Instrument, Span};
+use tracing::Instrument;
+use tracing::{debug, error, info, instrument, warn};
 
 #[cfg(test)]
 mod tests;
@@ -45,6 +45,9 @@ impl<StateStore, PerEpochStore, RollupManagerRpc>
     }
 }
 
+type SettlementResult<'a> =
+    Result<BoxFuture<'a, Result<(NetworkId, SettledCertificate), Error>>, Error>;
+
 impl<StateStore, PerEpochStore, RollupManagerRpc> EpochPacker
     for EpochPackerClient<StateStore, PerEpochStore, RollupManagerRpc>
 where
@@ -54,13 +57,15 @@ where
 {
     type PerEpochStore = PerEpochStore;
 
+    #[instrument(skip_all, fields(hash, network_id, calldata), level = "debug")]
     fn settle_certificate(
         &self,
         related_epoch: Arc<Self::PerEpochStore>,
         certificate_index: CertificateIndex,
         certificate_id: CertificateId,
-    ) -> Result<BoxFuture<Result<(NetworkId, SettledCertificate), Error>>, Error> {
+    ) -> SettlementResult {
         let hash = certificate_id.to_string();
+        tracing::Span::current().record("hash", &hash);
         if let Some(CertificateHeader {
             status: CertificateStatus::Candidate,
             ..
@@ -83,8 +88,10 @@ where
                 return Err(Error::InternalError);
             };
 
-        let height = certificate.height;
         let network_id = certificate.network_id;
+        tracing::Span::current().record("network_id", *network_id);
+
+        let height = certificate.height;
         let epoch_number = related_epoch.get_epoch_number();
 
         let l_1_info_tree_leaf_count = certificate.l1_info_tree_leaf_count();
@@ -114,14 +121,19 @@ where
                 proof.into(),
             );
 
-        let span = Span::current();
-        span.record("certificate_id", hash.clone());
-        span.record("network_id", *network_id);
-        if let Ok(data) = serde_json::to_string(&contract_call.function.inputs) {
-            span.record("call_data", data);
-        } else {
-            warn!("Failed to serialize contract call data for {}", hash);
-        }
+        tracing::Span::current().record(
+            "calldata",
+            contract_call
+                .tx
+                .data()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "unable to serialize calldata".to_string()),
+        );
+
+        info!(
+            "Initializing the settlement of the certificate {} on L1",
+            certificate_id
+        );
 
         let state_store = self.state_store.clone();
         let config = self.config.clone();
@@ -196,7 +208,7 @@ where
                     SettledCertificate(certificate_id, height, epoch_number, certificate_index),
                 ))
             }
-            .in_current_span(),
+            .instrument(tracing::Span::current()),
         );
 
         Ok(fut)

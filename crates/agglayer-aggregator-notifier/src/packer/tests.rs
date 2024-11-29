@@ -32,6 +32,7 @@ mockall::mock! {
         ) -> ContractCall<NonceManagerMiddleware<Provider<MockProvider>>, ()>;
     }
 }
+
 #[rstest]
 fn epoch_packer_can_settle_one_certificate() {
     let network_id = 1.into();
