@@ -15,7 +15,7 @@ use crate::rpc::{tests::RawRpcContext, AgglayerServer};
 #[rstest]
 #[awt]
 #[test_log::test(tokio::test)]
-async fn fetch_unkown_certificate_header(#[future] context: TestContext) {
+async fn fetch_unknown_certificate_header(#[future] context: TestContext) {
     let payload: Result<CertificateHeader, ClientError> = context
         .client
         .request("interop_getCertificateHeader", rpc_params![Hash([0; 32])])
@@ -30,7 +30,7 @@ async fn fetch_unkown_certificate_header(#[future] context: TestContext) {
 #[rstest]
 #[awt]
 #[test_log::test(tokio::test)]
-async fn fetch_kown_certificate_header(#[future] mut context: TestContext) {
+async fn fetch_known_certificate_header(#[future] mut context: TestContext) {
     let certificate = Certificate::new_for_test(1.into(), 0);
     let id = certificate.hash();
 
@@ -165,7 +165,7 @@ async fn certificate_header(#[future] raw_rpc: RawRpcContext) {
 }
 #[rstest]
 #[test_log::test(tokio::test)]
-async fn debug_fetch_unkown_certificate() {
+async fn debug_fetch_unknown_certificate() {
     let mut config = TestContext::get_default_config();
     config.debug_mode = true;
 
@@ -184,7 +184,7 @@ async fn debug_fetch_unkown_certificate() {
 
 #[rstest]
 #[test_log::test(tokio::test)]
-async fn debug_fetch_kown_certificate() {
+async fn debug_fetch_known_certificate() {
     let mut config = TestContext::get_default_config();
     config.debug_mode = true;
 

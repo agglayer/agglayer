@@ -481,7 +481,6 @@ where
         &self,
         certificate_id: CertificateId,
     ) -> RpcResult<(Certificate, Option<CertificateHeader>)> {
-        trace!("Received request to get certificate for id {certificate_id}");
         match self.debug_store.get_certificate(&certificate_id) {
             Ok(Some(cert)) => match self
                 .state

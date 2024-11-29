@@ -106,7 +106,7 @@ pub struct Config {
     pub prover_entrypoint: String,
 
     #[serde(default)]
-    #[serde(skip_serializing_if = "<&bool as std::ops::Not>::not")]
+    #[serde(skip_serializing_if = "is_false")]
     pub debug_mode: bool,
 }
 
@@ -224,4 +224,8 @@ impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
             .validate()
             .map_err(|e| serde::de::Error::custom(e.to_string()))
     }
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
