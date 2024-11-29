@@ -24,7 +24,7 @@ pub trait PendingCertificateReader: Send + Sync {
     fn get_latest_pending_certificate_for_network(
         &self,
         network_id: &NetworkId,
-    ) -> Result<Option<Certificate>, Error>;
+    ) -> Result<Option<(CertificateId, Height)>, Error>;
 
     fn get_certificate(
         &self,

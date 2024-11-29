@@ -4,6 +4,7 @@ use agglayer_config::prover::ProverConfig;
 use agglayer_telemetry::ServerBuilder as MetricsBuilder;
 use anyhow::Result;
 use prover::Prover;
+use sp1_sdk::HashableKey;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -92,6 +93,11 @@ pub fn main(cfg: PathBuf) -> Result<()> {
     metrics_runtime.shutdown_timeout(config.shutdown.runtime_timeout);
 
     Ok(())
+}
+
+pub fn get_vkey() -> String {
+    let vkey = executor::Executor::get_vkey();
+    vkey.bytes32().to_string()
 }
 
 #[cfg(feature = "testutils")]

@@ -120,7 +120,6 @@ where
             ));
         }
         let mut prover_client = self.prover.clone();
-
         let pending_store = self.pending_store.clone();
         let verifier = self.verifier.clone();
         let verifying_key = self.verifying_key.clone();

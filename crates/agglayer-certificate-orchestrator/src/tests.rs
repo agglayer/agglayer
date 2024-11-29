@@ -91,7 +91,7 @@ impl PerEpochWriter for DummyPendingStore {
         &self,
         _network_id: NetworkId,
         _height: Height,
-    ) -> std::result::Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
+    ) -> Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
         Ok((0, 0))
     }
 
@@ -241,6 +241,15 @@ impl PendingCertificateWriter for DummyPendingStore {
 
         Ok(())
     }
+
+    fn set_latest_pending_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+        _height: &Height,
+        _certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
 }
 
 impl StateWriter for DummyPendingStore {
@@ -329,7 +338,7 @@ impl PendingCertificateReader for DummyPendingStore {
     fn get_latest_pending_certificate_for_network(
         &self,
         _network_id: &NetworkId,
-    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
         todo!()
     }
 
