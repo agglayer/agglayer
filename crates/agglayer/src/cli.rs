@@ -46,4 +46,6 @@ pub(crate) enum Commands {
         #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer-prover.toml", env = "PROVER_CONFIG_PATH")]
         cfg: PathBuf,
     },
+
+    Vkey,
 }
