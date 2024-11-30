@@ -268,17 +268,7 @@ where
     {
         let mut seen_nodes = HashSet::new();
         self.traverse_helper(self.root, 0, &mut seen_nodes)?;
-
-        let unseen_nodes = self
-            .tree
-            .keys()
-            .copied()
-            .filter(|k| !seen_nodes.contains(k))
-            .collect::<Vec<_>>();
-
-        for node in unseen_nodes {
-            self.tree.remove(&node);
-        }
+        self.tree.retain(|k, _v| seen_nodes.contains(k));
 
         Ok(())
     }
