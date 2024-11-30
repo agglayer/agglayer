@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use agglayer_config::Config;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
+use agglayer_storage::stores::debug::DebugStore;
 use agglayer_storage::stores::pending::PendingStore;
 use agglayer_storage::stores::state::StateStore;
 use agglayer_storage::tests::TempDBDir;
@@ -55,6 +56,7 @@ async fn check_tx_status() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        Arc::new(DummyStore {}),
         config.clone(),
     )
     .start()
@@ -103,12 +105,19 @@ async fn check_tx_status_fail() {
     let store_db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
     let store = Arc::new(PendingStore::new(db));
     let state = Arc::new(StateStore::new(store_db));
+    let debug = Arc::new(DebugStore::new_with_path(&tmp.path.join("debug")).unwrap());
 
-    let _server_handle =
-        AgglayerImpl::new(kernel, certificate_sender, store, state, config.clone())
-            .start()
-            .await
-            .unwrap();
+    let _server_handle = AgglayerImpl::new(
+        kernel,
+        certificate_sender,
+        store,
+        state,
+        debug,
+        config.clone(),
+    )
+    .start()
+    .await
+    .unwrap();
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();

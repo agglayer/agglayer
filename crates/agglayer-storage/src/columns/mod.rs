@@ -36,6 +36,9 @@ pub const PER_EPOCH_TRANSACTION_HASH_PER_CERTIFICATE_INDEX: &str =
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
 pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
 
+// debug CFs
+pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
+
 pub trait Codec: Sized + Serialize + DeserializeOwned {
     fn encode(&self) -> Result<Vec<u8>, Error> {
         Ok(default_bincode_options().serialize(self)?)
@@ -68,6 +71,9 @@ pub(crate) mod certificate_header;
 pub mod latest_proven_certificate_per_network;
 pub mod latest_settled_certificate_per_network;
 pub(crate) mod metadata;
+
+// Debug
+pub(crate) mod debug_certificates;
 
 // PerEpoch
 pub mod epochs {

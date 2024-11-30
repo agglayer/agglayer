@@ -11,7 +11,10 @@ use agglayer_contracts::{
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::DB,
-    stores::{epochs::EpochsStore, pending::PendingStore, state::StateStore, PerEpochReader as _},
+    stores::{
+        debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
+        PerEpochReader as _,
+    },
 };
 use alloy::providers::WsConnect;
 use anyhow::Result;
@@ -86,6 +89,12 @@ impl Node {
 
         let state_store = Arc::new(StateStore::new(state_db.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
+        let debug_store = if config.debug_mode {
+            Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path)?)
+        } else {
+            Arc::new(DebugStore::Disabled)
+        };
+
         info!("Storage initialized.");
 
         // Spawn the TimeClock.
@@ -203,6 +212,7 @@ impl Node {
             data_sender,
             pending_store.clone(),
             state_store.clone(),
+            debug_store,
             config.clone(),
         )
         .start()

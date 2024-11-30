@@ -36,6 +36,7 @@ async fn send_certificate_method_can_be_called() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        Arc::new(DummyStore {}),
         config.clone(),
     )
     .start()
@@ -75,6 +76,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
     let _server_handle = AgglayerImpl::new(
         kernel,
         certificate_sender,
+        Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         config.clone(),

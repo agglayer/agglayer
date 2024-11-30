@@ -4,9 +4,10 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCertificate;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
+use agglayer_storage::stores::debug::DebugStore;
 use agglayer_storage::stores::pending::PendingStore;
 use agglayer_storage::stores::state::StateStore;
-use agglayer_storage::stores::PendingCertificateReader;
+use agglayer_storage::stores::{DebugReader, DebugWriter, PendingCertificateReader};
 use agglayer_storage::{
     stores::{PendingCertificateWriter, StateReader, StateWriter},
     tests::TempDBDir,
@@ -51,6 +52,7 @@ async fn healthcheck_method_can_be_called() {
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        Arc::new(DummyStore {}),
         config.clone(),
     )
     .start()
@@ -77,7 +79,7 @@ async fn healthcheck_method_can_be_called() {
 }
 
 pub(crate) struct RawRpcContext {
-    pub(crate) rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore>,
+    pub(crate) rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore, DebugStore>,
     config: Arc<Config>,
     pub(crate) certificate_receiver:
         tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
@@ -138,6 +140,11 @@ impl TestContext {
 
         let state_store = Arc::new(StateStore::new(state_db));
         let pending_store = Arc::new(PendingStore::new(pending_db));
+        let debug_store = if config.debug_mode {
+            Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap())
+        } else {
+            Arc::new(DebugStore::Disabled)
+        };
         let (provider, _mock) = providers::Provider::mocked();
         let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
@@ -148,6 +155,7 @@ impl TestContext {
             certificate_sender,
             pending_store,
             state_store,
+            debug_store,
             config.clone(),
         );
 
@@ -199,6 +207,23 @@ fn next_available_addr() -> std::net::SocketAddr {
 }
 
 struct DummyStore {}
+
+impl DebugReader for DummyStore {
+    fn get_certificate(
+        &self,
+        _certificate_id: &CertificateId,
+    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+        Ok(None)
+    }
+}
+impl DebugWriter for DummyStore {
+    fn add_certificate(
+        &self,
+        _certificate: &Certificate,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+}
 
 impl StateWriter for DummyStore {
     fn assign_certificate_to_epoch(

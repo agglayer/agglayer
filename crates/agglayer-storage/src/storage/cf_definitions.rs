@@ -1,5 +1,6 @@
 use rocksdb::ColumnFamilyDescriptor;
 
+pub mod debug;
 pub mod epochs;
 pub mod pending;
 pub mod state;

@@ -10,6 +10,7 @@ const METADATA_DB_NAME: &str = "metadata";
 const PENDING_DB_NAME: &str = "pending";
 const STATE_DB_NAME: &str = "state";
 const EPOCHS_DB_PATH: &str = "epochs";
+const DEBUG_DB_PATH: &str = "debug";
 
 /// Configuration for the storage.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -24,6 +25,8 @@ pub struct StorageConfig {
     pub state_db_path: PathBuf,
     /// Custom epochs storage path or inferred from the db path.
     pub epochs_db_path: PathBuf,
+    /// Custom debug storage path or inferred from the db path.
+    pub debug_db_path: PathBuf,
 }
 
 impl Default for StorageConfig {
@@ -33,6 +36,7 @@ impl Default for StorageConfig {
             pending_db_path: Path::new("./").join(STORAGE_DIR).join(PENDING_DB_NAME),
             state_db_path: Path::new("./").join(STORAGE_DIR).join(STATE_DB_NAME),
             epochs_db_path: Path::new("./").join(STORAGE_DIR).join(EPOCHS_DB_PATH),
+            debug_db_path: Path::new("./").join(STORAGE_DIR).join(DEBUG_DB_PATH),
         }
     }
 }
@@ -43,6 +47,7 @@ impl StorageConfig {
         self.pending_db_path = normalize_path(&base_path.join(&self.pending_db_path));
         self.state_db_path = normalize_path(&base_path.join(&self.state_db_path));
         self.epochs_db_path = normalize_path(&base_path.join(&self.epochs_db_path));
+        self.debug_db_path = normalize_path(&base_path.join(&self.debug_db_path));
 
         self
     }
@@ -61,6 +66,7 @@ impl StorageConfig {
             pending_db_path: db_path.join(PENDING_DB_NAME),
             state_db_path: db_path.join(STATE_DB_NAME),
             epochs_db_path: db_path.join(EPOCHS_DB_PATH),
+            debug_db_path: db_path.join(DEBUG_DB_PATH),
         }
     }
 }
@@ -79,6 +85,8 @@ struct StorageConfigHelper {
     pub state_db_path: Option<PathBuf>,
     /// Custom epochs storage path or inferred from the db path.
     pub epochs_db_path: Option<PathBuf>,
+    /// Custom debug storage path or inferred from the db path.
+    pub debug_db_path: Option<PathBuf>,
 }
 
 impl From<StorageConfigHelper> for StorageConfig {
@@ -96,6 +104,9 @@ impl From<StorageConfigHelper> for StorageConfig {
             epochs_db_path: value
                 .epochs_db_path
                 .unwrap_or_else(|| value.db_path.join(EPOCHS_DB_PATH)),
+            debug_db_path: value
+                .debug_db_path
+                .unwrap_or_else(|| value.db_path.join(DEBUG_DB_PATH)),
         }
     }
 }
@@ -114,6 +125,7 @@ impl From<StorageConfig> for StorageConfigHelper {
             pending_db_path: None,
             state_db_path: None,
             epochs_db_path: None,
+            debug_db_path: None,
         }
     }
 }
@@ -181,5 +193,6 @@ mod tests {
         assert_eq!(config.pending_db_path, PathBuf::from("/tmp/base/pending"));
         assert_eq!(config.state_db_path, PathBuf::from("/tmp/base/state"));
         assert_eq!(config.epochs_db_path, PathBuf::from("/tmp/base/epochs"));
+        assert_eq!(config.debug_db_path, PathBuf::from("/tmp/base/debug"));
     }
 }

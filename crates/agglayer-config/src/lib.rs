@@ -104,6 +104,10 @@ pub struct Config {
     #[serde(default = "default_prover_entrypoint")]
     #[serde(skip_serializing_if = "String::is_empty")]
     pub prover_entrypoint: String,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_false")]
+    pub debug_mode: bool,
 }
 
 impl Config {
@@ -153,6 +157,7 @@ impl Config {
             shutdown: Default::default(),
             certificate_orchestrator: Default::default(),
             prover_entrypoint: default_prover_entrypoint(),
+            debug_mode: false,
         }
     }
 
@@ -219,4 +224,8 @@ impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
             .validate()
             .map_err(|e| serde::de::Error::custom(e.to_string()))
     }
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
