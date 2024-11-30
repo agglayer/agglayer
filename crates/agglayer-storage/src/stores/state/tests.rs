@@ -142,15 +142,11 @@ use pessimistic_proof_test_suite::sample_data::{self as data};
 
 #[rstest]
 fn can_read(network_id: NetworkId, store: StateStore) {
-    let certificates: Vec<Certificate> = [
-        "n15-cert_h0.json",
-        "n15-cert_h1.json",
-        "n15-cert_h2-v2.json",
-        //"n15-cert_h3-v2.json",
-    ]
-    .iter()
-    .map(|p| data::load_certificate(p))
-    .collect();
+    let certificates: Vec<Certificate> =
+        ["n15-cert_h0.json", "n15-cert_h1.json", "n15-cert_h2.json"]
+            .iter()
+            .map(|p| data::load_certificate(p))
+            .collect();
 
     let mut leaves: Vec<Hash> = Vec::new();
     let mut lns = LocalNetworkStateData::default();

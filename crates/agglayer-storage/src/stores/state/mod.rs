@@ -382,7 +382,7 @@ impl StateStore {
         let mut nodes: Vec<Node<Keccak256Hasher>> = Vec::new();
         nodes.push(root_node);
 
-        let mut already_read = BTreeSet::new();
+        let mut queued = BTreeSet::new();
         while let Some(key) = keys.pop_front() {
             let value = self
                 .db
@@ -398,16 +398,12 @@ impl StateStore {
                         left: *left.as_bytes(),
                         right: *right.as_bytes(),
                     });
-                    // update here
-                    if !already_read.contains(&left) {
-                        already_read.insert(left);
+                    if queued.insert(left) {
                         keys.push_back(SmtKeyType::Node(left));
                     }
-                    if !already_read.contains(&right) {
-                        already_read.insert(right);
+                    if queued.insert(right) {
                         keys.push_back(SmtKeyType::Node(right));
                     }
-                    // update end
                 }
                 SmtValue::Leaf(_) => {} // nothing to do
             }
@@ -495,18 +491,12 @@ impl StateReader for StateStore {
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error> {
         debug!("Reading local network state for network_id: {}", network_id);
-        debug!("Fetching local exit tree");
+
         let local_exit_tree = self.read_local_exit_tree(network_id)?;
-        debug!("Local exit tree fetched");
-        debug!("Fetching balance tree");
         let balance_tree =
             self.read_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(network_id)?;
-        debug!("Balance tree fetched");
-        debug!("Fetching nullifier tree");
-
         let nullifier_tree =
             self.read_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(network_id)?;
-        debug!("Nullifier tree fetched");
 
         match (local_exit_tree, balance_tree, nullifier_tree) {
             (None, None, None) => Ok(None), // consistent empty state
