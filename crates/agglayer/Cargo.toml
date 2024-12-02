@@ -16,4 +16,7 @@ agglayer-config = { path = "../agglayer-config" }
 
 [dev-dependencies]
 assert_cmd = "2.0.14"
+clap-doc = "0.1.0"
+expect-test = "1.5.0"
 insta.workspace = true
+trycmd = "0.15.8"

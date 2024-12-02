@@ -1,7 +1,38 @@
----
-source: crates/agglayer/tests/config.rs
-expression: sanitize_config_folder_path(result)
----
+# Literate test cases for the agglayer CLI
+
+This file contains UI tests in code blocks.
+
+## Quickstart
+```bash
+cargo test --test cli # run the tests
+TRYCMD=overwrite cargo test --test cli # overwrite the snapshots
+TRYCMD=dump cargo test --test cli # dump the snapshots
+```
+
+Trycmd can additionally check exit statuses, clean local paths, assert file contents etc.
+See the [crate documentation](https://docs.rs/trycmd) for more.
+
+```console
+$ agglayer --help
+Agglayer command line interface
+
+Usage: agglayer <COMMAND>
+
+Commands:
+  run              
+  config           
+  validate-config  
+  prover-config    
+  prover           
+  help             Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
+
+```
+
+```console
+$ agglayer config --base-dir .
 prover-entrypoint = "http://127.0.0.1:8080"
 
 [full-node-rpcs]
@@ -60,4 +91,7 @@ input-backpressure-buffer-size = 1000
 [certificate-orchestrator.prover.sp1-local]
 
 [storage]
-db-path = "/tmp/agglayer-test/storage"
+db-path = "./storage"
+
+
+```

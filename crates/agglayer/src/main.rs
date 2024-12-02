@@ -31,3 +31,9 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test() {
+    let expected = clap_doc::markdown(<Cli as clap::CommandFactory>::command());
+    expect_test::expect_file!["../README.md"].assert_eq(&expected);
+}

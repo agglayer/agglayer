@@ -1,34 +1,59 @@
-[FullNodeRPCs]
-1 = "http://zkevm-node:8123"
+prover-entrypoint = "http://127.0.0.1:8080"
 
-[RPC]
-Host = "0.0.0.0"
-Port = 9090
+[full-node-rpcs]
 
-[Log]
-Level = "info"
-Outputs = ["stderr"]
+[l2]
+rpc-timeout = "45s"
 
-[L1]
-ChainID = 1337
-NodeURL = "https://rpc-cdk-validium-cardona-03-zkevm.polygondev.tools"
-RollupManagerContract = "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff"
+[proof-signers]
 
-[auth.local]
-PrivateKeys = [{ Path = "/pk/agglayer.keystore", Password = "testonly" }]
+[log]
+level = "info"
+outputs = []
+format = "pretty"
 
-[auth.gcpkms]
-ProjectId = ""
-Location = ""
-Keyring = ""
-KeyName = ""
+[rpc]
+port = 9090
+host = "0.0.0.0"
+request-timeout = "3m"
 
-[Telemetry]
+[rate-limiting]
+send-tx = "unlimited"
+
+[rate-limiting.network]
 
 [outbound.rpc.settle]
-max_retries = 10
-retry_interval = 1
-confirmations = 3
+max-retries = 3
+retry-interval = "7s"
+confirmations = 1
+settlement-timeout = "20m"
+
+[l1]
+chain-id = 1337
+node-url = "http://zkevm-mock-l1-network:8545/"
+ws-node-url = "ws://zkevm-mock-l1-network:8546/"
+max-reconnection-elapsed-time = "10s"
+rollup-manager-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
+polygon-zkevm-global-exit-root-v2-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
+rpc-timeout = "45s"
+
+[auth.local]
+private-keys = []
+
+[telemetry]
+prometheus-addr = "0.0.0.0:3000"
+
+[epoch.block-clock]
+epoch-duration = 6
+genesis-block = 0
 
 [shutdown]
-runtime_timeout = 5
+runtime-timeout = "5s"
+
+[certificate-orchestrator]
+input-backpressure-buffer-size = 1000
+
+[certificate-orchestrator.prover.sp1-local]
+
+[storage]
+db-path = "/home/aatif/polygon/agglayer/storage"

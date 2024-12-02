@@ -1,7 +1,3 @@
----
-source: crates/agglayer/tests/config.rs
-expression: sanitize_config_folder_path(result)
----
 grpc-endpoint = "127.0.0.1:8080"
 max-concurrency-limit = 100
 max-request-duration = "5m"
@@ -31,3 +27,4 @@ proving-timeout = "5m"
 enabled = false
 max-concurrency-limit = 100
 proving-timeout = "5m"
+
