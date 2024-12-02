@@ -50,7 +50,7 @@ pub enum SmtKeyType {
     Node(Hash),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum SmtValue {
     Node(Hash, Hash),
     Leaf(Hash),

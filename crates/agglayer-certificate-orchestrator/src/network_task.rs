@@ -80,6 +80,11 @@ where
             .read_local_network_state(network_id)?
             .unwrap_or_default();
 
+        debug!(
+            "Local state for network {}: {}",
+            network_id,
+            local_state.get_roots().display_to_hex()
+        );
         Ok(Self {
             network_id,
             pending_store,
@@ -525,11 +530,16 @@ where
                             .map(|exit| exit.hash().into())
                             .collect::<Vec<Hash>>();
 
-                        _ = self.state_store.write_local_network_state(
-                            &certificate.network_id,
-                            &self.local_state,
-                            new_leaves.as_slice(),
-                        );
+                        self.state_store
+                            .write_local_network_state(
+                                &certificate.network_id,
+                                &self.local_state,
+                                new_leaves.as_slice(),
+                            )
+                            .map_err(|e| Error::PersistenceError {
+                                certificate_id,
+                                error: e.to_string(),
+                            })?;
                     } else {
                         error!(
                             "Missing pending state for network {} needed upon settlement, current \

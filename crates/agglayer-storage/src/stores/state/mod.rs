@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     path::Path,
     sync::Arc,
 };
@@ -15,7 +15,7 @@ use pessimistic_proof::{
     utils::smt::{Node, Smt},
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
@@ -315,6 +315,7 @@ impl StateStore {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalExitTree<Keccak256Hasher>>, Error> {
+        debug!("Reading local exit tree for network_id: {}", network_id);
         let leaf_count = if let Some(leaf_count_value) =
             self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
                 network_id: network_id.into(),
@@ -381,6 +382,7 @@ impl StateStore {
         let mut nodes: Vec<Node<Keccak256Hasher>> = Vec::new();
         nodes.push(root_node);
 
+        let mut queued = BTreeSet::new();
         while let Some(key) = keys.pop_front() {
             let value = self
                 .db
@@ -396,9 +398,12 @@ impl StateStore {
                         left: *left.as_bytes(),
                         right: *right.as_bytes(),
                     });
-
-                    keys.push_back(SmtKeyType::Node(left));
-                    keys.push_back(SmtKeyType::Node(right));
+                    if queued.insert(left) {
+                        keys.push_back(SmtKeyType::Node(left));
+                    }
+                    if queued.insert(right) {
+                        keys.push_back(SmtKeyType::Node(right));
+                    }
                 }
                 SmtValue::Leaf(_) => {} // nothing to do
             }
@@ -485,11 +490,15 @@ impl StateReader for StateStore {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error> {
-        match (
-            self.read_local_exit_tree(network_id)?,
-            self.read_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(network_id)?,
-            self.read_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(network_id)?,
-        ) {
+        debug!("Reading local network state for network_id: {}", network_id);
+
+        let local_exit_tree = self.read_local_exit_tree(network_id)?;
+        let balance_tree =
+            self.read_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(network_id)?;
+        let nullifier_tree =
+            self.read_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(network_id)?;
+
+        match (local_exit_tree, balance_tree, nullifier_tree) {
             (None, None, None) => Ok(None), // consistent empty state
             (Some(exit_tree), Some(balance_tree), Some(nullifier_tree)) => {
                 Ok(Some(LocalNetworkStateData {

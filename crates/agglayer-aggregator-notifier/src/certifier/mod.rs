@@ -238,6 +238,11 @@ where
                 // TODO: Check if the key already exists
                 pending_store.insert_generated_proof(&certificate.hash(), &proof)?;
 
+                // Prune the SMTs of the state
+                state
+                    .prune_stale_nodes()
+                    .map_err(|e| CertificationError::InternalError(e.to_string()))?;
+
                 Ok(CertifierOutput {
                     certificate,
                     height,
