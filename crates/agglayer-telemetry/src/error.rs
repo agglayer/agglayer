@@ -11,7 +11,4 @@ pub(crate) enum MetricsError {
 
     #[error("Error formatting metrics: {0}")]
     FormattingMetrics(#[from] std::string::FromUtf8Error),
-
-    #[error("Error exporting metrics: {0}")]
-    OpenTelemetry(#[from] opentelemetry::metrics::MetricsError),
 }

@@ -31,32 +31,32 @@ lazy_static! {
     pub static ref SEND_TX: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_RPC_OTEL_SCOPE_NAME)
         .u64_counter("send_tx")
         .with_description("Number of transactions received on the RPC")
-        .init();
+        .build();
 
     pub static ref VERIFY_ZKP: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("verify_zkp")
         .with_description("Number of ZKP verifications")
-        .init();
+        .build();
 
     pub static ref VERIFY_SIGNATURE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("verify_signature")
         .with_description("Number of signature verifications")
-        .init();
+        .build();
 
     pub static ref CHECK_TX: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("check_tx")
         .with_description("Number of transactions checked")
-        .init();
+        .build();
 
     pub static ref EXECUTE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("execute")
         .with_description("Number of transactions executed")
-        .init();
+        .build();
 
     pub static ref SETTLE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("settle")
         .with_description("Number of transactions settled")
-        .init();
+        .build();
 }
 
 pub mod prover {
@@ -70,22 +70,22 @@ pub mod prover {
             global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
                 .u64_counter("proving_request_recv")
                 .with_description("Number of proving request received")
-                .init();
+                .build();
         pub static ref PROVING_REQUEST_SUCCEEDED: opentelemetry::metrics::Counter<u64> =
             global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
                 .u64_counter("proving_request_succeeded")
                 .with_description("Number of proving request that succeeded")
-                .init();
+                .build();
         pub static ref PROVING_REQUEST_FAILED: opentelemetry::metrics::Counter<u64> =
             global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
                 .u64_counter("proving_request_failed")
                 .with_description("Number of proving request that failed")
-                .init();
+                .build();
         pub static ref PROVING_FALLBACK_TRIGGERED: opentelemetry::metrics::Counter<u64> =
             global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
                 .u64_counter("proving_fallback_triggered")
                 .with_description("Number of proving fallback triggered")
-                .init();
+                .build();
     }
 }
 
