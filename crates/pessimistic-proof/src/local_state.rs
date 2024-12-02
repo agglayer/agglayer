@@ -1,7 +1,9 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use reth_primitives::{alloy_primitives::U512, ruint::UintTryFrom, B256, U256};
+use alloy_primitives::{ruint::UintTryFrom, U256, U512};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest as Sha256Digest, Sha256};
+use sp1_zkvm::lib::verify::verify_sp1_proof;
 
 use crate::{
     bridge_exit::{LeafType, L1_ETH, L1_NETWORK_ID},
@@ -34,6 +36,7 @@ pub struct StateCommitment {
     pub balance_root: Digest,
     pub nullifier_root: Digest,
 }
+
 impl StateCommitment {
     pub fn display_to_hex(&self) -> String {
         format!(
@@ -238,6 +241,7 @@ impl LocalNetworkState {
         }
 
         // Verify that the signature is valid
+        // TODO: change this to SHA2 ?
         let combined_hash = signature_commitment(
             self.exit_tree.get_root(),
             multi_batch_header
@@ -246,18 +250,20 @@ impl LocalNetworkState {
                 .map(|(exit, _)| exit),
         );
 
-        // Check batch header signature
-        let signer = multi_batch_header
-            .signature
-            .recover_signer(B256::new(combined_hash))
-            .ok_or(ProofError::InvalidSignature)?;
+        // TODO: figure out what else needs to be a pv in the consensus proof.
+        let consensus_public_values = [
+            combined_hash.as_slice(),
+            multi_batch_header.consensus_config.as_slice(),
+        ]
+        .concat();
 
-        if signer != multi_batch_header.signer {
-            return Err(ProofError::InvalidSigner {
-                declared: multi_batch_header.signer,
-                recovered: signer,
-            });
-        }
+        let vkey = multi_batch_header.vkey;
+        let public_values_digest = Sha256::digest(&consensus_public_values);
+        #[cfg(target_os = "zkvm")] // TODO: add a native verify otherwise.
+        verify_sp1_proof(&vkey, &public_values_digest.into());
+
+        // TODO: add native verification for the consensus proof if
+        // `not(target_os="zkvm")`.
 
         Ok(self.roots())
     }

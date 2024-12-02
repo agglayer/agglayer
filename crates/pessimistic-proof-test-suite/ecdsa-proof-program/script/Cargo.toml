@@ -1,0 +1,13 @@
+[workspace]
+[package]
+version = "0.1.0"
+name = "sp1-ecdsa-verification-script"
+edition = "2021"
+
+[dependencies]
+sp1-sdk = "3.3.0"
+alloy = { version = "0.6.4", features = ["signers", "signer-local"] }
+rand = "0.8.5"
+
+[build-dependencies]
+sp1-helper = { git = "https://github.com/succinctlabs/sp1.git", rev = "v1.0.0-testnet"  }

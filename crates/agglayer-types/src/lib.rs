@@ -1,10 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+pub use alloy_primitives::{address, Address, Signature, U256};
 use pessimistic_proof::global_index::GlobalIndex;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
+use pessimistic_proof::multi_batch_header::Vkey;
 use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::Smt;
 use pessimistic_proof::LocalNetworkState;
@@ -17,11 +19,8 @@ use pessimistic_proof::{
     nullifier_tree::{NullifierKey, NullifierPath},
     ProofError,
 };
-pub use reth_primitives::address;
-pub use reth_primitives::U256;
-pub use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
-use sp1_sdk::SP1PublicValues;
+use sp1_sdk::{SP1Proof, SP1PublicValues};
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Hash;
@@ -218,7 +217,7 @@ impl Proof {
 ///
 /// Note: be mindful to update the [`Self::hash`] method accordingly
 /// upon modifying the fields of this structure.
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Certificate {
     /// NetworkID of the origin network.
     pub network_id: NetworkId,
@@ -232,8 +231,8 @@ pub struct Certificate {
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits included in this state transition.
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
-    /// Signature committed to the bridge exits and imported bridge exits.
-    pub signature: Signature,
+    /// Consensus proof.
+    pub consensus_proof: (), // Should be `SP1Proof`, but it doesn't compile
     /// Fixed size field of arbitrary data for the chain needs.
     pub metadata: Metadata,
 }
@@ -257,9 +256,15 @@ impl Certificate {
             new_local_exit_root: [0; 32],
             bridge_exits: Vec::new(),
             imported_bridge_exits: Vec::new(),
-            signature: Signature::default(),
             metadata: Default::default(),
+            consensus_proof: (),
         }
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn with_new_local_exit_root(mut self, new_local_exit_root: [u8; 32]) -> Self {
+        self.new_local_exit_root = new_local_exit_root;
+        self
     }
 
     pub fn hash(&self) -> CertificateId {
@@ -343,7 +348,8 @@ impl LocalNetworkStateData {
     pub fn apply_certificate(
         &mut self,
         certificate: &Certificate,
-        signer: Address,
+        vkey: Vkey,
+        consensus_config: Digest,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
@@ -471,8 +477,9 @@ impl LocalNetworkStateData {
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
-            signer,
-            signature: certificate.signature,
+            vkey,
+            consensus_config,
+            consensus_proof: (),
             imported_exits_root: Some(imported_hash),
             target: StateCommitment {
                 exit_root: certificate.new_local_exit_root,
@@ -488,9 +495,11 @@ impl LocalNetworkStateData {
     pub fn make_multi_batch_header(
         &self,
         certificate: &Certificate,
-        signer: Address,
+        vkey: Vkey,
+        consensus_config: Digest,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
-        self.clone().apply_certificate(certificate, signer)
+        self.clone()
+            .apply_certificate(certificate, vkey, consensus_config)
     }
 
     pub fn get_roots(&self) -> StateCommitment {

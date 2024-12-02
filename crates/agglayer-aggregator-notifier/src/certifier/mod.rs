@@ -14,10 +14,10 @@ use agglayer_prover_types::{
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{Height, LocalNetworkStateData, NetworkId, Proof};
+use alloy_primitives::Address;
 use bincode::Options as _;
 use futures::future::BoxFuture;
 use pessimistic_proof::{generate_pessimistic_proof, LocalNetworkState};
-use reth_primitives::Address;
 use sp1_sdk::{CpuProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey};
 use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, warn};
@@ -136,8 +136,10 @@ where
             let initial_state = LocalNetworkState::from(state.clone());
 
             let signer = Address::new(*signer.as_fixed_bytes());
+            let vkey = todo!();
+            let consensus_config = todo!();
             let multi_batch_header = state
-                .apply_certificate(&certificate, signer)
+                .apply_certificate(&certificate, vkey, consensus_config)
                 .map_err(|source| CertificationError::Types { source })?;
 
             // Perform the native PP execution

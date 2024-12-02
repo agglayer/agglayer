@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+alloy-primitives.workspace = true
 anyhow.workspace = true
 arc-swap.workspace = true
 bincode.workspace = true
@@ -21,7 +22,6 @@ agglayer-storage = { path = "../agglayer-storage" }
 agglayer-types = { path = "../agglayer-types" }
 agglayer-prover-types = { path = "../agglayer-prover-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
-reth-primitives.workspace = true
 tonic = { workspace = true, features = ["zstd"] }
 
 sp1-sdk.workspace = true

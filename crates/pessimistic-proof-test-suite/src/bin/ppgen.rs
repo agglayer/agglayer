@@ -1,6 +1,7 @@
 use std::{path::PathBuf, time::Instant};
 
 use agglayer_types::{Certificate, U256};
+use alloy_primitives::Address;
 use clap::Parser;
 use pessimistic_proof::{
     bridge_exit::{NetworkId, TokenInfo},
@@ -10,7 +11,6 @@ use pessimistic_proof_test_suite::{
     runner::Runner,
     sample_data::{self as data},
 };
-use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use sp1_sdk::HashableKey;
 use tracing::{info, warn};
@@ -66,7 +66,8 @@ pub fn main() {
     let bridge_exits = get_events(args.n_exits, args.sample_path.clone());
     let imported_bridge_exits = get_events(args.n_imported_exits, args.sample_path);
 
-    let (certificate, signer) = state.apply_events(&imported_bridge_exits, &bridge_exits);
+    let (certificate, vkey, consensus_config, _proof) =
+        state.apply_events(&imported_bridge_exits, &bridge_exits);
 
     info!(
         "Certificate {}: [{}]",
@@ -75,7 +76,7 @@ pub fn main() {
     );
 
     let multi_batch_header = old_state
-        .make_multi_batch_header(&certificate, signer)
+        .make_multi_batch_header(&certificate, vkey.hash_u32(), consensus_config)
         .unwrap();
 
     info!(
@@ -100,7 +101,7 @@ pub fn main() {
     let fixture = PessimisticProofFixture {
         certificate,
         pp_inputs: new_roots.into(),
-        signer,
+        signer: Address::default(), // TODO: fix this
         vkey: vkey.clone(),
         public_values: format!("0x{}", hex::encode(proof.public_values.as_slice())),
         proof: format!("0x{}", hex::encode(proof.bytes())),
