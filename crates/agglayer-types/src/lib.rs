@@ -394,14 +394,14 @@ impl LocalNetworkStateData {
             let bridge_exits = certificate
                 .bridge_exits
                 .iter()
-                .filter(|b| b.token_info.origin_network != certificate.network_id);
+                .filter(|b| b.amount_token_info().origin_network != certificate.network_id);
 
             // Set of dedup tokens mutated in the transition
             let mutated_tokens: BTreeSet<TokenInfo> = {
                 let imported_tokens = imported_bridge_exits
                     .clone()
-                    .map(|exit| exit.bridge_exit.token_info);
-                let exported_tokens = bridge_exits.clone().map(|exit| exit.token_info);
+                    .map(|exit| exit.bridge_exit.amount_token_info());
+                let exported_tokens = bridge_exits.clone().map(|exit| exit.amount_token_info());
                 imported_tokens.chain(exported_tokens).collect()
             };
 
@@ -416,7 +416,7 @@ impl LocalNetworkStateData {
 
             let mut new_balances = initial_balances.clone();
             for imported_bridge_exit in imported_bridge_exits {
-                let token = imported_bridge_exit.bridge_exit.token_info;
+                let token = imported_bridge_exit.bridge_exit.amount_token_info();
                 new_balances.insert(
                     token,
                     new_balances[&token]
@@ -426,7 +426,7 @@ impl LocalNetworkStateData {
             }
 
             for bridge_exit in bridge_exits {
-                let token = bridge_exit.token_info;
+                let token = bridge_exit.amount_token_info();
                 new_balances.insert(
                     token,
                     new_balances[&token]

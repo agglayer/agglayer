@@ -4,7 +4,7 @@ use reth_primitives::{alloy_primitives::U512, ruint::UintTryFrom, B256, U256};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bridge_exit::{LeafType, L1_ETH, L1_NETWORK_ID},
+    bridge_exit::L1_NETWORK_ID,
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
     keccak::{Digest, Hash},
     local_balance_tree::LocalBalanceTree,
@@ -155,10 +155,7 @@ impl LocalNetworkState {
                 .verify_and_update(nullifier_key, nullifier_path)?;
 
             // The amount corresponds to L1 ETH if the leaf is a message
-            let token_info = match imported_bridge_exit.bridge_exit.leaf_type {
-                LeafType::Message => L1_ETH,
-                _ => imported_bridge_exit.bridge_exit.token_info,
-            };
+            let token_info = imported_bridge_exit.bridge_exit.amount_token_info();
 
             if multi_batch_header.origin_network == token_info.origin_network {
                 // When the token is native to the chain, we don't care about the local balance
@@ -203,10 +200,7 @@ impl LocalNetworkState {
             }
 
             // The amount corresponds to L1 ETH if the leaf is a message
-            let token_info = match bridge_exit.leaf_type {
-                LeafType::Message => L1_ETH,
-                _ => bridge_exit.token_info,
-            };
+            let token_info = bridge_exit.amount_token_info();
 
             if multi_batch_header.origin_network == token_info.origin_network {
                 // When the token is native to the chain, we don't care about the local balance

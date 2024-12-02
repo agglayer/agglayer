@@ -119,6 +119,15 @@ impl BridgeExit {
     pub fn is_message(&self) -> bool {
         self.leaf_type == LeafType::Message
     }
+
+    /// Returns the [`TokenInfo`] considered for the the given amount.
+    /// The amount corresponds to L1 ETH if the bridge exit is a message.
+    pub fn amount_token_info(&self) -> TokenInfo {
+        match self.leaf_type {
+            LeafType::Message => L1_ETH,
+            LeafType::Transfer => self.token_info,
+        }
+    }
 }
 
 #[derive(
