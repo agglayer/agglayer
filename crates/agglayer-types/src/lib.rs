@@ -6,6 +6,7 @@ use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
+use pessimistic_proof::multi_batch_header::signature_commitment;
 use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::Smt;
 use pessimistic_proof::LocalNetworkState;
@@ -259,8 +260,25 @@ impl Certificate {
 
 impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
+    pub fn wallet_for_test(network_id: NetworkId) -> ethers_signers::LocalWallet {
+        let fake_priv_key = keccak256_combine([b"FAKEKEY:", network_id.to_be_bytes().as_slice()]);
+        ethers_signers::LocalWallet::from_bytes(&fake_priv_key).unwrap()
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn sign(&mut self, wallet: &ethers_signers::LocalWallet) {
+        let sighash = self.signature_commitment_unchecked().into();
+        let signature = wallet.sign_hash(sighash).unwrap();
+        self.signature = Signature::new(
+            U256::from_limbs(signature.r.0),
+            U256::from_limbs(signature.s.0),
+            signature.recovery_id().unwrap().into(),
+        );
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
-        Certificate {
+        let mut this = Certificate {
             network_id,
             height,
             prev_local_exit_root: [0; 32],
@@ -269,7 +287,9 @@ impl Certificate {
             imported_bridge_exits: Vec::new(),
             signature: Signature::new(U256::default(), U256::default(), Default::default()),
             metadata: Default::default(),
-        }
+        };
+        this.sign(&Self::wallet_for_test(network_id));
+        this
     }
 
     #[cfg(any(test, feature = "testutils"))]
@@ -306,6 +326,12 @@ impl Certificate {
             .max()
             .unwrap_or(Self::DEFAULT_L1_INFO_LEAF_INDEX)
             + 1
+    }
+
+    /// Get signature commitment without checking that the declared state
+    /// matches the calculated state.
+    pub fn signature_commitment_unchecked(&self) -> Digest {
+        signature_commitment(self.new_local_exit_root, self.imported_bridge_exits.iter())
     }
 
     /// Returns the L1 Info Root considered for this [`Certificate`].

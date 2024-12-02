@@ -134,7 +134,7 @@ impl Display for NetworkId {
 
 impl NetworkId {
     pub const BITS: usize = u32::BITS as usize;
-    pub fn new(value: u32) -> Self {
+    pub const fn new(value: u32) -> Self {
         Self(value)
     }
 }

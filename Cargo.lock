@@ -341,6 +341,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-primitives 0.8.12",
  "bincode",
+ "ethers-signers",
  "hex",
  "pessimistic-proof",
  "serde",
@@ -5810,7 +5811,7 @@ dependencies = [
  "ethers-signers",
  "hex",
  "hex-literal",
- "lazy_static",
+ "insta",
  "pessimistic-proof",
  "rand",
  "rstest",

@@ -18,7 +18,6 @@ serde_json.workspace = true
 thiserror.workspace = true
 sp1-sdk = { workspace = true }
 sp1-core-machine.workspace = true
-lazy_static.workspace = true
 anyhow.workspace = true
 rand.workspace = true
 hex-literal = "0.4"
@@ -31,4 +30,5 @@ pessimistic-proof = { path = "../pessimistic-proof" }
 
 [dev-dependencies]
 rstest.workspace = true
+insta.workspace = true
 tracing.workspace = true
