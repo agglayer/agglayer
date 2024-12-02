@@ -13,7 +13,7 @@ thiserror.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-alloy = { version = "0.6.4", features = ["full"] }
+alloy.workspace = true
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 
 [dev-dependencies]
