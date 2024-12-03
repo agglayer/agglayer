@@ -1,6 +1,6 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use reth_primitives::{alloy_primitives::U512, ruint::UintTryFrom, B256, U256};
+use alloy_primitives::{ruint::UintTryFrom, B256, U256, U512};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -250,8 +250,8 @@ impl LocalNetworkState {
         // Check batch header signature
         let signer = multi_batch_header
             .signature
-            .recover_signer(B256::new(combined_hash))
-            .ok_or(ProofError::InvalidSignature)?;
+            .recover_address_from_prehash(&B256::new(combined_hash))
+            .map_err(|_| ProofError::InvalidSignature)?;
 
         if signer != multi_batch_header.signer {
             return Err(ProofError::InvalidSigner {

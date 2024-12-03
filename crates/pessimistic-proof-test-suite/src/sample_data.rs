@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use agglayer_types::Certificate;
+use alloy_primitives::{address, U256};
 use hex_literal::hex;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
@@ -10,7 +11,6 @@ use pessimistic_proof::{
     nullifier_tree::NullifierTree,
     LocalNetworkState,
 };
-use reth_primitives::{address, U256};
 
 use crate::{
     event_data::{load_json_data_file, parse_json_file, DepositEventData},

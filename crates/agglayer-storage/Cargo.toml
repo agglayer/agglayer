@@ -28,6 +28,8 @@ rstest.workspace = true
 sp1-sdk.workspace = true
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
+agglayer-storage = { path = ".", features = ["testutils"] }
+
 [[bench]]
 name = "latest_certificate_bench"
 harness = false
@@ -35,4 +37,4 @@ required-features = ["testutils"]
 
 [features]
 default = []
-testutils = ["rand", "mockall"]
+testutils = ["rand", "mockall", "agglayer-types/testutils"]
