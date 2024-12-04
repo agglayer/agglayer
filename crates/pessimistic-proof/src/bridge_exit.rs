@@ -5,13 +5,18 @@ use std::{fmt::Display, ops::Deref};
 use reth_primitives::{address, revm_primitives::bitvec::view::BitViewSized, Address, U256};
 use serde::{Deserialize, Serialize};
 
-use crate::keccak::{keccak256, keccak256_combine, Digest as KeccakDigest};
+use crate::keccak::{keccak256_combine, Digest as KeccakDigest};
 
 pub(crate) const L1_NETWORK_ID: NetworkId = NetworkId(0);
 pub(crate) const L1_ETH: TokenInfo = TokenInfo {
     origin_network: L1_NETWORK_ID,
     origin_token_address: address!("0000000000000000000000000000000000000000"),
 };
+
+const EMPTY_METADATA_HASH: [u8; 32] = [
+    197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
+    130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
+];
 
 /// Encapsulates the information to uniquely identify a token on the origin
 /// network.
@@ -59,20 +64,18 @@ impl TryFrom<u8> for LeafType {
 // TODO: Change it to an enum depending on `leaf_type`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BridgeExit {
+    /// Indicates whether this is message or transfer
     pub leaf_type: LeafType,
-
-    /// Unique ID for the token being transferred.
+    /// Unique ID for the token being transferred
     pub token_info: TokenInfo,
-
     /// Network which the token is transferred to
     pub dest_network: NetworkId,
     /// Address which will own the received token
     pub dest_address: Address,
-
     /// Token amount sent
     pub amount: U256,
-
-    pub metadata: Vec<u8>,
+    /// Hash of the metadata field
+    pub metadata: Option<KeccakDigest>,
 }
 
 impl BridgeExit {
@@ -84,7 +87,7 @@ impl BridgeExit {
         dest_network: NetworkId,
         dest_address: Address,
         amount: U256,
-        metadata: Vec<u8>,
+        metadata: Option<KeccakDigest>,
     ) -> Self {
         Self {
             leaf_type,
@@ -109,7 +112,7 @@ impl BridgeExit {
             &u32::to_be_bytes(self.dest_network.into()),
             self.dest_address.as_slice(),
             &self.amount.to_be_bytes::<32>(),
-            &keccak256(&self.metadata),
+            &self.metadata.unwrap_or(EMPTY_METADATA_HASH),
         ])
     }
 
@@ -182,8 +185,16 @@ mod tests {
             1.into(),
             Address::default(),
             U256::default(),
-            vec![],
+            None,
         );
+
+        let deposit_with_empty_metadata_hash = {
+            let mut bridge = deposit.clone();
+            bridge.metadata = Some(EMPTY_METADATA_HASH);
+            bridge
+        };
+
+        assert_eq!(deposit.hash(), deposit_with_empty_metadata_hash.hash());
 
         let amount_bytes = hex::decode("8ac7230489e80000").unwrap_or_default();
         deposit.amount = U256::try_from_be_slice(amount_bytes.as_slice()).unwrap();

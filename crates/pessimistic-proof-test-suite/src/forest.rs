@@ -199,7 +199,7 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
         dest_network,
         dest_address: random(),
         amount,
-        metadata: vec![],
+        metadata: None,
     }
 }
 
