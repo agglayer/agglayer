@@ -56,6 +56,8 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
             pending_store,
             prover: ProofGenerationServiceClient::connect(prover)
                 .await?
+                .max_decoding_message_size(config.prover.grpc.max_decoding_message_size)
+                .max_encoding_message_size(config.prover.grpc.max_encoding_message_size)
                 .send_compressed(CompressionEncoding::Zstd)
                 .accept_compressed(CompressionEncoding::Zstd),
             verifier: Arc::new(verifier),
