@@ -39,7 +39,7 @@ pub struct RpcConfig {
     pub max_connections: u32,
     /// The maximum number of requests in a batch request. If `None`, the
     /// batch request limit is unlimited.
-    #[serde(skip_serializing_if = "default")]
+    #[serde(skip_serializing_if = "crate::default")]
     pub batch_request_limit: Option<u32>,
     /// The interval at which to send ping messages
     #[serde(skip)]
@@ -107,10 +107,6 @@ fn from_env_or_default<T: FromStr>(key: &str, default: T) -> T {
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(default)
-}
-
-fn default<T: Default + PartialEq>(t: &T) -> bool {
-    *t == Default::default()
 }
 
 fn same_as_default_body_size(size: &u32) -> bool {
