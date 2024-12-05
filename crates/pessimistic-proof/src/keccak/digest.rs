@@ -7,7 +7,7 @@ use tiny_keccak::{Hasher, Keccak};
 
 use crate::{local_balance_tree::FromU256, nullifier_tree::FromBool};
 
-#[derive(Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Default, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct NewDigest(pub [u8; 32]);
 
 impl Deref for NewDigest {
@@ -67,23 +67,6 @@ impl From<[u8; 32]> for NewDigest {
     }
 }
 
-impl FromBool for NewDigest {
-    fn from_bool(b: bool) -> Self {
-        let array = if b {
-            [
-                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ]
-        } else {
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ]
-        };
-
-        Self(array)
-    }
-}
 impl fmt::LowerHex for NewDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
@@ -130,5 +113,26 @@ impl Serialize for NewDigest {
         } else {
             serializer.serialize_newtype_struct("NewDigest", &self.0)
         }
+    }
+}
+
+impl FromBool for NewDigest {
+    fn from_bool(b: bool) -> Self {
+        Self(if b {
+            [
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ]
+        } else {
+            [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ]
+        })
+    }
+}
+impl FromU256 for NewDigest {
+    fn from_u256(u: U256) -> Self {
+        Self(u.to_be_bytes())
     }
 }

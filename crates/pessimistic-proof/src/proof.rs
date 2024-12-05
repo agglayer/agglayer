@@ -9,7 +9,10 @@ use crate::{
     global_index::GlobalIndex,
     imported_bridge_exit,
     keccak::{keccak256_combine, Digest, Hash},
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTreeError},
+    local_exit_tree::{
+        hasher::{Keccak256Hasher, NewKeccak256Hasher},
+        LocalExitTreeError,
+    },
     local_state::{LocalNetworkState, StateCommitment},
     multi_batch_header::MultiBatchHeader,
 };
@@ -165,7 +168,7 @@ const EMPTY_PP_ROOT: [u8; 32] =
 /// [`LocalNetworkState`].
 pub fn generate_pessimistic_proof(
     initial_network_state: LocalNetworkState,
-    batch_header: &MultiBatchHeader<Keccak256Hasher>,
+    batch_header: &MultiBatchHeader<NewKeccak256Hasher>,
 ) -> Result<PessimisticProofOutput, ProofError> {
     let StateCommitment {
         exit_root: prev_ler,
@@ -230,7 +233,7 @@ pub fn generate_pessimistic_proof(
     Ok(PessimisticProofOutput {
         prev_local_exit_root,
         prev_pessimistic_root,
-        l1_info_root: batch_header.l1_info_root,
+        l1_info_root: *batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
         consensus_hash,
         new_local_exit_root: batch_header.target.exit_root,

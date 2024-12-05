@@ -24,10 +24,10 @@ pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`].
     pub exit_tree: LocalExitTree<NewKeccak256Hasher>,
     /// Commitment to the balance for each token.
-    pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
+    pub balance_tree: LocalBalanceTree<NewKeccak256Hasher>,
     /// Commitment to the Nullifier tree for the local network, tracks claimed
     /// assets on foreign networks
-    pub nullifier_tree: NullifierTree<Keccak256Hasher>,
+    pub nullifier_tree: NullifierTree<NewKeccak256Hasher>,
 }
 
 /// The roots of one [`LocalNetworkState`].
@@ -54,8 +54,8 @@ impl LocalNetworkState {
     pub fn roots(&self) -> StateCommitment {
         StateCommitment {
             exit_root: *self.exit_tree.get_root(),
-            balance_root: self.balance_tree.root,
-            nullifier_root: self.nullifier_tree.root,
+            balance_root: *self.balance_tree.root,
+            nullifier_root: *self.nullifier_tree.root,
         }
     }
 
@@ -64,7 +64,7 @@ impl LocalNetworkState {
     /// The state isn't modified on error.
     pub fn apply_batch_header(
         &mut self,
-        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+        multi_batch_header: &MultiBatchHeader<NewKeccak256Hasher>,
     ) -> Result<StateCommitment, ProofError> {
         let mut clone = self.clone();
         let roots = clone.apply_batch_header_helper(multi_batch_header)?;
@@ -78,27 +78,27 @@ impl LocalNetworkState {
     /// The state can be modified on error.
     fn apply_batch_header_helper(
         &mut self,
-        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+        multi_batch_header: &MultiBatchHeader<NewKeccak256Hasher>,
     ) -> Result<StateCommitment, ProofError> {
         // Check the initial state
         let computed_root = self.exit_tree.get_root();
-        if *computed_root != multi_batch_header.prev_local_exit_root {
+        if computed_root != multi_batch_header.prev_local_exit_root {
             return Err(ProofError::InvalidPreviousLocalExitRoot {
                 computed: Hash(*computed_root),
-                declared: Hash(multi_batch_header.prev_local_exit_root),
+                declared: Hash(*multi_batch_header.prev_local_exit_root),
             });
         }
         if self.balance_tree.root != multi_batch_header.prev_balance_root {
             return Err(ProofError::InvalidPreviousBalanceRoot {
-                computed: Hash(self.balance_tree.root),
-                declared: Hash(multi_batch_header.prev_balance_root),
+                computed: Hash(*self.balance_tree.root),
+                declared: Hash(*multi_batch_header.prev_balance_root),
             });
         }
 
         if self.nullifier_tree.root != multi_batch_header.prev_nullifier_root {
             return Err(ProofError::InvalidPreviousNullifierRoot {
-                computed: Hash(self.nullifier_tree.root),
-                declared: Hash(multi_batch_header.prev_nullifier_root),
+                computed: Hash(*self.nullifier_tree.root),
+                declared: Hash(*multi_batch_header.prev_nullifier_root),
             });
         }
 
@@ -119,9 +119,9 @@ impl LocalNetworkState {
         );
 
         if let Some(batch_imported_exits_root) = multi_batch_header.imported_exits_root {
-            if imported_exits_root != batch_imported_exits_root {
+            if imported_exits_root != *batch_imported_exits_root {
                 return Err(ProofError::InvalidImportedExitsRoot {
-                    declared: Hash(batch_imported_exits_root),
+                    declared: Hash(*batch_imported_exits_root),
                     computed: Hash(imported_exits_root),
                 });
             }
@@ -146,7 +146,7 @@ impl LocalNetworkState {
 
             // Check the inclusion proof
             imported_bridge_exit
-                .verify_path(multi_batch_header.l1_info_root)
+                .verify_path(*multi_batch_header.l1_info_root)
                 .map_err(|source| ProofError::InvalidImportedBridgeExit {
                     source,
                     global_index: imported_bridge_exit.global_index,

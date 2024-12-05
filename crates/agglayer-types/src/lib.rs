@@ -350,9 +350,9 @@ pub struct LocalNetworkStateData {
     /// The local exit tree without leaves.
     pub exit_tree: LocalExitTree<NewKeccak256Hasher>,
     /// The full local balance tree.
-    pub balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
+    pub balance_tree: Smt<NewKeccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
     /// The full nullifier tree.
-    pub nullifier_tree: Smt<Keccak256Hasher, NULLIFIER_TREE_DEPTH>,
+    pub nullifier_tree: Smt<NewKeccak256Hasher, NULLIFIER_TREE_DEPTH>,
 }
 
 impl From<LocalNetworkStateData> for LocalNetworkState {
@@ -381,7 +381,7 @@ impl LocalNetworkStateData {
         certificate: &Certificate,
         signer: Address,
         l1_info_root: Digest,
-    ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
+    ) -> Result<MultiBatchHeader<NewKeccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
 
@@ -389,7 +389,7 @@ impl LocalNetworkStateData {
             self.exit_tree.add_leaf(NewDigest(e.hash()))?;
         }
 
-        let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
+        let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<NewKeccak256Hasher>)> = {
             // Consider all the imported bridge exits
             let imported_bridge_exits = certificate.imported_bridge_exits.iter();
             // Consider all the bridge exits except for the native token
@@ -411,7 +411,7 @@ impl LocalNetworkStateData {
                 .iter()
                 .map(|&token| {
                     let balance =
-                        U256::from_be_bytes(self.balance_tree.get(token).unwrap_or_default());
+                        U256::from_be_bytes(*self.balance_tree.get(token).unwrap_or_default());
                     (token, balance)
                 })
                 .collect();
@@ -457,7 +457,7 @@ impl LocalNetworkStateData {
                     };
 
                     self.balance_tree
-                        .update(token, new_balances[&token].to_be_bytes())
+                        .update(token, NewDigest(new_balances[&token].to_be_bytes()))
                         .map_err(balance_proof_error)?;
 
                     Ok((token, (initial_balance, path)))
@@ -465,7 +465,7 @@ impl LocalNetworkStateData {
                 .collect::<Result<BTreeMap<_, _>, Error>>()?
         };
 
-        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> =
+        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<NewKeccak256Hasher>)> =
             certificate
                 .imported_bridge_exits
                 .iter()
@@ -480,7 +480,7 @@ impl LocalNetworkStateData {
                         .get_non_inclusion_proof(nullifier_key)
                         .map_err(nullifier_error)?;
                     self.nullifier_tree
-                        .insert(nullifier_key, Digest::from_bool(true))
+                        .insert(nullifier_key, NewDigest::from_bool(true))
                         .map_err(nullifier_error)?;
                     Ok((exit.clone(), nullifier_path))
                 })
@@ -498,9 +498,9 @@ impl LocalNetworkStateData {
             });
         }
 
-        Ok(MultiBatchHeader::<Keccak256Hasher> {
+        Ok(MultiBatchHeader::<NewKeccak256Hasher> {
             origin_network: certificate.network_id,
-            prev_local_exit_root: certificate.prev_local_exit_root,
+            prev_local_exit_root: NewDigest(certificate.prev_local_exit_root),
             bridge_exits: certificate.bridge_exits.clone(),
             imported_bridge_exits,
             balances_proofs,
@@ -508,13 +508,13 @@ impl LocalNetworkStateData {
             prev_nullifier_root,
             signer,
             signature: certificate.signature,
-            imported_exits_root: Some(imported_hash),
+            imported_exits_root: Some(NewDigest(imported_hash)),
             target: StateCommitment {
                 exit_root: certificate.new_local_exit_root,
-                balance_root: self.balance_tree.root,
-                nullifier_root: self.nullifier_tree.root,
+                balance_root: *self.balance_tree.root,
+                nullifier_root: *self.nullifier_tree.root,
             },
-            l1_info_root,
+            l1_info_root: NewDigest(l1_info_root),
         })
     }
 
@@ -525,7 +525,7 @@ impl LocalNetworkStateData {
         certificate: &Certificate,
         signer: Address,
         l1_info_root: Digest,
-    ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
+    ) -> Result<MultiBatchHeader<NewKeccak256Hasher>, Error> {
         self.clone()
             .apply_certificate(certificate, signer, l1_info_root)
     }
@@ -533,8 +533,8 @@ impl LocalNetworkStateData {
     pub fn get_roots(&self) -> StateCommitment {
         StateCommitment {
             exit_root: *self.exit_tree.get_root(),
-            balance_root: self.balance_tree.root,
-            nullifier_root: self.nullifier_tree.root,
+            balance_root: *self.balance_tree.root,
+            nullifier_root: *self.nullifier_tree.root,
         }
     }
 }

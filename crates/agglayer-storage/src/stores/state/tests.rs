@@ -189,7 +189,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
 
     info!(
         "before DB | root: {}, nb nodes: {}",
-        Hash(before_going_through_disk.balance_tree.root),
+        Hash(*before_going_through_disk.balance_tree.root),
         before_going_through_disk.balance_tree.tree.len()
     );
 
@@ -204,7 +204,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
 
     info!(
         "before DB (pruned) | root: {}, nb nodes: {}",
-        Hash(before_going_through_disk.balance_tree.root),
+        Hash(*before_going_through_disk.balance_tree.root),
         before_going_through_disk.balance_tree.tree.len()
     );
 
@@ -218,7 +218,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
 
     info!(
         "after DB | root: {}, nb nodes: {}",
-        Hash(after_going_through_disk.balance_tree.root),
+        Hash(*after_going_through_disk.balance_tree.root),
         after_going_through_disk.balance_tree.tree.len()
     );
 

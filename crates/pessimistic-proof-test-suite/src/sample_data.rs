@@ -20,7 +20,7 @@ use crate::{
 type TreeHasher = local_exit_tree::hasher::Keccak256Hasher;
 type NewTreeHasher = local_exit_tree::hasher::NewKeccak256Hasher;
 type LocalExitTree = local_exit_tree::LocalExitTree<NewTreeHasher>;
-type LocalBalanceTree = local_balance_tree::LocalBalanceTree<TreeHasher>;
+type LocalBalanceTree = local_balance_tree::LocalBalanceTree<NewTreeHasher>;
 
 lazy_static::lazy_static! {
     pub static ref NETWORK_A: NetworkId = 0.into();

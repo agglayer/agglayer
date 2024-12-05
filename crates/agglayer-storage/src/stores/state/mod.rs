@@ -271,7 +271,7 @@ impl StateStore {
     fn write_smt<C, const DEPTH: usize>(
         &self,
         network_id: u32,
-        smt: &Smt<Keccak256Hasher, DEPTH>,
+        smt: &Smt<NewKeccak256Hasher, DEPTH>,
         batch: &mut WriteBatch,
     ) -> Result<(), Error>
     where
@@ -286,10 +286,10 @@ impl StateStore {
                     key_type: if node_hash == smt.root {
                         SmtKeyType::Root
                     } else {
-                        SmtKeyType::Node(Hash(node_hash))
+                        SmtKeyType::Node(Hash(*node_hash))
                     },
                 },
-                SmtValue::Node(Hash(node.left), Hash(node.right)),
+                SmtValue::Node(Hash(*node.left), Hash(*node.right)),
             );
 
             // Write the children as leaves if they are
@@ -300,9 +300,9 @@ impl StateStore {
                     kv.insert(
                         SmtKey {
                             network_id,
-                            key_type: SmtKeyType::Node(Hash(leaf)),
+                            key_type: SmtKeyType::Node(Hash(*leaf)),
                         },
-                        SmtValue::Leaf(Hash(leaf)),
+                        SmtValue::Leaf(Hash(*leaf)),
                     );
                 });
         });
@@ -357,18 +357,19 @@ impl StateStore {
     fn read_smt<C, const DEPTH: usize>(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<Smt<Keccak256Hasher, DEPTH>>, Error>
+    ) -> Result<Option<Smt<NewKeccak256Hasher, DEPTH>>, Error>
     where
         C: ColumnSchema<Key = SmtKey, Value = SmtValue>,
     {
-        let root_node = if let Some(root_node_value) = self.db.get::<C>(&SmtKey {
-            network_id: network_id.into(),
-            key_type: SmtKeyType::Root,
-        })? {
+        let root_node: Node<NewKeccak256Hasher> = if let Some(root_node_value) =
+            self.db.get::<C>(&SmtKey {
+                network_id: network_id.into(),
+                key_type: SmtKeyType::Root,
+            })? {
             match root_node_value {
                 SmtValue::Node(left, right) => Node {
-                    left: *left.as_bytes(),
-                    right: *right.as_bytes(),
+                    left: NewDigest(*left.as_bytes()),
+                    right: NewDigest(*right.as_bytes()),
                 },
                 _ => return Err(Error::WrongValueType),
             }
@@ -377,10 +378,10 @@ impl StateStore {
         };
 
         let mut keys = VecDeque::new();
-        keys.push_back(SmtKeyType::Node(Hash(root_node.left)));
-        keys.push_back(SmtKeyType::Node(Hash(root_node.right)));
+        keys.push_back(SmtKeyType::Node(Hash(*root_node.left.as_bytes())));
+        keys.push_back(SmtKeyType::Node(Hash(*root_node.right.as_bytes())));
 
-        let mut nodes: Vec<Node<Keccak256Hasher>> = Vec::new();
+        let mut nodes: Vec<Node<NewKeccak256Hasher>> = Vec::new();
         nodes.push(root_node);
 
         let mut queued = BTreeSet::new();
@@ -396,8 +397,8 @@ impl StateStore {
             match value {
                 SmtValue::Node(left, right) => {
                     nodes.push(Node {
-                        left: *left.as_bytes(),
-                        right: *right.as_bytes(),
+                        left: NewDigest(*left.as_bytes()),
+                        right: NewDigest(*right.as_bytes()),
                     });
                     if queued.insert(left) {
                         keys.push_back(SmtKeyType::Node(left));
@@ -410,7 +411,7 @@ impl StateStore {
             }
         }
 
-        Ok(Some(Smt::<Keccak256Hasher, DEPTH>::new_with_nodes(
+        Ok(Some(Smt::<NewKeccak256Hasher, DEPTH>::new_with_nodes(
             root_node.hash(),
             nodes.as_slice(),
         )))

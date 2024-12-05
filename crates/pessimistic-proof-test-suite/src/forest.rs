@@ -61,7 +61,7 @@ impl Forest {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {
             local_balance_tree
-                .insert(token, balance.to_be_bytes())
+                .insert(token, NewDigest(balance.to_be_bytes()))
                 .unwrap();
         }
 
