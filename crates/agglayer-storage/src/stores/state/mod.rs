@@ -9,8 +9,9 @@ use agglayer_types::{
     EpochNumber, Hash, Height, Keccak256Hasher, LocalNetworkStateData, NetworkId,
 };
 use pessimistic_proof::{
+    keccak::digest::NewDigest,
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH,
-    local_exit_tree::LocalExitTree,
+    local_exit_tree::{hasher::NewKeccak256Hasher, LocalExitTree},
     nullifier_tree::NULLIFIER_TREE_DEPTH,
     utils::smt::{Node, Smt},
 };
@@ -231,7 +232,7 @@ impl StateWriter for StateStore {
                             network_id,
                             key_type: LET::KeyType::Frontier(layer),
                         },
-                        LET::Value::Frontier(new_state.exit_tree.frontier[layer as usize]),
+                        LET::Value::Frontier(*new_state.exit_tree.frontier[layer as usize]),
                     );
                 });
 
@@ -314,7 +315,7 @@ impl StateStore {
     fn read_local_exit_tree(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<LocalExitTree<Keccak256Hasher>>, Error> {
+    ) -> Result<Option<LocalExitTree<NewKeccak256Hasher>>, Error> {
         debug!("Reading local exit tree for network_id: {}", network_id);
         let leaf_count = if let Some(leaf_count_value) =
             self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
@@ -342,12 +343,12 @@ impl StateStore {
             })
             .collect::<Result<_, _>>()?;
 
-        let mut frontier = [[0u8; 32]; 32];
+        let mut frontier = [NewDigest::default(); 32];
         for (i, l) in retrieved_frontier.iter().enumerate() {
-            frontier[i] = *l;
+            frontier[i] = NewDigest(*l);
         }
 
-        Ok(Some(LocalExitTree::<Keccak256Hasher> {
+        Ok(Some(LocalExitTree::<NewKeccak256Hasher> {
             frontier,
             leaf_count,
         }))

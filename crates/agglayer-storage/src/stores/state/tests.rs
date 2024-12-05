@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_types::{Certificate, Hash, LocalNetworkStateData, NetworkId};
-use pessimistic_proof::{generate_pessimistic_proof, LocalNetworkState};
+use pessimistic_proof::{generate_pessimistic_proof, keccak::digest::NewDigest, LocalNetworkState};
 use rstest::{fixture, rstest};
 use tracing::info;
 
@@ -81,7 +81,7 @@ fn can_retrieve_state(network_id: NetworkId, store: StateStore) {
     let mut lns = LocalNetworkStateData::default();
     let leaves = (0..10).map(|_| Hash([5u8; 32])).collect::<Vec<_>>();
     for l in &leaves {
-        lns.exit_tree.add_leaf(l.0).unwrap();
+        lns.exit_tree.add_leaf(NewDigest(l.0)).unwrap();
     }
 
     assert!(store
@@ -105,7 +105,7 @@ fn can_update_existing_state(network_id: NetworkId, store: StateStore) {
 
     // update state
     let bridge_exit = [5u8; 32];
-    lns.exit_tree.add_leaf(bridge_exit).unwrap();
+    lns.exit_tree.add_leaf(NewDigest(bridge_exit)).unwrap();
 
     // write new state
     assert!(store
@@ -129,7 +129,7 @@ fn can_detect_inconsistent_state(network_id: NetworkId, store: StateStore) {
 
     // update state
     let bridge_exit = [5u8; 32];
-    lns.exit_tree.add_leaf(bridge_exit).unwrap();
+    lns.exit_tree.add_leaf(NewDigest(bridge_exit)).unwrap();
 
     // write new state with missing leaves
     assert!(matches!(

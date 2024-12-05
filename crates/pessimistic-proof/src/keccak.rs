@@ -1,11 +1,14 @@
 use std::fmt;
 
+use digest::NewDigest;
 use hex::FromHex;
 use reth_primitives::U256;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tiny_keccak::{Hasher, Keccak};
 
 use crate::{local_balance_tree::FromU256, nullifier_tree::FromBool};
+
+pub mod digest;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Hash(pub [u8; 32]);
@@ -141,4 +144,32 @@ where
     let mut output = [0u8; 32];
     hasher.finalize(&mut output);
     output
+}
+
+/// Hashes the input data using a Keccak hasher with a 256-bit security level.
+pub fn new_keccak256(data: &[u8]) -> NewDigest {
+    let mut hasher = Keccak::v256();
+    hasher.update(data);
+
+    let mut output = [0u8; 32];
+    hasher.finalize(&mut output);
+    NewDigest(output)
+}
+
+/// Hashes the input items using a Keccak hasher with a 256-bit security level.
+/// Safety: This function should only be called with fixed-size items to avoid
+/// collisions.
+pub fn new_keccak256_combine<I, T>(items: I) -> NewDigest
+where
+    I: IntoIterator<Item = T>,
+    T: AsRef<[u8]>,
+{
+    let mut hasher = Keccak::v256();
+    for data in items {
+        hasher.update(data.as_ref());
+    }
+
+    let mut output = [0u8; 32];
+    hasher.finalize(&mut output);
+    NewDigest(output)
 }

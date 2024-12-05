@@ -30,7 +30,7 @@ async fn executor_normal_behavior() {
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
     let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
+        new_local_exit_root: *state.exit_tree.get_root(),
         ..Default::default()
     };
     let batch_header = state
@@ -69,7 +69,7 @@ async fn executor_normal_behavior_only_network() {
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
     let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
+        new_local_exit_root: *state.exit_tree.get_root(),
         ..Default::default()
     };
     let batch_header = state
@@ -116,7 +116,7 @@ async fn executor_fallback_behavior_cpu() {
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
     let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
+        new_local_exit_root: *state.exit_tree.get_root(),
         ..Default::default()
     };
     let batch_header = state
@@ -167,7 +167,7 @@ async fn executor_fallback_because_of_timeout_cpu() {
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
     let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
+        new_local_exit_root: *state.exit_tree.get_root(),
         ..Default::default()
     };
     let batch_header = state
@@ -221,7 +221,7 @@ async fn executor_fails_because_of_timeout_cpu() {
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
     let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
+        new_local_exit_root: *state.exit_tree.get_root(),
         ..Default::default()
     };
     let batch_header = state
@@ -274,7 +274,7 @@ async fn executor_fails_because_of_concurrency_cpu() {
     let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
     let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
+        new_local_exit_root: *state.exit_tree.get_root(),
         ..Default::default()
     };
     let batch_header = state

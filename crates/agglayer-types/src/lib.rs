@@ -1,8 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use pessimistic_proof::global_index::GlobalIndex;
+use pessimistic_proof::keccak::digest::NewDigest;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof::local_exit_tree::hasher::NewKeccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::multi_batch_header::signature_commitment;
@@ -346,7 +348,7 @@ impl Certificate {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkStateData {
     /// The local exit tree without leaves.
-    pub exit_tree: LocalExitTree<Keccak256Hasher>,
+    pub exit_tree: LocalExitTree<NewKeccak256Hasher>,
     /// The full local balance tree.
     pub balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
     /// The full nullifier tree.
@@ -384,7 +386,7 @@ impl LocalNetworkStateData {
         let prev_nullifier_root = self.nullifier_tree.root;
 
         for e in certificate.bridge_exits.iter() {
-            self.exit_tree.add_leaf(e.hash())?;
+            self.exit_tree.add_leaf(NewDigest(e.hash()))?;
         }
 
         let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
@@ -489,10 +491,10 @@ impl LocalNetworkStateData {
 
         // Check that the certificate referred to the right target
         let computed = self.exit_tree.get_root();
-        if computed != certificate.new_local_exit_root {
+        if *computed != certificate.new_local_exit_root {
             return Err(Error::MismatchNewLocalExitRoot {
                 declared: certificate.new_local_exit_root.into(),
-                computed: computed.into(),
+                computed: computed.0.into(),
             });
         }
 
@@ -530,7 +532,7 @@ impl LocalNetworkStateData {
 
     pub fn get_roots(&self) -> StateCommitment {
         StateCommitment {
-            exit_root: self.exit_tree.get_root(),
+            exit_root: *self.exit_tree.get_root(),
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }

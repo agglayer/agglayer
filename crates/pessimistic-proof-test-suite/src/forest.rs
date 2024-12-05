@@ -7,8 +7,12 @@ use pessimistic_proof::{
         Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
         MerkleProof,
     },
-    keccak::{keccak256_combine, Digest},
-    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
+    keccak::{digest::NewDigest, keccak256_combine, Digest},
+    local_exit_tree::{
+        data::LocalExitTreeData,
+        hasher::{Keccak256Hasher, NewKeccak256Hasher},
+        LocalExitTree,
+    },
     multi_batch_header::signature_commitment,
     utils::smt::Smt,
     LocalNetworkState, PessimisticProofOutput,
@@ -52,7 +56,7 @@ impl Forest {
     /// Override the local exit tree for network B
     pub fn new_with_local_exit_tree(
         initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>,
-        local_exit_tree: LocalExitTree<Keccak256Hasher>,
+        local_exit_tree: LocalExitTree<NewKeccak256Hasher>,
     ) -> Self {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {
@@ -137,7 +141,10 @@ impl Forest {
         let mut res = Vec::new();
         for (token, amount) in events {
             let exit = exit_to_a(*token, *amount);
-            self.state_b.exit_tree.add_leaf(exit.hash()).unwrap();
+            self.state_b
+                .exit_tree
+                .add_leaf(NewDigest(exit.hash()))
+                .unwrap();
             res.push(exit);
         }
 
@@ -160,13 +167,13 @@ impl Forest {
         let bridge_exits = self.bridge_exits(bridge_events);
         let new_local_exit_root = self.state_b.exit_tree.get_root();
         let (_combined_hash, signer, signature) =
-            compute_signature_info(new_local_exit_root, &imported_bridge_exits);
+            compute_signature_info(*new_local_exit_root, &imported_bridge_exits);
 
         let certificate = Certificate {
             network_id: *NETWORK_B,
             height: 0,
-            prev_local_exit_root,
-            new_local_exit_root,
+            prev_local_exit_root: *prev_local_exit_root,
+            new_local_exit_root: *new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
             signature,
@@ -180,7 +187,7 @@ impl Forest {
     pub fn assert_output_matches(&self, output: &PessimisticProofOutput) {
         assert_eq!(
             output.new_local_exit_root,
-            self.state_b.exit_tree.get_root()
+            *self.state_b.exit_tree.get_root()
         );
         assert_eq!(
             output.new_pessimistic_root,

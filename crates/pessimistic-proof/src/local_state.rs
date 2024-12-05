@@ -6,9 +6,12 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::L1_NETWORK_ID,
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
-    keccak::{Digest, Hash},
+    keccak::{digest::NewDigest, Digest, Hash},
     local_balance_tree::LocalBalanceTree,
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
+    local_exit_tree::{
+        hasher::{Keccak256Hasher, NewKeccak256Hasher},
+        LocalExitTree,
+    },
     multi_batch_header::{signature_commitment, MultiBatchHeader},
     nullifier_tree::{NullifierKey, NullifierTree},
     ProofError,
@@ -19,7 +22,7 @@ use crate::{
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`].
-    pub exit_tree: LocalExitTree<Keccak256Hasher>,
+    pub exit_tree: LocalExitTree<NewKeccak256Hasher>,
     /// Commitment to the balance for each token.
     pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
     /// Commitment to the Nullifier tree for the local network, tracks claimed
@@ -50,7 +53,7 @@ impl LocalNetworkState {
     /// Returns the roots.
     pub fn roots(&self) -> StateCommitment {
         StateCommitment {
-            exit_root: self.exit_tree.get_root(),
+            exit_root: *self.exit_tree.get_root(),
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }
@@ -79,9 +82,9 @@ impl LocalNetworkState {
     ) -> Result<StateCommitment, ProofError> {
         // Check the initial state
         let computed_root = self.exit_tree.get_root();
-        if computed_root != multi_batch_header.prev_local_exit_root {
+        if *computed_root != multi_batch_header.prev_local_exit_root {
             return Err(ProofError::InvalidPreviousLocalExitRoot {
-                computed: Hash(computed_root),
+                computed: Hash(*computed_root),
                 declared: Hash(multi_batch_header.prev_local_exit_root),
             });
         }
@@ -182,7 +185,7 @@ impl LocalNetworkState {
                 // We don't allow a chain to exit to itself
                 return Err(ProofError::CannotExitToSameNetwork);
             }
-            self.exit_tree.add_leaf(bridge_exit.hash())?;
+            self.exit_tree.add_leaf(NewDigest(bridge_exit.hash()))?;
 
             // For message exits, the origin network in token info should be the origin
             // network of the batch header.
@@ -234,7 +237,7 @@ impl LocalNetworkState {
 
         // Verify that the signature is valid
         let combined_hash = signature_commitment(
-            self.exit_tree.get_root(),
+            *self.exit_tree.get_root(),
             multi_batch_header
                 .imported_bridge_exits
                 .iter()

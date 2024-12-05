@@ -252,7 +252,7 @@ mod tests {
             empty_state.nullifier_tree.root,
         ]);
 
-        assert_eq!(EMPTY_LER, ler);
+        assert_eq!(EMPTY_LER, *ler);
         assert_eq!(EMPTY_PP_ROOT, ppr);
     }
 }
