@@ -9,8 +9,7 @@ use agglayer_storage::{
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
 use agglayer_types::{
-    Certificate, CertificateStatus, CertificateStatusError, Hash, Height, LocalNetworkStateData,
-    NetworkId,
+    Certificate, CertificateStatus, CertificateStatusError, Hash, LocalNetworkStateData, NetworkId,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -21,8 +20,14 @@ use crate::{
     CertifierOutput, Error, InitialCheckError,
 };
 
+mod certificate_processing;
+
 /// Maximum height distance of future pending certificates.
 const MAX_FUTURE_HEIGHT_DISTANCE: u64 = 5;
+
+type CertifierResult = Result<CertifierOutput, CertificationError>;
+type SettlementResult = Result<SettledCertificate, String>;
+type CertificationNotifier = mpsc::Sender<(oneshot::Sender<SettlementResult>, ProvenCertificate)>;
 
 /// Network task that is responsible to certify the certificates for a network.
 pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
@@ -40,12 +45,9 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     /// The local network state of the network task.
     local_state: LocalNetworkStateData,
     /// Handle to the task of the running certifier.
-    certifier_task: certifier_job::Manager,
+    processing_task: certificate_processing::Manager,
     /// The sender to notify that a certificate has been proven.
-    certification_notifier: mpsc::Sender<(
-        oneshot::Sender<Result<SettledCertificate, String>>,
-        ProvenCertificate,
-    )>,
+    certification_notifier: CertificationNotifier,
     /// The pending local network state that should be applied on receiving
     /// settlement response.
     pending_state: Option<LocalNetworkStateData>,
@@ -67,10 +69,7 @@ where
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         certifier_client: Arc<CertifierClient>,
-        certification_notifier: mpsc::Sender<(
-            oneshot::Sender<Result<SettledCertificate, String>>,
-            ProvenCertificate,
-        )>,
+        certification_notifier: CertificationNotifier,
         clock_ref: ClockRef,
         network_id: NetworkId,
         certificate_stream: mpsc::Receiver<(Certificate, CertResponseSender)>,
@@ -92,7 +91,7 @@ where
             state_store,
             certifier_client,
             local_state,
-            certifier_task: certifier_job::Manager::new(),
+            processing_task: certificate_processing::Manager::new(),
             certification_notifier,
             clock_ref,
             pending_state: None,
@@ -150,7 +149,7 @@ where
     }
 
     fn accepts_certificates(&self) -> bool {
-        !self.at_capacity_for_epoch && !self.certifier_task.is_running()
+        !self.at_capacity_for_epoch && !self.processing_task.is_running()
     }
 
     async fn make_progress(
@@ -162,50 +161,97 @@ where
 
         tokio::select! {
             Ok(agglayer_clock::Event::EpochEnded(epoch)) = stream_epoch.recv() => {
-                info!("Received an epoch event: {}", epoch);
-
-                let current_epoch = self.clock_ref.current_epoch();
-                if epoch != 0 && epoch < (current_epoch - 1) {
-                    debug!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
-
-                    return Ok(());
-                }
-
-                self.at_capacity_for_epoch = false;
+                self.on_epoch_ended(epoch, next_expected_height)
             }
 
             Some((certificate, response_sender)) = self.certificate_stream.recv() => {
-                let certificate_id = certificate.hash();
-                let height = certificate.height;
-                info!(
-                    hash = certificate_id.to_string(),
-                    "Received a certificate event for {certificate_id} at height {height}"
-                );
-
-                let response = self.process_certificate(&certificate, *next_expected_height);
-
-                if let Err(err) = &response {
-                    let cert_id = certificate.hash();
-                    warn!("Certificate processing error for {cert_id}: {err}");
-                }
-
-                if let Err(response) = response_sender.send(response) {
-                    let cert_id = certificate.hash();
-                    warn!("Failed to send response ({response:?}) to {cert_id}");
-                }
+                self.on_receive_certificate(certificate, response_sender, next_expected_height)
             }
 
-            result = self.certifier_task.join() => {
-                let cert_id = result.certificate_id;
-                info!("Finished certifying {cert_id}");
-
-                let result = self.process_certifier_result(result, next_expected_height).await;
-                if let Err(error) = result {
-                    info!("Certifier result processing for {cert_id} error: {error}");
-                }
+            result = self.processing_task.join() => {
+                self.on_certifcate_processing_result(result, next_expected_height)
             }
-        };
+        }
+    }
 
+    fn on_epoch_ended(&mut self, epoch: u64, next_expected_height: &mut u64) -> Result<(), Error> {
+        info!("Received an epoch event: {}", epoch);
+
+        let current_epoch = self.clock_ref.current_epoch();
+        if epoch != 0 && epoch < (current_epoch - 1) {
+            debug!(
+                "Received an epoch event for epoch {epoch} which is outdated, current epoch is \
+                 {current_epoch}"
+            );
+
+            return Ok(());
+        }
+
+        self.at_capacity_for_epoch = false;
+
+        self.pick_next_certificate(next_expected_height)
+    }
+
+    fn on_receive_certificate(
+        &mut self,
+        certificate: Certificate,
+        response_sender: CertResponseSender,
+        next_expected_height: &mut u64,
+    ) -> Result<(), Error> {
+        let certificate_id = certificate.hash();
+        let height = certificate.height;
+        info!(
+            hash = certificate_id.to_string(),
+            "Received a certificate event for {certificate_id} at height {height}"
+        );
+
+        let response = self.accept_certificate(&certificate, *next_expected_height);
+        let success = response.is_ok();
+
+        if let Err(err) = &response {
+            info!("Certificate initial processing error for {certificate_id}: {err}");
+        }
+
+        if let Err(response) = response_sender.send(response) {
+            warn!("Failed to send response ({response:?}) to {certificate_id}");
+        }
+
+        if success {
+            self.pick_next_certificate(next_expected_height)?;
+        }
+
+        Ok(())
+    }
+
+    fn on_certifcate_processing_result(
+        &mut self,
+        result: certificate_processing::JobResult,
+        next_expected_height: &mut u64,
+    ) -> Result<(), Error> {
+        use certificate_processing::JobResult as JR;
+
+        match result {
+            JR::Certification {
+                certificate_id,
+                result,
+            } => {
+                info!("Finished certification of {certificate_id}");
+                self.process_certification_result(result, certificate_id)?
+            }
+
+            JR::Settlement {
+                certificate,
+                result,
+            } => {
+                info!("Finished settlement of {}", certificate.hash());
+                self.process_settlement_result(result, certificate, next_expected_height)?;
+            }
+        }
+
+        self.pick_next_certificate(next_expected_height)
+    }
+
+    fn pick_next_certificate(&mut self, next_expected_height: &mut u64) -> Result<(), Error> {
         if !self.accepts_certificates() {
             return Ok(());
         }
@@ -293,7 +339,7 @@ where
             .certifier_client
             .certify(self.local_state.clone(), self.network_id, height)
         {
-            Ok(task) => self.certifier_task.try_spawn(certificate_id, task)?,
+            Ok(task) => self.processing_task.start_proving(certificate_id, task)?,
 
             // If we received a `CertificateNotFound` error, it means that the certificate was
             // not found in the pending store. This can happen if we try to
@@ -326,53 +372,76 @@ where
         Ok(())
     }
 
-    async fn process_certifier_result(
+    /// Initial certificate checks.
+    ///
+    /// Performs a number of initial checks for the certificate. If these pass,
+    /// the certificate is recorded in persistent storage.
+    fn accept_certificate(&mut self, certificate: &Certificate, next_height: u64) -> CertResponse {
+        let height = certificate.height;
+        let network_id = certificate.network_id;
+
+        if height < next_height {
+            return Err(InitialCheckError::InPast {
+                height,
+                next_height,
+            });
+        }
+
+        let max_height = next_height + MAX_FUTURE_HEIGHT_DISTANCE;
+        if height > max_height {
+            return Err(InitialCheckError::FarFuture { height, max_height });
+        }
+
+        // TODO signature check + rate limit
+
+        let existing_header = self
+            .state_store
+            .get_certificate_header_by_cursor(network_id, height)?;
+
+        if let Some(existing_header) = existing_header {
+            use CertificateStatus as CS;
+
+            let status = existing_header.status;
+            match status {
+                CS::InError { error: _ } => (),
+                status @ (CS::Pending | CS::Proven | CS::Candidate | CS::Settled) => {
+                    return Err(InitialCheckError::IllegalReplacement { status });
+                }
+            }
+        }
+
+        // TODO: Batch the two queries.
+        // Insert the certificate header into the state store.
+        self.state_store
+            .insert_certificate_header(certificate, CertificateStatus::Pending)?;
+
+        // Insert the certificate into the pending store.
+        self.pending_store
+            .insert_pending_certificate(network_id, height, certificate)?;
+
+        Ok(())
+    }
+
+    fn process_certification_result(
         &mut self,
-        result: certifier_job::JobResult,
-        next_expected_height: &mut u64,
+        result: CertifierResult,
+        certificate_id: Hash,
     ) -> Result<(), Error> {
-        let certifier_job::JobResult {
-            certificate_id,
-            result,
-        } = result;
         debug!(
             "Processing certifier result: {:?}",
             result.as_ref().map(|_| certificate_id)
         );
 
         match result {
-            Ok(CertifierOutput {
-                height,
-                certificate,
-                new_state,
-                ..
-            }) => {
-                debug!(
-                    hash = certificate_id.to_string(),
-                    "Proof certification completed for {certificate_id} for network {}",
-                    self.network_id
-                );
-                if let Err(error) = self
-                    .on_proven_certificate(height, certificate, new_state)
-                    .await
-                {
+            Ok(proven_certificate) => {
+                if let Err(error) = self.handle_proven_certificate(proven_certificate) {
                     error!(
                         hash = certificate_id.to_string(),
-                        "Error during the certification process of {certificate_id} for network \
-                         {}: {:?}",
+                        "Error processing proven certificate {certificate_id} for network {}: {:?}",
                         self.network_id,
                         error
                     );
                 }
-
-                *next_expected_height += 1;
-
-                self.at_capacity_for_epoch = true;
-                debug!(
-                    hash = certificate_id.to_string(),
-                    "Certification process completed for {certificate_id} for network {}",
-                    self.network_id
-                );
 
                 Ok(())
             }
@@ -433,6 +502,7 @@ where
                             source
                         );
                         warn!(hash = certificate_id.to_string(), error);
+
                         CertificateStatusError::InternalError(error)
                     }
                     CertificationError::InternalError(error) => {
@@ -465,56 +535,6 @@ where
                 Ok(())
             }
         }
-    }
-
-    /// Process single certificate.
-    ///
-    /// Performs a number of initial checks for the certificate. If these pass,
-    /// the certificate is recorded in persistent storage.
-    fn process_certificate(&mut self, certificate: &Certificate, next_height: u64) -> CertResponse {
-        let height = certificate.height;
-        let network_id = certificate.network_id;
-
-        if height < next_height {
-            return Err(InitialCheckError::InPast {
-                height,
-                next_height,
-            });
-        }
-
-        let max_height = next_height + MAX_FUTURE_HEIGHT_DISTANCE;
-        if height > max_height {
-            return Err(InitialCheckError::FarFuture { height, max_height });
-        }
-
-        // TODO signature check + rate limit
-
-        let existing_header = self
-            .state_store
-            .get_certificate_header_by_cursor(network_id, height)?;
-
-        if let Some(existing_header) = existing_header {
-            use CertificateStatus as CS;
-
-            let status = existing_header.status;
-            match status {
-                CS::InError { error: _ } => (),
-                status @ (CS::Pending | CS::Proven | CS::Candidate | CS::Settled) => {
-                    return Err(InitialCheckError::IllegalReplacement { status });
-                }
-            }
-        }
-
-        // TODO: Batch the two queries.
-        // Insert the certificate header into the state store.
-        self.state_store
-            .insert_certificate_header(certificate, CertificateStatus::Pending)?;
-
-        // Insert the certificate into the pending store.
-        self.pending_store
-            .insert_pending_certificate(network_id, height, certificate)?;
-
-        Ok(())
     }
 }
 
@@ -552,13 +572,24 @@ where
     /// - We do not remove the pending certificate. (as it needs to be included
     ///   in an epoch)
     /// - We spawn the next certificate for the network.
-    async fn on_proven_certificate(
+    fn handle_proven_certificate(
         &mut self,
-        height: Height,
-        certificate: Certificate,
-        new_state: LocalNetworkStateData,
+        certifier_output: CertifierOutput,
     ) -> Result<(), Error> {
+        let CertifierOutput {
+            certificate,
+            height,
+            new_state,
+            network,
+        } = certifier_output;
+
         let certificate_id = certificate.hash();
+
+        debug!(
+            hash = certificate_id.to_string(),
+            "Proof certification completed for {certificate_id} for network {network}",
+        );
+
         if let Err(error) = self
             .pending_store
             .set_latest_proven_certificate_per_network(&self.network_id, &height, &certificate_id)
@@ -575,183 +606,111 @@ where
         {
             error!(
                 hash = certificate_id.to_string(),
-                "Failed to update the certificate header status: {:?}", error
+                "Failed to update the certificate header status: {error:?}",
             );
         }
 
         self.pending_state = Some(new_state);
 
-        let (sender, receiver) = oneshot::channel();
-
-        if self
-            .certification_notifier
-            .send((
-                sender,
-                ProvenCertificate(certificate_id, self.network_id, height),
-            ))
-            .await
-            .is_err()
+        if let Err(error) = self
+            .processing_task
+            .start_settlement(certificate, &self.certification_notifier)
         {
-            error!("Failed to send the proven certificate notification");
+            error!(
+                hash = certificate_id.to_string(),
+                "Failed to start settlement for {certificate_id}: {error}"
+            );
         }
 
-        if let Ok(result) = receiver.await {
-            match result {
-                Ok(SettledCertificate(certificate_id, _height, _epoch, _index)) => {
-                    info!(
-                        hash = certificate_id.to_string(),
-                        "Received a certificate settlement notification"
+        Ok(())
+    }
+
+    fn process_settlement_result(
+        &mut self,
+        result: SettlementResult,
+        certificate: Certificate,
+        next_expected_height: &mut u64,
+    ) -> Result<(), Error> {
+        match result {
+            Ok(SettledCertificate(certificate_id, _height, _epoch, _index)) => {
+                info!(
+                    hash = certificate_id.to_string(),
+                    "Received a certificate settlement notification"
+                );
+                if let Some(new) = self.pending_state.take() {
+                    debug!(
+                        "Updated the state for network {} with the new state {} > {}",
+                        self.network_id,
+                        self.local_state.get_roots().display_to_hex(),
+                        new.get_roots().display_to_hex()
                     );
-                    if let Some(new) = self.pending_state.take() {
-                        debug!(
-                            "Updated the state for network {} with the new state {} > {}",
-                            self.network_id,
-                            self.local_state.get_roots().display_to_hex(),
-                            new.get_roots().display_to_hex()
-                        );
 
-                        self.local_state = new;
+                    self.local_state = new;
 
-                        // Store the current state
-                        let new_leaves = certificate
-                            .bridge_exits
-                            .iter()
-                            .map(|exit| exit.hash().into())
-                            .collect::<Vec<Hash>>();
+                    // Store the current state
+                    let new_leaves = certificate
+                        .bridge_exits
+                        .iter()
+                        .map(|exit| exit.hash().into())
+                        .collect::<Vec<Hash>>();
 
-                        self.state_store
-                            .write_local_network_state(
-                                &certificate.network_id,
-                                &self.local_state,
-                                new_leaves.as_slice(),
-                            )
-                            .map_err(|e| Error::PersistenceError {
-                                certificate_id,
-                                error: e.to_string(),
-                            })?;
-                    } else {
-                        error!(
-                            "Missing pending state for network {} needed upon settlement, current \
-                             state: {}",
-                            self.network_id,
-                            self.local_state.get_roots().display_to_hex()
-                        );
-                    }
+                    self.state_store
+                        .write_local_network_state(
+                            &certificate.network_id,
+                            &self.local_state,
+                            new_leaves.as_slice(),
+                        )
+                        .map_err(|e| Error::PersistenceError {
+                            certificate_id,
+                            error: e.to_string(),
+                        })?;
+
+                    *next_expected_height += 1;
+
+                    self.at_capacity_for_epoch = true;
+
+                    debug!(
+                        hash = certificate_id.to_string(),
+                        "Certification process completed for {certificate_id} for network {}",
+                        self.network_id
+                    );
+                } else {
+                    error!(
+                        "Missing pending state for network {} needed upon settlement, current \
+                         state: {}",
+                        self.network_id,
+                        self.local_state.get_roots().display_to_hex()
+                    );
                 }
-                Err(error) => {
+            }
+            Err(error) => {
+                let certificate_id = certificate.hash();
+
+                error!(
+                    hash = certificate_id.to_string(),
+                    "Failed to settle the certificate: {}", error
+                );
+
+                if self
+                    .state_store
+                    .update_certificate_header_status(
+                        &certificate_id,
+                        &CertificateStatus::InError {
+                            error: CertificateStatusError::SettlementError(error),
+                        },
+                    )
+                    .is_err()
+                {
                     error!(
                         hash = certificate_id.to_string(),
-                        "Failed to settle the certificate: {}", error
+                        "Certificate {certificate_id} in error and failed to update the \
+                         certificate header status"
                     );
-
-                    if self
-                        .state_store
-                        .update_certificate_header_status(
-                            &certificate_id,
-                            &CertificateStatus::InError {
-                                error: CertificateStatusError::SettlementError(error),
-                            },
-                        )
-                        .is_err()
-                    {
-                        error!(
-                            hash = certificate_id.to_string(),
-                            "Certificate {certificate_id} in error and failed to update the \
-                             certificate header status"
-                        );
-                    }
                 }
             }
         }
 
         Ok(())
-    }
-}
-
-// TODO: Move into a separate file. Inline for now to avoid merge conflicts.
-mod certifier_job {
-    use std::{future::Future, pin::pin, task::Poll};
-
-    use tokio::task::JoinHandle;
-
-    use super::{CertificationError, CertifierOutput, Hash};
-
-    pub type CertifierResult = std::result::Result<CertifierOutput, CertificationError>;
-
-    pub enum Manager {
-        Idle,
-        Running(Job),
-    }
-
-    impl Manager {
-        /// New certifier task manager.
-        pub fn new() -> Self {
-            Self::Idle
-        }
-
-        /// Check if a certification job is running.
-        pub fn is_running(&self) -> bool {
-            matches!(self, Self::Running(_))
-        }
-
-        /// Spawn a certifier task if not running.
-        pub fn try_spawn(
-            &mut self,
-            certificate_id: Hash,
-            task: impl Future<Output = CertifierResult> + Send + 'static,
-        ) -> Result<(), CertificationError> {
-            match self {
-                Self::Idle => {
-                    *self = Self::Running(Job {
-                        task_handle: tokio::spawn(task),
-                        certificate_id,
-                    });
-                    Ok(())
-                }
-                Self::Running(_) => Err(CertificationError::InternalError(
-                    "Certifier task in progress".into(),
-                )),
-            }
-        }
-
-        /// Wait for a job to finish (pending if no job is running).
-        pub fn join(&mut self) -> impl Future<Output = JobResult> + '_ {
-            std::future::poll_fn(|cx| self.poll_join(cx))
-        }
-
-        fn poll_join(&mut self, cx: &mut std::task::Context) -> Poll<JobResult> {
-            match self {
-                Self::Idle => Poll::Pending,
-                Self::Running(job) => match pin!(&mut job.task_handle).poll(cx) {
-                    Poll::Pending => Poll::Pending,
-                    Poll::Ready(result) => {
-                        // Extract result.
-                        let result = result.unwrap_or_else(|join_error| {
-                            Err(CertificationError::InternalError(join_error.to_string()))
-                        });
-                        let certificate_id = job.certificate_id;
-
-                        // Mark the manager as idle.
-                        *self = Self::Idle;
-
-                        Poll::Ready(JobResult {
-                            certificate_id,
-                            result,
-                        })
-                    }
-                },
-            }
-        }
-    }
-
-    pub struct Job {
-        certificate_id: Hash,
-        task_handle: JoinHandle<CertifierResult>,
-    }
-
-    pub struct JobResult {
-        pub certificate_id: Hash,
-        pub result: CertifierResult,
     }
 }
 
@@ -893,10 +852,12 @@ mod tests {
         assert_eq!(next_expected_height, 0);
         assert!(reply_rx.await.unwrap().is_ok());
 
-        // Process the result of the certifier.
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
+        // Process the result of the certifier (two steps).
+        for _ in 1..3 {
+            task.make_progress(&mut epochs, &mut next_expected_height)
+                .await
+                .unwrap();
+        }
 
         assert_eq!(next_expected_height, 1);
     }
@@ -1083,12 +1044,11 @@ mod tests {
         assert_eq!(next_expected_height, 0);
         assert!(reply0_rx.await.unwrap().is_ok());
 
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
+        for _ in 0..3 {
+            task.make_progress(&mut epochs, &mut next_expected_height)
+                .await
+                .unwrap();
+        }
 
         assert_eq!(next_expected_height, 1);
 
@@ -1303,7 +1263,7 @@ mod tests {
 
         assert_eq!(next_expected_height, 0);
 
-        for _ in 0..2 {
+        for _ in 0..3 {
             task.make_progress(&mut epochs, &mut next_expected_height)
                 .await
                 .unwrap();
@@ -1325,7 +1285,7 @@ mod tests {
             .send(agglayer_clock::Event::EpochEnded(0))
             .expect("Failed to send");
 
-        for _ in 0..2 {
+        for _ in 0..3 {
             task.make_progress(&mut epochs, &mut next_expected_height)
                 .await
                 .unwrap();
@@ -1412,7 +1372,7 @@ mod tests {
         .expect("Failed to create a new network task");
 
         let certificate = Certificate::new_for_test(network_id, 0);
-        let result = task.process_certificate(&certificate, 0);
+        let result = task.accept_certificate(&certificate, 0);
         assert!(result.is_ok());
     }
 
@@ -1460,7 +1420,7 @@ mod tests {
         .expect("Failed to create a new network task");
 
         let certificate = Certificate::new_for_test(network_id, 0);
-        let result = task.process_certificate(&certificate, 0);
+        let result = task.accept_certificate(&certificate, 0);
         assert!(matches!(
             result.unwrap_err(),
             InitialCheckError::IllegalReplacement { .. }
