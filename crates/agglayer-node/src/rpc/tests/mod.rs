@@ -1,15 +1,15 @@
 use std::net::IpAddr;
 use std::sync::Arc;
 
+use agglayer_certificate_orchestrator::{CertResponseSender, CertificateSubmitter};
 use agglayer_config::Config;
-use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCertificate;
-use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
-use agglayer_storage::stores::debug::DebugStore;
-use agglayer_storage::stores::pending::PendingStore;
-use agglayer_storage::stores::state::StateStore;
-use agglayer_storage::stores::{DebugReader, DebugWriter, PendingCertificateReader};
 use agglayer_storage::{
-    stores::{PendingCertificateWriter, StateReader, StateWriter},
+    columns::latest_settled_certificate_per_network::SettledCertificate,
+    storage::{pending_db_cf_definitions, state_db_cf_definitions, DB},
+    stores::{
+        debug::DebugStore, pending::PendingStore, state::StateStore, DebugReader, DebugWriter,
+        PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
+    },
     tests::TempDBDir,
 };
 use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId};
@@ -20,6 +20,7 @@ use hyper_util::rt::TokioExecutor;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::ServerHandle;
 use rstest::*;
+use tokio::{sync::mpsc, task::JoinHandle};
 
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
@@ -47,12 +48,14 @@ async fn healthcheck_method_can_be_called() {
 
     let kernel = Kernel::new(Arc::new(provider), config.clone());
 
+    let cert_submitter = CertificateSubmitter::new(certificate_sender);
+
     let _server_handle = AgglayerImpl::new(
         kernel,
-        certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        cert_submitter,
         config.clone(),
     )
     .start()
@@ -78,18 +81,41 @@ async fn healthcheck_method_can_be_called() {
     assert_eq!(out.as_str(), "{\"health\":true}");
 }
 
+struct DummyOrchestrator(JoinHandle<()>);
+
+impl DummyOrchestrator {
+    fn start(
+        mut certificate_receiver: mpsc::Receiver<(Certificate, CertResponseSender)>,
+        state_store: Arc<StateStore>,
+    ) -> Self {
+        let handle = tokio::task::spawn(async move {
+            while let Some((cert, reply_sender)) = certificate_receiver.recv().await {
+                state_store
+                    .insert_certificate_header(&cert, CertificateStatus::Pending)
+                    .unwrap();
+                let _ = reply_sender.send(Ok(()));
+            }
+        });
+        Self(handle)
+    }
+}
+
+impl Drop for DummyOrchestrator {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 pub(crate) struct RawRpcContext {
-    pub(crate) rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore, DebugStore>,
+    rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore, DebugStore>,
     config: Arc<Config>,
-    pub(crate) certificate_receiver:
-        tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
+    dummy_orchestrator: DummyOrchestrator,
 }
 
 pub(crate) struct TestContext {
-    pub(crate) server_handle: ServerHandle,
-    pub(crate) client: jsonrpsee::http_client::HttpClient,
-    pub(crate) certificate_receiver:
-        tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
+    server_handle: ServerHandle,
+    client: jsonrpsee::http_client::HttpClient,
+    _dummy_orchestrator: DummyOrchestrator,
 }
 
 impl TestContext {
@@ -108,7 +134,7 @@ impl TestContext {
         Self {
             server_handle,
             client,
-            certificate_receiver: raw_rpc.certificate_receiver,
+            _dummy_orchestrator: raw_rpc.dummy_orchestrator,
         }
     }
 
@@ -150,19 +176,23 @@ impl TestContext {
 
         let kernel = Kernel::new(Arc::new(provider), config.clone());
 
+        let cert_submitter = CertificateSubmitter::new(certificate_sender);
+
         let rpc = AgglayerImpl::new(
             kernel,
-            certificate_sender,
             pending_store,
-            state_store,
+            state_store.clone(),
             debug_store,
+            cert_submitter,
             config.clone(),
         );
+
+        let dummy_orchestrator = DummyOrchestrator::start(certificate_receiver, state_store);
 
         RawRpcContext {
             rpc,
             config,
-            certificate_receiver,
+            dummy_orchestrator,
         }
     }
 }

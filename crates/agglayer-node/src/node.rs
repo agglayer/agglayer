@@ -206,13 +206,17 @@ impl Node {
             .await?;
 
         info!("Certificate orchestrator started.");
+
+        let cert_submitter =
+            agglayer_certificate_orchestrator::CertificateSubmitter::new(data_sender);
+
         // Bind the core to the RPC server.
         let server_handle = AgglayerImpl::new(
             core,
-            data_sender,
             pending_store.clone(),
-            state_store.clone(),
+            state_store,
             debug_store,
+            cert_submitter,
             config.clone(),
         )
         .start()

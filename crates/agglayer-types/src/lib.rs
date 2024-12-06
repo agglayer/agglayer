@@ -194,6 +194,16 @@ pub enum CertificateStatus {
     Settled,
 }
 
+impl CertificateStatus {
+    /// Get the error if the certificate is in error.
+    pub fn as_error(&self) -> Option<&CertificateStatusError> {
+        match self {
+            Self::InError { error } => Some(error),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for CertificateStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {

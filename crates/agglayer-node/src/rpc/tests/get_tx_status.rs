@@ -1,12 +1,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use agglayer_certificate_orchestrator::CertificateSubmitter;
 use agglayer_config::Config;
-use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
-use agglayer_storage::stores::debug::DebugStore;
-use agglayer_storage::stores::pending::PendingStore;
-use agglayer_storage::stores::state::StateStore;
-use agglayer_storage::tests::TempDBDir;
+use agglayer_storage::{
+    storage::{pending_db_cf_definitions, state_db_cf_definitions, DB},
+    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
+    tests::TempDBDir,
+};
 use ethers::providers::{Http, Middleware, Provider, ProviderExt as _};
 use ethers::types::{TransactionRequest, H256};
 use ethers::utils::Anvil;
@@ -51,12 +52,13 @@ async fn check_tx_status() {
     let kernel = Kernel::new(Arc::new(client), config.clone());
 
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
+    let certificate_submitter = CertificateSubmitter::new(certificate_sender);
     let _server_handle = AgglayerImpl::new(
         kernel,
-        certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
+        certificate_submitter,
         config.clone(),
     )
     .start()
@@ -100,19 +102,23 @@ async fn check_tx_status_fail() {
     let kernel = Kernel::new(Arc::new(client), config.clone());
 
     let tmp = TempDBDir::new();
-    let db = Arc::new(DB::open_cf(tmp.path.as_path(), pending_db_cf_definitions()).unwrap());
+    let pending_db =
+        Arc::new(DB::open_cf(tmp.path.as_path(), pending_db_cf_definitions()).unwrap());
+    let pending = Arc::new(PendingStore::new(pending_db));
+
     let tmp = TempDBDir::new();
     let store_db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
-    let store = Arc::new(PendingStore::new(db));
     let state = Arc::new(StateStore::new(store_db));
     let debug = Arc::new(DebugStore::new_with_path(&tmp.path.join("debug")).unwrap());
 
+    let certificate_submitter = CertificateSubmitter::new(certificate_sender);
+
     let _server_handle = AgglayerImpl::new(
         kernel,
-        certificate_sender,
-        store,
+        pending,
         state,
         debug,
+        certificate_submitter,
         config.clone(),
     )
     .start()
