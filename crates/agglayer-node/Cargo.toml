@@ -7,7 +7,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-alloy = { version = "0.6.4", features = ["full"] }
+alloy.workspace = true
 anyhow.workspace = true
 arc-swap.workspace = true
 buildstructor.workspace = true
