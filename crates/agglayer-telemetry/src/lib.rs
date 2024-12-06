@@ -91,7 +91,6 @@ pub mod prover {
 
 pub struct ServerBuilder {}
 
-#[buildstructor::buildstructor]
 impl ServerBuilder {
     /// Function that builds a new Metrics server and returns a
     /// [`WithGracefulShutdown`] instance ready to be spawn.
@@ -106,20 +105,13 @@ impl ServerBuilder {
     ///
     /// # Examples
     /// ```
-    /// # use std::sync::Arc;
-    /// # use agglayer_telemetry::ServerBuilder;
-    /// # use agglayer_telemetry::Error;
-    /// # use tokio_util::sync::CancellationToken;
-    /// # use std::net::SocketAddr;
-    /// #
-    ///
-    /// async fn build_metrics() -> Result<(), Error> {
-    ///     ServerBuilder::builder()
-    ///         .addr("127.0.0.1".parse::<SocketAddr>().unwrap())
-    ///         .cancellation_token(CancellationToken::new())
-    ///         .build()
-    ///         .await?;
-    ///
+    /// async fn build_metrics() -> Result<(), Box<dyn std::error::Error>> {
+    ///     agglayer_telemetry::ServerBuilder::serve(
+    ///         "127.0.0.1".parse()?,
+    ///         None,
+    ///         tokio_util::sync::CancellationToken::new(),
+    ///     )
+    ///     .await?;
     ///     Ok(())
     /// }
     /// ```
@@ -132,7 +124,6 @@ impl ServerBuilder {
     /// # Errors
     ///
     /// This function will return an error if the provided addr is invalid
-    #[builder(entry = "builder", exit = "build", visibility = "pub")]
     pub async fn serve(
         addr: SocketAddr,
         registry: Option<Registry>,
@@ -141,7 +132,7 @@ impl ServerBuilder {
         WithGracefulShutdown<
             axum::routing::IntoMakeService<Router>,
             axum::Router,
-            impl futures::Future<Output = ()>,
+            impl std::future::Future<Output = ()>,
         >,
         Error,
     > {
