@@ -27,6 +27,10 @@ fn main() -> anyhow::Result<()> {
                 Err(error) => eprintln!("{}", error),
             }
         }
+        cli::Commands::Vkey => {
+            let vkey = agglayer_prover::get_vkey();
+            println!("{}", vkey);
+        }
     }
 
     Ok(())

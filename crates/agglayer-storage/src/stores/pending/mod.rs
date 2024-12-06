@@ -6,6 +6,9 @@ use rocksdb::{Direction, ReadOptions};
 use super::{PendingCertificateReader, PendingCertificateWriter};
 use crate::{
     columns::{
+        latest_pending_certificate_per_network::{
+            LatestPendingCertificatePerNetworkColumn, PendingCertificate,
+        },
         latest_proven_certificate_per_network::{
             LatestProvenCertificatePerNetworkColumn, ProvenCertificate,
         },
@@ -45,6 +48,17 @@ impl PendingCertificateWriter for PendingStore {
         self.db
             .delete::<PendingQueueColumn>(&PendingQueueKey(network_id, height))
     }
+    fn set_latest_pending_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+        height: &Height,
+        certificate_id: &CertificateId,
+    ) -> Result<(), Error> {
+        self.db.put::<LatestPendingCertificatePerNetworkColumn>(
+            network_id,
+            &PendingCertificate(*certificate_id, *height),
+        )
+    }
 
     fn insert_pending_certificate(
         &self,
@@ -52,6 +66,23 @@ impl PendingCertificateWriter for PendingStore {
         height: Height,
         certificate: &Certificate,
     ) -> Result<(), Error> {
+        if let Some((_id, latest_height)) =
+            self.get_latest_pending_certificate_for_network(&network_id)?
+        {
+            if latest_height > height {
+                // TODO: This is technically not Candidate error,
+                return Err(Error::CertificateCandidateError(
+                    crate::error::CertificateCandidateError::UnexpectedHeight(
+                        network_id,
+                        height,
+                        latest_height,
+                    ),
+                ));
+            }
+        }
+
+        // TODO: make it batch
+        self.set_latest_pending_certificate_per_network(&network_id, &height, &certificate.hash())?;
         self.db
             .put::<PendingQueueColumn>(&PendingQueueKey(network_id, height), certificate)
     }
@@ -89,15 +120,10 @@ impl PendingCertificateReader for PendingStore {
     fn get_latest_pending_certificate_for_network(
         &self,
         network_id: &NetworkId,
-    ) -> Result<Option<Certificate>, Error> {
-        Ok(self
-            .db
-            .prefix_iterator_with_direction::<PendingQueueColumn, NetworkId>(
-                network_id,
-                Direction::Reverse,
-            )?
-            .filter_map(|v| v.map(|(_, certificate)| certificate).ok())
-            .next())
+    ) -> Result<Option<(CertificateId, Height)>, Error> {
+        self.db
+            .get::<LatestPendingCertificatePerNetworkColumn>(network_id)
+            .map(|v| v.map(|PendingCertificate(id, height)| (id, height)))
     }
 
     fn get_certificate(

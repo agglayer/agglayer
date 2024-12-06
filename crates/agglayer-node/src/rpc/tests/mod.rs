@@ -318,6 +318,14 @@ impl PendingCertificateWriter for DummyStore {
         Ok(())
     }
 
+    fn set_latest_pending_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+        _height: &Height,
+        _certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
     fn insert_generated_proof(
         &self,
         _certificate_id: &agglayer_types::CertificateId,
@@ -353,7 +361,7 @@ impl PendingCertificateReader for DummyStore {
     fn get_latest_pending_certificate_for_network(
         &self,
         _network_id: &NetworkId,
-    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
         todo!()
     }
 

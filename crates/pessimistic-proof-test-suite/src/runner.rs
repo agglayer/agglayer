@@ -63,6 +63,11 @@ impl Runner {
         Ok((output, report))
     }
 
+    pub fn get_vkey(&self) -> SP1VerifyingKey {
+        let (_pk, vk) = self.client.setup(PESSIMISTIC_PROOF_ELF);
+        vk
+    }
+
     /// Generate one plonk proof.
     pub fn generate_plonk_proof(
         &self,
