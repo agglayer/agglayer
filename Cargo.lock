@@ -94,7 +94,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "test-log",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
  "tokio-util",
  "tonic 0.12.3",
@@ -118,7 +118,7 @@ dependencies = [
  "pessimistic-proof",
  "rstest",
  "test-log",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -138,7 +138,7 @@ dependencies = [
  "futures",
  "rstest",
  "test-log",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
  "tokio-util",
  "tracing",
@@ -158,7 +158,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "toml",
  "tracing",
  "tracing-appender",
@@ -174,7 +174,7 @@ dependencies = [
  "ethers",
  "ethers-contract",
  "reth-primitives",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
 ]
 
@@ -186,7 +186,7 @@ dependencies = [
  "ethers",
  "ethers-gcp-kms-signer",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
 ]
 
 [[package]]
@@ -229,7 +229,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "test-log",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -256,7 +256,7 @@ dependencies = [
  "pessimistic-proof",
  "sp1-prover",
  "sp1-sdk",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
  "tokio-util",
  "toml",
@@ -278,7 +278,7 @@ dependencies = [
  "pessimistic-proof",
  "prost 0.13.3",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tonic 0.12.3",
  "tonic-build",
 ]
@@ -292,7 +292,7 @@ dependencies = [
  "async-trait",
  "ethers",
  "rstest",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
 ]
 
@@ -315,7 +315,7 @@ dependencies = [
  "rstest",
  "serde",
  "sp1-sdk",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tracing",
 ]
 
@@ -331,7 +331,7 @@ dependencies = [
  "opentelemetry-prometheus",
  "opentelemetry_sdk",
  "prometheus",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
  "tokio-util",
  "tracing",
@@ -349,7 +349,7 @@ dependencies = [
  "serde_with",
  "sp1-core-machine",
  "sp1-sdk",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
 ]
 
 [[package]]
@@ -6020,7 +6020,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?branch=patch-v2.0.2)",
  "tracing",
 ]
@@ -6047,7 +6047,7 @@ dependencies = [
  "serde_json",
  "sp1-core-machine",
  "sp1-sdk",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tracing",
  "uuid 1.11.0",
 ]
