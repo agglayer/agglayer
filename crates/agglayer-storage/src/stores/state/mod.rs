@@ -6,7 +6,7 @@ use std::{
 
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, Height, Keccak256Hasher, LocalNetworkStateData, NetworkId,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId,
 };
 use pessimistic_proof::{
     keccak::digest::NewDigest,
@@ -115,8 +115,8 @@ impl StateWriter for StateStore {
                 height: certificate.height,
                 epoch_number: None,
                 certificate_index: None,
-                prev_local_exit_root: *certificate.prev_local_exit_root,
-                new_local_exit_root: *certificate.new_local_exit_root,
+                prev_local_exit_root: certificate.prev_local_exit_root,
+                new_local_exit_root: certificate.new_local_exit_root,
                 status: status.clone(),
                 metadata: certificate.metadata,
             },

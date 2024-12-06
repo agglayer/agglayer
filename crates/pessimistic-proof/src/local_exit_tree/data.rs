@@ -179,11 +179,11 @@ mod tests {
     use rand::{random, thread_rng, Rng};
 
     use crate::local_exit_tree::{
-        data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree, LocalExitTreeError,
+        data::LocalExitTreeData, hasher::NewKeccak256Hasher, LocalExitTree, LocalExitTreeError,
     };
 
     const TREE_DEPTH: usize = 32;
-    type H = Keccak256Hasher;
+    type H = NewKeccak256Hasher;
 
     fn compare_let_data_let_frontier(num_leaves: usize) {
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();

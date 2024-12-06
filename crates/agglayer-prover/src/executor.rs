@@ -9,8 +9,7 @@ use agglayer_config::prover::{NetworkProverConfig, ProverConfig};
 use agglayer_prover_types::Error;
 use futures::{Future, TryFutureExt};
 use pessimistic_proof::{
-    local_exit_tree::hasher::{Keccak256Hasher, NewKeccak256Hasher},
-    multi_batch_header::MultiBatchHeader,
+    local_exit_tree::hasher::NewKeccak256Hasher, multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
 };
 use sp1_sdk::network::prover::NetworkProver;

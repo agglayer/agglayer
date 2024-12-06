@@ -136,3 +136,29 @@ impl FromU256 for NewDigest {
         Self(u.to_be_bytes())
     }
 }
+
+impl TryFrom<Vec<u8>> for NewDigest {
+    type Error = hex::FromHexError;
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        let mut bytes = [0u8; 32];
+        let len = value.len();
+        bytes[..len].copy_from_slice(&value);
+
+        Ok(NewDigest(bytes))
+    }
+}
+
+impl From<NewDigest> for Vec<u8> {
+    fn from(value: NewDigest) -> Self {
+        value.0.to_vec()
+    }
+}
+
+#[cfg(test)]
+impl rand::distributions::Distribution<NewDigest> for rand::distributions::Standard {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> NewDigest {
+        let raw: [u8; 32] = rng.gen();
+
+        NewDigest(raw)
+    }
+}

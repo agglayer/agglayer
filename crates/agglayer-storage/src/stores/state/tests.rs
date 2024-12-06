@@ -178,7 +178,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         info!("Certificate {idx}: successful native execution");
 
         for b in &certificate.bridge_exits {
-            leaves.push(NewDigest(b.hash()));
+            leaves.push(b.hash());
         }
         lns.apply_certificate(certificate, signer, l1_info_root)
             .unwrap();

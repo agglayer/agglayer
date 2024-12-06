@@ -5,10 +5,7 @@ use std::{fmt::Display, ops::Deref};
 use reth_primitives::{address, revm_primitives::bitvec::view::BitViewSized, Address, U256};
 use serde::{Deserialize, Serialize};
 
-use crate::keccak::{
-    digest::NewDigest, keccak256, keccak256_combine, new_keccak256, new_keccak256_combine,
-    Digest as KeccakDigest,
-};
+use crate::keccak::{digest::NewDigest, new_keccak256, new_keccak256_combine};
 
 pub(crate) const L1_NETWORK_ID: NetworkId = NetworkId(0);
 pub(crate) const L1_ETH: TokenInfo = TokenInfo {
@@ -28,8 +25,8 @@ pub struct TokenInfo {
 
 impl TokenInfo {
     /// Computes the Keccak digest of [`TokenInfo`].
-    pub fn hash(&self) -> KeccakDigest {
-        keccak256_combine([
+    pub fn hash(&self) -> NewDigest {
+        new_keccak256_combine([
             &self.origin_network.to_be_bytes(),
             self.origin_token_address.as_slice(),
         ])
@@ -103,14 +100,14 @@ impl BridgeExit {
             dest_network,
             dest_address,
             amount,
-            metadata: Some(NewDigest(keccak256(metadata.as_slice()))),
+            metadata: Some(new_keccak256(metadata.as_slice())),
         }
     }
 
     /// Hashes the [`BridgeExit`] to be inserted in a
     /// [`crate::local_exit_tree::LocalExitTree`].
-    pub fn hash(&self) -> KeccakDigest {
-        keccak256_combine([
+    pub fn hash(&self) -> NewDigest {
+        new_keccak256_combine([
             (self.leaf_type as u8).as_raw_slice(),
             &u32::to_be_bytes(self.token_info.origin_network.into()),
             self.token_info.origin_token_address.as_slice(),

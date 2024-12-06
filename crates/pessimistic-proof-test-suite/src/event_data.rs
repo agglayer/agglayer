@@ -3,7 +3,7 @@ use std::{fs::File, io::BufReader};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
-    keccak::{keccak256, new_keccak256},
+    keccak::new_keccak256,
 };
 use reth_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Deserializer};
@@ -87,7 +87,7 @@ impl From<DepositEventData> for BridgeExit {
                 .decode(deposit_event_data.metadata)
                 .ok()
                 .as_ref()
-                .map(|data| keccak256(data).into()),
+                .map(|data| new_keccak256(data).into()),
         }
     }
 }

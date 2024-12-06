@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::keccak::{
-    digest::NewDigest, keccak256_combine, new_keccak256_combine, Digest as KeccakDigest,
-};
+use crate::keccak::{digest::NewDigest, new_keccak256_combine};
 
 /// A hasher used in constructing a [`super::LocalExitTree`].
 pub trait Hasher {
@@ -10,18 +8,6 @@ pub trait Hasher {
 
     /// Hashes two digests into one.
     fn merge(left: &Self::Digest, right: &Self::Digest) -> Self::Digest;
-}
-
-/// A Keccak hasher with a 256-bit security level.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-pub struct Keccak256Hasher;
-
-impl Hasher for Keccak256Hasher {
-    type Digest = KeccakDigest;
-
-    fn merge(left: &KeccakDigest, right: &KeccakDigest) -> KeccakDigest {
-        keccak256_combine([left.as_ref(), right.as_ref()])
-    }
 }
 
 // pub type NewKeccak256Hasher = Keccak256Hasher;
@@ -33,6 +19,6 @@ impl Hasher for NewKeccak256Hasher {
     type Digest = NewDigest;
 
     fn merge(left: &Self::Digest, right: &Self::Digest) -> Self::Digest {
-        keccak256_combine([left.as_ref(), right.as_ref()]).into()
+        new_keccak256_combine([left.as_ref(), right.as_ref()]).into()
     }
 }

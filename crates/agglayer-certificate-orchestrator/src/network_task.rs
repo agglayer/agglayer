@@ -529,7 +529,7 @@ where
                         let new_leaves = certificate
                             .bridge_exits
                             .iter()
-                            .map(|exit| NewDigest(exit.hash()))
+                            .map(|exit| exit.hash())
                             .collect::<Vec<NewDigest>>();
 
                         self.state_store

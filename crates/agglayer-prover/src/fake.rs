@@ -6,7 +6,6 @@ use agglayer_prover_types::v1::proof_generation_service_server::{
     ProofGenerationService, ProofGenerationServiceServer,
 };
 use agglayer_prover_types::Error;
-use agglayer_types::Keccak256Hasher;
 use bincode::Options;
 use pessimistic_proof::local_exit_tree::hasher::NewKeccak256Hasher;
 use pessimistic_proof::multi_batch_header::MultiBatchHeader;

@@ -7,12 +7,8 @@ use pessimistic_proof::{
         Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
         MerkleProof,
     },
-    keccak::{digest::NewDigest, keccak256, keccak256_combine, new_keccak256, Digest},
-    local_exit_tree::{
-        data::LocalExitTreeData,
-        hasher::{Keccak256Hasher, NewKeccak256Hasher},
-        LocalExitTree,
-    },
+    keccak::{digest::NewDigest, new_keccak256, new_keccak256_combine},
+    local_exit_tree::{data::LocalExitTreeData, hasher::NewKeccak256Hasher, LocalExitTree},
     multi_batch_header::signature_commitment,
     utils::smt::Smt,
     LocalNetworkState, PessimisticProofOutput,
@@ -23,13 +19,13 @@ use reth_primitives::{Address, Signature, U256};
 use super::sample_data::{NETWORK_A, NETWORK_B};
 
 pub fn compute_signature_info(
-    new_local_exit_root: Digest,
+    new_local_exit_root: NewDigest,
     imported_bridge_exits: &[ImportedBridgeExit],
-) -> (Digest, Address, Signature) {
+) -> (NewDigest, Address, Signature) {
     let combined_hash = signature_commitment(new_local_exit_root, imported_bridge_exits);
     let wallet = LocalWallet::new(&mut thread_rng());
     let signer = wallet.address();
-    let signature = wallet.sign_hash(combined_hash.into()).unwrap();
+    let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
     let signature = Signature {
         r: U256::from_limbs(signature.r.0),
         s: U256::from_limbs(signature.s.0),
@@ -166,7 +162,7 @@ impl Forest {
         let bridge_exits = self.bridge_exits(bridge_events);
         let new_local_exit_root = self.state_b.exit_tree.get_root();
         let (_combined_hash, signer, signature) =
-            compute_signature_info(*new_local_exit_root, &imported_bridge_exits);
+            compute_signature_info(new_local_exit_root, &imported_bridge_exits);
 
         let certificate = Certificate {
             network_id: *NETWORK_B,
@@ -186,11 +182,11 @@ impl Forest {
     pub fn assert_output_matches(&self, output: &PessimisticProofOutput) {
         assert_eq!(
             output.new_local_exit_root,
-            *self.state_b.exit_tree.get_root()
+            self.state_b.exit_tree.get_root()
         );
         assert_eq!(
             output.new_pessimistic_root,
-            keccak256_combine([
+            new_keccak256_combine([
                 self.state_b.balance_tree.root,
                 self.state_b.nullifier_tree.root
             ])
@@ -205,8 +201,7 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
         dest_network,
         dest_address: random(),
         amount,
-        // metadata: vec![],
-        metadata: Some(NewDigest(keccak256(&vec![]))),
+        metadata: Some(new_keccak256(&vec![])),
     }
 }
 

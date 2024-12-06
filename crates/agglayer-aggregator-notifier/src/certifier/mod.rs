@@ -141,7 +141,8 @@ where
                 .await
                 .map_err(|_| {
                     CertificationError::L1InfoRootNotFound(certificate_id, l1_info_leaf_count)
-                })?;
+                })?
+                .into();
 
             let declared_l1_info_root = certificate
                 .l1_info_root()

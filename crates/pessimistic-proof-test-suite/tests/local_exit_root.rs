@@ -1,10 +1,7 @@
 use pessimistic_proof::{
     bridge_exit::BridgeExit,
     keccak::digest::NewDigest,
-    local_exit_tree::{
-        hasher::{Keccak256Hasher, NewKeccak256Hasher},
-        LocalExitTree,
-    },
+    local_exit_tree::{hasher::NewKeccak256Hasher, LocalExitTree},
 };
 use pessimistic_proof_test_suite::event_data::{load_json_data_file, BridgeEvent, EventData};
 

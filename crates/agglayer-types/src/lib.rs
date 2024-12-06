@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use pessimistic_proof::global_index::GlobalIndex;
 use pessimistic_proof::keccak::digest::NewDigest;
+use pessimistic_proof::keccak::new_keccak256_combine;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
-pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::hasher::NewKeccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
@@ -14,7 +14,6 @@ use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
-    keccak::{keccak256_combine, Digest},
     local_balance_tree::LocalBalancePath,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
@@ -50,8 +49,8 @@ pub struct CertificateHeader {
     pub epoch_number: Option<EpochNumber>,
     pub certificate_index: Option<CertificateIndex>,
     pub certificate_id: CertificateId,
-    pub prev_local_exit_root: Digest,
-    pub new_local_exit_root: Digest,
+    pub prev_local_exit_root: NewDigest,
+    pub new_local_exit_root: NewDigest,
     pub metadata: Metadata,
     pub status: CertificateStatus,
 }
@@ -284,11 +283,11 @@ impl Certificate {
 
     pub fn hash(&self) -> CertificateId {
         let commit_bridge_exits =
-            keccak256_combine(self.bridge_exits.iter().map(|exit| exit.hash()));
+            new_keccak256_combine(self.bridge_exits.iter().map(|exit| exit.hash()));
         let commit_imported_bridge_exits =
-            keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
+            new_keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
 
-        keccak256_combine([
+        new_keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
             self.height.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_slice(),
@@ -315,7 +314,7 @@ impl Certificate {
     /// Returns the L1 Info Root considered for this [`Certificate`].
     /// Fails if multiple L1 Info Root are considered among the inclusion proofs
     /// of the imported bridge exits.
-    pub fn l1_info_root(&self) -> Result<Option<Digest>, Error> {
+    pub fn l1_info_root(&self) -> Result<Option<NewDigest>, Error> {
         let Some(l1_info_root) = self
             .imported_bridge_exits
             .first()
@@ -338,9 +337,9 @@ impl Certificate {
     pub fn signer(&self) -> Option<Address> {
         // retrieve signer
         let combined_hash =
-            signature_commitment(*self.new_local_exit_root, &self.imported_bridge_exits);
+            signature_commitment(self.new_local_exit_root, &self.imported_bridge_exits);
 
-        self.signature.recover_signer(B256::new(combined_hash))
+        self.signature.recover_signer(B256::new(combined_hash.0))
     }
 }
 
@@ -381,7 +380,7 @@ impl LocalNetworkStateData {
         &mut self,
         certificate: &Certificate,
         signer: Address,
-        l1_info_root: Digest,
+        l1_info_root: NewDigest,
     ) -> Result<MultiBatchHeader<NewKeccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
@@ -511,9 +510,9 @@ impl LocalNetworkStateData {
             signature: certificate.signature,
             imported_exits_root: Some(imported_hash.into()),
             target: StateCommitment {
-                exit_root: *certificate.new_local_exit_root,
-                balance_root: *self.balance_tree.root,
-                nullifier_root: *self.nullifier_tree.root,
+                exit_root: certificate.new_local_exit_root,
+                balance_root: self.balance_tree.root,
+                nullifier_root: self.nullifier_tree.root,
             },
             l1_info_root: l1_info_root.into(),
         })
@@ -525,7 +524,7 @@ impl LocalNetworkStateData {
         &self,
         certificate: &Certificate,
         signer: Address,
-        l1_info_root: Digest,
+        l1_info_root: NewDigest,
     ) -> Result<MultiBatchHeader<NewKeccak256Hasher>, Error> {
         self.clone()
             .apply_certificate(certificate, signer, l1_info_root)
@@ -533,9 +532,9 @@ impl LocalNetworkStateData {
 
     pub fn get_roots(&self) -> StateCommitment {
         StateCommitment {
-            exit_root: *self.exit_tree.get_root(),
-            balance_root: *self.balance_tree.root,
-            nullifier_root: *self.nullifier_tree.root,
+            exit_root: self.exit_tree.get_root(),
+            balance_root: self.balance_tree.root,
+            nullifier_root: self.nullifier_tree.root,
         }
     }
 }
