@@ -25,13 +25,12 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
     EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, poll};
 use mocks::{MockCertifier, MockEpochPacker};
-use pessimistic_proof::keccak::digest::Digest;
 use rstest::fixture;
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;

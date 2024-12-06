@@ -1,4 +1,4 @@
-use pessimistic_proof::keccak::digest::Digest;
+use agglayer_types::Digest;
 
 use crate::columns::Codec as _;
 use crate::types::{SmtKey, SmtKeyType};

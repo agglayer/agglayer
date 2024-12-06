@@ -1,10 +1,9 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber, Height,
     LocalNetworkStateData, NetworkId, Proof,
 };
-use pessimistic_proof::keccak::digest::Digest;
 
 use crate::{error::Error, stores::PerEpochReader};
 

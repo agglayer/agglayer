@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use pessimistic_proof::global_index::GlobalIndex;
-use pessimistic_proof::keccak::digest::Digest;
+pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;

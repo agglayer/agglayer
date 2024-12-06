@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
-use pessimistic_proof::keccak::digest::Digest;
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateId, Digest, Height, NetworkId, Proof,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::columns::Codec;

@@ -1,10 +1,9 @@
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, CertificateStatus};
+use agglayer_types::{Certificate, CertificateHeader, CertificateId, CertificateStatus, Digest};
 use insta::assert_snapshot;
 use jsonrpsee::{
     core::{client::ClientT, ClientError},
     rpc_params,
 };
-use pessimistic_proof::keccak::digest::Digest;
 use rstest::*;
 use serde_json::json;
 

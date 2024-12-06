@@ -87,9 +87,8 @@ impl MerkleProof {
             self.proof
                 .siblings
                 .iter()
-                .map(|v| v.0)
+                .flat_map(|v| v.0)
                 .collect::<Vec<_>>()
-                .concat()
                 .as_slice(),
         ])
     }

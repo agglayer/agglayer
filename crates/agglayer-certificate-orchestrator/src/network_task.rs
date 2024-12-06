@@ -8,11 +8,11 @@ use agglayer_storage::{
     },
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
+use agglayer_types::Digest;
 use agglayer_types::{
     Certificate, CertificateId, CertificateStatus, CertificateStatusError, Height,
     LocalNetworkStateData, NetworkId,
 };
-use pessimistic_proof::keccak::digest::Digest;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};

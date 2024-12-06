@@ -102,6 +102,7 @@ impl<'de> Deserialize<'de> for Digest {
         }
     }
 }
+
 impl Serialize for Digest {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -115,21 +116,23 @@ impl Serialize for Digest {
     }
 }
 
+const DIGEST_FROM_BOOL_TRUE: Digest = Digest([
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+]);
+const DIGEST_FROM_BOOL_FALSE: Digest = Digest([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+]);
+
 impl FromBool for Digest {
     fn from_bool(b: bool) -> Self {
-        Self(if b {
-            [
-                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ]
+        if b {
+            DIGEST_FROM_BOOL_TRUE
         } else {
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ]
-        })
+            DIGEST_FROM_BOOL_FALSE
+        }
     }
 }
+
 impl FromU256 for Digest {
     fn from_u256(u: U256) -> Self {
         Self(u.to_be_bytes())

@@ -123,6 +123,7 @@ pub struct ClaimFromRollup {
     /// L1InfoTree leaf
     l1_leaf: L1InfoTreeLeaf,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BridgeExit {
     pub leaf_type: LeafType,
@@ -170,6 +171,7 @@ fn process_file(input_path: &str, output_path: &str) -> io::Result<()> {
     output_file.write_all(&certificate)?;
     Ok(())
 }
+
 fn main() -> io::Result<()> {
     // Parse command-line arguments
     let args: Vec<String> = env::args().collect();

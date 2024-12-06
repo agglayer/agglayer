@@ -12,14 +12,13 @@ use agglayer_storage::{
     stores::{PendingCertificateWriter, StateReader, StateWriter},
     tests::TempDBDir,
 };
-use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId};
+use agglayer_types::{Certificate, CertificateId, CertificateStatus, Digest, Height, NetworkId};
 use ethers::providers::{self, MockProvider, Provider};
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::ServerHandle;
-use pessimistic_proof::keccak::digest::Digest;
 use rstest::*;
 
 use crate::{kernel::Kernel, rpc::AgglayerImpl};

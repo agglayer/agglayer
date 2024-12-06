@@ -1,5 +1,5 @@
 use agglayer_types::CertificateIndex;
-use pessimistic_proof::keccak::digest::Digest;
+use agglayer_types::Digest;
 
 use crate::columns::PER_EPOCH_TRANSACTION_HASH_PER_CERTIFICATE_INDEX;
 
