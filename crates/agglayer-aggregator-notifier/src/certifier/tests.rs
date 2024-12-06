@@ -81,6 +81,11 @@ async fn happy_path() {
         .once()
         .returning(move |_, _| Ok(signer));
 
+    l1_rpc
+        .expect_default_l1_info_tree_entry()
+        .once()
+        .returning(|| (0u32, [1u8; 32]));
+
     fail::cfg(
         "notifier::certifier::certify::before_verifying_proof",
         "return()",
@@ -179,6 +184,11 @@ async fn prover_timeout() {
         .once()
         .returning(move |_| Ok(Default::default()));
 
+    l1_rpc
+        .expect_default_l1_info_tree_entry()
+        .once()
+        .returning(|| (0u32, [1u8; 32]));
+
     fail::cfg(
         "notifier::certifier::certify::before_verifying_proof",
         "return()",
@@ -217,6 +227,7 @@ mockall::mock! {
         ) -> Result<ethers::types::Address, ()>;
 
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()>;
+        fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
     }
     impl Settler for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;

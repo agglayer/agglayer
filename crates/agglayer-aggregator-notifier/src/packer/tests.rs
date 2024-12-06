@@ -18,6 +18,19 @@ use crate::EpochPackerClient;
 
 mockall::mock! {
     L1Rpc {}
+    #[async_trait::async_trait]
+    impl agglayer_contracts::RollupContract for L1Rpc {
+        type M = NonceManagerMiddleware<Provider<MockProvider>>;
+
+        async fn get_trusted_sequencer_address(
+            &self,
+            rollup_id: u32,
+            proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
+        ) -> Result<ethers::types::Address, ()>;
+
+        async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()>;
+        fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
+    }
     impl Settler for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
 
@@ -63,7 +76,12 @@ fn epoch_packer_can_settle_one_certificate() {
     let (mock, _) = Provider::mocked();
     let _t = NonceManagerMiddleware::new(mock, H160::zero());
 
-    let l1_rpc = Arc::new(MockL1Rpc::new());
+    let mut l1_rpc = MockL1Rpc::new();
+
+    l1_rpc
+        .expect_default_l1_info_tree_entry()
+        .once()
+        .returning(|| (0u32, [1u8; 32]));
 
     let mut per_epoch_store = MockPerEpochStore::new();
     per_epoch_store
@@ -93,7 +111,7 @@ fn epoch_packer_can_settle_one_certificate() {
     let epoch_packer = EpochPackerClient::<_, MockPerEpochStore, _>::try_new(
         config,
         Arc::new(state_store),
-        l1_rpc,
+        Arc::new(l1_rpc),
     )
     .unwrap();
 
