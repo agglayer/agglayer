@@ -8,7 +8,6 @@ pub(crate) fn tracing(config: &agglayer_config::Log) {
     let layer = match config.format {
         LogFormat::Pretty => {
             let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into());
-            println!("Filter: {:?}", filter);
 
             tracing_subscriber::fmt::layer()
                 .pretty()

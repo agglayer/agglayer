@@ -116,8 +116,8 @@ where
             .build_verify_pessimistic_trusted_aggregator_call(
                 *output.origin_network,
                 l_1_info_tree_leaf_count,
-                output.new_local_exit_root,
-                output.new_pessimistic_root,
+                *output.new_local_exit_root,
+                *output.new_pessimistic_root,
                 proof.into(),
             );
 

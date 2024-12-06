@@ -7,7 +7,7 @@ use pessimistic_proof::{
         Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
         MerkleProof,
     },
-    keccak::{keccak256_combine, Digest},
+    keccak::{digest::Digest, keccak256, keccak256_combine},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::signature_commitment,
     utils::smt::Smt,
@@ -25,7 +25,7 @@ pub fn compute_signature_info(
     let combined_hash = signature_commitment(new_local_exit_root, imported_bridge_exits);
     let wallet = LocalWallet::new(&mut thread_rng());
     let signer = wallet.address();
-    let signature = wallet.sign_hash(combined_hash.into()).unwrap();
+    let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
     let signature = Signature {
         r: U256::from_limbs(signature.r.0),
         s: U256::from_limbs(signature.s.0),
@@ -57,7 +57,7 @@ impl Forest {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {
             local_balance_tree
-                .insert(token, balance.to_be_bytes())
+                .insert(token, balance.to_be_bytes().into())
                 .unwrap();
         }
 
@@ -199,7 +199,7 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
         dest_network,
         dest_address: random(),
         amount,
-        metadata: vec![],
+        metadata: Some(keccak256(&[])),
     }
 }
 

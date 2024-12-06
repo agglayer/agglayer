@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::L1_NETWORK_ID,
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
-    keccak::{Digest, Hash},
+    keccak::digest::Digest,
     local_balance_tree::LocalBalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::{signature_commitment, MultiBatchHeader},
@@ -39,9 +39,7 @@ impl StateCommitment {
     pub fn display_to_hex(&self) -> String {
         format!(
             "exit_root: {}, balance_root: {}, nullifier_root: {}",
-            Hash(self.exit_root),
-            Hash(self.balance_root),
-            Hash(self.nullifier_root),
+            self.exit_root, self.balance_root, self.nullifier_root,
         )
     }
 }
@@ -81,21 +79,21 @@ impl LocalNetworkState {
         let computed_root = self.exit_tree.get_root();
         if computed_root != multi_batch_header.prev_local_exit_root {
             return Err(ProofError::InvalidPreviousLocalExitRoot {
-                computed: Hash(computed_root),
-                declared: Hash(multi_batch_header.prev_local_exit_root),
+                computed: computed_root,
+                declared: multi_batch_header.prev_local_exit_root,
             });
         }
         if self.balance_tree.root != multi_batch_header.prev_balance_root {
             return Err(ProofError::InvalidPreviousBalanceRoot {
-                computed: Hash(self.balance_tree.root),
-                declared: Hash(multi_batch_header.prev_balance_root),
+                computed: self.balance_tree.root,
+                declared: multi_batch_header.prev_balance_root,
             });
         }
 
         if self.nullifier_tree.root != multi_batch_header.prev_nullifier_root {
             return Err(ProofError::InvalidPreviousNullifierRoot {
-                computed: Hash(self.nullifier_tree.root),
-                declared: Hash(multi_batch_header.prev_nullifier_root),
+                computed: self.nullifier_tree.root,
+                declared: multi_batch_header.prev_nullifier_root,
             });
         }
 
@@ -118,8 +116,8 @@ impl LocalNetworkState {
         if let Some(batch_imported_exits_root) = multi_batch_header.imported_exits_root {
             if imported_exits_root != batch_imported_exits_root {
                 return Err(ProofError::InvalidImportedExitsRoot {
-                    declared: Hash(batch_imported_exits_root),
-                    computed: Hash(imported_exits_root),
+                    declared: batch_imported_exits_root,
+                    computed: imported_exits_root,
                 });
             }
         } else if !multi_batch_header.imported_bridge_exits.is_empty() {
@@ -244,7 +242,7 @@ impl LocalNetworkState {
         // Check batch header signature
         let signer = multi_batch_header
             .signature
-            .recover_signer(B256::new(combined_hash))
+            .recover_signer(B256::new(combined_hash.0))
             .ok_or(ProofError::InvalidSignature)?;
 
         if signer != multi_batch_header.signer {

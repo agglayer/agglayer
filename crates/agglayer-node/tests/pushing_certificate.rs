@@ -72,8 +72,7 @@ async fn successfully_push_certificate() {
         }
 
         if handle.is_finished() {
-            let result = handle.join();
-            println!("{:?}", result);
+            let _result = handle.join();
             panic!("Server has finished");
         }
 

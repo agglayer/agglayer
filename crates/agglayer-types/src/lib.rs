@@ -1,8 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use pessimistic_proof::global_index::GlobalIndex;
+pub use pessimistic_proof::keccak::digest::Digest;
+use pessimistic_proof::keccak::keccak256_combine;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
-pub use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::multi_batch_header::signature_commitment;
@@ -12,7 +14,6 @@ use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
-    keccak::{keccak256_combine, Digest},
     local_balance_tree::LocalBalancePath,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
@@ -26,12 +27,10 @@ use serde::{Deserialize, Serialize};
 use sp1_sdk::SP1PublicValues;
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
-pub type CertificateId = Hash;
+pub type CertificateId = Digest;
 pub type Height = u64;
-pub type Metadata = Hash;
+pub type Metadata = Digest;
 
-mod hash;
-pub use hash::Hash;
 pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
 
@@ -50,8 +49,8 @@ pub struct CertificateHeader {
     pub epoch_number: Option<EpochNumber>,
     pub certificate_index: Option<CertificateIndex>,
     pub certificate_id: CertificateId,
-    pub prev_local_exit_root: Hash,
-    pub new_local_exit_root: Hash,
+    pub prev_local_exit_root: Digest,
+    pub new_local_exit_root: Digest,
     pub metadata: Metadata,
     pub status: CertificateStatus,
 }
@@ -67,7 +66,7 @@ pub enum Error {
         "Mismatch on the certificate new local exit root. declared: {declared:?}, computed: \
          {computed:?}"
     )]
-    MismatchNewLocalExitRoot { computed: Hash, declared: Hash },
+    MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
     /// The given token balance cannot overflow.
     #[error("Token balance cannot overflow. token: {0:?}")]
     BalanceOverflow(TokenInfo),
@@ -99,8 +98,8 @@ pub enum Error {
     /// Invalid or unsettled L1 Info Root
     L1InfoRootIncorrect {
         leaf_count: u32,
-        declared: Hash,
-        retrieved: Hash,
+        declared: Digest,
+        retrieved: Digest,
     },
     /// The operation cannot be applied on the smt.
     #[error(transparent)]
@@ -270,8 +269,8 @@ impl Certificate {
         Certificate {
             network_id,
             height,
-            prev_local_exit_root: [0; 32],
-            new_local_exit_root: [1; 32],
+            prev_local_exit_root: [0; 32].into(),
+            new_local_exit_root: [1; 32].into(),
             bridge_exits: Vec::new(),
             imported_bridge_exits: Vec::new(),
             signature: Signature::default(),
@@ -294,7 +293,6 @@ impl Certificate {
             commit_imported_bridge_exits.as_slice(),
             self.metadata.as_slice(),
         ])
-        .into()
     }
 
     /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].
@@ -337,7 +335,7 @@ impl Certificate {
         let combined_hash =
             signature_commitment(self.new_local_exit_root, &self.imported_bridge_exits);
 
-        self.signature.recover_signer(B256::new(combined_hash))
+        self.signature.recover_signer(B256::new(combined_hash.0))
     }
 }
 
@@ -409,7 +407,7 @@ impl LocalNetworkStateData {
                 .iter()
                 .map(|&token| {
                     let balance =
-                        U256::from_be_bytes(self.balance_tree.get(token).unwrap_or_default());
+                        U256::from_be_bytes(*self.balance_tree.get(token).unwrap_or_default());
                     (token, balance)
                 })
                 .collect();
@@ -455,7 +453,7 @@ impl LocalNetworkStateData {
                     };
 
                     self.balance_tree
-                        .update(token, new_balances[&token].to_be_bytes())
+                        .update(token, new_balances[&token].to_be_bytes().into())
                         .map_err(balance_proof_error)?;
 
                     Ok((token, (initial_balance, path)))
@@ -491,8 +489,8 @@ impl LocalNetworkStateData {
         let computed = self.exit_tree.get_root();
         if computed != certificate.new_local_exit_root {
             return Err(Error::MismatchNewLocalExitRoot {
-                declared: certificate.new_local_exit_root.into(),
-                computed: computed.into(),
+                declared: (*certificate.new_local_exit_root).into(),
+                computed: (*computed).into(),
             });
         }
 

@@ -547,11 +547,11 @@ mod tests {
 
         let mut leaves = vec![[0_u8; 32]; 1 << DEPTH];
         for (key, value) in &kvs[..num_keys] {
-            leaves[key.reverse_bits() as usize] = *value;
+            leaves[key.reverse_bits() as usize] = **value;
         }
         let mt: MerkleTree<TestKeccak256> = MerkleTree::from_leaves(&leaves);
 
-        assert_eq!(smt.root, mt.root().unwrap());
+        assert_eq!(smt.root, mt.root().unwrap().into());
     }
 
     #[test]

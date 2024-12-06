@@ -6038,6 +6038,7 @@ dependencies = [
  "lazy_static",
  "pessimistic-proof",
  "rand",
+ "regex",
  "reth-primitives",
  "rstest",
  "serde",

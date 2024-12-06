@@ -12,7 +12,7 @@ use agglayer_storage::{
     stores::{PendingCertificateWriter, StateReader, StateWriter},
     tests::TempDBDir,
 };
-use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId};
+use agglayer_types::{Certificate, CertificateId, CertificateStatus, Digest, Height, NetworkId};
 use ethers::providers::{self, MockProvider, Provider};
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
@@ -263,7 +263,7 @@ impl StateWriter for DummyStore {
         &self,
         _network_id: &NetworkId,
         _new_state: &agglayer_types::LocalNetworkStateData,
-        _new_leaves: &[agglayer_types::Hash],
+        _new_leaves: &[Digest],
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }
