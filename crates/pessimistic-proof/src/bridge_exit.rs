@@ -2,6 +2,7 @@
 
 use std::{fmt::Display, ops::Deref};
 
+use hex_literal::hex;
 use reth_primitives::{address, revm_primitives::bitvec::view::BitViewSized, Address, U256};
 use serde::{Deserialize, Serialize};
 
@@ -75,10 +76,9 @@ pub struct BridgeExit {
     pub metadata: Option<Digest>,
 }
 
-const EMPTY_METADATA_HASH: Digest = Digest([
-    197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
-    130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
-]);
+const EMPTY_METADATA_HASH: Digest = Digest(hex!(
+    "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+));
 
 impl BridgeExit {
     /// Creates a new [`BridgeExit`].

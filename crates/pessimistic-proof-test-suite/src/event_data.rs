@@ -81,7 +81,6 @@ impl From<DepositEventData> for BridgeExit {
             dest_network: deposit_event_data.destination_network.into(),
             dest_address: deposit_event_data.destination_address.parse().unwrap(),
             amount: deposit_event_data.amount,
-            // metadata: STANDARD.decode(deposit_event_data.metadata).unwrap(),
             metadata: STANDARD
                 .decode(deposit_event_data.metadata)
                 .ok()
