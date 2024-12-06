@@ -5,7 +5,10 @@ use std::{fmt::Display, ops::Deref};
 use reth_primitives::{address, revm_primitives::bitvec::view::BitViewSized, Address, U256};
 use serde::{Deserialize, Serialize};
 
-use crate::keccak::{keccak256, keccak256_combine, Digest as KeccakDigest};
+use crate::keccak::{
+    digest::NewDigest, keccak256, keccak256_combine, new_keccak256, new_keccak256_combine,
+    Digest as KeccakDigest,
+};
 
 pub(crate) const L1_NETWORK_ID: NetworkId = NetworkId(0);
 pub(crate) const L1_ETH: TokenInfo = TokenInfo {
@@ -72,8 +75,13 @@ pub struct BridgeExit {
     /// Token amount sent
     pub amount: U256,
 
-    pub metadata: Vec<u8>,
+    pub metadata: Option<NewDigest>,
 }
+
+const EMPTY_METADATA_HASH: NewDigest = NewDigest([
+    197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
+    130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
+]);
 
 impl BridgeExit {
     /// Creates a new [`BridgeExit`].
@@ -95,7 +103,7 @@ impl BridgeExit {
             dest_network,
             dest_address,
             amount,
-            metadata,
+            metadata: Some(NewDigest(keccak256(metadata.as_slice()))),
         }
     }
 
@@ -109,7 +117,7 @@ impl BridgeExit {
             &u32::to_be_bytes(self.dest_network.into()),
             self.dest_address.as_slice(),
             &self.amount.to_be_bytes::<32>(),
-            &keccak256(&self.metadata),
+            &self.metadata.unwrap_or(EMPTY_METADATA_HASH).0,
         ])
     }
 
@@ -171,7 +179,7 @@ impl Deref for NetworkId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree};
+    use crate::local_exit_tree::{hasher::NewKeccak256Hasher, LocalExitTree};
 
     #[test]
     fn test_deposit_hash() {
@@ -197,8 +205,8 @@ mod tests {
             hex::encode(leaf_hash)
         );
 
-        let mut dm = LocalExitTree::<Keccak256Hasher>::new();
-        dm.add_leaf(leaf_hash).unwrap();
+        let mut dm = LocalExitTree::<NewKeccak256Hasher>::new();
+        dm.add_leaf(leaf_hash.into()).unwrap();
         let dm_root = dm.get_root();
         assert_eq!(
             "5ba002329b53c11a2f1dfe90b11e031771842056cf2125b43da8103c199dcd7f",

@@ -24,6 +24,7 @@ impl Hasher for Keccak256Hasher {
     }
 }
 
+// pub type NewKeccak256Hasher = Keccak256Hasher;
 /// A Keccak hasher with a 256-bit security level.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct NewKeccak256Hasher;
@@ -32,6 +33,6 @@ impl Hasher for NewKeccak256Hasher {
     type Digest = NewDigest;
 
     fn merge(left: &Self::Digest, right: &Self::Digest) -> Self::Digest {
-        new_keccak256_combine([left.as_ref(), right.as_ref()])
+        keccak256_combine([left.as_ref(), right.as_ref()]).into()
     }
 }

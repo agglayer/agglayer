@@ -6,7 +6,7 @@ use std::{
 
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, Hash, Height, Keccak256Hasher, LocalNetworkStateData, NetworkId,
+    EpochNumber, Height, Keccak256Hasher, LocalNetworkStateData, NetworkId,
 };
 use pessimistic_proof::{
     keccak::digest::NewDigest,
@@ -115,8 +115,8 @@ impl StateWriter for StateStore {
                 height: certificate.height,
                 epoch_number: None,
                 certificate_index: None,
-                prev_local_exit_root: certificate.prev_local_exit_root.into(),
-                new_local_exit_root: certificate.new_local_exit_root.into(),
+                prev_local_exit_root: *certificate.prev_local_exit_root,
+                new_local_exit_root: *certificate.new_local_exit_root,
                 status: status.clone(),
                 metadata: certificate.metadata,
             },
@@ -181,7 +181,7 @@ impl StateWriter for StateStore {
         &self,
         network_id: &NetworkId,
         new_state: &LocalNetworkStateData,
-        new_leaves: &[Hash],
+        new_leaves: &[NewDigest],
     ) -> Result<(), Error> {
         let network_id: u32 = (*network_id).into();
 
@@ -286,10 +286,10 @@ impl StateStore {
                     key_type: if node_hash == smt.root {
                         SmtKeyType::Root
                     } else {
-                        SmtKeyType::Node(Hash(*node_hash))
+                        SmtKeyType::Node(node_hash)
                     },
                 },
-                SmtValue::Node(Hash(*node.left), Hash(*node.right)),
+                SmtValue::Node(node.left, node.right),
             );
 
             // Write the children as leaves if they are
@@ -300,9 +300,9 @@ impl StateStore {
                     kv.insert(
                         SmtKey {
                             network_id,
-                            key_type: SmtKeyType::Node(Hash(*leaf)),
+                            key_type: SmtKeyType::Node(leaf),
                         },
-                        SmtValue::Leaf(Hash(*leaf)),
+                        SmtValue::Leaf(leaf),
                     );
                 });
         });
@@ -343,7 +343,8 @@ impl StateStore {
             })
             .collect::<Result<_, _>>()?;
 
-        let mut frontier = [NewDigest::default(); 32];
+        let mut frontier = [[0u8; 32].into(); 32];
+        println!("fontier: {:?}", NewDigest::default());
         for (i, l) in retrieved_frontier.iter().enumerate() {
             frontier[i] = NewDigest(*l);
         }
@@ -378,8 +379,8 @@ impl StateStore {
         };
 
         let mut keys = VecDeque::new();
-        keys.push_back(SmtKeyType::Node(Hash(*root_node.left.as_bytes())));
-        keys.push_back(SmtKeyType::Node(Hash(*root_node.right.as_bytes())));
+        keys.push_back(SmtKeyType::Node(root_node.left));
+        keys.push_back(SmtKeyType::Node(root_node.right));
 
         let mut nodes: Vec<Node<NewKeccak256Hasher>> = Vec::new();
         nodes.push(root_node);

@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Hash, Height,
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
     LocalNetworkStateData, NetworkId, Proof,
 };
+use pessimistic_proof::keccak::digest::NewDigest;
 
 use crate::{error::Error, stores::PerEpochReader};
 
@@ -69,7 +70,7 @@ pub trait StateWriter: Send + Sync {
         &self,
         network_id: &NetworkId,
         new_state: &LocalNetworkStateData,
-        new_leaves: &[Hash],
+        new_leaves: &[NewDigest],
     ) -> Result<(), Error>;
 }
 

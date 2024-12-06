@@ -19,6 +19,7 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::ServerHandle;
+use pessimistic_proof::keccak::digest::NewDigest;
 use rstest::*;
 
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
@@ -263,7 +264,7 @@ impl StateWriter for DummyStore {
         &self,
         _network_id: &NetworkId,
         _new_state: &agglayer_types::LocalNetworkStateData,
-        _new_leaves: &[agglayer_types::Hash],
+        _new_leaves: &[NewDigest],
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }

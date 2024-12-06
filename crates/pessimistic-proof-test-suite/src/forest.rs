@@ -7,7 +7,7 @@ use pessimistic_proof::{
         Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
         MerkleProof,
     },
-    keccak::{digest::NewDigest, keccak256_combine, Digest},
+    keccak::{digest::NewDigest, keccak256, keccak256_combine, new_keccak256, Digest},
     local_exit_tree::{
         data::LocalExitTreeData,
         hasher::{Keccak256Hasher, NewKeccak256Hasher},
@@ -42,8 +42,8 @@ pub fn compute_signature_info(
 /// Trees for the network B, as well as the LET for network A.
 #[derive(Clone)]
 pub struct Forest {
-    pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
-    pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
+    pub l1_info_tree: LocalExitTreeData<NewKeccak256Hasher>,
+    pub local_exit_tree_data_a: LocalExitTreeData<NewKeccak256Hasher>,
     pub state_b: LocalNetworkStateData,
 }
 
@@ -61,7 +61,7 @@ impl Forest {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {
             local_balance_tree
-                .insert(token, NewDigest(balance.to_be_bytes()))
+                .insert(token, balance.to_be_bytes().into())
                 .unwrap();
         }
 
@@ -90,25 +90,27 @@ impl Forest {
 
         // Append all the leafs in LET A (mainnet)
         for exit in &exits {
-            self.local_exit_tree_data_a.add_leaf(exit.hash()).unwrap();
+            self.local_exit_tree_data_a
+                .add_leaf(exit.hash().into())
+                .unwrap();
         }
 
         let l1_leaf = L1InfoTreeLeaf {
             l1_info_tree_index: 0,
-            rer: Digest::default(),
-            mer: self.local_exit_tree_data_a.get_root(),
+            rer: NewDigest::default(),
+            mer: self.local_exit_tree_data_a.get_root().into(),
             inner: L1InfoTreeLeafInner {
-                block_hash: Digest::default(),
+                block_hash: NewDigest::default(),
                 timestamp: 0,
-                global_exit_root: Digest::default(),
+                global_exit_root: NewDigest::default(),
             },
         };
 
-        self.l1_info_tree.add_leaf(l1_leaf.hash()).unwrap();
+        self.l1_info_tree.add_leaf(l1_leaf.hash().into()).unwrap();
 
         let proof_ger_l1root = MerkleProof {
             proof: self.l1_info_tree.get_proof(0).unwrap(),
-            root: self.l1_info_tree.get_root(),
+            root: self.l1_info_tree.get_root().into(),
         };
 
         // Generate them as imported bridge exits
@@ -124,7 +126,7 @@ impl Forest {
                 claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
                     proof_leaf_mer: MerkleProof {
                         proof: self.local_exit_tree_data_a.get_proof(index).unwrap(),
-                        root: self.local_exit_tree_data_a.get_root(),
+                        root: self.local_exit_tree_data_a.get_root().into(),
                     },
                     proof_ger_l1root: proof_ger_l1root.clone(),
                     l1_leaf: l1_leaf.clone(),
@@ -141,10 +143,7 @@ impl Forest {
         let mut res = Vec::new();
         for (token, amount) in events {
             let exit = exit_to_a(*token, *amount);
-            self.state_b
-                .exit_tree
-                .add_leaf(NewDigest(exit.hash()))
-                .unwrap();
+            self.state_b.exit_tree.add_leaf(exit.hash().into()).unwrap();
             res.push(exit);
         }
 
@@ -172,8 +171,8 @@ impl Forest {
         let certificate = Certificate {
             network_id: *NETWORK_B,
             height: 0,
-            prev_local_exit_root: *prev_local_exit_root,
-            new_local_exit_root: *new_local_exit_root,
+            prev_local_exit_root: prev_local_exit_root.into(),
+            new_local_exit_root: new_local_exit_root.into(),
             bridge_exits,
             imported_bridge_exits,
             signature,
@@ -206,7 +205,8 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
         dest_network,
         dest_address: random(),
         amount,
-        metadata: vec![],
+        // metadata: vec![],
+        metadata: Some(NewDigest(keccak256(&vec![]))),
     }
 }
 

@@ -31,6 +31,7 @@ use agglayer_types::{
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, poll};
 use mocks::{MockCertifier, MockEpochPacker};
+use pessimistic_proof::keccak::digest::NewDigest;
 use rstest::fixture;
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
@@ -280,8 +281,8 @@ impl StateWriter for DummyPendingStore {
                 epoch_number: None,
                 certificate_index: None,
                 certificate_id: certificate.hash(),
-                prev_local_exit_root: certificate.prev_local_exit_root.into(),
-                new_local_exit_root: certificate.new_local_exit_root.into(),
+                prev_local_exit_root: *certificate.prev_local_exit_root,
+                new_local_exit_root: *certificate.new_local_exit_root,
                 status,
                 metadata: certificate.metadata,
             },
@@ -322,7 +323,7 @@ impl StateWriter for DummyPendingStore {
         &self,
         _network_id: &NetworkId,
         _new_state: &LocalNetworkStateData,
-        _new_leaves: &[agglayer_types::Hash],
+        _new_leaves: &[NewDigest],
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }

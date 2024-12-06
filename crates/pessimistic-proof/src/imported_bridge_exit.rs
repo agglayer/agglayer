@@ -6,14 +6,17 @@ use thiserror::Error;
 use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
-    keccak::{keccak256_combine, Digest},
-    local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
+    keccak::{digest::NewDigest, keccak256_combine, new_keccak256_combine, Digest},
+    local_exit_tree::{
+        data::LETMerkleProof,
+        hasher::{Keccak256Hasher, NewKeccak256Hasher},
+    },
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L1InfoTreeLeafInner {
-    pub global_exit_root: Digest,
-    pub block_hash: Digest,
+    pub global_exit_root: NewDigest,
+    pub block_hash: NewDigest,
     pub timestamp: u64,
 }
 
@@ -30,8 +33,8 @@ impl L1InfoTreeLeafInner {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L1InfoTreeLeaf {
     pub l1_info_tree_index: u32,
-    pub rer: Digest,
-    pub mer: Digest,
+    pub rer: NewDigest,
+    pub mer: NewDigest,
     pub inner: L1InfoTreeLeafInner,
 }
 
@@ -76,20 +79,26 @@ pub enum Error {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MerkleProof {
-    pub proof: LETMerkleProof<Keccak256Hasher>,
-    pub root: Digest,
+    pub proof: LETMerkleProof<NewKeccak256Hasher>,
+    pub root: NewDigest,
 }
 
 impl MerkleProof {
     pub fn hash(&self) -> Digest {
         keccak256_combine([
             self.root.as_slice(),
-            self.proof.siblings.concat().as_slice(),
+            self.proof
+                .siblings
+                .iter()
+                .map(|v| v.0)
+                .collect::<Vec<_>>()
+                .concat()
+                .as_slice(),
         ])
     }
 
     pub fn verify(&self, leaf: Digest, leaf_index: u32) -> bool {
-        self.proof.verify(leaf, leaf_index, self.root)
+        self.proof.verify(leaf.into(), leaf_index, self.root)
     }
 }
 
@@ -134,7 +143,7 @@ impl ClaimFromMainnet {
         l1root: Digest,
     ) -> Result<(), Error> {
         // Check the consistency on the l1 root
-        if l1root != self.proof_ger_l1root.root {
+        if l1root != *self.proof_ger_l1root.root {
             return Err(Error::MismatchL1Root);
         }
 
@@ -151,7 +160,7 @@ impl ClaimFromMainnet {
         // Check the inclusion proof of the L1 leaf to L1Root
         if !self
             .proof_ger_l1root
-            .verify(self.l1_leaf.hash(), self.l1_leaf.l1_info_tree_index)
+            .verify(self.l1_leaf.hash().into(), self.l1_leaf.l1_info_tree_index)
         {
             return Err(Error::InvalidMerklePathGERToL1Root);
         }
@@ -189,7 +198,7 @@ impl ClaimFromRollup {
         l1root: Digest,
     ) -> Result<(), Error> {
         // Check the consistency on the l1 root
-        if l1root != self.proof_ger_l1root.root {
+        if l1root != *self.proof_ger_l1root.root {
             return Err(Error::MismatchL1Root);
         }
 
@@ -206,7 +215,7 @@ impl ClaimFromRollup {
         // Check the inclusion proof of the LER to the RER
         if !self
             .proof_ler_rer
-            .verify(self.proof_leaf_ler.root, global_index.rollup_index)
+            .verify(*self.proof_leaf_ler.root, global_index.rollup_index)
         {
             return Err(Error::InvalidMerklePathLERToRER);
         }
@@ -214,7 +223,7 @@ impl ClaimFromRollup {
         // Check the inclusion proof of the L1 leaf to L1Root
         if !self
             .proof_ger_l1root
-            .verify(self.l1_leaf.hash(), self.l1_leaf.l1_info_tree_index)
+            .verify(self.l1_leaf.hash().into(), self.l1_leaf.l1_info_tree_index)
         {
             return Err(Error::InvalidMerklePathGERToL1Root);
         }
@@ -259,10 +268,10 @@ impl ImportedBridgeExit {
 
         match &self.claim_data {
             Claim::Mainnet(claim) => {
-                claim.verify(self.bridge_exit.hash(), self.global_index, l1root)
+                claim.verify(self.bridge_exit.hash().into(), self.global_index, l1root)
             }
             Claim::Rollup(claim) => {
-                claim.verify(self.bridge_exit.hash(), self.global_index, l1root)
+                claim.verify(self.bridge_exit.hash().into(), self.global_index, l1root)
             }
         }
     }
@@ -270,8 +279,8 @@ impl ImportedBridgeExit {
     /// Returns the considered L1 Info Root against which the claim is done.
     pub fn l1_info_root(&self) -> Digest {
         match &self.claim_data {
-            Claim::Mainnet(claim) => claim.proof_ger_l1root.root,
-            Claim::Rollup(claim) => claim.proof_ger_l1root.root,
+            Claim::Mainnet(claim) => *claim.proof_ger_l1root.root,
+            Claim::Rollup(claim) => *claim.proof_ger_l1root.root,
         }
     }
 
@@ -324,10 +333,12 @@ mod tests {
             L1InfoTreeLeafInner {
                 global_exit_root: hex!(
                     "16994edfddddb9480667b64174fc00d3b6da7290d37b8db3a16571b4ddf0789f"
-                ),
+                )
+                .into(),
                 block_hash: hex!(
                     "24a5871d68723340d9eadc674aa8ad75f3e33b61d5a9db7db92af856a19270bb"
-                ),
+                )
+                .into(),
                 timestamp: 1697231573,
             }
             .hash(),
@@ -338,10 +349,12 @@ mod tests {
             L1InfoTreeLeafInner {
                 global_exit_root: hex!(
                     "356682567c5d485bbabe89590d3d72b08671a0a07899dcbaddccbe0599491669"
-                ),
+                )
+                .into(),
                 block_hash: hex!(
                     "8f9cfb43c0f6bc7ce9f9e43e8761776a2ef9657ccf87318e2487c313d119b8cf"
-                ),
+                )
+                .into(),
                 timestamp: 658736476,
             }
             .hash(),

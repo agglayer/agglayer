@@ -8,7 +8,7 @@ use crate::{
     bridge_exit::{NetworkId, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit,
-    keccak::{keccak256_combine, Digest, Hash},
+    keccak::{digest::NewDigest, keccak256_combine, Digest, Hash},
     local_exit_tree::{
         hasher::{Keccak256Hasher, NewKeccak256Hasher},
         LocalExitTreeError,
@@ -192,22 +192,22 @@ pub fn generate_pessimistic_proof(
 
     if computed_target.exit_root != batch_header.target.exit_root {
         return Err(ProofError::InvalidNewLocalExitRoot {
-            declared: batch_header.target.exit_root.into(),
-            computed: computed_target.exit_root.into(),
+            declared: (batch_header.target.exit_root).into(),
+            computed: (computed_target.exit_root).into(),
         });
     }
 
     if computed_target.balance_root != batch_header.target.balance_root {
         return Err(ProofError::InvalidNewBalanceRoot {
-            declared: batch_header.target.balance_root.into(),
-            computed: computed_target.balance_root.into(),
+            declared: (batch_header.target.balance_root).into(),
+            computed: (computed_target.balance_root).into(),
         });
     }
 
     if computed_target.nullifier_root != batch_header.target.nullifier_root {
         return Err(ProofError::InvalidNewNullifierRoot {
-            declared: batch_header.target.nullifier_root.into(),
-            computed: computed_target.nullifier_root.into(),
+            declared: (batch_header.target.nullifier_root).into(),
+            computed: (computed_target.nullifier_root).into(),
         });
     }
 
@@ -231,7 +231,7 @@ pub fn generate_pessimistic_proof(
     };
 
     Ok(PessimisticProofOutput {
-        prev_local_exit_root,
+        prev_local_exit_root: prev_local_exit_root,
         prev_pessimistic_root,
         l1_info_root: *batch_header.l1_info_root,
         origin_network: batch_header.origin_network,

@@ -9,9 +9,10 @@ use agglayer_storage::{
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
 use agglayer_types::{
-    Certificate, CertificateId, CertificateStatus, CertificateStatusError, Hash, Height,
+    Certificate, CertificateId, CertificateStatus, CertificateStatusError, Height,
     LocalNetworkStateData, NetworkId,
 };
+use pessimistic_proof::keccak::digest::NewDigest;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -325,9 +326,10 @@ where
                         self.network_id,
                         error
                     );
+                } else {
+                    *next_expected_height += 1;
+                    self.pending_state = None;
                 }
-
-                *next_expected_height += 1;
 
                 self.at_capacity_for_epoch = true;
                 debug!(
@@ -527,8 +529,8 @@ where
                         let new_leaves = certificate
                             .bridge_exits
                             .iter()
-                            .map(|exit| exit.hash().into())
-                            .collect::<Vec<Hash>>();
+                            .map(|exit| NewDigest(exit.hash()))
+                            .collect::<Vec<NewDigest>>();
 
                         self.state_store
                             .write_local_network_state(

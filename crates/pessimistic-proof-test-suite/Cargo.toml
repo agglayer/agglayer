@@ -7,6 +7,10 @@ edition.workspace = true
 name = "ppgen"
 path = "src/bin/ppgen.rs"
 
+[[bin]]
+name = "convertor"
+path = "src/bin/convertor.rs"
+
 [dependencies]
 agglayer-types = { path = "../agglayer-types" }
 base64.workspace = true
@@ -27,6 +31,7 @@ hex-literal = "0.4"
 hex.workspace = true
 tracing = "0.1.40"
 uuid = { version = "1.11.0", features = ["v4", "fast-rng"] }
+regex = "1.11"
 
 [dev-dependencies]
 rstest.workspace = true

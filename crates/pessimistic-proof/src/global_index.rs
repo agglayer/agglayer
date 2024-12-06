@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     bridge_exit::NetworkId,
-    keccak::{keccak256, Digest},
+    keccak::{digest::NewDigest, keccak256, new_keccak256, Digest},
     nullifier_tree::NullifierKey,
 };
 

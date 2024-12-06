@@ -1,8 +1,9 @@
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Hash, Height,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
     LocalNetworkStateData, NetworkId,
 };
 use mockall::mock;
+use pessimistic_proof::keccak::digest::NewDigest;
 
 use crate::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -52,7 +53,7 @@ mock! {
             &self,
             network_id: &NetworkId,
             new_state: &LocalNetworkStateData,
-            new_leaves: &[Hash],
+            new_leaves: &[NewDigest],
         ) -> Result<(), Error>;
     }
 

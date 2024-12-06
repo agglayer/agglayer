@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use agglayer_types::{Certificate, Hash, LocalNetworkStateData, NetworkId};
+use agglayer_types::{Certificate, LocalNetworkStateData, NetworkId};
 use pessimistic_proof::{generate_pessimistic_proof, keccak::digest::NewDigest, LocalNetworkState};
 use rstest::{fixture, rstest};
 use tracing::info;
@@ -79,9 +79,9 @@ fn can_handle_empty_state(#[from(network_id)] unknown_network_id: NetworkId, sto
 fn can_retrieve_state(network_id: NetworkId, store: StateStore) {
     // write arbitrary state
     let mut lns = LocalNetworkStateData::default();
-    let leaves = (0..10).map(|_| Hash([5u8; 32])).collect::<Vec<_>>();
+    let leaves = (0..10).map(|_| NewDigest([5u8; 32])).collect::<Vec<_>>();
     for l in &leaves {
-        lns.exit_tree.add_leaf(NewDigest(l.0)).unwrap();
+        lns.exit_tree.add_leaf(*l).unwrap();
     }
 
     assert!(store
@@ -105,11 +105,11 @@ fn can_update_existing_state(network_id: NetworkId, store: StateStore) {
 
     // update state
     let bridge_exit = [5u8; 32];
-    lns.exit_tree.add_leaf(NewDigest(bridge_exit)).unwrap();
+    lns.exit_tree.add_leaf(bridge_exit.into()).unwrap();
 
     // write new state
     assert!(store
-        .write_local_network_state(&network_id, &lns, &[Hash(bridge_exit)])
+        .write_local_network_state(&network_id, &lns, &[NewDigest(bridge_exit)])
         .is_ok());
 
     // retrieve new state
@@ -129,7 +129,7 @@ fn can_detect_inconsistent_state(network_id: NetworkId, store: StateStore) {
 
     // update state
     let bridge_exit = [5u8; 32];
-    lns.exit_tree.add_leaf(NewDigest(bridge_exit)).unwrap();
+    lns.exit_tree.add_leaf(bridge_exit.into()).unwrap();
 
     // write new state with missing leaves
     assert!(matches!(
@@ -152,11 +152,11 @@ fn can_read(network_id: NetworkId, store: StateStore) {
     .map(|p| data::load_certificate(p))
     .collect();
 
-    let mut leaves: Vec<Hash> = Vec::new();
+    let mut leaves: Vec<NewDigest> = Vec::new();
     let mut lns = LocalNetworkStateData::default();
 
     for (idx, certificate) in certificates.iter().enumerate() {
-        info!(
+        println!(
             "Certificate ({idx}|{}) | {}, nib:{} b:{}",
             certificate.height,
             certificate.hash(),
@@ -178,7 +178,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         info!("Certificate {idx}: successful native execution");
 
         for b in &certificate.bridge_exits {
-            leaves.push(Hash(b.hash()));
+            leaves.push(NewDigest(b.hash()));
         }
         lns.apply_certificate(certificate, signer, l1_info_root)
             .unwrap();
@@ -189,7 +189,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
 
     info!(
         "before DB | root: {}, nb nodes: {}",
-        Hash(*before_going_through_disk.balance_tree.root),
+        before_going_through_disk.balance_tree.root,
         before_going_through_disk.balance_tree.tree.len()
     );
 
@@ -204,7 +204,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
 
     info!(
         "before DB (pruned) | root: {}, nb nodes: {}",
-        Hash(*before_going_through_disk.balance_tree.root),
+        before_going_through_disk.balance_tree.root,
         before_going_through_disk.balance_tree.tree.len()
     );
 
@@ -218,7 +218,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
 
     info!(
         "after DB | root: {}, nb nodes: {}",
-        Hash(*after_going_through_disk.balance_tree.root),
+        after_going_through_disk.balance_tree.root,
         after_going_through_disk.balance_tree.tree.len()
     );
 
