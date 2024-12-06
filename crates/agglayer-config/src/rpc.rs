@@ -19,20 +19,27 @@ pub struct RpcConfig {
     #[serde(default = "default_host")]
     pub host: Ipv4Addr,
 
-    // Skip serialization of these fields as we don't need to expose them in the
-    // configuration yet.
     /// The maximum size of the request body in bytes.
-    #[serde(skip, default = "default_body_size")]
+    #[serde(
+        skip_serializing_if = "same_as_default_body_size",
+        default = "default_body_size"
+    )]
     pub max_request_body_size: u32,
     /// The maximum size of the response body in bytes.
-    #[serde(skip, default = "default_body_size")]
+    #[serde(
+        skip_serializing_if = "same_as_default_body_size",
+        default = "default_body_size"
+    )]
     pub max_response_body_size: u32,
     /// The maximum number of connections.
-    #[serde(skip, default = "default_max_connections")]
+    #[serde(
+        skip_serializing_if = "same_as_default_max_connections",
+        default = "default_max_connections"
+    )]
     pub max_connections: u32,
     /// The maximum number of requests in a batch request. If `None`, the
     /// batch request limit is unlimited.
-    #[serde(skip)]
+    #[serde(skip_serializing_if = "crate::default")]
     pub batch_request_limit: Option<u32>,
     /// The interval at which to send ping messages
     #[serde(skip)]
@@ -100,4 +107,12 @@ fn from_env_or_default<T: FromStr>(key: &str, default: T) -> T {
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(default)
+}
+
+fn same_as_default_body_size(size: &u32) -> bool {
+    *size == default_body_size()
+}
+
+fn same_as_default_max_connections(max_connections: &u32) -> bool {
+    *max_connections == default_max_connections()
 }

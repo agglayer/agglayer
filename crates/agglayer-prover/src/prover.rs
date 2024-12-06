@@ -46,6 +46,8 @@ impl Prover {
         let rpc = ProverRPC::new(executor);
 
         let svc = ProofGenerationServiceServer::new(rpc)
+            .max_decoding_message_size(config.grpc.max_decoding_message_size)
+            .max_encoding_message_size(config.grpc.max_encoding_message_size)
             .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd);
 
