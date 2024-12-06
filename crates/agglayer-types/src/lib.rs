@@ -258,12 +258,6 @@ pub struct Certificate {
 }
 
 impl Certificate {
-    /// Default L1 Info Tree leaf index used for state transitions without
-    /// imported bridge exits.
-    const DEFAULT_L1_INFO_LEAF_INDEX: u32 = 1;
-}
-
-impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
         Certificate {
@@ -298,13 +292,11 @@ impl Certificate {
     /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].
     /// Corresponds to the highest L1 Info Tree leaf index considered by the
     /// imported bridge exits.
-    pub fn l1_info_tree_leaf_count(&self) -> u32 {
+    pub fn l1_info_tree_leaf_count(&self) -> Option<u32> {
         self.imported_bridge_exits
             .iter()
-            .map(|i| i.l1_leaf_index())
+            .map(|i| i.l1_leaf_index() + 1)
             .max()
-            .unwrap_or(Self::DEFAULT_L1_INFO_LEAF_INDEX)
-            + 1
     }
 
     /// Returns the L1 Info Root considered for this [`Certificate`].

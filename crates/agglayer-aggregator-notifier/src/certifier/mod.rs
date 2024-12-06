@@ -134,7 +134,9 @@ where
                 .await
                 .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
 
-            let l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
+            let l1_info_leaf_count = certificate
+                .l1_info_tree_leaf_count()
+                .unwrap_or_else(|| l1_rpc.default_l1_info_tree_entry().0);
 
             let l1_info_root = l1_rpc
                 .get_l1_info_root(l1_info_leaf_count)
