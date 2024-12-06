@@ -20,7 +20,7 @@ agglayer-clock = { path = "../agglayer-clock" }
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-types = { path = "../agglayer-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
-tokio-stream = { version = "0.1.15", features = ["sync"] }
+tokio-stream = { version = "0.1.17", features = ["sync"] }
 futures-util = "0.3.30"
 
 [dev-dependencies]
