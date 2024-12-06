@@ -5,7 +5,7 @@ use std::{fmt::Display, ops::Deref};
 use reth_primitives::{address, revm_primitives::bitvec::view::BitViewSized, Address, U256};
 use serde::{Deserialize, Serialize};
 
-use crate::keccak::{digest::NewDigest, new_keccak256, new_keccak256_combine};
+use crate::keccak::{digest::Digest, keccak256, keccak256_combine};
 
 pub(crate) const L1_NETWORK_ID: NetworkId = NetworkId(0);
 pub(crate) const L1_ETH: TokenInfo = TokenInfo {
@@ -25,8 +25,8 @@ pub struct TokenInfo {
 
 impl TokenInfo {
     /// Computes the Keccak digest of [`TokenInfo`].
-    pub fn hash(&self) -> NewDigest {
-        new_keccak256_combine([
+    pub fn hash(&self) -> Digest {
+        keccak256_combine([
             &self.origin_network.to_be_bytes(),
             self.origin_token_address.as_slice(),
         ])
@@ -72,10 +72,10 @@ pub struct BridgeExit {
     /// Token amount sent
     pub amount: U256,
 
-    pub metadata: Option<NewDigest>,
+    pub metadata: Option<Digest>,
 }
 
-const EMPTY_METADATA_HASH: NewDigest = NewDigest([
+const EMPTY_METADATA_HASH: Digest = Digest([
     197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
     130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
 ]);
@@ -100,14 +100,14 @@ impl BridgeExit {
             dest_network,
             dest_address,
             amount,
-            metadata: Some(new_keccak256(metadata.as_slice())),
+            metadata: Some(keccak256(metadata.as_slice())),
         }
     }
 
     /// Hashes the [`BridgeExit`] to be inserted in a
     /// [`crate::local_exit_tree::LocalExitTree`].
-    pub fn hash(&self) -> NewDigest {
-        new_keccak256_combine([
+    pub fn hash(&self) -> Digest {
+        keccak256_combine([
             (self.leaf_type as u8).as_raw_slice(),
             &u32::to_be_bytes(self.token_info.origin_network.into()),
             self.token_info.origin_token_address.as_slice(),
@@ -176,7 +176,7 @@ impl Deref for NetworkId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::local_exit_tree::{hasher::NewKeccak256Hasher, LocalExitTree};
+    use crate::local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree};
 
     #[test]
     fn test_deposit_hash() {
@@ -202,8 +202,8 @@ mod tests {
             hex::encode(leaf_hash)
         );
 
-        let mut dm = LocalExitTree::<NewKeccak256Hasher>::new();
-        dm.add_leaf(leaf_hash.into()).unwrap();
+        let mut dm = LocalExitTree::<Keccak256Hasher>::new();
+        dm.add_leaf(leaf_hash).unwrap();
         let dm_root = dm.get_root();
         assert_eq!(
             "5ba002329b53c11a2f1dfe90b11e031771842056cf2125b43da8103c199dcd7f",

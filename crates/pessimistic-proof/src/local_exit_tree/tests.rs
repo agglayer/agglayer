@@ -1,16 +1,16 @@
-use hasher::NewKeccak256Hasher;
+use hasher::Keccak256Hasher;
 use rs_merkle::{Hasher as MerkleHasher, MerkleTree};
 use tiny_keccak::{Hasher as _, Keccak};
 
 use super::*;
-use crate::keccak::digest::NewDigest;
+use crate::keccak::digest::Digest;
 
 #[test]
 fn test_local_exit_tree_basic() {
     const TREE_DEPTH: usize = 3;
     let leaves = [[1_u8; 32].into(), [2_u8; 32].into(), [3_u8; 32].into()];
 
-    let local_exit_tree: LocalExitTree<NewKeccak256Hasher, TREE_DEPTH> =
+    let local_exit_tree: LocalExitTree<Keccak256Hasher, TREE_DEPTH> =
         LocalExitTree::from_leaves(leaves.into_iter()).unwrap();
 
     let ground_truth_tree: MerkleTree<TestKeccak256> = {
@@ -30,9 +30,9 @@ fn test_local_exit_tree_basic() {
 pub struct TestKeccak256;
 
 impl MerkleHasher for TestKeccak256 {
-    type Hash = NewDigest;
+    type Hash = Digest;
 
-    fn hash(data: &[u8]) -> NewDigest {
+    fn hash(data: &[u8]) -> Digest {
         let mut keccak256 = Keccak::v256();
         keccak256.update(data);
         let mut output = [0u8; 32];

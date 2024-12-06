@@ -3,39 +3,38 @@ use std::{fmt, ops::Deref};
 use hex::FromHex;
 use reth_primitives::U256;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use tiny_keccak::{Hasher, Keccak};
 
 use crate::{local_balance_tree::FromU256, nullifier_tree::FromBool};
 
 #[derive(Default, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct NewDigest(pub [u8; 32]);
+pub struct Digest(pub [u8; 32]);
 
-impl Deref for NewDigest {
+impl Deref for Digest {
     type Target = [u8; 32];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl AsRef<[u8]> for NewDigest {
+impl AsRef<[u8]> for Digest {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
 }
 
-impl fmt::Display for NewDigest {
+impl fmt::Display for Digest {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:#x}", self)
     }
 }
 
-impl fmt::Debug for NewDigest {
+impl fmt::Debug for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:x}", self)
     }
 }
 
-impl fmt::UpperHex for NewDigest {
+impl fmt::UpperHex for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             write!(f, "0x")?;
@@ -49,8 +48,8 @@ impl fmt::UpperHex for NewDigest {
     }
 }
 
-impl NewDigest {
-    pub const ZERO: NewDigest = NewDigest([0u8; 32]);
+impl Digest {
+    pub const ZERO: Digest = Digest([0u8; 32]);
 
     pub fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
@@ -61,13 +60,13 @@ impl NewDigest {
     }
 }
 
-impl From<[u8; 32]> for NewDigest {
+impl From<[u8; 32]> for Digest {
     fn from(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 }
 
-impl fmt::LowerHex for NewDigest {
+impl fmt::LowerHex for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             write!(f, "0x")?;
@@ -81,7 +80,7 @@ impl fmt::LowerHex for NewDigest {
     }
 }
 
-impl<'de> Deserialize<'de> for NewDigest {
+impl<'de> Deserialize<'de> for Digest {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -92,18 +91,18 @@ impl<'de> Deserialize<'de> for NewDigest {
             let s = s.trim_start_matches("0x");
             let s = <[u8; 32]>::from_hex(s).map_err(serde::de::Error::custom)?;
 
-            Ok(NewDigest(s))
+            Ok(Digest(s))
         } else {
             #[derive(::serde::Deserialize)]
             #[serde(rename = "NewDigest")]
             struct Value([u8; 32]);
 
             let value = Value::deserialize(deserializer)?;
-            Ok(NewDigest(value.0))
+            Ok(Digest(value.0))
         }
     }
 }
-impl Serialize for NewDigest {
+impl Serialize for Digest {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -116,7 +115,7 @@ impl Serialize for NewDigest {
     }
 }
 
-impl FromBool for NewDigest {
+impl FromBool for Digest {
     fn from_bool(b: bool) -> Self {
         Self(if b {
             [
@@ -131,34 +130,34 @@ impl FromBool for NewDigest {
         })
     }
 }
-impl FromU256 for NewDigest {
+impl FromU256 for Digest {
     fn from_u256(u: U256) -> Self {
         Self(u.to_be_bytes())
     }
 }
 
-impl TryFrom<Vec<u8>> for NewDigest {
+impl TryFrom<Vec<u8>> for Digest {
     type Error = hex::FromHexError;
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         let mut bytes = [0u8; 32];
         let len = value.len();
         bytes[..len].copy_from_slice(&value);
 
-        Ok(NewDigest(bytes))
+        Ok(Digest(bytes))
     }
 }
 
-impl From<NewDigest> for Vec<u8> {
-    fn from(value: NewDigest) -> Self {
+impl From<Digest> for Vec<u8> {
+    fn from(value: Digest) -> Self {
         value.0.to_vec()
     }
 }
 
 #[cfg(test)]
-impl rand::distributions::Distribution<NewDigest> for rand::distributions::Standard {
-    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> NewDigest {
+impl rand::distributions::Distribution<Digest> for rand::distributions::Standard {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Digest {
         let raw: [u8; 32] = rng.gen();
 
-        NewDigest(raw)
+        Digest(raw)
     }
 }

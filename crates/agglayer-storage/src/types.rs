@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
-use pessimistic_proof::keccak::digest::NewDigest;
+use pessimistic_proof::keccak::digest::Digest;
 use serde::{Deserialize, Serialize};
 
 use crate::columns::Codec;
@@ -47,13 +47,13 @@ pub struct SmtKey {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SmtKeyType {
     Root,
-    Node(NewDigest),
+    Node(Digest),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum SmtValue {
-    Node(NewDigest, NewDigest),
-    Leaf(NewDigest),
+    Node(Digest, Digest),
+    Leaf(Digest),
 }
 
 impl Codec for SmtKey {}

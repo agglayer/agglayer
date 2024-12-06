@@ -3,7 +3,7 @@ use agglayer_types::{
     LocalNetworkStateData, NetworkId,
 };
 use mockall::mock;
-use pessimistic_proof::keccak::digest::NewDigest;
+use pessimistic_proof::keccak::digest::Digest;
 
 use crate::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -53,7 +53,7 @@ mock! {
             &self,
             network_id: &NetworkId,
             new_state: &LocalNetworkStateData,
-            new_leaves: &[NewDigest],
+            new_leaves: &[Digest],
         ) -> Result<(), Error>;
     }
 

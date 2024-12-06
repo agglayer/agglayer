@@ -8,8 +8,8 @@ use crate::{
     bridge_exit::{NetworkId, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit,
-    keccak::{digest::NewDigest, new_keccak256_combine, Hash},
-    local_exit_tree::{hasher::NewKeccak256Hasher, LocalExitTreeError},
+    keccak::{digest::Digest, keccak256_combine},
+    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTreeError},
     local_state::{LocalNetworkState, StateCommitment},
     multi_batch_header::MultiBatchHeader,
 };
@@ -26,45 +26,27 @@ pub enum ProofError {
     /// The previous local exit root declared by the chain does not match the
     /// one computed by the prover.
     #[error("Invalid previous local exit root. declared: {declared}, computed: {computed}")]
-    InvalidPreviousLocalExitRoot {
-        declared: NewDigest,
-        computed: NewDigest,
-    },
+    InvalidPreviousLocalExitRoot { declared: Digest, computed: Digest },
     /// The previous balance root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid previous balance root. declared: {declared}, computed: {computed}")]
-    InvalidPreviousBalanceRoot {
-        declared: NewDigest,
-        computed: NewDigest,
-    },
+    InvalidPreviousBalanceRoot { declared: Digest, computed: Digest },
     /// The previous nullifier root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid previous nullifier root. declared: {declared}, computed: {computed}")]
-    InvalidPreviousNullifierRoot {
-        declared: NewDigest,
-        computed: NewDigest,
-    },
+    InvalidPreviousNullifierRoot { declared: Digest, computed: Digest },
     /// The new local exit root declared by the chain does not match the
     /// one computed by the prover.
     #[error("Invalid new local exit root. declared: {declared}, computed: {computed}")]
-    InvalidNewLocalExitRoot {
-        declared: NewDigest,
-        computed: NewDigest,
-    },
+    InvalidNewLocalExitRoot { declared: Digest, computed: Digest },
     /// The new balance root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid new balance root. declared: {declared}, computed: {computed}")]
-    InvalidNewBalanceRoot {
-        declared: NewDigest,
-        computed: NewDigest,
-    },
+    InvalidNewBalanceRoot { declared: Digest, computed: Digest },
     /// The new nullifier root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid new nullifier root. declared: {declared}, computed: {computed}")]
-    InvalidNewNullifierRoot {
-        declared: NewDigest,
-        computed: NewDigest,
-    },
+    InvalidNewNullifierRoot { declared: Digest, computed: Digest },
     /// The provided imported bridge exit is invalid.
     #[error("Invalid imported bridge exit. global index: {global_index:?}, error: {source}")]
     InvalidImportedBridgeExit {
@@ -76,10 +58,7 @@ pub enum ProofError {
         "Invalid commitment on the imported bridge exits. declared: {declared}, computed: \
          {computed}"
     )]
-    InvalidImportedExitsRoot {
-        declared: NewDigest,
-        computed: NewDigest,
-    },
+    InvalidImportedExitsRoot { declared: Digest, computed: Digest },
     /// The commitment to the list of imported bridge exits should be `Some`
     /// if and only if this list is non-empty, should be `None` otherwise.
     #[error("Mismatch between the imported bridge exits list and its commitment.")]
@@ -134,21 +113,21 @@ pub enum ProofError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PessimisticProofOutput {
     /// The previous local exit root.
-    pub prev_local_exit_root: NewDigest,
+    pub prev_local_exit_root: Digest,
     /// The previous pessimistic root.
-    pub prev_pessimistic_root: NewDigest,
+    pub prev_pessimistic_root: Digest,
     /// The l1 info root against which we prove the inclusion of the imported
     /// bridge exits.
-    pub l1_info_root: NewDigest,
+    pub l1_info_root: Digest,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
     /// The consensus hash.
-    pub consensus_hash: NewDigest,
+    pub consensus_hash: Digest,
     /// The new local exit root.
-    pub new_local_exit_root: NewDigest,
+    pub new_local_exit_root: Digest,
     /// The new pessimistic root which commits to the balance and nullifier
     /// tree.
-    pub new_pessimistic_root: NewDigest,
+    pub new_pessimistic_root: Digest,
 }
 
 impl PessimisticProofOutput {
@@ -176,11 +155,11 @@ impl PessimisticProofOutput {
 
 const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;
 
-const EMPTY_LER: NewDigest = NewDigest(hex!(
+const EMPTY_LER: Digest = Digest(hex!(
     "27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"
 ));
 
-const EMPTY_PP_ROOT: NewDigest = NewDigest(hex!(
+const EMPTY_PP_ROOT: Digest = Digest(hex!(
     "2152f3808cb81b33b5a47a7a256d61ab9ea916c66030c405ca9b2aaad3b00f0a"
 ));
 
@@ -188,21 +167,21 @@ const EMPTY_PP_ROOT: NewDigest = NewDigest(hex!(
 /// [`LocalNetworkState`].
 pub fn generate_pessimistic_proof(
     initial_network_state: LocalNetworkState,
-    batch_header: &MultiBatchHeader<NewKeccak256Hasher>,
+    batch_header: &MultiBatchHeader<Keccak256Hasher>,
 ) -> Result<PessimisticProofOutput, ProofError> {
     let StateCommitment {
         exit_root: prev_ler,
         balance_root: prev_lbr,
         nullifier_root: prev_nr,
     } = initial_network_state.roots();
-    let prev_pessimistic_root = new_keccak256_combine([prev_lbr, prev_nr]);
+    let prev_pessimistic_root = keccak256_combine([prev_lbr, prev_nr]);
 
-    let consensus_hash = new_keccak256_combine([
+    let consensus_hash = keccak256_combine([
         &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
         batch_header.signer.as_slice(),
     ]);
 
-    let new_pessimistic_root = new_keccak256_combine([
+    let new_pessimistic_root = keccak256_combine([
         batch_header.target.balance_root,
         batch_header.target.nullifier_root,
     ]);
@@ -219,15 +198,15 @@ pub fn generate_pessimistic_proof(
 
     if computed_target.balance_root != batch_header.target.balance_root {
         return Err(ProofError::InvalidNewBalanceRoot {
-            declared: (batch_header.target.balance_root).into(),
-            computed: (computed_target.balance_root).into(),
+            declared: batch_header.target.balance_root,
+            computed: computed_target.balance_root,
         });
     }
 
     if computed_target.nullifier_root != batch_header.target.nullifier_root {
         return Err(ProofError::InvalidNewNullifierRoot {
-            declared: (batch_header.target.nullifier_root).into(),
-            computed: (computed_target.nullifier_root).into(),
+            declared: batch_header.target.nullifier_root,
+            computed: computed_target.nullifier_root,
         });
     }
 
@@ -251,7 +230,7 @@ pub fn generate_pessimistic_proof(
     };
 
     Ok(PessimisticProofOutput {
-        prev_local_exit_root: prev_local_exit_root,
+        prev_local_exit_root,
         prev_pessimistic_root,
         l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
@@ -270,7 +249,7 @@ mod tests {
         let empty_state = LocalNetworkState::default();
 
         let ler = empty_state.exit_tree.get_root();
-        let ppr = new_keccak256_combine([
+        let ppr = keccak256_combine([
             empty_state.balance_tree.root,
             empty_state.nullifier_tree.root,
         ]);

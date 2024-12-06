@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use pessimistic_proof::global_index::GlobalIndex;
-use pessimistic_proof::keccak::digest::NewDigest;
-use pessimistic_proof::keccak::new_keccak256_combine;
+use pessimistic_proof::keccak::digest::Digest;
+use pessimistic_proof::keccak::keccak256_combine;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
-use pessimistic_proof::local_exit_tree::hasher::NewKeccak256Hasher;
+use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::multi_batch_header::signature_commitment;
@@ -27,9 +27,9 @@ use serde::{Deserialize, Serialize};
 use sp1_sdk::SP1PublicValues;
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
-pub type CertificateId = NewDigest;
+pub type CertificateId = Digest;
 pub type Height = u64;
-pub type Metadata = NewDigest;
+pub type Metadata = Digest;
 
 pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
@@ -49,8 +49,8 @@ pub struct CertificateHeader {
     pub epoch_number: Option<EpochNumber>,
     pub certificate_index: Option<CertificateIndex>,
     pub certificate_id: CertificateId,
-    pub prev_local_exit_root: NewDigest,
-    pub new_local_exit_root: NewDigest,
+    pub prev_local_exit_root: Digest,
+    pub new_local_exit_root: Digest,
     pub metadata: Metadata,
     pub status: CertificateStatus,
 }
@@ -66,10 +66,7 @@ pub enum Error {
         "Mismatch on the certificate new local exit root. declared: {declared:?}, computed: \
          {computed:?}"
     )]
-    MismatchNewLocalExitRoot {
-        computed: NewDigest,
-        declared: NewDigest,
-    },
+    MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
     /// The given token balance cannot overflow.
     #[error("Token balance cannot overflow. token: {0:?}")]
     BalanceOverflow(TokenInfo),
@@ -101,8 +98,8 @@ pub enum Error {
     /// Invalid or unsettled L1 Info Root
     L1InfoRootIncorrect {
         leaf_count: u32,
-        declared: NewDigest,
-        retrieved: NewDigest,
+        declared: Digest,
+        retrieved: Digest,
     },
     /// The operation cannot be applied on the smt.
     #[error(transparent)]
@@ -247,9 +244,9 @@ pub struct Certificate {
     /// Simple increment to count the Certificate per network.
     pub height: Height,
     /// Previous local exit root.
-    pub prev_local_exit_root: NewDigest,
+    pub prev_local_exit_root: Digest,
     /// New local exit root.
-    pub new_local_exit_root: NewDigest,
+    pub new_local_exit_root: Digest,
     /// List of bridge exits included in this state transition.
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits included in this state transition.
@@ -283,11 +280,11 @@ impl Certificate {
 
     pub fn hash(&self) -> CertificateId {
         let commit_bridge_exits =
-            new_keccak256_combine(self.bridge_exits.iter().map(|exit| exit.hash()));
+            keccak256_combine(self.bridge_exits.iter().map(|exit| exit.hash()));
         let commit_imported_bridge_exits =
-            new_keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
+            keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
 
-        new_keccak256_combine([
+        keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
             self.height.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_slice(),
@@ -296,7 +293,6 @@ impl Certificate {
             commit_imported_bridge_exits.as_slice(),
             self.metadata.as_slice(),
         ])
-        .into()
     }
 
     /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].
@@ -314,7 +310,7 @@ impl Certificate {
     /// Returns the L1 Info Root considered for this [`Certificate`].
     /// Fails if multiple L1 Info Root are considered among the inclusion proofs
     /// of the imported bridge exits.
-    pub fn l1_info_root(&self) -> Result<Option<NewDigest>, Error> {
+    pub fn l1_info_root(&self) -> Result<Option<Digest>, Error> {
         let Some(l1_info_root) = self
             .imported_bridge_exits
             .first()
@@ -348,11 +344,11 @@ impl Certificate {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkStateData {
     /// The local exit tree without leaves.
-    pub exit_tree: LocalExitTree<NewKeccak256Hasher>,
+    pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// The full local balance tree.
-    pub balance_tree: Smt<NewKeccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
+    pub balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
     /// The full nullifier tree.
-    pub nullifier_tree: Smt<NewKeccak256Hasher, NULLIFIER_TREE_DEPTH>,
+    pub nullifier_tree: Smt<Keccak256Hasher, NULLIFIER_TREE_DEPTH>,
 }
 
 impl From<LocalNetworkStateData> for LocalNetworkState {
@@ -380,16 +376,16 @@ impl LocalNetworkStateData {
         &mut self,
         certificate: &Certificate,
         signer: Address,
-        l1_info_root: NewDigest,
-    ) -> Result<MultiBatchHeader<NewKeccak256Hasher>, Error> {
+        l1_info_root: Digest,
+    ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
 
         for e in certificate.bridge_exits.iter() {
-            self.exit_tree.add_leaf(e.hash().into())?;
+            self.exit_tree.add_leaf(e.hash())?;
         }
 
-        let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<NewKeccak256Hasher>)> = {
+        let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
             // Consider all the imported bridge exits
             let imported_bridge_exits = certificate.imported_bridge_exits.iter();
             // Consider all the bridge exits except for the native token
@@ -465,7 +461,7 @@ impl LocalNetworkStateData {
                 .collect::<Result<BTreeMap<_, _>, Error>>()?
         };
 
-        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<NewKeccak256Hasher>)> =
+        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> =
             certificate
                 .imported_bridge_exits
                 .iter()
@@ -480,7 +476,7 @@ impl LocalNetworkStateData {
                         .get_non_inclusion_proof(nullifier_key)
                         .map_err(nullifier_error)?;
                     self.nullifier_tree
-                        .insert(nullifier_key, NewDigest::from_bool(true))
+                        .insert(nullifier_key, Digest::from_bool(true))
                         .map_err(nullifier_error)?;
                     Ok((exit.clone(), nullifier_path))
                 })
@@ -498,7 +494,7 @@ impl LocalNetworkStateData {
             });
         }
 
-        Ok(MultiBatchHeader::<NewKeccak256Hasher> {
+        Ok(MultiBatchHeader::<Keccak256Hasher> {
             origin_network: certificate.network_id,
             prev_local_exit_root: certificate.prev_local_exit_root,
             bridge_exits: certificate.bridge_exits.clone(),
@@ -508,13 +504,13 @@ impl LocalNetworkStateData {
             prev_nullifier_root,
             signer,
             signature: certificate.signature,
-            imported_exits_root: Some(imported_hash.into()),
+            imported_exits_root: Some(imported_hash),
             target: StateCommitment {
                 exit_root: certificate.new_local_exit_root,
                 balance_root: self.balance_tree.root,
                 nullifier_root: self.nullifier_tree.root,
             },
-            l1_info_root: l1_info_root.into(),
+            l1_info_root,
         })
     }
 
@@ -524,8 +520,8 @@ impl LocalNetworkStateData {
         &self,
         certificate: &Certificate,
         signer: Address,
-        l1_info_root: NewDigest,
-    ) -> Result<MultiBatchHeader<NewKeccak256Hasher>, Error> {
+        l1_info_root: Digest,
+    ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         self.clone()
             .apply_certificate(certificate, signer, l1_info_root)
     }

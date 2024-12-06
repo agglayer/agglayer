@@ -26,6 +26,7 @@ use jsonrpsee::{
     server::{middleware::http::ProxyGetRequestLayer, PingConfig, ServerBuilder, ServerHandle},
 };
 use tokio::{sync::mpsc, try_join};
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
 use tracing::trace;
 use tracing::{debug, error, info, instrument};
@@ -182,6 +183,7 @@ where
         // Create a middleware stack with the CORS middleware and a proxy layer for
         // health checks.
         let middleware = tower::ServiceBuilder::new()
+            .layer(CompressionLayer::new())
             .layer(ProxyGetRequestLayer::new("/health", "system_health")?)
             .layer(cors);
 

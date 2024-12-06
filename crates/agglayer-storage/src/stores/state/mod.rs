@@ -9,9 +9,9 @@ use agglayer_types::{
     EpochNumber, Height, LocalNetworkStateData, NetworkId,
 };
 use pessimistic_proof::{
-    keccak::digest::NewDigest,
+    keccak::digest::Digest,
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH,
-    local_exit_tree::{hasher::NewKeccak256Hasher, LocalExitTree},
+    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     nullifier_tree::NULLIFIER_TREE_DEPTH,
     utils::smt::{Node, Smt},
 };
@@ -181,7 +181,7 @@ impl StateWriter for StateStore {
         &self,
         network_id: &NetworkId,
         new_state: &LocalNetworkStateData,
-        new_leaves: &[NewDigest],
+        new_leaves: &[Digest],
     ) -> Result<(), Error> {
         let network_id: u32 = (*network_id).into();
 
@@ -271,7 +271,7 @@ impl StateStore {
     fn write_smt<C, const DEPTH: usize>(
         &self,
         network_id: u32,
-        smt: &Smt<NewKeccak256Hasher, DEPTH>,
+        smt: &Smt<Keccak256Hasher, DEPTH>,
         batch: &mut WriteBatch,
     ) -> Result<(), Error>
     where
@@ -315,7 +315,7 @@ impl StateStore {
     fn read_local_exit_tree(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<LocalExitTree<NewKeccak256Hasher>>, Error> {
+    ) -> Result<Option<LocalExitTree<Keccak256Hasher>>, Error> {
         debug!("Reading local exit tree for network_id: {}", network_id);
         let leaf_count = if let Some(leaf_count_value) =
             self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
@@ -344,12 +344,11 @@ impl StateStore {
             .collect::<Result<_, _>>()?;
 
         let mut frontier = [[0u8; 32].into(); 32];
-        println!("fontier: {:?}", NewDigest::default());
         for (i, l) in retrieved_frontier.iter().enumerate() {
-            frontier[i] = NewDigest(*l);
+            frontier[i] = Digest(*l);
         }
 
-        Ok(Some(LocalExitTree::<NewKeccak256Hasher> {
+        Ok(Some(LocalExitTree::<Keccak256Hasher> {
             frontier,
             leaf_count,
         }))
@@ -358,19 +357,19 @@ impl StateStore {
     fn read_smt<C, const DEPTH: usize>(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<Smt<NewKeccak256Hasher, DEPTH>>, Error>
+    ) -> Result<Option<Smt<Keccak256Hasher, DEPTH>>, Error>
     where
         C: ColumnSchema<Key = SmtKey, Value = SmtValue>,
     {
-        let root_node: Node<NewKeccak256Hasher> = if let Some(root_node_value) =
+        let root_node: Node<Keccak256Hasher> = if let Some(root_node_value) =
             self.db.get::<C>(&SmtKey {
                 network_id: network_id.into(),
                 key_type: SmtKeyType::Root,
             })? {
             match root_node_value {
                 SmtValue::Node(left, right) => Node {
-                    left: NewDigest(*left.as_bytes()),
-                    right: NewDigest(*right.as_bytes()),
+                    left: Digest(*left.as_bytes()),
+                    right: Digest(*right.as_bytes()),
                 },
                 _ => return Err(Error::WrongValueType),
             }
@@ -382,7 +381,7 @@ impl StateStore {
         keys.push_back(SmtKeyType::Node(root_node.left));
         keys.push_back(SmtKeyType::Node(root_node.right));
 
-        let mut nodes: Vec<Node<NewKeccak256Hasher>> = Vec::new();
+        let mut nodes: Vec<Node<Keccak256Hasher>> = Vec::new();
         nodes.push(root_node);
 
         let mut queued = BTreeSet::new();
@@ -398,8 +397,8 @@ impl StateStore {
             match value {
                 SmtValue::Node(left, right) => {
                     nodes.push(Node {
-                        left: NewDigest(*left.as_bytes()),
-                        right: NewDigest(*right.as_bytes()),
+                        left: Digest(*left.as_bytes()),
+                        right: Digest(*right.as_bytes()),
                     });
                     if queued.insert(left) {
                         keys.push_back(SmtKeyType::Node(left));
@@ -412,7 +411,7 @@ impl StateStore {
             }
         }
 
-        Ok(Some(Smt::<NewKeccak256Hasher, DEPTH>::new_with_nodes(
+        Ok(Some(Smt::<Keccak256Hasher, DEPTH>::new_with_nodes(
             root_node.hash(),
             nodes.as_slice(),
         )))

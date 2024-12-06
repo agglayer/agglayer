@@ -1,7 +1,6 @@
 use pessimistic_proof::{
     bridge_exit::BridgeExit,
-    keccak::digest::NewDigest,
-    local_exit_tree::{hasher::NewKeccak256Hasher, LocalExitTree},
+    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
 };
 use pessimistic_proof_test_suite::event_data::{load_json_data_file, BridgeEvent, EventData};
 
@@ -9,7 +8,7 @@ const JSON_FILE_NAME: &str = "bridge_events_10k.json";
 
 #[test]
 fn test_local_exit_root() {
-    let mut local_exit_tree: LocalExitTree<NewKeccak256Hasher> = LocalExitTree::new();
+    let mut local_exit_tree: LocalExitTree<Keccak256Hasher> = LocalExitTree::new();
 
     let bridge_events: Vec<BridgeEvent> = read_sorted_bridge_events();
 
@@ -29,7 +28,7 @@ fn test_local_exit_root() {
                 deposit_count += 1;
 
                 let bridge_exit: BridgeExit = deposit_event_data.into();
-                local_exit_tree.add_leaf(bridge_exit.hash().into()).unwrap();
+                local_exit_tree.add_leaf(bridge_exit.hash()).unwrap();
             }
             EventData::Claim(_) => {
                 // do nothing

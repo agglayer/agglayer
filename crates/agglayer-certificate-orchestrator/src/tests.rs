@@ -31,7 +31,7 @@ use agglayer_types::{
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, poll};
 use mocks::{MockCertifier, MockEpochPacker};
-use pessimistic_proof::keccak::digest::NewDigest;
+use pessimistic_proof::keccak::digest::Digest;
 use rstest::fixture;
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
@@ -323,7 +323,7 @@ impl StateWriter for DummyPendingStore {
         &self,
         _network_id: &NetworkId,
         _new_state: &LocalNetworkStateData,
-        _new_leaves: &[NewDigest],
+        _new_leaves: &[Digest],
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }

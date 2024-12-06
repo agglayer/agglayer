@@ -498,12 +498,12 @@ mod tests {
     use tiny_keccak::{Hasher as _, Keccak};
 
     use crate::{
-        local_exit_tree::hasher::NewKeccak256Hasher,
+        local_exit_tree::hasher::Keccak256Hasher,
         utils::smt::{Smt, SmtError, ToBits},
     };
 
     const DEPTH: usize = 32;
-    type H = NewKeccak256Hasher;
+    type H = Keccak256Hasher;
 
     impl ToBits<8> for u8 {
         fn to_bits(&self) -> [bool; 8] {

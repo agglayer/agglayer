@@ -9,7 +9,7 @@ use agglayer_config::prover::{NetworkProverConfig, ProverConfig};
 use agglayer_prover_types::Error;
 use futures::{Future, TryFutureExt};
 use pessimistic_proof::{
-    local_exit_tree::hasher::NewKeccak256Hasher, multi_batch_header::MultiBatchHeader,
+    local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
 };
 use sp1_sdk::network::prover::NetworkProver;
@@ -146,7 +146,7 @@ impl Executor {
 #[derive(Debug, Clone)]
 pub struct Request {
     pub(crate) initial_state: LocalNetworkState,
-    pub(crate) batch_header: MultiBatchHeader<NewKeccak256Hasher>,
+    pub(crate) batch_header: MultiBatchHeader<Keccak256Hasher>,
 }
 
 impl From<Request> for SP1Stdin {

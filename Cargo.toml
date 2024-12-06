@@ -34,7 +34,7 @@ insta = { git = "https://github.com/freyskeyd/insta", branch = "chore/updating-d
     "toml",
     "yaml",
 ] }
-jsonrpsee = { version = "0.24.6", features = ["full"] }
+jsonrpsee = { version = "0.24.7", features = ["full"] }
 lazy_static = "1.5.0"
 mockall = "0.13.1"
 parking_lot = "0.12.3"

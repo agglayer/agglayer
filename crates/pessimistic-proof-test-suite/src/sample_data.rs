@@ -17,7 +17,7 @@ use crate::{
     forest::Forest,
 };
 
-type TreeHasher = local_exit_tree::hasher::NewKeccak256Hasher;
+type TreeHasher = local_exit_tree::hasher::Keccak256Hasher;
 type LocalExitTree = local_exit_tree::LocalExitTree<TreeHasher>;
 type LocalBalanceTree = local_balance_tree::LocalBalanceTree<TreeHasher>;
 

@@ -1,4 +1,4 @@
-use pessimistic_proof::keccak::digest::NewDigest;
+use pessimistic_proof::keccak::digest::Digest;
 
 use crate::columns::Codec as _;
 use crate::types::{SmtKey, SmtKeyType};
@@ -24,7 +24,7 @@ fn can_serialize_a_root_key() {
 fn can_serialize_a_node_key() {
     let key = SmtKey {
         network_id: 1,
-        key_type: SmtKeyType::Node(NewDigest([1; 32])),
+        key_type: SmtKeyType::Node(Digest([1; 32])),
     };
 
     //                  -> [  network ][ key type ]
@@ -43,7 +43,7 @@ fn can_serialize_a_node_key() {
 fn can_serialize_a_leaf_key() {
     let key = SmtKey {
         network_id: 1,
-        key_type: SmtKeyType::Node(NewDigest([1; 32])),
+        key_type: SmtKeyType::Node(Digest([1; 32])),
     };
 
     //                  -> [  network ][ key type ]

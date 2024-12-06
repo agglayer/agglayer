@@ -6,7 +6,7 @@ use agglayer_telemetry::prover::{
 };
 use bincode::Options;
 use pessimistic_proof::{
-    local_exit_tree::hasher::NewKeccak256Hasher, multi_batch_header::MultiBatchHeader,
+    local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
 };
 use tower::{buffer::Buffer, util::BoxService, Service, ServiceExt};
@@ -40,7 +40,7 @@ impl ProofGenerationService for ProverRPC {
             .deserialize(&request_inner.initial_state)
             .map_err(|_| tonic::Status::invalid_argument("Unable to deserialize initial state"))?;
 
-        let batch_header: MultiBatchHeader<NewKeccak256Hasher> =
+        let batch_header: MultiBatchHeader<Keccak256Hasher> =
             agglayer_prover_types::default_bincode_options()
                 .deserialize(&request_inner.batch_header)
                 .map_err(|_| {

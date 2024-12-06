@@ -7,8 +7,8 @@ use pessimistic_proof::{
         Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
         MerkleProof,
     },
-    keccak::{digest::NewDigest, new_keccak256, new_keccak256_combine},
-    local_exit_tree::{data::LocalExitTreeData, hasher::NewKeccak256Hasher, LocalExitTree},
+    keccak::{digest::Digest, keccak256, keccak256_combine},
+    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::signature_commitment,
     utils::smt::Smt,
     LocalNetworkState, PessimisticProofOutput,
@@ -19,9 +19,9 @@ use reth_primitives::{Address, Signature, U256};
 use super::sample_data::{NETWORK_A, NETWORK_B};
 
 pub fn compute_signature_info(
-    new_local_exit_root: NewDigest,
+    new_local_exit_root: Digest,
     imported_bridge_exits: &[ImportedBridgeExit],
-) -> (NewDigest, Address, Signature) {
+) -> (Digest, Address, Signature) {
     let combined_hash = signature_commitment(new_local_exit_root, imported_bridge_exits);
     let wallet = LocalWallet::new(&mut thread_rng());
     let signer = wallet.address();
@@ -38,8 +38,8 @@ pub fn compute_signature_info(
 /// Trees for the network B, as well as the LET for network A.
 #[derive(Clone)]
 pub struct Forest {
-    pub l1_info_tree: LocalExitTreeData<NewKeccak256Hasher>,
-    pub local_exit_tree_data_a: LocalExitTreeData<NewKeccak256Hasher>,
+    pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
+    pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
     pub state_b: LocalNetworkStateData,
 }
 
@@ -52,7 +52,7 @@ impl Forest {
     /// Override the local exit tree for network B
     pub fn new_with_local_exit_tree(
         initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>,
-        local_exit_tree: LocalExitTree<NewKeccak256Hasher>,
+        local_exit_tree: LocalExitTree<Keccak256Hasher>,
     ) -> Self {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {
@@ -86,27 +86,25 @@ impl Forest {
 
         // Append all the leafs in LET A (mainnet)
         for exit in &exits {
-            self.local_exit_tree_data_a
-                .add_leaf(exit.hash().into())
-                .unwrap();
+            self.local_exit_tree_data_a.add_leaf(exit.hash()).unwrap();
         }
 
         let l1_leaf = L1InfoTreeLeaf {
             l1_info_tree_index: 0,
-            rer: NewDigest::default(),
-            mer: self.local_exit_tree_data_a.get_root().into(),
+            rer: Digest::default(),
+            mer: self.local_exit_tree_data_a.get_root(),
             inner: L1InfoTreeLeafInner {
-                block_hash: NewDigest::default(),
+                block_hash: Digest::default(),
                 timestamp: 0,
-                global_exit_root: NewDigest::default(),
+                global_exit_root: Digest::default(),
             },
         };
 
-        self.l1_info_tree.add_leaf(l1_leaf.hash().into()).unwrap();
+        self.l1_info_tree.add_leaf(l1_leaf.hash()).unwrap();
 
         let proof_ger_l1root = MerkleProof {
             proof: self.l1_info_tree.get_proof(0).unwrap(),
-            root: self.l1_info_tree.get_root().into(),
+            root: self.l1_info_tree.get_root(),
         };
 
         // Generate them as imported bridge exits
@@ -122,7 +120,7 @@ impl Forest {
                 claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
                     proof_leaf_mer: MerkleProof {
                         proof: self.local_exit_tree_data_a.get_proof(index).unwrap(),
-                        root: self.local_exit_tree_data_a.get_root().into(),
+                        root: self.local_exit_tree_data_a.get_root(),
                     },
                     proof_ger_l1root: proof_ger_l1root.clone(),
                     l1_leaf: l1_leaf.clone(),
@@ -139,7 +137,7 @@ impl Forest {
         let mut res = Vec::new();
         for (token, amount) in events {
             let exit = exit_to_a(*token, *amount);
-            self.state_b.exit_tree.add_leaf(exit.hash().into()).unwrap();
+            self.state_b.exit_tree.add_leaf(exit.hash()).unwrap();
             res.push(exit);
         }
 
@@ -167,8 +165,8 @@ impl Forest {
         let certificate = Certificate {
             network_id: *NETWORK_B,
             height: 0,
-            prev_local_exit_root: prev_local_exit_root.into(),
-            new_local_exit_root: new_local_exit_root.into(),
+            prev_local_exit_root,
+            new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
             signature,
@@ -186,7 +184,7 @@ impl Forest {
         );
         assert_eq!(
             output.new_pessimistic_root,
-            new_keccak256_combine([
+            keccak256_combine([
                 self.state_b.balance_tree.root,
                 self.state_b.nullifier_tree.root
             ])
@@ -201,7 +199,7 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
         dest_network,
         dest_address: random(),
         amount,
-        metadata: Some(new_keccak256(&vec![])),
+        metadata: Some(keccak256(&[])),
     }
 }
 

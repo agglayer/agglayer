@@ -3,7 +3,7 @@ use std::{fs::File, io::BufReader};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
-    keccak::new_keccak256,
+    keccak::keccak256,
 };
 use reth_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Deserializer};
@@ -23,7 +23,6 @@ pub fn parse_json_file<T>(json_file_path: impl AsRef<std::path::Path>) -> T
 where
     T: DeserializeOwned,
 {
-    println!("Loading file: {:?}", json_file_path.as_ref());
     let json_file = File::open(json_file_path).unwrap();
     let reader = BufReader::new(json_file);
 
@@ -87,7 +86,7 @@ impl From<DepositEventData> for BridgeExit {
                 .decode(deposit_event_data.metadata)
                 .ok()
                 .as_ref()
-                .map(|data| new_keccak256(data).into()),
+                .map(|data| keccak256(data)),
         }
     }
 }

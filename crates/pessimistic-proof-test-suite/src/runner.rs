@@ -6,7 +6,7 @@ use sp1_sdk::{SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
 
 use crate::PESSIMISTIC_PROOF_ELF;
 
-pub type Hasher = pessimistic_proof::local_exit_tree::hasher::NewKeccak256Hasher;
+pub type Hasher = pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 pub type Digest = <Hasher as pessimistic_proof::local_exit_tree::hasher::Hasher>::Digest;
 pub type MultiBatchHeader = pessimistic_proof::multi_batch_header::MultiBatchHeader<Hasher>;
 

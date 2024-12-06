@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_types::{Certificate, LocalNetworkStateData, NetworkId};
-use pessimistic_proof::{generate_pessimistic_proof, keccak::digest::NewDigest, LocalNetworkState};
+use pessimistic_proof::{generate_pessimistic_proof, keccak::digest::Digest, LocalNetworkState};
 use rstest::{fixture, rstest};
 use tracing::info;
 
@@ -79,7 +79,7 @@ fn can_handle_empty_state(#[from(network_id)] unknown_network_id: NetworkId, sto
 fn can_retrieve_state(network_id: NetworkId, store: StateStore) {
     // write arbitrary state
     let mut lns = LocalNetworkStateData::default();
-    let leaves = (0..10).map(|_| NewDigest([5u8; 32])).collect::<Vec<_>>();
+    let leaves = (0..10).map(|_| Digest([5u8; 32])).collect::<Vec<_>>();
     for l in &leaves {
         lns.exit_tree.add_leaf(*l).unwrap();
     }
@@ -109,7 +109,7 @@ fn can_update_existing_state(network_id: NetworkId, store: StateStore) {
 
     // write new state
     assert!(store
-        .write_local_network_state(&network_id, &lns, &[NewDigest(bridge_exit)])
+        .write_local_network_state(&network_id, &lns, &[Digest(bridge_exit)])
         .is_ok());
 
     // retrieve new state
@@ -152,11 +152,11 @@ fn can_read(network_id: NetworkId, store: StateStore) {
     .map(|p| data::load_certificate(p))
     .collect();
 
-    let mut leaves: Vec<NewDigest> = Vec::new();
+    let mut leaves: Vec<Digest> = Vec::new();
     let mut lns = LocalNetworkStateData::default();
 
     for (idx, certificate) in certificates.iter().enumerate() {
-        println!(
+        info!(
             "Certificate ({idx}|{}) | {}, nib:{} b:{}",
             certificate.height,
             certificate.hash(),

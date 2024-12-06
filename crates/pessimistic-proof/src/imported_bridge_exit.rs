@@ -6,20 +6,20 @@ use thiserror::Error;
 use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
-    keccak::{digest::NewDigest, new_keccak256_combine},
-    local_exit_tree::{data::LETMerkleProof, hasher::NewKeccak256Hasher},
+    keccak::{digest::Digest, keccak256_combine},
+    local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L1InfoTreeLeafInner {
-    pub global_exit_root: NewDigest,
-    pub block_hash: NewDigest,
+    pub global_exit_root: Digest,
+    pub block_hash: Digest,
     pub timestamp: u64,
 }
 
 impl L1InfoTreeLeafInner {
-    fn hash(&self) -> NewDigest {
-        new_keccak256_combine([
+    fn hash(&self) -> Digest {
+        keccak256_combine([
             self.global_exit_root.as_slice(),
             self.block_hash.as_slice(),
             &self.timestamp.to_be_bytes(),
@@ -30,13 +30,13 @@ impl L1InfoTreeLeafInner {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L1InfoTreeLeaf {
     pub l1_info_tree_index: u32,
-    pub rer: NewDigest,
-    pub mer: NewDigest,
+    pub rer: Digest,
+    pub mer: Digest,
     pub inner: L1InfoTreeLeafInner,
 }
 
 impl L1InfoTreeLeaf {
-    pub fn hash(&self) -> NewDigest {
+    pub fn hash(&self) -> Digest {
         self.inner.hash()
     }
 }
@@ -76,13 +76,13 @@ pub enum Error {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MerkleProof {
-    pub proof: LETMerkleProof<NewKeccak256Hasher>,
-    pub root: NewDigest,
+    pub proof: LETMerkleProof<Keccak256Hasher>,
+    pub root: Digest,
 }
 
 impl MerkleProof {
-    pub fn hash(&self) -> NewDigest {
-        new_keccak256_combine([
+    pub fn hash(&self) -> Digest {
+        keccak256_combine([
             self.root.as_slice(),
             self.proof
                 .siblings
@@ -94,7 +94,7 @@ impl MerkleProof {
         ])
     }
 
-    pub fn verify(&self, leaf: NewDigest, leaf_index: u32) -> bool {
+    pub fn verify(&self, leaf: Digest, leaf_index: u32) -> bool {
         self.proof.verify(leaf, leaf_index, self.root)
     }
 }
@@ -106,7 +106,7 @@ pub enum Claim {
 }
 
 impl Claim {
-    pub fn hash(&self) -> NewDigest {
+    pub fn hash(&self) -> Digest {
         match self {
             Claim::Mainnet(claim_from_mainnet) => claim_from_mainnet.hash(),
             Claim::Rollup(claim_from_rollup) => claim_from_rollup.hash(),
@@ -125,8 +125,8 @@ pub struct ClaimFromMainnet {
 }
 
 impl ClaimFromMainnet {
-    pub fn hash(&self) -> NewDigest {
-        new_keccak256_combine([
+    pub fn hash(&self) -> Digest {
+        keccak256_combine([
             self.proof_leaf_mer.hash(),
             self.proof_ger_l1root.hash(),
             self.l1_leaf.hash(),
@@ -135,9 +135,9 @@ impl ClaimFromMainnet {
 
     pub fn verify(
         &self,
-        leaf: NewDigest,
+        leaf: Digest,
         global_index: GlobalIndex,
-        l1root: NewDigest,
+        l1root: Digest,
     ) -> Result<(), Error> {
         // Check the consistency on the l1 root
         if l1root != self.proof_ger_l1root.root {
@@ -157,7 +157,7 @@ impl ClaimFromMainnet {
         // Check the inclusion proof of the L1 leaf to L1Root
         if !self
             .proof_ger_l1root
-            .verify(self.l1_leaf.hash().into(), self.l1_leaf.l1_info_tree_index)
+            .verify(self.l1_leaf.hash(), self.l1_leaf.l1_info_tree_index)
         {
             return Err(Error::InvalidMerklePathGERToL1Root);
         }
@@ -179,8 +179,8 @@ pub struct ClaimFromRollup {
 }
 
 impl ClaimFromRollup {
-    pub fn hash(&self) -> NewDigest {
-        new_keccak256_combine([
+    pub fn hash(&self) -> Digest {
+        keccak256_combine([
             self.proof_leaf_ler.hash(),
             self.proof_ler_rer.hash(),
             self.proof_ger_l1root.hash(),
@@ -190,9 +190,9 @@ impl ClaimFromRollup {
 
     pub fn verify(
         &self,
-        leaf: NewDigest,
+        leaf: Digest,
         global_index: GlobalIndex,
-        l1root: NewDigest,
+        l1root: Digest,
     ) -> Result<(), Error> {
         // Check the consistency on the l1 root
         if l1root != self.proof_ger_l1root.root {
@@ -220,7 +220,7 @@ impl ClaimFromRollup {
         // Check the inclusion proof of the L1 leaf to L1Root
         if !self
             .proof_ger_l1root
-            .verify(self.l1_leaf.hash().into(), self.l1_leaf.l1_info_tree_index)
+            .verify(self.l1_leaf.hash(), self.l1_leaf.l1_info_tree_index)
         {
             return Err(Error::InvalidMerklePathGERToL1Root);
         }
@@ -256,7 +256,7 @@ impl ImportedBridgeExit {
 
     /// Verifies that the provided inclusion path is valid and consistent with
     /// the provided LER
-    pub fn verify_path(&self, l1root: NewDigest) -> Result<(), Error> {
+    pub fn verify_path(&self, l1root: Digest) -> Result<(), Error> {
         // Check that the inclusion proof and the global index both refer to mainnet or
         // rollup
         if self.global_index.mainnet_flag != matches!(self.claim_data, Claim::Mainnet(_)) {
@@ -265,16 +265,16 @@ impl ImportedBridgeExit {
 
         match &self.claim_data {
             Claim::Mainnet(claim) => {
-                claim.verify(self.bridge_exit.hash().into(), self.global_index, l1root)
+                claim.verify(self.bridge_exit.hash(), self.global_index, l1root)
             }
             Claim::Rollup(claim) => {
-                claim.verify(self.bridge_exit.hash().into(), self.global_index, l1root)
+                claim.verify(self.bridge_exit.hash(), self.global_index, l1root)
             }
         }
     }
 
     /// Returns the considered L1 Info Root against which the claim is done.
-    pub fn l1_info_root(&self) -> NewDigest {
+    pub fn l1_info_root(&self) -> Digest {
         match &self.claim_data {
             Claim::Mainnet(claim) => claim.proof_ger_l1root.root,
             Claim::Rollup(claim) => claim.proof_ger_l1root.root,
@@ -291,8 +291,8 @@ impl ImportedBridgeExit {
     }
 
     /// Hash the entire data structure.
-    pub fn hash(&self) -> NewDigest {
-        new_keccak256_combine([
+    pub fn hash(&self) -> Digest {
+        keccak256_combine([
             self.bridge_exit.hash(),
             self.claim_data.hash(),
             self.global_index.hash(),
@@ -302,8 +302,8 @@ impl ImportedBridgeExit {
 
 pub fn commit_imported_bridge_exits<E: Borrow<ImportedBridgeExit>>(
     iter: impl Iterator<Item = E>,
-) -> NewDigest {
-    new_keccak256_combine(iter.map(|exit| exit.borrow().global_index.hash()))
+) -> Digest {
+    keccak256_combine(iter.map(|exit| exit.borrow().global_index.hash()))
 }
 
 #[cfg(test)]
@@ -315,10 +315,10 @@ mod tests {
 
     #[test]
     fn can_parse_empty_l1infotree() {
-        let empty_l1_info_tree: NewDigest =
+        let empty_l1_info_tree: Digest =
             hex!("27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757").into();
 
-        let l1_tree = LocalExitTree::<NewKeccak256Hasher, 32>::default();
+        let l1_tree = LocalExitTree::<Keccak256Hasher, 32>::default();
 
         assert_eq!(empty_l1_info_tree, l1_tree.get_root());
     }

@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::L1_NETWORK_ID,
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
-    keccak::{digest::NewDigest, Hash},
+    keccak::digest::Digest,
     local_balance_tree::LocalBalanceTree,
-    local_exit_tree::{hasher::NewKeccak256Hasher, LocalExitTree},
+    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::{signature_commitment, MultiBatchHeader},
     nullifier_tree::{NullifierKey, NullifierTree},
     ProofError,
@@ -19,20 +19,20 @@ use crate::{
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`].
-    pub exit_tree: LocalExitTree<NewKeccak256Hasher>,
+    pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// Commitment to the balance for each token.
-    pub balance_tree: LocalBalanceTree<NewKeccak256Hasher>,
+    pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
     /// Commitment to the Nullifier tree for the local network, tracks claimed
     /// assets on foreign networks
-    pub nullifier_tree: NullifierTree<NewKeccak256Hasher>,
+    pub nullifier_tree: NullifierTree<Keccak256Hasher>,
 }
 
 /// The roots of one [`LocalNetworkState`].
 #[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StateCommitment {
-    pub exit_root: NewDigest,
-    pub balance_root: NewDigest,
-    pub nullifier_root: NewDigest,
+    pub exit_root: Digest,
+    pub balance_root: Digest,
+    pub nullifier_root: Digest,
 }
 
 impl StateCommitment {
@@ -59,7 +59,7 @@ impl LocalNetworkState {
     /// The state isn't modified on error.
     pub fn apply_batch_header(
         &mut self,
-        multi_batch_header: &MultiBatchHeader<NewKeccak256Hasher>,
+        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
     ) -> Result<StateCommitment, ProofError> {
         let mut clone = self.clone();
         let roots = clone.apply_batch_header_helper(multi_batch_header)?;
@@ -73,7 +73,7 @@ impl LocalNetworkState {
     /// The state can be modified on error.
     fn apply_batch_header_helper(
         &mut self,
-        multi_batch_header: &MultiBatchHeader<NewKeccak256Hasher>,
+        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
     ) -> Result<StateCommitment, ProofError> {
         // Check the initial state
         let computed_root = self.exit_tree.get_root();
@@ -180,7 +180,7 @@ impl LocalNetworkState {
                 // We don't allow a chain to exit to itself
                 return Err(ProofError::CannotExitToSameNetwork);
             }
-            self.exit_tree.add_leaf(bridge_exit.hash().into())?;
+            self.exit_tree.add_leaf(bridge_exit.hash())?;
 
             // For message exits, the origin network in token info should be the origin
             // network of the batch header.

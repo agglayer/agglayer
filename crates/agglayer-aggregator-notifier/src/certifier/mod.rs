@@ -152,8 +152,8 @@ where
                 if declared != l1_info_root {
                     return Err(CertificationError::Types {
                         source: agglayer_types::Error::L1InfoRootIncorrect {
-                            declared: (declared).into(),
-                            retrieved: (l1_info_root).into(),
+                            declared,
+                            retrieved: l1_info_root,
                             leaf_count: l1_info_leaf_count,
                         },
                     });

@@ -8,7 +8,7 @@ use serde_with::serde_as;
 use crate::{
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
-    keccak::{digest::NewDigest, new_keccak256_combine},
+    keccak::{digest::Digest, keccak256_combine},
     local_balance_tree::LocalBalancePath,
     local_exit_tree::hasher::Hasher,
     local_state::StateCommitment,
@@ -94,9 +94,9 @@ where
 }
 
 pub fn signature_commitment(
-    new_local_exit_root: NewDigest,
+    new_local_exit_root: Digest,
     imported_bridge_exits: impl IntoIterator<Item = impl Borrow<ImportedBridgeExit>>,
-) -> NewDigest {
+) -> Digest {
     let imported_hash = commit_imported_bridge_exits(imported_bridge_exits.into_iter());
-    new_keccak256_combine([new_local_exit_root.as_slice(), imported_hash.as_slice()])
+    keccak256_combine([new_local_exit_root.as_slice(), imported_hash.as_slice()])
 }

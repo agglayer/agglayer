@@ -4,7 +4,7 @@ use agglayer_types::{
     Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
     LocalNetworkStateData, NetworkId, Proof,
 };
-use pessimistic_proof::keccak::digest::NewDigest;
+use pessimistic_proof::keccak::digest::Digest;
 
 use crate::{error::Error, stores::PerEpochReader};
 
@@ -70,7 +70,7 @@ pub trait StateWriter: Send + Sync {
         &self,
         network_id: &NetworkId,
         new_state: &LocalNetworkStateData,
-        new_leaves: &[NewDigest],
+        new_leaves: &[Digest],
     ) -> Result<(), Error>;
 }
 

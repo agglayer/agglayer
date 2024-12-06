@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     bridge_exit::NetworkId,
-    keccak::{digest::NewDigest, new_keccak256},
+    keccak::{digest::Digest, keccak256},
     nullifier_tree::NullifierKey,
 };
 
@@ -32,9 +32,9 @@ impl GlobalIndex {
         .into()
     }
 
-    pub fn hash(&self) -> NewDigest {
+    pub fn hash(&self) -> Digest {
         let global_index: U256 = (*self).into();
-        new_keccak256(global_index.as_le_slice())
+        keccak256(global_index.as_le_slice())
     }
 }
 
