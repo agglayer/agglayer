@@ -23,7 +23,7 @@ pub mod polygon_zkevm_global_exit_root_v2;
 pub mod settler;
 
 use polygon_zk_evm::PolygonZkEvm;
-use polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2Errors;
+use polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2Events;
 pub use settler::Settler;
 
 #[async_trait::async_trait]
@@ -64,26 +64,32 @@ where
         l1_info_tree: polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2<RpcProvider>,
     ) -> Result<Self, L1RpcInitializationError> {
         let default_l1_info_tree_entry = {
-            let events = l1_info_tree
-                .init_l1_info_root_map_filter()
-                .from_block(BlockNumber::Earliest)
-                .query()
-                .await
-                .map_err(|e| {
-                    L1RpcInitializationError::InitL1InfoRootMapEventNotFound(
-                        e.decode_contract_revert::<PolygonZkEVMGlobalExitRootV2Errors>()
-                            .map(|err| format!("{:?}", err))
-                            .unwrap_or(e.to_string()),
-                    )
-                })?;
+            let filter = Filter::new()
+                .address(l1_info_tree.address())
+                .event("InitL1InfoRootMap(uint32,bytes32)")
+                .from_block(BlockNumber::Earliest);
+
+            let events = l1_info_tree.client().get_logs(&filter).await.map_err(|e| {
+                L1RpcInitializationError::InitL1InfoRootMapEventNotFound(e.to_string())
+            })?;
 
             // Get the first l1 info tree leaf from the init event
-            let (l1_leaf_count, l1_info_root) = events
+            let (l1_leaf_count, l1_info_root) = match events
                 .first()
-                .map(|i| (i.leaf_count, i.current_l1_info_root))
+                .cloned()
+                .map(|log| PolygonZkEVMGlobalExitRootV2Events::decode_log(&log.into()))
                 .ok_or(L1RpcInitializationError::InitL1InfoRootMapEventNotFound(
                     String::from("Event InitL1InfoRootMap not found"),
-                ))?;
+                ))? {
+                Ok(PolygonZkEVMGlobalExitRootV2Events::InitL1InfoRootMapFilter(event)) => {
+                    (event.leaf_count, event.current_l1_info_root)
+                }
+                _ => {
+                    return Err(L1RpcInitializationError::InitL1InfoRootMapEventNotFound(
+                        String::from("Event InitL1InfoRootMap not found"),
+                    ))
+                }
+            };
 
             // Check that fetched l1 info root is non-zero
             if l1_info_root == [0u8; 32] {
@@ -196,10 +202,12 @@ mod tests {
                 .unwrap(),
         );
 
-        let rollup_manager_contract: H160 = "0xe2ef6215adc132df6913c8dd16487abf118d1764"
+        // Cardona contracts
+        let rollup_manager_contract: H160 = "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff" // bali: 0xe2ef6215adc132df6913c8dd16487abf118d1764
             .parse()
             .unwrap();
-        let ger_contract: H160 = "0x2968d6d736178f8fe7393cc33c87f29d9c287e78"
+
+        let ger_contract: H160 = "0xAd1490c248c5d3CbAE399Fd529b79B42984277DF" // bali: 0x2968d6d736178f8fe7393cc33c87f29d9c287e78
             .parse()
             .unwrap();
 
@@ -213,7 +221,7 @@ mod tests {
         );
 
         let (default_leaf_count, default_l1_info_root) = l1_rpc.default_l1_info_tree_entry;
-        let expected_leaf_count = 335;
+        let expected_leaf_count = 48445; // bali: 335
 
         assert_eq!(
             default_leaf_count, expected_leaf_count,
