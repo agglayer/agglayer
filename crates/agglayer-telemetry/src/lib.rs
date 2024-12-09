@@ -153,7 +153,11 @@ impl ServerBuilder {
                 "/metrics",
                 get(|State(registry): State<prometheus::Registry>| async move {
                     match Self::gather_metrics(&registry) {
-                        Ok(metrics) => Response::new(metrics),
+                        Ok(metrics) => Response::builder()
+                            .status(StatusCode::OK)
+                            .header("Content-Type", "text/plain; version=0.0.4")
+                            .body(metrics)
+                            .unwrap(),
                         Err(error) => Response::builder()
                             .status(StatusCode::INTERNAL_SERVER_ERROR)
                             .body(error.to_string())

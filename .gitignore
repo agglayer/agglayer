@@ -1,3 +1,4 @@
 target
 tests/kurtosis
 tests/tmp
+.idea/
