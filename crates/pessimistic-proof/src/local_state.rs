@@ -31,6 +31,7 @@ pub struct LocalNetworkState {
 #[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StateCommitment {
     pub exit_root: Digest,
+    pub ler_leaf_count: u32,
     pub balance_root: Digest,
     pub nullifier_root: Digest,
 }
@@ -38,8 +39,8 @@ pub struct StateCommitment {
 impl StateCommitment {
     pub fn display_to_hex(&self) -> String {
         format!(
-            "exit_root: {}, balance_root: {}, nullifier_root: {}",
-            self.exit_root, self.balance_root, self.nullifier_root,
+            "exit_root: {}, ler_leaf_count: {}, balance_root: {}, nullifier_root: {}",
+            self.exit_root, self.ler_leaf_count, self.balance_root, self.nullifier_root,
         )
     }
 }
@@ -49,6 +50,7 @@ impl LocalNetworkState {
     pub fn roots(&self) -> StateCommitment {
         StateCommitment {
             exit_root: self.exit_tree.get_root(),
+            ler_leaf_count: self.exit_tree.leaf_count,
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }
