@@ -13,15 +13,15 @@ bincode.workspace = true
 buildstructor.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+futures-util = "0.3.30"
 
 agglayer-clock = { path = "../agglayer-clock" }
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-types = { path = "../agglayer-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
-tokio-stream = { version = "0.1.15", features = ["sync"] }
-futures-util = "0.3.30"
 
 [dev-dependencies]
 agglayer-clock = { path = "../agglayer-clock", features = ["testutils"] }
