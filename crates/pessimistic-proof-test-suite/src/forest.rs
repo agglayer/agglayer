@@ -185,8 +185,9 @@ impl Forest {
         assert_eq!(
             output.new_pessimistic_root,
             keccak256_combine([
-                self.state_b.balance_tree.root,
-                self.state_b.nullifier_tree.root
+                self.state_b.balance_tree.root.as_slice(),
+                self.state_b.nullifier_tree.root.as_slice(),
+                self.state_b.exit_tree.leaf_count.to_le_bytes().as_slice(),
             ])
         );
     }
