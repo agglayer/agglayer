@@ -497,11 +497,7 @@ impl LocalNetworkStateData {
             signer,
             signature: certificate.signature,
             imported_exits_root: Some(imported_hash),
-            target: StateCommitment {
-                exit_root: certificate.new_local_exit_root,
-                balance_root: self.balance_tree.root,
-                nullifier_root: self.nullifier_tree.root,
-            },
+            target: self.get_roots(),
             l1_info_root,
         })
     }
@@ -521,6 +517,7 @@ impl LocalNetworkStateData {
     pub fn get_roots(&self) -> StateCommitment {
         StateCommitment {
             exit_root: self.exit_tree.get_root(),
+            ler_leaf_count: self.exit_tree.leaf_count,
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }

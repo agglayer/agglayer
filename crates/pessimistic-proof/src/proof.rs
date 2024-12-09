@@ -171,10 +171,15 @@ pub fn generate_pessimistic_proof(
 ) -> Result<PessimisticProofOutput, ProofError> {
     let StateCommitment {
         exit_root: prev_ler,
+        ler_leaf_count: prev_ler_leaf_count,
         balance_root: prev_lbr,
         nullifier_root: prev_nr,
     } = initial_network_state.roots();
-    let prev_pessimistic_root = keccak256_combine([prev_lbr, prev_nr]);
+    let prev_pessimistic_root = keccak256_combine([
+        prev_lbr.as_slice(),
+        prev_nr.as_slice(),
+        prev_ler_leaf_count.to_le_bytes().as_slice(),
+    ]);
 
     let consensus_hash = keccak256_combine([
         &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
@@ -182,8 +187,9 @@ pub fn generate_pessimistic_proof(
     ]);
 
     let new_pessimistic_root = keccak256_combine([
-        batch_header.target.balance_root,
-        batch_header.target.nullifier_root,
+        batch_header.target.balance_root.as_slice(),
+        batch_header.target.nullifier_root.as_slice(),
+        batch_header.target.ler_leaf_count.to_le_bytes().as_slice(),
     ]);
 
     let mut network_state = initial_network_state;
