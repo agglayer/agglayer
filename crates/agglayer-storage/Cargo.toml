@@ -16,6 +16,7 @@ thiserror.workspace = true
 tracing.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
+agglayer-telemetry = { path = "../agglayer-telemetry" }
 agglayer-types = { path = "../agglayer-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
 
@@ -23,10 +24,16 @@ mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion = "0.5.1"
+tokio = { workspace = true, features = ["full"] }
+tokio-util.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 rand.workspace = true
 rstest.workspace = true
 sp1-sdk.workspace = true
+
+agglayer-telemetry = { path = "../agglayer-telemetry" }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
+
 
 [[bench]]
 name = "latest_certificate_bench"

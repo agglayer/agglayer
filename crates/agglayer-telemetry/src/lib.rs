@@ -89,6 +89,21 @@ pub mod prover {
     }
 }
 
+pub mod storage {
+    use lazy_static::lazy_static;
+    use opentelemetry::global;
+
+    use crate::constant::AGGLAYER_STORAGE_OTEL_SCOPE_NAME;
+
+    lazy_static! {
+        pub static ref STORAGE_COUNTER: opentelemetry::metrics::Counter<u64> =
+            global::meter(AGGLAYER_STORAGE_OTEL_SCOPE_NAME)
+                .u64_counter("storage_test_counter")
+                .with_description("Number of write accesses to the storage")
+                .init();
+    }
+}
+
 pub struct ServerBuilder {}
 
 #[buildstructor::buildstructor]
