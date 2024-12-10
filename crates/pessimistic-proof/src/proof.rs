@@ -160,7 +160,7 @@ const EMPTY_LER: Digest = Digest(hex!(
 ));
 
 const EMPTY_PP_ROOT: Digest = Digest(hex!(
-    "2152f3808cb81b33b5a47a7a256d61ab9ea916c66030c405ca9b2aaad3b00f0a"
+    "c89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184"
 ));
 
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
@@ -256,8 +256,9 @@ mod tests {
 
         let ler = empty_state.exit_tree.get_root();
         let ppr = keccak256_combine([
-            empty_state.balance_tree.root,
-            empty_state.nullifier_tree.root,
+            empty_state.balance_tree.root.as_slice(),
+            empty_state.nullifier_tree.root.as_slice(),
+            empty_state.exit_tree.leaf_count.to_le_bytes().as_slice(),
         ]);
 
         assert_eq!(EMPTY_LER, ler);
