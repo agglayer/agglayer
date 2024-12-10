@@ -1,5 +1,4 @@
 use std::sync::Arc;
-
 use agglayer_types::{Certificate, LocalNetworkStateData, NetworkId};
 use pessimistic_proof::{generate_pessimistic_proof, keccak::digest::Digest, LocalNetworkState};
 use rstest::{fixture, rstest};
@@ -228,4 +227,121 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         &before_going_through_disk,
         &after_going_through_disk
     ));
+}
+
+use tokio::task::JoinHandle;
+use std::future::IntoFuture;
+use std::net::SocketAddr;
+use std::thread::sleep;
+use tokio_util::sync::CancellationToken;
+use agglayer_config::log::{LogLevel, LogOutput};
+use tokio::runtime::Runtime;
+
+
+struct MetricsContext {
+    pub handle: JoinHandle<Result<(), std::io::Error>>,
+    pub cancellation_token: CancellationToken,
+    // Need to keep runtime existing to keep the metrics server running
+   _runtime: Runtime,
+}
+
+#[fixture]
+fn metrics(
+    #[default("127.0.0.1:3000")]
+    prometheus_addr: SocketAddr
+) -> MetricsContext {
+    use agglayer_telemetry::ServerBuilder as MetricsBuilder;
+    use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
+    use tokio_util::sync::CancellationToken;
+
+    let cancellation_token = CancellationToken::new();
+
+    let layer = tracing_subscriber::fmt::layer()
+            .json()
+            .with_writer(LogOutput::Stdout.as_make_writer())
+            .with_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| LogLevel::Trace.into()))
+            .boxed();
+    tracing_subscriber::Registry::default().with(layer).init();
+
+    // Setup the metrics runtime
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .thread_name("metrics-runtime")
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("Unable to create metrics runtime");
+
+    // Create the metrics server.
+    let metric_server = runtime.block_on(
+        MetricsBuilder::builder()
+            .addr(prometheus_addr)
+            .cancellation_token(cancellation_token.clone())
+            .build(),
+    ).expect("Unable to create metrics server");
+
+    // Spawn the metrics server into the metrics runtime.
+    let metrics_handle = {
+        let _guard = runtime.enter();
+        // Spawn the metrics server
+        runtime.spawn(metric_server.into_future())
+    };
+
+    // Wait some time to let the metrics server start
+    std::thread::sleep(std::time::Duration::from_secs(5));
+
+    MetricsContext {
+        handle: metrics_handle,
+        cancellation_token,
+        _runtime: runtime,
+    }
+}
+
+fn metrics_shutdown(context: MetricsContext) {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("Unable to create current thread runtime")
+        .block_on(async {
+            context.cancellation_token.cancel();
+            // Wait for the metrics server to shut down.
+            let _ = context.handle.await;
+        });
+}
+
+
+
+#[rstest]
+fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: NetworkId,
+                                         store: StateStore,
+                                         #[from(metrics)] metrics_context: MetricsContext) {
+    use rand::RngCore;
+
+    // Initialize metrics monitoring
+    let mut lns = LocalNetworkStateData::default();
+
+    // Write and read some random data to generate storage metric events
+    for _ in 0..100 {
+        let mut data = [0u8; 32];
+        agglayer_telemetry::storage::STORAGE_COUNTER.add(1, &[]);
+        agglayer_telemetry::SEND_TX.add(1, &[]);
+        rand::thread_rng().fill_bytes(&mut data);
+        let leaves = (0..10).map(|_| Digest(data)).collect::<Vec<_>>();
+        for l in &leaves {
+            lns.exit_tree.add_leaf(*l).unwrap();
+        }
+        // store it
+        assert!(store
+            .write_local_network_state(&network_id, &lns, leaves.as_slice())
+            .is_ok());
+
+        // retrieve it
+        assert!(
+            matches!(store.read_local_network_state(network_id), Ok(Some(retrieved)) if equal_state(&lns, &retrieved))
+        );
+
+        sleep(std::time::Duration::from_millis(100));
+    }
+
+    metrics_shutdown(metrics_context);
+
 }
