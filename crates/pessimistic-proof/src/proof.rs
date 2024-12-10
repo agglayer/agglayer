@@ -160,7 +160,7 @@ const EMPTY_LER: Digest = Digest(hex!(
 ));
 
 const EMPTY_PP_ROOT: Digest = Digest(hex!(
-    "2152f3808cb81b33b5a47a7a256d61ab9ea916c66030c405ca9b2aaad3b00f0a"
+    "c89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184"
 ));
 
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
@@ -171,10 +171,15 @@ pub fn generate_pessimistic_proof(
 ) -> Result<PessimisticProofOutput, ProofError> {
     let StateCommitment {
         exit_root: prev_ler,
+        ler_leaf_count: prev_ler_leaf_count,
         balance_root: prev_lbr,
         nullifier_root: prev_nr,
     } = initial_network_state.roots();
-    let prev_pessimistic_root = keccak256_combine([prev_lbr, prev_nr]);
+    let prev_pessimistic_root = keccak256_combine([
+        prev_lbr.as_slice(),
+        prev_nr.as_slice(),
+        prev_ler_leaf_count.to_le_bytes().as_slice(),
+    ]);
 
     let consensus_hash = keccak256_combine([
         &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
@@ -182,8 +187,9 @@ pub fn generate_pessimistic_proof(
     ]);
 
     let new_pessimistic_root = keccak256_combine([
-        batch_header.target.balance_root,
-        batch_header.target.nullifier_root,
+        batch_header.target.balance_root.as_slice(),
+        batch_header.target.nullifier_root.as_slice(),
+        batch_header.target.ler_leaf_count.to_le_bytes().as_slice(),
     ]);
 
     let mut network_state = initial_network_state;
@@ -250,8 +256,9 @@ mod tests {
 
         let ler = empty_state.exit_tree.get_root();
         let ppr = keccak256_combine([
-            empty_state.balance_tree.root,
-            empty_state.nullifier_tree.root,
+            empty_state.balance_tree.root.as_slice(),
+            empty_state.nullifier_tree.root.as_slice(),
+            empty_state.exit_tree.leaf_count.to_le_bytes().as_slice(),
         ]);
 
         assert_eq!(EMPTY_LER, ler);
