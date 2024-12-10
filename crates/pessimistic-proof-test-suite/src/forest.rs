@@ -19,12 +19,11 @@ use reth_primitives::{Address, Signature, U256};
 use super::sample_data::{NETWORK_A, NETWORK_B};
 
 pub fn compute_signature_info(
+    wallet: &LocalWallet,
     new_local_exit_root: Digest,
     imported_bridge_exits: &[ImportedBridgeExit],
-) -> (Digest, Address, Signature) {
+) -> (Digest, Signature) {
     let combined_hash = signature_commitment(new_local_exit_root, imported_bridge_exits);
-    let wallet = LocalWallet::new(&mut thread_rng());
-    let signer = wallet.address();
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
     let signature = Signature {
         r: U256::from_limbs(signature.r.0),
@@ -32,7 +31,7 @@ pub fn compute_signature_info(
         odd_y_parity: signature.recovery_id().unwrap().is_y_odd(),
     };
 
-    (combined_hash, signer.0.into(), signature)
+    (combined_hash, signature)
 }
 
 /// Trees for the network B, as well as the LET for network A.
@@ -67,6 +66,7 @@ impl Forest {
 
         self
     }
+
     /// Create a new forest based on given initial balances.
     pub fn new(initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>) -> Self {
         Self::new_with_local_exit_tree(initial_balances, LocalExitTree::new())
@@ -178,15 +178,15 @@ impl Forest {
         &mut self,
         imported_bridge_events: &[(TokenInfo, U256)],
         bridge_events: &[(TokenInfo, U256)],
-    ) -> (Certificate, Address) {
+    ) -> Certificate {
         let prev_local_exit_root = self.state_b.exit_tree.get_root();
         let imported_bridge_exits = self.imported_bridge_exits(imported_bridge_events);
         let bridge_exits = self.bridge_exits(bridge_events);
         let new_local_exit_root = self.state_b.exit_tree.get_root();
-        let (_combined_hash, signer, signature) =
-            compute_signature_info(new_local_exit_root, &imported_bridge_exits);
+        let (_combined_hash, signature) =
+            compute_signature_info(&self.wallet, new_local_exit_root, &imported_bridge_exits);
 
-        let certificate = Certificate {
+        Certificate {
             network_id: *NETWORK_B,
             height: 0,
             prev_local_exit_root,
@@ -195,9 +195,11 @@ impl Forest {
             imported_bridge_exits,
             signature,
             metadata: Default::default(),
-        };
+        }
+    }
 
-        (certificate, signer)
+    pub fn get_signer(&self) -> Address {
+        self.wallet.address().0.into()
     }
 
     /// Check the current state corresponds to given proof output.

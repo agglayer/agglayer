@@ -1,95 +1,91 @@
 use std::time::Duration;
 
-use agglayer_config::log::LogLevel;
-use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::TempDBDir;
-use agglayer_types::{CertificateHeader, CertificateId, CertificateStatusError};
-use ethers::{signers::LocalWallet, utils::Anvil};
-use jsonrpsee::{core::client::ClientT, rpc_params, ws_client::WsClientBuilder};
+use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
+use fail::FailScenario;
+use jsonrpsee::{core::client::ClientT, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
-use tokio_util::sync::CancellationToken;
+
+mod common;
+
+use common::agglayer_setup::{get_signer, setup_agglayer};
 
 #[rstest]
-#[ignore = "ignore until signature"]
 #[tokio::test]
-#[timeout(Duration::from_secs(60))]
+#[timeout(Duration::from_secs(180))]
 async fn successfully_push_certificate() {
-    let anvil = Anvil::new().block_time(1u64).spawn();
     let tmp_dir = TempDBDir::new();
-    let mut config = agglayer_config::Config::new(&tmp_dir.path);
-    let prover_config = agglayer_config::prover::ProverConfig::default();
+    let scenario = FailScenario::setup();
 
-    // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::default();
-    let endpoint = prover_config.grpc_endpoint;
-    let cancellation = CancellationToken::new();
+    // L1 is a RAII guard
+    let (_handle, _l1, client) = setup_agglayer(&tmp_dir.path).await;
+    let signer = get_signer(0);
 
-    FakeProver::spawn_at(fake_prover, endpoint, cancellation.clone())
-        .await
-        .unwrap();
-
-    let account = anvil.keys().first().cloned().unwrap();
-
-    let mut rng = rand::thread_rng();
-    let (_key, uuid) = LocalWallet::encrypt_keystore(
-        &tmp_dir.path,
-        &mut rng,
-        account.to_bytes(),
-        "randpsswd",
-        None,
-    )
-    .unwrap();
-
-    let key_path = tmp_dir.path.join(uuid);
-
-    config.log.level = LogLevel::Debug;
-    config.l1.node_url = anvil.endpoint().parse().unwrap();
-    config.l1.ws_node_url = anvil.ws_endpoint().parse().unwrap();
-    config.auth = agglayer_config::AuthConfig::Local(agglayer_config::LocalConfig {
-        private_keys: vec![agglayer_config::PrivateKey {
-            path: key_path,
-            password: "randpsswd".into(),
-        }],
-    });
-
-    let config_file = tmp_dir.path.join("config.toml");
-    let toml = toml::to_string_pretty(&config).unwrap();
-    std::fs::write(&config_file, toml).unwrap();
-
-    let handle = std::thread::spawn(move || agglayer_node::main(config_file));
-    let url = format!("ws://{}/", config.rpc_addr());
-
-    let mut interval = tokio::time::interval(Duration::from_secs(10));
-    let mut max_attempts = 20;
-    let client = loop {
-        if max_attempts == 0 {
-            panic!("Failed to connect to the server");
-        }
-        interval.tick().await;
-        if let Ok(client) = WsClientBuilder::default().build(&url).await {
-            break client;
-        }
-
-        if handle.is_finished() {
-            let _result = handle.join();
-            panic!("Server has finished");
-        }
-
-        max_attempts -= 1;
-    };
-
-    assert!(!handle.is_finished());
-    let state = Forest::new(vec![]);
+    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
-    let (certificate, _signer) = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events(&[], &withdrawals);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
         .unwrap();
+
+    let mut status;
+    loop {
+        let response: CertificateHeader = client
+            .request("interop_getCertificateHeader", rpc_params![certificate_id])
+            .await
+            .unwrap();
+
+        status = response.status;
+
+        match status {
+            CertificateStatus::InError { .. } | CertificateStatus::Settled => {
+                break;
+            }
+            _ => {
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+            }
+        }
+    }
+
+    assert_eq!(status, CertificateStatus::Settled);
+
+    scenario.teardown();
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(180))]
+async fn failure_on_settlement_transaction_failed_status_0() {
+    let tmp_dir = TempDBDir::new();
+    let scenario = FailScenario::setup();
+
+    fail::cfg(
+        "notifier::packer::settle_certificate::receipt_future_ended::status_0",
+        "return",
+    )
+    .expect("Failed to configure failpoint");
+
+    // L1 is a RAII guard
+    let (_handle, _l1, client) = setup_agglayer(&tmp_dir.path).await;
+    let signer = get_signer(0);
+
+    let state = Forest::default().with_signer(signer);
+
+    let withdrawals = vec![];
+
+    let certificate = state.clone().apply_events(&[], &withdrawals);
+
+    let certificate_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate])
+        .await
+        .unwrap();
+
+    let mut status;
 
     loop {
         let response: CertificateHeader = client
@@ -97,26 +93,240 @@ async fn successfully_push_certificate() {
             .await
             .unwrap();
 
-        match response.status {
-            agglayer_types::CertificateStatus::Pending => {
-                println!("Certificate is pending");
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-            // In success the test is valid
-            agglayer_types::CertificateStatus::Proven => {
-                println!("Certificate is proven");
+        status = response.status;
+        match status {
+            CertificateStatus::InError { .. } | CertificateStatus::Settled => {
                 break;
             }
-
-            // We can't go further than that with the current test setup
-            // TODO: Add a way to generate valide certificate here
-            agglayer_types::CertificateStatus::InError {
-                error: CertificateStatusError::TrustedSequencerNotFound(_),
-            } => break,
-            agglayer_types::CertificateStatus::InError { error } => {
-                panic!("{}", error)
+            _ => {
+                tokio::time::sleep(Duration::from_millis(1000)).await;
             }
-            _ => break,
         }
     }
+
+    assert!(matches!(status, CertificateStatus::InError { .. }));
+
+    scenario.teardown();
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(180))]
+async fn failure_on_settlement_transaction_failed_no_receipt() {
+    let tmp_dir = TempDBDir::new();
+    let scenario = FailScenario::setup();
+
+    fail::cfg(
+        "notifier::packer::settle_certificate::receipt_future_ended::no_receipt",
+        "return",
+    )
+    .expect("Failed to configure failpoint");
+
+    // L1 is a RAII guard
+    let (_handle, _l1, client) = setup_agglayer(&tmp_dir.path).await;
+    let signer = get_signer(0);
+
+    let state = Forest::default().with_signer(signer);
+
+    let withdrawals = vec![];
+
+    let certificate = state.clone().apply_events(&[], &withdrawals);
+
+    let certificate_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate])
+        .await
+        .unwrap();
+
+    let mut status;
+
+    loop {
+        let response: CertificateHeader = client
+            .request("interop_getCertificateHeader", rpc_params![certificate_id])
+            .await
+            .unwrap();
+
+        status = response.status;
+        match status {
+            CertificateStatus::InError { .. } | CertificateStatus::Settled => {
+                break;
+            }
+            _ => {
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+            }
+        }
+    }
+
+    assert!(matches!(status, CertificateStatus::InError { .. }));
+
+    scenario.teardown();
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(180))]
+async fn retry_on_error() {
+    let tmp_dir = TempDBDir::new();
+    let scenario = FailScenario::setup();
+
+    fail::cfg(
+        "notifier::packer::settle_certificate::receipt_future_ended::no_receipt",
+        "return",
+    )
+    .expect("Failed to configure failpoint");
+
+    // L1 is a RAII guard
+    let (_handle, _l1, client) = setup_agglayer(&tmp_dir.path).await;
+    let signer = get_signer(0);
+
+    let state = Forest::default().with_signer(signer);
+
+    let withdrawals = vec![];
+
+    let certificate = state.clone().apply_events(&[], &withdrawals);
+
+    let certificate_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate.clone()])
+        .await
+        .unwrap();
+
+    let mut status;
+
+    loop {
+        let response: CertificateHeader = client
+            .request("interop_getCertificateHeader", rpc_params![certificate_id])
+            .await
+            .unwrap();
+
+        status = response.status;
+        match status {
+            CertificateStatus::InError { .. } | CertificateStatus::Settled => {
+                break;
+            }
+            _ => {
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+            }
+        }
+    }
+
+    assert!(matches!(status, CertificateStatus::InError { .. }));
+
+    fail::cfg(
+        "notifier::packer::settle_certificate::receipt_future_ended::no_receipt",
+        "off",
+    )
+    .expect("Failed to configure failpoint");
+    let certificate_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate])
+        .await
+        .unwrap();
+
+    let mut status;
+
+    loop {
+        let response: CertificateHeader = client
+            .request("interop_getCertificateHeader", rpc_params![certificate_id])
+            .await
+            .unwrap();
+
+        status = response.status;
+        match status {
+            CertificateStatus::InError { .. } | CertificateStatus::Settled => {
+                break;
+            }
+            _ => {
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+            }
+        }
+    }
+
+    assert!(matches!(status, CertificateStatus::Settled));
+
+    scenario.teardown();
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(180))]
+async fn schedule_two_certs() {
+    let tmp_dir = TempDBDir::new();
+    let scenario = FailScenario::setup();
+
+    // L1 is a RAII guard
+    let (_handle, _l1, client) = setup_agglayer(&tmp_dir.path).await;
+    let signer = get_signer(0);
+
+    let mut state = Forest::default().with_signer(signer);
+
+    let withdrawals = vec![];
+
+    let certificate_one = state.apply_events(&[], &withdrawals);
+    let mut certificate_two = state.apply_events(&[], &withdrawals);
+    certificate_two.height = 1;
+
+    let certificate_one_id: CertificateId = client
+        .request(
+            "interop_sendCertificate",
+            rpc_params![certificate_one.clone()],
+        )
+        .await
+        .unwrap();
+
+    let certificate_two_id: CertificateId = client
+        .request(
+            "interop_sendCertificate",
+            rpc_params![certificate_two.clone()],
+        )
+        .await
+        .unwrap();
+    let mut status;
+
+    loop {
+        let response: CertificateHeader = client
+            .request(
+                "interop_getCertificateHeader",
+                rpc_params![certificate_two_id],
+            )
+            .await
+            .unwrap();
+
+        status = response.status;
+        match status {
+            CertificateStatus::InError { .. } | CertificateStatus::Settled => {
+                break;
+            }
+            _ => {
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+            }
+        }
+    }
+
+    assert!(matches!(status, CertificateStatus::Settled));
+
+    let response_one: CertificateHeader = client
+        .request(
+            "interop_getCertificateHeader",
+            rpc_params![certificate_one_id],
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(response_one.status, CertificateStatus::Settled));
+    let epoch_number = response_one.epoch_number.unwrap();
+
+    let response_two: CertificateHeader = client
+        .request(
+            "interop_getCertificateHeader",
+            rpc_params![certificate_two_id],
+        )
+        .await
+        .unwrap();
+
+    println!("one: {:?}", response_one);
+    println!("two: {:?}", response_two);
+
+    assert!(
+        matches!(response_two.epoch_number, Some(epoch_number_two) if epoch_number < epoch_number_two)
+    );
+
+    scenario.teardown();
 }

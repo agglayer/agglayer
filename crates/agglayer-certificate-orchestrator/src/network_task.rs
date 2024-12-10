@@ -175,8 +175,6 @@ where
                     Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
                         warn!("Network {} is at capacity for the epoch {}", self.network_id, current_epoch);
                         return Ok(());
-
-
                     },
                     _ => {
                         self.at_capacity_for_epoch = false;
@@ -617,9 +615,12 @@ where
 mod tests {
     use std::{collections::VecDeque, sync::Mutex, time::Duration};
 
-    use agglayer_storage::tests::{
-        mocks::{MockPendingStore, MockStateStore},
-        TempDBDir,
+    use agglayer_storage::{
+        stores::{PendingCertificateReader, PendingCertificateWriter, StateWriter},
+        tests::{
+            mocks::{MockPendingStore, MockStateStore},
+            TempDBDir,
+        },
     };
     use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
     use mockall::predicate::{always, eq, in_iter};
@@ -782,6 +783,12 @@ mod tests {
 
                 Ok(Some(c))
             });
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(|_| Ok(None));
         state
             .expect_get_latest_settled_certificate_per_network()
             .once()
@@ -1187,6 +1194,11 @@ mod tests {
             });
 
         state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(|_| Ok(None));
+        state
             .expect_read_local_network_state()
             .returning(|_| Ok(Default::default()));
 
@@ -1497,7 +1509,8 @@ mod tests {
         let (sender, certificate_stream) = mpsc::channel(100);
 
         let mut forest = Forest::default();
-        let (certificate, _signer) = forest.apply_events(
+
+        let certificate = forest.apply_events(
             &[(*USDC, 10.try_into().unwrap())],
             &[(*USDC, 1.try_into().unwrap())],
         );
@@ -1512,8 +1525,7 @@ mod tests {
             .insert_certificate_header(&certificate, CertificateStatus::Pending)
             .expect("Failed to insert certificate header");
 
-        let (mut certificate, _signer) =
-            forest.apply_events(&[], &[(*USDC, 1.try_into().unwrap())]);
+        let mut certificate = forest.apply_events(&[], &[(*USDC, 1.try_into().unwrap())]);
         certificate.height = 1;
 
         storage

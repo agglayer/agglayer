@@ -158,6 +158,7 @@ impl Node {
                 .nonce_manager(address),
         );
 
+        tracing::debug!("RPC provider created");
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
                 PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
@@ -168,6 +169,7 @@ impl Node {
             )
             .await?,
         );
+        tracing::debug!("RollupManager created");
 
         let certifier_client = CertifierClient::try_new(
             config.prover_entrypoint.clone(),

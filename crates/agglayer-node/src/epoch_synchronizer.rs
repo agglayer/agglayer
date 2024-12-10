@@ -204,6 +204,7 @@ mod tests {
 
         let mut epochs_store = MockEpochsStore::new();
         let end_checkpoint = start_checkpoint.clone();
+
         epochs_store
             .expect_open()
             .once()

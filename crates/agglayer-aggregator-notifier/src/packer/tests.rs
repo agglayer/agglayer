@@ -57,7 +57,8 @@ async fn epoch_packer_can_settle_one_certificate() {
 
     let withdrawals = vec![];
 
-    let (certificate, signer) = state.clone().apply_events(&[], &withdrawals);
+    let signer = state.get_signer();
+    let certificate = state.clone().apply_events(&[], &withdrawals);
 
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let batch_header = state

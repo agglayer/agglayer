@@ -11,6 +11,7 @@ anyhow.workspace = true
 arc-swap.workspace = true
 bincode.workspace = true
 buildstructor.workspace = true
+parking_lot.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

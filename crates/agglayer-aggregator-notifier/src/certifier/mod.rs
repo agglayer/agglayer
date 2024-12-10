@@ -76,7 +76,6 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
             |_| {
-                debug!("Failing before verifying the proof");
                 let verifier = sp1_sdk::MockProver::new();
                 let (_, verifying_key) = verifier.setup(ELF);
 
@@ -223,6 +222,7 @@ where
             let Proof::SP1(ref proof_to_verify) = proof;
 
             debug!("Verifying the generated p-proof...");
+
             if let Err(error) = Self::verify_proof(verifier, &verifying_key, proof_to_verify) {
                 error!("Failed to verify the p-proof: {:?}", error);
 
