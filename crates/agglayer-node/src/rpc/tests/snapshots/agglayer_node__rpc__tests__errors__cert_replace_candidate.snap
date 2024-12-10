@@ -1,0 +1,15 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+assertion_line: 144
+expression: "SendCertificate { detail: \"Cannot replace an existing Candidate certificate\" }"
+snapshot_kind: text
+---
+{
+  "code": -10006,
+  "data": {
+    "send-certificate": {
+      "detail": "Cannot replace an existing Candidate certificate"
+    }
+  },
+  "message": "Cannot send certificate"
+}

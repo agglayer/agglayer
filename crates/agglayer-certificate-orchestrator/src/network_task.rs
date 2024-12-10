@@ -10,21 +10,26 @@ use agglayer_storage::{
 };
 use agglayer_types::Digest;
 use agglayer_types::{
-    Certificate, CertificateId, CertificateStatus, CertificateStatusError, Height,
-    LocalNetworkStateData, NetworkId,
+    Certificate, CertificateId, CertificateStatus, CertificateStatusError, LocalNetworkStateData,
+    NetworkId,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::{error::PreCertificationError, CertificationError, Certifier, CertifierOutput, Error};
+use crate::{
+    error::PreCertificationError, CertResponse, CertResponseSender, CertificationError, Certifier,
+    CertifierOutput, Error, InitialCheckError,
+};
 
-/// Message to notify the network task that a new certificate has been received.
-#[derive(Debug)]
-pub(crate) struct NewCertificate {
-    pub(crate) certificate_id: CertificateId,
-    pub(crate) height: Height,
-}
+mod certificate_processing;
+
+/// Maximum height distance of future pending certificates.
+const MAX_FUTURE_HEIGHT_DISTANCE: u64 = 5;
+
+type CertifierResult = Result<CertifierOutput, CertificationError>;
+type SettlementResult = Result<SettledCertificate, String>;
+type CertificationNotifier = mpsc::Sender<(oneshot::Sender<SettlementResult>, ProvenCertificate)>;
 
 /// Network task that is responsible to certify the certificates for a network.
 pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
@@ -36,21 +41,20 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     state_store: Arc<StateStore>,
     /// The certifier client to certify the certificates.
     certifier_client: Arc<CertifierClient>,
-    /// The local network state of the network task.
-    local_state: LocalNetworkStateData,
-    /// The sender to notify that a certificate has been proven.
-    certification_notifier: mpsc::Sender<(
-        oneshot::Sender<Result<SettledCertificate, String>>,
-        ProvenCertificate,
-    )>,
     /// The clock reference to subscribe to the epoch events and check for
     /// current epoch.
     clock_ref: ClockRef,
+    /// The local network state of the network task.
+    local_state: LocalNetworkStateData,
+    /// Handle to the task of the running certifier.
+    processing_task: certificate_processing::Manager,
+    /// The sender to notify that a certificate has been proven.
+    certification_notifier: CertificationNotifier,
     /// The pending local network state that should be applied on receiving
     /// settlement response.
     pending_state: Option<LocalNetworkStateData>,
     /// The stream of new certificates to certify.
-    certificate_stream: mpsc::Receiver<NewCertificate>,
+    certificate_stream: mpsc::Receiver<(Certificate, CertResponseSender)>,
     /// Flag to indicate if the network is at capacity for the current epoch.
     at_capacity_for_epoch: bool,
 }
@@ -67,13 +71,10 @@ where
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         certifier_client: Arc<CertifierClient>,
-        certification_notifier: mpsc::Sender<(
-            oneshot::Sender<Result<SettledCertificate, String>>,
-            ProvenCertificate,
-        )>,
+        certification_notifier: CertificationNotifier,
         clock_ref: ClockRef,
         network_id: NetworkId,
-        certificate_stream: mpsc::Receiver<NewCertificate>,
+        certificate_stream: mpsc::Receiver<(Certificate, CertResponseSender)>,
     ) -> Result<Self, Error> {
         info!("Creating a new network task for network {}", network_id);
 
@@ -92,6 +93,7 @@ where
             state_store,
             certifier_client,
             local_state,
+            processing_task: certificate_processing::Manager::new(),
             certification_notifier,
             clock_ref,
             pending_state: None,
@@ -148,46 +150,118 @@ where
         }
     }
 
+    fn accepts_certificates(&self) -> bool {
+        !self.at_capacity_for_epoch && !self.processing_task.is_running()
+    }
+
     async fn make_progress(
         &mut self,
         stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
         next_expected_height: &mut u64,
     ) -> Result<(), Error> {
-        let height = tokio::select! {
+        debug!("Waiting for an event to make progress");
+
+        tokio::select! {
             Ok(agglayer_clock::Event::EpochEnded(epoch)) = stream_epoch.recv() => {
-                info!("Received an epoch event: {}", epoch);
-
-                let current_epoch = self.clock_ref.current_epoch();
-                if epoch != 0 && epoch < (current_epoch - 1) {
-                    debug!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
-
-                    return Ok(());
-                }
-
-                self.at_capacity_for_epoch = false;
-                *next_expected_height
+                self.on_epoch_ended(epoch, next_expected_height)
             }
-            Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
-                info!(
-                    hash = certificate_id.to_string(),
-                    "Received a certificate event for {certificate_id} at height {height}"
-                );
 
-                if *next_expected_height != height {
-                    warn!(
-                        hash = certificate_id.to_string(),
-                        "Received a certificate event for the wrong height");
-
-                    return Ok(());
-                }
-
-                *next_expected_height
+            Some((certificate, response_sender)) = self.certificate_stream.recv() => {
+                self.on_receive_certificate(certificate, response_sender, next_expected_height)
             }
-            // Need to implement the cancellation token
-            // _ = cancellation_token.cancelled() => {
-            //     break;
-            // }
-        };
+
+            result = self.processing_task.join() => {
+                self.on_certifcate_processing_result(result, next_expected_height)
+            }
+        }
+    }
+
+    fn on_epoch_ended(&mut self, epoch: u64, next_expected_height: &mut u64) -> Result<(), Error> {
+        info!("Received an epoch event: {}", epoch);
+
+        let current_epoch = self.clock_ref.current_epoch();
+        if epoch != 0 && epoch < (current_epoch - 1) {
+            debug!(
+                "Received an epoch event for epoch {epoch} which is outdated, current epoch is \
+                 {current_epoch}"
+            );
+
+            return Ok(());
+        }
+
+        self.at_capacity_for_epoch = false;
+
+        self.pick_next_certificate(next_expected_height)
+    }
+
+    fn on_receive_certificate(
+        &mut self,
+        certificate: Certificate,
+        response_sender: CertResponseSender,
+        next_expected_height: &mut u64,
+    ) -> Result<(), Error> {
+        let certificate_id = certificate.hash();
+        let height = certificate.height;
+        info!(
+            hash = certificate_id.to_string(),
+            "Received a certificate event for {certificate_id} at height {height}"
+        );
+
+        let response = self.accept_certificate(&certificate, *next_expected_height);
+        let success = response.is_ok();
+
+        if let Err(err) = &response {
+            info!("Certificate initial processing error for {certificate_id}: {err}");
+        }
+
+        if let Err(response) = response_sender.send(response) {
+            warn!("Failed to send response ({response:?}) to {certificate_id}");
+        }
+
+        if success {
+            self.pick_next_certificate(next_expected_height)?;
+        }
+
+        Ok(())
+    }
+
+    fn on_certifcate_processing_result(
+        &mut self,
+        result: certificate_processing::JobResult,
+        next_expected_height: &mut u64,
+    ) -> Result<(), Error> {
+        use certificate_processing::JobResult as JR;
+
+        match result {
+            JR::Certification {
+                certificate_id,
+                result,
+            } => {
+                info!("Finished certification of {certificate_id}");
+                self.process_certification_result(result, certificate_id)?
+            }
+
+            JR::Settlement {
+                certificate,
+                result,
+            } => {
+                info!("Finished settlement of {}", certificate.hash());
+                self.process_settlement_result(result, certificate, next_expected_height)?;
+            }
+        }
+
+        self.pick_next_certificate(next_expected_height)
+    }
+
+    fn pick_next_certificate(&mut self, next_expected_height: &mut u64) -> Result<(), Error> {
+        if !self.accepts_certificates() {
+            return Ok(());
+        }
+
+        let height = *next_expected_height;
+
+        debug!("Checking the next certificate to process at height {height}");
+
         // Get the certificate the pending certificate for the network at the height
         let certificate = if let Some(certificate) = self
             .pending_store
@@ -211,6 +285,11 @@ where
 
                 return Ok(());
             };
+
+        debug!(
+            "Found certificate {certificate_id} with status {}",
+            header.status
+        );
 
         match header.status {
             CertificateStatus::Pending => {}
@@ -258,85 +337,114 @@ where
             height
         );
 
-        let result =
-            match self
-                .certifier_client
-                .certify(self.local_state.clone(), self.network_id, height)
-            {
-                Ok(certifier_task) => certifier_task.await,
+        match self
+            .certifier_client
+            .certify(self.local_state.clone(), self.network_id, height)
+        {
+            Ok(task) => self.processing_task.start_proving(certificate_id, task)?,
 
-                // If we received a `CertificateNotFound` error, it means that the certificate was
-                // not found in the pending store. This can happen if we try to
-                // certify a certificate that has not been received yet. When
-                // received, the certificate will be stored in the pending store and
-                // the certifier task will be spawned again.
-                Err(PreCertificationError::CertificateNotFound(_network_id, _height)) => {
-                    return Ok(());
-                }
+            // If we received a `CertificateNotFound` error, it means that the certificate was
+            // not found in the pending store. This can happen if we try to
+            // certify a certificate that has not been received yet. When
+            // received, the certificate will be stored in the pending store and
+            // the certifier task will be spawned again.
+            Err(PreCertificationError::CertificateNotFound(_network_id, _height)) => {}
 
-                Err(PreCertificationError::ProofAlreadyExists(
+            Err(PreCertificationError::ProofAlreadyExists(network_id, height, certificate_id)) => {
+                warn!(
+                    hash = certificate_id.to_string(),
+                    "Received a proof certification error for a proof that already exists for \
+                     network {} at height {}",
                     network_id,
+                    height
+                );
+            }
+            Err(PreCertificationError::Storage(error)) => {
+                warn!(
+                    hash = certificate_id.to_string(),
+                    "Received a storage error while trying to certify the certificate for network \
+                     {} at height {}: {:?}",
+                    self.network_id,
                     height,
-                    certificate_id,
-                )) => {
-                    warn!(
-                        hash = certificate_id.to_string(),
-                        "Received a proof certification error for a proof that already exists for \
-                         network {} at height {}",
-                        network_id,
-                        height
-                    );
+                    error
+                );
+            }
+        };
 
-                    return Ok(());
-                }
-                Err(PreCertificationError::Storage(error)) => {
-                    warn!(
-                        hash = certificate_id.to_string(),
-                        "Received a storage error while trying to certify the certificate for \
-                         network {} at height {}: {:?}",
-                        self.network_id,
-                        height,
-                        error
-                    );
+        Ok(())
+    }
 
-                    return Ok(());
+    /// Initial certificate checks.
+    ///
+    /// Performs a number of initial checks for the certificate. If these pass,
+    /// the certificate is recorded in persistent storage.
+    fn accept_certificate(&mut self, certificate: &Certificate, next_height: u64) -> CertResponse {
+        let height = certificate.height;
+        let network_id = certificate.network_id;
+
+        if height < next_height {
+            return Err(InitialCheckError::InPast {
+                height,
+                next_height,
+            });
+        }
+
+        let max_height = next_height + MAX_FUTURE_HEIGHT_DISTANCE;
+        if height > max_height {
+            return Err(InitialCheckError::FarFuture { height, max_height });
+        }
+
+        // TODO signature check + rate limit
+
+        let existing_header = self
+            .state_store
+            .get_certificate_header_by_cursor(network_id, height)?;
+
+        if let Some(existing_header) = existing_header {
+            use CertificateStatus as CS;
+
+            let status = existing_header.status;
+            match status {
+                CS::InError { error: _ } => (),
+                status @ (CS::Pending | CS::Proven | CS::Candidate | CS::Settled) => {
+                    return Err(InitialCheckError::IllegalReplacement { status });
                 }
-            };
+            }
+        }
+
+        // TODO: Batch the two queries.
+        // Insert the certificate header into the state store.
+        self.state_store
+            .insert_certificate_header(certificate, CertificateStatus::Pending)?;
+
+        // Insert the certificate into the pending store.
+        self.pending_store
+            .insert_pending_certificate(network_id, height, certificate)?;
+
+        Ok(())
+    }
+
+    fn process_certification_result(
+        &mut self,
+        result: CertifierResult,
+        certificate_id: CertificateId,
+    ) -> Result<(), Error> {
+        debug!(
+            "Processing certifier result: {:?}",
+            result.as_ref().map(|_| certificate_id)
+        );
 
         match result {
-            Ok(CertifierOutput {
-                height,
-                certificate,
-                new_state,
-                ..
-            }) => {
-                debug!(
-                    hash = certificate_id.to_string(),
-                    "Proof certification completed for {certificate_id} for network {}",
-                    self.network_id
-                );
-                if let Err(error) = self
-                    .on_proven_certificate(height, certificate, new_state)
-                    .await
-                {
+            Ok(proven_certificate) => {
+                if let Err(error) = self.handle_proven_certificate(proven_certificate) {
                     error!(
                         hash = certificate_id.to_string(),
-                        "Error during the certification process of {certificate_id} for network \
-                         {}: {:?}",
+                        "Error processing proven certificate {certificate_id} for network {}: {:?}",
                         self.network_id,
                         error
                     );
                     self.pending_state = None;
                     self.at_capacity_for_epoch = false;
-                } else {
-                    *next_expected_height += 1;
-                    self.at_capacity_for_epoch = true;
-
-                    debug!(
-                        hash = certificate_id.to_string(),
-                        "Certification process completed for {certificate_id} for network {}",
-                        self.network_id
-                    );
                 }
 
                 Ok(())
@@ -398,6 +506,7 @@ where
                             source
                         );
                         warn!(hash = certificate_id.to_string(), error);
+
                         CertificateStatusError::InternalError(error)
                     }
                     CertificationError::InternalError(error) => {
@@ -412,12 +521,13 @@ where
                     }
                 };
 
+                let status = CertificateStatus::InError { error };
+
+                debug!("Updating status of {certificate_id} to {status:?}");
+
                 if self
                     .state_store
-                    .update_certificate_header_status(
-                        &certificate_id,
-                        &CertificateStatus::InError { error },
-                    )
+                    .update_certificate_header_status(&certificate_id, &status)
                     .is_err()
                 {
                     error!(
@@ -466,13 +576,24 @@ where
     /// - We do not remove the pending certificate. (as it needs to be included
     ///   in an epoch)
     /// - We spawn the next certificate for the network.
-    async fn on_proven_certificate(
+    fn handle_proven_certificate(
         &mut self,
-        height: Height,
-        certificate: Certificate,
-        new_state: LocalNetworkStateData,
+        certifier_output: CertifierOutput,
     ) -> Result<(), Error> {
+        let CertifierOutput {
+            certificate,
+            height,
+            new_state,
+            network,
+        } = certifier_output;
+
         let certificate_id = certificate.hash();
+
+        debug!(
+            hash = certificate_id.to_string(),
+            "Proof certification completed for {certificate_id} for network {network}",
+        );
+
         if let Err(error) = self
             .pending_store
             .set_latest_proven_certificate_per_network(&self.network_id, &height, &certificate_id)
@@ -489,91 +610,106 @@ where
         {
             error!(
                 hash = certificate_id.to_string(),
-                "Failed to update the certificate header status: {:?}", error
+                "Failed to update the certificate header status: {error:?}",
             );
         }
 
         self.pending_state = Some(new_state);
 
-        let (sender, receiver) = oneshot::channel();
-
-        if self
-            .certification_notifier
-            .send((
-                sender,
-                ProvenCertificate(certificate_id, self.network_id, height),
-            ))
-            .await
-            .is_err()
+        if let Err(error) = self
+            .processing_task
+            .start_settlement(certificate, &self.certification_notifier)
         {
-            error!("Failed to send the proven certificate notification");
+            error!(
+                hash = certificate_id.to_string(),
+                "Failed to start settlement for {certificate_id}: {error}"
+            );
         }
 
-        if let Ok(result) = receiver.await {
-            match result {
-                Ok(SettledCertificate(certificate_id, _height, _epoch, _index)) => {
-                    info!(
-                        hash = certificate_id.to_string(),
-                        "Received a certificate settlement notification"
+        Ok(())
+    }
+
+    fn process_settlement_result(
+        &mut self,
+        result: SettlementResult,
+        certificate: Certificate,
+        next_expected_height: &mut u64,
+    ) -> Result<(), Error> {
+        match result {
+            Ok(SettledCertificate(certificate_id, _height, _epoch, _index)) => {
+                info!(
+                    hash = certificate_id.to_string(),
+                    "Received a certificate settlement notification"
+                );
+                if let Some(new) = self.pending_state.take() {
+                    debug!(
+                        "Updated the state for network {} with the new state {} > {}",
+                        self.network_id,
+                        self.local_state.get_roots().display_to_hex(),
+                        new.get_roots().display_to_hex()
                     );
-                    if let Some(new) = self.pending_state.take() {
-                        debug!(
-                            "Updated the state for network {} with the new state {} > {}",
-                            self.network_id,
-                            self.local_state.get_roots().display_to_hex(),
-                            new.get_roots().display_to_hex()
-                        );
 
-                        self.local_state = new;
+                    self.local_state = new;
 
-                        // Store the current state
-                        let new_leaves = certificate
-                            .bridge_exits
-                            .iter()
-                            .map(|exit| exit.hash())
-                            .collect::<Vec<Digest>>();
+                    // Store the current state
+                    let new_leaves = certificate
+                        .bridge_exits
+                        .iter()
+                        .map(|exit| exit.hash())
+                        .collect::<Vec<Digest>>();
 
-                        self.state_store
-                            .write_local_network_state(
-                                &certificate.network_id,
-                                &self.local_state,
-                                new_leaves.as_slice(),
-                            )
-                            .map_err(|e| Error::PersistenceError {
-                                certificate_id,
-                                error: e.to_string(),
-                            })?;
-                    } else {
-                        error!(
-                            "Missing pending state for network {} needed upon settlement, current \
-                             state: {}",
-                            self.network_id,
-                            self.local_state.get_roots().display_to_hex()
-                        );
-                    }
+                    self.state_store
+                        .write_local_network_state(
+                            &certificate.network_id,
+                            &self.local_state,
+                            new_leaves.as_slice(),
+                        )
+                        .map_err(|e| Error::PersistenceError {
+                            certificate_id,
+                            error: e.to_string(),
+                        })?;
+
+                    *next_expected_height += 1;
+
+                    self.at_capacity_for_epoch = true;
+
+                    debug!(
+                        hash = certificate_id.to_string(),
+                        "Certification process completed for {certificate_id} for network {}",
+                        self.network_id
+                    );
+                } else {
+                    error!(
+                        "Missing pending state for network {} needed upon settlement, current \
+                         state: {}",
+                        self.network_id,
+                        self.local_state.get_roots().display_to_hex()
+                    );
                 }
-                Err(error) => {
+            }
+            Err(error) => {
+                let certificate_id = certificate.hash();
+
+                error!(
+                    hash = certificate_id.to_string(),
+                    "Failed to settle the certificate: {}", error
+                );
+
+                if self
+                    .state_store
+                    .update_certificate_header_status(
+                        &certificate_id,
+                        &CertificateStatus::InError {
+                            error: CertificateStatusError::SettlementError(error.clone()),
+                        },
+                    )
+                    .is_err()
+                {
                     error!(
                         hash = certificate_id.to_string(),
-                        "Failed to settle the certificate: {}", error
+                        "Certificate {certificate_id} in error and failed to update the \
+                         certificate header status"
                     );
-
-                    if self
-                        .state_store
-                        .update_certificate_header_status(
-                            &certificate_id,
-                            &CertificateStatus::InError {
-                                error: CertificateStatusError::SettlementError(error.clone()),
-                            },
-                        )
-                        .is_err()
-                    {
-                        error!(
-                            hash = certificate_id.to_string(),
-                            "Certificate {certificate_id} in error and failed to update the \
-                             certificate header status"
-                        );
-                    }
 
                     return Err(Error::SettlementError {
                         certificate_id,
@@ -592,6 +728,7 @@ mod tests {
     use std::{collections::VecDeque, sync::Mutex, time::Duration};
 
     use agglayer_storage::tests::mocks::{MockPendingStore, MockStateStore};
+    use agglayer_types::CertificateHeader;
     use mockall::predicate::{always, eq};
     use rstest::rstest;
 
@@ -599,7 +736,7 @@ mod tests {
     use crate::tests::{clock, mocks::MockCertifier};
 
     #[rstest]
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     #[timeout(Duration::from_secs(1))]
     async fn start_from_zero() {
         let mut pending = MockPendingStore::new();
@@ -612,6 +749,31 @@ mod tests {
 
         let certificate = Certificate::new_for_test(network_id, 0);
         let certificate_id = certificate.hash();
+
+        state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(0))
+            .returning(|_, _| Ok(None));
+
+        state
+            .expect_insert_certificate_header()
+            .once()
+            .returning(|_, _| Ok(()));
+
+        state
+            .expect_read_local_network_state()
+            .returning(|_| Ok(Default::default()));
+
+        state
+            .expect_write_local_network_state()
+            .returning(|_, _, _| Ok(()));
+
+        pending
+            .expect_insert_pending_certificate()
+            .once()
+            .returning(|_, _, _| Ok(()));
+
         pending
             .expect_get_certificate()
             .once()
@@ -655,14 +817,6 @@ mod tests {
                 }))
             });
 
-        state
-            .expect_read_local_network_state()
-            .returning(|_| Ok(Default::default()));
-
-        state
-            .expect_write_local_network_state()
-            .returning(|_, _, _| Ok(()));
-
         pending
             .expect_set_latest_proven_certificate_per_network()
             .once()
@@ -688,11 +842,9 @@ mod tests {
         let mut epochs = task.clock_ref.subscribe().unwrap();
         let mut next_expected_height = 0;
 
+        let (reply_sx, reply_rx) = oneshot::channel();
         let _ = sender
-            .send(NewCertificate {
-                certificate_id,
-                height: 0,
-            })
+            .send((Certificate::new_for_test(network_id, 0), reply_sx))
             .await;
 
         tokio::spawn(async move {
@@ -701,15 +853,26 @@ mod tests {
             _ = sender.send(Ok(SettledCertificate(cert.0, cert.2, 0, 0)));
         });
 
+        // Initial certificate processing + pass it to the certifier.
         task.make_progress(&mut epochs, &mut next_expected_height)
             .await
             .unwrap();
+
+        assert_eq!(next_expected_height, 0);
+        assert!(reply_rx.await.unwrap().is_ok());
+
+        // Process the result of the certifier (two steps).
+        for _ in 1..3 {
+            task.make_progress(&mut epochs, &mut next_expected_height)
+                .await
+                .unwrap();
+        }
 
         assert_eq!(next_expected_height, 1);
     }
 
     #[rstest]
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     #[timeout(Duration::from_secs(1))]
     async fn one_per_epoch() {
         let mut pending = MockPendingStore::new();
@@ -724,6 +887,36 @@ mod tests {
         let certificate2 = Certificate::new_for_test(network_id, 1);
         let certificate_id = certificate.hash();
         let certificate_id2 = certificate2.hash();
+
+        state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(0))
+            .returning(|_, _| Ok(None));
+
+        state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(1))
+            .returning(|_, _| Ok(None));
+
+        state
+            .expect_insert_certificate_header()
+            .times(2)
+            .returning(|_, _| Ok(()));
+
+        state
+            .expect_read_local_network_state()
+            .returning(|_| Ok(Default::default()));
+
+        state
+            .expect_write_local_network_state()
+            .returning(|_, _, _| Ok(()));
+
+        pending
+            .expect_insert_pending_certificate()
+            .times(2)
+            .returning(|_, _, _| Ok(()));
 
         pending
             .expect_get_certificate()
@@ -792,14 +985,6 @@ mod tests {
                 }))
             });
 
-        state
-            .expect_read_local_network_state()
-            .returning(|_| Ok(Default::default()));
-
-        state
-            .expect_write_local_network_state()
-            .returning(|_, _, _| Ok(()));
-
         certifier
             .expect_certify()
             .never()
@@ -841,19 +1026,15 @@ mod tests {
         let mut epochs = task.clock_ref.subscribe().unwrap();
         let mut next_expected_height = 0;
 
+        let (reply0_sx, reply0_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id,
-                height: 0,
-            })
+            .send((Certificate::new_for_test(network_id, 0), reply0_sx))
             .await
             .expect("Failed to send the certificate");
 
+        let (reply1_sx, mut reply1_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id: certificate_id2,
-                height: 1,
-            })
+            .send((Certificate::new_for_test(network_id, 1), reply1_sx))
             .await
             .expect("Failed to send the certificate");
 
@@ -869,6 +1050,15 @@ mod tests {
             .await
             .unwrap();
 
+        assert_eq!(next_expected_height, 0);
+        assert!(reply0_rx.await.unwrap().is_ok());
+
+        for _ in 0..3 {
+            task.make_progress(&mut epochs, &mut next_expected_height)
+                .await
+                .unwrap();
+        }
+
         assert_eq!(next_expected_height, 1);
 
         tokio::time::timeout(
@@ -879,6 +1069,8 @@ mod tests {
         .expect_err("Should have timed out");
 
         assert_eq!(next_expected_height, 1);
+
+        assert!(reply1_rx.try_recv().is_ok());
     }
 
     #[rstest]
@@ -904,6 +1096,22 @@ mod tests {
         certs.push_back(certificate.clone());
         certs.push_back(certificate2.clone());
         let certs = Arc::new(Mutex::new(certs));
+
+        state
+            .expect_get_certificate_header_by_cursor()
+            .times(2)
+            .with(eq(network_id), eq(0))
+            .returning(move |_network_id, _height| Ok(None));
+
+        state
+            .expect_insert_certificate_header()
+            .times(2)
+            .returning(|_cert, _status| Ok(()));
+
+        pending
+            .expect_insert_pending_certificate()
+            .times(2)
+            .returning(|_net, _ht, _cert| Ok(()));
 
         pending
             .expect_get_certificate()
@@ -992,17 +1200,20 @@ mod tests {
             .expect_certify()
             .never()
             .with(always(), eq(network_id), eq(1))
-            .return_once(move |new_state, network_id, _height| {
-                Ok(Box::pin(async move {
-                    let result = crate::CertifierOutput {
-                        certificate: certificate2,
-                        height: 1,
-                        new_state,
-                        network: network_id,
-                    };
+            .return_once({
+                let certificate = certificate2.clone();
+                move |new_state, network_id, _height| {
+                    Ok(Box::pin(async move {
+                        let result = crate::CertifierOutput {
+                            certificate,
+                            height: 1,
+                            new_state,
+                            network: network_id,
+                        };
 
-                    Ok(result)
-                }))
+                        Ok(result)
+                    }))
+                }
             });
         pending
             .expect_set_latest_proven_certificate_per_network()
@@ -1049,19 +1260,15 @@ mod tests {
         let mut epochs = task.clock_ref.subscribe().unwrap();
         let mut next_expected_height = 0;
 
+        let (reply_tx, reply_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id,
-                height: 0,
-            })
+            .send((certificate, reply_tx))
             .await
             .expect("Failed to send the certificate");
 
+        let (reply2_tx, reply2_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id: certificate_id2,
-                height: 0,
-            })
+            .send((certificate2, reply2_tx))
             .await
             .expect("Failed to send the certificate");
 
@@ -1080,21 +1287,20 @@ mod tests {
             }
         });
 
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
-
-        assert_eq!(next_expected_height, 0);
-
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
+        for _ in 0..6 {
+            assert_eq!(next_expected_height, 0);
+            task.make_progress(&mut epochs, &mut next_expected_height)
+                .await
+                .unwrap();
+        }
 
         assert_eq!(next_expected_height, 1);
+        assert!(reply_rx.await.is_ok());
+        assert!(reply2_rx.await.is_ok());
     }
 
     #[rstest]
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     #[timeout(Duration::from_secs(1))]
     async fn changing_epoch_triggers_certify() {
         let mut pending = MockPendingStore::new();
@@ -1109,6 +1315,26 @@ mod tests {
         let certificate2 = Certificate::new_for_test(network_id, 1);
         let certificate_id = certificate.hash();
         let certificate_id2 = certificate2.hash();
+
+        state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(0))
+            .returning(|_, _| Ok(None));
+
+        state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(1))
+            .returning(|_, _| Ok(None));
+
+        state
+            .expect_insert_certificate_header()
+            .returning(|_, _| Ok(()));
+
+        pending
+            .expect_insert_pending_certificate()
+            .returning(|_, _, _| Ok(()));
 
         pending
             .expect_get_certificate()
@@ -1240,19 +1466,15 @@ mod tests {
         let mut epochs = task.clock_ref.subscribe().unwrap();
         let mut next_expected_height = 0;
 
+        let (reply0_sx, reply0_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id,
-                height: 0,
-            })
+            .send((Certificate::new_for_test(network_id, 0), reply0_sx))
             .await
             .expect("Failed to send the certificate");
 
+        let (reply1_sx, reply1_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id: certificate_id2,
-                height: 1,
-            })
+            .send((Certificate::new_for_test(network_id, 1), reply1_sx))
             .await
             .expect("Failed to send the certificate");
 
@@ -1274,6 +1496,14 @@ mod tests {
             .await
             .unwrap();
 
+        assert_eq!(next_expected_height, 0);
+
+        for _ in 0..3 {
+            task.make_progress(&mut epochs, &mut next_expected_height)
+                .await
+                .unwrap();
+        }
+
         assert_eq!(next_expected_height, 1);
 
         tokio::time::timeout(
@@ -1290,15 +1520,150 @@ mod tests {
             .send(agglayer_clock::Event::EpochEnded(0))
             .expect("Failed to send");
 
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
+        for _ in 0..3 {
+            task.make_progress(&mut epochs, &mut next_expected_height)
+                .await
+                .unwrap();
+        }
 
         assert_eq!(next_expected_height, 2);
+
+        assert!(reply0_rx.await.unwrap().is_ok());
+        assert!(reply1_rx.await.unwrap().is_ok());
+    }
+
+    const fn dummy_cert_header(
+        network_id: NetworkId,
+        height: u64,
+        status: CertificateStatus,
+    ) -> CertificateHeader {
+        CertificateHeader {
+            network_id,
+            height,
+            epoch_number: None,
+            certificate_index: None,
+            certificate_id: Digest([0xab; 32]),
+            prev_local_exit_root: Digest([0xbc; 32]),
+            new_local_exit_root: Digest([0xcd; 32]),
+            metadata: Digest([0xef; 32]),
+            status,
+        }
     }
 
     #[rstest]
-    #[tokio::test]
+    #[case(None)]
+    #[case(Some(dummy_cert_header(1.into(), 0, CertificateStatus::InError {
+        error: CertificateStatusError::TrustedSequencerNotFound(1.into())
+    })))]
+    #[case(Some(dummy_cert_header(1.into(), 0, CertificateStatus::InError {
+        error: CertificateStatusError::ProofVerificationFailed(
+            agglayer_types::ProofVerificationError::InvalidPublicValues
+        )
+    })))]
+    #[test_log::test(tokio::test)]
+    #[timeout(Duration::from_secs(1))]
+    async fn process_certificate_ok(#[case] existing_cert_header: Option<CertificateHeader>) {
+        let mut pending = MockPendingStore::new();
+        let mut state = MockStateStore::new();
+        let certifier = MockCertifier::new();
+        let (certification_notifier, mut _receiver) = mpsc::channel(1);
+        let clock_ref = clock();
+        let network_id = 1.into();
+        let (_sender, certificate_stream) = mpsc::channel(100);
+
+        state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(0))
+            .returning(move |_network_id, _height| Ok(existing_cert_header.clone()));
+
+        state
+            .expect_read_local_network_state()
+            .returning(|_| Ok(Default::default()));
+
+        state
+            .expect_insert_certificate_header()
+            .once()
+            .returning(|_cert, _status| Ok(()));
+
+        pending
+            .expect_insert_pending_certificate()
+            .once()
+            .returning(|_net, _ht, _cert| Ok(()));
+
+        state
+            .expect_write_local_network_state()
+            .returning(|_, _, _| Ok(()));
+
+        let mut task = NetworkTask::new(
+            Arc::new(pending),
+            Arc::new(state),
+            Arc::new(certifier),
+            certification_notifier,
+            clock_ref.clone(),
+            network_id,
+            certificate_stream,
+        )
+        .expect("Failed to create a new network task");
+
+        let certificate = Certificate::new_for_test(network_id, 0);
+        let result = task.accept_certificate(&certificate, 0);
+        assert!(result.is_ok());
+    }
+
+    #[rstest]
+    #[case(CertificateStatus::Proven)]
+    #[case(CertificateStatus::Pending)]
+    #[case(CertificateStatus::Candidate)]
+    #[case(CertificateStatus::Settled)]
+    #[test_log::test(tokio::test)]
+    #[timeout(Duration::from_secs(1))]
+    async fn replace_certificate_illegally(#[case] cur_cert_status: CertificateStatus) {
+        let pending = MockPendingStore::new();
+        let mut state = MockStateStore::new();
+        let certifier = MockCertifier::new();
+        let (certification_notifier, mut _receiver) = mpsc::channel(1);
+        let clock_ref = clock();
+        let network_id = 1.into();
+        let (_sender, certificate_stream) = mpsc::channel(100);
+
+        state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(0))
+            .returning(move |network_id, height| {
+                Ok(Some(dummy_cert_header(
+                    network_id,
+                    height,
+                    cur_cert_status.clone(),
+                )))
+            });
+
+        state
+            .expect_read_local_network_state()
+            .returning(|_| Ok(Default::default()));
+
+        let mut task = NetworkTask::new(
+            Arc::new(pending),
+            Arc::new(state),
+            Arc::new(certifier),
+            certification_notifier,
+            clock_ref.clone(),
+            network_id,
+            certificate_stream,
+        )
+        .expect("Failed to create a new network task");
+
+        let certificate = Certificate::new_for_test(network_id, 0);
+        let result = task.accept_certificate(&certificate, 0);
+        assert!(matches!(
+            result.unwrap_err(),
+            InitialCheckError::IllegalReplacement { .. }
+        ));
+    }
+
+    #[rstest]
+    #[test_log::test(tokio::test)]
     #[timeout(Duration::from_secs(1))]
     async fn timeout_certifier() {
         let mut pending = MockPendingStore::new();
@@ -1312,9 +1677,25 @@ mod tests {
         let certificate = Certificate::new_for_test(network_id, 0);
         let certificate_id = certificate.hash();
 
+        state
+            .expect_get_certificate_header_by_cursor()
+            .once()
+            .with(eq(network_id), eq(0))
+            .returning(move |_network_id, _height| Ok(None));
+
+        state
+            .expect_insert_certificate_header()
+            .once()
+            .returning(|_cert, _status| Ok(()));
+
+        pending
+            .expect_insert_pending_certificate()
+            .once()
+            .returning(|_net, _ht, _cert| Ok(()));
+
         pending
             .expect_get_certificate()
-            .once()
+            .times(2)
             .with(eq(network_id), eq(0))
             .returning(|network_id, height| {
                 Ok(Some(Certificate::new_for_test(network_id, height)))
@@ -1324,18 +1705,26 @@ mod tests {
             .expect_get_certificate_header()
             .once()
             .with(eq(certificate_id))
-            .returning(|certificate_id| {
-                Ok(Some(agglayer_types::CertificateHeader {
-                    network_id: 1.into(),
-                    height: 0,
-                    epoch_number: None,
-                    certificate_index: None,
-                    certificate_id: *certificate_id,
-                    prev_local_exit_root: [1; 32].into(),
-                    new_local_exit_root: [0; 32].into(),
-                    metadata: [0; 32].into(),
-                    status: CertificateStatus::Pending,
-                }))
+            .returning(move |_id| {
+                Ok(Some(dummy_cert_header(
+                    network_id,
+                    0,
+                    CertificateStatus::Pending,
+                )))
+            });
+
+        state
+            .expect_get_certificate_header()
+            .once()
+            .with(eq(certificate_id))
+            .returning(move |_id| {
+                Ok(Some(dummy_cert_header(
+                    network_id,
+                    0,
+                    CertificateStatus::InError {
+                        error: CertificateStatusError::InternalError("foo".into()),
+                    },
+                )))
             });
 
         certifier
@@ -1382,11 +1771,9 @@ mod tests {
         let mut epochs = task.clock_ref.subscribe().unwrap();
         let mut next_expected_height = 0;
 
+        let (reply_sx, reply_rx) = oneshot::channel();
         sender
-            .send(NewCertificate {
-                certificate_id,
-                height: 0,
-            })
+            .send((certificate, reply_sx))
             .await
             .expect("Failed to send the certificate");
 
@@ -1403,5 +1790,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(next_expected_height, 0);
+
+        task.make_progress(&mut epochs, &mut next_expected_height)
+            .await
+            .unwrap();
+
+        assert_eq!(next_expected_height, 0);
+        assert!(reply_rx.await.unwrap().is_ok());
     }
 }
