@@ -46,12 +46,11 @@ pub fn main(cfg: PathBuf) -> Result<()> {
         .build()?;
 
     // Create the metrics server.
-    let metric_server = metrics_runtime.block_on(
-        MetricsBuilder::builder()
-            .addr(config.telemetry.addr)
-            .cancellation_token(global_cancellation_token.clone())
-            .build(),
-    )?;
+    let metric_server = metrics_runtime.block_on(MetricsBuilder::serve(
+        config.telemetry.addr,
+        None,
+        global_cancellation_token.clone(),
+    ))?;
 
     // Spawn the metrics server into the metrics runtime.
     let metrics_handle = {
@@ -65,12 +64,10 @@ pub fn main(cfg: PathBuf) -> Result<()> {
     };
 
     // Spawn the node.
-    let node = node_runtime.block_on(
-        Prover::builder()
-            .config(config.clone())
-            .cancellation_token(global_cancellation_token.clone())
-            .start(),
-    )?;
+    let node = node_runtime.block_on(Prover::start(
+        config.clone(),
+        global_cancellation_token.clone(),
+    ))?;
 
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -103,10 +100,7 @@ pub fn get_vkey() -> String {
 #[cfg(feature = "testutils")]
 #[tokio::main]
 pub async fn start_prover(config: Arc<ProverConfig>, global_cancellation_token: CancellationToken) {
-    let prover = Prover::builder()
-        .config(config)
-        .cancellation_token(global_cancellation_token)
-        .start()
+    let prover = Prover::start(config, global_cancellation_token)
         .await
         .unwrap();
     prover.await_shutdown().await;
