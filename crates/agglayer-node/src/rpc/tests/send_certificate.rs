@@ -93,7 +93,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
     let res: Result<(), _> = client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::default()],
+            rpc_params![Certificate::new_for_test(0.into(), 0)],
         )
         .await;
 
