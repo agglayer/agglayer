@@ -386,4 +386,100 @@ mod tests {
 
         assert_eq!(state_store.get_latest_settled_epoch().unwrap(), Some(14));
     }
+
+    #[test_log::test(tokio::test)]
+    async fn current_epoch_should_be_open() {
+        let tmp = TempDBDir::new();
+        let config = Arc::new(Config::new(&tmp.path));
+        let state_store =
+            Arc::new(StateStore::new_with_path(&config.storage.state_db_path).unwrap());
+        let pending_store =
+            Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+
+        let epochs_store = Arc::new(
+            EpochsStore::new(
+                config.clone(),
+                15,
+                pending_store.clone(),
+                state_store.clone(),
+            )
+            .unwrap(),
+        );
+
+        let start_checkpoint = BTreeMap::new();
+
+        let network_1 = 1.into();
+        let network_2 = 2.into();
+
+        let epoch_10 = epochs_store
+            .open_with_start_checkpoint(10, start_checkpoint.clone())
+            .unwrap();
+        let certificate_1 = Certificate::new_for_test(network_1, 0);
+        let certificate_2 = Certificate::new_for_test(network_2, 0);
+        pending_store
+            .insert_pending_certificate(network_1, 0, &certificate_1)
+            .unwrap();
+        pending_store
+            .insert_generated_proof(&certificate_1.hash(), &Proof::new_for_test())
+            .unwrap();
+
+        pending_store
+            .insert_pending_certificate(network_2, 0, &certificate_2)
+            .unwrap();
+        pending_store
+            .insert_generated_proof(&certificate_2.hash(), &Proof::new_for_test())
+            .unwrap();
+
+        epoch_10.add_certificate(network_1, 0).unwrap();
+        epoch_10.add_certificate(network_2, 0).unwrap();
+
+        let mut expected_end_checkpoint = BTreeMap::new();
+
+        expected_end_checkpoint.insert(network_1, 0);
+        expected_end_checkpoint.insert(network_2, 0);
+
+        let path_15 = config.storage.epochs_db_path.join("15");
+        let epoch_15 =
+            agglayer_storage::storage::DB::open_cf(&path_15, epochs_db_cf_definitions()).unwrap();
+
+        let mut expected_end_checkpoint_15 = expected_end_checkpoint.clone();
+
+        expected_end_checkpoint_15
+            .entry(network_1)
+            .and_modify(|e| *e += 1);
+
+        epoch_15
+            .multi_insert::<EndCheckpointColumn>(&expected_end_checkpoint_15)
+            .unwrap();
+
+        drop(epoch_15);
+        drop(epoch_10);
+        state_store.set_latest_settled_epoch(10).unwrap();
+
+        let (sender, _receiver) = tokio::sync::broadcast::channel(1);
+        let current_block = AtomicU64::new(15);
+        let clock_ref = ClockRef::new(
+            sender,
+            Arc::new(current_block),
+            Arc::new(NonZeroU64::new(1).unwrap()),
+        );
+
+        let result = EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref)
+            .await
+            .unwrap();
+
+        assert_eq!(result.get_epoch_number(), 15);
+
+        drop(result);
+        let epoch_15 = epochs_store.open(15).unwrap();
+        assert_eq!(epoch_15.get_epoch_number(), 15);
+        assert_eq!(epoch_15.get_start_checkpoint(), &expected_end_checkpoint);
+        assert_eq!(epoch_15.get_end_checkpoint(), expected_end_checkpoint_15);
+        assert!(!epoch_15.is_epoch_packed());
+
+        let epoch_14 = epochs_store.open(14).unwrap();
+        assert!(epoch_14.is_epoch_packed());
+
+        assert_eq!(state_store.get_latest_settled_epoch().unwrap(), Some(14));
+    }
 }

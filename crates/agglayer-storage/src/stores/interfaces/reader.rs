@@ -105,4 +105,6 @@ pub trait PerEpochReader: Send + Sync {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<Height>, Error>;
+
+    fn is_epoch_packed(&self) -> bool;
 }
