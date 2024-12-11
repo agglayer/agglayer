@@ -10,9 +10,10 @@ ethers.workspace = true
 ethers-contract = "2.0.14"
 reth-primitives.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full"] }
+mockall.workspace = true
 
 [build-dependencies]
 ethers-contract = "2.0.14"

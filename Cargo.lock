@@ -85,6 +85,7 @@ dependencies = [
  "futures",
  "hex",
  "mockall",
+ "mockall_double",
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
  "reth-primitives",
@@ -173,6 +174,7 @@ dependencies = [
  "async-trait",
  "ethers",
  "ethers-contract",
+ "mockall",
  "reth-primitives",
  "thiserror 1.0.69",
  "tokio",
@@ -4943,7 +4945,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -5142,6 +5144,18 @@ name = "mockall_derive"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25ca3004c2efe9011bd4e461bd8256445052b9615405b4f7ea43fc8ca5c20898"
+dependencies = [
+ "cfg-if",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.89",
+]
+
+[[package]]
+name = "mockall_double"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1ca96e5ac35256ae3e13536edd39b172b88f41615e1d7b653c8ad24524113e8"
 dependencies = [
  "cfg-if",
  "proc-macro2",
