@@ -31,32 +31,32 @@ lazy_static! {
     pub static ref SEND_TX: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_RPC_OTEL_SCOPE_NAME)
         .u64_counter("send_tx")
         .with_description("Number of transactions received on the RPC")
-        .init();
+        .build();
 
     pub static ref VERIFY_ZKP: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("verify_zkp")
         .with_description("Number of ZKP verifications")
-        .init();
+        .build();
 
     pub static ref VERIFY_SIGNATURE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("verify_signature")
         .with_description("Number of signature verifications")
-        .init();
+        .build();
 
     pub static ref CHECK_TX: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("check_tx")
         .with_description("Number of transactions checked")
-        .init();
+        .build();
 
     pub static ref EXECUTE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("execute")
         .with_description("Number of transactions executed")
-        .init();
+        .build();
 
     pub static ref SETTLE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("settle")
         .with_description("Number of transactions settled")
-        .init();
+        .build();
 }
 
 pub mod prover {
@@ -70,22 +70,22 @@ pub mod prover {
             global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
                 .u64_counter("proving_request_recv")
                 .with_description("Number of proving request received")
-                .init();
+                .build();
         pub static ref PROVING_REQUEST_SUCCEEDED: opentelemetry::metrics::Counter<u64> =
             global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
                 .u64_counter("proving_request_succeeded")
                 .with_description("Number of proving request that succeeded")
-                .init();
+                .build();
         pub static ref PROVING_REQUEST_FAILED: opentelemetry::metrics::Counter<u64> =
             global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
                 .u64_counter("proving_request_failed")
                 .with_description("Number of proving request that failed")
-                .init();
+                .build();
         pub static ref PROVING_FALLBACK_TRIGGERED: opentelemetry::metrics::Counter<u64> =
             global::meter(AGGLAYER_PROVER_RPC_OTEL_SCOPE_NAME)
                 .u64_counter("proving_fallback_triggered")
                 .with_description("Number of proving fallback triggered")
-                .init();
+                .build();
     }
 }
 
@@ -95,22 +95,33 @@ pub mod storage {
 
     use crate::constant::AGGLAYER_STORAGE_OTEL_SCOPE_NAME;
 
+    const SMT_TIME_BOUNDARIES_MS: [f64; 16] = [0., 0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0];
+    const SMT_WRITE_COUNT_BOUNDARIES: [f64; 16] = [
+        0., 1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
+
+    ];
+
     lazy_static! {
         pub static ref STORAGE_SMT_WRITE_TIME: opentelemetry::metrics::Histogram<f64> =
             global::meter(AGGLAYER_STORAGE_OTEL_SCOPE_NAME)
                 .f64_histogram("storage_smt_write_time")
                 .with_description("write_smt execution time in milliseconds")
-                .init();
+                .with_boundaries(SMT_TIME_BOUNDARIES_MS.to_vec())
+                .with_unit("ms")
+                .build();
         pub static ref STORAGE_SMT_WRITE_ITEMS_COUNT: opentelemetry::metrics::Histogram<u64> =
             global::meter(AGGLAYER_STORAGE_OTEL_SCOPE_NAME)
                 .u64_histogram("storage_smt_write_items_count")
                 .with_description("write_smt number of items written per call")
-                .init();
+                .with_boundaries(SMT_WRITE_COUNT_BOUNDARIES.to_vec())
+                .build();
         pub static ref STORAGE_SMT_READ_TIME: opentelemetry::metrics::Histogram<f64> =
             global::meter(AGGLAYER_STORAGE_OTEL_SCOPE_NAME)
                 .f64_histogram("storage_smt_read_time")
                 .with_description("read_smt execution time in milliseconds")
-                .init();
+                .with_unit("ms")
+                .with_boundaries(SMT_TIME_BOUNDARIES_MS.to_vec())
+                .build();
     }
 }
 
