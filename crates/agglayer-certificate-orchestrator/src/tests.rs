@@ -52,9 +52,13 @@ pub(crate) struct DummyPendingStore {
     pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
     pub(crate) latest_proven_certificate_per_network:
         RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
+    pub(crate) is_packed: bool,
 }
 
 impl PerEpochReader for DummyPendingStore {
+    fn is_epoch_packed(&self) -> bool {
+        self.is_packed
+    }
     fn get_epoch_number(&self) -> u64 {
         self.current_epoch
     }
