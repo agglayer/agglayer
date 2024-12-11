@@ -8,9 +8,10 @@ license.workspace = true
 anyhow.workspace = true
 arc-swap.workspace = true
 bincode.workspace = true
+ethers.workspace = true
 hex.workspace = true
 futures.workspace = true
-fail.workspace = true
+fail = { workspace = true, default-features = false, features = [] }
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
@@ -28,6 +29,7 @@ serde_json.workspace = true
 
 sp1-sdk.workspace = true
 sp1-prover.workspace = true
+mockall_double = "0.3.1"
 
 [dev-dependencies]
 agglayer-prover = { path = "../agglayer-prover", features = ["testutils"] }

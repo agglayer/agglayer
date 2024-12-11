@@ -12,7 +12,7 @@ use serde_with::DisplayFromStr;
 use shutdown::ShutdownConfig;
 use url::Url;
 
-use self::telemetry::TelemetryConfig;
+pub use self::telemetry::TelemetryConfig;
 
 pub mod prover;
 
