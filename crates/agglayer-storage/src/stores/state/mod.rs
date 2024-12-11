@@ -344,7 +344,7 @@ impl StateStore {
 
         self.db.multi_insert_batch::<C>(&kv, batch)?;
 
-        let elapsed = now.elapsed().as_micros() as f64 / 1000.0; // milliseconds
+        let elapsed = now.elapsed().as_micros() as f64 / 1000.0; // elapsed milliseconds
         agglayer_telemetry::storage::STORAGE_SMT_WRITE_TIME.record(elapsed, &[]);
 
         Ok(())

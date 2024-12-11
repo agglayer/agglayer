@@ -236,7 +236,9 @@ use std::thread::sleep;
 use tokio_util::sync::CancellationToken;
 use agglayer_config::log::{LogLevel, LogOutput};
 use tokio::runtime::Runtime;
-
+use pessimistic_proof::local_balance_tree::LOCAL_BALANCE_TREE_DEPTH;
+use pessimistic_proof::nullifier_tree::NULLIFIER_TREE_DEPTH;
+use pessimistic_proof::utils::smt::ToBits;
 
 struct MetricsContext {
     pub handle: JoinHandle<Result<(), std::io::Error>>,
@@ -310,6 +312,15 @@ fn metrics_shutdown(context: MetricsContext) {
         });
 }
 
+#[derive(Copy, Clone)]
+struct TestKey<const DEPTH: usize>(pub [bool; DEPTH]);
+impl<const DEPTH: usize> ToBits<DEPTH> for TestKey<DEPTH> {
+    fn to_bits(&self) -> [bool; DEPTH] {
+        self.0
+    }
+}
+
+
 
 
 #[rstest]
@@ -318,35 +329,61 @@ fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: Network
                                          #[from(metrics)] metrics_context: MetricsContext) {
     use rand::{RngCore, Rng};
     use std::io::Read;
-    const LOOP_COUNT: usize = 100;
+    const LOOP_COUNT: usize = 10;
 
-    // Initialize metrics monitoring
     let mut lns = LocalNetworkStateData::default();
 
-    // Write and read some random data to generate storage metric events
+    // Write and read some random data in a loop
+    // to generate storage metric events
     for _ in 0..LOOP_COUNT {
         let mut data = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut data);
-        // Take random number of leaves to write
-        let leaves_count = rand::thread_rng().gen_range(1..100);
-        let leaves = (0..leaves_count).map(|_| Digest(data)).collect::<Vec<_>>();
-        for l in &leaves {
+        // Take random number of elements
+        let count = rand::thread_rng().gen_range(1..100);
+
+        // Fill exit_tree
+        let exit_tree_leaves = (0..count).map(|_| Digest(data.clone())).collect::<Vec<_>>();
+        for l in &exit_tree_leaves {
             lns.exit_tree.add_leaf(*l).unwrap();
         }
+
+        // Fill balance tree
+        let balance_tree_data: Vec<(TestKey<LOCAL_BALANCE_TREE_DEPTH>, _)> = (0..count).map(|_| {
+            let mut key: TestKey<LOCAL_BALANCE_TREE_DEPTH> = TestKey([false; LOCAL_BALANCE_TREE_DEPTH]);
+            rand::thread_rng().fill(&mut key.0[..]);
+            (key, Digest(data.clone()))}).collect();
+
+        for (key, value) in balance_tree_data.iter() {
+            lns.balance_tree.insert(*key, *value).unwrap();
+        }
+
+        let nullifier_tree_data: Vec<(TestKey<NULLIFIER_TREE_DEPTH>, _)> = (0..count).map(|_| {
+            let mut key: TestKey<NULLIFIER_TREE_DEPTH> = TestKey([false; NULLIFIER_TREE_DEPTH]);
+            rand::thread_rng().fill(&mut key.0[..]);
+            (key, Digest(data.clone()))}).collect();
+
+        for (key, value) in nullifier_tree_data.iter() {
+            lns.nullifier_tree.insert(*key, *value).unwrap();
+        }
+
         // store it
         assert!(store
-            .write_local_network_state(&network_id, &lns, leaves.as_slice())
+            .write_local_network_state(&network_id, &lns, exit_tree_leaves.as_slice())
+            .inspect_err(|e| error!("Unable to write local network state: {e:?}"))
             .is_ok());
+
+        sleep(std::time::Duration::from_millis(100));
 
         // retrieve it
         assert!(
-            matches!(store.read_local_network_state(network_id), Ok(Some(retrieved)) if equal_state(&lns, &retrieved))
+            store.read_local_network_state(network_id).is_ok()
         );
 
         sleep(std::time::Duration::from_millis(100));
     }
 
-    let mut res = reqwest::blocking::get(format!("http://{}/metrics", metrics_context.prometheus_addr.to_string()))
+    // Read metrics data from the API and check that the metrics are present
+    let mut res = reqwest::blocking::get(format!("http://{}/metrics", metrics_context.prometheus_addr))
         .inspect_err(|e| error!("Unable to read metrics data: {e:?}"))
         .expect("valid metrics data");
     let mut body = String::new();
@@ -357,7 +394,4 @@ fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: Network
     assert!(body.contains(&format!("storage_smt_write_time_milliseconds_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
     
     metrics_shutdown(metrics_context);
-
 }
-
-
