@@ -24,7 +24,7 @@ pub trait PendingCertificateReader: Send + Sync {
     fn get_latest_pending_certificate_for_network(
         &self,
         network_id: &NetworkId,
-    ) -> Result<Option<Certificate>, Error>;
+    ) -> Result<Option<(CertificateId, Height)>, Error>;
 
     fn get_certificate(
         &self,
@@ -105,4 +105,6 @@ pub trait PerEpochReader: Send + Sync {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<Height>, Error>;
+
+    fn is_epoch_packed(&self) -> bool;
 }

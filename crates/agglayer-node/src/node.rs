@@ -158,13 +158,16 @@ impl Node {
                 .nonce_manager(address),
         );
 
-        let rollup_manager = Arc::new(L1RpcClient::new(
-            PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
-            PolygonZkEVMGlobalExitRootV2::new(
-                config.l1.polygon_zkevm_global_exit_root_v2_contract,
-                rpc.clone(),
-            ),
-        ));
+        let rollup_manager = Arc::new(
+            L1RpcClient::try_new(
+                PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
+                PolygonZkEVMGlobalExitRootV2::new(
+                    config.l1.polygon_zkevm_global_exit_root_v2_contract,
+                    rpc.clone(),
+                ),
+            )
+            .await?,
+        );
 
         let certifier_client = CertifierClient::try_new(
             config.prover_entrypoint.clone(),

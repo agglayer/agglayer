@@ -16,12 +16,15 @@ pub struct ProverConfig {
     #[serde(default = "default_socket_addr")]
     pub grpc_endpoint: SocketAddr,
 
+    #[serde(default, skip_serializing_if = "crate::default")]
+    pub grpc: GrpcConfig,
+
     /// The log configuration.
-    #[serde(alias = "Log")]
+    #[serde(default, alias = "Log")]
     pub log: Log,
 
     /// Telemetry configuration.
-    #[serde(alias = "Telemetry")]
+    #[serde(default, alias = "Telemetry")]
     pub telemetry: TelemetryConfig,
 
     /// The list of configuration options used during shutdown.
@@ -67,6 +70,7 @@ impl Default for ProverConfig {
             cpu_prover: CpuProverConfig::default(),
             network_prover: NetworkProverConfig::default(),
             gpu_prover: GpuProverConfig::default(),
+            grpc: Default::default(),
         }
     }
 }
@@ -182,6 +186,50 @@ impl Default for GpuProverConfig {
             proving_timeout: default_cpu_proving_timeout(),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct GrpcConfig {
+    #[serde(
+        skip_serializing_if = "same_as_default_max_decoding_message_size",
+        default = "default_max_decoding_message_size"
+    )]
+    pub max_decoding_message_size: usize,
+    #[serde(
+        skip_serializing_if = "same_as_default_max_encoding_message_size",
+        default = "default_max_encoding_message_size"
+    )]
+    pub max_encoding_message_size: usize,
+}
+
+impl Default for GrpcConfig {
+    fn default() -> Self {
+        Self {
+            max_decoding_message_size: default_max_decoding_message_size(),
+            max_encoding_message_size: default_max_encoding_message_size(),
+        }
+    }
+}
+
+#[derive(Default, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ClientProverConfig {
+    #[serde(default)]
+    pub grpc: GrpcConfig,
+}
+
+const fn default_max_decoding_message_size() -> usize {
+    4 * 1024 * 1024
+}
+fn same_as_default_max_decoding_message_size(value: &usize) -> bool {
+    *value == default_max_decoding_message_size()
+}
+const fn default_max_encoding_message_size() -> usize {
+    4 * 1024 * 1024
+}
+fn same_as_default_max_encoding_message_size(value: &usize) -> bool {
+    *value == default_max_encoding_message_size()
 }
 
 const fn default_socket_addr() -> SocketAddr {

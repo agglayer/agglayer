@@ -26,6 +26,7 @@ use jsonrpsee::{
     server::{middleware::http::ProxyGetRequestLayer, PingConfig, ServerBuilder, ServerHandle},
 };
 use tokio::{sync::mpsc, try_join};
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
 use tracing::trace;
 use tracing::{debug, error, info, instrument};
@@ -64,6 +65,18 @@ trait Agglayer {
 
     #[method(name = "getLatestKnownCertificateHeader")]
     async fn get_latest_known_certificate_header(
+        &self,
+        network_id: NetworkId,
+    ) -> RpcResult<Option<CertificateHeader>>;
+
+    #[method(name = "getLatestSettledCertificateHeader")]
+    async fn get_latest_settled_certificate_header(
+        &self,
+        network_id: NetworkId,
+    ) -> RpcResult<Option<CertificateHeader>>;
+
+    #[method(name = "getLatestPendingCertificateHeader")]
+    async fn get_latest_pending_certificate_header(
         &self,
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>>;
@@ -170,6 +183,7 @@ where
         // Create a middleware stack with the CORS middleware and a proxy layer for
         // health checks.
         let middleware = tower::ServiceBuilder::new()
+            .layer(CompressionLayer::new())
             .layer(ProxyGetRequestLayer::new("/health", "system_health")?)
             .layer(cors);
 
@@ -443,8 +457,7 @@ where
             .map_err(|e| {
                 error!("Failed to get latest pending certificate: {e}");
                 Error::internal(e.to_string())
-            })?
-            .map(|c| (c.hash(), c.height));
+            })?;
 
         let certificate_id = [
             settled_certificate_id_and_height,
@@ -501,6 +514,66 @@ where
                 error!("Failed to get certificate: {}", error);
 
                 Err(Error::internal("Unable to get certificate"))
+            }
+        }
+    }
+
+    async fn get_latest_settled_certificate_header(
+        &self,
+        network_id: NetworkId,
+    ) -> RpcResult<Option<CertificateHeader>> {
+        let id = match self
+            .state
+            .get_latest_settled_certificate_per_network(&network_id)
+        {
+            Ok(Some((_, SettledCertificate(id, _, _, _)))) => id,
+            Ok(None) => {
+                return Ok(None);
+            }
+            Err(e) => {
+                error!("Failed to get latest settled certificate header: {e}");
+                return Err(Error::internal(e.to_string()));
+            }
+        };
+
+        match self.state.get_certificate_header(&id) {
+            Ok(Some(header)) => Ok(Some(header)),
+            Ok(None) => Err(Error::resource_not_found(format!("Certificate({})", id))),
+            Err(e) => {
+                error!("Failed to get certificate header: {e}");
+                Err(Error::internal(e.to_string()))
+            }
+        }
+    }
+
+    async fn get_latest_pending_certificate_header(
+        &self,
+        network_id: NetworkId,
+    ) -> RpcResult<Option<CertificateHeader>> {
+        let id = match self
+            .pending_store
+            .get_latest_pending_certificate_for_network(&network_id)
+        {
+            Ok(Some((id, _height))) => id,
+            Ok(None) => {
+                return Ok(None);
+            }
+            Err(e) => {
+                error!("Failed to get latest settled certificate header: {e}");
+                return Err(Error::internal(e.to_string()));
+            }
+        };
+
+        match self.state.get_certificate_header(&id) {
+            Ok(Some(CertificateHeader {
+                status: CertificateStatus::Settled,
+                ..
+            })) => Ok(None),
+            Ok(Some(header)) => Ok(Some(header)),
+            Ok(None) => Err(Error::resource_not_found(format!("Certificate({})", id))),
+            Err(e) => {
+                error!("Failed to get certificate header: {e}");
+                Err(Error::internal(e.to_string()))
             }
         }
     }

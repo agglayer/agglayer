@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agglayer_certificate_orchestrator::{EpochPacker, Error};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
-use agglayer_contracts::Settler;
+use agglayer_contracts::{RollupContract, Settler};
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PerEpochReader, PerEpochWriter, StateReader, StateWriter},
@@ -52,7 +52,7 @@ impl<StateStore, PerEpochStore, RollupManagerRpc> EpochPacker
     for EpochPackerClient<StateStore, PerEpochStore, RollupManagerRpc>
 where
     StateStore: StateReader + StateWriter + 'static,
-    RollupManagerRpc: Settler + Send + Sync + 'static,
+    RollupManagerRpc: RollupContract + Settler + Send + Sync + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
     type PerEpochStore = PerEpochStore;
@@ -94,7 +94,9 @@ where
         let height = certificate.height;
         let epoch_number = related_epoch.get_epoch_number();
 
-        let l_1_info_tree_leaf_count = certificate.l1_info_tree_leaf_count();
+        let l_1_info_tree_leaf_count = certificate
+            .l1_info_tree_leaf_count()
+            .unwrap_or_else(|| self.l1_rpc.default_l1_info_tree_entry().0);
 
         // Prepare the proof
         let (output, proof) =
@@ -116,8 +118,8 @@ where
             .build_verify_pessimistic_trusted_aggregator_call(
                 *output.origin_network,
                 l_1_info_tree_leaf_count,
-                output.new_local_exit_root,
-                output.new_pessimistic_root,
+                *output.new_local_exit_root,
+                *output.new_pessimistic_root,
                 proof.into(),
             );
 

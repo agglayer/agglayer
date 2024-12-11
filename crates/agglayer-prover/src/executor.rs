@@ -38,6 +38,13 @@ pub struct Executor {
 }
 
 impl Executor {
+    pub fn get_vkey() -> SP1VerifyingKey {
+        let prover = CpuProver::new();
+        let (_proving_key, verification_key) = prover.setup(ELF);
+
+        verification_key
+    }
+
     pub fn build_network_service<S>(
         timeout: Duration,
         service: S,

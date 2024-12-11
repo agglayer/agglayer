@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Hash, Height,
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber, Height,
     LocalNetworkStateData, NetworkId, Proof,
 };
 
@@ -69,7 +69,7 @@ pub trait StateWriter: Send + Sync {
         &self,
         network_id: &NetworkId,
         new_state: &LocalNetworkStateData,
-        new_leaves: &[Hash],
+        new_leaves: &[Digest],
     ) -> Result<(), Error>;
 }
 
@@ -96,6 +96,13 @@ pub trait PendingCertificateWriter: Send + Sync {
     ) -> Result<(), Error>;
 
     fn set_latest_proven_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+        height: &Height,
+        certificate_id: &CertificateId,
+    ) -> Result<(), Error>;
+
+    fn set_latest_pending_certificate_per_network(
         &self,
         network_id: &NetworkId,
         height: &Height,

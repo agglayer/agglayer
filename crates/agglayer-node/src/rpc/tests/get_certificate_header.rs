@@ -1,4 +1,4 @@
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, CertificateStatus, Hash};
+use agglayer_types::{Certificate, CertificateHeader, CertificateId, CertificateStatus, Digest};
 use insta::assert_snapshot;
 use jsonrpsee::{
     core::{client::ClientT, ClientError},
@@ -18,12 +18,12 @@ use crate::rpc::{tests::RawRpcContext, AgglayerServer};
 async fn fetch_unknown_certificate_header(#[future] context: TestContext) {
     let payload: Result<CertificateHeader, ClientError> = context
         .client
-        .request("interop_getCertificateHeader", rpc_params![Hash([0; 32])])
+        .request("interop_getCertificateHeader", rpc_params![Digest([0; 32])])
         .await;
 
     let error = payload.unwrap_err();
 
-    let expected_message = format!("Resource not found: Certificate({:#})", Hash([0; 32]));
+    let expected_message = format!("Resource not found: Certificate({:#})", Digest([0; 32]));
     assert!(matches!(error, ClientError::Call(obj) if obj.message() == expected_message));
 }
 
@@ -80,12 +80,12 @@ async fn get_certificate_header_after_sending_the_certificate(#[future] mut cont
 
     let payload: Result<CertificateHeader, ClientError> = context
         .client
-        .request("interop_getCertificateHeader", rpc_params![Hash([0; 32])])
+        .request("interop_getCertificateHeader", rpc_params![Digest([0; 32])])
         .await;
 
     let error = payload.unwrap_err();
 
-    let expected_message = format!("Resource not found: Certificate({:#})", Hash([0; 32]));
+    let expected_message = format!("Resource not found: Certificate({:#})", Digest([0; 32]));
     assert!(matches!(error, ClientError::Call(obj) if obj.message() == expected_message));
 }
 
@@ -94,7 +94,7 @@ async fn get_certificate_header_after_sending_the_certificate(#[future] mut cont
 #[test_log::test(tokio::test)]
 async fn certificate_error_message(#[future] raw_rpc: RawRpcContext) {
     let rpc = raw_rpc.rpc.into_rpc();
-    let params = vec![Hash([0; 32])];
+    let params = vec![Digest([0; 32])];
     let payload = json!({
         "jsonrpc": "2.0",
         "method": "interop_getCertificateHeader",
@@ -173,12 +173,12 @@ async fn debug_fetch_unknown_certificate() {
 
     let payload: Result<(Certificate, Option<CertificateHeader>), ClientError> = context
         .client
-        .request("interop_debugGetCertificate", rpc_params![Hash([0; 32])])
+        .request("interop_debugGetCertificate", rpc_params![Digest([0; 32])])
         .await;
 
     let error = payload.unwrap_err();
 
-    let expected_message = format!("Resource not found: Certificate({:#})", Hash([0; 32]));
+    let expected_message = format!("Resource not found: Certificate({:#})", Digest([0; 32]));
     assert!(matches!(error, ClientError::Call(obj) if obj.message() == expected_message));
 }
 
@@ -249,12 +249,12 @@ async fn debug_get_certificate_after_sending_the_certificate() {
 
     let payload: Result<(Certificate, Option<CertificateHeader>), ClientError> = context
         .client
-        .request("interop_debugGetCertificate", rpc_params![Hash([0; 32])])
+        .request("interop_debugGetCertificate", rpc_params![Digest([0; 32])])
         .await;
 
     let error = payload.unwrap_err();
 
-    let expected_message = format!("Resource not found: Certificate({:#})", Hash([0; 32]));
+    let expected_message = format!("Resource not found: Certificate({:#})", Digest([0; 32]));
     assert!(matches!(error, ClientError::Call(obj) if obj.message() == expected_message));
 }
 
@@ -291,7 +291,7 @@ async fn debug_get_certificate_after_overwrite() {
     assert_eq!(header.status, CertificateStatus::Pending);
 
     let mut certificate = Certificate::new_for_test(1.into(), 0);
-    certificate.prev_local_exit_root = [2; 32];
+    certificate.prev_local_exit_root = [2; 32].into();
     let id2 = certificate.hash();
 
     let res: CertificateId = context
@@ -361,7 +361,7 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
     assert!(matches!(error, ClientError::Call(obj) if obj.message() == expected_message));
 
     let mut certificate = Certificate::new_for_test(1.into(), 0);
-    certificate.prev_local_exit_root = [2; 32];
+    certificate.prev_local_exit_root = [2; 32].into();
     let id2 = certificate.hash();
 
     let res: CertificateId = context

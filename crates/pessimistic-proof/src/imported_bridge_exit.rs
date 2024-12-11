@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
-    keccak::{keccak256_combine, Digest},
+    keccak::{digest::Digest, keccak256_combine},
     local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
 };
 
@@ -84,7 +84,12 @@ impl MerkleProof {
     pub fn hash(&self) -> Digest {
         keccak256_combine([
             self.root.as_slice(),
-            self.proof.siblings.concat().as_slice(),
+            self.proof
+                .siblings
+                .iter()
+                .flat_map(|v| v.0)
+                .collect::<Vec<_>>()
+                .as_slice(),
         ])
     }
 
@@ -309,8 +314,8 @@ mod tests {
 
     #[test]
     fn can_parse_empty_l1infotree() {
-        let empty_l1_info_tree =
-            hex!("27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757");
+        let empty_l1_info_tree: Digest =
+            hex!("27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757").into();
 
         let l1_tree = LocalExitTree::<Keccak256Hasher, 32>::default();
 
@@ -324,13 +329,16 @@ mod tests {
             L1InfoTreeLeafInner {
                 global_exit_root: hex!(
                     "16994edfddddb9480667b64174fc00d3b6da7290d37b8db3a16571b4ddf0789f"
-                ),
+                )
+                .into(),
                 block_hash: hex!(
                     "24a5871d68723340d9eadc674aa8ad75f3e33b61d5a9db7db92af856a19270bb"
-                ),
+                )
+                .into(),
                 timestamp: 1697231573,
             }
-            .hash(),
+            .hash()
+            .0,
         );
 
         assert_eq!(
@@ -338,13 +346,16 @@ mod tests {
             L1InfoTreeLeafInner {
                 global_exit_root: hex!(
                     "356682567c5d485bbabe89590d3d72b08671a0a07899dcbaddccbe0599491669"
-                ),
+                )
+                .into(),
                 block_hash: hex!(
                     "8f9cfb43c0f6bc7ce9f9e43e8761776a2ef9657ccf87318e2487c313d119b8cf"
-                ),
+                )
+                .into(),
                 timestamp: 658736476,
             }
-            .hash(),
+            .hash()
+            .0,
         );
     }
 }

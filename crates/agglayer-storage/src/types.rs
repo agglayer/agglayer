@@ -1,7 +1,4 @@
-use std::collections::BTreeMap;
-
-use agglayer_types::Hash;
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId, Proof};
+use agglayer_types::{Certificate, CertificateHeader, CertificateId, Digest, NetworkId, Proof};
 use serde::{Deserialize, Serialize};
 
 use crate::columns::Codec;
@@ -27,15 +24,13 @@ pub enum MetadataValue {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PerEpochMetadataKey {
     SettlementTxHash,
-    StartCheckpoint,
-    EndCheckpoint,
+    Packed,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PerEpochMetadataValue {
-    SettlementTxHash([u8; 32]),
-    StartCheckpoint(BTreeMap<NetworkId, Height>),
-    EndCheckpoint(BTreeMap<NetworkId, Height>),
+    SettlementTxHash(Digest),
+    Packed(bool),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -47,13 +42,13 @@ pub struct SmtKey {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SmtKeyType {
     Root,
-    Node(Hash),
+    Node(Digest),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum SmtValue {
-    Node(Hash, Hash),
-    Leaf(Hash),
+    Node(Digest, Digest),
+    Leaf(Digest),
 }
 
 impl Codec for SmtKey {}

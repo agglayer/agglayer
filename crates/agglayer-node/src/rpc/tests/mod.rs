@@ -12,7 +12,7 @@ use agglayer_storage::{
     stores::{PendingCertificateWriter, StateReader, StateWriter},
     tests::TempDBDir,
 };
-use agglayer_types::{Certificate, CertificateId, CertificateStatus, Height, NetworkId};
+use agglayer_types::{Certificate, CertificateId, CertificateStatus, Digest, Height, NetworkId};
 use ethers::providers::{self, MockProvider, Provider};
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
@@ -263,7 +263,7 @@ impl StateWriter for DummyStore {
         &self,
         _network_id: &NetworkId,
         _new_state: &agglayer_types::LocalNetworkStateData,
-        _new_leaves: &[agglayer_types::Hash],
+        _new_leaves: &[Digest],
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }
@@ -318,6 +318,14 @@ impl PendingCertificateWriter for DummyStore {
         Ok(())
     }
 
+    fn set_latest_pending_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+        _height: &Height,
+        _certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
     fn insert_generated_proof(
         &self,
         _certificate_id: &agglayer_types::CertificateId,
@@ -353,7 +361,7 @@ impl PendingCertificateReader for DummyStore {
     fn get_latest_pending_certificate_for_network(
         &self,
         _network_id: &NetworkId,
-    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
         todo!()
     }
 

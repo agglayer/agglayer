@@ -1,15 +1,12 @@
 use std::path::Path;
 
-use bincode::Options as _;
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
-    ColumnFamilyDescriptor, DBPinnableSlice, DBRawIteratorWithThreadMode, Direction, Options,
-    ReadOptions, WriteBatch,
+    ColumnFamilyDescriptor, DBPinnableSlice, Direction, Options, ReadOptions, WriteBatch,
 };
-use serde::Serialize;
 
 use crate::{
-    columns::{default_bincode_options, Codec, ColumnSchema},
+    columns::{Codec, ColumnSchema},
     error::Error,
 };
 
@@ -177,28 +174,5 @@ impl DB {
         let key = key.encode()?;
 
         Ok(self.rocksdb.delete_cf(&cf, key)?)
-    }
-
-    pub(crate) fn prefix_iterator_with_direction<C: ColumnSchema, P: Serialize>(
-        &self,
-        prefix: &P,
-        direction: Direction,
-    ) -> Result<ColumnIterator<C>, Error> {
-        let cf = self
-            .rocksdb
-            .cf_handle(C::COLUMN_FAMILY_NAME)
-            .ok_or(Error::ColumnFamilyNotFound)?;
-
-        let mut iterator: DBRawIteratorWithThreadMode<_> = self
-            .rocksdb
-            .prefix_iterator_cf(&cf, default_bincode_options().serialize(prefix)?)
-            .into();
-
-        match direction {
-            Direction::Forward => iterator.seek_to_first(),
-            Direction::Reverse => iterator.seek_to_last(),
-        }
-
-        Ok(ColumnIterator::new(iterator, direction))
     }
 }

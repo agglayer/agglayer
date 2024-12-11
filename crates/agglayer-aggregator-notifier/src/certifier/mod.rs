@@ -56,6 +56,8 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
             pending_store,
             prover: ProofGenerationServiceClient::connect(prover)
                 .await?
+                .max_decoding_message_size(config.prover.grpc.max_decoding_message_size)
+                .max_encoding_message_size(config.prover.grpc.max_encoding_message_size)
                 .send_compressed(CompressionEncoding::Zstd)
                 .accept_compressed(CompressionEncoding::Zstd),
             verifier: Arc::new(verifier),
@@ -120,7 +122,6 @@ where
             ));
         }
         let mut prover_client = self.prover.clone();
-
         let pending_store = self.pending_store.clone();
         let verifier = self.verifier.clone();
         let verifying_key = self.verifying_key.clone();
@@ -133,14 +134,17 @@ where
                 .await
                 .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
 
-            let l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
+            let l1_info_leaf_count = certificate
+                .l1_info_tree_leaf_count()
+                .unwrap_or_else(|| l1_rpc.default_l1_info_tree_entry().0);
 
             let l1_info_root = l1_rpc
                 .get_l1_info_root(l1_info_leaf_count)
                 .await
                 .map_err(|_| {
                     CertificationError::L1InfoRootNotFound(certificate_id, l1_info_leaf_count)
-                })?;
+                })?
+                .into();
 
             let declared_l1_info_root = certificate
                 .l1_info_root()
@@ -150,8 +154,8 @@ where
                 if declared != l1_info_root {
                     return Err(CertificationError::Types {
                         source: agglayer_types::Error::L1InfoRootIncorrect {
-                            declared: declared.into(),
-                            retrieved: l1_info_root.into(),
+                            declared,
+                            retrieved: l1_info_root,
                             leaf_count: l1_info_leaf_count,
                         },
                     });

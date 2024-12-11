@@ -23,7 +23,7 @@ mock! {
         fn get_latest_pending_certificate_for_network(
             &self,
             network_id: &NetworkId,
-        ) -> Result<Option<Certificate>, Error>;
+        ) -> Result<Option<(CertificateId, Height)>, Error>;
 
         fn get_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error>;
 
@@ -69,6 +69,14 @@ mock! {
             height: &Height,
             certificate_id: &CertificateId,
         ) -> Result<(), Error>;
+
+        fn set_latest_pending_certificate_per_network(
+            &self,
+            network_id: &NetworkId,
+            height: &Height,
+            certificate_id: &CertificateId,
+        ) -> Result<(), Error>;
+
 
     }
 }

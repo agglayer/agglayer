@@ -8,7 +8,7 @@ use serde_with::serde_as;
 use crate::{
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
-    keccak::{keccak256_combine, Digest},
+    keccak::{digest::Digest, keccak256_combine},
     local_balance_tree::LocalBalancePath,
     local_exit_tree::hasher::Hasher,
     local_state::StateCommitment,

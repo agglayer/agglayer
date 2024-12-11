@@ -18,10 +18,12 @@ use super::{
 use crate::{
     columns::epochs::{
         certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
-        proofs::ProofPerIndexColumn, start_checkpoint::StartCheckpointColumn,
+        metadata::PerEpochMetadataColumn, proofs::ProofPerIndexColumn,
+        start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
     storage::{epochs_db_cf_definitions, DB},
+    types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
 
 #[cfg(test)]
@@ -38,7 +40,7 @@ pub struct PerEpochStore<PendingStore, StateStore> {
     next_certificate_index: AtomicU64,
     start_checkpoint: BTreeMap<NetworkId, Height>,
     end_checkpoint: RwLock<BTreeMap<NetworkId, Height>>,
-    packing_lock: RwLock<Option<EpochNumber>>,
+    packing_lock: RwLock<bool>,
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
@@ -56,6 +58,20 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             .join(format!("{}", epoch_number));
 
         let db = Arc::new(DB::open_cf(&path, epochs_db_cf_definitions())?);
+
+        // Check if the epoch is already packed, if no value is found, the epoch is not
+        // packed
+        let packed = db
+            .get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::Packed)?
+            .map(|value| match value {
+                PerEpochMetadataValue::SettlementTxHash(_digest) => Err(Error::Unexpected(
+                    "Tried to retrieve the status of an epoch, retrieve another unexpected value"
+                        .to_string(),
+                )),
+                PerEpochMetadataValue::Packed(value) => Ok(value),
+            })
+            .transpose()?
+            .unwrap_or_default();
 
         let start_checkpoint = {
             let checkpoint = db
@@ -89,7 +105,6 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             }
         };
 
-        let mut closed = None;
         let next_certificate_index = if let Some(Ok((index, _))) = db
             .iter_with_direction::<CertificatePerIndexColumn>(
                 ReadOptions::default(),
@@ -122,8 +137,6 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
 
                 start_checkpoint.clone()
             } else {
-                closed = Some(epoch_number);
-
                 checkpoint
             }
         };
@@ -136,15 +149,15 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             state_store,
             start_checkpoint,
             end_checkpoint: RwLock::new(end_checkpoint),
-            packing_lock: RwLock::new(closed),
+            packing_lock: RwLock::new(packed),
         })
     }
 
-    fn lock_for_adding_certificate(&self) -> RwLockReadGuard<Option<EpochNumber>> {
+    fn lock_for_adding_certificate(&self) -> RwLockReadGuard<bool> {
         self.packing_lock.read()
     }
 
-    fn lock_for_packing(&self) -> RwLockWriteGuard<Option<EpochNumber>> {
+    fn lock_for_packing(&self) -> RwLockWriteGuard<bool> {
         self.packing_lock.write()
     }
 }
@@ -161,7 +174,7 @@ where
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
         let lock = self.lock_for_adding_certificate();
 
-        if lock.is_some() {
+        if *lock {
             return Err(Error::AlreadyPacked(*self.epoch_number))?;
         }
 
@@ -293,8 +306,8 @@ where
     fn start_packing(&self) -> Result<(), Error> {
         let mut lock = self.lock_for_packing();
 
-        if let Some(epoch_number) = *lock {
-            return Err(Error::AlreadyPacked(epoch_number))?;
+        if *lock {
+            return Err(Error::AlreadyPacked(*self.epoch_number))?;
         }
 
         let epoch_number = *self.epoch_number;
@@ -319,7 +332,12 @@ where
             batch_status.push((certificate.hash(), index));
         }
 
-        _ = *lock.insert(epoch_number);
+        self.db.put::<PerEpochMetadataColumn>(
+            &PerEpochMetadataKey::Packed,
+            &PerEpochMetadataValue::Packed(true),
+        )?;
+
+        *lock = true;
         match self
             .state_store
             .set_latest_settled_epoch(*self.epoch_number)
@@ -342,6 +360,10 @@ where
     PendingStore: Send + Sync,
     StateStore: Send + Sync,
 {
+    fn is_epoch_packed(&self) -> bool {
+        *self.lock_for_packing()
+    }
+
     fn get_epoch_number(&self) -> u64 {
         *self.epoch_number
     }

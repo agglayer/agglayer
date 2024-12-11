@@ -348,3 +348,53 @@ function mint_erc20_tokens() {
     run send_tx "$rpc_url" "$minter_private_key" "$erc20_token_addr" "$mint_fn_sig" "$receiver" "$tokens_amount"
     assert_success
 }
+
+function check_balance() {
+    local retries="${3:-3}"
+    while true ; do
+        echo "Checking balance of $2 on $1..." >&3
+        run cast balance --ether --rpc-url $1 $2
+        assert_success
+        echo $output >&3
+        echo $(echo $output | bc) >&3
+
+        if [[ $(echo $output | bc) != "0" ]]; then
+            exit 0
+        fi
+
+        retries=$((retries - 1))
+        if [[ $retries == 0 ]]; then
+            break
+        fi
+        echo "Balance is still 0. Retrying in 10 seconds..." >&3
+        echo $output >&3
+        sleep 10
+    done
+
+    exit 1
+}
+
+function check_balance_rpc_call() {
+    local retries="${5:-3}"
+    while true ; do
+        echo "Checking balance of $2 on $1..." >&3
+        run cast call --rpc-url $1 $2 $3 $4
+        assert_success
+        echo $output >&3
+        echo $(echo $output | bc) >&3
+
+        if [[ $(echo $output | bc) != "0" ]]; then
+            exit 0
+        fi
+
+        retries=$((retries - 1))
+        if [[ $retries == 0 ]]; then
+            break
+        fi
+        echo "Balance is still 0. Retrying in 10 seconds..." >&3
+        echo $output >&3
+        sleep 10
+    done
+
+    exit 1
+}

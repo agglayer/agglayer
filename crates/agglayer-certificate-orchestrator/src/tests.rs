@@ -25,7 +25,7 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
     EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 use arc_swap::ArcSwap;
@@ -52,9 +52,13 @@ pub(crate) struct DummyPendingStore {
     pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
     pub(crate) latest_proven_certificate_per_network:
         RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
+    pub(crate) is_packed: bool,
 }
 
 impl PerEpochReader for DummyPendingStore {
+    fn is_epoch_packed(&self) -> bool {
+        self.is_packed
+    }
     fn get_epoch_number(&self) -> u64 {
         self.current_epoch
     }
@@ -91,7 +95,7 @@ impl PerEpochWriter for DummyPendingStore {
         &self,
         _network_id: NetworkId,
         _height: Height,
-    ) -> std::result::Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
+    ) -> Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
         Ok((0, 0))
     }
 
@@ -241,6 +245,15 @@ impl PendingCertificateWriter for DummyPendingStore {
 
         Ok(())
     }
+
+    fn set_latest_pending_certificate_per_network(
+        &self,
+        _network_id: &NetworkId,
+        _height: &Height,
+        _certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
 }
 
 impl StateWriter for DummyPendingStore {
@@ -271,8 +284,8 @@ impl StateWriter for DummyPendingStore {
                 epoch_number: None,
                 certificate_index: None,
                 certificate_id: certificate.hash(),
-                prev_local_exit_root: certificate.prev_local_exit_root.into(),
-                new_local_exit_root: certificate.new_local_exit_root.into(),
+                prev_local_exit_root: certificate.prev_local_exit_root,
+                new_local_exit_root: certificate.new_local_exit_root,
                 status,
                 metadata: certificate.metadata,
             },
@@ -313,7 +326,7 @@ impl StateWriter for DummyPendingStore {
         &self,
         _network_id: &NetworkId,
         _new_state: &LocalNetworkStateData,
-        _new_leaves: &[agglayer_types::Hash],
+        _new_leaves: &[Digest],
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }
@@ -329,7 +342,7 @@ impl PendingCertificateReader for DummyPendingStore {
     fn get_latest_pending_certificate_for_network(
         &self,
         _network_id: &NetworkId,
-    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
+    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
         todo!()
     }
 
