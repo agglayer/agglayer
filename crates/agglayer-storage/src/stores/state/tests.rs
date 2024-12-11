@@ -2,7 +2,7 @@ use std::sync::Arc;
 use agglayer_types::{Certificate, LocalNetworkStateData, NetworkId};
 use pessimistic_proof::{generate_pessimistic_proof, keccak::digest::Digest, LocalNetworkState};
 use rstest::{fixture, rstest};
-use tracing::info;
+use tracing::{info, error};
 
 use crate::{
     columns::latest_settled_certificate_per_network::{
@@ -241,6 +241,7 @@ use tokio::runtime::Runtime;
 struct MetricsContext {
     pub handle: JoinHandle<Result<(), std::io::Error>>,
     pub cancellation_token: CancellationToken,
+    pub prometheus_addr: SocketAddr,
     // Need to keep runtime existing to keep the metrics server running
    _runtime: Runtime,
 }
@@ -287,11 +288,12 @@ fn metrics(
     };
 
     // Wait some time to let the metrics server start
-    std::thread::sleep(std::time::Duration::from_secs(5));
+    std::thread::sleep(std::time::Duration::from_secs(2));
 
     MetricsContext {
         handle: metrics_handle,
         cancellation_token,
+        prometheus_addr,
         _runtime: runtime,
     }
 }
@@ -314,18 +316,20 @@ fn metrics_shutdown(context: MetricsContext) {
 fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: NetworkId,
                                          store: StateStore,
                                          #[from(metrics)] metrics_context: MetricsContext) {
-    use rand::RngCore;
+    use rand::{RngCore, Rng};
+    use std::io::Read;
+    const LOOP_COUNT: usize = 100;
 
     // Initialize metrics monitoring
     let mut lns = LocalNetworkStateData::default();
 
     // Write and read some random data to generate storage metric events
-    for _ in 0..100 {
+    for _ in 0..LOOP_COUNT {
         let mut data = [0u8; 32];
-        agglayer_telemetry::storage::STORAGE_COUNTER.add(1, &[]);
-        agglayer_telemetry::SEND_TX.add(1, &[]);
         rand::thread_rng().fill_bytes(&mut data);
-        let leaves = (0..10).map(|_| Digest(data)).collect::<Vec<_>>();
+        // Take random number of leaves to write
+        let leaves_count = rand::thread_rng().gen_range(1..100);
+        let leaves = (0..leaves_count).map(|_| Digest(data)).collect::<Vec<_>>();
         for l in &leaves {
             lns.exit_tree.add_leaf(*l).unwrap();
         }
@@ -342,6 +346,18 @@ fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: Network
         sleep(std::time::Duration::from_millis(100));
     }
 
+    let mut res = reqwest::blocking::get(format!("http://{}/metrics", metrics_context.prometheus_addr.to_string()))
+        .inspect_err(|e| error!("Unable to read metrics data: {e:?}"))
+        .expect("valid metrics data");
+    let mut body = String::new();
+    res.read_to_string(&mut body).expect("read data to string");
+
+    assert!(body.contains(&format!("storage_smt_read_time_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
+    assert!(body.contains(&format!("storage_smt_write_items_count_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
+    assert!(body.contains(&format!("storage_smt_write_time_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
+    
     metrics_shutdown(metrics_context);
 
 }
+
+

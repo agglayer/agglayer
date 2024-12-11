@@ -96,10 +96,20 @@ pub mod storage {
     use crate::constant::AGGLAYER_STORAGE_OTEL_SCOPE_NAME;
 
     lazy_static! {
-        pub static ref STORAGE_COUNTER: opentelemetry::metrics::Counter<u64> =
+        pub static ref STORAGE_SMT_WRITE_TIME: opentelemetry::metrics::Histogram<f64> =
             global::meter(AGGLAYER_STORAGE_OTEL_SCOPE_NAME)
-                .u64_counter("storage_test_counter")
-                .with_description("Number of write accesses to the storage")
+                .f64_histogram("storage_smt_write_time")
+                .with_description("write_smt execution time in milliseconds")
+                .init();
+        pub static ref STORAGE_SMT_WRITE_ITEMS_COUNT: opentelemetry::metrics::Histogram<u64> =
+            global::meter(AGGLAYER_STORAGE_OTEL_SCOPE_NAME)
+                .u64_histogram("storage_smt_write_items_count")
+                .with_description("write_smt number of items written per call")
+                .init();
+        pub static ref STORAGE_SMT_READ_TIME: opentelemetry::metrics::Histogram<f64> =
+            global::meter(AGGLAYER_STORAGE_OTEL_SCOPE_NAME)
+                .f64_histogram("storage_smt_read_time")
+                .with_description("read_smt execution time in milliseconds")
                 .init();
     }
 }

@@ -309,6 +309,7 @@ impl StateStore {
     where
         C: ColumnSchema<Key = SmtKey, Value = SmtValue>,
     {
+        let now = std::time::Instant::now();
         let mut kv = BTreeMap::new();
         smt.tree.iter().for_each(|(&node_hash, node)| {
             // Write the node
@@ -339,7 +340,12 @@ impl StateStore {
                 });
         });
 
+        agglayer_telemetry::storage::STORAGE_SMT_WRITE_ITEMS_COUNT.record(kv.len() as u64, &[]);
+
         self.db.multi_insert_batch::<C>(&kv, batch)?;
+
+        let elapsed = now.elapsed().as_micros() as f64 / 1000.0; // milliseconds
+        agglayer_telemetry::storage::STORAGE_SMT_WRITE_TIME.record(elapsed, &[]);
 
         Ok(())
     }
@@ -392,6 +398,7 @@ impl StateStore {
     where
         C: ColumnSchema<Key = SmtKey, Value = SmtValue>,
     {
+        let now = std::time::Instant::now();
         let root_node: Node<Keccak256Hasher> = if let Some(root_node_value) =
             self.db.get::<C>(&SmtKey {
                 network_id: network_id.into(),
@@ -442,10 +449,15 @@ impl StateStore {
             }
         }
 
-        Ok(Some(Smt::<Keccak256Hasher, DEPTH>::new_with_nodes(
+        let result = Some(Smt::<Keccak256Hasher, DEPTH>::new_with_nodes(
             root_node.hash(),
             nodes.as_slice(),
-        )))
+        ));
+
+        let elapsed = now.elapsed().as_micros() as f64 / 1000.0; // milliseconds
+        agglayer_telemetry::storage::STORAGE_SMT_READ_TIME.record(elapsed, &[]);
+
+        Ok(result)
     }
 }
 
