@@ -55,6 +55,8 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     pending_state: Option<LocalNetworkStateData>,
     /// The stream of new certificates to certify.
     certificate_stream: mpsc::Receiver<(Certificate, CertResponseSender)>,
+    /// Expected height of the next certificate.
+    next_height: u64,
     /// Flag to indicate if the network is at capacity for the current epoch.
     at_capacity_for_epoch: bool,
 }
@@ -87,6 +89,28 @@ where
             network_id,
             local_state.get_roots().display_to_hex()
         );
+
+        let current_epoch = clock_ref.current_epoch();
+
+        // Start from the latest settled certificate to define the next expected height
+        let latest_settled = state_store
+            .get_latest_settled_certificate_per_network(&network_id)?
+            .map(|(_network_id, settled)| settled);
+
+        let (next_height, at_capacity_for_epoch) =
+            if let Some(SettledCertificate(_, current_height, epoch, _)) = latest_settled {
+                debug!("Current network height is {}", current_height);
+                let at_capacity_for_epoch = epoch == current_epoch;
+                if at_capacity_for_epoch {
+                    debug!("Already settled for the epoch {current_epoch}");
+                }
+
+                (current_height + 1, at_capacity_for_epoch)
+            } else {
+                debug!("Network never settled any certificate");
+                (0, false)
+            };
+
         Ok(Self {
             network_id,
             pending_store,
@@ -98,7 +122,8 @@ where
             clock_ref,
             pending_state: None,
             certificate_stream,
-            at_capacity_for_epoch: false,
+            next_height,
+            at_capacity_for_epoch,
         })
     }
 
@@ -110,28 +135,6 @@ where
 
         let mut stream_epoch = self.clock_ref.subscribe()?;
 
-        let current_epoch = self.clock_ref.current_epoch();
-
-        // Start from the latest settled certificate to define the next expected height
-        let latest_settled = self
-            .state_store
-            .get_latest_settled_certificate_per_network(&self.network_id)?
-            .map(|(_network_id, settled)| settled);
-
-        let mut next_expected_height =
-            if let Some(SettledCertificate(_, current_height, epoch, _)) = latest_settled {
-                debug!("Current network height is {}", current_height);
-                if epoch == current_epoch {
-                    debug!("Already settled for the epoch {current_epoch}");
-                    self.at_capacity_for_epoch = true;
-                }
-
-                current_height + 1
-            } else {
-                debug!("Network never settled any certificate");
-                0
-            };
-
         loop {
             tokio::select! {
                 _ = cancellation_token.cancelled() => {
@@ -139,7 +142,7 @@ where
                     return Ok(self.network_id);
                 }
 
-                result = self.make_progress(&mut stream_epoch, &mut next_expected_height) => {
+                result = self.make_progress(&mut stream_epoch) => {
                     if let Err(error)= result {
                         error!("Error during the certification process: {}", error);
 
@@ -157,26 +160,25 @@ where
     async fn make_progress(
         &mut self,
         stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
-        next_expected_height: &mut u64,
     ) -> Result<(), Error> {
         debug!("Waiting for an event to make progress");
 
         tokio::select! {
             Ok(agglayer_clock::Event::EpochEnded(epoch)) = stream_epoch.recv() => {
-                self.on_epoch_ended(epoch, next_expected_height)
+                self.on_epoch_ended(epoch)
             }
 
             Some((certificate, response_sender)) = self.certificate_stream.recv() => {
-                self.on_receive_certificate(certificate, response_sender, next_expected_height)
+                self.on_receive_certificate(certificate, response_sender)
             }
 
             result = self.processing_task.join() => {
-                self.on_certifcate_processing_result(result, next_expected_height)
+                self.on_certifcate_processing_result(result)
             }
         }
     }
 
-    fn on_epoch_ended(&mut self, epoch: u64, next_expected_height: &mut u64) -> Result<(), Error> {
+    fn on_epoch_ended(&mut self, epoch: u64) -> Result<(), Error> {
         info!("Received an epoch event: {}", epoch);
 
         let current_epoch = self.clock_ref.current_epoch();
@@ -191,14 +193,13 @@ where
 
         self.at_capacity_for_epoch = false;
 
-        self.pick_next_certificate(next_expected_height)
+        self.pick_next_certificate()
     }
 
     fn on_receive_certificate(
         &mut self,
         certificate: Certificate,
         response_sender: CertResponseSender,
-        next_expected_height: &mut u64,
     ) -> Result<(), Error> {
         let certificate_id = certificate.hash();
         let height = certificate.height;
@@ -207,7 +208,7 @@ where
             "Received a certificate event for {certificate_id} at height {height}"
         );
 
-        let response = self.accept_certificate(&certificate, *next_expected_height);
+        let response = self.accept_certificate(&certificate);
         let success = response.is_ok();
 
         if let Err(err) = &response {
@@ -219,7 +220,7 @@ where
         }
 
         if success {
-            self.pick_next_certificate(next_expected_height)?;
+            self.pick_next_certificate()?;
         }
 
         Ok(())
@@ -228,7 +229,6 @@ where
     fn on_certifcate_processing_result(
         &mut self,
         result: certificate_processing::JobResult,
-        next_expected_height: &mut u64,
     ) -> Result<(), Error> {
         use certificate_processing::JobResult as JR;
 
@@ -246,19 +246,19 @@ where
                 result,
             } => {
                 info!("Finished settlement of {}", certificate.hash());
-                self.process_settlement_result(result, certificate, next_expected_height)?;
+                self.process_settlement_result(result, certificate)?;
             }
         }
 
-        self.pick_next_certificate(next_expected_height)
+        self.pick_next_certificate()
     }
 
-    fn pick_next_certificate(&mut self, next_expected_height: &mut u64) -> Result<(), Error> {
+    fn pick_next_certificate(&mut self) -> Result<(), Error> {
         if !self.accepts_certificates() {
             return Ok(());
         }
 
-        let height = *next_expected_height;
+        let height = self.next_height;
 
         debug!("Checking the next certificate to process at height {height}");
 
@@ -378,9 +378,10 @@ where
     ///
     /// Performs a number of initial checks for the certificate. If these pass,
     /// the certificate is recorded in persistent storage.
-    fn accept_certificate(&mut self, certificate: &Certificate, next_height: u64) -> CertResponse {
+    fn accept_certificate(&mut self, certificate: &Certificate) -> CertResponse {
         let height = certificate.height;
         let network_id = certificate.network_id;
+        let next_height = self.next_height;
 
         if height < next_height {
             return Err(InitialCheckError::InPast {
@@ -633,7 +634,6 @@ where
         &mut self,
         result: SettlementResult,
         certificate: Certificate,
-        next_expected_height: &mut u64,
     ) -> Result<(), Error> {
         match result {
             Ok(SettledCertificate(certificate_id, _height, _epoch, _index)) => {
@@ -669,8 +669,7 @@ where
                             error: e.to_string(),
                         })?;
 
-                    *next_expected_height += 1;
-
+                    self.next_height += 1;
                     self.at_capacity_for_epoch = true;
 
                     debug!(
@@ -749,6 +748,12 @@ mod tests {
 
         let certificate = Certificate::new_for_test(network_id, 0);
         let certificate_id = certificate.hash();
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(move |_network_id| Ok(None));
 
         state
             .expect_get_certificate_header_by_cursor()
@@ -840,7 +845,6 @@ mod tests {
         .expect("Failed to create a new network task");
 
         let mut epochs = task.clock_ref.subscribe().unwrap();
-        let mut next_expected_height = 0;
 
         let (reply_sx, reply_rx) = oneshot::channel();
         let _ = sender
@@ -854,21 +858,17 @@ mod tests {
         });
 
         // Initial certificate processing + pass it to the certifier.
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
+        task.make_progress(&mut epochs).await.unwrap();
 
-        assert_eq!(next_expected_height, 0);
+        assert_eq!(task.next_height, 0);
         assert!(reply_rx.await.unwrap().is_ok());
 
         // Process the result of the certifier (two steps).
         for _ in 1..3 {
-            task.make_progress(&mut epochs, &mut next_expected_height)
-                .await
-                .unwrap();
+            task.make_progress(&mut epochs).await.unwrap();
         }
 
-        assert_eq!(next_expected_height, 1);
+        assert_eq!(task.next_height, 1);
     }
 
     #[rstest]
@@ -887,6 +887,12 @@ mod tests {
         let certificate2 = Certificate::new_for_test(network_id, 1);
         let certificate_id = certificate.hash();
         let certificate_id2 = certificate2.hash();
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(move |_network_id| Ok(None));
 
         state
             .expect_get_certificate_header_by_cursor()
@@ -1024,7 +1030,6 @@ mod tests {
         .expect("Failed to create a new network task");
 
         let mut epochs = task.clock_ref.subscribe().unwrap();
-        let mut next_expected_height = 0;
 
         let (reply0_sx, reply0_rx) = oneshot::channel();
         sender
@@ -1046,29 +1051,22 @@ mod tests {
                 .expect("Failed to send");
         });
 
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
+        task.make_progress(&mut epochs).await.unwrap();
 
-        assert_eq!(next_expected_height, 0);
+        assert_eq!(task.next_height, 0);
         assert!(reply0_rx.await.unwrap().is_ok());
 
         for _ in 0..3 {
-            task.make_progress(&mut epochs, &mut next_expected_height)
-                .await
-                .unwrap();
+            task.make_progress(&mut epochs).await.unwrap();
         }
 
-        assert_eq!(next_expected_height, 1);
+        assert_eq!(task.next_height, 1);
 
-        tokio::time::timeout(
-            Duration::from_millis(100),
-            task.make_progress(&mut epochs, &mut next_expected_height),
-        )
-        .await
-        .expect_err("Should have timed out");
+        tokio::time::timeout(Duration::from_millis(100), task.make_progress(&mut epochs))
+            .await
+            .expect_err("Should have timed out");
 
-        assert_eq!(next_expected_height, 1);
+        assert_eq!(task.next_height, 1);
 
         assert!(reply1_rx.try_recv().is_ok());
     }
@@ -1096,6 +1094,12 @@ mod tests {
         certs.push_back(certificate.clone());
         certs.push_back(certificate2.clone());
         let certs = Arc::new(Mutex::new(certs));
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(move |_network_id| Ok(None));
 
         state
             .expect_get_certificate_header_by_cursor()
@@ -1258,7 +1262,6 @@ mod tests {
         .expect("Failed to create a new network task");
 
         let mut epochs = task.clock_ref.subscribe().unwrap();
-        let mut next_expected_height = 0;
 
         let (reply_tx, reply_rx) = oneshot::channel();
         sender
@@ -1288,13 +1291,11 @@ mod tests {
         });
 
         for _ in 0..6 {
-            assert_eq!(next_expected_height, 0);
-            task.make_progress(&mut epochs, &mut next_expected_height)
-                .await
-                .unwrap();
+            assert_eq!(task.next_height, 0);
+            task.make_progress(&mut epochs).await.unwrap();
         }
 
-        assert_eq!(next_expected_height, 1);
+        assert_eq!(task.next_height, 1);
         assert!(reply_rx.await.is_ok());
         assert!(reply2_rx.await.is_ok());
     }
@@ -1315,6 +1316,12 @@ mod tests {
         let certificate2 = Certificate::new_for_test(network_id, 1);
         let certificate_id = certificate.hash();
         let certificate_id2 = certificate2.hash();
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(move |_network_id| Ok(None));
 
         state
             .expect_get_certificate_header_by_cursor()
@@ -1464,7 +1471,6 @@ mod tests {
         .expect("Failed to create a new network task");
 
         let mut epochs = task.clock_ref.subscribe().unwrap();
-        let mut next_expected_height = 0;
 
         let (reply0_sx, reply0_rx) = oneshot::channel();
         sender
@@ -1492,28 +1498,21 @@ mod tests {
                 .expect("Failed to send");
         });
 
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
+        task.make_progress(&mut epochs).await.unwrap();
 
-        assert_eq!(next_expected_height, 0);
+        assert_eq!(task.next_height, 0);
 
         for _ in 0..3 {
-            task.make_progress(&mut epochs, &mut next_expected_height)
-                .await
-                .unwrap();
+            task.make_progress(&mut epochs).await.unwrap();
         }
 
-        assert_eq!(next_expected_height, 1);
+        assert_eq!(task.next_height, 1);
 
-        tokio::time::timeout(
-            Duration::from_millis(100),
-            task.make_progress(&mut epochs, &mut next_expected_height),
-        )
-        .await
-        .expect_err("Should have timed out");
+        tokio::time::timeout(Duration::from_millis(100), task.make_progress(&mut epochs))
+            .await
+            .expect_err("Should have timed out");
 
-        assert_eq!(next_expected_height, 1);
+        assert_eq!(task.next_height, 1);
 
         clock_ref
             .get_sender()
@@ -1521,12 +1520,10 @@ mod tests {
             .expect("Failed to send");
 
         for _ in 0..3 {
-            task.make_progress(&mut epochs, &mut next_expected_height)
-                .await
-                .unwrap();
+            task.make_progress(&mut epochs).await.unwrap();
         }
 
-        assert_eq!(next_expected_height, 2);
+        assert_eq!(task.next_height, 2);
 
         assert!(reply0_rx.await.unwrap().is_ok());
         assert!(reply1_rx.await.unwrap().is_ok());
@@ -1572,6 +1569,12 @@ mod tests {
         let (_sender, certificate_stream) = mpsc::channel(100);
 
         state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(move |_network_id| Ok(None));
+
+        state
             .expect_get_certificate_header_by_cursor()
             .once()
             .with(eq(network_id), eq(0))
@@ -1607,7 +1610,7 @@ mod tests {
         .expect("Failed to create a new network task");
 
         let certificate = Certificate::new_for_test(network_id, 0);
-        let result = task.accept_certificate(&certificate, 0);
+        let result = task.accept_certificate(&certificate);
         assert!(result.is_ok());
     }
 
@@ -1626,6 +1629,12 @@ mod tests {
         let clock_ref = clock();
         let network_id = 1.into();
         let (_sender, certificate_stream) = mpsc::channel(100);
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(move |_network_id| Ok(None));
 
         state
             .expect_get_certificate_header_by_cursor()
@@ -1655,7 +1664,7 @@ mod tests {
         .expect("Failed to create a new network task");
 
         let certificate = Certificate::new_for_test(network_id, 0);
-        let result = task.accept_certificate(&certificate, 0);
+        let result = task.accept_certificate(&certificate);
         assert!(matches!(
             result.unwrap_err(),
             InitialCheckError::IllegalReplacement { .. }
@@ -1676,6 +1685,12 @@ mod tests {
 
         let certificate = Certificate::new_for_test(network_id, 0);
         let certificate_id = certificate.hash();
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(move |_network_id| Ok(None));
 
         state
             .expect_get_certificate_header_by_cursor()
@@ -1769,7 +1784,6 @@ mod tests {
         .expect("Failed to create a new network task");
 
         let mut epochs = task.clock_ref.subscribe().unwrap();
-        let mut next_expected_height = 0;
 
         let (reply_sx, reply_rx) = oneshot::channel();
         sender
@@ -1785,17 +1799,13 @@ mod tests {
                 .expect("Failed to send");
         });
 
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
+        task.make_progress(&mut epochs).await.unwrap();
 
-        assert_eq!(next_expected_height, 0);
+        assert_eq!(task.next_height, 0);
 
-        task.make_progress(&mut epochs, &mut next_expected_height)
-            .await
-            .unwrap();
+        task.make_progress(&mut epochs).await.unwrap();
 
-        assert_eq!(next_expected_height, 0);
+        assert_eq!(task.next_height, 0);
         assert!(reply_rx.await.unwrap().is_ok());
     }
 }
