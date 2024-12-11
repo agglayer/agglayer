@@ -352,9 +352,9 @@ fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: Network
     let mut body = String::new();
     res.read_to_string(&mut body).expect("read data to string");
 
-    assert!(body.contains(&format!("storage_smt_read_time_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
+    assert!(body.contains(&format!("storage_smt_read_time_milliseconds_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
     assert!(body.contains(&format!("storage_smt_write_items_count_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
-    assert!(body.contains(&format!("storage_smt_write_time_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
+    assert!(body.contains(&format!("storage_smt_write_time_milliseconds_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
     
     metrics_shutdown(metrics_context);
 
