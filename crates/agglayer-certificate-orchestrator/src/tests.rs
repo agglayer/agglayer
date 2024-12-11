@@ -30,9 +30,10 @@ use agglayer_types::{
 };
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, poll};
+use mockall::predicate::always;
 use mocks::{MockCertifier, MockEpochPacker};
 use rstest::fixture;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -41,6 +42,64 @@ use crate::{
 };
 
 pub(crate) mod mocks;
+
+#[tokio::test]
+async fn certificate_that_failed_to_be_added_endup_in_error() {
+    let (sender, _receiver) = tokio::sync::broadcast::channel(1);
+    let current_block = AtomicU64::new(10);
+    let clock_ref = ClockRef::new(
+        sender,
+        Arc::new(current_block),
+        Arc::new(NonZeroU64::new(1).unwrap()),
+    );
+    let (_certificate_sender, certificate_receiver) = mpsc::channel(1);
+    let cancellation_token = CancellationToken::new();
+    let packer = MockEpochPacker::new();
+    let certifier = MockCertifier::new();
+    let pending_store = MockPendingStore::new();
+    let epochs_store = MockEpochsStore::new();
+    let mut current_epoch = MockPerEpochStore::new();
+    let state_store = MockStateStore::new();
+
+    current_epoch
+        .expect_add_certificate()
+        .with(always(), always())
+        .once()
+        .returning(|_, _| Err(agglayer_storage::error::Error::AlreadyPacked(1)));
+
+    let mut orchestrator = CertificateOrchestrator::try_new(
+        clock_ref,
+        certificate_receiver,
+        cancellation_token,
+        packer,
+        certifier,
+        Arc::new(pending_store),
+        Arc::new(epochs_store),
+        ArcSwap::new(Arc::new(current_epoch)),
+        Arc::new(state_store),
+    )
+    .unwrap();
+
+    let certificate = Certificate::new_for_test(1.into(), 0);
+
+    let (sender, receiver) = oneshot::channel();
+    orchestrator.handle_proven_certificate((
+        sender,
+        ProvenCertificate(
+            certificate.hash(),
+            certificate.network_id,
+            certificate.height,
+        ),
+    ));
+
+    let r = receiver.await.unwrap();
+    assert!(matches!(
+        r,
+        Err(Error::Storage(
+            agglayer_storage::error::Error::AlreadyPacked(1)
+        ))
+    ));
+}
 
 #[derive(Default)]
 pub(crate) struct DummyPendingStore {
