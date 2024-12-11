@@ -1,4 +1,6 @@
-use agglayer_types::{CertificateId, Height, NetworkId, ProofVerificationError};
+use agglayer_types::{
+    CertificateId, CertificateStatusError, Height, NetworkId, ProofVerificationError,
+};
 use pessimistic_proof::ProofError;
 
 #[derive(thiserror::Error, Debug)]
@@ -11,6 +13,7 @@ pub enum PreCertificationError {
     #[error("proof already exists for network {0} at height {1} for certificate {2}")]
     ProofAlreadyExists(NetworkId, Height, CertificateId),
 }
+
 #[derive(thiserror::Error, Debug)]
 pub enum CertificationError {
     #[error(
@@ -49,8 +52,8 @@ pub enum Error {
 
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
-    #[error("internal error")]
-    InternalError,
+    #[error("internal error: {0}")]
+    InternalError(String),
 
     #[error("The status of the certificate is invalid")]
     InvalidCertificateStatus,
@@ -66,4 +69,27 @@ pub enum Error {
         certificate_id: CertificateId,
         error: String,
     },
+}
+
+impl From<Error> for CertificateStatusError {
+    fn from(value: Error) -> Self {
+        match value {
+            Error::Clock(error) => CertificateStatusError::InternalError(error.to_string()),
+            Error::PreCertification(pre_certification_error) => {
+                CertificateStatusError::PreCertificationError(pre_certification_error.to_string())
+            }
+            Error::Certification(certification_error) => {
+                CertificateStatusError::CertificationError(certification_error.to_string())
+            }
+            Error::Storage(error) => CertificateStatusError::InternalError(error.to_string()),
+            Error::InternalError(error) => CertificateStatusError::InternalError(error),
+            Error::InvalidCertificateStatus => {
+                CertificateStatusError::InternalError("InvalidCertificateStatus".to_string())
+            }
+            Error::SettlementError { error, .. } => CertificateStatusError::SettlementError(error),
+            Error::PersistenceError { error, .. } => {
+                CertificateStatusError::InternalError(error.to_string())
+            }
+        }
+    }
 }

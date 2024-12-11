@@ -128,6 +128,10 @@ pub enum CertificateStatusError {
     InternalError(String),
     #[error("Settlement error: {0}")]
     SettlementError(String),
+    #[error("Pre certification error: {0}")]
+    PreCertificationError(String),
+    #[error("Certification error: {0}")]
+    CertificationError(String),
     #[error("L1 Info root not found for l1 leaf count: {0}")]
     L1InfoRootNotFound(u32),
 }

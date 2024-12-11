@@ -40,7 +40,7 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     local_state: LocalNetworkStateData,
     /// The sender to notify that a certificate has been proven.
     certification_notifier: mpsc::Sender<(
-        oneshot::Sender<Result<SettledCertificate, String>>,
+        oneshot::Sender<Result<SettledCertificate, Error>>,
         ProvenCertificate,
     )>,
     /// The clock reference to subscribe to the epoch events and check for
@@ -68,7 +68,7 @@ where
         state_store: Arc<StateStore>,
         certifier_client: Arc<CertifierClient>,
         certification_notifier: mpsc::Sender<(
-            oneshot::Sender<Result<SettledCertificate, String>>,
+            oneshot::Sender<Result<SettledCertificate, Error>>,
             ProvenCertificate,
         )>,
         clock_ref: ClockRef,
@@ -553,9 +553,10 @@ where
                     }
                 }
                 Err(error) => {
+                    let error_as_string = error.to_string();
                     error!(
                         hash = certificate_id.to_string(),
-                        "Failed to settle the certificate: {}", error
+                        "Failed to settle the certificate: {}", error_as_string
                     );
 
                     if self
@@ -563,7 +564,7 @@ where
                         .update_certificate_header_status(
                             &certificate_id,
                             &CertificateStatus::InError {
-                                error: CertificateStatusError::SettlementError(error.clone()),
+                                error: error.into(),
                             },
                         )
                         .is_err()
@@ -577,7 +578,7 @@ where
 
                     return Err(Error::SettlementError {
                         certificate_id,
-                        error,
+                        error: error_as_string,
                     });
                 }
             }
@@ -1030,7 +1031,7 @@ mod tests {
             .with(
                 eq(certificate_id),
                 eq(CertificateStatus::InError {
-                    error: CertificateStatusError::SettlementError(String::new()),
+                    error: CertificateStatusError::InternalError(String::new()),
                 }),
             )
             .returning(|_, _| Ok(()));
@@ -1070,7 +1071,7 @@ mod tests {
                 tokio::select! {
                     Some((sender, ProvenCertificate(id, _, height))) = receiver.recv() => {
                         if id == certificate_id {
-                            sender.send(Err(String::new())).expect("Failed to send");
+                            sender.send(Err(Error::InternalError(String::new()))).expect("Failed to send");
                         } else {
                             sender
                                 .send(Ok(SettledCertificate(id, height, 0, 0))).expect("Failed to send");

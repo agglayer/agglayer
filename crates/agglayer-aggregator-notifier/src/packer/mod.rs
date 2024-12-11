@@ -85,7 +85,11 @@ where
             if let Some(certificate) = related_epoch.get_certificate_at_index(certificate_index)? {
                 certificate
             } else {
-                return Err(Error::InternalError);
+                return Err(Error::InternalError(format!(
+                    "Unable to find the certificate in the epoch {} at index {}",
+                    related_epoch.get_epoch_number(),
+                    certificate_index
+                )));
             };
 
         let network_id = certificate.network_id;
@@ -107,10 +111,12 @@ where
                 {
                     (output, proof.bytes())
                 } else {
-                    return Err(Error::InternalError);
+                    return Err(Error::InternalError(
+                        "Unable to deserialize the proof output".to_string(),
+                    ));
                 }
             } else {
-                return Err(Error::InternalError);
+                return Err(Error::InternalError("Unable to find the proof".to_string()));
             };
 
         let contract_call = self
@@ -233,7 +239,12 @@ where
             })
             .await
             // TODO: Handle error in a better way
-            .map_err(|_| Error::InternalError)?;
+            .map_err(|_| {
+                Error::InternalError(format!(
+                    "Unable to join the packing task for {}",
+                    epoch_number
+                ))
+            })?;
 
             Ok(())
         }))
