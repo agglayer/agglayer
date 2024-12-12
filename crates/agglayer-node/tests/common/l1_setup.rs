@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use tokio::process::Command;
 
 pub struct L1Docker {
@@ -31,6 +33,8 @@ impl L1Docker {
         let ws = format!("ws://127.0.0.1:{}", ws_port);
         let rpc = format!("http://127.0.0.1:{}", rpc_port);
 
+        // Add delay to ensure the container is ready
+        tokio::time::sleep(Duration::from_secs(5)).await;
         Self { id, ws, rpc }
     }
 }
