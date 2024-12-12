@@ -1,6 +1,6 @@
 //! Agglayer smart-contract bindings.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use ethers::prelude::*;
 use ethers::providers::Middleware;
@@ -41,6 +41,7 @@ pub trait RollupContract {
 }
 
 pub struct L1RpcClient<RpcProvider> {
+    rpc: Arc<RpcProvider>,
     inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
     l1_info_tree: polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2<RpcProvider>,
     /// L1 info tree entry used for certificates without imported bridge exits.
@@ -60,6 +61,7 @@ where
     RpcProvider: Middleware + 'static,
 {
     pub async fn try_new(
+        rpc: Arc<RpcProvider>,
         inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
         l1_info_tree: polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2<RpcProvider>,
     ) -> Result<Self, L1RpcInitializationError> {
@@ -103,6 +105,7 @@ where
         };
 
         Ok(Self {
+            rpc,
             inner,
             l1_info_tree,
             default_l1_info_tree_entry,
@@ -155,11 +158,27 @@ where
     }
 }
 
+#[async_trait::async_trait]
 impl<RpcProvider> Settler for L1RpcClient<RpcProvider>
 where
     RpcProvider: Middleware + 'static,
 {
     type M = RpcProvider;
+
+    async fn transaction_exists(&self, tx_hash: H256) -> Result<bool, String> {
+        self.rpc
+            .get_transaction(tx_hash)
+            .await
+            .map_err(|e| e.to_string())
+            .map(|v| v.is_some())
+    }
+
+    fn build_pending_transaction(
+        &self,
+        tx_hash: H256,
+    ) -> PendingTransaction<'_, <Self::M as Middleware>::Provider> {
+        PendingTransaction::new(tx_hash, self.rpc.as_ref().provider())
+    }
 
     fn decode_contract_revert(error: &ContractError<Self::M>) -> Option<String> {
         error
@@ -213,6 +232,7 @@ mod tests {
 
         let l1_rpc = Arc::new(
             L1RpcClient::try_new(
+                rpc.clone(),
                 PolygonRollupManager::new(rollup_manager_contract, rpc.clone()),
                 PolygonZkEVMGlobalExitRootV2::new(ger_contract, rpc.clone()),
             )

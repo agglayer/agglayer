@@ -1,9 +1,17 @@
-use ethers::providers::Middleware;
+use ethers::{
+    providers::{Middleware, PendingTransaction},
+    types::H256,
+};
 use ethers_contract::{ContractCall, ContractError};
 
+#[async_trait::async_trait]
 pub trait Settler {
     type M: Middleware;
-
+    async fn transaction_exists(&self, tx_hash: H256) -> Result<bool, String>;
+    fn build_pending_transaction(
+        &self,
+        tx_hash: H256,
+    ) -> PendingTransaction<'_, <Self::M as ethers::providers::Middleware>::Provider>;
     fn decode_contract_revert(error: &ContractError<Self::M>) -> Option<String>;
     fn build_verify_pessimistic_trusted_aggregator_call(
         &self,

@@ -8,14 +8,14 @@ pub enum PreCertificationError {
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
 
-    #[error("certificate not found for network {0} at height {1}")]
-    CertificateNotFound(NetworkId, Height),
     #[error("proof already exists for network {0} at height {1} for certificate {2}")]
     ProofAlreadyExists(NetworkId, Height, CertificateId),
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertificationError {
+    #[error("certificate not found for network {0} at height {1}")]
+    CertificateNotFound(NetworkId, Height),
     #[error(
         "Failed to retrieve the trusted sequencer address for network {0} during proving phase"
     )]
@@ -72,11 +72,14 @@ pub enum Error {
         certificate_id: CertificateId,
         error: String,
     },
+    #[error("Failed to communicate with L1: {0}")]
+    L1CommunicationError(String),
 }
 
 impl From<Error> for CertificateStatusError {
     fn from(value: Error) -> Self {
         match value {
+            Error::L1CommunicationError(error) => CertificateStatusError::InternalError(error),
             Error::Clock(error) => CertificateStatusError::InternalError(error.to_string()),
             Error::PreCertification(pre_certification_error) => {
                 CertificateStatusError::PreCertificationError(pre_certification_error.to_string())

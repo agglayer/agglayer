@@ -1,8 +1,10 @@
 use agglayer_types::LocalNetworkStateData;
 use agglayer_types::{Certificate, Height, NetworkId};
-use futures_util::future::BoxFuture;
+use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof::multi_batch_header::MultiBatchHeader;
+use pessimistic_proof::LocalNetworkState;
 
-use crate::error::{CertificationError, PreCertificationError};
+use crate::error::CertificationError;
 
 pub trait CertificateInput: Clone {
     fn network_id(&self) -> NetworkId;
@@ -22,15 +24,21 @@ pub struct CertifierOutput {
     pub network: NetworkId,
 }
 
-pub type CertifierResult =
-    Result<BoxFuture<'static, Result<CertifierOutput, CertificationError>>, PreCertificationError>;
+pub type CertifierResult = Result<CertifierOutput, CertificationError>;
 
 /// Apply one Certificate on top of a local state and computes one proof.
+#[async_trait::async_trait]
 pub trait Certifier: Unpin + Send + Sync + 'static {
-    fn certify(
+    async fn certify(
         &self,
         full_state: LocalNetworkStateData,
         network_id: NetworkId,
         height: Height,
     ) -> CertifierResult;
+
+    async fn witness_execution(
+        &self,
+        certificate: &Certificate,
+        state: &mut LocalNetworkStateData,
+    ) -> Result<(MultiBatchHeader<Keccak256Hasher>, LocalNetworkState), CertificationError>;
 }

@@ -1,26 +1,62 @@
-use std::{path::Path, thread::JoinHandle, time::Duration};
+use std::{path::Path, time::Duration};
 
 use agglayer_config::{log::LogLevel, TelemetryConfig};
 use agglayer_prover::fake::FakeProver;
-use anyhow::Result;
 use ethers::{
     core::k256::ecdsa::SigningKey,
     signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet},
 };
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
-use super::l1_setup::L1Docker;
-use crate::common::l1_setup::{self, next_available_addr};
+use crate::l1_setup::L1Docker;
+use crate::l1_setup::{self, next_available_addr};
 
 const PHRASE: &str = "test test test test test test test test test test test junk";
 
-pub async fn setup_agglayer(tmp_dir: &Path) -> (JoinHandle<Result<()>>, L1Docker, WsClient) {
+#[macro_export]
+macro_rules! wait_for_settlement_or_error {
+    ($client:ident, $certificate_id:ident) => {{
+        async {
+            use jsonrpsee::{core::client::ClientT, rpc_params};
+            let mut result;
+            loop {
+                let response: agglayer_types::CertificateHeader = $client
+                    .request(
+                        "interop_getCertificateHeader",
+                        jsonrpsee::rpc_params![$certificate_id],
+                    )
+                    .await
+                    .unwrap();
+
+                result = response;
+
+                match result.status {
+                    agglayer_types::CertificateStatus::InError { .. }
+                    | agglayer_types::CertificateStatus::Settled => {
+                        break;
+                    }
+                    _ => {
+                        tokio::time::sleep(Duration::from_millis(1000)).await;
+                    }
+                }
+            }
+
+            return result;
+        }
+    }};
+}
+
+pub async fn start_l1() -> L1Docker {
     let name = std::thread::current().name().unwrap().replace("::", "_");
     let l1 = l1_setup::L1Docker::new(name).await;
     tokio::time::sleep(Duration::from_secs(1)).await;
-    println!("L1 RPC: {}", l1.rpc);
-    println!("L1 WS RPC: {}", l1.ws);
+    l1
+}
+
+pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver<()>, WsClient) {
+    let (shutdown, receiver) = oneshot::channel();
 
     // Make the mock prover pass
     fail::cfg(
@@ -44,7 +80,6 @@ pub async fn setup_agglayer(tmp_dir: &Path) -> (JoinHandle<Result<()>>, L1Docker
 
     config.prover_entrypoint = format!("http://{}", endpoint);
     let cancellation = CancellationToken::new();
-
     FakeProver::spawn_at(fake_prover, endpoint, cancellation.clone())
         .await
         .unwrap();
@@ -65,7 +100,6 @@ pub async fn setup_agglayer(tmp_dir: &Path) -> (JoinHandle<Result<()>>, L1Docker
 
     let addr = next_available_addr();
     config.rpc.port = addr.port();
-    println!("RPC port: {}", config.rpc.port);
 
     config.telemetry.addr = next_available_addr();
     config.log.level = LogLevel::Debug;
@@ -86,11 +120,13 @@ pub async fn setup_agglayer(tmp_dir: &Path) -> (JoinHandle<Result<()>>, L1Docker
     });
 
     let config_file = tmp_dir.join("config.toml");
-    println!("config_file: {:?}", config_file);
     let toml = toml::to_string_pretty(&config).unwrap();
     std::fs::write(&config_file, toml).unwrap();
 
-    let handle = std::thread::spawn(move || agglayer_node::main(config_file));
+    let handle = std::thread::spawn(move || {
+        _ = agglayer_node::main(config_file);
+        _ = shutdown.send(());
+    });
     let url = format!("ws://{}/", config.rpc_addr());
 
     let mut interval = tokio::time::interval(Duration::from_secs(10));
@@ -115,7 +151,14 @@ pub async fn setup_agglayer(tmp_dir: &Path) -> (JoinHandle<Result<()>>, L1Docker
 
     assert!(!handle.is_finished());
 
-    (handle, l1, client)
+    (receiver, client)
+}
+
+pub async fn setup_network(tmp_dir: &Path) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
+    let l1 = start_l1().await;
+    let (receiver, client) = start_agglayer(tmp_dir, &l1).await;
+
+    (receiver, l1, client)
 }
 
 pub fn get_signer(index: u32) -> Wallet<SigningKey> {

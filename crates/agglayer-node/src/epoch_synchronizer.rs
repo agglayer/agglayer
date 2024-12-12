@@ -299,8 +299,8 @@ mod tests {
         let epoch_10 = epochs_store
             .open_with_start_checkpoint(10, start_checkpoint.clone())
             .unwrap();
-        let certificate_1 = Certificate::new_for_test(network_1, 0).0;
-        let certificate_2 = Certificate::new_for_test(network_2, 0).0;
+        let certificate_1 = Certificate::new_for_test(network_1, 0);
+        let certificate_2 = Certificate::new_for_test(network_2, 0);
         pending_store
             .insert_pending_certificate(network_1, 0, &certificate_1)
             .unwrap();
@@ -419,8 +419,8 @@ mod tests {
         let epoch_10 = epochs_store
             .open_with_start_checkpoint(10, start_checkpoint.clone())
             .unwrap();
-        let certificate_1 = Certificate::new_for_test(network_1, 0).0;
-        let certificate_2 = Certificate::new_for_test(network_2, 0).0;
+        let certificate_1 = Certificate::new_for_test(network_1, 0);
+        let certificate_2 = Certificate::new_for_test(network_2, 0);
         pending_store
             .insert_pending_certificate(network_1, 0, &certificate_1)
             .unwrap();

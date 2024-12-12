@@ -91,8 +91,8 @@ jobs:
           name: "contracts-image"
           path: /tmp/contracts-image.tar
 
-  unit:
-    name: Unit Tests
+  integrations:
+    name: Integration tests
     needs:
       - build_contracts_image
     runs-on: ubuntu-latest-16-cores
@@ -112,6 +112,38 @@ jobs:
           echo ${{ needs.build_contracts_image.outputs.tags }}
           docker load --input /tmp/contracts-image.tar
           docker image ls -a
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install SP1UP
+        run: curl -L https://sp1.succinct.xyz | bash
+
+      - name: Install SP1 toolchain
+        run: /home/runner/.sp1/bin/sp1up
+        shell: bash
+
+      - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
+
+      - name: Install Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Test
+        run: cargo nextest run --workspace -P integrations
+
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 30
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable

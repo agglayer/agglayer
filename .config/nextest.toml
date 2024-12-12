@@ -1,0 +1,5 @@
+[profile.default]
+default-filter = "not package(integrations)"
+
+[profile.integrations]
+default-filter = "package(integrations)"

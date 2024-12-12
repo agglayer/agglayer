@@ -34,9 +34,9 @@ async fn returns_the_pending_certificate_header() {
     let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, 0).0;
-    let proven_certificate = Certificate::new_for_test(network_id, 1).0;
-    let pending_certificate = Certificate::new_for_test(network_id, 2).0;
+    let settled_certificate = Certificate::new_for_test(network_id, 0);
+    let proven_certificate = Certificate::new_for_test(network_id, 1);
+    let pending_certificate = Certificate::new_for_test(network_id, 2);
 
     state_db
         .insert_certificate_header(&settled_certificate, CertificateStatus::Settled)
@@ -126,8 +126,8 @@ async fn returns_the_proven_certificate_header() {
     let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, 0).0;
-    let proven_certificate = Certificate::new_for_test(network_id, 1).0;
+    let settled_certificate = Certificate::new_for_test(network_id, 0);
+    let proven_certificate = Certificate::new_for_test(network_id, 1);
 
     state_db
         .insert_certificate_header(&settled_certificate, CertificateStatus::Settled)
@@ -209,7 +209,7 @@ async fn returns_the_settled_certificate_header() {
     let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, 0).0;
+    let settled_certificate = Certificate::new_for_test(network_id, 0);
 
     state_db
         .insert_certificate_header(&settled_certificate, CertificateStatus::Settled)
@@ -337,8 +337,8 @@ async fn returns_the_highest_height() {
     let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, 10).0;
-    let pending_certificate = Certificate::new_for_test(network_id, 3).0;
+    let settled_certificate = Certificate::new_for_test(network_id, 10);
+    let pending_certificate = Certificate::new_for_test(network_id, 3);
 
     state_db
         .insert_certificate_header(&settled_certificate, CertificateStatus::Settled)
