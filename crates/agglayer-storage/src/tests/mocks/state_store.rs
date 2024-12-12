@@ -20,6 +20,11 @@ mock! {
     }
 
     impl StateWriter for StateStore {
+        fn update_settlement_tx_hash(
+            &self,
+            certificate_id: &CertificateId,
+            tx_hash: Digest,
+        ) -> Result<(), Error>;
         fn assign_certificate_to_epoch(
             &self,
             certificate_id: &CertificateId,

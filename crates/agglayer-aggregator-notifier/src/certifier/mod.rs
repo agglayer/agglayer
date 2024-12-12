@@ -114,13 +114,6 @@ where
 
         let certificate_id = certificate.hash();
 
-        if self.pending_store.get_proof(certificate_id)?.is_some() {
-            return Err(PreCertificationError::ProofAlreadyExists(
-                network_id,
-                height,
-                certificate_id,
-            ));
-        }
         let mut prover_client = self.prover.clone();
         let pending_store = self.pending_store.clone();
         let verifier = self.verifier.clone();

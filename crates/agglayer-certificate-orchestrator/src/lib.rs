@@ -17,7 +17,7 @@ use agglayer_storage::{
         PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
 };
-use agglayer_types::{CertificateId, CertificateIndex, Height, NetworkId};
+use agglayer_types::{CertificateId, ExecutionMode, Height, NetworkId};
 use arc_swap::ArcSwap;
 use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt};
 use network_task::{NetworkTask, NewCertificate};
@@ -51,7 +51,7 @@ pub type EpochPackingTasks =
 pub type NetworkTasks =
     FuturesUnordered<Pin<Box<dyn Future<Output = Result<NetworkId, Error>> + Send + 'static>>>;
 
-pub type SettlementContext = (NetworkId, CertificateIndex, CertificateId);
+pub type SettlementContext = (NetworkId, CertificateId);
 
 pub type SettlementTasks = FuturesUnordered<
     Pin<
@@ -104,7 +104,7 @@ pub struct CertificateOrchestrator<
     /// Epochs store to manage epoch transitions.
     epochs_store: Arc<EpochsStore>,
     /// The current epoch considered by the orchestrator.
-    current_epoch: ArcSwap<PerEpochStore>,
+    current_epoch: Arc<ArcSwap<PerEpochStore>>,
 
     /// Network tasks that are currently running, with their associated
     /// notifier.
@@ -176,7 +176,7 @@ where
             cancellation_token_future: Box::pin(cancellation_token.cancelled_owned()),
             pending_store,
             epochs_store,
-            current_epoch,
+            current_epoch: Arc::new(current_epoch),
             state_store,
             spawned_network_tasks: Default::default(),
             network_tasks: FuturesUnordered::new(),
@@ -344,9 +344,35 @@ where
     /// - Spawning the epoch packing task.
     fn handle_epoch_end(&mut self, epoch: u64) -> Result<(), Error> {
         debug!("Start the settlement of the epoch {}", epoch);
-        let task = self.epoch_packing_task_builder.clone();
 
         let closing_epoch = self.current_epoch.load_full();
+        if let Err(error) = closing_epoch.start_packing() {
+            error!("Failed to pack the epoch {}: {:?}", epoch, error);
+
+            match error {
+                agglayer_storage::error::Error::AlreadyPacked(_) => {}
+                agglayer_storage::error::Error::DBError(error) => {
+                    let msg = format!(
+                        "CRITICAL error during packing of epoch {}: {}",
+                        epoch, error
+                    );
+                    error!(msg);
+                    self.cancellation_token.cancel();
+                    return Err(Error::InternalError(msg));
+                }
+
+                // Other errors are shouldn't happen
+                error => {
+                    let msg = format!(
+                        "CRITICAL error: Failed to pack the epoch {}: {:?}",
+                        epoch, error
+                    );
+                    error!(msg);
+                    return Err(Error::InternalError(msg));
+                }
+            }
+        }
+
         // TODO: Check for overflow
         let next_epoch = epoch + 1;
 
@@ -366,9 +392,6 @@ where
                 return Err(Error::InternalError(msg));
             }
         }
-
-        self.epoch_packing_tasks
-            .push(async move { task.pack(closing_epoch)?.await }.boxed());
 
         Ok(())
     }
@@ -439,7 +462,7 @@ where
 {
     fn handle_settlement_result(
         &mut self,
-        ((_network_id, _index, certificate_id), settlement_result): (
+        ((_network_id, certificate_id), settlement_result): (
             SettlementContext,
             Result<(NetworkId, SettledCertificate), Error>,
         ),
@@ -500,7 +523,7 @@ where
             ProvenCertificate,
         ),
     ) {
-        let current_epoch = self.current_epoch.load_full();
+        let current_epoch = self.current_epoch.clone();
         if self
             .settlement_notifier
             .insert(certificate_id, response)
@@ -518,33 +541,33 @@ where
     /// Try to add a certificate to the current epoch and settle it on L1.
     fn try_adding_certificate(
         &mut self,
-        current_epoch: Arc<PerEpochStore>,
+        current_epoch: Arc<ArcSwap<PerEpochStore>>,
         network: NetworkId,
         height: Height,
         certificate_id: CertificateId,
     ) {
-        match current_epoch.add_certificate(network, height) {
+        let dry_current_epoch = current_epoch.load();
+        match dry_current_epoch.add_certificate(network, height, ExecutionMode::DryRun) {
             Err(error) => {
+                drop(dry_current_epoch);
                 error!(
                     hash = certificate_id.to_string(),
-                    "Failed to add the certificate to the current epoch: {}", error
+                    "(Dry run) Failed to add the certificate to the current epoch: {}", error
                 );
                 if let Some(sender) = self.settlement_notifier.remove(&certificate_id) {
                     if sender.send(Err(Error::Storage(error))).is_err() {
                         error!(
                             hash = certificate_id.to_string(),
-                            "Unable to notify the error of the certificate {}", certificate_id
+                            "(Dry run) Unable to notify the error of the certificate {}",
+                            certificate_id
                         );
                     }
                 }
             }
-            Ok((epoch_number, certificate_index)) => {
-                if let Err(error) = self.settle_certificate(
-                    current_epoch,
-                    certificate_index,
-                    certificate_id,
-                    network,
-                ) {
+            Ok((epoch_number, _certificate_index)) => {
+                drop(dry_current_epoch);
+                if let Err(error) = self.settle_certificate(current_epoch, certificate_id, network)
+                {
                     error!(
                         hash = certificate_id.to_string(),
                         "Failed to settle the certificate {} in epoch {}: {:?}",
@@ -560,8 +583,7 @@ where
     /// Spawn a task that will settle the certificate on the L1.
     fn settle_certificate(
         &mut self,
-        related_epoch: Arc<PerEpochStore>,
-        certificate_index: CertificateIndex,
+        related_epoch: Arc<ArcSwap<PerEpochStore>>,
         certificate_id: CertificateId,
         network_id: NetworkId,
     ) -> Result<(), Error> {
@@ -573,14 +595,12 @@ where
         let task = self.epoch_packing_task_builder.clone();
         self.settlement_tasks.push(
             async move {
-                let result =
-                    match task.settle_certificate(related_epoch, certificate_index, certificate_id)
-                    {
-                        Ok(settlement_future) => settlement_future.await,
-                        Err(error) => Err(error),
-                    };
+                let result = match task.settle_certificate(related_epoch, certificate_id) {
+                    Ok(settlement_future) => settlement_future.await,
+                    Err(error) => Err(error),
+                };
 
-                ((network_id, certificate_index, certificate_id), result)
+                ((network_id, certificate_id), result)
             }
             .boxed(),
         );

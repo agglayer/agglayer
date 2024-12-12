@@ -26,8 +26,7 @@ mock! {
         fn pack(&self, closing_epoch: std::sync::Arc<agglayer_storage::tests::mocks::MockPerEpochStore>) -> Result<BoxFuture<'static, Result<(), Error>>, Error>;
         fn settle_certificate(
             &self,
-            related_epoch: std::sync::Arc<agglayer_storage::tests::mocks::MockPerEpochStore>,
-            certificate_index: agglayer_types::CertificateIndex,
+            related_epoch: std::sync::Arc<arc_swap::ArcSwap<agglayer_storage::tests::mocks::MockPerEpochStore>>,
             certificate_id: agglayer_types::CertificateId,
         ) -> Result<SettlementFuture<'static>, Error>;
     }

@@ -103,7 +103,7 @@ fn adding_a_certificate(
     use agglayer_types::CertificateStatus;
 
     let network_id = 0.into();
-    let certificate = Certificate::new_for_test(network_id, height);
+    let certificate = Certificate::new_for_test(network_id, height).0;
     let certificate_id = certificate.hash();
     let pending_store = store.pending_store.clone();
     let state_store = store.state_store.clone();
@@ -117,13 +117,17 @@ fn adding_a_certificate(
         .unwrap();
 
     pending_store
-        .insert_generated_proof(&certificate_id, &Proof::new_for_test())
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
         .unwrap();
 
     store.start_checkpoint = start_checkpoint.into();
     store.end_checkpoint = RwLock::new(end_checkpoint.into());
 
-    assert!(expected_result(store.add_certificate(network_id, height)));
+    assert!(expected_result(store.add_certificate(
+        network_id,
+        height,
+        agglayer_types::ExecutionMode::Default
+    )));
 
     let header = state_store
         .get_certificate_header(&certificate_id)
@@ -134,7 +138,7 @@ fn adding_a_certificate(
     assert_eq!(
         header.status,
         if expected_certificate_index.is_some() {
-            CertificateStatus::Candidate
+            CertificateStatus::Settled
         } else {
             CertificateStatus::Proven
         }
@@ -186,16 +190,20 @@ fn adding_multiple_certificates(
     store.end_checkpoint = RwLock::new(end_checkpoint.into());
 
     while let Some(expected_result) = expected_results.pop_front() {
-        let certificate = Certificate::new_for_test(network, height);
+        let certificate = Certificate::new_for_test(network, height).0;
         pending_store
             .insert_pending_certificate(network, height, &certificate)
             .unwrap();
         pending_store
-            .insert_generated_proof(&certificate.hash(), &Proof::new_for_test())
+            .insert_generated_proof(&certificate.hash(), &Proof::dummy())
             .unwrap();
 
         assert!(
-            expected_result(store.add_certificate(network, height)),
+            expected_result(store.add_certificate(
+                network,
+                height,
+                agglayer_types::ExecutionMode::Default
+            )),
             "{}:{} failed to pass the test",
             network,
             height

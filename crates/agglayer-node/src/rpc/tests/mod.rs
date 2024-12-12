@@ -226,6 +226,13 @@ impl DebugWriter for DummyStore {
 }
 
 impl StateWriter for DummyStore {
+    fn update_settlement_tx_hash(
+        &self,
+        _certificate_id: &CertificateId,
+        _tx_hash: Digest,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
     fn assign_certificate_to_epoch(
         &self,
         _certificate_id: &CertificateId,

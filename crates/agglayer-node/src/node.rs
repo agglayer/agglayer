@@ -184,6 +184,7 @@ impl Node {
         let epoch_packing_aggregator_task = EpochPackerClient::try_new(
             Arc::new(config.outbound.rpc.settle.clone()),
             state_store.clone(),
+            pending_store.clone(),
             Arc::clone(&rollup_manager),
         )?;
 

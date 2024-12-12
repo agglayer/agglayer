@@ -37,7 +37,9 @@ impl DebugReader for DebugStore {
         certificate_id: &CertificateId,
     ) -> Result<Option<Certificate>, Error> {
         match self {
-            DebugStore::Enabled(store) => store.db.get::<DebugCertificatesColumn>(certificate_id),
+            DebugStore::Enabled(store) => {
+                Ok(store.db.get::<DebugCertificatesColumn>(certificate_id)?)
+            }
             DebugStore::Disabled => Ok(None),
         }
     }
@@ -46,9 +48,9 @@ impl DebugReader for DebugStore {
 impl DebugWriter for DebugStore {
     fn add_certificate(&self, certificate: &Certificate) -> Result<(), Error> {
         match self {
-            DebugStore::Enabled(store) => store
+            DebugStore::Enabled(store) => Ok(store
                 .db
-                .put::<DebugCertificatesColumn>(&certificate.hash(), certificate),
+                .put::<DebugCertificatesColumn>(&certificate.hash(), certificate)?),
             DebugStore::Disabled => Ok(()),
         }
     }

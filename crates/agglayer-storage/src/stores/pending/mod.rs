@@ -45,8 +45,9 @@ impl PendingCertificateWriter for PendingStore {
         network_id: NetworkId,
         height: Height,
     ) -> Result<(), Error> {
-        self.db
-            .delete::<PendingQueueColumn>(&PendingQueueKey(network_id, height))
+        Ok(self
+            .db
+            .delete::<PendingQueueColumn>(&PendingQueueKey(network_id, height))?)
     }
     fn set_latest_pending_certificate_per_network(
         &self,
@@ -54,10 +55,10 @@ impl PendingCertificateWriter for PendingStore {
         height: &Height,
         certificate_id: &CertificateId,
     ) -> Result<(), Error> {
-        self.db.put::<LatestPendingCertificatePerNetworkColumn>(
+        Ok(self.db.put::<LatestPendingCertificatePerNetworkColumn>(
             network_id,
             &PendingCertificate(*certificate_id, *height),
-        )
+        )?)
     }
 
     fn insert_pending_certificate(
@@ -83,8 +84,9 @@ impl PendingCertificateWriter for PendingStore {
 
         // TODO: make it batch
         self.set_latest_pending_certificate_per_network(&network_id, &height, &certificate.hash())?;
-        self.db
-            .put::<PendingQueueColumn>(&PendingQueueKey(network_id, height), certificate)
+        Ok(self
+            .db
+            .put::<PendingQueueColumn>(&PendingQueueKey(network_id, height), certificate)?)
     }
 
     fn insert_generated_proof(
@@ -92,15 +94,18 @@ impl PendingCertificateWriter for PendingStore {
         certificate_id: &agglayer_types::CertificateId,
         proof: &agglayer_types::Proof,
     ) -> Result<(), Error> {
-        self.db
-            .put::<ProofPerCertificateColumn>(certificate_id, proof)
+        Ok(self
+            .db
+            .put::<ProofPerCertificateColumn>(certificate_id, proof)?)
     }
 
     fn remove_generated_proof(
         &self,
         certificate_id: &agglayer_types::CertificateId,
     ) -> Result<(), Error> {
-        self.db.delete::<ProofPerCertificateColumn>(certificate_id)
+        Ok(self
+            .db
+            .delete::<ProofPerCertificateColumn>(certificate_id)?)
     }
 
     fn set_latest_proven_certificate_per_network(
@@ -109,10 +114,10 @@ impl PendingCertificateWriter for PendingStore {
         height: &Height,
         certificate_id: &CertificateId,
     ) -> Result<(), Error> {
-        self.db.put::<LatestProvenCertificatePerNetworkColumn>(
+        Ok(self.db.put::<LatestProvenCertificatePerNetworkColumn>(
             network_id,
             &ProvenCertificate(*certificate_id, *network_id, *height),
-        )
+        )?)
     }
 }
 
@@ -121,9 +126,10 @@ impl PendingCertificateReader for PendingStore {
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<(CertificateId, Height)>, Error> {
-        self.db
+        Ok(self
+            .db
             .get::<LatestPendingCertificatePerNetworkColumn>(network_id)
-            .map(|v| v.map(|PendingCertificate(id, height)| (id, height)))
+            .map(|v| v.map(|PendingCertificate(id, height)| (id, height)))?)
     }
 
     fn get_certificate(
@@ -131,12 +137,13 @@ impl PendingCertificateReader for PendingStore {
         network_id: NetworkId,
         height: Height,
     ) -> Result<Option<Certificate>, Error> {
-        self.db
-            .get::<PendingQueueColumn>(&PendingQueueKey(network_id, height))
+        Ok(self
+            .db
+            .get::<PendingQueueColumn>(&PendingQueueKey(network_id, height))?)
     }
 
     fn get_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error> {
-        self.db.get::<ProofPerCertificateColumn>(&certificate_id)
+        Ok(self.db.get::<ProofPerCertificateColumn>(&certificate_id)?)
     }
 
     fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error> {
@@ -162,21 +169,24 @@ impl PendingCertificateReader for PendingStore {
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<(NetworkId, Height, CertificateId)>, Error> {
-        self.db
+        Ok(self
+            .db
             .get::<LatestProvenCertificatePerNetworkColumn>(network_id)
-            .map(|v| v.map(|ProvenCertificate(id, network, height)| (network, height, id)))
+            .map(|v| v.map(|ProvenCertificate(id, network, height)| (network, height, id)))?)
     }
 
     fn multi_get_certificate(
         &self,
         keys: &[(NetworkId, Height)],
     ) -> Result<Vec<Option<Certificate>>, Error> {
-        self.db
-            .multi_get::<PendingQueueColumn>(keys.iter().map(|(n, h)| PendingQueueKey(*n, *h)))
+        Ok(self
+            .db
+            .multi_get::<PendingQueueColumn>(keys.iter().map(|(n, h)| PendingQueueKey(*n, *h)))?)
     }
 
     fn multi_get_proof(&self, keys: &[CertificateId]) -> Result<Vec<Option<Proof>>, Error> {
-        self.db
-            .multi_get::<ProofPerCertificateColumn>(keys.iter().copied())
+        Ok(self
+            .db
+            .multi_get::<ProofPerCertificateColumn>(keys.iter().copied())?)
     }
 }

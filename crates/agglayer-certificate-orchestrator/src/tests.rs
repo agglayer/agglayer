@@ -26,11 +26,11 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof,
+    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 use arc_swap::ArcSwap;
 use futures_util::{future::BoxFuture, poll};
-use mockall::predicate::always;
+use mockall::predicate::{always, eq};
 use mocks::{MockCertifier, MockEpochPacker};
 use rstest::fixture;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -63,9 +63,9 @@ async fn certificate_that_failed_to_be_added_endup_in_error() {
 
     current_epoch
         .expect_add_certificate()
-        .with(always(), always())
+        .with(always(), always(), eq(ExecutionMode::DryRun))
         .once()
-        .returning(|_, _| Err(agglayer_storage::error::Error::AlreadyPacked(1)));
+        .returning(|_, _, _| Err(agglayer_storage::error::Error::AlreadyPacked(1)));
 
     let mut orchestrator = CertificateOrchestrator::try_new(
         clock_ref,
@@ -80,7 +80,7 @@ async fn certificate_that_failed_to_be_added_endup_in_error() {
     )
     .unwrap();
 
-    let certificate = Certificate::new_for_test(1.into(), 0);
+    let certificate = Certificate::new_for_test(1.into(), 0).0;
 
     let (sender, receiver) = oneshot::channel();
     orchestrator.handle_proven_certificate((
@@ -154,6 +154,7 @@ impl PerEpochWriter for DummyPendingStore {
         &self,
         _network_id: NetworkId,
         _height: Height,
+        _mode: ExecutionMode,
     ) -> Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
         Ok((0, 0))
     }
@@ -316,6 +317,14 @@ impl PendingCertificateWriter for DummyPendingStore {
 }
 
 impl StateWriter for DummyPendingStore {
+    fn update_settlement_tx_hash(
+        &self,
+        _certificate_id: &CertificateId,
+        _tx_hash: Digest,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
+
     fn assign_certificate_to_epoch(
         &self,
         _certificate_id: &CertificateId,
@@ -347,6 +356,7 @@ impl StateWriter for DummyPendingStore {
                 new_local_exit_root: certificate.new_local_exit_root,
                 status,
                 metadata: certificate.metadata,
+                settlement_tx_hash: None,
             },
         );
 
@@ -565,7 +575,7 @@ async fn test_collect_certificates() {
     let (data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
 
-    let (check_sender, mut check_receiver) = mpsc::channel(1);
+    let (check_sender, _check_receiver) = mpsc::channel(1);
     let check = Check::builder()
         .pending_store(pending_store.clone())
         .state_store(state_store.clone())
@@ -587,11 +597,12 @@ async fn test_collect_certificates() {
     .expect("Unable to create orchestrator");
 
     _ = data_sender.send((1.into(), 1, [0; 32].into())).await;
+    let current_epoch = orchestrator.current_epoch.load().clone();
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(1));
 
     let _poll = poll!(&mut orchestrator);
 
-    assert!(check_receiver.recv().await.is_some());
+    assert!(current_epoch.is_epoch_packed());
 }
 
 // A certificate received after an EpochEnded is stored for next epoch
@@ -895,15 +906,11 @@ impl EpochPacker for Check {
     type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
     fn settle_certificate(
         &self,
-        _epoch: Arc<Self::PerEpochStore>,
-        certificate_index: CertificateIndex,
+        _epoch: Arc<ArcSwap<Self::PerEpochStore>>,
         certificate_id: CertificateId,
     ) -> Result<BoxFuture<Result<(NetworkId, SettledCertificate), Error>>, Error> {
         Ok(Box::pin(async move {
-            Ok((
-                0.into(),
-                SettledCertificate(certificate_id, 0, 0, certificate_index),
-            ))
+            Ok((0.into(), SettledCertificate(certificate_id, 0, 0, 0)))
         }))
     }
 
@@ -920,7 +927,7 @@ impl EpochPacker for Check {
             certificate: self
                 .expected_certificate
                 .clone()
-                .unwrap_or_else(|| Certificate::new_for_test(1.into(), 0)),
+                .unwrap_or_else(|| Certificate::new_for_test(1.into(), 0).0),
             height: 0,
             new_state: LocalNetworkStateData::default(),
             network: 1.into(),
@@ -956,7 +963,7 @@ impl Certifier for Check {
 
         let certificate_id = certificate.hash();
 
-        let proof = Proof::new_for_test();
+        let proof = Proof::dummy();
         self.pending_store
             .insert_generated_proof(&certificate_id, &proof)
             .expect("Storage failure: Unable to insert proof");

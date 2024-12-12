@@ -1,0 +1,19 @@
+[package]
+name = "agglayer-test-suite"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+alloy = "0.7"
+agglayer-config = { path = "../agglayer-config" }
+agglayer-storage = { path = "../agglayer-storage" }
+agglayer-types = { path = "../agglayer-types" }
+derive_builder = "0.20.2"
+pessimistic-proof = { path = "../pessimistic-proof" }
+pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
+
+rstest.workspace = true
+
+[lints]
+workspace = true

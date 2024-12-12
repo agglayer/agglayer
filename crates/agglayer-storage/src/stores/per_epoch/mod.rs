@@ -6,10 +6,12 @@ use std::{
     },
 };
 
-use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Height, NetworkId, Proof};
+use agglayer_types::{
+    Certificate, CertificateIndex, EpochNumber, ExecutionMode, Height, NetworkId, Proof,
+};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::ReadOptions;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use super::{
     interfaces::reader::PerEpochReader, MetadataWriter, PendingCertificateReader,
@@ -171,6 +173,7 @@ where
         &self,
         network_id: NetworkId,
         height: Height,
+        mode: ExecutionMode,
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
         let lock = self.lock_for_adding_certificate();
 
@@ -183,8 +186,14 @@ where
         let mut end_checkpoint = self.end_checkpoint.write();
 
         debug!(
-            "Try adding certificate for network {} at height {}",
-            network_id, height
+            "{}Try adding certificate for network {} at height {}",
+            if mode == ExecutionMode::DryRun {
+                "(Dry run) "
+            } else {
+                ""
+            },
+            network_id,
+            height
         );
         let end_checkpoint_entry = end_checkpoint.entry(network_id);
 
@@ -196,18 +205,36 @@ where
             // the start checkpoint, this is an invalid state.
             (Some(_), Entry::Vacant(_)) => {
                 warn!(
-                    "Network {} is present in the start checkpoint but not in the end checkpoint",
+                    "{}Network {} is present in the start checkpoint but not in the end checkpoint",
+                    if mode == ExecutionMode::DryRun {
+                        "(Dry run) "
+                    } else {
+                        ""
+                    },
                     network_id
                 );
                 return Err(Error::Unexpected(format!(
-                    "Network {} is present in the start checkpoint but not in the end checkpoint",
+                    "{}Network {} is present in the start checkpoint but not in the end checkpoint",
+                    if mode == ExecutionMode::DryRun {
+                        "(Dry run) "
+                    } else {
+                        ""
+                    },
                     network_id
                 )));
             }
             // If the network is not found in the end checkpoint and the height is 0,
             // this is the first certificate for this network.
             (None, Entry::Vacant(_entry)) if height == 0 => {
-                debug!("First certificate for network {}", network_id);
+                debug!(
+                    "{}First certificate for network {}",
+                    if mode == ExecutionMode::DryRun {
+                        "(Dry run) "
+                    } else {
+                        ""
+                    },
+                    network_id
+                );
                 // Adding the network to the end checkpoint.
                 end_checkpoint_entry_assigment = Some(0);
 
@@ -234,8 +261,14 @@ where
                     && height - start_height <= MAX_CERTIFICATE_PER_EPOCH =>
             {
                 debug!(
-                    "Certificate candidate for network {} at height {} accepted",
-                    network_id, height
+                    "{}Certificate candidate for network {} at height {} accepted",
+                    if mode == ExecutionMode::DryRun {
+                        "(Dry run) "
+                    } else {
+                        ""
+                    },
+                    network_id,
+                    height
                 );
 
                 end_checkpoint_entry_assigment = Some(height);
@@ -248,6 +281,15 @@ where
                     *current_height.get(),
                 ))?
             }
+        }
+
+        if mode == ExecutionMode::DryRun {
+            // If this is a dry run, we don't want to add the certificate to the DB
+            // The certificate index is informal
+            return Ok((
+                *self.epoch_number,
+                self.next_certificate_index.load(Ordering::Relaxed),
+            ));
         }
 
         // Acquire locks
@@ -310,28 +352,6 @@ where
             return Err(Error::AlreadyPacked(*self.epoch_number))?;
         }
 
-        let epoch_number = *self.epoch_number;
-        // No more certificate can be added
-        let iterator = self.db.iter_with_direction::<CertificatePerIndexColumn>(
-            ReadOptions::default(),
-            rocksdb::Direction::Forward,
-        )?;
-        let mut batch_status = Vec::new();
-
-        for entry in iterator {
-            if let Err(error) = entry {
-                error!(
-                    "CRITICAL error: Epoch {} contains a certificate that is unparsable: {}",
-                    epoch_number, error
-                );
-                return Err(error);
-            }
-
-            let (index, certificate) = entry.unwrap();
-
-            batch_status.push((certificate.hash(), index));
-        }
-
         self.db.put::<PerEpochMetadataColumn>(
             &PerEpochMetadataKey::Packed,
             &PerEpochMetadataValue::Packed(true),
@@ -371,11 +391,11 @@ where
         &self,
         index: CertificateIndex,
     ) -> Result<Option<Certificate>, Error> {
-        self.db.get::<CertificatePerIndexColumn>(&index)
+        Ok(self.db.get::<CertificatePerIndexColumn>(&index)?)
     }
 
     fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error> {
-        self.db.get::<ProofPerIndexColumn>(&index)
+        Ok(self.db.get::<ProofPerIndexColumn>(&index)?)
     }
 
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {

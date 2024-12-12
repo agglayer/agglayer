@@ -1,16 +1,11 @@
 use agglayer_types::{EpochNumber, Height, NetworkId};
 
+use crate::storage::DBError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("RocksDB error: {0}")]
-    RocksDB(#[from] rocksdb::Error),
-
-    #[error("Trying to access an unknown ColumnFamily")]
-    ColumnFamilyNotFound,
-
-    #[error(r#"Serialization error: {0}
-        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    Serialization(#[from] bincode::Error),
+    #[error("DB error: {0}")]
+    DBError(#[from] DBError),
 
     #[error(r#"An unexpected error occurred: {0}
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]

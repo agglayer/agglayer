@@ -49,7 +49,7 @@ async fn send_certificate_method_can_be_called() {
     let _: CertificateId = client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), 0)],
+            rpc_params![Certificate::new_for_test(1.into(), 0).0],
         )
         .await
         .unwrap();

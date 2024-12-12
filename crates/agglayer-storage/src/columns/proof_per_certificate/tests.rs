@@ -24,7 +24,7 @@ fn can_parse_key() {
 
 #[test]
 fn can_parse_value() {
-    let value = Proof::new_for_test();
+    let value = Proof::dummy();
 
     let encoded = value.encode().expect("Unable to encode value");
 

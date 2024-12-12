@@ -38,12 +38,35 @@ pub fn compute_signature_info(
 /// Trees for the network B, as well as the LET for network A.
 #[derive(Clone)]
 pub struct Forest {
+    pub wallet: LocalWallet,
     pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
     pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
     pub state_b: LocalNetworkStateData,
 }
 
+impl Default for Forest {
+    fn default() -> Self {
+        let local_balance_tree = Smt::new();
+
+        Self {
+            wallet: LocalWallet::new(&mut thread_rng()),
+            local_exit_tree_data_a: LocalExitTreeData::new(),
+            l1_info_tree: Default::default(),
+            state_b: LocalNetworkStateData {
+                exit_tree: LocalExitTree::new(),
+                balance_tree: local_balance_tree,
+                nullifier_tree: Smt::new(),
+            },
+        }
+    }
+}
+
 impl Forest {
+    pub fn with_signer(mut self, signer: LocalWallet) -> Self {
+        self.wallet = signer;
+
+        self
+    }
     /// Create a new forest based on given initial balances.
     pub fn new(initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>) -> Self {
         Self::new_with_local_exit_tree(initial_balances, LocalExitTree::new())
@@ -62,6 +85,7 @@ impl Forest {
         }
 
         Self {
+            wallet: LocalWallet::new(&mut thread_rng()),
             local_exit_tree_data_a: LocalExitTreeData::new(),
             l1_info_tree: Default::default(),
             state_b: LocalNetworkStateData {

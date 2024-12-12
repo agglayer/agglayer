@@ -61,6 +61,11 @@ impl ClockRef {
     }
 
     #[cfg(feature = "testutils")]
+    pub fn update_block_height(&self, n: u64) {
+        self.block_height.store(n, Ordering::SeqCst);
+    }
+
+    #[cfg(feature = "testutils")]
     pub fn get_sender(&self) -> broadcast::Sender<Event> {
         self.sender.clone()
     }

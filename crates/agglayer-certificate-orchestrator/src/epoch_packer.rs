@@ -4,7 +4,8 @@ use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PerEpochReader, PerEpochWriter},
 };
-use agglayer_types::{CertificateId, CertificateIndex, NetworkId};
+use agglayer_types::{CertificateId, NetworkId};
+use arc_swap::ArcSwap;
 use futures_util::future::BoxFuture;
 
 use crate::Error;
@@ -21,8 +22,7 @@ pub trait EpochPacker: Unpin + Send + Sync + 'static {
 
     fn settle_certificate(
         &self,
-        related_epoch: Arc<Self::PerEpochStore>,
-        certificate_index: CertificateIndex,
+        related_epoch: Arc<ArcSwap<Self::PerEpochStore>>,
         certificate_id: CertificateId,
     ) -> Result<SettlementFuture, Error>;
 }

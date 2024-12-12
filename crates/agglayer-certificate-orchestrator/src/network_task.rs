@@ -53,6 +53,8 @@ pub(crate) struct NetworkTask<CertifierClient, PendingStore, StateStore> {
     certificate_stream: mpsc::Receiver<NewCertificate>,
     /// Flag to indicate if the network is at capacity for the current epoch.
     at_capacity_for_epoch: bool,
+    /// latest certificate settled
+    latest_settled: Option<SettledCertificate>,
 }
 
 impl<CertifierClient, PendingStore, StateStore>
@@ -81,11 +83,16 @@ where
             .read_local_network_state(network_id)?
             .unwrap_or_default();
 
+        let latest_settled = state_store
+            .get_latest_settled_certificate_per_network(&network_id)?
+            .map(|(_v, settled)| settled);
+
         debug!(
             "Local state for network {}: {}",
             network_id,
             local_state.get_roots().display_to_hex()
         );
+
         Ok(Self {
             network_id,
             pending_store,
@@ -97,6 +104,7 @@ where
             pending_state: None,
             certificate_stream,
             at_capacity_for_epoch: false,
+            latest_settled,
         })
     }
 
@@ -163,9 +171,18 @@ where
 
                     return Ok(());
                 }
+                match self.latest_settled {
+                    Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
+                        warn!("Network {} is at capacity for the epoch {}", self.network_id, current_epoch);
+                        return Ok(());
 
-                self.at_capacity_for_epoch = false;
-                *next_expected_height
+
+                    },
+                    _ => {
+                        self.at_capacity_for_epoch = false;
+                        *next_expected_height
+                    }
+                }
             }
             Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
                 info!(
@@ -315,30 +332,33 @@ where
                     "Proof certification completed for {certificate_id} for network {}",
                     self.network_id
                 );
-                if let Err(error) = self
+                match self
                     .on_proven_certificate(height, certificate, new_state)
                     .await
                 {
-                    error!(
-                        hash = certificate_id.to_string(),
-                        "Error during the certification process of {certificate_id} for network \
-                         {}: {:?}",
-                        self.network_id,
-                        error
-                    );
-                    self.pending_state = None;
-                    self.at_capacity_for_epoch = false;
-                } else {
-                    *next_expected_height += 1;
-                    self.at_capacity_for_epoch = true;
+                    Err(error) => {
+                        error!(
+                            hash = certificate_id.to_string(),
+                            "Error during the certification process of {certificate_id} for \
+                             network {}: {:?}",
+                            self.network_id,
+                            error
+                        );
+                        self.pending_state = None;
+                        self.at_capacity_for_epoch = false;
+                    }
+                    Ok(settled) => {
+                        self.latest_settled = Some(settled);
+                        *next_expected_height += 1;
+                        self.at_capacity_for_epoch = true;
 
-                    debug!(
-                        hash = certificate_id.to_string(),
-                        "Certification process completed for {certificate_id} for network {}",
-                        self.network_id
-                    );
+                        debug!(
+                            hash = certificate_id.to_string(),
+                            "Certification process completed for {certificate_id} for network {}",
+                            self.network_id
+                        );
+                    }
                 }
-
                 Ok(())
             }
 
@@ -471,7 +491,7 @@ where
         height: Height,
         certificate: Certificate,
         new_state: LocalNetworkStateData,
-    ) -> Result<(), Error> {
+    ) -> Result<SettledCertificate, Error> {
         let certificate_id = certificate.hash();
         if let Err(error) = self
             .pending_store
@@ -511,7 +531,7 @@ where
 
         if let Ok(result) = receiver.await {
             match result {
-                Ok(SettledCertificate(certificate_id, _height, _epoch, _index)) => {
+                Ok(settled_certificate) => {
                     info!(
                         hash = certificate_id.to_string(),
                         "Received a certificate settlement notification"
@@ -551,6 +571,8 @@ where
                             self.local_state.get_roots().display_to_hex()
                         );
                     }
+
+                    Ok(settled_certificate)
                 }
                 Err(error) => {
                     let error_as_string = error.to_string();
@@ -576,15 +598,18 @@ where
                         );
                     }
 
-                    return Err(Error::SettlementError {
+                    Err(Error::SettlementError {
                         certificate_id,
                         error: error_as_string,
-                    });
+                    })
                 }
             }
+        } else {
+            Err(Error::SettlementError {
+                certificate_id,
+                error: "Settlement failed due to timeout".to_string(),
+            })
         }
-
-        Ok(())
     }
 }
 
@@ -592,8 +617,12 @@ where
 mod tests {
     use std::{collections::VecDeque, sync::Mutex, time::Duration};
 
-    use agglayer_storage::tests::mocks::{MockPendingStore, MockStateStore};
-    use mockall::predicate::{always, eq};
+    use agglayer_storage::tests::{
+        mocks::{MockPendingStore, MockStateStore},
+        TempDBDir,
+    };
+    use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
+    use mockall::predicate::{always, eq, in_iter};
     use rstest::rstest;
 
     use super::*;
@@ -611,15 +640,22 @@ mod tests {
         let network_id = 1.into();
         let (sender, certificate_stream) = mpsc::channel(1);
 
-        let certificate = Certificate::new_for_test(network_id, 0);
+        let (certificate, _) = Certificate::new_for_test(network_id, 0);
         let certificate_id = certificate.hash();
         pending
             .expect_get_certificate()
             .once()
             .with(eq(network_id), eq(0))
             .returning(|network_id, height| {
-                Ok(Some(Certificate::new_for_test(network_id, height)))
+                let (certificate, _) = Certificate::new_for_test(network_id, height);
+                Ok(Some(certificate))
             });
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(|_| Ok(None));
 
         state
             .expect_get_certificate_header()
@@ -636,6 +672,7 @@ mod tests {
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
+                    settlement_tx_hash: None,
                 }))
             });
 
@@ -721,8 +758,8 @@ mod tests {
         let network_id = 1.into();
         let (sender, certificate_stream) = mpsc::channel(100);
 
-        let certificate = Certificate::new_for_test(network_id, 0);
-        let certificate2 = Certificate::new_for_test(network_id, 1);
+        let (certificate, _) = Certificate::new_for_test(network_id, 0);
+        let (certificate2, _) = Certificate::new_for_test(network_id, 1);
         let certificate_id = certificate.hash();
         let certificate_id2 = certificate2.hash();
 
@@ -731,7 +768,9 @@ mod tests {
             .once()
             .with(eq(network_id), eq(0))
             .returning(|network_id, height| {
-                Ok(Some(Certificate::new_for_test(network_id, height)))
+                let (c, _) = Certificate::new_for_test(network_id, height);
+
+                Ok(Some(c))
             });
 
         pending
@@ -739,8 +778,16 @@ mod tests {
             .never()
             .with(eq(network_id), eq(1))
             .returning(|network_id, height| {
-                Ok(Some(Certificate::new_for_test(network_id, height)))
+                let (c, _) = Certificate::new_for_test(network_id, height);
+
+                Ok(Some(c))
             });
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(|_| Ok(None));
+
         state
             .expect_get_certificate_header()
             .once()
@@ -756,6 +803,7 @@ mod tests {
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
+                    settlement_tx_hash: None,
                 }))
             });
 
@@ -774,6 +822,7 @@ mod tests {
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
+                    settlement_tx_hash: None,
                 }))
             });
         certifier
@@ -894,8 +943,8 @@ mod tests {
         let network_id = 1.into();
         let (sender, certificate_stream) = mpsc::channel(100);
 
-        let certificate = Certificate::new_for_test(network_id, 0);
-        let mut certificate2 = Certificate::new_for_test(network_id, 0);
+        let (certificate, _) = Certificate::new_for_test(network_id, 0);
+        let (mut certificate2, _) = Certificate::new_for_test(network_id, 0);
         certificate2.new_local_exit_root = [2u8; 32].into();
 
         let certificate_id = certificate.hash();
@@ -920,8 +969,16 @@ mod tests {
             .never()
             .with(eq(network_id), eq(1))
             .returning(|network_id, height| {
-                Ok(Some(Certificate::new_for_test(network_id, height)))
+                let (c, _) = Certificate::new_for_test(network_id, height);
+                Ok(Some(c))
             });
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(|_| Ok(None));
+
         state
             .expect_get_certificate_header()
             .once()
@@ -937,6 +994,7 @@ mod tests {
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
+                    settlement_tx_hash: None,
                 }))
             });
 
@@ -955,6 +1013,7 @@ mod tests {
                     new_local_exit_root: [2; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
+                    settlement_tx_hash: None,
                 }))
             });
 
@@ -1106,8 +1165,8 @@ mod tests {
         let network_id = 1.into();
         let (sender, certificate_stream) = mpsc::channel(100);
 
-        let certificate = Certificate::new_for_test(network_id, 0);
-        let certificate2 = Certificate::new_for_test(network_id, 1);
+        let (certificate, _) = Certificate::new_for_test(network_id, 0);
+        let (certificate2, _) = Certificate::new_for_test(network_id, 1);
         let certificate_id = certificate.hash();
         let certificate_id2 = certificate2.hash();
 
@@ -1116,7 +1175,7 @@ mod tests {
             .once()
             .with(eq(network_id), eq(0))
             .returning(|network_id, height| {
-                Ok(Some(Certificate::new_for_test(network_id, height)))
+                Ok(Some(Certificate::new_for_test(network_id, height).0))
             });
 
         pending
@@ -1124,7 +1183,7 @@ mod tests {
             .once()
             .with(eq(network_id), eq(1))
             .returning(|network_id, height| {
-                Ok(Some(Certificate::new_for_test(network_id, height)))
+                Ok(Some(Certificate::new_for_test(network_id, height).0))
             });
 
         state
@@ -1134,6 +1193,12 @@ mod tests {
         state
             .expect_write_local_network_state()
             .returning(|_, _, _| Ok(()));
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(|_| Ok(None));
 
         state
             .expect_get_certificate_header()
@@ -1150,6 +1215,7 @@ mod tests {
                     prev_local_exit_root: [1; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
+                    settlement_tx_hash: None,
                 }))
             });
 
@@ -1168,6 +1234,7 @@ mod tests {
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
+                    settlement_tx_hash: None,
                 }))
             });
         certifier
@@ -1286,6 +1353,8 @@ mod tests {
 
         assert_eq!(next_expected_height, 1);
 
+        clock_ref.update_block_height(2);
+
         clock_ref
             .get_sender()
             .send(agglayer_clock::Event::EpochEnded(0))
@@ -1310,7 +1379,7 @@ mod tests {
         let network_id = 1.into();
         let (sender, certificate_stream) = mpsc::channel(100);
 
-        let certificate = Certificate::new_for_test(network_id, 0);
+        let certificate = Certificate::new_for_test(network_id, 0).0;
         let certificate_id = certificate.hash();
 
         pending
@@ -1318,7 +1387,7 @@ mod tests {
             .once()
             .with(eq(network_id), eq(0))
             .returning(|network_id, height| {
-                Ok(Some(Certificate::new_for_test(network_id, height)))
+                Ok(Some(Certificate::new_for_test(network_id, height).0))
             });
 
         state
@@ -1336,6 +1405,7 @@ mod tests {
                     new_local_exit_root: [0; 32].into(),
                     metadata: [0; 32].into(),
                     status: CertificateStatus::Pending,
+                    settlement_tx_hash: None,
                 }))
             });
 
@@ -1353,6 +1423,12 @@ mod tests {
             "Internal error happened in the certification process of {}: TimedOut",
             certificate_id
         );
+
+        state
+            .expect_get_latest_settled_certificate_per_network()
+            .once()
+            .with(eq(network_id))
+            .returning(|_| Ok(None));
 
         state
             .expect_update_certificate_header_status()
@@ -1404,5 +1480,130 @@ mod tests {
             .unwrap();
 
         assert_eq!(next_expected_height, 0);
+    }
+
+    #[rstest]
+    #[test_log::test(tokio::test)]
+    #[timeout(Duration::from_secs(2))]
+    async fn process_next_certificate() {
+        let tmp = TempDBDir::new();
+        let storage = new_storage(&tmp.path);
+
+        let mut certifier = MockCertifier::new();
+        let (certification_notifier, mut receiver) = mpsc::channel(1);
+        let clock_ref = clock();
+        let clock_sender = clock_ref.get_sender();
+        let network_id = 1.into();
+        let (sender, certificate_stream) = mpsc::channel(100);
+
+        let mut forest = Forest::default();
+        let (certificate, _signer) = forest.apply_events(
+            &[(*USDC, 10.try_into().unwrap())],
+            &[(*USDC, 1.try_into().unwrap())],
+        );
+        let certificate_id = certificate.hash();
+        storage
+            .pending
+            .insert_pending_certificate(network_id, 0, &certificate)
+            .expect("unable to insert certificate in pending");
+
+        storage
+            .state
+            .insert_certificate_header(&certificate, CertificateStatus::Pending)
+            .expect("Failed to insert certificate header");
+
+        let (mut certificate, _signer) =
+            forest.apply_events(&[], &[(*USDC, 1.try_into().unwrap())]);
+        certificate.height = 1;
+
+        storage
+            .pending
+            .insert_pending_certificate(network_id, 1, &certificate)
+            .expect("unable to insert certificate in pending");
+        storage
+            .state
+            .insert_certificate_header(&certificate, CertificateStatus::Pending)
+            .expect("Failed to insert certificate header");
+
+        let pending_store = storage.pending.clone();
+        certifier
+            .expect_certify()
+            .times(2)
+            .with(always(), eq(network_id), in_iter(vec![0, 1]))
+            .returning(move |mut new_state, network, height| {
+                let certificate = pending_store
+                    .get_certificate(network, height)
+                    .expect("Failed to get certificate")
+                    .expect("Certificate not found");
+
+                let signer = pessimistic_proof::Address::new([0; 20]);
+                let _ = new_state
+                    .apply_certificate(
+                        &certificate,
+                        signer,
+                        certificate
+                            .l1_info_root()
+                            .expect("Failed to get L1 info root")
+                            .unwrap_or_default(),
+                    )
+                    .expect("Failed to apply certificate");
+
+                Ok(Box::pin(async move {
+                    Ok(CertifierOutput {
+                        certificate,
+                        height,
+                        new_state,
+                        network,
+                    })
+                }))
+            });
+
+        let mut task = NetworkTask::new(
+            Arc::clone(&storage.pending),
+            Arc::clone(&storage.state),
+            Arc::new(certifier),
+            certification_notifier,
+            clock_ref.clone(),
+            network_id,
+            certificate_stream,
+        )
+        .expect("Failed to create a new network task");
+
+        let mut epochs = task.clock_ref.subscribe().unwrap();
+        let mut next_expected_height = 0;
+
+        sender
+            .send(NewCertificate {
+                certificate_id,
+                height: 0,
+            })
+            .await
+            .expect("Failed to send the certificate");
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some((sender, ProvenCertificate(id, _, height))) = receiver.recv() => {
+
+                        sender
+                            .send(Ok(SettledCertificate(id, height, 0, height)))
+                            .expect("Failed to send");
+                        }
+                }
+            }
+        });
+
+        task.make_progress(&mut epochs, &mut next_expected_height)
+            .await
+            .unwrap();
+
+        assert_eq!(next_expected_height, 1);
+        clock_ref.update_block_height(2);
+        _ = clock_sender.send(agglayer_clock::Event::EpochEnded(0));
+
+        task.make_progress(&mut epochs, &mut next_expected_height)
+            .await
+            .unwrap();
+        assert_eq!(next_expected_height, 2);
     }
 }

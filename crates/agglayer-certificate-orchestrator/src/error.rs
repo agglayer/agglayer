@@ -58,6 +58,9 @@ pub enum Error {
     #[error("The status of the certificate is invalid")]
     InvalidCertificateStatus,
 
+    #[error("The certificate header is not found")]
+    NotFoundCertificateHeader,
+
     #[error("Failed to settle the certificate {certificate_id}: {error}")]
     SettlementError {
         certificate_id: CertificateId,
@@ -85,6 +88,9 @@ impl From<Error> for CertificateStatusError {
             Error::InternalError(error) => CertificateStatusError::InternalError(error),
             Error::InvalidCertificateStatus => {
                 CertificateStatusError::InternalError("InvalidCertificateStatus".to_string())
+            }
+            Error::NotFoundCertificateHeader => {
+                CertificateStatusError::InternalError("NotFoundCertificateHeader".to_string())
             }
             Error::SettlementError { error, .. } => CertificateStatusError::SettlementError(error),
             Error::PersistenceError { error, .. } => {
