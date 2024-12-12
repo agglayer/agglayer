@@ -14,6 +14,7 @@ use common::agglayer_setup::{get_signer, setup_agglayer};
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
+#[ignore = "Setup is not automated for creating the l1 docker image"]
 async fn successfully_push_certificate() {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
@@ -60,6 +61,7 @@ async fn successfully_push_certificate() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
+#[ignore = "Setup is not automated for creating the l1 docker image"]
 async fn failure_on_settlement_transaction_failed_status_0() {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
@@ -112,6 +114,7 @@ async fn failure_on_settlement_transaction_failed_status_0() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
+#[ignore = "Setup is not automated for creating the l1 docker image"]
 async fn failure_on_settlement_transaction_failed_no_receipt() {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
@@ -164,6 +167,7 @@ async fn failure_on_settlement_transaction_failed_no_receipt() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
+#[ignore = "Setup is not automated for creating the l1 docker image"]
 async fn retry_on_error() {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
@@ -247,6 +251,7 @@ async fn retry_on_error() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
+#[ignore = "Setup is not automated for creating the l1 docker image"]
 async fn schedule_two_certs() {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
