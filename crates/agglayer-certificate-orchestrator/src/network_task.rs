@@ -19,7 +19,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     error::PreCertificationError, CertResponse, CertResponseSender, CertificationError, Certifier,
-    CertifierOutput, Error, InitialCheckError,
+    CertifierOutput, Error, PreCheckError,
 };
 
 mod certificate_processing;
@@ -383,16 +383,13 @@ where
         let network_id = certificate.network_id;
         let next_height = self.next_height;
 
-        if height < next_height {
-            return Err(InitialCheckError::InPast {
-                height,
-                next_height,
-            });
-        }
+        let acceptable_height = next_height..=(next_height + MAX_FUTURE_HEIGHT_DISTANCE);
 
-        let max_height = next_height + MAX_FUTURE_HEIGHT_DISTANCE;
-        if height > max_height {
-            return Err(InitialCheckError::FarFuture { height, max_height });
+        if !acceptable_height.contains(&height) {
+            return Err(PreCheckError::IllegalHeight {
+                height,
+                accepting: acceptable_height,
+            });
         }
 
         // TODO signature check + rate limit
@@ -408,7 +405,7 @@ where
             match status {
                 CS::InError { error: _ } => (),
                 status @ (CS::Pending | CS::Proven | CS::Candidate | CS::Settled) => {
-                    return Err(InitialCheckError::IllegalReplacement { status });
+                    return Err(PreCheckError::IllegalReplacement { status });
                 }
             }
         }
@@ -1667,7 +1664,7 @@ mod tests {
         let result = task.accept_certificate(&certificate);
         assert!(matches!(
             result.unwrap_err(),
-            InitialCheckError::IllegalReplacement { .. }
+            PreCheckError::IllegalReplacement { .. }
         ));
     }
 

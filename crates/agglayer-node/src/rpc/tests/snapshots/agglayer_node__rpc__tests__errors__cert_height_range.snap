@@ -1,14 +1,13 @@
 ---
 source: crates/agglayer-node/src/rpc/tests/errors.rs
-assertion_line: 144
-expression: "SendCertificate { detail: \"Certificate is in the past (height 55, expecting 57)\" }"
+expression: "SendCertificate { detail: \"Certificate height (55) outside of acceptable range (57..=67)\" }"
 snapshot_kind: text
 ---
 {
   "code": -10006,
   "data": {
     "send-certificate": {
-      "detail": "Certificate is in the past (height 55, expecting 57)"
+      "detail": "Certificate height (55) outside of acceptable range (57..=67)"
     }
   },
   "message": "Cannot send certificate"

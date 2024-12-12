@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 use agglayer_types::{
     CertificateId, CertificateStatus, CertificateStatusError, Height, NetworkId,
     ProofVerificationError,
@@ -5,18 +7,29 @@ use agglayer_types::{
 use pessimistic_proof::ProofError;
 
 #[derive(thiserror::Error, Debug)]
-pub enum InitialCheckError {
+pub enum PreCheckError {
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
 
     #[error("Certificate submission failed")]
     CertificateSubmission,
 
+    /*
     #[error("Certificate is in the past (height {height}, expecting {next_height})")]
     InPast { height: u64, next_height: u64 },
 
     #[error("Certificate is too far in the future (height {height}, max allowed {max_height})")]
     FarFuture { height: u64, max_height: u64 },
+    */
+    #[error(
+        "Certificate height ({height}) outside of acceptable range ({}..={})",
+        accepting.start(),
+        accepting.end(),
+    )]
+    IllegalHeight {
+        height: u64,
+        accepting: RangeInclusive<u64>,
+    },
 
     #[error("Cannot replace an existing {status} certificate")]
     IllegalReplacement { status: CertificateStatus },

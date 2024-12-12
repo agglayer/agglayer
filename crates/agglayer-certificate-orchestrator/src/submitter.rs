@@ -1,6 +1,6 @@
 use tokio::sync::{mpsc, oneshot};
 
-use crate::{CertResponseSender, Certificate, InitialCheckError as Error};
+use crate::{CertResponseSender, Certificate, PreCheckError as Error};
 
 /// An entry point to submit certificates to the orchestrator.
 #[derive(Debug, Clone)]

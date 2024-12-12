@@ -40,7 +40,7 @@ mod tests;
 
 pub use certifier::{CertificateInput, Certifier, CertifierOutput, CertifierResult};
 pub use epoch_packer::{EpochPacker, SettlementFuture};
-pub use error::{CertificationError, Error, InitialCheckError, PreCertificationError};
+pub use error::{CertificationError, Error, PreCertificationError, PreCheckError};
 pub use submitter::Submitter as CertificateSubmitter;
 
 const MAX_POLL_READS: usize = 1_000;
@@ -68,7 +68,7 @@ pub type SettlementTasks = FuturesUnordered<
 >;
 
 /// A response to the certificate submission.
-pub type CertResponse = Result<(), InitialCheckError>;
+pub type CertResponse = Result<(), PreCheckError>;
 
 /// A certificate response sender.
 pub type CertResponseSender = oneshot::Sender<CertResponse>;
@@ -332,7 +332,7 @@ where
                         "Failed to send the certificate {certificate_id} to the network task for \
                          network {network_id}",
                     );
-                    let _ = reply_sender.send(Err(InitialCheckError::Internal));
+                    let _ = reply_sender.send(Err(PreCheckError::Internal));
                 }
             } else {
                 warn!("Unable to find the network task for network {}", network_id);
