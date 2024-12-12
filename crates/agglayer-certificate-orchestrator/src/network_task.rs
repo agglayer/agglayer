@@ -209,7 +209,6 @@ where
         );
 
         let response = self.accept_certificate(&certificate);
-        let success = response.is_ok();
 
         if let Err(err) = &response {
             info!("Certificate initial processing error for {certificate_id}: {err}");
@@ -219,11 +218,7 @@ where
             warn!("Failed to send response ({response:?}) to {certificate_id}");
         }
 
-        if success {
-            self.pick_next_certificate()?;
-        }
-
-        Ok(())
+        self.pick_next_certificate()
     }
 
     fn on_certifcate_processing_result(
@@ -237,7 +232,7 @@ where
                 certificate_id,
                 result,
             } => {
-                info!("Finished certification of {certificate_id}");
+                info!("Finished certification attempt of {certificate_id}");
                 self.process_certification_result(result, certificate_id)?
             }
 
@@ -245,7 +240,7 @@ where
                 certificate,
                 result,
             } => {
-                info!("Finished settlement of {}", certificate.hash());
+                info!("Finished settlement attempt of {}", certificate.hash());
                 self.process_settlement_result(result, certificate)?;
             }
         }
@@ -298,8 +293,10 @@ where
             // certification process has already been initiated but not completed.
             // It also means that the proof exists and thus we should redo the native
             // execution to update the local state.
-            CertificateStatus::Proven | CertificateStatus::Candidate => {
-                // Redo native execution to get the new_state
+            CertificateStatus::Started
+            | CertificateStatus::Proven
+            | CertificateStatus::Candidate => {
+                // Redo native execution to get the new_state if `Proven` or `Candidate`.
 
                 error!(
                     hash = certificate_id.to_string(),
@@ -337,41 +334,64 @@ where
             height
         );
 
-        match self
-            .certifier_client
-            .certify(self.local_state.clone(), self.network_id, height)
-        {
-            Ok(task) => self.processing_task.start_proving(certificate_id, task)?,
-
-            // If we received a `CertificateNotFound` error, it means that the certificate was
-            // not found in the pending store. This can happen if we try to
-            // certify a certificate that has not been received yet. When
-            // received, the certificate will be stored in the pending store and
-            // the certifier task will be spawned again.
-            Err(PreCertificationError::CertificateNotFound(_network_id, _height)) => {}
-
-            Err(PreCertificationError::ProofAlreadyExists(network_id, height, certificate_id)) => {
-                warn!(
-                    hash = certificate_id.to_string(),
-                    "Received a proof certification error for a proof that already exists for \
-                     network {} at height {}",
-                    network_id,
-                    height
-                );
-            }
-            Err(PreCertificationError::Storage(error)) => {
-                warn!(
-                    hash = certificate_id.to_string(),
-                    "Received a storage error while trying to certify the certificate for network \
-                     {} at height {}: {:?}",
-                    self.network_id,
-                    height,
-                    error
-                );
-            }
+        let status = match self.start_certification(certificate_id, height) {
+            Ok(()) => CertificateStatus::Started,
+            Err(error) => CertificateStatus::in_error(error),
         };
+        self.set_certificate_status(&certificate_id, &status);
 
         Ok(())
+    }
+
+    fn start_certification(
+        &mut self,
+        certificate_id: CertificateId,
+        height: u64,
+    ) -> Result<(), PreCertificationError> {
+        let certification_task = self
+            .certifier_client
+            .certify(self.local_state.clone(), self.network_id, height)
+            .inspect_err(|err| match err {
+                // If we received a `CertificateNotFound` error, it means that the certificate was
+                // not found in the pending store. This can happen if we try to
+                // certify a certificate that has not been received yet. When
+                // received, the certificate will be stored in the pending store and
+                // the certifier task will be spawned again.
+                PreCertificationError::CertificateNotFound(_network_id, _height) => {}
+
+                // Certification failed to start
+                PreCertificationError::FailedToStart => {
+                    let network_id = self.network_id;
+                    warn!(
+                        hash = certificate_id.to_string(),
+                        "Failed to start certification for network {network_id} at height {height}"
+                    );
+                }
+
+                PreCertificationError::ProofAlreadyExists(network_id, height, certificate_id) => {
+                    warn!(
+                        hash = certificate_id.to_string(),
+                        "Received a proof certification error for a proof that already exists for \
+                         network {} at height {}",
+                        network_id,
+                        height
+                    );
+                }
+
+                PreCertificationError::Storage(error) => {
+                    warn!(
+                        hash = certificate_id.to_string(),
+                        "Received a storage error while trying to certify the certificate for \
+                         network {} at height {}: {:?}",
+                        self.network_id,
+                        height,
+                        error
+                    );
+                }
+            })?;
+
+        self.processing_task
+            .start_proving(certificate_id, certification_task)
     }
 
     /// Initial certificate checks.
@@ -403,8 +423,8 @@ where
 
             let status = existing_header.status;
             match status {
-                CS::InError { error: _ } => (),
-                status @ (CS::Pending | CS::Proven | CS::Candidate | CS::Settled) => {
+                CS::Pending | CS::InError { error: _ } => (),
+                status @ (CS::Started | CS::Proven | CS::Candidate | CS::Settled) => {
                     return Err(PreCheckError::IllegalReplacement { status });
                 }
             }
@@ -519,21 +539,8 @@ where
                     }
                 };
 
-                let status = CertificateStatus::InError { error };
+                self.set_certificate_status(&certificate_id, &CertificateStatus::in_error(error));
 
-                debug!("Updating status of {certificate_id} to {status:?}");
-
-                if self
-                    .state_store
-                    .update_certificate_header_status(&certificate_id, &status)
-                    .is_err()
-                {
-                    error!(
-                        hash = certificate_id.to_string(),
-                        "Certificate {certificate_id} in error and failed to update the \
-                         certificate header status"
-                    );
-                }
                 Ok(())
             }
         }
@@ -602,15 +609,7 @@ where
             );
         }
 
-        if let Err(error) = self
-            .state_store
-            .update_certificate_header_status(&certificate_id, &CertificateStatus::Proven)
-        {
-            error!(
-                hash = certificate_id.to_string(),
-                "Failed to update the certificate header status: {error:?}",
-            );
-        }
+        self.set_certificate_status(&certificate_id, &CertificateStatus::Proven);
 
         self.pending_state = Some(new_state);
 
@@ -692,21 +691,7 @@ where
                     "Failed to settle the certificate: {error_as_string}"
                 );
 
-                let status = CertificateStatus::InError {
-                    error: error.into(),
-                };
-
-                if self
-                    .state_store
-                    .update_certificate_header_status(&certificate_id, &status)
-                    .is_err()
-                {
-                    error!(
-                        hash = certificate_id.to_string(),
-                        "Certificate {certificate_id} in error and failed to update the \
-                         certificate header status"
-                    );
-                }
+                self.set_certificate_status(&certificate_id, &CertificateStatus::in_error(error));
 
                 return Err(Error::SettlementError {
                     certificate_id,
@@ -716,6 +701,21 @@ where
         }
 
         Ok(())
+    }
+
+    fn set_certificate_status(&self, certificate_id: &CertificateId, status: &CertificateStatus) {
+        debug!("Updating status of {certificate_id} to {status:?}");
+
+        let result = self
+            .state_store
+            .update_certificate_header_status(certificate_id, status);
+
+        if let Err(error) = result {
+            error!(
+                hash = certificate_id.to_string(),
+                "Failed to update status of certificate {certificate_id} to {status}: {error}"
+            );
+        }
     }
 }
 
@@ -824,6 +824,11 @@ mod tests {
             .once()
             .with(eq(network_id), eq(0), eq(certificate_id))
             .returning(|_, _, _| Ok(()));
+        state
+            .expect_update_certificate_header_status()
+            .once()
+            .with(eq(certificate_id), eq(CertificateStatus::Started))
+            .returning(|_, _| Ok(()));
         state
             .expect_update_certificate_header_status()
             .once()
@@ -1009,6 +1014,11 @@ mod tests {
             .once()
             .with(eq(network_id), eq(0), eq(certificate_id))
             .returning(|_, _, _| Ok(()));
+        state
+            .expect_update_certificate_header_status()
+            .once()
+            .with(eq(certificate_id), eq(CertificateStatus::Started))
+            .returning(|_, _| Ok(()));
         state
             .expect_update_certificate_header_status()
             .once()
@@ -1229,6 +1239,16 @@ mod tests {
         state
             .expect_update_certificate_header_status()
             .once()
+            .with(eq(certificate_id), eq(CertificateStatus::Started))
+            .returning(|_, _| Ok(()));
+        state
+            .expect_update_certificate_header_status()
+            .once()
+            .with(eq(certificate_id2), eq(CertificateStatus::Started))
+            .returning(|_, _| Ok(()));
+        state
+            .expect_update_certificate_header_status()
+            .once()
             .with(eq(certificate_id), eq(CertificateStatus::Proven))
             .returning(|_, _| Ok(()));
         state
@@ -1241,9 +1261,9 @@ mod tests {
             .once()
             .with(
                 eq(certificate_id),
-                eq(CertificateStatus::InError {
-                    error: CertificateStatusError::InternalError(String::new()),
-                }),
+                eq(CertificateStatus::in_error(
+                    CertificateStatusError::InternalError("mock error".into()),
+                )),
             )
             .returning(|_, _| Ok(()));
 
@@ -1267,17 +1287,13 @@ mod tests {
             .expect("Failed to send the certificate");
 
         let (reply2_tx, reply2_rx) = oneshot::channel();
-        sender
-            .send((certificate2, reply2_tx))
-            .await
-            .expect("Failed to send the certificate");
 
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     Some((sender, ProvenCertificate(id, _, height))) = receiver.recv() => {
                         if id == certificate_id {
-                            sender.send(Err(Error::InternalError(String::new()))).expect("Failed to send");
+                            sender.send(Err(Error::InternalError("mock error".into()))).expect("Failed to send");
                         } else {
                             sender
                                 .send(Ok(SettledCertificate(id, height, 0, 0))).expect("Failed to send");
@@ -1287,7 +1303,20 @@ mod tests {
             }
         });
 
-        for _ in 0..6 {
+        let mut num_fails = 0;
+        for _i in 0..3 {
+            assert_eq!(task.next_height, 0);
+            let is_err = task.make_progress(&mut epochs).await.is_err();
+            num_fails += is_err as u32;
+        }
+        assert_eq!(num_fails, 1);
+
+        sender
+            .send((certificate2, reply2_tx))
+            .await
+            .expect("Failed to send the certificate");
+
+        for _i in 0..3 {
             assert_eq!(task.next_height, 0);
             task.make_progress(&mut epochs).await.unwrap();
         }
@@ -1447,7 +1476,19 @@ mod tests {
         state
             .expect_update_certificate_header_status()
             .once()
+            .with(eq(certificate_id), eq(CertificateStatus::Started))
+            .returning(|_, _| Ok(()));
+
+        state
+            .expect_update_certificate_header_status()
+            .once()
             .with(eq(certificate_id), eq(CertificateStatus::Proven))
+            .returning(|_, _| Ok(()));
+
+        state
+            .expect_update_certificate_header_status()
+            .once()
+            .with(eq(certificate_id2), eq(CertificateStatus::Started))
             .returning(|_, _| Ok(()));
 
         state
@@ -1546,14 +1587,15 @@ mod tests {
 
     #[rstest]
     #[case(None)]
-    #[case(Some(dummy_cert_header(1.into(), 0, CertificateStatus::InError {
-        error: CertificateStatusError::TrustedSequencerNotFound(1.into())
-    })))]
-    #[case(Some(dummy_cert_header(1.into(), 0, CertificateStatus::InError {
-        error: CertificateStatusError::ProofVerificationFailed(
+    #[case(Some(dummy_cert_header(1.into(), 0, CertificateStatus::Pending)))]
+    #[case(Some(dummy_cert_header(1.into(), 0, CertificateStatus::in_error(
+        CertificateStatusError::TrustedSequencerNotFound(1.into())
+    ))))]
+    #[case(Some(dummy_cert_header(1.into(), 0, CertificateStatus::in_error(
+        CertificateStatusError::ProofVerificationFailed(
             agglayer_types::ProofVerificationError::InvalidPublicValues
         )
-    })))]
+    ))))]
     #[test_log::test(tokio::test)]
     #[timeout(Duration::from_secs(1))]
     async fn process_certificate_ok(#[case] existing_cert_header: Option<CertificateHeader>) {
@@ -1613,7 +1655,7 @@ mod tests {
 
     #[rstest]
     #[case(CertificateStatus::Proven)]
-    #[case(CertificateStatus::Pending)]
+    #[case(CertificateStatus::Started)]
     #[case(CertificateStatus::Candidate)]
     #[case(CertificateStatus::Settled)]
     #[test_log::test(tokio::test)]
@@ -1757,11 +1799,17 @@ mod tests {
         state
             .expect_update_certificate_header_status()
             .once()
+            .with(eq(certificate_id), eq(CertificateStatus::Started))
+            .returning(|_, _| Ok(()));
+
+        state
+            .expect_update_certificate_header_status()
+            .once()
             .with(
                 eq(certificate_id),
-                eq(CertificateStatus::InError {
-                    error: CertificateStatusError::InternalError(expected_error),
-                }),
+                eq(CertificateStatus::in_error(
+                    CertificateStatusError::InternalError(expected_error),
+                )),
             )
             .returning(|_, _| Ok(()));
 

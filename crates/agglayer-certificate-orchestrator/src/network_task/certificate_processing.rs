@@ -5,7 +5,8 @@ use agglayer_types::Certificate;
 use tokio::{sync::oneshot, task::JoinHandle};
 
 use super::{
-    CertificateId, CertificationError, CertificationNotifier, CertifierResult, SettlementResult,
+    CertificateId, CertificationError, CertificationNotifier, CertifierResult,
+    PreCertificationError, SettlementResult,
 };
 
 /// Manages the jobs associated with certificate processing.
@@ -37,13 +38,16 @@ impl Manager {
         &mut self,
         certificate_id: CertificateId,
         task: impl Future<Output = CertifierResult> + Send + 'static,
-    ) -> Result<(), CertificationError> {
-        self.start_with(move || {
-            Ok(Self::Proving(ProverJob {
-                task_handle: tokio::spawn(task),
-                certificate_id,
-            }))
-        })
+    ) -> Result<(), PreCertificationError> {
+        self.start_with(
+            move || {
+                Ok(Self::Proving(ProverJob {
+                    task_handle: tokio::spawn(task),
+                    certificate_id,
+                }))
+            },
+            || PreCertificationError::FailedToStart,
+        )
     }
 
     /// Start the settlement process.
@@ -52,38 +56,40 @@ impl Manager {
         certificate: Certificate,
         sender: &CertificationNotifier,
     ) -> Result<(), CertificationError> {
-        self.start_with(move || {
-            let proven_certificate = ProvenCertificate(
-                certificate.hash(),
-                certificate.network_id,
-                certificate.height,
-            );
+        self.start_with(
+            move || {
+                let proven_certificate = ProvenCertificate(
+                    certificate.hash(),
+                    certificate.network_id,
+                    certificate.height,
+                );
 
-            let (result_tx, result_rx) = oneshot::channel();
-            let err_f = |_| CertificationError::InternalError("Settlement channel full".into());
-            sender
-                .try_send((result_tx, proven_certificate))
-                .map_err(err_f)?;
+                let (result_tx, result_rx) = oneshot::channel();
+                let err_f = |_| CertificationError::InternalError("Settlement channel full".into());
+                sender
+                    .try_send((result_tx, proven_certificate))
+                    .map_err(err_f)?;
 
-            Ok(Self::Settling(SettlementJob {
-                certificate,
-                result_rx,
-            }))
-        })
+                Ok(Self::Settling(SettlementJob {
+                    certificate,
+                    result_rx,
+                }))
+            },
+            || CertificationError::InternalError("Certificate processing in progress".into()),
+        )
     }
 
-    fn start_with(
+    fn start_with<E>(
         &mut self,
-        start_fn: impl FnOnce() -> Result<Self, CertificationError>,
-    ) -> Result<(), CertificationError> {
+        start_fn: impl FnOnce() -> Result<Self, E>,
+        err_fn: impl FnOnce() -> E,
+    ) -> Result<(), E> {
         match self {
             Self::Idle => {
                 *self = start_fn()?;
                 Ok(())
             }
-            Self::Proving(_) | Self::Settling(_) => Err(CertificationError::InternalError(
-                "Certificate processing in progress".into(),
-            )),
+            Self::Proving(_) | Self::Settling(_) => Err(err_fn()),
         }
     }
 

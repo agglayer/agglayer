@@ -14,13 +14,6 @@ pub enum PreCheckError {
     #[error("Certificate submission failed")]
     CertificateSubmission,
 
-    /*
-    #[error("Certificate is in the past (height {height}, expecting {next_height})")]
-    InPast { height: u64, next_height: u64 },
-
-    #[error("Certificate is too far in the future (height {height}, max allowed {max_height})")]
-    FarFuture { height: u64, max_height: u64 },
-    */
     #[error(
         "Certificate height ({height}) outside of acceptable range ({}..={})",
         accepting.start(),
@@ -40,9 +33,10 @@ pub enum PreCheckError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum PreCertificationError {
+    #[error("Certification failed to start")]
+    FailedToStart,
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
-
     #[error("certificate not found for network {0} at height {1}")]
     CertificateNotFound(NetworkId, Height),
     #[error("proof already exists for network {0} at height {1} for certificate {2}")]
@@ -110,12 +104,8 @@ impl From<Error> for CertificateStatusError {
     fn from(value: Error) -> Self {
         match value {
             Error::Clock(error) => CertificateStatusError::InternalError(error.to_string()),
-            Error::PreCertification(pre_certification_error) => {
-                CertificateStatusError::PreCertificationError(pre_certification_error.to_string())
-            }
-            Error::Certification(certification_error) => {
-                CertificateStatusError::CertificationError(certification_error.to_string())
-            }
+            Error::PreCertification(error) => error.into(),
+            Error::Certification(error) => error.into(),
             Error::Storage(error) => CertificateStatusError::InternalError(error.to_string()),
             Error::InternalError(error) => CertificateStatusError::InternalError(error),
             Error::InvalidCertificateStatus => {
@@ -126,5 +116,17 @@ impl From<Error> for CertificateStatusError {
                 CertificateStatusError::InternalError(error.to_string())
             }
         }
+    }
+}
+
+impl From<PreCertificationError> for CertificateStatusError {
+    fn from(error: PreCertificationError) -> Self {
+        CertificateStatusError::PreCertificationError(error.to_string())
+    }
+}
+
+impl From<CertificationError> for CertificateStatusError {
+    fn from(error: CertificationError) -> Self {
+        CertificateStatusError::CertificationError(error.to_string())
     }
 }

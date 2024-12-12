@@ -164,9 +164,7 @@ impl Error {
         err.into()
     }
 
-    pub(crate) fn send_certificate(
-        err: agglayer_certificate_orchestrator::PreCheckError,
-    ) -> Self {
+    pub(crate) fn send_certificate(err: agglayer_certificate_orchestrator::PreCheckError) -> Self {
         let detail = err.to_string();
         Self::SendCertificate { detail }
     }
