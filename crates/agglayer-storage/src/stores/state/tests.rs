@@ -342,7 +342,7 @@ fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: Network
         let count = rand::thread_rng().gen_range(1..100);
 
         // Fill exit_tree
-        let exit_tree_leaves = (0..count).map(|_| Digest(data.clone())).collect::<Vec<_>>();
+        let exit_tree_leaves = (0..count).map(|_| Digest(data)).collect::<Vec<_>>();
         for l in &exit_tree_leaves {
             lns.exit_tree.add_leaf(*l).unwrap();
         }
@@ -351,7 +351,7 @@ fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: Network
         let balance_tree_data: Vec<(TestKey<LOCAL_BALANCE_TREE_DEPTH>, _)> = (0..count).map(|_| {
             let mut key: TestKey<LOCAL_BALANCE_TREE_DEPTH> = TestKey([false; LOCAL_BALANCE_TREE_DEPTH]);
             rand::thread_rng().fill(&mut key.0[..]);
-            (key, Digest(data.clone()))}).collect();
+            (key, Digest(data))}).collect();
 
         for (key, value) in balance_tree_data.iter() {
             lns.balance_tree.insert(*key, *value).unwrap();
@@ -360,7 +360,7 @@ fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: Network
         let nullifier_tree_data: Vec<(TestKey<NULLIFIER_TREE_DEPTH>, _)> = (0..count).map(|_| {
             let mut key: TestKey<NULLIFIER_TREE_DEPTH> = TestKey([false; NULLIFIER_TREE_DEPTH]);
             rand::thread_rng().fill(&mut key.0[..]);
-            (key, Digest(data.clone()))}).collect();
+            (key, Digest(data))}).collect();
 
         for (key, value) in nullifier_tree_data.iter() {
             lns.nullifier_tree.insert(*key, *value).unwrap();
