@@ -245,3 +245,83 @@ async fn shutdown_signal(cancellation: CancellationToken) {
         },
     }
 }
+
+pub mod tests {
+    use std::net::SocketAddr;
+
+    use tokio::runtime::Runtime;
+    use tokio::task::JoinHandle;
+    use tokio_util::sync::CancellationToken;
+
+    pub struct TestMetricsContext {
+        pub handle: JoinHandle<Result<(), std::io::Error>>,
+        pub cancellation_token: CancellationToken,
+        pub prometheus_addr: SocketAddr,
+        // Need to keep runtime existing to keep the metrics server running
+        _runtime: Runtime,
+    }
+    pub fn setup_metrics_server(prometheus_addr: SocketAddr) -> TestMetricsContext {
+        use std::future::IntoFuture;
+
+        use agglayer_config::log::{LogLevel, LogOutput};
+        use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
+
+        let cancellation_token = CancellationToken::new();
+
+        let layer = tracing_subscriber::fmt::layer()
+            .json()
+            .with_writer(LogOutput::Stdout.as_make_writer())
+            .with_filter(
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| LogLevel::Trace.into()),
+            )
+            .boxed();
+        tracing_subscriber::Registry::default().with(layer).init();
+
+        // Setup the metrics runtime
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("metrics-runtime")
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("Unable to create metrics runtime");
+
+        // Create the metrics server.
+        let metric_server = runtime
+            .block_on(
+                crate::ServerBuilder::builder()
+                    .addr(prometheus_addr)
+                    .cancellation_token(cancellation_token.clone())
+                    .build(),
+            )
+            .expect("Unable to create metrics server");
+
+        // Spawn the metrics server into the metrics runtime.
+        let metrics_handle = {
+            let _guard = runtime.enter();
+            // Spawn the metrics server
+            runtime.spawn(metric_server.into_future())
+        };
+
+        // Wait some time to let the metrics server start
+        std::thread::sleep(std::time::Duration::from_secs(2));
+
+        TestMetricsContext {
+            handle: metrics_handle,
+            cancellation_token,
+            prometheus_addr,
+            _runtime: runtime,
+        }
+    }
+
+    pub fn metrics_shutdown(context: TestMetricsContext) {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Unable to create current thread runtime")
+            .block_on(async {
+                context.cancellation_token.cancel();
+                // Wait for the metrics server to shut down.
+                let _ = context.handle.await;
+            });
+    }
+}

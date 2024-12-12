@@ -2,6 +2,7 @@ use std::sync::Arc;
 use agglayer_types::{Certificate, LocalNetworkStateData, NetworkId};
 use pessimistic_proof::{generate_pessimistic_proof, keccak::digest::Digest, LocalNetworkState};
 use rstest::{fixture, rstest};
+use std::net::SocketAddr;
 use tracing::{info, error};
 
 use crate::{
@@ -58,6 +59,14 @@ fn store() -> StateStore {
     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
 
     StateStore::new(db.clone())
+}
+
+#[fixture]
+fn metrics(
+    #[default("127.0.0.1:3000")]
+    prometheus_addr: SocketAddr
+) -> agglayer_telemetry::tests::TestMetricsContext {
+    agglayer_telemetry::tests::setup_metrics_server(prometheus_addr)
 }
 
 #[rstest]
@@ -229,88 +238,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
     ));
 }
 
-use tokio::task::JoinHandle;
-use std::future::IntoFuture;
-use std::net::SocketAddr;
-use std::thread::sleep;
-use tokio_util::sync::CancellationToken;
-use agglayer_config::log::{LogLevel, LogOutput};
-use tokio::runtime::Runtime;
-use pessimistic_proof::local_balance_tree::LOCAL_BALANCE_TREE_DEPTH;
-use pessimistic_proof::nullifier_tree::NULLIFIER_TREE_DEPTH;
 use pessimistic_proof::utils::smt::ToBits;
-
-struct MetricsContext {
-    pub handle: JoinHandle<Result<(), std::io::Error>>,
-    pub cancellation_token: CancellationToken,
-    pub prometheus_addr: SocketAddr,
-    // Need to keep runtime existing to keep the metrics server running
-   _runtime: Runtime,
-}
-
-#[fixture]
-fn metrics(
-    #[default("127.0.0.1:3000")]
-    prometheus_addr: SocketAddr
-) -> MetricsContext {
-    use agglayer_telemetry::ServerBuilder as MetricsBuilder;
-    use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
-    use tokio_util::sync::CancellationToken;
-
-    let cancellation_token = CancellationToken::new();
-
-    let layer = tracing_subscriber::fmt::layer()
-            .json()
-            .with_writer(LogOutput::Stdout.as_make_writer())
-            .with_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| LogLevel::Trace.into()))
-            .boxed();
-    tracing_subscriber::Registry::default().with(layer).init();
-
-    // Setup the metrics runtime
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .thread_name("metrics-runtime")
-        .worker_threads(2)
-        .enable_all()
-        .build()
-        .expect("Unable to create metrics runtime");
-
-    // Create the metrics server.
-    let metric_server = runtime.block_on(
-        MetricsBuilder::builder()
-            .addr(prometheus_addr)
-            .cancellation_token(cancellation_token.clone())
-            .build(),
-    ).expect("Unable to create metrics server");
-
-    // Spawn the metrics server into the metrics runtime.
-    let metrics_handle = {
-        let _guard = runtime.enter();
-        // Spawn the metrics server
-        runtime.spawn(metric_server.into_future())
-    };
-
-    // Wait some time to let the metrics server start
-    std::thread::sleep(std::time::Duration::from_secs(2));
-
-    MetricsContext {
-        handle: metrics_handle,
-        cancellation_token,
-        prometheus_addr,
-        _runtime: runtime,
-    }
-}
-
-fn metrics_shutdown(context: MetricsContext) {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("Unable to create current thread runtime")
-        .block_on(async {
-            context.cancellation_token.cancel();
-            // Wait for the metrics server to shut down.
-            let _ = context.handle.await;
-        });
-}
 
 #[derive(Copy, Clone)]
 struct TestKey<const DEPTH: usize>(pub [bool; DEPTH]);
@@ -320,15 +248,16 @@ impl<const DEPTH: usize> ToBits<DEPTH> for TestKey<DEPTH> {
     }
 }
 
-
-
-
 #[rstest]
 fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: NetworkId,
                                          store: StateStore,
-                                         #[from(metrics)] metrics_context: MetricsContext) {
+                                         #[from(metrics)] metrics_context: agglayer_telemetry::tests::TestMetricsContext) {
     use rand::{RngCore, Rng};
     use std::io::Read;
+    use std::thread::sleep;
+    use pessimistic_proof::local_balance_tree::LOCAL_BALANCE_TREE_DEPTH;
+    use pessimistic_proof::nullifier_tree::NULLIFIER_TREE_DEPTH;
+
     const LOOP_COUNT: usize = 10;
 
     let mut lns = LocalNetworkStateData::default();
@@ -393,5 +322,5 @@ fn monitor_smt_read_and_write_operations(#[from(network_id)] network_id: Network
     assert!(body.contains(&format!("storage_smt_write_items_count_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
     assert!(body.contains(&format!("storage_smt_write_time_milliseconds_count{{otel_scope_name=\"agglayer_storage\"}} {}", LOOP_COUNT*2)));
     
-    metrics_shutdown(metrics_context);
+    agglayer_telemetry::tests::metrics_shutdown(metrics_context);
 }
