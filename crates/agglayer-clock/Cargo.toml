@@ -4,7 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+alloy = { version = "0.6.4", features = ["full"] }
 async-trait.workspace = true
+backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 ethers = { workspace = true, features = ["ws"] }
 fail.workspace = true
@@ -13,8 +15,6 @@ thiserror.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-alloy = { version = "0.6.4", features = ["full"] }
-backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 
 [dev-dependencies]
 fail = { workspace = true, features = ["failpoints"] }

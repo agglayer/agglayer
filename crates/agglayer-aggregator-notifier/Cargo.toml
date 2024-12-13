@@ -5,31 +5,30 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
+agglayer-config = { path = "../agglayer-config" }
+agglayer-contracts = { path = "../agglayer-contracts" }
+agglayer-prover-types = { path = "../agglayer-prover-types" }
+agglayer-storage = { path = "../agglayer-storage" }
+agglayer-types = { path = "../agglayer-types" }
 anyhow.workspace = true
 arc-swap.workspace = true
 bincode.workspace = true
 ethers.workspace = true
-hex.workspace = true
+fail.workspace = true
 futures.workspace = true
-fail = { workspace = true, default-features = false, features = [] }
-serde.workspace = true
-thiserror.workspace = true
-tokio = { workspace = true, features = ["full"] }
-tracing.workspace = true
-agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
-agglayer-config = { path = "../agglayer-config" }
-agglayer-contracts = { path = "../agglayer-contracts" }
-agglayer-storage = { path = "../agglayer-storage" }
-agglayer-types = { path = "../agglayer-types" }
-agglayer-prover-types = { path = "../agglayer-prover-types" }
+hex.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 reth-primitives.workspace = true
-tonic = { workspace = true, features = ["zstd"] }
+serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tonic = { workspace = true, features = ["zstd"] }
+tracing.workspace = true
 
 sp1-sdk.workspace = true
 sp1-prover.workspace = true
-mockall_double = "0.3.1"
 
 [dev-dependencies]
 agglayer-prover = { path = "../agglayer-prover", features = ["testutils"] }

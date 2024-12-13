@@ -286,7 +286,6 @@ where
     let receipt = pending_tx
         .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
         .map_err(|e| {
-            println!("Error: {:?}", e);
             let error_str = RollupManagerRpc::decode_contract_revert(&e).unwrap_or(e.to_string());
 
             error!(
