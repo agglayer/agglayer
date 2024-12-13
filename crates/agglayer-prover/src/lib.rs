@@ -72,11 +72,27 @@ pub fn main(cfg: PathBuf) -> Result<()> {
             .start(),
     )?;
 
+    let terminate_signal = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Fail to setup SIGTERM signal")
+            .recv()
+            .await;
+    };
+
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
         .block_on(async {
             tokio::select! {
+                _ = terminate_signal => {
+                    info!("Received SIGTERM, shutting down...");
+                    // Cancel the global cancellation token to start the shutdown process.
+                    global_cancellation_token.cancel();
+                    // Wait for the node to shutdown.
+                    node.await_shutdown().await;
+                    // Wait for the metrics server to shutdown.
+                    _ = metrics_handle.await;
+                }
                 _ = tokio::signal::ctrl_c() => {
                     info!("Received SIGINT (ctrl-c), shutting down...");
                     // Cancel the global cancellation token to start the shutdown process.
