@@ -188,7 +188,6 @@ where
     }
 }
 
-#[buildstructor::buildstructor]
 impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
     CertificateOrchestrator<
         E,
@@ -224,7 +223,6 @@ where
     ///
     /// evolution.
     #[allow(clippy::too_many_arguments)]
-    #[builder(entry = "builder", exit = "start", visibility = "pub")]
     pub async fn start(
         clock: ClockRef,
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
