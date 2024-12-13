@@ -11,6 +11,11 @@ use agglayer_types::{
     CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, NetworkId, Proof,
 };
 use bincode::Options;
+use ethers::{
+    contract::ContractError,
+    providers::{Middleware, PendingTransaction},
+    types::{TransactionReceipt, H160, H256, U64},
+};
 use futures::future::BoxFuture;
 use pessimistic_proof::PessimisticProofOutput;
 use tracing::Instrument;
@@ -146,76 +151,91 @@ where
 
         let state_store = self.state_store.clone();
         let config = self.config.clone();
+
         // Call the Provider
         let fut = Box::pin(
             async move {
-                let _tx = contract_call
-                    .send()
-                    .await
-                    .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
-                    // .map_err(SettlementError::ContractError)?
-                    .map_err(|e| {
-                        let error_str =
-                            RollupManagerRpc::decode_contract_revert(&e).unwrap_or(e.to_string());
+                // Send the transaction
+                let pending_tx = contract_call.send().await;
+                // wait for the receipt
+                let receipt = handle_pending_tx::<RollupManagerRpc>(
+                    pending_tx,
+                    hash.clone(),
+                    certificate_id,
+                    config,
+                )
+                .await?
+                // If the result is `None`, it means the transaction is no longer
+                // in the mempool.
+                .ok_or(Error::SettlementError {
+                    certificate_id,
+                    error: "No receipt hash returned, transaction still in mempool".to_string(),
+                })?;
 
-                        error!(
-                        error_code = %e,
-                        error = error_str,
-                        hash,
-                            "Failed to settle the certificate {certificate_id}: {}", error_str);
-
-                        Error::SettlementError {
+                match receipt.status {
+                    Some(n) if n == U64::zero() => {
+                        warn!(
+                            hash,
+                            "The transaction failed to settle the certificate {}", certificate_id
+                        );
+                        Err(Error::SettlementError {
                             certificate_id,
-                            error: error_str,
+                            error: "SettlementTransaction failed".to_string(),
+                        })
+                    }
+                    None => {
+                        error!(
+                            hash,
+                            "The transaction failed to settle the certificate {}", certificate_id
+                        );
+
+                        Err(Error::SettlementError {
+                            certificate_id,
+                            error: "SettlementTransaction failed due to no receipt status"
+                                .to_string(),
+                        })
+                    }
+                    Some(_) => {
+                        if let Err(error) = state_store.update_certificate_header_status(
+                            &certificate_id,
+                            &CertificateStatus::Settled,
+                        ) {
+                            error!(
+                                hash,
+                                "Certificate settled but failed to update the certificate status \
+                                 of {} due to: {}",
+                                certificate_id,
+                                error
+                            );
                         }
-                    })?
-                    .interval(config.retry_interval)
-                    .retries(config.max_retries)
-                    .confirmations(config.confirmations)
-                    .await
-                    .map_err(|error| Error::SettlementError {
-                        certificate_id,
-                        error: error.to_string(),
-                    })?
-                    // If the result is `None`, it means the transaction is no longer
-                    // in the mempool.
-                    .ok_or(Error::SettlementError {
-                        certificate_id,
-                        error: "No receipt hash returned, transaction still in mempool".to_string(),
-                    })?;
+                        if let Err(error) = state_store.set_latest_settled_certificate_for_network(
+                            &network_id,
+                            &height,
+                            &certificate_id,
+                            &epoch_number,
+                            &certificate_index,
+                        ) {
+                            error!(
+                                hash,
+                                "Certificate settled but failed to update the latest settled \
+                                 certificate for network {} with {} due to: {}",
+                                network_id,
+                                certificate_id,
+                                error
+                            );
+                        }
 
-                if let Err(error) = state_store
-                    .update_certificate_header_status(&certificate_id, &CertificateStatus::Settled)
-                {
-                    error!(
-                        hash,
-                        "Certificate settled but failed to update the certificate status of {} \
-                         due to: {}",
-                        certificate_id,
-                        error
-                    );
+                        Ok::<_, Error>((
+                            network_id,
+                            SettledCertificate(
+                                certificate_id,
+                                height,
+                                epoch_number,
+                                certificate_index,
+                            ),
+                        ))
+                    }
                 }
-                if let Err(error) = state_store.set_latest_settled_certificate_for_network(
-                    &network_id,
-                    &height,
-                    &certificate_id,
-                    &epoch_number,
-                    &certificate_index,
-                ) {
-                    error!(
-                        hash,
-                        "Certificate settled but failed to update the latest settled certificate \
-                         for network {} with {} due to: {}",
-                        network_id,
-                        certificate_id,
-                        error
-                    );
-                }
-
-                Ok::<_, Error>((
-                    network_id,
-                    SettledCertificate(certificate_id, height, epoch_number, certificate_index),
-                ))
             }
             .instrument(tracing::Span::current()),
         );
@@ -249,4 +269,73 @@ where
             Ok(())
         }))
     }
+}
+
+async fn handle_pending_tx<RollupManagerRpc>(
+    pending_tx: Result<
+        PendingTransaction<'_, <<RollupManagerRpc as Settler>::M as Middleware>::Provider>,
+        ContractError<<RollupManagerRpc as Settler>::M>,
+    >,
+    hash: String,
+    certificate_id: CertificateId,
+    config: Arc<OutboundRpcSettleConfig>,
+) -> Result<Option<TransactionReceipt>, Error>
+where
+    RollupManagerRpc: RollupContract + Settler + Send + Sync + 'static,
+{
+    let receipt = pending_tx
+        .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
+        .map_err(|e| {
+            let error_str = RollupManagerRpc::decode_contract_revert(&e).unwrap_or(e.to_string());
+
+            error!(
+                error_code = %e,
+                error = error_str,
+                hash,
+                "Failed to settle the certificate {certificate_id}: {}", error_str
+            );
+
+            Error::SettlementError {
+                certificate_id,
+                error: error_str,
+            }
+        })?
+        .interval(config.retry_interval)
+        .retries(config.max_retries)
+        .confirmations(config.confirmations)
+        .await;
+
+    fail::fail_point!(
+        "notifier::packer::settle_certificate::receipt_future_ended::status_0",
+        |_| {
+            Ok(Some(TransactionReceipt {
+                transaction_hash: H256::random(),
+                transaction_index: U64([1; 1]),
+                block_hash: None,
+                block_number: None,
+                from: H160::random(),
+                to: None,
+                cumulative_gas_used: ethers::types::U256::zero(),
+                gas_used: None,
+                contract_address: None,
+                logs: vec![],
+                status: Some(U64([0; 1])),
+                root: None,
+                logs_bloom: ethers::types::Bloom::zero(),
+                transaction_type: None,
+                effective_gas_price: None,
+                other: ethers::types::OtherFields::default(),
+            }))
+        }
+    );
+
+    fail::fail_point!(
+        "notifier::packer::settle_certificate::receipt_future_ended::no_receipt",
+        |_| { Ok(None) }
+    );
+
+    receipt.map_err(|error| Error::SettlementError {
+        certificate_id,
+        error: error.to_string(),
+    })
 }
