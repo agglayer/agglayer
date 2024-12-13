@@ -1,0 +1,11 @@
+bug:
+- head-branch: ['^fix']
+
+feature:
+- head-branch: ['^feature']
+
+pessimistic-proof:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'crates/pessimistic-proof/**/*'
+    - 'crates/pessimistic-proof-program/**/*'
