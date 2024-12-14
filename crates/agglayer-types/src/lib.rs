@@ -191,16 +191,34 @@ impl From<SP1VerificationError> for ProofVerificationError {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CertificateStatus {
     Pending,
+    Started,
     Proven,
     Candidate,
     InError { error: CertificateStatusError },
     Settled,
 }
 
+impl CertificateStatus {
+    /// Create a [Self::InError] status.
+    pub fn in_error(error: impl Into<CertificateStatusError>) -> Self {
+        let error = error.into();
+        Self::InError { error }
+    }
+
+    /// Get the error if the certificate is in error.
+    pub fn as_error(&self) -> Option<&CertificateStatusError> {
+        match self {
+            Self::InError { error } => Some(error),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for CertificateStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             CertificateStatus::Pending => write!(f, "Pending"),
+            CertificateStatus::Started => write!(f, "Started"),
             CertificateStatus::Proven => write!(f, "Proven"),
             CertificateStatus::Candidate => write!(f, "Candidate"),
             CertificateStatus::InError { error } => write!(f, "InError: {}", error),
