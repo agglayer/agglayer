@@ -112,10 +112,8 @@ impl Node {
                     config.l1.max_reconnection_elapsed_time,
                 )
                 .await
-                .map_err(|e| {
+                .inspect_err(|e| {
                     error!("Failed to start BlockClock: {:?}", e);
-
-                    e
                 })?;
 
                 clock.spawn(cancellation_token.clone()).await?

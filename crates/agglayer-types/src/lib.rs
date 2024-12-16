@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use ethers::signers::{LocalWallet, Signer as _};
+use ethers::signers::LocalWallet;
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -48,6 +48,15 @@ pub(crate) const ELF: &[u8] =
 pub enum ExecutionMode {
     Default,
     DryRun,
+}
+
+impl ExecutionMode {
+    pub const fn prefix(&self) -> &'static str {
+        match self {
+            ExecutionMode::Default => "",
+            ExecutionMode::DryRun => "(Dry run) ",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -344,6 +353,7 @@ impl Certificate {
 
     #[cfg(any(test, feature = "testutils"))]
     pub fn get_signer(&self) -> Address {
+        use ethers::signers::Signer;
         Self::wallet_for_test(self.network_id).address().0.into()
     }
 

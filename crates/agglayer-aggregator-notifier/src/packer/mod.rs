@@ -22,7 +22,7 @@ use tracing::{debug, error, info, instrument, warn};
 #[cfg(test)]
 mod tests;
 
-const MAX_EPOCH_ASSIGNEMENT_RETRIES: usize = 5;
+const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
 
 #[derive(Default, Clone)]
 pub struct EpochPackerClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
@@ -107,7 +107,9 @@ where
                 drop(dry_current_epoch);
                 error!(
                     hash = certificate_id.to_string(),
-                    "(Dry run) Failed to add the certificate to the current epoch: {}", error
+                    "{}Failed to add the certificate to the current epoch: {}",
+                    ExecutionMode::DryRun.prefix(),
+                    error
                 );
 
                 return Err(Error::Storage(error));
@@ -135,7 +137,6 @@ where
         tracing::Span::current().record("network_id", *network_id);
 
         let height = certificate.height;
-        // let epoch_number = related_epoch.get_epoch_number();
 
         let l_1_info_tree_leaf_count = certificate
             .l1_info_tree_leaf_count()
@@ -191,7 +192,6 @@ where
             .await
             .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
             .map_err(|e| {
-                println!("Error: {:?}", e);
                 let error_str =
                     RollupManagerRpc::decode_contract_revert(&e).unwrap_or(e.to_string());
 
@@ -213,7 +213,7 @@ where
         {
             error!(
                 hash,
-                "CRITICAL: Failed to update the settlement transaction hash of {} with {} the \
+                "CRITICAL: Failed to update the settlement transaction hash of {} with {}. The \
                  settlement transaction continues, this is due to: {}",
                 certificate_id,
                 pending_tx.tx_hash(),
@@ -286,7 +286,7 @@ where
                     certificate_id
                 );
 
-                let mut max_retries = MAX_EPOCH_ASSIGNEMENT_RETRIES;
+                let mut max_retries = MAX_EPOCH_ASSIGNMENT_RETRIES;
 
                 let (epoch_number, certificate_index) = loop {
                     max_retries -= 1;

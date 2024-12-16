@@ -333,7 +333,7 @@ where
                     return Err(Error::InternalError(msg));
                 }
 
-                // Other errors are shouldn't happen
+                // Other errors shouldn't happen
                 error => {
                     let msg = format!(
                         "CRITICAL error: Failed to pack the epoch {}: {:?}",

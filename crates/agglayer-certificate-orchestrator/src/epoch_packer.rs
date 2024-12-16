@@ -47,6 +47,8 @@ pub trait EpochPacker: Unpin + Send + Sync + 'static {
         height: Height,
     ) -> Result<(NetworkId, SettledCertificate), Error>;
 
+    /// Watch for the transaction to be mined and update the certificate
+    /// accordingly
     #[cfg_attr(any(test, feature = "testutils"), mockall::concretize)]
     async fn watch_and_update(
         &self,

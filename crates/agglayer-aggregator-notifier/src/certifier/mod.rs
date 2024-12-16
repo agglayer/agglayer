@@ -20,7 +20,7 @@ use pessimistic_proof::{
 use reth_primitives::Address;
 use sp1_sdk::{CpuProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey};
 use tonic::{codec::CompressionEncoding, transport::Channel};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::ELF;
 
@@ -100,6 +100,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     L1Rpc: RollupContract + Send + Sync + 'static,
 {
+    #[instrument(skip(self, state, height), fields(hash, %network_id), level = "info")]
     async fn certify(
         &self,
         state: LocalNetworkStateData,
@@ -115,6 +116,7 @@ where
             .ok_or(CertificationError::CertificateNotFound(network_id, height))?;
 
         let certificate_id = certificate.hash();
+        tracing::Span::current().record("hash", certificate_id.to_string());
 
         let mut prover_client = self.prover.clone();
         let pending_store = self.pending_store.clone();

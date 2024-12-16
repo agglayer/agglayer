@@ -186,11 +186,7 @@ where
 
         debug!(
             "{}Try adding certificate for network {} at height {} in epoch {}",
-            if mode == ExecutionMode::DryRun {
-                "(Dry run) "
-            } else {
-                ""
-            },
+            mode.prefix(),
             network_id,
             height,
             self.epoch_number
@@ -206,20 +202,12 @@ where
             (Some(_), Entry::Vacant(_)) => {
                 warn!(
                     "{}Network {} is present in the start checkpoint but not in the end checkpoint",
-                    if mode == ExecutionMode::DryRun {
-                        "(Dry run) "
-                    } else {
-                        ""
-                    },
+                    mode.prefix(),
                     network_id
                 );
                 return Err(Error::Unexpected(format!(
                     "{}Network {} is present in the start checkpoint but not in the end checkpoint",
-                    if mode == ExecutionMode::DryRun {
-                        "(Dry run) "
-                    } else {
-                        ""
-                    },
+                    mode.prefix(),
                     network_id
                 )));
             }
@@ -228,11 +216,7 @@ where
             (None, Entry::Vacant(_entry)) if height == 0 => {
                 debug!(
                     "{}First certificate for network {}",
-                    if mode == ExecutionMode::DryRun {
-                        "(Dry run) "
-                    } else {
-                        ""
-                    },
+                    mode.prefix(),
                     network_id
                 );
                 // Adding the network to the end checkpoint.
@@ -262,11 +246,7 @@ where
             {
                 debug!(
                     "{}Certificate candidate for network {} at height {} accepted",
-                    if mode == ExecutionMode::DryRun {
-                        "(Dry run) "
-                    } else {
-                        ""
-                    },
+                    mode.prefix(),
                     network_id,
                     height
                 );
