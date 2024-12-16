@@ -11,7 +11,6 @@ use ethers::{
     providers::{JsonRpcClient, PendingTransaction},
     types::H256,
 };
-use futures_util::future::BoxFuture;
 
 use crate::Error;
 
@@ -57,6 +56,3 @@ pub trait EpochPacker: Unpin + Send + Sync + 'static {
         height: Height,
     ) -> Result<(NetworkId, SettledCertificate), Error>;
 }
-
-pub type WatchAndUpdateFuture<'a> = BoxFuture<'a, Result<(), Error>>;
-pub type SettlementFuture<'a> = BoxFuture<'a, Result<(NetworkId, SettledCertificate), Error>>;

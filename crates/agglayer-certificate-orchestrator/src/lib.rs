@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     future::Future,
     pin::Pin,
     sync::Arc,
@@ -22,14 +22,11 @@ use arc_swap::ArcSwap;
 use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt};
 use network_task::{NetworkTask, NewCertificate};
 use tokio::{
-    sync::{
-        mpsc::{self, Receiver},
-        oneshot,
-    },
+    sync::mpsc::{self, Receiver},
     task::JoinHandle,
 };
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 mod certifier;
 mod epoch_packer;
@@ -40,7 +37,7 @@ mod network_task;
 mod tests;
 
 pub use certifier::{CertificateInput, Certifier, CertifierOutput, CertifierResult};
-pub use epoch_packer::{EpochPacker, SettlementFuture, WatchAndUpdateFuture};
+pub use epoch_packer::EpochPacker;
 pub use error::{CertificationError, Error, PreCertificationError};
 
 const MAX_POLL_READS: usize = 1_000;
@@ -110,13 +107,8 @@ pub struct CertificateOrchestrator<
     /// notifier.
     spawned_network_tasks: BTreeMap<NetworkId, mpsc::Sender<NewCertificate>>,
 
-    /// Notifiers for the settlement of the certificates.
-    settlement_notifier: HashMap<CertificateId, oneshot::Sender<Result<SettledCertificate, Error>>>,
-
     /// Network task future resolver.
     network_tasks: NetworkTasks,
-    /// Certificate settlement task future resolver.
-    settlement_tasks: SettlementTasks,
 }
 
 impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
@@ -164,8 +156,6 @@ where
             state_store,
             spawned_network_tasks: Default::default(),
             network_tasks: FuturesUnordered::new(),
-            settlement_tasks: FuturesUnordered::new(),
-            settlement_notifier: Default::default(),
         })
     }
 }
@@ -381,124 +371,6 @@ where
     fn handle_epoch_packing_result(&mut self) {}
 }
 
-// This block contains the logic applied to a Certificate.
-// The method are executed following this flow:
-//
-//                      ┌─────────────────────────┐
-//                      │                         │
-// ┌────────────────────►  spawn certifier task   ◄───────────────────┐
-// │                    │                         │                   │
-// │                    └────────────┬────────────┘                   │
-// │                                 │                                │
-// │                                 │                                │
-// │                                 │                                │
-// │                                 │                                │
-// │                                 │                                │
-// │                                 │                                │
-// │                    ┌────────────▼────────────┐              in some case
-// │                    │                         │                   │
-// │                    │      handle result      │                   │
-// │                    │                         │                   │
-// │                    └────────────┬────────────┘                   │
-// │                                 │                                │
-// │                 ┌───────────────┴────────────────┐               │
-// │                 │                                │               │
-// │       ┌─────────▼──────────┐      ┌──────────────▼────────────┐  │
-// │       │                    │      │                           │  │
-// └───────┼     on proven      │      │  on proof already exists  ┼──┘
-//         │                    │      │                           │
-//         └─────────┬──────────┘      └───────────────────────────┘
-//                   │
-//                   │
-//                   │
-//   ┌───────────────▼──────────────────┐
-//   │                                  │
-//   │  Try adding certificate to epoch │
-//   │                                  │
-//   └───────────────┬──────────────────┘
-//                   │
-//                   │
-//        ┌──────────▼────────────┐
-//        │                       │
-//        │  Settle certificate   │
-//        │                       │
-//        └───────────────────────┘
-//
-// When a Certificate is proven, we try to add it to the current epoch.
-// If we succeed, we try to settle it on L1.
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
-    CertificateOrchestrator<
-        E,
-        CertifierClient,
-        PendingStore,
-        EpochsStore,
-        PerEpochStore,
-        StateStore,
-    >
-where
-    CertifierClient: Certifier,
-    E: EpochPacker<PerEpochStore = PerEpochStore> + 'static,
-    PendingStore: PendingCertificateReader + PendingCertificateWriter,
-    StateStore: StateReader + StateWriter,
-    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
-{
-    fn handle_settlement_result(
-        &mut self,
-        ((_network_id, certificate_id), settlement_result): (
-            SettlementContext,
-            Result<(NetworkId, SettledCertificate), Error>,
-        ),
-    ) -> Result<(), ()> {
-        match settlement_result {
-            Ok((
-                network_id,
-                settled @ SettledCertificate(
-                    certificate_id,
-                    height,
-                    _epoch_number,
-                    _certificate_index,
-                ),
-            )) => {
-                info!(
-                    hash = certificate_id.to_string(),
-                    "Certificate {certificate_id} settled on L1 for network {network_id} at \
-                     height {height}",
-                );
-
-                if let Some(notifier) = self.settlement_notifier.remove(&certificate_id) {
-                    if notifier.send(Ok(settled)).is_err() {
-                        warn!(
-                            "Unable to notify the settlement of the certificate {}",
-                            certificate_id
-                        );
-                    }
-                } else {
-                    warn!("No notifier found for network {}", network_id);
-                }
-            }
-            Err(error) => {
-                error!("Error during certificate settlement: {:?}", error);
-                if let Some(notifier) = self.settlement_notifier.remove(&certificate_id) {
-                    if notifier.send(Err(error)).is_err() {
-                        warn!(
-                            hash = certificate_id.to_string(),
-                            "Unable to notify the settlement error of the certificate {}",
-                            certificate_id
-                        );
-                    }
-                } else {
-                    warn!(
-                        hash = certificate_id.to_string(),
-                        "No notifier found for network {}", certificate_id
-                    );
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
 impl<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore> Future
     for CertificateOrchestrator<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
 where
@@ -532,15 +404,6 @@ where
                     error
                 );
                 // TODO: Need to find a way to remove the task
-            }
-            Poll::Ready(None) => {}
-            Poll::Pending => {}
-        }
-
-        match self.settlement_tasks.poll_next_unpin(cx) {
-            Poll::Ready(Some(settlement_result)) => {
-                debug!("Certificate settlement task completed");
-                _ = self.handle_settlement_result(settlement_result);
             }
             Poll::Ready(None) => {}
             Poll::Pending => {}

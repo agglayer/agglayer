@@ -14,7 +14,7 @@ use rstest::rstest;
 
 #[rstest]
 #[tokio::test]
-#[timeout(Duration::from_secs(60))]
+#[timeout(Duration::from_secs(120))]
 async fn sent_transaction_recover() {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();

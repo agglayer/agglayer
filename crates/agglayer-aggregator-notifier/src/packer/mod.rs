@@ -208,7 +208,6 @@ where
                 }
             })?;
 
-        fail::fail_point!("notifier::packer::settle_certificate::transaction_sent::kill_node");
         if let Err(error) =
             state_store.update_settlement_tx_hash(&certificate_id, pending_tx.tx_hash().0.into())
         {
@@ -221,6 +220,8 @@ where
                 error
             );
         }
+
+        fail::fail_point!("notifier::packer::settle_certificate::transaction_sent::kill_node");
 
         self.watch_and_update(pending_tx, certificate_id, network_id, height)
             .await
