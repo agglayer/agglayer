@@ -33,8 +33,15 @@ mockall::mock! {
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
     }
+    #[async_trait::async_trait]
     impl Settler for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
+
+        async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, String>;
+        fn build_pending_transaction(
+            &self,
+            tx_hash: ethers::types::H256,
+        ) -> ethers::providers::PendingTransaction<'_, <NonceManagerMiddleware<Provider<MockProvider>> as ethers::providers::Middleware>::Provider>;
 
         fn decode_contract_revert(error: &ContractError<NonceManagerMiddleware<Provider<MockProvider>>>) -> Option<String>;
         fn build_verify_pessimistic_trusted_aggregator_call(
@@ -57,7 +64,8 @@ async fn epoch_packer_can_settle_one_certificate() {
 
     let withdrawals = vec![];
 
-    let (certificate, signer) = state.clone().apply_events(&[], &withdrawals);
+    let signer = state.get_signer();
+    let certificate = state.clone().apply_events(&[], &withdrawals);
 
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let batch_header = state
@@ -120,16 +128,11 @@ async fn epoch_packer_can_settle_one_certificate() {
         Arc::new(state_store),
         Arc::new(pending_store),
         Arc::new(l1_rpc),
+        Arc::new(ArcSwap::new(Arc::new(per_epoch_store))),
     )
     .unwrap();
 
-    let r = epoch_packer
-        .settle_certificate(
-            Arc::new(ArcSwap::new(Arc::new(per_epoch_store))),
-            certificate_id,
-        )
-        .unwrap()
-        .await;
+    let r = epoch_packer.settle_certificate(certificate_id).await;
 
     assert!(r.is_ok());
 }

@@ -79,6 +79,13 @@ impl StateWriter for StateStore {
                 ));
             }
 
+            if certificate_header.status == CertificateStatus::Settled {
+                return Err(Error::UnprocessedAction(
+                    "Tried to update settlement tx hash for a certificate that is already settled"
+                        .to_string(),
+                ));
+            }
+
             certificate_header.settlement_tx_hash = Some(tx_hash);
             certificate_header.status = CertificateStatus::Candidate;
 

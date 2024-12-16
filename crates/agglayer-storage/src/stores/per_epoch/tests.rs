@@ -40,6 +40,7 @@ fn can_start_packing_an_unpacked_epoch(store: PerEpochStore<PendingStore, StateS
 fn cant_start_packing_a_packed_epoch(store: PerEpochStore<PendingStore, StateStore>) {
     let mut lock = store.packing_lock.write();
     *lock = true;
+
     drop(lock);
 
     assert!(store.start_packing().is_err());
@@ -103,7 +104,7 @@ fn adding_a_certificate(
     use agglayer_types::CertificateStatus;
 
     let network_id = 0.into();
-    let certificate = Certificate::new_for_test(network_id, height).0;
+    let certificate = Certificate::new_for_test(network_id, height);
     let certificate_id = certificate.hash();
     let pending_store = store.pending_store.clone();
     let state_store = store.state_store.clone();
@@ -190,7 +191,7 @@ fn adding_multiple_certificates(
     store.end_checkpoint = RwLock::new(end_checkpoint.into());
 
     while let Some(expected_result) = expected_results.pop_front() {
-        let certificate = Certificate::new_for_test(network, height).0;
+        let certificate = Certificate::new_for_test(network, height);
         pending_store
             .insert_pending_certificate(network, height, &certificate)
             .unwrap();

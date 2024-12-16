@@ -158,7 +158,6 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     fn lock_for_adding_certificate(&self) -> RwLockReadGuard<bool> {
         self.packing_lock.read()
     }
-
     fn lock_for_packing(&self) -> RwLockWriteGuard<bool> {
         self.packing_lock.write()
     }
@@ -186,14 +185,15 @@ where
         let mut end_checkpoint = self.end_checkpoint.write();
 
         debug!(
-            "{}Try adding certificate for network {} at height {}",
+            "{}Try adding certificate for network {} at height {} in epoch {}",
             if mode == ExecutionMode::DryRun {
                 "(Dry run) "
             } else {
                 ""
             },
             network_id,
-            height
+            height,
+            self.epoch_number
         );
         let end_checkpoint_entry = end_checkpoint.entry(network_id);
 
@@ -369,8 +369,6 @@ where
             Ok(_) => (),
         }
 
-        drop(lock);
-
         Ok(())
     }
 }
@@ -381,7 +379,7 @@ where
     StateStore: Send + Sync,
 {
     fn is_epoch_packed(&self) -> bool {
-        *self.lock_for_packing()
+        *self.lock_for_adding_certificate()
     }
 
     fn get_epoch_number(&self) -> u64 {

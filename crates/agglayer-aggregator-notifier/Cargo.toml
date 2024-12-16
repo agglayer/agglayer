@@ -11,7 +11,9 @@ agglayer-contracts = { path = "../agglayer-contracts" }
 agglayer-prover-types = { path = "../agglayer-prover-types" }
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-types = { path = "../agglayer-types" }
+
 anyhow.workspace = true
+async-trait.workspace = true
 arc-swap.workspace = true
 bincode.workspace = true
 ethers.workspace = true

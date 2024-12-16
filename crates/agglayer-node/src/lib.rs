@@ -4,7 +4,7 @@ use agglayer_config::Config;
 use anyhow::{bail, Result};
 use node::Node;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{debug, info};
 
 mod kernel;
 mod logging;
@@ -99,12 +99,18 @@ pub fn main(cfg: PathBuf) -> Result<()> {
         .build()?
         .block_on(async {
             tokio::select! {
+                _ = node.await_shutdown() => {
+                    info!("Node has shutdown, shutting down...");
+                    // Cancel the global cancellation token to start the shutdown process.
+                    global_cancellation_token.cancel();
+                    // Wait for the metrics server to shutdown.
+                    _ = metrics_handle.await;
+                }
+
                 _ = terminate_signal => {
                     info!("Received SIGTERM, shutting down...");
                     // Cancel the global cancellation token to start the shutdown process.
                     global_cancellation_token.cancel();
-                    // Wait for the node to shutdown.
-                    node.await_shutdown().await;
                     // Wait for the metrics server to shutdown.
                     _ = metrics_handle.await;
                 }
@@ -112,8 +118,6 @@ pub fn main(cfg: PathBuf) -> Result<()> {
                     info!("Received SIGINT (ctrl-c), shutting down...");
                     // Cancel the global cancellation token to start the shutdown process.
                     global_cancellation_token.cancel();
-                    // Wait for the node to shutdown.
-                    node.await_shutdown().await;
                     // Wait for the metrics server to shutdown.
                     _ = metrics_handle.await;
                 }
@@ -122,6 +126,8 @@ pub fn main(cfg: PathBuf) -> Result<()> {
 
     node_runtime.shutdown_timeout(config.shutdown.runtime_timeout);
     metrics_runtime.shutdown_timeout(config.shutdown.runtime_timeout);
+
+    debug!("Node shutdown completed.");
 
     Ok(())
 }

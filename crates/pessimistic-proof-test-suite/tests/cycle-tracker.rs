@@ -38,13 +38,13 @@ fn cycles_on_sample_inputs_inner(
     let n_exits = withdrawals.len();
 
     let old_state = state.local_state();
-    let (certificate, signer) = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events(&[], &withdrawals);
 
     let multi_batch_header = state
         .state_b
         .apply_certificate(
             &certificate,
-            signer,
+            state.get_signer(),
             certificate.l1_info_root().unwrap().unwrap_or_default(),
         )
         .unwrap();

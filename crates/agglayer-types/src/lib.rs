@@ -20,7 +20,6 @@ use pessimistic_proof::{
     nullifier_tree::{NullifierKey, NullifierPath},
     ProofError,
 };
-use rand::thread_rng;
 pub use reth_primitives::address;
 use reth_primitives::B256;
 pub use reth_primitives::U256;
@@ -297,12 +296,15 @@ pub struct Certificate {
     pub metadata: Metadata,
 }
 
+#[cfg(any(test, feature = "testutils"))]
 impl Default for Certificate {
     fn default() -> Self {
+        let network_id = Default::default();
+        let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_new_local_exit_root, _, signature) = compute_signature_info(exit_root, &[]);
+        let (_new_local_exit_root, signature) = compute_signature_info(exit_root, &[], &wallet);
         Self {
-            network_id: Default::default(),
+            network_id,
             height: Default::default(),
             prev_local_exit_root: exit_root,
             new_local_exit_root: exit_root,
@@ -317,13 +319,12 @@ impl Default for Certificate {
 pub fn compute_signature_info(
     new_local_exit_root: Digest,
     imported_bridge_exits: &[ImportedBridgeExit],
-) -> (Digest, Address, Signature) {
+    wallet: &LocalWallet,
+) -> (Digest, Signature) {
     let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
         new_local_exit_root,
         imported_bridge_exits,
     );
-    let wallet = LocalWallet::new(&mut thread_rng());
-    let signer = wallet.address();
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
     let signature = Signature {
         r: U256::from_limbs(signature.r.0),
@@ -331,15 +332,28 @@ pub fn compute_signature_info(
         odd_y_parity: signature.recovery_id().unwrap().is_y_odd(),
     };
 
-    (combined_hash, signer.0.into(), signature)
+    (combined_hash, signature)
 }
 
 impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
-    pub fn new_for_test(network_id: NetworkId, height: Height) -> (Self, Address) {
+    pub fn wallet_for_test(network_id: NetworkId) -> ethers::signers::LocalWallet {
+        let fake_priv_key = keccak256_combine([b"FAKEKEY:", network_id.to_be_bytes().as_slice()]);
+        ethers::signers::LocalWallet::from_bytes(fake_priv_key.as_bytes()).unwrap()
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn get_signer(&self) -> Address {
+        Self::wallet_for_test(self.network_id).address().0.into()
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
+        let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_, signer, signature) = compute_signature_info(exit_root, &[]);
-        let certificate = Self {
+        let (_, signature) = compute_signature_info(exit_root, &[], &wallet);
+
+        Self {
             network_id,
             height,
             prev_local_exit_root: exit_root,
@@ -348,8 +362,7 @@ impl Certificate {
             imported_bridge_exits: Default::default(),
             signature,
             metadata: Default::default(),
-        };
-        (certificate, signer)
+        }
     }
 
     pub fn hash(&self) -> CertificateId {

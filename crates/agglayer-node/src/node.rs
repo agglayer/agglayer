@@ -23,15 +23,15 @@ use ethers::{
     providers::{Http, Provider},
     signers::Signer,
 };
-use tokio::{join, sync::mpsc, task::JoinHandle};
+use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use crate::{epoch_synchronizer::EpochSynchronizer, kernel::Kernel, rpc::AgglayerImpl};
 
 pub(crate) struct Node {
-    rpc_handle: JoinHandle<()>,
-    certificate_orchestrator_handle: JoinHandle<()>,
+    pub(crate) rpc_handle: JoinHandle<()>,
+    pub(crate) certificate_orchestrator_handle: JoinHandle<()>,
 }
 
 #[buildstructor::buildstructor]
@@ -111,7 +111,12 @@ impl Node {
                     cfg.epoch_duration,
                     config.l1.max_reconnection_elapsed_time,
                 )
-                .await?;
+                .await
+                .map_err(|e| {
+                    error!("Failed to start BlockClock: {:?}", e);
+
+                    e
+                })?;
 
                 clock.spawn(cancellation_token.clone()).await?
             }
@@ -158,8 +163,10 @@ impl Node {
                 .nonce_manager(address),
         );
 
+        tracing::debug!("RPC provider created");
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
+                rpc.clone(),
                 PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
                 PolygonZkEVMGlobalExitRootV2::new(
                     config.l1.polygon_zkevm_global_exit_root_v2_contract,
@@ -168,6 +175,7 @@ impl Node {
             )
             .await?,
         );
+        tracing::debug!("RollupManager created");
 
         let certifier_client = CertifierClient::try_new(
             config.prover_entrypoint.clone(),
@@ -179,13 +187,15 @@ impl Node {
         info!("Certifier client created.");
 
         // Construct the core.
-        let core = Kernel::new(rpc, config.clone());
+        let core = Kernel::new(rpc.clone(), config.clone());
 
+        let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
         let epoch_packing_aggregator_task = EpochPackerClient::try_new(
             Arc::new(config.outbound.rpc.settle.clone()),
             state_store.clone(),
             pending_store.clone(),
             Arc::clone(&rollup_manager),
+            current_epoch_store.clone(),
         )?;
 
         info!("Epoch packing aggregator task created.");
@@ -203,7 +213,7 @@ impl Node {
             .epoch_packing_task_builder(epoch_packing_aggregator_task)
             .pending_store(pending_store.clone())
             .epochs_store(epochs_store.clone())
-            .current_epoch(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)))
+            .current_epoch(current_epoch_store)
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
             .start()
@@ -240,8 +250,12 @@ impl Node {
     }
 
     pub(crate) async fn await_shutdown(self) {
-        debug!("Node shutdown started.");
-        _ = join!(self.rpc_handle, self.certificate_orchestrator_handle);
+        tokio::select! {
+            _ = self.rpc_handle => {
+            }
+            _ = self.certificate_orchestrator_handle => {
+            }
+        }
         debug!("Node shutdown completed.");
     }
 }

@@ -28,7 +28,8 @@ async fn executor_normal_behavior() {
     let mut executor = Executor::new_with_services(Some(network), Some(local));
 
     let mut state = LocalNetworkStateData::default();
-    let (certificate, signer) = Certificate::new_for_test(0.into(), 0);
+    let certificate = Certificate::new_for_test(0.into(), 0);
+    let signer = certificate.get_signer();
     let batch_header = state
         .apply_certificate(
             &certificate,
@@ -63,7 +64,8 @@ async fn executor_normal_behavior_only_network() {
     let mut executor = Executor::new_with_services(Some(network), None);
 
     let mut state = LocalNetworkStateData::default();
-    let (certificate, signer) = Certificate::new_for_test(0.into(), 0);
+    let certificate = Certificate::new_for_test(0.into(), 0);
+    let signer = certificate.get_signer();
 
     let batch_header = state
         .apply_certificate(
@@ -107,7 +109,8 @@ async fn executor_fallback_behavior_cpu() {
     let mut executor = Executor::new_with_services(Some(network), Some(local));
 
     let mut state = LocalNetworkStateData::default();
-    let (certificate, signer) = Certificate::new_for_test(0.into(), 0);
+    let certificate = Certificate::new_for_test(0.into(), 0);
+    let signer = certificate.get_signer();
     let batch_header = state
         .apply_certificate(
             &certificate,
