@@ -49,17 +49,24 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         l1_rpc: Arc<L1Rpc>,
         config: Arc<Config>,
     ) -> anyhow::Result<Self> {
+        debug!("Initializing the CertifierClient verifier...");
         let verifier = CpuProver::new();
         let (_, verifying_key) = verifier.setup(ELF);
+        debug!("CertifierClient verifier successfully initialized!");
+
+        debug!("Connecting to the prover service...");
+
+        let prover = ProofGenerationServiceClient::connect(prover)
+            .await?
+            .max_decoding_message_size(config.prover.grpc.max_decoding_message_size)
+            .max_encoding_message_size(config.prover.grpc.max_encoding_message_size)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
+        debug!("Successfully connected to the prover service!");
 
         Ok(Self {
             pending_store,
-            prover: ProofGenerationServiceClient::connect(prover)
-                .await?
-                .max_decoding_message_size(config.prover.grpc.max_decoding_message_size)
-                .max_encoding_message_size(config.prover.grpc.max_encoding_message_size)
-                .send_compressed(CompressionEncoding::Zstd)
-                .accept_compressed(CompressionEncoding::Zstd),
+            prover,
             verifier: Arc::new(verifier),
             verifying_key,
             l1_rpc,
