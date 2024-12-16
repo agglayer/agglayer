@@ -33,7 +33,7 @@ The <b>Agglayer</b> (<i>Aggregation layer</i>) provides a common language for se
 
 - [Overview](#overview)
 - [Crate Directory](#crate-directory)
-- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
   - [Succinct Prover Network](#succinct-prover-network)
   - [Software Requirements](#software-requirements)
   - [Hardware Requirements](#hardware-requirements)
@@ -46,19 +46,24 @@ The <b>Agglayer</b> (<i>Aggregation layer</i>) provides a common language for se
 
 ## Overview
 
-AggLayer is the Rust-based service designed to (1) receive zero-knowledge proofs from AggLayer-connected chains, (2) verify their validity, and (3) send them to the L1 for final settlement. AggLayer replaces the previous Golang implementation. 
+Agglayer is the Rust-based service designed to: 
+1. Receive updates from Agglayer-connected chains 
+2. Verify their validity 
+3. Send them to the L1 for final settlement. 
 
-To find out more about Polygon, visit the [official website.](https://docs.polygon.technology/cdk/)
+Agglayer replaces the previous Golang implementation. 
 
-WARNING: This is a work in progress, and as such, all APIs and configuration are subject to change. The code is still being audited, so please contact the Polygon team if you would like to use it in production.
+To find out more about Agglayer, [please visit the docs.](https://docs.polygon.technology/agglayer/overview/)
 
+!!! info "Disclaimer"
+    - Some of the content in this section discusses technology in development and not ready for release. As such, all APIs and configuration are subject to change. The code is still being audited, so please contact the Polygon team if you would like to use it in production.
 ## Crate Directory
 
-The crates and their functions within the AggLayer repo are as follows:
+The crates and their functions within the Agglayer repo are as follows:
 
 | Crate                          | Description                                                                                                  |
 |--------------------------------|--------------------------------------------------------------------------------------------------------------|
-| agglayer-aggregator-notifier   | Contains certificate implementations for `certify` and `settled`, as well as `packer`, which handles the packing of an epoch |
+| agglayer-aggregator-notifier   | Contains implementations for [Certifier](crates/agglayer-certificate-orchestrator/src/certifier.rs#L29) which applies new [Certificate](crates/agglayer-types/src/lib.rs#245) on top of an existing state and computes the proof, as well as [EpochPacker](crates/agglayer-certificate-orchestrator/src/epoch_packer.rs#14), which handles the packing of an epoch |
 | agglayer-certificate-orchestrator | Manages the orchestration and handling of certificates; also handles `current_epoch`, which allows non-orchestrators to push a proven certificate |
 | agglayer-clock                 | Defines the pace of the Agglayer in terms of epoch with support for two clocks: time (for testing) and block (for listening for L1 blocks) |
 | agglayer-config                | Manages configuration settings and parameters for Agglayer components                                       |
@@ -76,7 +81,7 @@ The crates and their functions within the AggLayer repo are as follows:
 | pessimistic-proof-test-suite   | Provides a suite of tests for validating the functionality of the pessimistic proof program                  |
 | pessimistic-proof              | Contains the core logic and implementation of the pessimistic proof mechanism                               |
 
-## Prerequisite
+## Getting Started
 
 Before working with the repository, you’ll need the following:
 
@@ -88,14 +93,13 @@ You’ll need to submit a unique Ethereum address to Succinct for access to thei
 2. Apply for access for the public address associated with your private key to Succinct Network [here.](https://docs.google.com/forms/d/e/1FAIpQLSd-X9uH7G0bvXH_kjptnQtNil8L4dumrVPpFE4t8Ci1XT1GaQ/viewform)
 
 ### Software Requirements
-#### Rust
-AggLayer is built with the stable version of Rust. To install Rust using `rustup` please see instructions [here.](https://www.rust-lang.org/tools/install) 
-
-#### Go
-To run certain libraries, you’ll need to have Go installed. Follow instructions to install Go [here.](https://go.dev/doc/install)
-
-#### Protoc
-If you don’t have protoc installed, [source it here](https://docs.rs/prost-build/latest/prost_build/#sourcing-protoc) or, for MacOS, you can run `brew install protobuf`
+### Requirements
+* [Rustup](https://www.rust-lang.org/tools/install) (stable)
+* [protoc](https://grpc.io/docs/protoc-installation/)
+* [nextest](https://nexte.st/docs/installation/pre-built-binaries/#with-cargo-binstall)
+* [cargo-make](https://github.com/sagiegurari/cargo-make#installation)
+* [cargo-insta](https://insta.rs/docs/quickstart/)
+* [Go](https://go.dev/doc/install)
 
 ### Hardware Recommendations
 With SP1, you do not need to generate proofs locally on your machine
@@ -104,14 +108,14 @@ However, if you’d like to run a prover locally (not recommended), you’ll nee
 
 ## Installation
 
-To install the AggLayer repository, please run the following:
+To install the Agglayer repository, please run the following:
 
 ```bash
 git clone https://github.com/agglayer/agglayer
 cd agglayer
 ```
 
-To build AggLayer locally, please run:
+To build Agglayer locally, please run:
 ```bash
 cargo build
 ```
@@ -127,7 +131,7 @@ You can find the test inputs here: [`./agglayer/crates/pessimistic-proof-test-su
 
 ## Running SP1 Proof Generation Locally (Not Recommended)
 
-The [Succinct Prover Network](#succinct-prover-network) is the best way to generate Pessimistic Proofs for AggLayer. 
+The [Succinct Prover Network](#succinct-prover-network) is the best way to generate Pessimistic Proofs for Agglayer. 
 
 For those with the hardware and know-how, however, you can run the Pessimistic Proof program in a local SP1 Prover with the following commands:
 
