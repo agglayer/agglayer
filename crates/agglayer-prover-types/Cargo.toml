@@ -7,7 +7,7 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 bincode.workspace = true
-prost = "0.13.3"
+prost = "0.13.4"
 serde.workspace = true
 thiserror.workspace = true
 tonic = { workspace = true, default-features = false, features = [
