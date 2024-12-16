@@ -16,7 +16,7 @@ use pessimistic_proof::{
     utils::smt::{Node, Smt},
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
@@ -348,7 +348,6 @@ impl StateStore {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalExitTree<Keccak256Hasher>>, Error> {
-        debug!("Reading local exit tree for network_id: {}", network_id);
         let leaf_count = if let Some(leaf_count_value) =
             self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
                 network_id: network_id.into(),
@@ -525,8 +524,6 @@ impl StateReader for StateStore {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error> {
-        debug!("Reading local network state for network_id: {}", network_id);
-
         let local_exit_tree = self.read_local_exit_tree(network_id)?;
         let balance_tree =
             self.read_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(network_id)?;

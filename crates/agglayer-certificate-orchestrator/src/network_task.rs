@@ -179,7 +179,7 @@ where
                     }
                     match self.latest_settled {
                         Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
-                            warn!("Network {} is at capacity for the epoch {}", self.network_id, current_epoch);
+                            info!("Network {} is at capacity for the epoch {}", self.network_id, current_epoch);
                             return Ok(());
                         },
                         _ => {
@@ -193,6 +193,13 @@ where
                         hash = certificate_id.to_string(),
                         "Received a certificate event for {certificate_id} at height {height}"
                     );
+
+                    if matches!(
+                        self.latest_settled,
+                        Some(SettledCertificate(settled_id, _, _, _)) if settled_id == certificate_id)
+                    {
+                        return Ok(());
+                    }
 
                     if *next_expected_height != height {
                         warn!(
