@@ -18,7 +18,8 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   CARGO_TERM_COLOR: always
-  KURTOSIS_CDK_GIT_REF: v0.2.11
+  KURTOSIS_CDK_GIT_REF: v0.2.20
+  KURTOSIS_ARG_FILE: .github/tests/fork12-pessimistic.yml
 
 jobs:
   docker-build-local:
@@ -61,10 +62,7 @@ jobs:
           # Escape special characters in the new value
           escaped_new_value=$(sed 's/[\/&]/\\&/g' <<< "$new_value")
 
-          sed -i "s/zkevm_agglayer_image: .*/zkevm_agglayer_image: $escaped_new_value/" "params.yml"
-
-          # Debug
-          cat params.yml
+          sed -i "s/agglayer_image: .*/agglayer_image: $escaped_new_value/" ${KURTOSIS_ARG_FILE}
 
       - name: Install kurtosis
         run: |
@@ -77,17 +75,36 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run kurtosis
-        run: kurtosis run --enclave cdk-v1 --args-file params.yml --image-download always .
+        run: kurtosis run --enclave pp --args-file ${KURTOSIS_ARG_FILE} --image-download always .
 
       - name: Expose RPC URL
-        run: echo "ETH_RPC_URL=$(kurtosis port print cdk-v1 cdk-erigon-node-001 http-rpc)" >> $GITHUB_ENV
+        run: echo "ETH_RPC_URL=$(kurtosis port print pp el-1-geth-lighthouse http-rpc)" >> $GITHUB_ENV
 
       - name: Check that batches are progressing
         continue-on-error: true
         env:
           ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
           TIMEOUT_SECONDS: 900
-        run: ./.github/scripts/monitor-verified-batches.sh --rpc-url "$ETH_RPC_URL"
+        run: ./.github/scripts/monitor-verified-batches.sh --rpc-url "$ETH_RPC_URL" --enclave pp
+
+      - name: Checkout agglayer
+        uses: actions/checkout@v4
+        with:
+          path: "agglayer-repo"
+
+      - name: Setup Bats and bats libs
+        id: setup-bats
+        uses: bats-core/bats-action@3.0.0
+
+      - name: Executing PP e2e
+        shell: bash
+        working-directory: ./agglayer-repo
+        env:
+          KURTOSIS_PATH: ../
+          KURTOSIS_ENCLAVE: pp
+          BATS_LIB_PATH: ${{ steps.setup-bats.outputs.lib-path }}
+          TERM: xterm
+        run: bats tests/e2e/pessimistic.bats
 
       - name: debug
         run: kurtosis service logs cdk-v1 agglayer
