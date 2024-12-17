@@ -32,8 +32,8 @@ The <b>Agglayer</b> (<i>Aggregation layer</i>) provides a common language for se
 ## Table of Contents
 
 - [Overview](#overview)
-- [Crate Directory](#crate-directory)
-- [Getting Started](#getting-started)
+- [Repository Structure](#repository-structure)
+- [Prerequisites](#prerequisites)
   - [Succinct Prover Network](#succinct-prover-network)
   - [Software Requirements](#software-requirements)
   - [Hardware Requirements](#hardware-requirements)
@@ -51,37 +51,35 @@ Agglayer is the Rust-based service designed to:
 2. Verify their validity 
 3. Send them to the L1 for final settlement. 
 
-Agglayer replaces the previous Golang implementation. 
-
-To find out more about Agglayer, [please visit the docs.](https://docs.polygon.technology/agglayer/overview/)
+To find out more about Agglayer, please visit [the more detailed documentation.](https://docs.polygon.technology/agglayer/overview/)
 
 !!! info "Disclaimer"
     - Some of the content in this section discusses technology in development and not ready for release. As such, all APIs and configuration are subject to change. The code is still being audited, so please contact the Polygon team if you would like to use it in production.
-## Crate Directory
+## Repository Structure
 
 The crates and their functions within the Agglayer repo are as follows:
 
-| Crate                          | Description                                                                                                  |
-|--------------------------------|--------------------------------------------------------------------------------------------------------------|
-| agglayer-aggregator-notifier   | Contains implementations for [Certifier](crates/agglayer-certificate-orchestrator/src/certifier.rs#L29) which applies new [Certificate](crates/agglayer-types/src/lib.rs#245) on top of an existing state and computes the proof, as well as [EpochPacker](crates/agglayer-certificate-orchestrator/src/epoch_packer.rs#14), which handles the packing of an epoch |
-| agglayer-certificate-orchestrator | Manages the orchestration and handling of certificates; also handles `current_epoch`, which allows non-orchestrators to push a proven certificate |
-| agglayer-clock                 | Defines the pace of the Agglayer in terms of epoch with support for two clocks: time (for testing) and block (for listening for L1 blocks) |
-| agglayer-config                | Manages configuration settings and parameters for Agglayer components                                       |
-| agglayer-contracts             | Contains smart contracts and related logic                                                                  |
-| agglayer-gcp-kms               | Provides integration with GCP's Key Management Service for secure key handling                              |
-| agglayer-node                  | Responsible for spawning and running the different components of the node                                   |
-| agglayer-prover-types          | Defines data structures and types used by the prover                                                        |
-| agglayer-prover                | Responsible for running everything related to the prover                                                    |
-| agglayer-signer                | Manages signing operations                                                                                  |
-| agglayer-storage               | Contains two layers: a physical layer for abstracting RocksDB and a logic layer for exposing the interface to other crates so that they may interact with the storage |
-| agglayer-telemetry             | Handles telemetry and monitoring functionalities                                                            |
-| agglayer-types                 | Defines common data types and structures                                                                    |
-| agglayer                       | The CLI for interacting with the Agglayer                                                                   |
-| pessimistic-proof-program      | Implements the pessimistic proof program                                                                    |
-| pessimistic-proof-test-suite   | Provides a suite of tests for validating the functionality of the pessimistic proof program                  |
-| pessimistic-proof              | Contains the core logic and implementation of the pessimistic proof mechanism                               |
+| Crate                                                                          | Description                                                                                                                                                                                                                                                                                                                                                        |
+| ---                                                                            | ---                                                                                                                                                                                                                                                                                                                                                                |
+| [agglayer-aggregator-notifier](/crates/agglayer-aggregator-notifier)           | Contains implementations for [Certifier](crates/agglayer-certificate-orchestrator/src/certifier.rs#L29) which applies new [Certificate](crates/agglayer-types/src/lib.rs#245) on top of an existing state and computes the proof, as well as [EpochPacker](crates/agglayer-certificate-orchestrator/src/epoch_packer.rs#14), which handles the packing of an epoch |
+| [agglayer-certificate-orchestrator](/crates/agglayer-certificate-orchestrator) | Manages the orchestration and handling of certificates; also handles `current_epoch`, which allows non-orchestrators to push a proven certificate                                                                                                                                                                                                                  |
+| [agglayer-clock](/crates/agglayer-clock)                                       | Defines the pace of the Agglayer in terms of epoch with support for two clocks: time (for testing) and block (for listening for L1 blocks)                                                                                                                                                                                                                         |
+| [agglayer-config](/crates/agglayer-config)                                     | Manages configuration settings and parameters for Agglayer components                                                                                                                                                                                                                                                                                              |
+| [agglayer-contracts](/crates/agglayer-contracts)                               | Contains smart contracts and related logic                                                                                                                                                                                                                                                                                                                         |
+| [agglayer-gcp-kms](/crates/agglayer-gcp-kms)                                   | Provides integration with GCP's Key Management Service for secure key handling                                                                                                                                                                                                                                                                                     |
+| [agglayer-node](/crates/agglayer-node)                                         | Responsible for spawning and running the different components of the node                                                                                                                                                                                                                                                                                          |
+| [agglayer-prover-types](/crates/agglayer-prover-types)                         | Defines data structures and types used by the prover                                                                                                                                                                                                                                                                                                               |
+| [agglayer-prover](/crates/agglayer-prover)                                     | Responsible for running everything related to the prover                                                                                                                                                                                                                                                                                                           |
+| [agglayer-signer](/crates/agglayer-signer)                                     | Manages signing operations                                                                                                                                                                                                                                                                                                                                         |
+| [agglayer-storage](/crates/agglayer-storage)                                   | Contains two layers: a physical layer for abstracting RocksDB and a logic layer for exposing the interface to other crates so that they may interact with the storage                                                                                                                                                                                              |
+| [agglayer-telemetry](/crates/agglayer-telemetry)                               | Handles telemetry and monitoring functionalities                                                                                                                                                                                                                                                                                                                   |
+| [agglayer-types](/crates/agglayer-types)                                       | Defines common data types and structures                                                                                                                                                                                                                                                                                                                           |
+| [agglayer](/crates/agglayer)                                                   | The CLI for interacting with the Agglayer                                                                                                                                                                                                                                                                                                                          |
+| [pessimistic-proof-program](/crates/pessimistic-proof-program)                 | Implements the pessimistic proof program                                                                                                                                                                                                                                                                                                                           |
+| [pessimistic-proof-test-suite](/crates/pessimistic-proof-test-suite)           | Provides a suite of tests for validating the functionality of the pessimistic proof program                                                                                                                                                                                                                                                                        |
+| [pessimistic-proof](/crates/pessimistic-proof)                                 | Contains the core logic and implementation of the pessimistic proof mechanism                                                                                                                                                                                                                                                                                      |
 
-## Getting Started
+## Prerequisites
 
 Before working with the repository, you’ll need the following:
 
@@ -93,7 +91,6 @@ You’ll need to submit a unique Ethereum address to Succinct for access to thei
 2. Apply for access for the public address associated with your private key to Succinct Network [here.](https://docs.google.com/forms/d/e/1FAIpQLSd-X9uH7G0bvXH_kjptnQtNil8L4dumrVPpFE4t8Ci1XT1GaQ/viewform)
 
 ### Software Requirements
-### Requirements
 * [Rustup](https://www.rust-lang.org/tools/install) (stable)
 * [protoc](https://grpc.io/docs/protoc-installation/)
 * [nextest](https://nexte.st/docs/installation/pre-built-binaries/#with-cargo-binstall)
