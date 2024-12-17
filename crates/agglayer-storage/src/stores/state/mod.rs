@@ -16,7 +16,7 @@ use pessimistic_proof::{
     utils::smt::{Node, Smt},
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
-use tracing::{debug, warn};
+use tracing::{info, warn};
 
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
@@ -62,6 +62,46 @@ impl StateStore {
 }
 
 impl StateWriter for StateStore {
+    fn update_settlement_tx_hash(
+        &self,
+        certificate_id: &CertificateId,
+        tx_hash: Digest,
+    ) -> Result<(), Error> {
+        // TODO: make lockguard for certificate_id
+        let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
+
+        if let Some(mut certificate_header) = certificate_header {
+            if certificate_header.settlement_tx_hash.is_some() {
+                return Err(Error::UnprocessedAction(
+                    "Tried to update settlement tx hash for a certificate that already has a \
+                     settlement tx hash"
+                        .to_string(),
+                ));
+            }
+
+            if certificate_header.status == CertificateStatus::Settled {
+                return Err(Error::UnprocessedAction(
+                    "Tried to update settlement tx hash for a certificate that is already settled"
+                        .to_string(),
+                ));
+            }
+
+            certificate_header.settlement_tx_hash = Some(tx_hash);
+            certificate_header.status = CertificateStatus::Candidate;
+
+            self.db
+                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+        } else {
+            info!(
+                hash = %certificate_id,
+                "Certificate header not found for certificate_id: {}",
+                certificate_id
+            )
+        }
+
+        Ok(())
+    }
+
     fn assign_certificate_to_epoch(
         &self,
         certificate_id: &CertificateId,
@@ -81,16 +121,7 @@ impl StateWriter for StateStore {
                 ));
             }
 
-            if certificate_header.status != CertificateStatus::Proven {
-                return Err(Error::UnprocessedAction(format!(
-                    "Tried to assign a certificate to an epoch that is not in the right status \
-                     expect {} found {}",
-                    CertificateStatus::Proven,
-                    certificate_header.status
-                )));
-            }
-
-            certificate_header.status = CertificateStatus::Candidate;
+            certificate_header.status = CertificateStatus::Settled;
             certificate_header.epoch_number = Some(*epoch_number);
             certificate_header.certificate_index = Some(*certificate_index);
 
@@ -119,6 +150,7 @@ impl StateWriter for StateStore {
                 new_local_exit_root: certificate.new_local_exit_root,
                 status: status.clone(),
                 metadata: certificate.metadata,
+                settlement_tx_hash: None,
             },
         )?;
 
@@ -171,10 +203,10 @@ impl StateWriter for StateStore {
         epoch_number: &EpochNumber,
         certificate_index: &CertificateIndex,
     ) -> Result<(), Error> {
-        self.db.put::<LatestSettledCertificatePerNetworkColumn>(
+        Ok(self.db.put::<LatestSettledCertificatePerNetworkColumn>(
             network_id,
             &SettledCertificate(*certificate_id, *height, *epoch_number, *certificate_index),
-        )
+        )?)
     }
 
     fn write_local_network_state(
@@ -316,7 +348,6 @@ impl StateStore {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalExitTree<Keccak256Hasher>>, Error> {
-        debug!("Reading local exit tree for network_id: {}", network_id);
         let leaf_count = if let Some(leaf_count_value) =
             self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
                 network_id: network_id.into(),
@@ -440,7 +471,7 @@ impl StateReader for StateStore {
         &self,
         certificate_id: &CertificateId,
     ) -> Result<Option<CertificateHeader>, Error> {
-        self.db.get::<CertificateHeaderColumn>(certificate_id)
+        Ok(self.db.get::<CertificateHeaderColumn>(certificate_id)?)
     }
 
     fn get_certificate_header_by_cursor(
@@ -483,17 +514,16 @@ impl StateReader for StateStore {
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<(NetworkId, SettledCertificate)>, Error> {
-        self.db
+        Ok(self
+            .db
             .get::<LatestSettledCertificatePerNetworkColumn>(network_id)
-            .map(|v| v.map(|v| (*network_id, v)))
+            .map(|v| v.map(|v| (*network_id, v)))?)
     }
 
     fn read_local_network_state(
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error> {
-        debug!("Reading local network state for network_id: {}", network_id);
-
         let local_exit_tree = self.read_local_exit_tree(network_id)?;
         let balance_tree =
             self.read_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(network_id)?;
@@ -524,10 +554,10 @@ impl MetadataWriter for StateStore {
             }
         }
 
-        self.db.put::<MetadataColumn>(
+        Ok(self.db.put::<MetadataColumn>(
             &MetadataKey::LatestSettledEpoch,
             &MetadataValue::LatestSettledEpoch(value),
-        )
+        )?)
     }
 }
 
@@ -535,6 +565,7 @@ impl MetadataReader for StateStore {
     fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error> {
         self.db
             .get::<MetadataColumn>(&MetadataKey::LatestSettledEpoch)
+            .map_err(Into::into)
             .and_then(|v| {
                 v.map_or(Ok(None), |v| match v {
                     MetadataValue::LatestSettledEpoch(value) => Ok(Some(value)),

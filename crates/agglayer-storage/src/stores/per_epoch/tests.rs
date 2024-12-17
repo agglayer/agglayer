@@ -40,6 +40,7 @@ fn can_start_packing_an_unpacked_epoch(store: PerEpochStore<PendingStore, StateS
 fn cant_start_packing_a_packed_epoch(store: PerEpochStore<PendingStore, StateStore>) {
     let mut lock = store.packing_lock.write();
     *lock = true;
+
     drop(lock);
 
     assert!(store.start_packing().is_err());
@@ -117,13 +118,17 @@ fn adding_a_certificate(
         .unwrap();
 
     pending_store
-        .insert_generated_proof(&certificate_id, &Proof::new_for_test())
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
         .unwrap();
 
     store.start_checkpoint = start_checkpoint.into();
     store.end_checkpoint = RwLock::new(end_checkpoint.into());
 
-    assert!(expected_result(store.add_certificate(network_id, height)));
+    assert!(expected_result(store.add_certificate(
+        network_id,
+        height,
+        agglayer_types::ExecutionMode::Default
+    )));
 
     let header = state_store
         .get_certificate_header(&certificate_id)
@@ -134,7 +139,7 @@ fn adding_a_certificate(
     assert_eq!(
         header.status,
         if expected_certificate_index.is_some() {
-            CertificateStatus::Candidate
+            CertificateStatus::Settled
         } else {
             CertificateStatus::Proven
         }
@@ -191,11 +196,15 @@ fn adding_multiple_certificates(
             .insert_pending_certificate(network, height, &certificate)
             .unwrap();
         pending_store
-            .insert_generated_proof(&certificate.hash(), &Proof::new_for_test())
+            .insert_generated_proof(&certificate.hash(), &Proof::dummy())
             .unwrap();
 
         assert!(
-            expected_result(store.add_certificate(network, height)),
+            expected_result(store.add_certificate(
+                network,
+                height,
+                agglayer_types::ExecutionMode::Default
+            )),
             "{}:{} failed to pass the test",
             network,
             height

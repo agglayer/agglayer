@@ -1,0 +1,6 @@
+[profile.default]
+default-filter = "not package(integrations)"
+
+[profile.integrations]
+default-filter = "package(integrations)"
+threads-required = 3

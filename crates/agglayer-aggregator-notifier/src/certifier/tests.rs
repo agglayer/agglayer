@@ -48,9 +48,9 @@ async fn happy_path() {
 
     let withdrawals = vec![];
 
-    let (certificate, signer) = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events(&[], &withdrawals);
 
-    let signer: H160 = H160(**signer);
+    let signer: H160 = H160(**state.get_signer());
     let certificate_id = certificate.hash();
 
     pending_store
@@ -58,12 +58,6 @@ async fn happy_path() {
         .once()
         .with(eq(network), eq(height))
         .return_once(|_, _| Ok(Some(certificate)));
-
-    pending_store
-        .expect_get_proof()
-        .once()
-        .with(eq(certificate_id))
-        .return_once(|_| Ok(None));
 
     pending_store
         .expect_insert_generated_proof()
@@ -103,7 +97,6 @@ async fn happy_path() {
 
     let result = certifier
         .certify(local_state.clone(), network, height)
-        .unwrap()
         .await
         .unwrap();
 
@@ -151,9 +144,9 @@ async fn prover_timeout() {
 
     let withdrawals = vec![];
 
-    let (certificate, signer) = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events(&[], &withdrawals);
 
-    let signer: H160 = H160(**signer);
+    let signer: H160 = H160(**state.get_signer());
     let certificate_id = certificate.hash();
 
     pending_store
@@ -161,12 +154,6 @@ async fn prover_timeout() {
         .once()
         .with(eq(network), eq(height))
         .return_once(|_, _| Ok(Some(certificate)));
-
-    pending_store
-        .expect_get_proof()
-        .once()
-        .with(eq(certificate_id))
-        .return_once(|_| Ok(None));
 
     pending_store
         .expect_insert_generated_proof()
@@ -206,7 +193,6 @@ async fn prover_timeout() {
 
     let result = certifier
         .certify(local_state.clone(), network, height)
-        .unwrap()
         .await;
 
     assert!(result.is_err());
@@ -229,8 +215,15 @@ mockall::mock! {
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
     }
+    #[async_trait::async_trait]
     impl Settler for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
+
+        async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, String>;
+        fn build_pending_transaction(
+            &self,
+            tx_hash: ethers::types::H256,
+        ) -> ethers::providers::PendingTransaction<'_, <NonceManagerMiddleware<Provider<MockProvider>> as ethers::providers::Middleware>::Provider>;
 
         fn decode_contract_revert(error: &ethers::contract::ContractError<NonceManagerMiddleware<Provider<MockProvider> > > ) -> Option<String>;
         fn build_verify_pessimistic_trusted_aggregator_call(

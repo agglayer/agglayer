@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 default-members = ["crates/agglayer"]
-members = ["crates/*", "xtask"]
+members = ["crates/*", "xtask", "tests/integrations"]
 exclude = ["crates/pessimistic-proof-program"]
 
 [workspace.package]
@@ -15,6 +15,21 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 ] }
 
 [workspace.dependencies]
+# Project dependencies
+agglayer-aggregator-notifier = { path = "crates/agglayer-aggregator-notifier" }
+agglayer-certificate-orchestrator = { path = "crates/agglayer-certificate-orchestrator" }
+agglayer-clock = { path = "crates/agglayer-clock" }
+agglayer-config = { path = "crates/agglayer-config" }
+agglayer-contracts = { path = "crates/agglayer-contracts" }
+agglayer-node = { path = "crates/agglayer-node" }
+agglayer-prover = { path = "crates/agglayer-prover", features = ["testutils"] }
+agglayer-signer = { path = "crates/agglayer-signer" }
+agglayer-storage = { path = "crates/agglayer-storage" }
+agglayer-telemetry = { path = "crates/agglayer-telemetry" }
+agglayer-types = { path = "crates/agglayer-types" }
+pessimistic-proof = { path = "crates/pessimistic-proof" }
+pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
+
 # Core dependencies
 anyhow = "1.0.93"
 arc-swap = "1.7.1"
@@ -61,9 +76,9 @@ test-log = "0.2.16"
 
 # SP1 dependencies
 reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
-sp1-core-machine = "3.1.0"
-sp1-sdk = "3.0.0"
-sp1-prover = "3.1.0"
+sp1-core-machine = "=3.3.0"
+sp1-sdk = "=3.3.0"
+sp1-prover = "=3.3.0"
 
 # A hack to make the resolver pull in the correct sp1 branch when processing the reth and revm deps.
 # This is intended to be a temporary hotfix while the dependency issue in the upstream packages is

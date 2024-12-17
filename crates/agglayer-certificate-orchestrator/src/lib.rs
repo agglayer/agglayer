@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     future::Future,
     pin::Pin,
     sync::Arc,
@@ -17,19 +17,16 @@ use agglayer_storage::{
         PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
 };
-use agglayer_types::{CertificateId, CertificateIndex, Height, NetworkId};
+use agglayer_types::{CertificateId, Height, NetworkId};
 use arc_swap::ArcSwap;
 use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt};
 use network_task::{NetworkTask, NewCertificate};
 use tokio::{
-    sync::{
-        mpsc::{self, Receiver},
-        oneshot,
-    },
+    sync::mpsc::{self, Receiver},
     task::JoinHandle,
 };
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 mod certifier;
 mod epoch_packer;
@@ -40,7 +37,7 @@ mod network_task;
 mod tests;
 
 pub use certifier::{CertificateInput, Certifier, CertifierOutput, CertifierResult};
-pub use epoch_packer::{EpochPacker, SettlementFuture};
+pub use epoch_packer::EpochPacker;
 pub use error::{CertificationError, Error, PreCertificationError};
 
 const MAX_POLL_READS: usize = 1_000;
@@ -51,7 +48,7 @@ pub type EpochPackingTasks =
 pub type NetworkTasks =
     FuturesUnordered<Pin<Box<dyn Future<Output = Result<NetworkId, Error>> + Send + 'static>>>;
 
-pub type SettlementContext = (NetworkId, CertificateIndex, CertificateId);
+pub type SettlementContext = (NetworkId, CertificateId);
 
 pub type SettlementTasks = FuturesUnordered<
     Pin<
@@ -104,32 +101,14 @@ pub struct CertificateOrchestrator<
     /// Epochs store to manage epoch transitions.
     epochs_store: Arc<EpochsStore>,
     /// The current epoch considered by the orchestrator.
-    current_epoch: ArcSwap<PerEpochStore>,
+    current_epoch: Arc<ArcSwap<PerEpochStore>>,
 
     /// Network tasks that are currently running, with their associated
     /// notifier.
     spawned_network_tasks: BTreeMap<NetworkId, mpsc::Sender<NewCertificate>>,
 
-    /// Notifiers for the settlement of the certificates.
-    settlement_notifier: HashMap<CertificateId, oneshot::Sender<Result<SettledCertificate, Error>>>,
-
     /// Network task future resolver.
     network_tasks: NetworkTasks,
-    /// Certificate settlement task future resolver.
-    settlement_tasks: SettlementTasks,
-
-    /// Channel to receive notifications of proven certificatesa in order to
-    /// settle them.
-    certification_notification: mpsc::Receiver<(
-        oneshot::Sender<Result<SettledCertificate, Error>>,
-        ProvenCertificate,
-    )>,
-    /// Channel to pass to NetworkTask for them to send notifications of proven
-    /// certificates.
-    certification_notification_sender: mpsc::Sender<(
-        oneshot::Sender<Result<SettledCertificate, Error>>,
-        ProvenCertificate,
-    )>,
 }
 
 impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
@@ -156,12 +135,9 @@ where
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
-        current_epoch: ArcSwap<PerEpochStore>,
+        current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
-        let (certification_notification_sender, certification_notification) =
-            mpsc::channel(Self::DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE);
-
         Ok(Self {
             epoch_packing_tasks: FuturesUnordered::new(),
             clock: Box::pin(tokio_stream::StreamExt::filter_map(
@@ -180,10 +156,6 @@ where
             state_store,
             spawned_network_tasks: Default::default(),
             network_tasks: FuturesUnordered::new(),
-            settlement_tasks: FuturesUnordered::new(),
-            settlement_notifier: Default::default(),
-            certification_notification,
-            certification_notification_sender,
         })
     }
 }
@@ -233,7 +205,7 @@ where
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
-        current_epoch: ArcSwap<PerEpochStore>,
+        current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
     ) -> anyhow::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
@@ -291,7 +263,7 @@ where
             self.pending_store.clone(),
             self.state_store.clone(),
             self.certifier_task_builder.clone(),
-            self.certification_notification_sender.clone(),
+            self.epoch_packing_task_builder.clone(),
             self.clock_ref.clone(),
             network_id,
             receiver,
@@ -344,9 +316,35 @@ where
     /// - Spawning the epoch packing task.
     fn handle_epoch_end(&mut self, epoch: u64) -> Result<(), Error> {
         debug!("Start the settlement of the epoch {}", epoch);
-        let task = self.epoch_packing_task_builder.clone();
 
         let closing_epoch = self.current_epoch.load_full();
+        if let Err(error) = closing_epoch.start_packing() {
+            error!("Failed to pack the epoch {}: {:?}", epoch, error);
+
+            match error {
+                agglayer_storage::error::Error::AlreadyPacked(_) => {}
+                agglayer_storage::error::Error::DBError(error) => {
+                    let msg = format!(
+                        "CRITICAL error during packing of epoch {}: {}",
+                        epoch, error
+                    );
+                    error!(msg);
+                    self.cancellation_token.cancel();
+                    return Err(Error::InternalError(msg));
+                }
+
+                // Other errors shouldn't happen
+                error => {
+                    let msg = format!(
+                        "CRITICAL error: Failed to pack the epoch {}: {:?}",
+                        epoch, error
+                    );
+                    error!(msg);
+                    return Err(Error::InternalError(msg));
+                }
+            }
+        }
+
         // TODO: Check for overflow
         let next_epoch = epoch + 1;
 
@@ -367,226 +365,10 @@ where
             }
         }
 
-        self.epoch_packing_tasks
-            .push(async move { task.pack(closing_epoch)?.await }.boxed());
-
         Ok(())
     }
 
     fn handle_epoch_packing_result(&mut self) {}
-}
-
-// This block contains the logic applied to a Certificate.
-// The method are executed following this flow:
-//
-//                      ┌─────────────────────────┐
-//                      │                         │
-// ┌────────────────────►  spawn certifier task   ◄───────────────────┐
-// │                    │                         │                   │
-// │                    └────────────┬────────────┘                   │
-// │                                 │                                │
-// │                                 │                                │
-// │                                 │                                │
-// │                                 │                                │
-// │                                 │                                │
-// │                                 │                                │
-// │                    ┌────────────▼────────────┐              in some case
-// │                    │                         │                   │
-// │                    │      handle result      │                   │
-// │                    │                         │                   │
-// │                    └────────────┬────────────┘                   │
-// │                                 │                                │
-// │                 ┌───────────────┴────────────────┐               │
-// │                 │                                │               │
-// │       ┌─────────▼──────────┐      ┌──────────────▼────────────┐  │
-// │       │                    │      │                           │  │
-// └───────┼     on proven      │      │  on proof already exists  ┼──┘
-//         │                    │      │                           │
-//         └─────────┬──────────┘      └───────────────────────────┘
-//                   │
-//                   │
-//                   │
-//   ┌───────────────▼──────────────────┐
-//   │                                  │
-//   │  Try adding certificate to epoch │
-//   │                                  │
-//   └───────────────┬──────────────────┘
-//                   │
-//                   │
-//        ┌──────────▼────────────┐
-//        │                       │
-//        │  Settle certificate   │
-//        │                       │
-//        └───────────────────────┘
-//
-// When a Certificate is proven, we try to add it to the current epoch.
-// If we succeed, we try to settle it on L1.
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
-    CertificateOrchestrator<
-        E,
-        CertifierClient,
-        PendingStore,
-        EpochsStore,
-        PerEpochStore,
-        StateStore,
-    >
-where
-    CertifierClient: Certifier,
-    E: EpochPacker<PerEpochStore = PerEpochStore> + 'static,
-    PendingStore: PendingCertificateReader + PendingCertificateWriter,
-    StateStore: StateReader + StateWriter,
-    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
-{
-    fn handle_settlement_result(
-        &mut self,
-        ((_network_id, _index, certificate_id), settlement_result): (
-            SettlementContext,
-            Result<(NetworkId, SettledCertificate), Error>,
-        ),
-    ) -> Result<(), ()> {
-        match settlement_result {
-            Ok((
-                network_id,
-                settled @ SettledCertificate(
-                    certificate_id,
-                    height,
-                    _epoch_number,
-                    _certificate_index,
-                ),
-            )) => {
-                info!(
-                    hash = certificate_id.to_string(),
-                    "Certificate {certificate_id} settled on L1 for network {network_id} at \
-                     height {height}",
-                );
-
-                if let Some(notifier) = self.settlement_notifier.remove(&certificate_id) {
-                    if notifier.send(Ok(settled)).is_err() {
-                        warn!(
-                            "Unable to notify the settlement of the certificate {}",
-                            certificate_id
-                        );
-                    }
-                } else {
-                    warn!("No notifier found for network {}", network_id);
-                }
-            }
-            Err(error) => {
-                error!("Error during certificate settlement: {:?}", error);
-                if let Some(notifier) = self.settlement_notifier.remove(&certificate_id) {
-                    if notifier.send(Err(error)).is_err() {
-                        warn!(
-                            hash = certificate_id.to_string(),
-                            "Unable to notify the settlement error of the certificate {}",
-                            certificate_id
-                        );
-                    }
-                } else {
-                    warn!(
-                        hash = certificate_id.to_string(),
-                        "No notifier found for network {}", certificate_id
-                    );
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn handle_proven_certificate(
-        &mut self,
-        (response, ProvenCertificate(certificate_id, network, height)): (
-            oneshot::Sender<Result<SettledCertificate, Error>>,
-            ProvenCertificate,
-        ),
-    ) {
-        let current_epoch = self.current_epoch.load_full();
-        if self
-            .settlement_notifier
-            .insert(certificate_id, response)
-            .is_some()
-        {
-            warn!(
-                hash = certificate_id.to_string(),
-                "Notification channel already assigned for Certificate {certificate_id} ..."
-            );
-        }
-
-        self.try_adding_certificate(current_epoch, network, height, certificate_id);
-    }
-
-    /// Try to add a certificate to the current epoch and settle it on L1.
-    fn try_adding_certificate(
-        &mut self,
-        current_epoch: Arc<PerEpochStore>,
-        network: NetworkId,
-        height: Height,
-        certificate_id: CertificateId,
-    ) {
-        match current_epoch.add_certificate(network, height) {
-            Err(error) => {
-                error!(
-                    hash = certificate_id.to_string(),
-                    "Failed to add the certificate to the current epoch: {}", error
-                );
-                if let Some(sender) = self.settlement_notifier.remove(&certificate_id) {
-                    if sender.send(Err(Error::Storage(error))).is_err() {
-                        error!(
-                            hash = certificate_id.to_string(),
-                            "Unable to notify the error of the certificate {}", certificate_id
-                        );
-                    }
-                }
-            }
-            Ok((epoch_number, certificate_index)) => {
-                if let Err(error) = self.settle_certificate(
-                    current_epoch,
-                    certificate_index,
-                    certificate_id,
-                    network,
-                ) {
-                    error!(
-                        hash = certificate_id.to_string(),
-                        "Failed to settle the certificate {} in epoch {}: {:?}",
-                        certificate_id,
-                        epoch_number,
-                        error
-                    );
-                }
-            }
-        }
-    }
-
-    /// Spawn a task that will settle the certificate on the L1.
-    fn settle_certificate(
-        &mut self,
-        related_epoch: Arc<PerEpochStore>,
-        certificate_index: CertificateIndex,
-        certificate_id: CertificateId,
-        network_id: NetworkId,
-    ) -> Result<(), Error> {
-        debug!(
-            hash = certificate_id.to_string(),
-            "Settling the certificate {certificate_id}"
-        );
-
-        let task = self.epoch_packing_task_builder.clone();
-        self.settlement_tasks.push(
-            async move {
-                let result =
-                    match task.settle_certificate(related_epoch, certificate_index, certificate_id)
-                    {
-                        Ok(settlement_future) => settlement_future.await,
-                        Err(error) => Err(error),
-                    };
-
-                ((network_id, certificate_index, certificate_id), result)
-            }
-            .boxed(),
-        );
-
-        Ok(())
-    }
 }
 
 impl<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore> Future
@@ -609,12 +391,6 @@ where
             return Poll::Ready(());
         }
 
-        match self.certification_notification.poll_recv(cx) {
-            Poll::Ready(Some(result)) => self.handle_proven_certificate(result),
-            Poll::Ready(None) => {}
-            Poll::Pending => {}
-        }
-
         // Poll the notification tasks to check for
         match self.network_tasks.poll_next_unpin(cx) {
             Poll::Ready(Some(Ok(network_id))) => {
@@ -628,15 +404,6 @@ where
                     error
                 );
                 // TODO: Need to find a way to remove the task
-            }
-            Poll::Ready(None) => {}
-            Poll::Pending => {}
-        }
-
-        match self.settlement_tasks.poll_next_unpin(cx) {
-            Poll::Ready(Some(settlement_result)) => {
-                debug!("Certificate settlement task completed");
-                _ = self.handle_settlement_result(settlement_result);
             }
             Poll::Ready(None) => {}
             Poll::Pending => {}

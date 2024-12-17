@@ -11,8 +11,8 @@ use crate::executor::{Executor, Request, Response};
 async fn executor_normal_behavior() {
     let network = Executor::build_network_service(
         Duration::from_secs(1),
-        service_fn(|_: Request| async {
-            let Proof::SP1(mut proof) = Proof::new_for_test();
+        service_fn(|r: Request| async move {
+            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
             proof.sp1_version = "from_network".to_string();
 
             Ok(Response { proof })
@@ -27,12 +27,9 @@ async fn executor_normal_behavior() {
 
     let mut executor = Executor::new_with_services(Some(network), Some(local));
 
-    let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
-    let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
-        ..Default::default()
-    };
+    let certificate = Certificate::new_for_test(0.into(), 0);
+    let signer = certificate.get_signer();
     let batch_header = state
         .apply_certificate(
             &certificate,
@@ -56,8 +53,8 @@ async fn executor_normal_behavior() {
 async fn executor_normal_behavior_only_network() {
     let network = Executor::build_network_service(
         Duration::from_secs(1),
-        service_fn(|_: Request| async {
-            let Proof::SP1(mut proof) = Proof::new_for_test();
+        service_fn(|r: Request| async move {
+            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
             proof.sp1_version = "from_network".to_string();
 
             Ok(Response { proof })
@@ -66,12 +63,10 @@ async fn executor_normal_behavior_only_network() {
 
     let mut executor = Executor::new_with_services(Some(network), None);
 
-    let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
-    let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
-        ..Default::default()
-    };
+    let certificate = Certificate::new_for_test(0.into(), 0);
+    let signer = certificate.get_signer();
+
     let batch_header = state
         .apply_certificate(
             &certificate,
@@ -103,8 +98,8 @@ async fn executor_fallback_behavior_cpu() {
     let local = Executor::build_local_service(
         Duration::from_secs(1),
         1,
-        service_fn(|_: Request| async {
-            let Proof::SP1(mut proof) = Proof::new_for_test();
+        service_fn(|r: Request| async move {
+            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
             proof.sp1_version = "from_local".to_string();
 
             Ok(Response { proof })
@@ -113,12 +108,9 @@ async fn executor_fallback_behavior_cpu() {
 
     let mut executor = Executor::new_with_services(Some(network), Some(local));
 
-    let signer = pessimistic_proof::Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
-    let certificate = Certificate {
-        new_local_exit_root: state.exit_tree.get_root(),
-        ..Default::default()
-    };
+    let certificate = Certificate::new_for_test(0.into(), 0);
+    let signer = certificate.get_signer();
     let batch_header = state
         .apply_certificate(
             &certificate,
@@ -144,7 +136,7 @@ async fn executor_fallback_because_of_timeout_cpu() {
         Duration::from_millis(100),
         service_fn(|_: Request| async {
             tokio::time::sleep(Duration::from_secs(20)).await;
-            let Proof::SP1(mut proof) = Proof::new_for_test();
+            let Proof::SP1(mut proof) = Proof::dummy();
             proof.sp1_version = "from_network".to_string();
 
             Ok(Response { proof })
@@ -155,7 +147,7 @@ async fn executor_fallback_because_of_timeout_cpu() {
         Duration::from_secs(1),
         1,
         service_fn(|_: Request| async {
-            let Proof::SP1(mut proof) = Proof::new_for_test();
+            let Proof::SP1(mut proof) = Proof::dummy();
             proof.sp1_version = "from_local".to_string();
 
             Ok(Response { proof })
@@ -193,9 +185,9 @@ async fn executor_fallback_because_of_timeout_cpu() {
 async fn executor_fails_because_of_timeout_cpu() {
     let network = Executor::build_network_service(
         Duration::from_millis(100),
-        service_fn(|_: Request| async {
+        service_fn(|r: Request| async move {
             tokio::time::sleep(Duration::from_secs(20)).await;
-            let Proof::SP1(mut proof) = Proof::new_for_test();
+            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
             proof.sp1_version = "from_network".to_string();
 
             Ok(Response { proof })
@@ -205,9 +197,9 @@ async fn executor_fails_because_of_timeout_cpu() {
     let local = Executor::build_local_service(
         Duration::from_millis(100),
         1,
-        service_fn(|_: Request| async {
+        service_fn(|r: Request| async move {
             tokio::time::sleep(Duration::from_secs(20)).await;
-            let Proof::SP1(mut proof) = Proof::new_for_test();
+            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
             proof.sp1_version = "from_local".to_string();
 
             Ok(Response { proof })
@@ -246,9 +238,9 @@ async fn executor_fails_because_of_timeout_cpu() {
 async fn executor_fails_because_of_concurrency_cpu() {
     let network = Executor::build_network_service(
         Duration::from_millis(100),
-        service_fn(|_: Request| async {
+        service_fn(|r: Request| async move {
             tokio::time::sleep(Duration::from_secs(20)).await;
-            let Proof::SP1(mut proof) = Proof::new_for_test();
+            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
             proof.sp1_version = "from_network".to_string();
 
             Ok(Response { proof })
@@ -258,9 +250,9 @@ async fn executor_fails_because_of_concurrency_cpu() {
     let local = Executor::build_local_service(
         Duration::from_secs(20),
         1,
-        service_fn(|_: Request| async {
+        service_fn(|r: Request| async move {
             tokio::time::sleep(Duration::from_secs(20)).await;
-            let Proof::SP1(mut proof) = Proof::new_for_test();
+            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
             proof.sp1_version = "from_local".to_string();
 
             Ok(Response { proof })

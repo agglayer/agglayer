@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use ethers::signers::LocalWallet;
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -24,7 +25,12 @@ use reth_primitives::B256;
 pub use reth_primitives::U256;
 pub use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
-use sp1_sdk::SP1PublicValues;
+use sp1_sdk::provers::ProofOpts;
+use sp1_sdk::{
+    MockProver, Prover, SP1Context, SP1Proof, SP1ProofKind, SP1ProofWithPublicValues,
+    SP1PublicValues, SP1Stdin,
+};
+
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Digest;
@@ -33,6 +39,25 @@ pub type Metadata = Digest;
 
 pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
+
+/// ELF of the pessimistic proof program
+pub(crate) const ELF: &[u8] =
+    include_bytes!("../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ExecutionMode {
+    Default,
+    DryRun,
+}
+
+impl ExecutionMode {
+    pub const fn prefix(&self) -> &'static str {
+        match self {
+            ExecutionMode::Default => "",
+            ExecutionMode::DryRun => "(Dry run) ",
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EpochConfiguration {
@@ -53,6 +78,7 @@ pub struct CertificateHeader {
     pub new_local_exit_root: Digest,
     pub metadata: Metadata,
     pub status: CertificateStatus,
+    pub settlement_tx_hash: Option<Digest>,
 }
 
 #[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -217,13 +243,31 @@ pub enum Proof {
 }
 
 impl Proof {
-    pub fn new_for_test() -> Self {
-        Proof::SP1(sp1_sdk::SP1ProofWithPublicValues {
-            proof: sp1_sdk::SP1Proof::Core(Vec::new()),
-            stdin: sp1_sdk::SP1Stdin::new(),
+    pub fn dummy() -> Self {
+        Self::SP1(SP1ProofWithPublicValues {
+            proof: SP1Proof::Core(vec![]),
+            stdin: SP1Stdin::new(),
             public_values: SP1PublicValues::new(),
-            sp1_version: String::new(),
+            sp1_version: "".to_string(),
         })
+    }
+    pub fn new_for_test(
+        state: &LocalNetworkState,
+        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+    ) -> Self {
+        let mock = MockProver::new();
+        let (p, _v) = mock.setup(ELF);
+
+        let mut stdin = SP1Stdin::new();
+        stdin.write(state);
+        stdin.write(multi_batch_header);
+
+        let opts = ProofOpts::default();
+        let context = SP1Context::default();
+        let kind = SP1ProofKind::Plonk;
+        let proof = mock.prove(&p, stdin, opts, context, kind).unwrap();
+
+        Proof::SP1(proof)
     }
 }
 
@@ -241,7 +285,7 @@ impl Proof {
 ///
 /// Note: be mindful to update the [`Self::hash`] method accordingly
 /// upon modifying the fields of this structure.
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Certificate {
     /// NetworkID of the origin network.
     pub network_id: NetworkId,
@@ -261,17 +305,72 @@ pub struct Certificate {
     pub metadata: Metadata,
 }
 
+#[cfg(any(test, feature = "testutils"))]
+impl Default for Certificate {
+    fn default() -> Self {
+        let network_id = Default::default();
+        let wallet = Self::wallet_for_test(network_id);
+        let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
+        let (_new_local_exit_root, signature) = compute_signature_info(exit_root, &[], &wallet);
+        Self {
+            network_id,
+            height: Default::default(),
+            prev_local_exit_root: exit_root,
+            new_local_exit_root: exit_root,
+            bridge_exits: Default::default(),
+            imported_bridge_exits: Default::default(),
+            signature,
+            metadata: Default::default(),
+        }
+    }
+}
+
+pub fn compute_signature_info(
+    new_local_exit_root: Digest,
+    imported_bridge_exits: &[ImportedBridgeExit],
+    wallet: &LocalWallet,
+) -> (Digest, Signature) {
+    let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
+        new_local_exit_root,
+        imported_bridge_exits,
+    );
+    let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
+    let signature = Signature {
+        r: U256::from_limbs(signature.r.0),
+        s: U256::from_limbs(signature.s.0),
+        odd_y_parity: signature.recovery_id().unwrap().is_y_odd(),
+    };
+
+    (combined_hash, signature)
+}
+
 impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
+    pub fn wallet_for_test(network_id: NetworkId) -> ethers::signers::LocalWallet {
+        let fake_priv_key = keccak256_combine([b"FAKEKEY:", network_id.to_be_bytes().as_slice()]);
+        ethers::signers::LocalWallet::from_bytes(fake_priv_key.as_bytes()).unwrap()
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn get_signer(&self) -> Address {
+        use ethers::signers::Signer;
+        Self::wallet_for_test(self.network_id).address().0.into()
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
-        Certificate {
+        let wallet = Self::wallet_for_test(network_id);
+        let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
+        let (_, signature) = compute_signature_info(exit_root, &[], &wallet);
+
+        Self {
             network_id,
             height,
-            prev_local_exit_root: [0; 32].into(),
-            new_local_exit_root: [1; 32].into(),
-            bridge_exits: Vec::new(),
-            imported_bridge_exits: Vec::new(),
-            signature: Signature::default(),
+            prev_local_exit_root: exit_root,
+            new_local_exit_root: exit_root,
+            bridge_exits: Default::default(),
+            imported_bridge_exits: Default::default(),
+            signature,
             metadata: Default::default(),
         }
     }

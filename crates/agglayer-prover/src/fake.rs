@@ -31,7 +31,8 @@ pub struct FakeProver {
 impl Default for FakeProver {
     fn default() -> Self {
         let prover = MockProver::new();
-        let (proving_key, _) = prover.setup(ELF);
+        let (proving_key, _verifying_key) = prover.setup(ELF);
+
         Self {
             proving_key,
             prover: Arc::new(prover),

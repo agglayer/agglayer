@@ -29,6 +29,7 @@ fn can_parse_value() {
         new_local_exit_root: [5; 32].into(),
         status: agglayer_types::CertificateStatus::Pending,
         metadata: [6; 32].into(),
+        settlement_tx_hash: None,
     };
 
     let encoded = value.encode().expect("Unable to encode value");

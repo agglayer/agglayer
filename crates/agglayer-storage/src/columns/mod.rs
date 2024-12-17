@@ -1,7 +1,12 @@
 use bincode::{DefaultOptions, Options};
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::error::Error;
+#[derive(Debug, thiserror::Error)]
+pub enum CodecError {
+    #[error(r#"Serialization error: {0}
+        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
+    Serialization(#[from] bincode::Error),
+}
 
 pub fn default_bincode_options() -> impl bincode::Options {
     DefaultOptions::new()
@@ -42,11 +47,11 @@ pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
 pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
 
 pub trait Codec: Sized + Serialize + DeserializeOwned {
-    fn encode(&self) -> Result<Vec<u8>, Error> {
+    fn encode(&self) -> Result<Vec<u8>, CodecError> {
         Ok(default_bincode_options().serialize(self)?)
     }
 
-    fn decode(buf: &[u8]) -> Result<Self, Error> {
+    fn decode(buf: &[u8]) -> Result<Self, CodecError> {
         Ok(default_bincode_options().deserialize(buf)?)
     }
 }

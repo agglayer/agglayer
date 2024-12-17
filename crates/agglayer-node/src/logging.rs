@@ -23,5 +23,9 @@ pub(crate) fn tracing(config: &agglayer_config::Log) {
             .boxed(),
     };
 
-    tracing_subscriber::Registry::default().with(layer).init();
+    // We are using try_init because integration test may try to initialize this
+    // multiple times.
+    _ = tracing_subscriber::Registry::default()
+        .with(layer)
+        .try_init();
 }

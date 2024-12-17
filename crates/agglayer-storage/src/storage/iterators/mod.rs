@@ -1,9 +1,7 @@
 use tracing::debug;
 
-use crate::{
-    columns::{Codec as _, ColumnSchema},
-    error::Error,
-};
+use super::DBError;
+use crate::columns::{Codec as _, ColumnSchema};
 
 /// The status of the iterator.
 enum IteratorStatus {
@@ -39,7 +37,7 @@ impl<'a, C: ColumnSchema> KeysIterator<'a, C> {
 }
 
 impl<C: ColumnSchema> Iterator for KeysIterator<'_, C> {
-    type Item = Result<C::Key, Error>;
+    type Item = Result<C::Key, DBError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.status {
@@ -63,7 +61,9 @@ impl<C: ColumnSchema> Iterator for KeysIterator<'_, C> {
             return None;
         }
 
-        self.iter.key().map(C::Key::decode)
+        self.iter
+            .key()
+            .map(|v| C::Key::decode(v).map_err(Into::into))
     }
 }
 
@@ -74,7 +74,7 @@ pub struct ColumnIterator<'a, C: ColumnSchema> {
     _phantom: std::marker::PhantomData<C>,
 }
 
-type KeyValueResult<K, V> = Result<Option<(K, V)>, Error>;
+type KeyValueResult<K, V> = Result<Option<(K, V)>, DBError>;
 
 impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
     pub(crate) fn new(iter: rocksdb::DBRawIterator<'a>, direction: rocksdb::Direction) -> Self {
@@ -107,7 +107,7 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
 
     /// Seeks for the first key (binary equal to or greater)
     #[allow(unused)]
-    pub fn seek(&mut self, seek_key: &C::Key) -> Result<(), Error> {
+    pub fn seek(&mut self, seek_key: &C::Key) -> Result<(), DBError> {
         let key = seek_key.encode()?;
         self.iter.seek(&key);
 
@@ -116,7 +116,7 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
 
     /// Seeks for the last key (binary equal to or less)
     #[allow(unused)]
-    pub fn seek_for_prev(&mut self, seek_key: &C::Key) -> Result<(), Error> {
+    pub fn seek_for_prev(&mut self, seek_key: &C::Key) -> Result<(), DBError> {
         let key = seek_key.encode()?;
         self.iter.seek_for_prev(&key);
 
@@ -125,7 +125,7 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
 }
 
 impl<C: ColumnSchema> Iterator for ColumnIterator<'_, C> {
-    type Item = Result<(C::Key, C::Value), Error>;
+    type Item = Result<(C::Key, C::Value), DBError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.status {

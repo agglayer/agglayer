@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+ethers.workspace = true
 hex.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 reth-primitives.workspace = true
@@ -14,6 +15,7 @@ sp1-sdk.workspace = true
 sp1-core-machine.workspace = true
 thiserror.workspace = true
 bincode.workspace = true
+rand.workspace = true
 
 [features]
 default = []

@@ -7,27 +7,41 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+async-trait.workspace = true
 anyhow.workspace = true
 arc-swap.workspace = true
 bincode.workspace = true
 buildstructor.workspace = true
+ethers.workspace = true
+parking_lot.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 
-agglayer-clock = { path = "../agglayer-clock" }
-agglayer-storage = { path = "../agglayer-storage" }
-agglayer-types = { path = "../agglayer-types" }
-pessimistic-proof = { path = "../pessimistic-proof" }
+agglayer-clock.workspace = true
+agglayer-config.workspace = true
+agglayer-storage.workspace = true
+agglayer-types.workspace = true
+pessimistic-proof.workspace = true
 tokio-stream = { version = "0.1.15", features = ["sync"] }
 futures-util = "0.3.30"
 
 [dev-dependencies]
-agglayer-clock = { path = "../agglayer-clock", features = ["testutils"] }
-agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
-agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
-agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
+agglayer-clock = { workspace = true, features = ["testutils"] }
+agglayer-storage = { workspace = true, features = ["testutils"] }
+agglayer-config = { workspace = true, features = ["testutils"] }
+agglayer-types = { workspace = true, features = ["testutils"] }
+agglayer-test-suite = { path = "../agglayer-test-suite" }
+async-trait.workspace = true
+ethers.workspace = true
+lazy_static.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 mockall.workspace = true
 rstest.workspace = true
 test-log.workspace = true
+
+[features]
+default = []
+testutils = []

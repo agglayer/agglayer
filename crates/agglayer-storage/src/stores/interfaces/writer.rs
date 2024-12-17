@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId, Proof,
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
+    ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 
 use crate::{error::Error, stores::PerEpochReader};
@@ -16,6 +16,7 @@ pub trait PerEpochWriter: Send + Sync {
         &self,
         network_id: NetworkId,
         height: Height,
+        mode: ExecutionMode,
     ) -> Result<(EpochNumber, CertificateIndex), Error>;
     fn start_packing(&self) -> Result<(), Error>;
 }
@@ -37,6 +38,11 @@ pub trait MetadataWriter: Send + Sync {
 }
 
 pub trait StateWriter: Send + Sync {
+    fn update_settlement_tx_hash(
+        &self,
+        certificate_id: &CertificateId,
+        tx_hash: Digest,
+    ) -> Result<(), Error>;
     fn insert_certificate_header(
         &self,
         certificate: &Certificate,

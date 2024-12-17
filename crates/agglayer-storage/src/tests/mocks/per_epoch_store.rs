@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Height, NetworkId, Proof};
+use agglayer_types::{
+    Certificate, CertificateIndex, EpochNumber, ExecutionMode, Height, NetworkId, Proof,
+};
 use mockall::mock;
 
 use crate::{
@@ -26,7 +28,7 @@ mock! {
     }
 
     impl PerEpochWriter for PerEpochStore {
-        fn add_certificate(&self, network_id: NetworkId, height: Height) -> Result<(EpochNumber, CertificateIndex), Error>;
+        fn add_certificate(&self, network_id: NetworkId, height: Height, mode: ExecutionMode) -> Result<(EpochNumber, CertificateIndex), Error>;
         fn start_packing(&self) -> Result<(), Error>;
     }
 }

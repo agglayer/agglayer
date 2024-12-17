@@ -1,5 +1,8 @@
 FROM --platform=${BUILDPLATFORM} rust:slim-bullseye AS chef
 
+ARG CIRCUIT_ARTIFACTS_URL_BASE=https://sp1-circuits.s3-us-east-2.amazonaws.com
+ARG CIRCUIT_TYPE=plonk
+ARG CIRCUIT_VERSION=v3.0.0
 ARG PROTOC_VERSION=28.2
 
 USER root
@@ -10,6 +13,8 @@ FROM chef AS planner
 
 COPY --link crates crates
 COPY --link xtask xtask
+# Needed for cargo-chef to build, but not use during the compilation due to `--bin agglayer`
+COPY --link tests/integrations tests/integrations
 COPY --link Cargo.toml Cargo.toml
 COPY --link Cargo.lock Cargo.lock
 
@@ -20,7 +25,7 @@ FROM --platform=${BUILDPLATFORM} golang:1.22 AS go-builder
 FROM chef AS builder
 
 RUN apt-get update && \
-    apt-get --no-install-recommends install -y clang cmake curl libssl-dev pkg-config unzip && \
+    apt-get --no-install-recommends install -y clang cmake curl libssl-dev tar pkg-config unzip && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 RUN ARCHITECTURE=$(uname -m | sed -e "s/arm64/arm_64/g" | sed -e "s/aarch64/aarch_64/g") \
@@ -42,11 +47,17 @@ COPY --link crates crates
 COPY --link Cargo.toml Cargo.toml
 COPY --link Cargo.lock Cargo.lock
 
+RUN mkdir -p /root/.sp1/circuits/${CIRCUIT_TYPE}/${CIRCUIT_VERSION}
+RUN curl -s -o /tmp/circuits.tar.gz ${CIRCUIT_ARTIFACTS_URL_BASE}/${CIRCUIT_VERSION}-${CIRCUIT_TYPE}.tar.gz \
+    && tar -Pxzf/tmp/circuits.tar.gz -C /root/.sp1/circuits/${CIRCUIT_TYPE}/${CIRCUIT_VERSION}
+
 RUN cargo build --release --bin agglayer
+
 
 FROM --platform=${BUILDPLATFORM} debian:bullseye-slim
 
 RUN apt-get update && apt-get install -y ca-certificates
 COPY --from=builder /app/target/release/agglayer /usr/local/bin/
+COPY --from=builder /root/.sp1/circuits /root/.sp1/circuits
 
 CMD ["/usr/local/bin/agglayer"]

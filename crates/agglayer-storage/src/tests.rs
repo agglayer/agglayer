@@ -21,7 +21,7 @@ impl Default for TempDBDir {
 
 impl TempDBDir {
     pub fn new() -> Self {
-        let mut path = temp_dir();
+        let mut path = temp_dir().join("agglayer");
 
         let folder_name = std::thread::current().name().unwrap().replace("::", "_");
         let time = SystemTime::now()

@@ -112,7 +112,7 @@ mod tests {
             TempDBDir,
         },
     };
-    use agglayer_types::{Certificate, Height, NetworkId, Proof};
+    use agglayer_types::{Certificate, ExecutionMode, Height, NetworkId, Proof};
     use mockall::{predicate::eq, Sequence};
 
     use super::*;
@@ -204,6 +204,7 @@ mod tests {
 
         let mut epochs_store = MockEpochsStore::new();
         let end_checkpoint = start_checkpoint.clone();
+
         epochs_store
             .expect_open()
             .once()
@@ -304,18 +305,22 @@ mod tests {
             .insert_pending_certificate(network_1, 0, &certificate_1)
             .unwrap();
         pending_store
-            .insert_generated_proof(&certificate_1.hash(), &Proof::new_for_test())
+            .insert_generated_proof(&certificate_1.hash(), &Proof::dummy())
             .unwrap();
 
         pending_store
             .insert_pending_certificate(network_2, 0, &certificate_2)
             .unwrap();
         pending_store
-            .insert_generated_proof(&certificate_2.hash(), &Proof::new_for_test())
+            .insert_generated_proof(&certificate_2.hash(), &Proof::dummy())
             .unwrap();
 
-        epoch_10.add_certificate(network_1, 0).unwrap();
-        epoch_10.add_certificate(network_2, 0).unwrap();
+        epoch_10
+            .add_certificate(network_1, 0, ExecutionMode::Default)
+            .unwrap();
+        epoch_10
+            .add_certificate(network_2, 0, ExecutionMode::Default)
+            .unwrap();
 
         let mut expected_end_checkpoint = BTreeMap::new();
 
@@ -420,18 +425,22 @@ mod tests {
             .insert_pending_certificate(network_1, 0, &certificate_1)
             .unwrap();
         pending_store
-            .insert_generated_proof(&certificate_1.hash(), &Proof::new_for_test())
+            .insert_generated_proof(&certificate_1.hash(), &Proof::dummy())
             .unwrap();
 
         pending_store
             .insert_pending_certificate(network_2, 0, &certificate_2)
             .unwrap();
         pending_store
-            .insert_generated_proof(&certificate_2.hash(), &Proof::new_for_test())
+            .insert_generated_proof(&certificate_2.hash(), &Proof::dummy())
             .unwrap();
 
-        epoch_10.add_certificate(network_1, 0).unwrap();
-        epoch_10.add_certificate(network_2, 0).unwrap();
+        epoch_10
+            .add_certificate(network_1, 0, ExecutionMode::Default)
+            .unwrap();
+        epoch_10
+            .add_certificate(network_2, 0, ExecutionMode::Default)
+            .unwrap();
 
         let mut expected_end_checkpoint = BTreeMap::new();
 
