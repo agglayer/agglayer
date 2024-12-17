@@ -53,8 +53,8 @@ Agglayer is the Rust-based service designed to:
 
 To find out more about Agglayer, please visit [the more detailed documentation.](https://docs.polygon.technology/agglayer/overview/)
 
-!!! info "Disclaimer"
-    - Some of the content in this section discusses technology in development and not ready for release. As such, all APIs and configuration are subject to change. The code is still being audited, so please contact the Polygon team if you would like to use it in production.
+> [!WARNING]
+>    - Some of the content in this section discusses technology in development and not ready for release. As such, all APIs and configuration are subject to change. The code is still being audited, so please contact the Polygon team if you would like to use it in production.
 ## Repository Structure
 
 The crates and their functions within the Agglayer repo are as follows:
