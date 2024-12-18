@@ -1,0 +1,12 @@
+[package]
+name = "sp1-toolchain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[env]
+
+[dependencies]
+
+[lints]
+workspace = true
