@@ -24,7 +24,7 @@ agglayer-config.workspace = true
 agglayer-storage.workspace = true
 agglayer-types.workspace = true
 pessimistic-proof.workspace = true
-tokio-stream = { version = "0.1.15", features = ["sync"] }
+tokio-stream = { version = "0.1.17", features = ["sync"] }
 futures-util = "0.3.30"
 
 # Optional dependencies

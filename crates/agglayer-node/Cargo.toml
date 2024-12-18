@@ -7,14 +7,14 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-alloy = { version = "0.6.4", features = ["full"] }
+alloy = { version = "0.7.3", features = ["full"] }
 anyhow.workspace = true
 arc-swap.workspace = true
 buildstructor.workspace = true
 ethers = { workspace = true, features = ["solc"] }
 futures.workspace = true
 hex.workspace = true
-hyper = "1.5.1"
+hyper = "1.5.2"
 jsonrpsee = { workspace = true, features = ["full"] }
 parking_lot.workspace = true
 pin-project = "1.1.7"
@@ -25,7 +25,7 @@ serde_with.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true
-tokio-stream = "0.1.15"
+tokio-stream = "0.1.17"
 toml.workspace = true
 tower-http = { version = "0.6.2", features = ["full"] }
 tower.workspace = true
@@ -44,7 +44,7 @@ pessimistic-proof = { path = "../pessimistic-proof" }
 agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
 
 [dev-dependencies]
-alloy = { version = "0.6.4", features = ["full", "node-bindings"] }
+alloy = { version = "0.7.3", features = ["full", "node-bindings"] }
 ethers.workspace = true
 http-body-util = "0.1.2"
 hyper-util = { version = "0.1.6", features = ["client"] }
