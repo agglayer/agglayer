@@ -1,0 +1,58 @@
+[tasks.pp-elf]
+description = "Install pessmisitic proof ELF file"
+dependencies = [ "pp-elf-build" ]
+cwd = "crates/pessimistic-proof-program"
+command = "cp"
+args = [
+    "target/riscv32im-succinct-zkvm-elf/release/pessimistic-proof-program",
+    "elf/riscv32im-succinct-zkvm-elf",
+]
+
+[tasks.pp-elf-build]
+description = "Compile pessmisitic proof ELF file"
+dependencies = [ "sp1-toolchain-image" ]
+command = "docker"
+args = [
+    "run",
+    "--rm",
+    "-v${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}:/sp1/source",
+    "-w/sp1/source/crates/pessimistic-proof-program",
+    "sp1:ppbuild",
+    "cargo",
+    "build",
+    "--target=riscv32im-succinct-zkvm-elf",
+    "--release",
+    "--locked",
+    "-vv",
+]
+
+[tasks.sp1-toolchain-shell]
+description = "Drop into an interactive shell in sp1 build environment image"
+dependencies = [ "sp1-toolchain-image" ]
+command = "docker"
+args = [
+    "run",
+    "--rm",
+    "-it",
+    "-v${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}:/sp1/source",
+    "sp1:ppbuild",
+]
+
+[tasks.sp1-toolchain-image]
+description = "Build a docker image with sp1 build environment"
+command = "docker"
+args = [
+    "build",
+    "--build-arg=RUST_VERSION",
+    "--build-arg=SP1_VERSION",
+    "--build-arg=SP1_TOOLCHAIN_HASH",
+    "--build-arg=SP1_ARCH",
+    "-tsp1:ppbuild",
+    "-f./build/sp1-toolchain/Dockerfile",
+    "./build/sp1-toolchain",
+]
+
+env.RUST_VERSION = "1.81.0"
+env.SP1_VERSION = "v1.81.0"
+env.SP1_TOOLCHAIN_HASH = "f8b978b44fdedfd9f3dfea127ee11f13ee2fdaaffdea2619489dff7bbe791cce"
+env.SP1_ARCH = "${CARGO_MAKE_RUST_TARGET_ARCH}"
