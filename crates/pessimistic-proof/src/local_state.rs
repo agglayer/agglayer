@@ -18,7 +18,7 @@ use crate::{
 /// the prover.
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkState {
-    /// Commitment to the [`BridgeExit`].
+    /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
     pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// Commitment to the balance for each token.
     pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
