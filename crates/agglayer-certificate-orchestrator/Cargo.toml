@@ -16,16 +16,15 @@ ethers.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+futures-util = "0.3.30"
 
 agglayer-clock.workspace = true
-agglayer-config.workspace = true
 agglayer-storage.workspace = true
 agglayer-types.workspace = true
 pessimistic-proof.workspace = true
-tokio-stream = { version = "0.1.15", features = ["sync"] }
-futures-util = "0.3.30"
 
 # Optional dependencies
 mockall = { workspace = true, optional = true }
