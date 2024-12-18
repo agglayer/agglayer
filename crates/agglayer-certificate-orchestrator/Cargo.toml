@@ -27,21 +27,24 @@ pessimistic-proof.workspace = true
 tokio-stream = { version = "0.1.15", features = ["sync"] }
 futures-util = "0.3.30"
 
+# Optional dependencies
+mockall = { workspace = true, optional = true }
+
 [dev-dependencies]
 agglayer-clock = { workspace = true, features = ["testutils"] }
-agglayer-storage = { workspace = true, features = ["testutils"] }
 agglayer-config = { workspace = true, features = ["testutils"] }
-agglayer-types = { workspace = true, features = ["testutils"] }
+agglayer-storage = { workspace = true, features = ["testutils"] }
 agglayer-test-suite = { path = "../agglayer-test-suite" }
+agglayer-types = { workspace = true, features = ["testutils"] }
 async-trait.workspace = true
 ethers.workspace = true
 lazy_static.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 mockall.workspace = true
 rstest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 test-log.workspace = true
 
 [features]
 default = []
-testutils = []
+testutils = ["dep:mockall"]
