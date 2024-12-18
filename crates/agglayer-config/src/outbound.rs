@@ -45,6 +45,15 @@ pub struct OutboundRpcSettleConfig {
     #[serde(default = "default_settlement_timeout")]
     #[serde(with = "crate::with::HumanDuration")]
     pub settlement_timeout: Duration,
+
+    /// Gas multiplier factor for the transaction.
+    /// The gas is calculated as follows:
+    /// `gas = estimate_gas * (gas_multiplier / 100)
+    #[serde(
+        default = "default_gas_multiplier_factor",
+        skip_serializing_if = "same_as_default_gas_multiplier_factor"
+    )]
+    pub gas_multiplier_factor: u32,
 }
 
 impl Default for OutboundRpcSettleConfig {
@@ -54,8 +63,18 @@ impl Default for OutboundRpcSettleConfig {
             retry_interval: default_rpc_retry_interval(),
             confirmations: default_rpc_confirmations(),
             settlement_timeout: default_settlement_timeout(),
+            gas_multiplier_factor: default_gas_multiplier_factor(),
         }
     }
+}
+
+/// Default gas price multiplier for the transaction.
+const fn default_gas_multiplier_factor() -> u32 {
+    100
+}
+
+const fn same_as_default_gas_multiplier_factor(v: &u32) -> bool {
+    *v == default_gas_multiplier_factor()
 }
 
 /// Default number of retries for the transaction. It matches the ethers default
