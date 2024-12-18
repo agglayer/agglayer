@@ -26,3 +26,10 @@ rustflags = []
 
 [profile.test.package.sp1-sdk]
 debug-assertions = false
+
+[target.riscv32im-succinct-zkvm-elf]
+rustflags = [
+    "-Cpasses=loweratomic",
+    "-Clink-arg=-Ttext=0x00200800",
+    "-Cpanic=abort",
+]
