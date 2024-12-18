@@ -14,7 +14,7 @@ use arc_swap::ArcSwap;
 use bincode::Options;
 use ethers::{
     providers::PendingTransaction,
-    types::{TransactionReceipt, H256, U64},
+    types::{TransactionReceipt, H256, U256, U64},
 };
 use pessimistic_proof::PessimisticProofOutput;
 use tracing::{debug, error, info, instrument, warn};
@@ -185,6 +185,31 @@ where
         );
 
         let state_store = self.state_store.clone();
+
+        let gas_estimate = contract_call.estimate_gas().await.map_err(|error| {
+            let error_str =
+                RollupManagerRpc::decode_contract_revert(&error).unwrap_or(error.to_string());
+
+            error!(
+                error_code = %error,
+                error = error_str,
+                hash,
+                "Failed to settle the certificate {certificate_id}: {}", error_str
+            );
+
+            Error::SettlementError {
+                certificate_id,
+                error: error_str,
+            }
+        })?;
+
+        let gas = calculate_gas(&gas_estimate, &self.config);
+        debug!(
+            hash,
+            "Gas estimate: {}, Gas calculated: {}", gas_estimate, gas
+        );
+
+        let contract_call = contract_call.gas(gas);
 
         // Send the transaction
         let pending_tx = contract_call
@@ -395,6 +420,15 @@ where
             .await
             .map_err(Error::L1CommunicationError)
     }
+}
+
+fn calculate_gas(gas_estimate: &U256, config: &OutboundRpcSettleConfig) -> U256 {
+    fail::fail_point!(
+        "notifier::packer::settle_certificate::gas_estimate::low_gas",
+        |_| { gas_estimate * 50 / 100 }
+    );
+    let gas_multiplier = config.gas_multiplier_factor;
+    gas_estimate * gas_multiplier / 100
 }
 
 async fn handle_pending_tx<RollupManagerRpc>(
