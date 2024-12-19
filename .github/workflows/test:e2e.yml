@@ -18,7 +18,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   CARGO_TERM_COLOR: always
-  KURTOSIS_CDK_GIT_REF: v0.2.20
+  KURTOSIS_CDK_GIT_REF: v0.2.25
   KURTOSIS_ARG_FILE: .github/tests/fork12-pessimistic.yml
 
 jobs:
@@ -78,10 +78,9 @@ jobs:
         run: kurtosis run --enclave pp --args-file ${KURTOSIS_ARG_FILE} --image-download always .
 
       - name: Expose RPC URL
-        run: echo "ETH_RPC_URL=$(kurtosis port print pp el-1-geth-lighthouse http-rpc)" >> $GITHUB_ENV
+        run: echo "ETH_RPC_URL=$(kurtosis port print pp cdk-erigon-rpc-001 rpc)" >> $GITHUB_ENV
 
       - name: Check that batches are progressing
-        continue-on-error: true
         env:
           ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
           TIMEOUT_SECONDS: 900
