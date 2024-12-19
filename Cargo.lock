@@ -255,6 +255,7 @@ name = "agglayer-primitives"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives 0.8.15",
+ "k256",
  "serde",
 ]
 
@@ -374,6 +375,7 @@ name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "agglayer-types",
  "bincode",
  "ethers",
  "hex",
