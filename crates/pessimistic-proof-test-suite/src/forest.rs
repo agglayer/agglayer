@@ -1,5 +1,5 @@
+use agglayer_primitives::{Address, Signature, U256};
 use agglayer_types::{Certificate, LocalNetworkStateData};
-use alloy_primitives::{Address, Signature, U256};
 use ethers_signers::{LocalWallet, Signer};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},

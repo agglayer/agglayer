@@ -2,7 +2,7 @@ pub mod keccak;
 pub mod local_exit_tree;
 
 mod proof;
-pub use alloy_primitives::{Address, Signature, U256};
+pub use agglayer_primitives::{Address, Signature, U256};
 pub use proof::{generate_pessimistic_proof, PessimisticProofOutput, ProofError};
 
 pub mod local_balance_tree;

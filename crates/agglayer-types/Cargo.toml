@@ -5,7 +5,9 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-alloy-primitives.workspace = true
+agglayer-primitives.workspace = true
+pessimistic-proof = { path = "../pessimistic-proof" }
+
 ethers.workspace = true
 hex.workspace = true
 serde.workspace = true
@@ -15,8 +17,6 @@ sp1-core-machine.workspace = true
 thiserror.workspace = true
 bincode.workspace = true
 rand.workspace = true
-
-pessimistic-proof = { path = "../pessimistic-proof" }
 
 [features]
 default = []

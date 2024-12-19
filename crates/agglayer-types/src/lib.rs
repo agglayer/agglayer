@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use alloy_primitives::{address, Address, Signature, B256, U256};
+pub use agglayer_primitives::{address, Address, Signature, B256, U256};
 use ethers::signers::LocalWallet;
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
