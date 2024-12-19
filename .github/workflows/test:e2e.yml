@@ -63,6 +63,7 @@ jobs:
           escaped_new_value=$(sed 's/[\/&]/\\&/g' <<< "$new_value")
 
           sed -i "s/agglayer_image: .*/agglayer_image: $escaped_new_value/" ${KURTOSIS_ARG_FILE}
+          sed -i "s/agglayer_prover_sp1_key: .*/agglayer_prover_sp1_key: ${{ secrets.SP1_PRIVATE_KEY }}/" ${KURTOSIS_ARG_FILE}
 
       - name: Install kurtosis
         run: |
