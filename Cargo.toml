@@ -22,6 +22,7 @@ agglayer-clock = { path = "crates/agglayer-clock" }
 agglayer-config = { path = "crates/agglayer-config" }
 agglayer-contracts = { path = "crates/agglayer-contracts" }
 agglayer-node = { path = "crates/agglayer-node" }
+agglayer-primitives = { path = "crates/agglayer-primitives" }
 agglayer-prover = { path = "crates/agglayer-prover", features = ["testutils"] }
 agglayer-signer = { path = "crates/agglayer-signer" }
 agglayer-storage = { path = "crates/agglayer-storage" }
@@ -31,7 +32,7 @@ pessimistic-proof = { path = "crates/pessimistic-proof" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Core dependencies
-alloy = { version = "0.8.0", features = ["full"] }
+alloy = { version = "0.8.1", features = ["full"] }
 anyhow = "1.0.94"
 arc-swap = "1.7.1"
 async-trait = "0.1.82"
@@ -76,19 +77,7 @@ rand = "0.8.5"
 rstest = "0.22.0"
 test-log = "0.2.16"
 
-
 # SP1 dependencies
-reth-primitives = { git = "https://github.com/sp1-patches/reth", default-features = false, branch = "sp1-reth" }
 sp1-core-machine = "=3.3.0"
 sp1-sdk = "=3.3.0"
 sp1-prover = "=3.3.0"
-
-# A hack to make the resolver pull in the correct sp1 branch when processing the reth and revm deps.
-# This is intended to be a temporary hotfix while the dependency issue in the upstream packages is
-# being fixed.
-#
-# Note the doubled up '/' character. It is present to make Cargo treat the target git repository as
-# being distinct from the source. That is to work around the current limitation in Cargo where
-# patches differing solely in git branch/tag are not allowed. This may stop working in the future.
-[patch.'https://github.com/succinctlabs/sp1']
-sp1-precompiles = { git = "https://github.com/succinctlabs//sp1", tag = "v1.0.8-testnet" }

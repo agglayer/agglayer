@@ -3,6 +3,7 @@ use std::sync::Arc;
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
 use agglayer_contracts::RollupContract;
+use agglayer_primitives::Address;
 use agglayer_prover_types::{
     default_bincode_options,
     v1::{
@@ -17,7 +18,6 @@ use pessimistic_proof::{
     generate_pessimistic_proof, local_exit_tree::hasher::Keccak256Hasher,
     multi_batch_header::MultiBatchHeader, LocalNetworkState,
 };
-use reth_primitives::Address;
 use sp1_sdk::{CpuProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey};
 use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, instrument, warn};

@@ -229,3 +229,17 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         &after_going_through_disk
     ));
 }
+
+#[rstest]
+#[case("n15-cert_h0")]
+#[case("n15-cert_h1")]
+#[case("n15-cert_h2")]
+#[case("n15-cert_h3")]
+fn certificate_serialization(#[case] cert_name: &str) {
+    use crate::columns::Codec;
+
+    let certificate = data::load_certificate(&format!("{cert_name}.json"));
+    let encoded = certificate.encode().unwrap();
+    let hash = pessimistic_proof::keccak::keccak256(&encoded);
+    insta::assert_debug_snapshot!(cert_name, hash);
+}
