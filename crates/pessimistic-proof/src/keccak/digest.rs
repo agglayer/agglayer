@@ -1,7 +1,7 @@
 use std::{fmt, ops::Deref};
 
+use agglayer_primitives::U256;
 use hex::FromHex;
-use reth_primitives::U256;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{local_balance_tree::FromU256, nullifier_tree::FromBool};
