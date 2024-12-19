@@ -15,6 +15,14 @@ pub struct Log {
     pub outputs: Vec<LogOutput>,
     #[serde(default)]
     pub format: LogFormat,
+    /// Socket of the open telemetry agent endpoint.
+    /// If not provided open telemetry will not be used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub otlp_agent: Option<String>,
+    /// Otlp service name.
+    /// If not provided open telemetry will not be used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub otlp_service_name: Option<String>,
 }
 
 /// The log format.
@@ -74,6 +82,7 @@ pub enum LogOutput {
     Stdout,
     Stderr,
     File(PathBuf),
+    Otlp,
 }
 
 impl<'de> Deserialize<'de> for LogOutput {
@@ -104,6 +113,7 @@ impl LogOutput {
                 let appender = tracing_appender::rolling::never(".", path);
                 BoxMakeWriter::new(appender)
             }
+            LogOutput::Otlp => BoxMakeWriter::new(std::io::stdout),
         }
     }
 }

@@ -9,7 +9,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 // TODO: Mutualize with agglayer-node
-mod logging;
 
 mod executor;
 #[cfg(feature = "testutils")]
@@ -32,7 +31,7 @@ pub fn main(cfg: PathBuf) -> Result<()> {
     let global_cancellation_token = CancellationToken::new();
 
     // Initialize the logger
-    logging::tracing(&config.log);
+    agglayer_telemetry::log::setup_logging(&config.log);
 
     let node_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("agglayer-prover-runtime")
