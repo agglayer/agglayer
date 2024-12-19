@@ -89,6 +89,44 @@ pub mod prover {
     }
 }
 
+pub mod storage {
+    use lazy_static::lazy_static;
+    use opentelemetry::global;
+
+    use crate::constant::AGGLAYER_STORAGE_OTEL_SCOPE_NAME;
+
+    const SMT_TIME_BOUNDARIES_MS: [f64; 16] = [
+        0., 0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
+    ];
+    const SMT_WRITE_COUNT_BOUNDARIES: [f64; 16] = [
+        0., 1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000.,
+        50000.,
+    ];
+
+    lazy_static! {
+        pub static ref STORAGE_SMT_WRITE_TIME: opentelemetry::metrics::Histogram<f64> =
+            global::meter(AGGLAYER_STORAGE_OTEL_SCOPE_NAME)
+                .f64_histogram("storage_smt_write_time")
+                .with_description("write_smt execution time in milliseconds")
+                .with_boundaries(SMT_TIME_BOUNDARIES_MS.to_vec())
+                .with_unit("ms")
+                .build();
+        pub static ref STORAGE_SMT_WRITE_ITEMS_COUNT: opentelemetry::metrics::Histogram<u64> =
+            global::meter(AGGLAYER_STORAGE_OTEL_SCOPE_NAME)
+                .u64_histogram("storage_smt_write_items_count")
+                .with_description("write_smt number of items written per call")
+                .with_boundaries(SMT_WRITE_COUNT_BOUNDARIES.to_vec())
+                .build();
+        pub static ref STORAGE_SMT_READ_TIME: opentelemetry::metrics::Histogram<f64> =
+            global::meter(AGGLAYER_STORAGE_OTEL_SCOPE_NAME)
+                .f64_histogram("storage_smt_read_time")
+                .with_description("read_smt execution time in milliseconds")
+                .with_unit("ms")
+                .with_boundaries(SMT_TIME_BOUNDARIES_MS.to_vec())
+                .build();
+    }
+}
+
 pub struct ServerBuilder {}
 
 #[buildstructor::buildstructor]
@@ -153,7 +191,11 @@ impl ServerBuilder {
                 "/metrics",
                 get(|State(registry): State<prometheus::Registry>| async move {
                     match Self::gather_metrics(&registry) {
-                        Ok(metrics) => Response::new(metrics),
+                        Ok(metrics) => Response::builder()
+                            .status(StatusCode::OK)
+                            .header("Content-Type", "text/plain; version=0.0.4")
+                            .body(metrics)
+                            .unwrap(),
                         Err(error) => Response::builder()
                             .status(StatusCode::INTERNAL_SERVER_ERROR)
                             .body(error.to_string())
@@ -201,5 +243,85 @@ async fn shutdown_signal(cancellation: CancellationToken) {
         _ = cancellation.cancelled() => {
             debug!("Shutting down metrics server...");
         },
+    }
+}
+
+pub mod tests {
+    use std::net::SocketAddr;
+
+    use tokio::runtime::Runtime;
+    use tokio::task::JoinHandle;
+    use tokio_util::sync::CancellationToken;
+
+    pub struct TestMetricsContext {
+        pub handle: JoinHandle<Result<(), std::io::Error>>,
+        pub cancellation_token: CancellationToken,
+        pub prometheus_addr: SocketAddr,
+        // Need to keep runtime existing to keep the metrics server running
+        _runtime: Runtime,
+    }
+    pub fn setup_metrics_server(prometheus_addr: SocketAddr) -> TestMetricsContext {
+        use std::future::IntoFuture;
+
+        use agglayer_config::log::{LogLevel, LogOutput};
+        use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
+
+        let cancellation_token = CancellationToken::new();
+
+        let layer = tracing_subscriber::fmt::layer()
+            .json()
+            .with_writer(LogOutput::Stdout.as_make_writer())
+            .with_filter(
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| LogLevel::Trace.into()),
+            )
+            .boxed();
+        tracing_subscriber::Registry::default().with(layer).init();
+
+        // Setup the metrics runtime
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("metrics-runtime")
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("Unable to create metrics runtime");
+
+        // Create the metrics server.
+        let metric_server = runtime
+            .block_on(
+                crate::ServerBuilder::builder()
+                    .addr(prometheus_addr)
+                    .cancellation_token(cancellation_token.clone())
+                    .build(),
+            )
+            .expect("Unable to create metrics server");
+
+        // Spawn the metrics server into the metrics runtime.
+        let metrics_handle = {
+            let _guard = runtime.enter();
+            // Spawn the metrics server
+            runtime.spawn(metric_server.into_future())
+        };
+
+        // Wait some time to let the metrics server start
+        std::thread::sleep(std::time::Duration::from_secs(2));
+
+        TestMetricsContext {
+            handle: metrics_handle,
+            cancellation_token,
+            prometheus_addr,
+            _runtime: runtime,
+        }
+    }
+
+    pub fn metrics_shutdown(context: TestMetricsContext) {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Unable to create current thread runtime")
+            .block_on(async {
+                context.cancellation_token.cancel();
+                // Wait for the metrics server to shut down.
+                let _ = context.handle.await;
+            });
     }
 }
