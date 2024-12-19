@@ -1,7 +1,7 @@
 use std::{path::PathBuf, time::Instant};
 
+use agglayer_primitives::Address;
 use agglayer_types::{Certificate, U256};
-use alloy_primitives::Address;
 use clap::Parser;
 use pessimistic_proof::{
     bridge_exit::{NetworkId, TokenInfo},
