@@ -315,6 +315,7 @@ dependencies = [
  "bincode",
  "criterion",
  "hex",
+ "insta",
  "mockall",
  "parking_lot",
  "pessimistic-proof",

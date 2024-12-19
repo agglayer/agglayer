@@ -23,9 +23,12 @@ mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion = "0.5.1"
+insta.workspace = true
 rand.workspace = true
 rstest.workspace = true
 sp1-sdk.workspace = true
+
+agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
 [[bench]]
