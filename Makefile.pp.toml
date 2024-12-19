@@ -1,0 +1,4 @@
+[tasks.build-sp1-toolchain]
+command = "sudo"
+args = [ "docker", "build", "-tsp1:latest", "." ]
+cwd = "./build/sp1-toolchain"
