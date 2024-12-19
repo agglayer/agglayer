@@ -1,4 +1,4 @@
-use alloy_primitives::Address;
+use agglayer_primitives::Address;
 pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};

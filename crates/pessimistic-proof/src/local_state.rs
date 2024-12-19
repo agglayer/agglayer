@@ -1,6 +1,6 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use alloy_primitives::{ruint::UintTryFrom, B256, U256, U512};
+use agglayer_primitives::{ruint::UintTryFrom, B256, U256, U512};
 use serde::{Deserialize, Serialize};
 
 use crate::{

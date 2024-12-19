@@ -9,11 +9,11 @@ agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrat
 agglayer-config = { path = "../agglayer-config" }
 agglayer-contracts = { path = "../agglayer-contracts" }
 agglayer-prover-types = { path = "../agglayer-prover-types" }
+agglayer-primitives.workspace = true
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-types = { path = "../agglayer-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
 
-alloy-primitives.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 arc-swap.workspace = true

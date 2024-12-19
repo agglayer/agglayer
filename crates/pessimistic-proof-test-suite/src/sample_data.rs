@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
+use agglayer_primitives::{address, U256};
 use agglayer_types::Certificate;
-use alloy_primitives::{address, U256};
 use hex_literal::hex;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},

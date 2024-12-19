@@ -1,6 +1,6 @@
 use std::{fmt, ops::Deref};
 
-use alloy_primitives::U256;
+use agglayer_primitives::U256;
 use hex::FromHex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

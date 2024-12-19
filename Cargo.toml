@@ -22,6 +22,7 @@ agglayer-clock = { path = "crates/agglayer-clock" }
 agglayer-config = { path = "crates/agglayer-config" }
 agglayer-contracts = { path = "crates/agglayer-contracts" }
 agglayer-node = { path = "crates/agglayer-node" }
+agglayer-primitives = { path = "crates/agglayer-primitives" }
 agglayer-prover = { path = "crates/agglayer-prover", features = ["testutils"] }
 agglayer-signer = { path = "crates/agglayer-signer" }
 agglayer-storage = { path = "crates/agglayer-storage" }
@@ -32,7 +33,6 @@ pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Core dependencies
 alloy = { version = "0.8.1", features = ["full"] }
-alloy-primitives = { version = "0.8.15", features = ["serde", "k256"] }
 anyhow = "1.0.94"
 arc-swap = "1.7.1"
 async-trait = "0.1.82"

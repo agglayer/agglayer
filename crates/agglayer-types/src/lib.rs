@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use alloy_primitives::{address, Address, Signature, B256, U256};
-use ethers::signers::LocalWallet;
+pub use agglayer_primitives::{address, Address, Signature, B256, U256};
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -322,10 +321,11 @@ impl Default for Certificate {
     }
 }
 
+#[cfg(any(test, feature = "testutils"))]
 pub fn compute_signature_info(
     new_local_exit_root: Digest,
     imported_bridge_exits: &[ImportedBridgeExit],
-    wallet: &LocalWallet,
+    wallet: &ethers::signers::LocalWallet,
 ) -> (Digest, Signature) {
     let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
         new_local_exit_root,
@@ -335,7 +335,7 @@ pub fn compute_signature_info(
     let signature = Signature::new(
         U256::from_limbs(signature.r.0),
         U256::from_limbs(signature.s.0),
-        signature.recovery_id().unwrap().into(),
+        signature.recovery_id().unwrap().is_y_odd(),
     );
 
     (combined_hash, signature)

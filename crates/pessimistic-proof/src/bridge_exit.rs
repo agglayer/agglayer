@@ -2,7 +2,7 @@
 
 use std::{fmt::Display, ops::Deref};
 
-use alloy_primitives::{address, Address, U256};
+use agglayer_primitives::{address, Address, U256};
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 
