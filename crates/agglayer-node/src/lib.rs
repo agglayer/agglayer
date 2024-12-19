@@ -7,7 +7,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
 mod kernel;
-mod logging;
 mod rate_limiting;
 mod rpc;
 mod signed_tx;
@@ -48,7 +47,7 @@ pub fn main(cfg: PathBuf, version: &str) -> Result<()> {
     let global_cancellation_token = CancellationToken::new();
 
     // Initialize the logger
-    logging::tracing(&config.log);
+    agglayer_telemetry::log::setup_tracing(&config.log, version)?;
 
     info!("Starting agglayer node version info: {}", version);
 
