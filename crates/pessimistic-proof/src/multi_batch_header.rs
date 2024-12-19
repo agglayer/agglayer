@@ -1,10 +1,13 @@
 #![allow(clippy::too_many_arguments)]
 use std::{borrow::Borrow, collections::BTreeMap, hash::Hash};
 
-use reth_primitives::{Address, Signature, U256};
+use alloy_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
+#[cfg(not(target_os = "zkvm"))]
+use sp1_sdk::SP1Proof;
 
+// use sp1_sdk::SP1Proof;
 use crate::{
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
@@ -15,9 +18,11 @@ use crate::{
     nullifier_tree::NullifierPath,
 };
 
+pub type Vkey = [u32; 8];
+
 /// Represents the chain state transition for the pessimistic proof.
 #[serde_as]
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiBatchHeader<H>
 where
     H: Hasher,
@@ -48,12 +53,15 @@ where
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
     pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
-    /// Signer committing to the state transition.
-    pub signer: Address,
-    /// Signature committing to the state transition.
-    pub signature: Signature,
+    /// SP1 verification key for the consensus proof.
+    pub vkey: Vkey,
+    /// Consensus config.
+    pub consensus_config: Digest,
     /// State commitment target hashes.
     pub target: StateCommitment,
+    /// Consensus proof.
+    #[cfg(not(target_os = "zkvm"))]
+    pub consensus_proof: SP1Proof,
 }
 
 impl<H> MultiBatchHeader<H>
@@ -71,10 +79,11 @@ where
         balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
         prev_balance_root: H::Digest,
         prev_nullifier_root: H::Digest,
-        signer: Address,
-        signature: Signature,
+        vkey: Vkey,
+        consensus_config: Digest,
         target: StateCommitment,
         l1_info_root: H::Digest,
+        #[cfg(not(target_os = "zkvm"))] consensus_proof: SP1Proof,
     ) -> Self {
         Self {
             origin_network,
@@ -85,10 +94,12 @@ where
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
-            signer,
-            signature,
+            vkey,
+            consensus_config,
             target,
             l1_info_root,
+            #[cfg(not(target_os = "zkvm"))]
+            consensus_proof,
         }
     }
 }
