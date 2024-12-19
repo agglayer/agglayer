@@ -36,9 +36,9 @@ fn e2e_local_pp_simple_helper(
 #[test]
 fn e2e_local_pp_simple() {
     e2e_local_pp_simple_helper(
-        vec![(*USDC, u(100)), (*ETH, u(200))],
-        vec![(*USDC, u(50)), (*ETH, u(100)), (*USDC, u(10))],
-        vec![(*USDC, u(20)), (*ETH, u(50)), (*USDC, u(130))],
+        vec![(USDC, u(100)), (ETH, u(200))],
+        vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))],
+        vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))],
     )
 }
 
@@ -46,8 +46,8 @@ fn e2e_local_pp_simple() {
 fn e2e_local_pp_simple_zero_initial_balances() {
     e2e_local_pp_simple_helper(
         [],
-        vec![(*USDC, u(50)), (*ETH, u(100)), (*USDC, u(10))],
-        vec![(*USDC, u(20)), (*ETH, u(50)), (*USDC, u(30))],
+        vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))],
+        vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(30))],
     )
 }
 
@@ -55,7 +55,7 @@ fn e2e_local_pp_simple_zero_initial_balances() {
 fn e2e_local_pp_random() {
     let target = u(u64::MAX);
     let upper = u64::MAX / 10;
-    let mut forest = Forest::new(vec![(*USDC, target), (*ETH, target)]);
+    let mut forest = Forest::new(vec![(USDC, target), (ETH, target)]);
     // Generate random bridge events such that the sum of the USDC and ETH amounts
     // is less than `target`
     let get_events = || {
@@ -64,12 +64,8 @@ fn e2e_local_pp_random() {
         let mut events = Vec::new();
         loop {
             let amount = u(random::<u64>() % upper);
-            let token = if random::<u64>() & 1 == 1 {
-                *USDC
-            } else {
-                *ETH
-            };
-            if token == *USDC {
+            let token = if random::<u64>() & 1 == 1 { USDC } else { ETH };
+            if token == USDC {
                 usdc_acc += amount;
                 if usdc_acc > target {
                     break;
@@ -104,9 +100,9 @@ fn test_sp1_simple() {
     // Setup logging.
     utils::setup_logger();
 
-    let mut forest = Forest::new(vec![(*USDC, u(100)), (*ETH, u(200))]);
-    let imported_bridge_events = vec![(*USDC, u(50)), (*ETH, u(100)), (*USDC, u(10))];
-    let bridge_events = vec![(*USDC, u(20)), (*ETH, u(50)), (*USDC, u(130))];
+    let mut forest = Forest::new(vec![(USDC, u(100)), (ETH, u(200))]);
+    let imported_bridge_events = vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))];
+    let bridge_events = vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))];
 
     let initial_state = forest.state_b.clone();
     let certificate = forest.apply_events(&imported_bridge_events, &bridge_events);

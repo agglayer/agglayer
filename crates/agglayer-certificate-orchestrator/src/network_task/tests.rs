@@ -857,8 +857,8 @@ async fn process_next_certificate() {
     let mut forest = Forest::default();
 
     let certificate = forest.apply_events(
-        &[(*USDC, 10.try_into().unwrap())],
-        &[(*USDC, 1.try_into().unwrap())],
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
     );
     let certificate_id = certificate.hash();
     storage
@@ -871,7 +871,7 @@ async fn process_next_certificate() {
         .insert_certificate_header(&certificate, CertificateStatus::Pending)
         .expect("Failed to insert certificate header");
 
-    let mut certificate = forest.apply_events(&[], &[(*USDC, 1.try_into().unwrap())]);
+    let mut certificate = forest.apply_events(&[], &[(USDC, 1.try_into().unwrap())]);
     certificate.height = 1;
     let certificate_id2 = certificate.hash();
 

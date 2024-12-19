@@ -34,5 +34,6 @@ uuid = { version = "1.11.0", features = ["v4", "fast-rng"] }
 regex = "1.11"
 
 [dev-dependencies]
+insta.workspace = true
 rstest.workspace = true
 tracing.workspace = true
