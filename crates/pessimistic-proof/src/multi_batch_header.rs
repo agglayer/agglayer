@@ -4,6 +4,8 @@ use std::{borrow::Borrow, collections::BTreeMap, hash::Hash};
 use alloy_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
+#[cfg(not(target_os = "zkvm"))]
+use sp1_sdk::SP1Proof;
 
 // use sp1_sdk::SP1Proof;
 use crate::{
@@ -55,10 +57,11 @@ where
     pub vkey: Vkey,
     /// Consensus config.
     pub consensus_config: Digest,
-    /// Consensus proof.
-    pub consensus_proof: (), // Should be `SP1Proof`, but it doesn't compile
     /// State commitment target hashes.
     pub target: StateCommitment,
+    /// Consensus proof.
+    #[cfg(not(target_os = "zkvm"))]
+    pub consensus_proof: SP1Proof,
 }
 
 impl<H> MultiBatchHeader<H>
@@ -78,9 +81,9 @@ where
         prev_nullifier_root: H::Digest,
         vkey: Vkey,
         consensus_config: Digest,
-        consensus_proof: (),
         target: StateCommitment,
         l1_info_root: H::Digest,
+        #[cfg(not(target_os = "zkvm"))] consensus_proof: SP1Proof,
     ) -> Self {
         Self {
             origin_network,
@@ -93,9 +96,10 @@ where
             prev_nullifier_root,
             vkey,
             consensus_config,
-            consensus_proof,
             target,
             l1_info_root,
+            #[cfg(not(target_os = "zkvm"))]
+            consensus_proof,
         }
     }
 }

@@ -3,6 +3,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use alloy_primitives::{ruint::UintTryFrom, U256, U512};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as Sha256Digest, Sha256};
+#[cfg(target_os = "zkvm")]
 use sp1_zkvm::lib::verify::verify_sp1_proof;
 
 use crate::{
