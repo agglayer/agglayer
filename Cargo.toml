@@ -31,7 +31,7 @@ pessimistic-proof = { path = "crates/pessimistic-proof" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Core dependencies
-alloy = { version = "0.8.0", features = ["full"] }
+alloy = { version = "0.8.1", features = ["full"] }
 anyhow = "1.0.94"
 arc-swap = "1.7.1"
 async-trait = "0.1.82"
