@@ -1,5 +1,4 @@
 [alias]
-xtask = "run --package xtask --"
 doc-full = "doc --document-private-items --workspace --all-features"
 
 # SP1 profile
