@@ -43,6 +43,6 @@ fn main() -> anyhow::Result<()> {
 pub fn version() -> String {
     let pkg_name = env!("CARGO_PKG_NAME");
     let git_describe = env!("VERGEN_GIT_DESCRIBE");
-    let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
-    format!("{pkg_name} ({git_describe}) [built: {timestamp}]")
+    let timestamp = env!("VERGEN_GIT_COMMIT_TIMESTAMP");
+    format!("{pkg_name} ({git_describe}) [git commit timestamp: {timestamp}]")
 }
