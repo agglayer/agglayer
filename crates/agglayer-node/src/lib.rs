@@ -27,7 +27,7 @@ use agglayer_telemetry::ServerBuilder as MetricsBuilder;
 ///
 /// This function returns on fatal error or after graceful shutdown has
 /// completed.
-pub fn main(cfg: PathBuf) -> Result<()> {
+pub fn main(cfg: PathBuf, version: &str) -> Result<()> {
     let cfg = cfg.canonicalize().map_err(|_| {
         anyhow::Error::msg(format!(
             "Configuration file path must be absolute, given: {}",
@@ -49,6 +49,8 @@ pub fn main(cfg: PathBuf) -> Result<()> {
 
     // Initialize the logger
     logging::tracing(&config.log);
+
+    info!("Starting agglayer node version info: {}", version);
 
     let node_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("agglayer-node-runtime")

@@ -17,3 +17,6 @@ agglayer-config = { path = "../agglayer-config" }
 [dev-dependencies]
 assert_cmd = "2.0.14"
 insta.workspace = true
+
+[build-dependencies]
+vergen-git2 = { version = "1.0.0", features = ["build"] }
