@@ -1,11 +1,8 @@
 use std::{fs::File, io::BufReader};
 
+use agglayer_primitives::U256;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use pessimistic_proof::{
-    bridge_exit::{BridgeExit, TokenInfo},
-    keccak::keccak256,
-};
-use reth_primitives::U256;
+use pessimistic_proof::bridge_exit::{BridgeExit, TokenInfo};
 use serde::{de::DeserializeOwned, Deserialize, Deserializer};
 use serde_json::Number;
 
@@ -85,7 +82,7 @@ impl From<DepositEventData> for BridgeExit {
                 .decode(deposit_event_data.metadata)
                 .ok()
                 .as_ref()
-                .map(|data| keccak256(data)),
+                .map(|data| pessimistic_proof::keccak::keccak256(data)),
         }
     }
 }

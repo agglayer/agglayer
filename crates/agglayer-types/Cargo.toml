@@ -5,10 +5,11 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-ethers.workspace = true
-hex.workspace = true
+agglayer-primitives.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
-reth-primitives.workspace = true
+
+ethers = { workspace = true, optional = true }
+hex.workspace = true
 serde.workspace = true
 serde_with.workspace = true
 sp1-sdk.workspace = true
@@ -17,6 +18,9 @@ thiserror.workspace = true
 bincode.workspace = true
 rand.workspace = true
 
+[dev-dependencies]
+agglayer-types = { path = ".", features = ["testutils"] }
+
 [features]
 default = []
-testutils = []
+testutils = ["dep:ethers"]

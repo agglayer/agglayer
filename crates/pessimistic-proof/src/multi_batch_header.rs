@@ -1,7 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 use std::{borrow::Borrow, collections::BTreeMap, hash::Hash};
 
-use reth_primitives::{Address, Signature, U256};
+use agglayer_primitives::{Address, Signature, U256};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -17,7 +17,7 @@ use crate::{
 
 /// Represents the chain state transition for the pessimistic proof.
 #[serde_as]
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiBatchHeader<H>
 where
     H: Hasher,
