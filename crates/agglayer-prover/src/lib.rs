@@ -25,7 +25,7 @@ mod rpc;
 ///
 /// This function returns on fatal error or after graceful shutdown has
 /// completed.
-pub fn main(cfg: PathBuf) -> Result<()> {
+pub fn main(cfg: PathBuf, version: &str) -> Result<()> {
     // Load the configuration file
     let config: Arc<ProverConfig> = Arc::new(toml::from_str(&std::fs::read_to_string(cfg)?)?);
 
@@ -33,6 +33,8 @@ pub fn main(cfg: PathBuf) -> Result<()> {
 
     // Initialize the logger
     logging::tracing(&config.log);
+
+    info!("Starting agglayer prover version info: {}", version);
 
     let node_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("agglayer-prover-runtime")
