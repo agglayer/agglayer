@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Common information about the executed agglayer for the `version`
+/// Common version information about the executed agglayer binary.
 pub fn version() -> String {
     let pkg_name = env!("CARGO_PKG_NAME");
     let git_describe = env!("VERGEN_GIT_DESCRIBE");
