@@ -50,6 +50,7 @@ use crate::{
 
 pub(crate) mod mocks;
 
+#[allow(dead_code)]
 #[derive(Default)]
 pub(crate) struct DummyPendingStore {
     pub(crate) current_epoch: u64,

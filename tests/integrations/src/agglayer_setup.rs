@@ -124,7 +124,7 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
     std::fs::write(&config_file, toml).unwrap();
 
     let handle = std::thread::spawn(move || {
-        _ = agglayer_node::main(config_file);
+        _ = agglayer_node::main(config_file, "test");
         _ = shutdown.send(());
     });
     let url = format!("ws://{}/", config.rpc_addr());
