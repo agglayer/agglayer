@@ -1,0 +1,80 @@
+---
+source: crates/pessimistic-proof-test-suite/tests/cycle-tracker.rs
+expression: stats
+snapshot_kind: text
+---
+opcode counts (1552625 total instructions):
+  375032 add
+  286940 sw
+  250557 lw
+  142526 lbu
+  115430 sb
+   62899 beq
+   54657 bne
+   50477 xor
+   43877 bltu
+   38368 jalr
+   22582 and
+   19206 auipc
+   16968 or
+   15062 srl
+   14512 jal
+   13987 sll
+   12673 lb
+    5982 sltu
+    5287 sub
+    1986 bgeu
+    1455 ecall
+    1011 mul
+     719 sh
+     348 mulhu
+      51 sra
+      16 lhu
+      13 lh
+       4 blt
+       0 slt
+       0 bge
+       0 ebreak
+       0 mulh
+       0 mulhsu
+       0 div
+       0 divu
+       0 rem
+       0 remu
+       0 unimp
+syscall counts (1455 total syscall instructions):
+  648 keccak_permute
+  512 secp256k1_double
+  267 secp256k1_add
+    8 commit
+    8 commit_deferred_proofs
+    4 hint_len
+    4 hint_read
+    1 halt
+    1 write
+    1 enter_unconstrained
+    1 secp256k1_decompress
+    0 exit_unconstrained
+    0 verify_sp1_proof
+    0 ed_decompress
+    0 bn254_double
+    0 bls12381_decompress
+    0 bls12381_double
+    0 sha_compress
+    0 ed_add
+    0 bn254_add
+    0 uint256_mul
+    0 bls12381_add
+    0 bls12381_fp_add
+    0 bls12381_fp_sub
+    0 bls12381_fp_mul
+    0 bls12381_fp2_add
+    0 bls12381_fp2_sub
+    0 bls12381_fp2_mul
+    0 bn254_fp_add
+    0 bn254_fp_sub
+    0 bn254_fp_mul
+    0 bn254_fp2_add
+    0 bn254_fp2_sub
+    0 bn254_fp2_mul
+    0 sha_extend

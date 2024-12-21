@@ -6709,6 +6709,7 @@ dependencies = [
  "ethers-signers",
  "hex",
  "hex-literal",
+ "insta",
  "lazy_static",
  "pessimistic-proof",
  "rand",
