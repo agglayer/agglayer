@@ -7,14 +7,14 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-agglayer-config = { path = "../agglayer-config" }
+agglayer-config.workspace = true
 anyhow.workspace = true
 axum = "0.7.9"
 buildstructor.workspace = true
 futures.workspace = true
 lazy_static.workspace = true
 opentelemetry = { version = "0.27.1", features = ["metrics"] }
-opentelemetry-otlp = "0.27.0"
+opentelemetry-otlp = { version = "0.27.0", features = ["trace", "grpc-tonic"]}
 opentelemetry-prometheus = "0.27.0"
 opentelemetry_sdk = { version = "0.27.1", features = ["metrics", "rt-tokio"] }
 prometheus = "0.13.3"
@@ -22,6 +22,6 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true }
 tracing.workspace = true
-tracing-opentelemetry = "0.27"
+tracing-opentelemetry = "0.28"
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 
