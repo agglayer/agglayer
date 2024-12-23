@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use agglayer_config::log::{LogFormat, LogOutput};
+use opentelemetry::trace::TracerProvider;
 use opentelemetry::{global, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace::{BatchConfigBuilder, BatchSpanProcessor, SpanLimits};
@@ -8,19 +9,18 @@ use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::Sampler, Res
 use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
 
 pub fn setup_tracing(config: &agglayer_config::Log, version: &str) -> anyhow::Result<()> {
-    // TODO: Support multiple outputs.
+
     let writer = config.outputs.first().cloned().unwrap_or_default();
 
     let mut layers = Vec::new();
 
-    // Setup instrumentation if both otlp agent and otlp service name are provided
-    // as arguments
+    // Setup instrumentation if both otlp agent url and
+    // otlp service name are provided as arguments
     if config
         .outputs
         .iter()
         .any(|output| *output == LogOutput::Otlp)
     {
-        // Both otlp agent and otlp service name must be provided
         if let (Some(otlp_agent), Some(otlp_service_name)) =
             (&config.otlp_agent, &config.otlp_service_name)
         {
@@ -98,10 +98,13 @@ pub fn setup_tracing(config: &agglayer_config::Log, version: &str) -> anyhow::Re
                 )
                 .build();
 
+            let tracer = trace_provider.tracer("agglayer-otlp");
+
             let _ = global::set_tracer_provider(trace_provider);
 
             layers.push(
                 tracing_opentelemetry::layer()
+                    .with_tracer(tracer)
                     .with_filter(
                         EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into()),
                     )
@@ -111,7 +114,7 @@ pub fn setup_tracing(config: &agglayer_config::Log, version: &str) -> anyhow::Re
             global::set_text_map_propagator(TraceContextPropagator::new());
         } else {
             anyhow::bail!(
-                "For otlp tracing both otlp agent and otlp service name must be provided"
+                "Otlp tracing requires both otlp agent url and otlp service provided"
             );
         }
     }
@@ -130,12 +133,12 @@ pub fn setup_tracing(config: &agglayer_config::Log, version: &str) -> anyhow::Re
             .boxed(),
     });
 
-    // We are using try_init because integration test may try to initialize this
-    // multiple times.
+    // We are using try_init because integration test may try
+    // to initialize this multiple times.
     _ = tracing_subscriber::Registry::default()
         .with(layers)
         .try_init();
-
+    
     Ok(())
 }
 
