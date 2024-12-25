@@ -9,7 +9,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 // TODO: Mutualize with agglayer-node
-mod logging;
 
 mod executor;
 #[cfg(feature = "testutils")]
@@ -31,11 +30,6 @@ pub fn main(cfg: PathBuf, version: &str) -> Result<()> {
 
     let global_cancellation_token = CancellationToken::new();
 
-    // Initialize the logger
-    logging::tracing(&config.log);
-
-    info!("Starting agglayer prover version info: {}", version);
-
     let node_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("agglayer-prover-runtime")
         .enable_all()
@@ -46,6 +40,10 @@ pub fn main(cfg: PathBuf, version: &str) -> Result<()> {
         .worker_threads(2)
         .enable_all()
         .build()?;
+
+    // Initialize the tracing
+    metrics_runtime
+        .block_on(async { agglayer_telemetry::log::setup_tracing(&config.log, version) })?;
 
     // Create the metrics server.
     let metric_server = metrics_runtime.block_on(
@@ -65,6 +63,8 @@ pub fn main(cfg: PathBuf, version: &str) -> Result<()> {
         // Spawn the metrics server
         metrics_runtime.spawn(metric_server.into_future())
     };
+
+    info!("Starting agglayer prover version: {}", version);
 
     // Spawn the node.
     let node = node_runtime.block_on(

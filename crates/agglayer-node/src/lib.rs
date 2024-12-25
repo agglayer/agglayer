@@ -7,7 +7,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
 mod kernel;
-mod logging;
 mod rate_limiting;
 mod rpc;
 mod signed_tx;
@@ -47,11 +46,6 @@ pub fn main(cfg: PathBuf, version: &str) -> Result<()> {
 
     let global_cancellation_token = CancellationToken::new();
 
-    // Initialize the logger
-    logging::tracing(&config.log);
-
-    info!("Starting agglayer node version info: {}", version);
-
     let node_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("agglayer-node-runtime")
         .enable_all()
@@ -62,6 +56,10 @@ pub fn main(cfg: PathBuf, version: &str) -> Result<()> {
         .worker_threads(2)
         .enable_all()
         .build()?;
+
+    // Initialize the tracing
+    metrics_runtime
+        .block_on(async { agglayer_telemetry::log::setup_tracing(&config.log, version) })?;
 
     // Create the metrics server.
     let metric_server = metrics_runtime.block_on(
@@ -81,6 +79,8 @@ pub fn main(cfg: PathBuf, version: &str) -> Result<()> {
         // Spawn the metrics server
         metrics_runtime.spawn(metric_server.into_future())
     };
+
+    info!("Starting agglayer node version info: {}", version);
 
     // Spawn the node.
     let node = node_runtime.block_on(
