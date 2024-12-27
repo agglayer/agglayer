@@ -6,7 +6,7 @@ use ethers::prelude::*;
 use ethers::providers::Middleware;
 use ethers_contract::{ContractCall, ContractError};
 use polygon_rollup_manager::{PolygonRollupManagerErrors, RollupIDToRollupDataReturn};
-
+use tracing::debug;
 
 #[rustfmt::skip]
 #[allow(warnings)]
@@ -100,6 +100,11 @@ where
                 ));
             }
 
+            debug!(
+                "Retrieved the default L1 Info Tree entry. leaf_count: {}, root: {:?}",
+                l1_leaf_count, l1_info_root
+            );
+
             // Use this entry as default
             (l1_leaf_count, l1_info_root)
         };
@@ -126,10 +131,65 @@ where
     }
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()> {
-        self.l1_info_tree
-            .l_1_info_root_map(l1_leaf_count)
+        // Get `UpdateL1InfoTreeV2` event for the given leaf count from the latest block
+        let filter = Filter::new()
+            .address(self.l1_info_tree.address())
+            .event("UpdateL1InfoTreeV2(bytes32,uint32,uint256,uint64)")
+            .topic1(U256::from_big_endian(&l1_leaf_count.to_be_bytes()))
+            .from_block(BlockNumber::Earliest);
+
+        let events = self
+            .l1_info_tree
+            .client()
+            .get_logs(&filter)
             .await
-            .map_err(|_| ())
+            .map_err(|_| ())?;
+
+        // Extract event details
+        let (l1_info_root, event_block_number) = events
+            .first()
+            .and_then(|log| {
+                match PolygonZkEVMGlobalExitRootV2Events::decode_log(&log.clone().into()).ok()? {
+                    PolygonZkEVMGlobalExitRootV2Events::UpdateL1InfoTreeV2Filter(event) => {
+                        Some((event.current_l1_info_root, log.block_number?))
+                    }
+                    _ => None,
+                }
+            })
+            .ok_or(())?;
+
+        debug!(
+            "Retrieved UpdateL1InfoTreeV2 event from block {}. L1 info tree leaf count: {}, root: \
+             {:?}",
+            event_block_number, l1_leaf_count, l1_info_root
+        );
+
+        // Await for the related block to be finalized
+        // NOTE: Cannot use block subscription because the provider is not websocket
+        {
+            let mut tick = tokio::time::interval(tokio::time::Duration::from_secs(10));
+            let mut finalized_block_number: U64 = 0.into();
+            while finalized_block_number < event_block_number {
+                tick.tick().await;
+
+                finalized_block_number = self
+                    .rpc
+                    .get_block(BlockNumber::Finalized)
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|block| block.number)
+                    .ok_or(())?;
+
+                debug!(
+                    "Awaiting L1 info tree leaf count ({}) set at block {} to be finalized. \
+                     Latest finalized block: {}",
+                    l1_leaf_count, event_block_number, finalized_block_number,
+                );
+            }
+        }
+
+        Ok(l1_info_root)
     }
 
     async fn get_trusted_sequencer_address(
@@ -240,7 +300,7 @@ mod tests {
             .unwrap(),
         );
 
-        let (default_leaf_count, default_l1_info_root) = l1_rpc.default_l1_info_tree_entry;
+        let (default_leaf_count, _default_l1_info_root) = l1_rpc.default_l1_info_tree_entry;
         let expected_leaf_count = 48445; // bali: 335
 
         assert_eq!(
@@ -249,7 +309,8 @@ mod tests {
             default_leaf_count, expected_leaf_count,
         );
 
-        let l1_info_root_from_map = l1_rpc.get_l1_info_root(default_leaf_count).await.unwrap();
-        assert_eq!(l1_info_root_from_map, default_l1_info_root);
+        // check that the awaiting for finalization is done as expected
+        let latest_l1_leaf = 66653;
+        let _l1_info_root = l1_rpc.get_l1_info_root(latest_l1_leaf).await.unwrap();
     }
 }
