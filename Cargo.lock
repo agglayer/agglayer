@@ -184,6 +184,7 @@ dependencies = [
  "reth-primitives",
  "thiserror 2.0.8",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
