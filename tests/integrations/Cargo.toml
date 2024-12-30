@@ -8,7 +8,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-alloy = { version = "0.6.4", features = ["full"] }
+alloy = { version = "0.8.1", features = ["full"] }
 anyhow.workspace = true
 arc-swap.workspace = true
 buildstructor.workspace = true
@@ -27,7 +27,7 @@ mockall.workspace = true
 parking_lot.workspace = true
 pin-project = "1.1.7"
 rand.workspace = true
-reqwest = "0.12.9"
+reqwest = "0.12.11"
 rstest.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
