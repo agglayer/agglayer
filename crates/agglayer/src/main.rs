@@ -9,7 +9,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.cmd {
-        cli::Commands::Run { cfg } => agglayer_node::main(cfg)?,
+        cli::Commands::Run { cfg } => agglayer_node::main(cfg, None)?,
         cli::Commands::Prover { cfg } => agglayer_prover::main(cfg)?,
         cli::Commands::ProverConfig => println!(
             "{}",

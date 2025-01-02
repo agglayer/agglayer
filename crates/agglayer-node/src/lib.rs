@@ -27,7 +27,7 @@ use agglayer_telemetry::ServerBuilder as MetricsBuilder;
 ///
 /// This function returns on fatal error or after graceful shutdown has
 /// completed.
-pub fn main(cfg: PathBuf) -> Result<()> {
+pub fn main(cfg: PathBuf, cancellation_token: Option<CancellationToken>) -> Result<()> {
     let cfg = cfg.canonicalize().map_err(|_| {
         anyhow::Error::msg(format!(
             "Configuration file path must be absolute, given: {}",
@@ -45,7 +45,11 @@ pub fn main(cfg: PathBuf) -> Result<()> {
         )
     };
 
-    let global_cancellation_token = CancellationToken::new();
+    let global_cancellation_token = cancellation_token.unwrap_or_default();
+
+    if global_cancellation_token.is_cancelled() {
+        bail!("Received cancellation signal before starting the node.");
+    }
 
     // Initialize the logger
     logging::tracing(&config.log);

@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use agglayer_config::Config;
 use agglayer_storage::{
-    storage::{pending_db_cf_definitions, state_db_cf_definitions, DB},
+    storage::{backup::BackupClient, pending_db_cf_definitions, state_db_cf_definitions, DB},
     stores::{pending::PendingStore, state::StateStore, PendingCertificateWriter, StateWriter},
     tests::TempDBDir,
 };
@@ -30,7 +30,7 @@ async fn returns_the_pending_certificate_header() {
             .expect("unable to open state db"),
     );
 
-    let state_db = StateStore::new(state_db);
+    let state_db = StateStore::new(state_db, BackupClient::noop());
     let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
@@ -122,7 +122,7 @@ async fn returns_the_proven_certificate_header() {
             .expect("unable to open state db"),
     );
 
-    let state_db = StateStore::new(state_db);
+    let state_db = StateStore::new(state_db, BackupClient::noop());
     let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
@@ -205,7 +205,7 @@ async fn returns_the_settled_certificate_header() {
             .expect("unable to open state db"),
     );
 
-    let state_db = StateStore::new(state_db);
+    let state_db = StateStore::new(state_db, BackupClient::noop());
     let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
@@ -333,7 +333,7 @@ async fn returns_the_highest_height() {
             .expect("unable to open state db"),
     );
 
-    let state_db = StateStore::new(state_db);
+    let state_db = StateStore::new(state_db, BackupClient::noop());
     let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
