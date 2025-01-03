@@ -25,7 +25,7 @@ struct PPGenArgs {
     n_exits: usize,
 
     /// The number of imported bridge exits.
-    #[clap(long, default_value = "0")]
+    #[clap(long, default_value = "10")]
     n_imported_exits: usize,
 
     /// The optional output directory to write the proofs in JSON. If not set,
