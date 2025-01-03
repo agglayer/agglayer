@@ -10,7 +10,7 @@ use crate::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     error::Error,
-    storage::{state_db_cf_definitions, DB},
+    storage::{backup::BackupClient, state_db_cf_definitions, DB},
     stores::{state::StateStore, StateReader as _, StateWriter as _},
     tests::TempDBDir,
 };
@@ -21,7 +21,7 @@ mod metadata;
 fn can_retrieve_list_of_network() {
     let tmp = TempDBDir::new();
     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
-    let store = StateStore::new(db.clone());
+    let store = StateStore::new(db.clone(), BackupClient::noop());
     assert!(store.get_active_networks().unwrap().is_empty());
 
     db.put::<LatestSettledCertificatePerNetworkColumn>(
@@ -58,7 +58,7 @@ fn store() -> StateStore {
     let tmp = TempDBDir::new();
     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
 
-    StateStore::new(db.clone())
+    StateStore::new(db.clone(), BackupClient::noop())
 }
 
 #[rstest]
