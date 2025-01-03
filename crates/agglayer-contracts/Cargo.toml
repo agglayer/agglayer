@@ -5,10 +5,11 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agglayer-primitives.workspace = true
+
 async-trait.workspace = true
 ethers.workspace = true
 ethers-contract = "2.0.14"
-reth-primitives.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 

@@ -1,6 +1,6 @@
+use agglayer_primitives::Address;
 pub use bincode::Options;
 use hex_literal::hex;
-use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

@@ -1,4 +1,5 @@
-use agglayer_types::{Certificate, LocalNetworkStateData};
+use agglayer_primitives::{Address, U256};
+use agglayer_types::{compute_signature_info, Certificate, LocalNetworkStateData};
 use ethers_signers::{LocalWallet, Signer};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
@@ -9,30 +10,12 @@ use pessimistic_proof::{
     },
     keccak::{digest::Digest, keccak256, keccak256_combine},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
-    multi_batch_header::signature_commitment,
     utils::smt::Smt,
     LocalNetworkState, PessimisticProofOutput,
 };
 use rand::{random, thread_rng};
-use reth_primitives::{Address, Signature, U256};
 
 use super::sample_data::{NETWORK_A, NETWORK_B};
-
-pub fn compute_signature_info(
-    wallet: &LocalWallet,
-    new_local_exit_root: Digest,
-    imported_bridge_exits: &[ImportedBridgeExit],
-) -> (Digest, Signature) {
-    let combined_hash = signature_commitment(new_local_exit_root, imported_bridge_exits);
-    let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
-    let signature = Signature {
-        r: U256::from_limbs(signature.r.0),
-        s: U256::from_limbs(signature.s.0),
-        odd_y_parity: signature.recovery_id().unwrap().is_y_odd(),
-    };
-
-    (combined_hash, signature)
-}
 
 /// Trees for the network B, as well as the LET for network A.
 #[derive(Clone)]
@@ -184,7 +167,7 @@ impl Forest {
         let bridge_exits = self.bridge_exits(bridge_events);
         let new_local_exit_root = self.state_b.exit_tree.get_root();
         let (_combined_hash, signature) =
-            compute_signature_info(&self.wallet, new_local_exit_root, &imported_bridge_exits);
+            compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
 
         Certificate {
             network_id: *NETWORK_B,
@@ -224,7 +207,7 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
         leaf_type: LeafType::Transfer,
         token_info,
         dest_network,
-        dest_address: random(),
+        dest_address: random::<[u8; 20]>().into(),
         amount,
         metadata: Some(keccak256(&[])),
     }

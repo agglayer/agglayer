@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use reth_primitives::U256;
+use agglayer_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 

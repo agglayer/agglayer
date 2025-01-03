@@ -12,16 +12,17 @@ name = "convertor"
 path = "src/bin/convertor.rs"
 
 [dependencies]
-agglayer-types = { path = "../agglayer-types" }
+agglayer-primitives.workspace = true
+agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
+pessimistic-proof = { path = "../pessimistic-proof" }
+
 base64.workspace = true
 bincode.workspace = true
 clap.workspace = true
 ethers-signers.workspace = true
-reth-primitives.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-pessimistic-proof = { path = "../pessimistic-proof" }
 sp1-sdk = { workspace = true }
 sp1-core-machine.workspace = true
 lazy_static.workspace = true

@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use ethers::signers::LocalWallet;
+pub use agglayer_primitives::{address, Address, Signature, B256, U256};
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -20,10 +20,6 @@ use pessimistic_proof::{
     nullifier_tree::{NullifierKey, NullifierPath},
     ProofError,
 };
-pub use reth_primitives::address;
-use reth_primitives::B256;
-pub use reth_primitives::U256;
-pub use reth_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
 use sp1_sdk::provers::ProofOpts;
 use sp1_sdk::{
@@ -325,21 +321,22 @@ impl Default for Certificate {
     }
 }
 
+#[cfg(any(test, feature = "testutils"))]
 pub fn compute_signature_info(
     new_local_exit_root: Digest,
     imported_bridge_exits: &[ImportedBridgeExit],
-    wallet: &LocalWallet,
+    wallet: &ethers::signers::LocalWallet,
 ) -> (Digest, Signature) {
     let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
         new_local_exit_root,
         imported_bridge_exits,
     );
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
-    let signature = Signature {
-        r: U256::from_limbs(signature.r.0),
-        s: U256::from_limbs(signature.s.0),
-        odd_y_parity: signature.recovery_id().unwrap().is_y_odd(),
-    };
+    let signature = Signature::new(
+        U256::from_limbs(signature.r.0),
+        U256::from_limbs(signature.s.0),
+        signature.recovery_id().unwrap().is_y_odd(),
+    );
 
     (combined_hash, signature)
 }
@@ -373,6 +370,12 @@ impl Certificate {
             signature,
             metadata: Default::default(),
         }
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn with_new_local_exit_root(mut self, new_local_exit_root: Digest) -> Self {
+        self.new_local_exit_root = new_local_exit_root;
+        self
     }
 
     pub fn hash(&self) -> CertificateId {
@@ -430,7 +433,9 @@ impl Certificate {
         let combined_hash =
             signature_commitment(self.new_local_exit_root, &self.imported_bridge_exits);
 
-        self.signature.recover_signer(B256::new(combined_hash.0))
+        self.signature
+            .recover_address_from_prehash(&B256::new(combined_hash.0))
+            .ok()
     }
 }
 

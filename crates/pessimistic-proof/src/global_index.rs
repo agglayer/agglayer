@@ -1,4 +1,4 @@
-use reth_primitives::U256;
+use agglayer_primitives::U256;
 use serde::{Deserialize, Serialize};
 
 use crate::{

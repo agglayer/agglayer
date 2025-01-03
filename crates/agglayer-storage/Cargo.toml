@@ -23,10 +23,15 @@ mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion = "0.5.1"
+insta.workspace = true
 rand.workspace = true
 rstest.workspace = true
 sp1-sdk.workspace = true
+
+agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
+
+agglayer-storage = { path = ".", features = ["testutils"] }
 
 [[bench]]
 name = "latest_certificate_bench"
@@ -35,4 +40,4 @@ required-features = ["testutils"]
 
 [features]
 default = []
-testutils = ["rand", "mockall"]
+testutils = ["rand", "mockall", "agglayer-types/testutils"]
