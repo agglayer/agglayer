@@ -48,4 +48,6 @@ pub(crate) enum Commands {
     },
 
     Vkey,
+
+    Version,
 }
