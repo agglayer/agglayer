@@ -288,6 +288,7 @@ mod tests {
                 15,
                 pending_store.clone(),
                 state_store.clone(),
+                BackupClient::noop(),
             )
             .unwrap(),
         );
@@ -409,6 +410,7 @@ mod tests {
                 15,
                 pending_store.clone(),
                 state_store.clone(),
+                BackupClient::noop(),
             )
             .unwrap(),
         );

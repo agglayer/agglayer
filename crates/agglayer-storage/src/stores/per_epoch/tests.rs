@@ -30,7 +30,8 @@ fn store() -> PerEpochStore<PendingStore, StateStore> {
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
     );
 
-    PerEpochStore::try_open(config, 0, pending_store, state_store, None).unwrap()
+    let backup_client = BackupClient::noop();
+    PerEpochStore::try_open(config, 0, pending_store, state_store, None, backup_client).unwrap()
 }
 
 #[rstest]

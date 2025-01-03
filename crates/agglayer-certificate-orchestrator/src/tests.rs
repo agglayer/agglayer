@@ -446,6 +446,7 @@ async fn test_certificate_orchestrator_can_stop() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -511,6 +512,7 @@ async fn test_collect_certificates() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -577,6 +579,7 @@ async fn test_collect_certificates_after_epoch() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -645,6 +648,7 @@ async fn test_collect_certificates_when_empty() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -724,6 +728,7 @@ fn check() -> (
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );

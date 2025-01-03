@@ -36,6 +36,9 @@ pub enum BackupError {
 
     #[error("RocksDB error: {0}")]
     RocksDB(#[from] rocksdb::Error),
+
+    #[error("IO Error: {0}")]
+    IO(#[from] std::io::Error),
 }
 
 /// A physical storage storage component with an active RocksDB.

@@ -110,7 +110,7 @@ impl Node {
         } else {
             BackupClient::noop()
         };
-        let state_store = Arc::new(StateStore::new(state_db.clone(), backup_client));
+        let state_store = Arc::new(StateStore::new(state_db.clone(), backup_client.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
         let debug_store = if config.debug_mode {
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path)?)
@@ -161,6 +161,7 @@ impl Node {
             current_epoch,
             pending_store.clone(),
             state_store.clone(),
+            backup_client.clone(),
         )?);
 
         info!("Epoch synchronization started.");
