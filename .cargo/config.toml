@@ -1,5 +1,4 @@
 [alias]
-xtask = "run --package xtask --"
 doc-full = "doc --document-private-items --workspace --all-features"
 
 # SP1 profile
@@ -26,3 +25,10 @@ rustflags = []
 
 [profile.test.package.sp1-sdk]
 debug-assertions = false
+
+[target.riscv32im-succinct-zkvm-elf]
+rustflags = [
+    "-Cpasses=loweratomic",
+    "-Clink-arg=-Ttext=0x00200800",
+    "-Cpanic=abort",
+]
