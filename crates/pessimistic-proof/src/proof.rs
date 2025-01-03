@@ -3,6 +3,7 @@ pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::trace;
 
 use crate::{
     bridge_exit::{NetworkId, TokenInfo},
@@ -235,6 +236,7 @@ pub fn generate_pessimistic_proof(
         (prev_ler, prev_pp_root)
     };
 
+    trace!("Pessimistic proof generated successfully.");
     Ok(PessimisticProofOutput {
         prev_local_exit_root,
         prev_pessimistic_root,
