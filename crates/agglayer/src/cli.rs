@@ -52,4 +52,72 @@ pub(crate) enum Commands {
     },
 
     Vkey,
+
+    #[clap(subcommand)]
+    Backups(Backups),
+}
+
+#[derive(Subcommand)]
+pub(crate) enum Backups {
+    /// List all backups.
+    List {
+        #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
+        cfg: PathBuf,
+    },
+
+    /// Restore from a backup.
+    Restore {
+        #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
+        cfg: PathBuf,
+        #[arg( value_parser = parse_db_kind_version)]
+        db_versions: Vec<(DbKind, u32)>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum DbKind {
+    State,
+    Pending,
+    Epoch(u64),
+}
+
+impl std::str::FromStr for DbKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "state" => Ok(DbKind::State),
+            "pending" => Ok(DbKind::Pending),
+            s if s.starts_with("epoch_") => {
+                let parts: Vec<&str> = s.split("_").collect();
+                if parts.len() != 2 {
+                    return Err(format!("Invalid epoch format: {}", s));
+                }
+
+                let epoch = parts[1]
+                    .parse::<u64>()
+                    .map_err(|e| format!("Invalid epoch: {}", e))?;
+
+                Ok(DbKind::Epoch(epoch))
+            }
+            _ => Err(format!("Invalid DB kind: {}", s)),
+        }
+    }
+}
+
+fn parse_db_kind_version(s: &str) -> Result<(DbKind, u32), String> {
+    let parts: Vec<&str> = s.split(':').collect();
+    if parts.len() != 2 {
+        return Err(format!(
+            "Invalid format for argument '{}'. Expected 'name:version'",
+            s
+        ));
+    }
+
+    let db_kind = parts[0].parse::<DbKind>()?;
+    let version = parts[1]
+        .parse::<u32>()
+        .map_err(|e| format!("Invalid version '{}': {}", parts[1], e))?;
+
+    Ok((db_kind, version))
 }

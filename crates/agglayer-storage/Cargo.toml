@@ -5,15 +5,17 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+thiserror.workspace = true
 arc-swap.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 bincode.workspace = true
 hex.workspace = true
 parking_lot.workspace = true
 rand = { version = "0.8.5", optional = true }
 rocksdb = "0.22.0"
 serde.workspace = true
-thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
