@@ -2,8 +2,8 @@
 RUST_VERSION = "1.81.0"
 SP1_VERSION = "v1.81.0"
 SP1_TOOLCHAIN_HASH_aarch64 = "68bc4a29237e2eb862da36324d19cf835bb93f45106ad206ba17836fb7862f32"
-SP1_TOOLCHAIN_HASH_x86 = "68bc4a29237e2eb862da36324d19cf835bb93f45106ad206ba17836fb7862f32"
-SP1_ARCH = "${CARGO_MAKE_RUST_TARGET_ARCH}"
+SP1_TOOLCHAIN_HASH_x86_64 = "f8b978b44fdedfd9f3dfea127ee11f13ee2fdaaffdea2619489dff7bbe791cce"
+SP1_ARCH = "x86_64"
 
 [tasks.pp-elf]
 description = "Install pessimistic proof ELF file"
@@ -16,8 +16,12 @@ args = [
 ]
 
 [tasks.pp-elf-build]
+description = "Compile pessimistic proof ELF file"
+dependencies = ["sp1-toolchain-image"]
+command = "docker"
 args = [
     "run",
+    "--platform=linux/amd64",
     "--rm",
     "--env",
     "CARGO_ENCODED_RUSTFLAGS=-C\u001fpasses=loweratomic\u001f-C\u001flink-arg=-Ttext=0x00200800\u001f-C\u001fpanic=abort",
@@ -31,9 +35,6 @@ args = [
     "--locked",
     "-vv",
 ]
-description = "Compile pessimistic proof ELF file"
-dependencies = ["sp1-toolchain-image"]
-command = "docker"
 
 [tasks.sp1-toolchain-shell]
 description = "Drop into an interactive shell in sp1 build environment image"
@@ -41,6 +42,7 @@ dependencies = ["sp1-toolchain-image"]
 command = "docker"
 args = [
     "run",
+    "--platform=linux/amd64",
     "--rm",
     "-it",
     "-v${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}:/sp1/source",
@@ -62,6 +64,7 @@ description = "Build a docker image with sp1 build environment"
 command = "docker"
 args = [
     "build",
+    "--platform=linux/amd64",
     "--build-arg=RUST_VERSION",
     "--build-arg=SP1_VERSION",
     "--build-arg=SP1_TOOLCHAIN_HASH",

@@ -1,12 +1,13 @@
 ARG RUST_VERSION=1.81.0
 # Base image with rust compiler & tools
-FROM --platform=${BUILDPLATFORM} docker.io/library/rust:${RUST_VERSION}
+FROM docker.io/library/rust:${RUST_VERSION}
 
 # Build arguments specifying the toolchain version and location
 ARG SP1_TOOLCHAIN_HASH
 ARG SP1_VERSION
 ARG SP1_ARCH
 ARG SP1_BASE_URL=https://github.com/succinctlabs/rust/releases/download
+ARG RUST_VERSION
 
 # Mark the image with arguably useful metadata
 LABEL \
@@ -33,6 +34,6 @@ RUN mkdir -p sp1-toolchain \
     && rm -rf /sp1/install
 
 # Drop root priviledges
-RUN useradd --create-home --home-dir=/sp1 sp1
+# RUN useradd --create-home --home-dir=/sp1 sp1
 
-USER sp1
+# USER sp1
