@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 default-members = ["crates/agglayer"]
-members = ["crates/*", "xtask", "tests/integrations"]
+members = ["crates/*", "tests/integrations"]
 exclude = ["crates/pessimistic-proof-program"]
 
 [workspace.package]

@@ -1,0 +1,75 @@
+[env]
+RUST_VERSION = "1.81.0"
+SP1_VERSION = "v1.81.0"
+SP1_TOOLCHAIN_HASH_aarch64 = "68bc4a29237e2eb862da36324d19cf835bb93f45106ad206ba17836fb7862f32"
+SP1_TOOLCHAIN_HASH_x86_64 = "f8b978b44fdedfd9f3dfea127ee11f13ee2fdaaffdea2619489dff7bbe791cce"
+SP1_ARCH = "x86_64"
+
+[tasks.pp-elf]
+description = "Install pessimistic proof ELF file"
+dependencies = ["pp-elf-build"]
+cwd = "crates/pessimistic-proof-program"
+command = "cp"
+args = [
+    "target/riscv32im-succinct-zkvm-elf/release/pessimistic-proof-program",
+    "elf/riscv32im-succinct-zkvm-elf",
+]
+
+[tasks.pp-elf-build]
+description = "Compile pessimistic proof ELF file"
+dependencies = ["sp1-toolchain-image"]
+command = "docker"
+args = [
+    "run",
+    "--platform=linux/amd64",
+    "--rm",
+    "--env",
+    "CARGO_ENCODED_RUSTFLAGS=-C\u001fpasses=loweratomic\u001f-C\u001flink-arg=-Ttext=0x00200800\u001f-C\u001fpanic=abort",
+    "-v${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}:/sp1/source",
+    "-w/sp1/source/crates/pessimistic-proof-program",
+    "sp1:ppbuild",
+    "cargo",
+    "build",
+    "--target=riscv32im-succinct-zkvm-elf",
+    "--release",
+    "--locked",
+    "-vv",
+]
+
+[tasks.sp1-toolchain-shell]
+description = "Drop into an interactive shell in sp1 build environment image"
+dependencies = ["sp1-toolchain-image"]
+command = "docker"
+args = [
+    "run",
+    "--platform=linux/amd64",
+    "--rm",
+    "-it",
+    "-v${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}:/sp1/source",
+    "sp1:ppbuild",
+]
+
+[tasks.sp1-toolchain-image-config]
+script_runner = "@duckscript"
+script = '''
+arch = get_env SP1_ARCH
+sha_arch = get_env SP1_TOOLCHAIN_HASH_${arch}
+
+set_env SP1_TOOLCHAIN_HASH ${sha_arch}
+'''
+
+[tasks.sp1-toolchain-image]
+dependencies = ["sp1-toolchain-image-config"]
+description = "Build a docker image with sp1 build environment"
+command = "docker"
+args = [
+    "build",
+    "--platform=linux/amd64",
+    "--build-arg=RUST_VERSION",
+    "--build-arg=SP1_VERSION",
+    "--build-arg=SP1_TOOLCHAIN_HASH",
+    "--build-arg=SP1_ARCH",
+    "-tsp1:ppbuild",
+    "-f./build/sp1-toolchain/Dockerfile",
+    "./build/sp1-toolchain",
+]
