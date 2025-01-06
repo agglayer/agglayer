@@ -16,7 +16,7 @@ tonic = { workspace = true, default-features = false, features = [
     "transport",
 ] }
 
-agglayer-types = { path = "../agglayer-types" }
+agglayer-types.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 
 [build-dependencies]

@@ -36,7 +36,7 @@ agglayer-config = { path = "../agglayer-config" }
 agglayer-contracts = { path = "../agglayer-contracts" }
 agglayer-clock = { path = "../agglayer-clock" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
-agglayer-types = { path = "../agglayer-types" }
+agglayer-types.workspace = true
 agglayer-signer = { path = "../agglayer-signer" }
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }

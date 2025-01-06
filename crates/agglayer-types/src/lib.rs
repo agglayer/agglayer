@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use agglayer_primitives::{address, Address, Signature, B256, U256};
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -27,6 +26,8 @@ use sp1_sdk::{
     SP1PublicValues, SP1Stdin,
 };
 
+use crate::primitives::{Address, Signature, B256, U256};
+
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Digest;
@@ -35,6 +36,12 @@ pub type Metadata = Digest;
 
 pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
+
+pub mod primitives {
+    pub use agglayer_primitives::{
+        address, ruint, Address, Signature, SignatureError, B256, U256, U512,
+    };
+}
 
 /// ELF of the pessimistic proof program
 pub(crate) const ELF: &[u8] =
