@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::DEFAULT_IP;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct TelemetryConfig {
     #[serde(
