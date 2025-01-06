@@ -184,6 +184,7 @@ dependencies = [
  "mockall",
  "thiserror 2.0.8",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
