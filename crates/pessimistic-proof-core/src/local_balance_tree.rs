@@ -43,7 +43,7 @@ impl ToBits<192> for TokenInfo {
         // 20 bytes. The following code could panic otherwise.
         std::array::from_fn(|i| {
             if i < 32 {
-                (*self.origin_network >> i) & 1 == 1
+                (self.origin_network >> i) & 1 == 1
             } else {
                 ((address_bytes[(i - 32) / 8]) >> (i % 8)) & 1 == 1
             }

@@ -136,21 +136,6 @@ impl PessimisticProofOutput {
             .with_big_endian()
             .with_fixint_encoding()
     }
-
-    pub fn display_to_hex(&self) -> String {
-        format!(
-            "prev_local_exit_root: {}, prev_pessimistic_root: {}, l1_info_root: {}, \
-             origin_network: {}, consensus_hash: {}, new_local_exit_root: {}, \
-             new_pessimistic_root: {}",
-            self.prev_local_exit_root,
-            self.prev_pessimistic_root,
-            self.l1_info_root,
-            self.origin_network,
-            self.consensus_hash,
-            self.new_local_exit_root,
-            self.new_pessimistic_root,
-        )
-    }
 }
 
 const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;

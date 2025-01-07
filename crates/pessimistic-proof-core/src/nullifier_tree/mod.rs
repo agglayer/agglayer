@@ -45,7 +45,7 @@ impl ToBits<64> for NullifierKey {
     fn to_bits(&self) -> [bool; 64] {
         std::array::from_fn(|i| {
             if i < 32 {
-                (*self.network_id >> i) & 1 == 1
+                (self.network_id >> i) & 1 == 1
             } else {
                 (self.let_index >> (i - 32)) & 1 == 1
             }

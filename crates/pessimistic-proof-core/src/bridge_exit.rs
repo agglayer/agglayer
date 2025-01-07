@@ -1,13 +1,11 @@
 #![allow(clippy::too_many_arguments)]
 
-use std::{fmt::Display, ops::Deref};
-
 use agglayer_primitives::{address, Address, U256};
 use serde::{Deserialize, Serialize};
 
 use crate::keccak::{digest::Digest, keccak256_combine};
 
-pub(crate) const L1_NETWORK_ID: NetworkId = NetworkId(0);
+pub(crate) const L1_NETWORK_ID: NetworkId = 0;
 pub(crate) const L1_ETH: TokenInfo = TokenInfo {
     origin_network: L1_NETWORK_ID,
     origin_token_address: address!("0000000000000000000000000000000000000000"),
@@ -18,7 +16,7 @@ pub(crate) const L1_ETH: TokenInfo = TokenInfo {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Copy)]
 pub struct TokenInfo {
     /// Network which the token originates from
-    pub origin_network: NetworkId,
+    pub origin_network: u32,
     /// The address of the token on the origin network
     pub origin_token_address: Address,
 }
@@ -72,34 +70,7 @@ pub struct BridgeExit {
     pub metadata: Digest,
 }
 
-// const EMPTY_METADATA_HASH: Digest = Digest(hex!(
-//     "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
-// ));
-
 impl BridgeExit {
-    /// Creates a new [`BridgeExit`].
-    pub fn new(
-        leaf_type: LeafType,
-        origin_network: NetworkId,
-        origin_token_address: Address,
-        dest_network: NetworkId,
-        dest_address: Address,
-        amount: U256,
-        metadata: Digest,
-    ) -> Self {
-        Self {
-            leaf_type,
-            token_info: TokenInfo {
-                origin_network,
-                origin_token_address,
-            },
-            dest_network,
-            dest_address,
-            amount,
-            metadata,
-        }
-    }
-
     /// Hashes the [`BridgeExit`] to be inserted in a
     /// [`crate::local_exit_tree::LocalExitTree`].
     pub fn hash(&self) -> Digest {
@@ -132,43 +103,7 @@ impl BridgeExit {
     }
 }
 
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash,
-)]
-pub struct NetworkId(u32);
-
-impl Display for NetworkId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl NetworkId {
-    pub const BITS: usize = u32::BITS as usize;
-    pub fn new(value: u32) -> Self {
-        Self(value)
-    }
-}
-
-impl From<u32> for NetworkId {
-    fn from(value: u32) -> Self {
-        Self(value)
-    }
-}
-
-impl From<NetworkId> for u32 {
-    fn from(value: NetworkId) -> Self {
-        value.0
-    }
-}
-
-impl Deref for NetworkId {
-    type Target = u32;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+pub type NetworkId = u32;
 
 #[cfg(test)]
 mod tests {
@@ -177,15 +112,17 @@ mod tests {
 
     #[test]
     fn test_deposit_hash() {
-        let mut deposit = BridgeExit::new(
-            LeafType::Transfer,
-            0.into(),
-            Address::default(),
-            1.into(),
-            Address::default(),
-            U256::default(),
-            vec![],
-        );
+        let mut deposit = BridgeExit {
+            leaf_type: LeafType::Transfer,
+            token_info: TokenInfo {
+                origin_network: 0.into(),
+                origin_token_address: Address::default(),
+            },
+            dest_network: 1,
+            dest_address: Address::default(),
+            amount: U256::default(),
+            metadata: vec![],
+        };
 
         let amount_bytes = hex::decode("8ac7230489e80000").unwrap_or_default();
         deposit.amount = U256::try_from_be_slice(amount_bytes.as_slice()).unwrap();
