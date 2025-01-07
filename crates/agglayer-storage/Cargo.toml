@@ -22,6 +22,7 @@ pessimistic-proof = { path = "../pessimistic-proof" }
 mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
+tokio.workspace = true
 criterion = "0.5.1"
 insta.workspace = true
 rand.workspace = true
