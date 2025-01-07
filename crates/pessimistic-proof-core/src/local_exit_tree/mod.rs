@@ -1,13 +1,11 @@
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
 pub mod hasher;
 use hasher::Hasher;
 
-use crate::local_exit_tree::data::LocalExitTreeData;
-
-pub mod data;
 #[cfg(test)]
 mod tests;
 
@@ -50,19 +48,6 @@ where
         }
     }
 
-    /// Creates a new [`LocalExitTree`] and populates its leaves.
-    pub fn from_leaves(
-        leaves: impl Iterator<Item = H::Digest>,
-    ) -> Result<Self, LocalExitTreeError> {
-        let mut tree = Self::new();
-
-        for leaf in leaves {
-            tree.add_leaf(leaf)?;
-        }
-
-        Ok(tree)
-    }
-
     /// Creates a new [`LocalExitTree`] from its parts: leaf count, and
     /// frontier.
     pub fn from_parts(leaf_count: u32, frontier: [H::Digest; TREE_DEPTH]) -> Self {
@@ -77,6 +62,7 @@ where
         if self.leaf_count >= Self::MAX_NUM_LEAVES {
             return Err(LocalExitTreeError::LeafIndexOverflow);
         }
+
         // the index at which the new entry will be inserted
         let frontier_insertion_index: usize = {
             let leaf_count_after_insertion = self.leaf_count + 1;
@@ -138,35 +124,37 @@ fn get_bit_at(target: u32, bit_idx: usize) -> u32 {
     (target >> bit_idx) & 1
 }
 
-impl<H, const TREE_DEPTH: usize> TryFrom<&LocalExitTreeData<H, TREE_DEPTH>>
-    for LocalExitTree<H, TREE_DEPTH>
+#[serde_as]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LETMerkleProof<H, const TREE_DEPTH: usize = 32>
 where
     H: Hasher,
-    H::Digest: Copy + Default + Serialize + DeserializeOwned,
+    H::Digest: Serialize + DeserializeOwned,
 {
-    type Error = LocalExitTreeError;
+    #[serde_as(as = "[_; TREE_DEPTH]")]
+    pub(crate) siblings: [H::Digest; TREE_DEPTH],
+}
 
-    fn try_from(data: &LocalExitTreeData<H, TREE_DEPTH>) -> Result<Self, Self::Error> {
-        let leaf_count = data.layers[0].len();
-        let mut frontier = [H::Digest::default(); TREE_DEPTH];
-        let mut index = leaf_count;
-        let mut height = 0;
-        while index != 0 {
-            if height >= TREE_DEPTH {
-                return Err(LocalExitTreeError::FrontierIndexOutOfBounds);
-            }
-            if index & 1 == 1 {
-                frontier[height] = data.get(height, index ^ 1)?;
-            }
-            height += 1;
+impl<H, const TREE_DEPTH: usize> LETMerkleProof<H, TREE_DEPTH>
+where
+    H: Hasher,
+    H::Digest: Eq + Copy + Default + Serialize + DeserializeOwned,
+{
+    pub fn verify(&self, leaf: H::Digest, leaf_index: u32, root: H::Digest) -> bool {
+        let mut entry = leaf;
+        let mut index = leaf_index;
+        for &sibling in &self.siblings {
+            entry = if index & 1 == 0 {
+                H::merge(&entry, &sibling)
+            } else {
+                H::merge(&sibling, &entry)
+            };
             index >>= 1;
         }
+        if index != 0 {
+            return false;
+        }
 
-        Ok(LocalExitTree::from_parts(
-            leaf_count
-                .try_into()
-                .map_err(|_| LocalExitTreeError::LeafIndexOverflow)?,
-            frontier,
-        ))
+        entry == root
     }
 }
