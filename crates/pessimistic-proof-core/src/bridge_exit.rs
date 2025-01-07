@@ -3,10 +3,9 @@
 use std::{fmt::Display, ops::Deref};
 
 use agglayer_primitives::{address, Address, U256};
-use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 
-use crate::keccak::{digest::Digest, keccak256, keccak256_combine};
+use crate::keccak::{digest::Digest, keccak256_combine};
 
 pub(crate) const L1_NETWORK_ID: NetworkId = NetworkId(0);
 pub(crate) const L1_ETH: TokenInfo = TokenInfo {
@@ -57,7 +56,6 @@ impl TryFrom<u8> for LeafType {
 }
 
 /// Represents a token bridge exit from the network.
-// TODO: Change it to an enum depending on `leaf_type`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BridgeExit {
     /// Leaf type whether message of transfer.
@@ -70,13 +68,13 @@ pub struct BridgeExit {
     pub dest_address: Address,
     /// Token amount sent.
     pub amount: U256,
-    /// Optional hash of the metadata.
-    pub metadata: Option<Digest>,
+    /// Hash of the metadata.
+    pub metadata: Digest,
 }
 
-const EMPTY_METADATA_HASH: Digest = Digest(hex!(
-    "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
-));
+// const EMPTY_METADATA_HASH: Digest = Digest(hex!(
+//     "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+// ));
 
 impl BridgeExit {
     /// Creates a new [`BridgeExit`].
@@ -87,7 +85,7 @@ impl BridgeExit {
         dest_network: NetworkId,
         dest_address: Address,
         amount: U256,
-        metadata: Vec<u8>,
+        metadata: Digest,
     ) -> Self {
         Self {
             leaf_type,
@@ -98,7 +96,7 @@ impl BridgeExit {
             dest_network,
             dest_address,
             amount,
-            metadata: Some(keccak256(metadata.as_slice())),
+            metadata,
         }
     }
 
@@ -112,13 +110,14 @@ impl BridgeExit {
             &u32::to_be_bytes(self.dest_network.into()),
             self.dest_address.as_slice(),
             &self.amount.to_be_bytes::<32>(),
-            &self.metadata.unwrap_or(EMPTY_METADATA_HASH).0,
+            &self.metadata.0,
         ])
     }
 
     pub fn is_transfer(&self) -> bool {
         self.leaf_type == LeafType::Transfer
     }
+
     pub fn is_message(&self) -> bool {
         self.leaf_type == LeafType::Message
     }

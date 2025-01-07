@@ -6674,6 +6674,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pessimistic-proof-core"
+version = "0.1.0"
+dependencies = [
+ "agglayer-primitives",
+ "bincode",
+ "hex",
+ "hex-literal",
+ "rand",
+ "rs_merkle",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror 2.0.8",
+ "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?branch=patch-v2.0.2)",
+ "tracing",
+]
+
+[[package]]
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
