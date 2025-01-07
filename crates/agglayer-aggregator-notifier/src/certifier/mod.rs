@@ -84,7 +84,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
             |_| {
-                let verifier = sp1_sdk::MockProver::new();
+                let verifier = sp1_sdk::ProverClient::builder().mock().build();
                 let (_, verifying_key) = verifier.setup(ELF);
 
                 verifier.verify(proof, &verifying_key)
