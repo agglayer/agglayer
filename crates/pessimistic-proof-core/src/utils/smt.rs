@@ -8,7 +8,9 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use crate::{local_exit_tree::hasher::Hasher, utils::empty_hash::empty_hash_at_height};
+use crate::{
+    local_state::local_exit_tree::hasher::Hasher, utils::empty_hash::empty_hash_at_height,
+};
 
 pub trait ToBits<const NUM_BITS: usize> {
     fn to_bits(&self) -> [bool; NUM_BITS];

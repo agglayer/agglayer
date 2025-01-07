@@ -9,10 +9,10 @@ use crate::{
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
     keccak::{digest::Digest, keccak256_combine},
-    local_balance_tree::LocalBalancePath,
-    local_exit_tree::hasher::Hasher,
-    local_state::StateCommitment,
-    nullifier_tree::NullifierPath,
+    local_state::{
+        local_balance_tree::LocalBalancePath, local_exit_tree::hasher::Hasher,
+        nullifier_tree::NullifierPath, StateCommitment,
+    },
 };
 
 /// Represents the chain state transition for the pessimistic proof.

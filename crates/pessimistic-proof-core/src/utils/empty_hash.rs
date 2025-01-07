@@ -1,4 +1,4 @@
-use crate::local_exit_tree::hasher::Hasher;
+use crate::local_state::local_exit_tree::hasher::Hasher;
 
 /// Returns an array whose `i`th element is the root of an empty Merkle tree of
 /// depth `i`.

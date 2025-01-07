@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::NetworkId,
     keccak::{digest::Digest, keccak256},
-    nullifier_tree::NullifierKey,
+    local_state::nullifier_tree::NullifierKey,
 };
 
 /// The [`GlobalIndex`] uniquely references one leaf within one Global Exit

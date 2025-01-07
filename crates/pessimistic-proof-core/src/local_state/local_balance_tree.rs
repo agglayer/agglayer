@@ -6,7 +6,7 @@ use serde_with::serde_as;
 
 use crate::{
     bridge_exit::TokenInfo,
-    local_exit_tree::hasher::Hasher,
+    local_state::local_exit_tree::hasher::Hasher,
     utils::smt::{SmtMerkleProof, ToBits},
     ProofError,
 };
@@ -15,7 +15,6 @@ use crate::{
 /// id and 160 for token address).
 pub const LOCAL_BALANCE_TREE_DEPTH: usize = 192;
 
-// TODO: This is basically the same as the nullifier tree, consider refactoring
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
@@ -55,44 +54,11 @@ pub trait FromU256 {
     fn from_u256(u: U256) -> Self;
 }
 
-impl<H> Default for LocalBalanceTree<H>
-where
-    H: Hasher,
-    H::Digest: Copy + Eq + Hash + Default + Serialize + for<'a> Deserialize<'a> + FromU256,
-{
-    fn default() -> Self {
-        Self::new()
-    }
-}
 impl<H> LocalBalanceTree<H>
 where
     H: Hasher,
     H::Digest: Copy + Eq + Hash + Default + Serialize + for<'a> Deserialize<'a> + FromU256,
 {
-    pub fn new() -> Self {
-        let mut empty_hash_at_height = [H::Digest::default(); LOCAL_BALANCE_TREE_DEPTH];
-        for height in 1..LOCAL_BALANCE_TREE_DEPTH {
-            empty_hash_at_height[height] = H::merge(
-                &empty_hash_at_height[height - 1],
-                &empty_hash_at_height[height - 1],
-            );
-        }
-        let root = H::merge(
-            &empty_hash_at_height[LOCAL_BALANCE_TREE_DEPTH - 1],
-            &empty_hash_at_height[LOCAL_BALANCE_TREE_DEPTH - 1],
-        );
-        LocalBalanceTree {
-            root,
-            empty_hash_at_height,
-        }
-    }
-
-    pub fn new_with_root(root: H::Digest) -> Self {
-        let mut res = Self::new();
-        res.root = root;
-        res
-    }
-
     // TODO: Consider batching the updates per network for efficiency
     pub fn verify_and_update(
         &mut self,

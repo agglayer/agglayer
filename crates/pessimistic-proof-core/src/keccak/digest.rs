@@ -4,7 +4,7 @@ use agglayer_primitives::U256;
 use hex::FromHex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{local_balance_tree::FromU256, nullifier_tree::FromBool};
+use crate::local_state::{local_balance_tree::FromU256, nullifier_tree::FromBool};
 
 #[derive(Default, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Digest(pub [u8; 32]);

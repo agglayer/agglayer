@@ -7,16 +7,20 @@ use crate::{
     bridge_exit::L1_NETWORK_ID,
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
     keccak::digest::Digest,
-    local_balance_tree::LocalBalanceTree,
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
+    local_state::local_balance_tree::LocalBalanceTree,
+    local_state::local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
+    local_state::nullifier_tree::{NullifierKey, NullifierTree},
     multi_batch_header::{signature_commitment, MultiBatchHeader},
-    nullifier_tree::{NullifierKey, NullifierTree},
     ProofError,
 };
 
+pub mod local_balance_tree;
+pub mod local_exit_tree;
+pub mod nullifier_tree;
+
 /// State representation of one network without the leaves, taken as input by
 /// the prover.
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
     pub exit_tree: LocalExitTree<Keccak256Hasher>,

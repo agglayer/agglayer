@@ -9,7 +9,7 @@ use crate::{
     global_index::GlobalIndex,
     imported_bridge_exit,
     keccak::{digest::Digest, keccak256_combine},
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTreeError},
+    local_state::local_exit_tree::{hasher::Keccak256Hasher, LocalExitTreeError},
     local_state::{LocalNetworkState, StateCommitment},
     multi_batch_header::MultiBatchHeader,
 };

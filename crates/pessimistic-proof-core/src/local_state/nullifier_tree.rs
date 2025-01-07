@@ -3,7 +3,7 @@ use serde_with::serde_as;
 
 use crate::{
     bridge_exit::NetworkId,
-    local_exit_tree::hasher::Hasher,
+    local_state::local_exit_tree::hasher::Hasher,
     utils::smt::{SmtNonInclusionProof, ToBits},
     ProofError,
 };
@@ -13,8 +13,8 @@ use crate::{
 // we'll have 4 billion chains :)
 pub const NULLIFIER_TREE_DEPTH: usize = 64;
 
-// TODO: This is basically the same as the local balance tree, consider
-// refactoring TODO: Consider using an Indexed Merkle Tree instead of an SMT. See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
+// TODO: Consider using an Indexed Merkle Tree instead of an SMT.
+// See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
@@ -57,44 +57,11 @@ pub trait FromBool {
     fn from_bool(b: bool) -> Self;
 }
 
-impl<H> Default for NullifierTree<H>
-where
-    H: Hasher,
-    H::Digest: Copy + Eq + Default + Serialize + for<'a> Deserialize<'a> + FromBool,
-{
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<H> NullifierTree<H>
 where
     H: Hasher,
     H::Digest: Copy + Eq + Default + Serialize + for<'a> Deserialize<'a> + FromBool,
 {
-    pub fn new() -> Self {
-        let mut empty_hash_at_height = [H::Digest::default(); NULLIFIER_TREE_DEPTH];
-        for height in 1..NULLIFIER_TREE_DEPTH {
-            empty_hash_at_height[height] = H::merge(
-                &empty_hash_at_height[height - 1],
-                &empty_hash_at_height[height - 1],
-            );
-        }
-        let root = H::merge(
-            &empty_hash_at_height[NULLIFIER_TREE_DEPTH - 1],
-            &empty_hash_at_height[NULLIFIER_TREE_DEPTH - 1],
-        );
-        NullifierTree {
-            root,
-            empty_hash_at_height,
-        }
-    }
-    pub fn new_with_root(root: H::Digest) -> Self {
-        let mut res = Self::new();
-        res.root = root;
-        res
-    }
-
     // TODO: Consider batching the updates per network for efficiency
     pub fn verify_and_update(
         &mut self,
