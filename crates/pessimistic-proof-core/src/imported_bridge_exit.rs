@@ -81,18 +81,6 @@ pub struct MerkleProof {
 }
 
 impl MerkleProof {
-    pub fn hash(&self) -> Digest {
-        keccak256_combine([
-            self.root.as_slice(),
-            self.proof
-                .siblings
-                .iter()
-                .flat_map(|v| v.0)
-                .collect::<Vec<_>>()
-                .as_slice(),
-        ])
-    }
-
     pub fn verify(&self, leaf: Digest, leaf_index: u32) -> bool {
         self.proof.verify(leaf, leaf_index, self.root)
     }
@@ -102,15 +90,6 @@ impl MerkleProof {
 pub enum Claim {
     Mainnet(Box<ClaimFromMainnet>),
     Rollup(Box<ClaimFromRollup>),
-}
-
-impl Claim {
-    pub fn hash(&self) -> Digest {
-        match self {
-            Claim::Mainnet(claim_from_mainnet) => claim_from_mainnet.hash(),
-            Claim::Rollup(claim_from_rollup) => claim_from_rollup.hash(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,14 +103,6 @@ pub struct ClaimFromMainnet {
 }
 
 impl ClaimFromMainnet {
-    pub fn hash(&self) -> Digest {
-        keccak256_combine([
-            self.proof_leaf_mer.hash(),
-            self.proof_ger_l1root.hash(),
-            self.l1_leaf.hash(),
-        ])
-    }
-
     pub fn verify(
         &self,
         leaf: Digest,
@@ -178,15 +149,6 @@ pub struct ClaimFromRollup {
 }
 
 impl ClaimFromRollup {
-    pub fn hash(&self) -> Digest {
-        keccak256_combine([
-            self.proof_leaf_ler.hash(),
-            self.proof_ler_rer.hash(),
-            self.proof_ger_l1root.hash(),
-            self.l1_leaf.hash(),
-        ])
-    }
-
     pub fn verify(
         &self,
         leaf: Digest,
@@ -244,15 +206,6 @@ pub struct ImportedBridgeExit {
 }
 
 impl ImportedBridgeExit {
-    /// Creates a new [`ImportedBridgeExit`].
-    pub fn new(bridge_exit: BridgeExit, claim_data: Claim, global_index: GlobalIndex) -> Self {
-        Self {
-            bridge_exit,
-            global_index,
-            claim_data,
-        }
-    }
-
     /// Verifies that the provided inclusion path is valid and consistent with
     /// the provided LER
     pub fn verify_path(&self, l1root: Digest) -> Result<(), Error> {
@@ -270,32 +223,6 @@ impl ImportedBridgeExit {
                 claim.verify(self.bridge_exit.hash(), self.global_index, l1root)
             }
         }
-    }
-
-    /// Returns the considered L1 Info Root against which the claim is done.
-    pub fn l1_info_root(&self) -> Digest {
-        match &self.claim_data {
-            Claim::Mainnet(claim) => claim.proof_ger_l1root.root,
-            Claim::Rollup(claim) => claim.proof_ger_l1root.root,
-        }
-    }
-
-    /// Returns the considered L1 Info Tree leaf index against which the claim
-    /// is done.
-    pub fn l1_leaf_index(&self) -> u32 {
-        match &self.claim_data {
-            Claim::Mainnet(claim) => claim.l1_leaf.l1_info_tree_index,
-            Claim::Rollup(claim) => claim.l1_leaf.l1_info_tree_index,
-        }
-    }
-
-    /// Hash the entire data structure.
-    pub fn hash(&self) -> Digest {
-        keccak256_combine([
-            self.bridge_exit.hash(),
-            self.claim_data.hash(),
-            self.global_index.hash(),
-        ])
     }
 }
 
