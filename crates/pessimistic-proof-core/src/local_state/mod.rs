@@ -7,9 +7,11 @@ use crate::{
     bridge_exit::L1_NETWORK_ID,
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
     keccak::digest::Digest,
-    local_state::local_balance_tree::LocalBalanceTree,
-    local_state::local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    local_state::nullifier_tree::{NullifierKey, NullifierTree},
+    local_state::{
+        local_balance_tree::LocalBalanceTree,
+        local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
+        nullifier_tree::{NullifierKey, NullifierTree},
+    },
     multi_batch_header::{signature_commitment, MultiBatchHeader},
     ProofError,
 };
@@ -17,6 +19,7 @@ use crate::{
 pub mod local_balance_tree;
 pub mod local_exit_tree;
 pub mod nullifier_tree;
+pub mod smt;
 
 /// State representation of one network without the leaves, taken as input by
 /// the prover.

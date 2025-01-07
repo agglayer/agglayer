@@ -3,8 +3,10 @@ use serde_with::serde_as;
 
 use crate::{
     bridge_exit::NetworkId,
-    local_state::local_exit_tree::hasher::Hasher,
-    utils::smt::{SmtNonInclusionProof, ToBits},
+    local_state::{
+        local_exit_tree::hasher::Hasher,
+        smt::{SmtNonInclusionProof, ToBits},
+    },
     ProofError,
 };
 

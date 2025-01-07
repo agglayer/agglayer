@@ -10,6 +10,5 @@ pub mod global_index;
 pub mod imported_bridge_exit;
 pub mod local_state;
 pub mod multi_batch_header;
-pub mod utils;
 
 pub use local_state::LocalNetworkState;

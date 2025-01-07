@@ -40,23 +40,6 @@ where
 {
     const MAX_NUM_LEAVES: u32 = ((1u64 << TREE_DEPTH) - 1) as u32;
 
-    /// Creates a new empty [`LocalExitTree`].
-    pub fn new() -> Self {
-        LocalExitTree {
-            leaf_count: 0,
-            frontier: [H::Digest::default(); TREE_DEPTH],
-        }
-    }
-
-    /// Creates a new [`LocalExitTree`] from its parts: leaf count, and
-    /// frontier.
-    pub fn from_parts(leaf_count: u32, frontier: [H::Digest; TREE_DEPTH]) -> Self {
-        Self {
-            leaf_count,
-            frontier,
-        }
-    }
-
     /// Appends a leaf to the tree.
     pub fn add_leaf(&mut self, leaf: H::Digest) -> Result<u32, LocalExitTreeError> {
         if self.leaf_count >= Self::MAX_NUM_LEAVES {
@@ -106,16 +89,6 @@ where
         }
 
         root
-    }
-}
-
-impl<H, const TREE_DEPTH: usize> Default for LocalExitTree<H, TREE_DEPTH>
-where
-    H: Hasher,
-    H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a>,
-{
-    fn default() -> Self {
-        Self::new()
     }
 }
 

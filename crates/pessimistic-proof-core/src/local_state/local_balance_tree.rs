@@ -6,8 +6,10 @@ use serde_with::serde_as;
 
 use crate::{
     bridge_exit::TokenInfo,
-    local_state::local_exit_tree::hasher::Hasher,
-    utils::smt::{SmtMerkleProof, ToBits},
+    local_state::{
+        local_exit_tree::hasher::Hasher,
+        smt::{SmtMerkleProof, ToBits},
+    },
     ProofError,
 };
 
