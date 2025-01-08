@@ -31,9 +31,6 @@ fn main() -> anyhow::Result<()> {
             let vkey = agglayer_prover::get_vkey();
             println!("{}", vkey);
         }
-        cli::Commands::Version => {
-            println!("version info: {}", version());
-        }
     }
 
     Ok(())
