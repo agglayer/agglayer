@@ -32,8 +32,6 @@ agglayer-types.workspace = true
 sp1-sdk = { workspace = true, features = ["native-gnark"] }
 sp1-prover = { workspace = true, features = ["native-gnark"] }
 
-[dev-dependencies]
-
 [features]
 default = []
 testutils = []

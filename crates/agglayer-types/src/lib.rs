@@ -34,14 +34,9 @@ pub type CertificateId = Digest;
 pub type Height = u64;
 pub type Metadata = Digest;
 
+pub use agglayer_primitives as primitives;
 pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
-
-pub mod primitives {
-    pub use agglayer_primitives::{
-        address, ruint, Address, Signature, SignatureError, B256, U256, U512,
-    };
-}
 
 /// ELF of the pessimistic proof program
 pub(crate) const ELF: &[u8] =
