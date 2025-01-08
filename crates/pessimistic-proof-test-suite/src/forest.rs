@@ -1,8 +1,4 @@
-use agglayer_types::{
-    compute_signature_info,
-    primitives::{Address, U256},
-    Certificate, LocalNetworkStateData,
-};
+use agglayer_types::{compute_signature_info, Address, Certificate, LocalNetworkStateData, U256};
 use ethers_signers::{LocalWallet, Signer};
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},

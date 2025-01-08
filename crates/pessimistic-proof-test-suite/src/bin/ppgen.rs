@@ -1,9 +1,6 @@
 use std::{path::PathBuf, time::Instant};
 
-use agglayer_types::{
-    primitives::{Address, U256},
-    Certificate,
-};
+use agglayer_types::{Address, Certificate, U256};
 use clap::Parser;
 use pessimistic_proof::{
     bridge_exit::{NetworkId, TokenInfo},

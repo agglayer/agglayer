@@ -26,8 +26,6 @@ use sp1_sdk::{
     SP1PublicValues, SP1Stdin,
 };
 
-use crate::primitives::{Address, Signature, B256, U256};
-
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Digest;
@@ -35,6 +33,8 @@ pub type Height = u64;
 pub type Metadata = Digest;
 
 pub use agglayer_primitives as primitives;
+// Re-export common primitives again as agglayer-types root types
+pub use agglayer_primitives::{Address, Signature, SignatureError, B256, U256, U512};
 pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
 
