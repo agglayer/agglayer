@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use agglayer_primitives::{address, Address, Signature, B256, U256};
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -33,6 +32,9 @@ pub type CertificateId = Digest;
 pub type Height = u64;
 pub type Metadata = Digest;
 
+pub use agglayer_primitives as primitives;
+// Re-export common primitives again as agglayer-types root types
+pub use agglayer_primitives::{Address, Signature, SignatureError, B256, U256, U512};
 pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
 

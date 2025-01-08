@@ -16,7 +16,7 @@ thiserror.workspace = true
 tracing.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
-agglayer-types = { path = "../agglayer-types" }
+agglayer-types.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 
 mockall = { workspace = true, optional = true }
@@ -28,7 +28,7 @@ rand.workspace = true
 rstest.workspace = true
 sp1-sdk.workspace = true
 
-agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
+agglayer-types = {workspace = true, features = ["testutils"] }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
 agglayer-storage = { path = ".", features = ["testutils"] }

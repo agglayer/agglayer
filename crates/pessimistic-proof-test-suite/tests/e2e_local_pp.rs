@@ -1,4 +1,4 @@
-use agglayer_primitives::U256;
+use agglayer_types::primitives::U256;
 use pessimistic_proof::{bridge_exit::TokenInfo, generate_pessimistic_proof, LocalNetworkState};
 use pessimistic_proof_test_suite::{
     forest::Forest,
