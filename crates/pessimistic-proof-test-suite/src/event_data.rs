@@ -1,6 +1,6 @@
 use std::{fs::File, io::BufReader};
 
-use agglayer_primitives::U256;
+use agglayer_types::U256;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use pessimistic_proof::bridge_exit::{BridgeExit, TokenInfo};
 use serde::{de::DeserializeOwned, Deserialize, Deserializer};

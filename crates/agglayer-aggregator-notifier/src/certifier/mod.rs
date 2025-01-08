@@ -3,7 +3,6 @@ use std::sync::Arc;
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
 use agglayer_contracts::RollupContract;
-use agglayer_primitives::Address;
 use agglayer_prover_types::{
     default_bincode_options,
     v1::{
@@ -12,7 +11,7 @@ use agglayer_prover_types::{
     },
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
-use agglayer_types::{Certificate, Height, LocalNetworkStateData, NetworkId, Proof};
+use agglayer_types::{Address, Certificate, Height, LocalNetworkStateData, NetworkId, Proof};
 use bincode::Options as _;
 use pessimistic_proof::{
     generate_pessimistic_proof, local_exit_tree::hasher::Keccak256Hasher,

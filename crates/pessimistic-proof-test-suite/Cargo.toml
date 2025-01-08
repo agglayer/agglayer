@@ -12,7 +12,6 @@ name = "convertor"
 path = "src/bin/convertor.rs"
 
 [dependencies]
-agglayer-primitives.workspace = true
 agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
 pessimistic-proof = { path = "../pessimistic-proof" }
 

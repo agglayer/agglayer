@@ -72,7 +72,6 @@ dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-primitives",
  "agglayer-prover",
  "agglayer-prover-types",
  "agglayer-storage",
@@ -6677,7 +6676,6 @@ dependencies = [
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
  "agglayer-types",
  "anyhow",
  "base64 0.22.1",

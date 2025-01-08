@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use agglayer_primitives::{address, Address, Signature, B256, U256};
+pub use agglayer_primitives::{self as primitives, address, Address, Signature, B256, U256};
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
