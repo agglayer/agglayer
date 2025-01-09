@@ -11,6 +11,7 @@ use lazy_static::lazy_static;
 use opentelemetry::global;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::{Encoder as _, Registry, TextEncoder};
+use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
@@ -139,6 +140,7 @@ impl ServerBuilder {
         cancellation_token: CancellationToken,
     ) -> Result<
         WithGracefulShutdown<
+            TcpListener,
             axum::routing::IntoMakeService<Router>,
             axum::Router,
             impl futures::Future<Output = ()>,
