@@ -1,19 +1,25 @@
 use agglayer_primitives::{Address, U256};
 use agglayer_types::{compute_signature_info, Certificate, LocalNetworkStateData};
 use ethers_signers::{LocalWallet, Signer};
+use pessimistic_proof::local_exit_tree::data::LocalExitTreeData;
+use pessimistic_proof::utils::smt::Smt;
 use pessimistic_proof::{
-    bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
-    global_index::GlobalIndex,
+    bridge_exit::BridgeExit,
     imported_bridge_exit::{
         Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
         MerkleProof,
     },
+};
+use pessimistic_proof_core::{
+    bridge_exit::{LeafType, TokenInfo},
+    global_index::GlobalIndex,
     keccak::{digest::Digest, keccak256, keccak256_combine},
-    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
-    utils::smt::Smt,
+    local_state::local_exit_tree::hasher::Keccak256Hasher,
     LocalNetworkState, PessimisticProofOutput,
 };
 use rand::{random, thread_rng};
+
+type NetworkId = u32;
 
 use super::sample_data::{NETWORK_A, NETWORK_B};
 
@@ -35,7 +41,7 @@ impl Default for Forest {
             local_exit_tree_data_a: LocalExitTreeData::new(),
             l1_info_tree: Default::default(),
             state_b: LocalNetworkStateData {
-                exit_tree: LocalExitTree::new(),
+                exit_tree: pessimistic_proof::local_exit_tree::LocalExitTree::new(),
                 balance_tree: local_balance_tree,
                 nullifier_tree: Smt::new(),
             },
@@ -52,13 +58,16 @@ impl Forest {
 
     /// Create a new forest based on given initial balances.
     pub fn new(initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>) -> Self {
-        Self::new_with_local_exit_tree(initial_balances, LocalExitTree::new())
+        Self::new_with_local_exit_tree(
+            initial_balances,
+            pessimistic_proof::local_exit_tree::LocalExitTree::new(),
+        )
     }
 
     /// Override the local exit tree for network B
     pub fn new_with_local_exit_tree(
         initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>,
-        local_exit_tree: LocalExitTree<Keccak256Hasher>,
+        local_exit_tree: pessimistic_proof::local_exit_tree::LocalExitTree<Keccak256Hasher>,
     ) -> Self {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {
@@ -121,7 +130,7 @@ impl Forest {
                 bridge_exit: exit,
                 global_index: GlobalIndex {
                     mainnet_flag: true,
-                    rollup_index: **NETWORK_A,
+                    rollup_index: *NETWORK_A,
                     leaf_index: index,
                 },
                 claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
@@ -170,7 +179,7 @@ impl Forest {
             compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
 
         Certificate {
-            network_id: *NETWORK_B,
+            network_id: (*NETWORK_B).into(),
             height: 0,
             prev_local_exit_root,
             new_local_exit_root,
@@ -206,7 +215,7 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
     BridgeExit {
         leaf_type: LeafType::Transfer,
         token_info,
-        dest_network,
+        dest_network: dest_network.into(),
         dest_address: random::<[u8; 20]>().into(),
         amount,
         metadata: Some(keccak256(&[])),

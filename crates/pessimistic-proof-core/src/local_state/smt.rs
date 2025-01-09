@@ -31,7 +31,7 @@ where
     H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
 {
     #[serde_as(as = "[_; DEPTH]")]
-    siblings: [H::Digest; DEPTH],
+    pub siblings: [H::Digest; DEPTH],
 }
 
 #[serde_as]
@@ -42,7 +42,7 @@ where
     H::Digest: Copy + Eq + Serialize + DeserializeOwned,
 {
     #[serde_as(as = "Vec<_>")]
-    siblings: Vec<H::Digest>,
+    pub siblings: Vec<H::Digest>,
 }
 
 impl<H, const DEPTH: usize> SmtMerkleProof<H, DEPTH>

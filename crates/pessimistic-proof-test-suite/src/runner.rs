@@ -1,14 +1,15 @@
 use bincode::config::Options;
-pub use pessimistic_proof::{LocalNetworkState, PessimisticProofOutput};
+pub use pessimistic_proof_core::{LocalNetworkState, PessimisticProofOutput};
 use sp1_sdk::SP1PublicValues;
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
 
 use crate::PESSIMISTIC_PROOF_ELF;
 
-pub type Hasher = pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
-pub type Digest = <Hasher as pessimistic_proof::local_exit_tree::hasher::Hasher>::Digest;
-pub type MultiBatchHeader = pessimistic_proof::multi_batch_header::MultiBatchHeader<Hasher>;
+pub type Hasher = pessimistic_proof_core::local_state::local_exit_tree::hasher::Keccak256Hasher;
+pub type Digest =
+    <Hasher as pessimistic_proof_core::local_state::local_exit_tree::hasher::Hasher>::Digest;
+pub type MultiBatchHeader = pessimistic_proof_core::multi_batch_header::MultiBatchHeader<Hasher>;
 
 pub struct ProofOutput {}
 

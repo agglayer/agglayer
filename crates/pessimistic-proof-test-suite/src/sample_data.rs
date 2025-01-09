@@ -5,11 +5,9 @@ use std::path::PathBuf;
 use agglayer_primitives::{address, U256};
 use agglayer_types::Certificate;
 use hex_literal::hex;
-use pessimistic_proof::{
-    bridge_exit::{BridgeExit, NetworkId, TokenInfo},
-    local_balance_tree, local_exit_tree,
-    nullifier_tree::NullifierTree,
-    LocalNetworkState,
+use pessimistic_proof::bridge_exit::BridgeExit;
+use pessimistic_proof_core::{
+    bridge_exit::TokenInfo, local_state::local_exit_tree, LocalNetworkState,
 };
 
 use crate::{
@@ -19,11 +17,13 @@ use crate::{
 
 type TreeHasher = local_exit_tree::hasher::Keccak256Hasher;
 type LocalExitTree = local_exit_tree::LocalExitTree<TreeHasher>;
-type LocalBalanceTree = local_balance_tree::LocalBalanceTree<TreeHasher>;
+//type LocalBalanceTree = local_balance_tree::LocalBalanceTree<TreeHasher>;
+
+type NetworkId = u32;
 
 lazy_static::lazy_static! {
-    pub static ref NETWORK_A: NetworkId = 0.into();
-    pub static ref NETWORK_B: NetworkId = 1.into();
+    pub static ref NETWORK_A: NetworkId = 0u32;
+    pub static ref NETWORK_B: NetworkId = 1u32;
     pub static ref USDC: TokenInfo = TokenInfo {
         origin_network: *NETWORK_A,
         origin_token_address: address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
@@ -36,15 +36,15 @@ lazy_static::lazy_static! {
 
 pub fn empty_state() -> LocalNetworkState {
     LocalNetworkState {
-        balance_tree: LocalBalanceTree::new(),
         exit_tree: LocalExitTree::new(),
-        nullifier_tree: NullifierTree::new(),
+        balance_tree: pessimistic_proof::local_balance_tree::LocalBalanceTree::new().into(),
+        nullifier_tree: pessimistic_proof::nullifier_tree::NullifierTree::new().into(),
     }
 }
 
-fn sample_exit_tree_01() -> LocalExitTree {
+fn sample_exit_tree_01() -> pessimistic_proof::local_exit_tree::LocalExitTree<TreeHasher> {
     const LEAF_COUNT: u32 = 1853;
-    LocalExitTree::from_parts(
+    pessimistic_proof::local_exit_tree::LocalExitTree::from_parts(
         LEAF_COUNT,
         [
             hex!("4a3c0e05a537700590e5cfa29654e7db5b36fbe85b24e7f34bdec7ed2b194aa6").into(),
@@ -90,7 +90,10 @@ pub fn sample_state_01() -> Forest {
 }
 
 pub fn sample_state_00() -> Forest {
-    Forest::new_with_local_exit_tree([], LocalExitTree::default())
+    Forest::new_with_local_exit_tree(
+        [],
+        pessimistic_proof::local_exit_tree::LocalExitTree::default(),
+    )
 }
 
 pub fn sample_bridge_exits_01() -> impl Iterator<Item = BridgeExit> + Clone {

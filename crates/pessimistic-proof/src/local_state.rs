@@ -1,22 +1,23 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use agglayer_primitives::{ruint::UintTryFrom, B256, U256, U512};
-use serde::{Deserialize, Serialize};
-
-use crate::{
+use pessimistic_proof_core::multi_batch_header::{signature_commitment, MultiBatchHeader};
+use pessimistic_proof_core::{
     bridge_exit::L1_NETWORK_ID,
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
     keccak::digest::Digest,
-    local_balance_tree::LocalBalanceTree,
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    multi_batch_header::{signature_commitment, MultiBatchHeader},
-    nullifier_tree::{NullifierKey, NullifierTree},
+    local_state::{
+        local_balance_tree::LocalBalanceTree,
+        local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
+        nullifier_tree::{NullifierKey, NullifierTree},
+    },
     ProofError,
 };
+use serde::{Deserialize, Serialize};
 
 /// State representation of one network without the leaves, taken as input by
 /// the prover.
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
     pub exit_tree: LocalExitTree<Keccak256Hasher>,

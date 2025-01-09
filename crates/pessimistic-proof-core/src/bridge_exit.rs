@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::keccak::{digest::Digest, keccak256_combine};
 
-pub(crate) const L1_NETWORK_ID: NetworkId = 0;
-pub(crate) const L1_ETH: TokenInfo = TokenInfo {
+pub const L1_NETWORK_ID: NetworkId = 0;
+pub const L1_ETH: TokenInfo = TokenInfo {
     origin_network: L1_NETWORK_ID,
     origin_token_address: address!("0000000000000000000000000000000000000000"),
 };
@@ -104,44 +104,3 @@ impl BridgeExit {
 }
 
 pub type NetworkId = u32;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree};
-
-    #[test]
-    fn test_deposit_hash() {
-        let mut deposit = BridgeExit {
-            leaf_type: LeafType::Transfer,
-            token_info: TokenInfo {
-                origin_network: 0.into(),
-                origin_token_address: Address::default(),
-            },
-            dest_network: 1,
-            dest_address: Address::default(),
-            amount: U256::default(),
-            metadata: vec![],
-        };
-
-        let amount_bytes = hex::decode("8ac7230489e80000").unwrap_or_default();
-        deposit.amount = U256::try_from_be_slice(amount_bytes.as_slice()).unwrap();
-
-        let dest_addr = hex::decode("c949254d682d8c9ad5682521675b8f43b102aec4").unwrap_or_default();
-        deposit.dest_address.copy_from_slice(&dest_addr);
-
-        let leaf_hash = deposit.hash();
-        assert_eq!(
-            "22ed288677b4c2afd83a6d7d55f7df7f4eaaf60f7310210c030fd27adacbc5e0",
-            hex::encode(leaf_hash)
-        );
-
-        let mut dm = LocalExitTree::<Keccak256Hasher>::new();
-        dm.add_leaf(leaf_hash).unwrap();
-        let dm_root = dm.get_root();
-        assert_eq!(
-            "5ba002329b53c11a2f1dfe90b11e031771842056cf2125b43da8103c199dcd7f",
-            hex::encode(dm_root)
-        );
-    }
-}

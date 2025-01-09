@@ -1,12 +1,13 @@
 #![allow(clippy::needless_range_loop)]
 use std::fmt::Debug;
 
+use pessimistic_proof_core::local_state::local_exit_tree::hasher::Hasher;
+use pessimistic_proof_core::local_state::local_exit_tree::LETMerkleProof;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::local_exit_tree::LocalExitTreeError;
-use crate::{local_exit_tree::hasher::Hasher, utils::empty_hash::empty_hash_at_height};
-
+use crate::utils::empty_hash::empty_hash_at_height;
 /// Represents a local exit tree as defined by the LxLy bridge.
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -23,17 +24,6 @@ where
     /// `i`.
     #[serde_as(as = "[_; TREE_DEPTH]")]
     empty_hash_at_height: [H::Digest; TREE_DEPTH],
-}
-
-#[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LETMerkleProof<H, const TREE_DEPTH: usize = 32>
-where
-    H: Hasher,
-    H::Digest: Serialize + DeserializeOwned,
-{
-    #[serde_as(as = "[_; TREE_DEPTH]")]
-    pub(crate) siblings: [H::Digest; TREE_DEPTH],
 }
 
 impl<H, const TREE_DEPTH: usize> Default for LocalExitTreeData<H, TREE_DEPTH>
@@ -150,37 +140,15 @@ where
     }
 }
 
-impl<H, const TREE_DEPTH: usize> LETMerkleProof<H, TREE_DEPTH>
-where
-    H: Hasher,
-    H::Digest: Eq + Copy + Default + Serialize + DeserializeOwned,
-{
-    pub fn verify(&self, leaf: H::Digest, leaf_index: u32, root: H::Digest) -> bool {
-        let mut entry = leaf;
-        let mut index = leaf_index;
-        for &sibling in &self.siblings {
-            entry = if index & 1 == 0 {
-                H::merge(&entry, &sibling)
-            } else {
-                H::merge(&sibling, &entry)
-            };
-            index >>= 1;
-        }
-        if index != 0 {
-            return false;
-        }
-
-        entry == root
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use pessimistic_proof_core::{
+        local_state::local_exit_tree::hasher::Keccak256Hasher,
+        local_state::local_exit_tree::{LocalExitTree, LocalExitTreeError},
+    };
     use rand::{random, thread_rng, Rng};
 
-    use crate::local_exit_tree::{
-        data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree, LocalExitTreeError,
-    };
+    use crate::local_exit_tree::data::LocalExitTreeData;
 
     const TREE_DEPTH: usize = 32;
     type H = Keccak256Hasher;

@@ -18,6 +18,7 @@ tracing.workspace = true
 agglayer-config = { path = "../agglayer-config" }
 agglayer-types = { path = "../agglayer-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
+pessimistic-proof-core = { path = "../pessimistic-proof-core" }
 
 mockall = { workspace = true, optional = true }
 

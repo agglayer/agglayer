@@ -27,6 +27,7 @@ agglayer-config = { path = "../agglayer-config" }
 agglayer-prover-types = { path = "../agglayer-prover-types" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
 pessimistic-proof = { path = "../pessimistic-proof" }
+pessimistic-proof-core = { path = "../pessimistic-proof-core" }
 agglayer-types = { path = "../agglayer-types" }
 
 sp1-sdk = { workspace = true, features = ["native-gnark"] }

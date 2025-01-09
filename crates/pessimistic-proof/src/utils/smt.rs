@@ -4,15 +4,19 @@ use std::{
     hash::Hash,
 };
 
+use pessimistic_proof_core::local_state::{
+    local_exit_tree::hasher::Hasher,
+    smt::{SmtMerkleProof, SmtNonInclusionProof, ToBits},
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use crate::{local_exit_tree::hasher::Hasher, utils::empty_hash::empty_hash_at_height};
+use crate::utils::empty_hash::empty_hash_at_height;
 
-pub trait ToBits<const NUM_BITS: usize> {
-    fn to_bits(&self) -> [bool; NUM_BITS];
-}
+// pub trait ToBits<const NUM_BITS: usize> {
+//     fn to_bits(&self) -> [bool; NUM_BITS];
+// }
 
 #[derive(Error, Debug, Eq, PartialEq, Serialize, Deserialize, Clone)]
 pub enum SmtError {
@@ -87,27 +91,27 @@ where
     empty_hash_at_height: [H::Digest; DEPTH],
 }
 
-#[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SmtMerkleProof<H, const DEPTH: usize>
-where
-    H: Hasher,
-    H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
-{
-    #[serde_as(as = "[_; DEPTH]")]
-    siblings: [H::Digest; DEPTH],
-}
+// #[serde_as]
+// #[derive(Clone, Debug, Serialize, Deserialize)]
+// pub struct SmtMerkleProof<H, const DEPTH: usize>
+// where
+//     H: Hasher,
+//     H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
+// {
+//     #[serde_as(as = "[_; DEPTH]")]
+//     siblings: [H::Digest; DEPTH],
+// }
 
-#[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SmtNonInclusionProof<H, const DEPTH: usize>
-where
-    H: Hasher,
-    H::Digest: Copy + Eq + Serialize + DeserializeOwned,
-{
-    #[serde_as(as = "Vec<_>")]
-    siblings: Vec<H::Digest>,
-}
+// #[serde_as]
+// #[derive(Clone, Debug, Serialize, Deserialize)]
+// pub struct SmtNonInclusionProof<H, const DEPTH: usize>
+// where
+//     H: Hasher,
+//     H::Digest: Copy + Eq + Serialize + DeserializeOwned,
+// {
+//     #[serde_as(as = "Vec<_>")]
+//     siblings: Vec<H::Digest>,
+// }
 
 impl<H, const DEPTH: usize> Default for Smt<H, DEPTH>
 where
@@ -353,163 +357,19 @@ where
     }
 }
 
-impl<H, const DEPTH: usize> SmtMerkleProof<H, DEPTH>
-where
-    H: Hasher,
-    H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
-{
-    pub fn verify<K>(&self, key: K, value: H::Digest, root: H::Digest) -> bool
-    where
-        K: ToBits<DEPTH>,
-    {
-        let bits = key.to_bits();
-        let mut hash = value;
-        for i in 0..DEPTH {
-            hash = if bits[DEPTH - i - 1] {
-                H::merge(&self.siblings[i], &hash)
-            } else {
-                H::merge(&hash, &self.siblings[i])
-            };
-        }
-
-        hash == root
-    }
-
-    /// Verify the inclusion proof (i.e. that `(key, old_value)` is in the SMT)
-    /// and return the updated root of the SMT with `(key, new_value)`
-    /// inserted, or `None` if the inclusion proof is invalid.
-    pub fn verify_and_update<K>(
-        &self,
-        key: K,
-        old_value: H::Digest,
-        new_value: H::Digest,
-        root: H::Digest,
-    ) -> Option<H::Digest>
-    where
-        K: ToBits<DEPTH> + Copy,
-    {
-        if !self.verify(key, old_value, root) {
-            return None;
-        }
-        let bits = key.to_bits();
-        let mut hash = new_value;
-        for i in 0..DEPTH {
-            hash = if bits[DEPTH - i - 1] {
-                H::merge(&self.siblings[i], &hash)
-            } else {
-                H::merge(&hash, &self.siblings[i])
-            };
-        }
-
-        Some(hash)
-    }
-}
-
-impl<H, const DEPTH: usize> SmtNonInclusionProof<H, DEPTH>
-where
-    H: Hasher,
-    H::Digest: Copy + Eq + Serialize + DeserializeOwned,
-{
-    pub fn verify<K>(
-        &self,
-        key: K,
-        root: H::Digest,
-        empty_hash_at_height: &[H::Digest; DEPTH],
-    ) -> bool
-    where
-        K: ToBits<DEPTH>,
-    {
-        if self.siblings.len() > DEPTH {
-            return false;
-        }
-        if self.siblings.is_empty() {
-            let empty_root = H::merge(
-                &empty_hash_at_height[DEPTH - 1],
-                &empty_hash_at_height[DEPTH - 1],
-            );
-            return root == empty_root;
-        }
-        let bits = key.to_bits();
-        let mut entry = empty_hash_at_height[DEPTH - self.siblings.len()];
-        for i in (0..self.siblings.len()).rev() {
-            let sibling = self.siblings[i];
-            entry = if bits[i] {
-                H::merge(&sibling, &entry)
-            } else {
-                H::merge(&entry, &sibling)
-            };
-        }
-
-        entry == root
-    }
-
-    /// Verify the non-inclusion proof (i.e. that `key` is not in the SMT) and
-    /// return the updated root of the SMT with `(key, value)` inserted, or
-    /// `None` if the inclusion proof is invalid.
-    pub fn verify_and_update<K>(
-        &self,
-        key: K,
-        new_value: H::Digest,
-        root: H::Digest,
-        empty_hash_at_height: &[H::Digest; DEPTH],
-    ) -> Option<H::Digest>
-    where
-        K: Copy + ToBits<DEPTH>,
-    {
-        if !self.verify(key, root, empty_hash_at_height) {
-            return None;
-        }
-
-        let mut entry = new_value;
-        let bits = key.to_bits();
-        for i in (self.siblings.len()..DEPTH).rev() {
-            let sibling = empty_hash_at_height[DEPTH - i - 1];
-            entry = if bits[i] {
-                H::merge(&sibling, &entry)
-            } else {
-                H::merge(&entry, &sibling)
-            };
-        }
-        for i in (0..self.siblings.len()).rev() {
-            let sibling = self.siblings[i];
-            entry = if bits[i] {
-                H::merge(&sibling, &entry)
-            } else {
-                H::merge(&entry, &sibling)
-            };
-        }
-
-        Some(entry)
-    }
-}
-
-impl ToBits<32> for u32 {
-    fn to_bits(&self) -> [bool; 32] {
-        std::array::from_fn(|i| (self >> i) & 1 == 1)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::hash::Hash;
 
+    use pessimistic_proof_core::local_state::local_exit_tree::hasher::Keccak256Hasher;
     use rand::{prelude::SliceRandom, random, thread_rng, Rng};
     use rs_merkle::{Hasher as MerkleHasher, MerkleTree};
     use tiny_keccak::{Hasher as _, Keccak};
 
-    use crate::{
-        local_exit_tree::hasher::Keccak256Hasher,
-        utils::smt::{Smt, SmtError, ToBits},
-    };
+    use crate::utils::smt::{Smt, SmtError};
 
     const DEPTH: usize = 32;
     type H = Keccak256Hasher;
-
-    impl ToBits<8> for u8 {
-        fn to_bits(&self) -> [bool; 8] {
-            std::array::from_fn(|i| (self >> i) & 1 == 1)
-        }
-    }
 
     #[derive(Clone, Debug)]
     pub struct TestKeccak256;

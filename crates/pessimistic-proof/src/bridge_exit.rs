@@ -4,57 +4,17 @@ use std::{fmt::Display, ops::Deref};
 
 use agglayer_primitives::{address, Address, U256};
 use hex_literal::hex;
+use pessimistic_proof_core::bridge_exit::{LeafType, TokenInfo};
+use pessimistic_proof_core::keccak::digest::Digest;
+use pessimistic_proof_core::keccak::keccak256;
+use pessimistic_proof_core::keccak::keccak256_combine;
 use serde::{Deserialize, Serialize};
 
-use crate::keccak::{digest::Digest, keccak256, keccak256_combine};
-
-pub(crate) const L1_NETWORK_ID: NetworkId = NetworkId(0);
+//pub(crate) const L1_NETWORK_ID: NetworkId = NetworkId(0);
 pub(crate) const L1_ETH: TokenInfo = TokenInfo {
-    origin_network: L1_NETWORK_ID,
+    origin_network: 0,
     origin_token_address: address!("0000000000000000000000000000000000000000"),
 };
-
-/// Encapsulates the information to uniquely identify a token on the origin
-/// network.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Copy)]
-pub struct TokenInfo {
-    /// Network which the token originates from
-    pub origin_network: NetworkId,
-    /// The address of the token on the origin network
-    pub origin_token_address: Address,
-}
-
-impl TokenInfo {
-    /// Computes the Keccak digest of [`TokenInfo`].
-    pub fn hash(&self) -> Digest {
-        keccak256_combine([
-            &self.origin_network.to_be_bytes(),
-            self.origin_token_address.as_slice(),
-        ])
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LeafType {
-    Transfer = 0,
-    Message = 1,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("Invalid leaf type number")]
-pub struct LeafTypeFromU8Error;
-
-impl TryFrom<u8> for LeafType {
-    type Error = LeafTypeFromU8Error;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::Transfer),
-            1 => Ok(Self::Message),
-            _ => Err(LeafTypeFromU8Error),
-        }
-    }
-}
 
 /// Represents a token bridge exit from the network.
 // TODO: Change it to an enum depending on `leaf_type`.
@@ -72,6 +32,19 @@ pub struct BridgeExit {
     pub amount: U256,
     /// Optional hash of the metadata.
     pub metadata: Option<Digest>,
+}
+
+impl From<BridgeExit> for pessimistic_proof_core::bridge_exit::BridgeExit {
+    fn from(value: BridgeExit) -> Self {
+        Self {
+            leaf_type: value.leaf_type,
+            token_info: value.token_info,
+            dest_network: *value.dest_network,
+            dest_address: value.dest_address,
+            amount: value.amount,
+            metadata: value.metadata.unwrap_or(EMPTY_METADATA_HASH).0.into(),
+        }
+    }
 }
 
 const EMPTY_METADATA_HASH: Digest = Digest(hex!(
@@ -92,7 +65,7 @@ impl BridgeExit {
         Self {
             leaf_type,
             token_info: TokenInfo {
-                origin_network,
+                origin_network: *origin_network,
                 origin_token_address,
             },
             dest_network,
@@ -173,8 +146,11 @@ impl Deref for NetworkId {
 
 #[cfg(test)]
 mod tests {
+    use pessimistic_proof_core::local_state::local_exit_tree::{
+        hasher::Keccak256Hasher, LocalExitTree,
+    };
+
     use super::*;
-    use crate::local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree};
 
     #[test]
     fn test_deposit_hash() {

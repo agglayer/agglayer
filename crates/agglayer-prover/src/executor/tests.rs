@@ -222,7 +222,7 @@ async fn executor_fails_because_of_timeout_cpu() {
 
     let result = executor
         .call(Request {
-            initial_state: LocalNetworkState::default(),
+            initial_state: LocalNetworkState::new(),
             batch_header,
         })
         .await;

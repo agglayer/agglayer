@@ -3,7 +3,7 @@ use std::{path::PathBuf, time::Instant};
 use agglayer_primitives::Address;
 use agglayer_types::{Certificate, U256};
 use clap::Parser;
-use pessimistic_proof::{
+use pessimistic_proof_core::{
     bridge_exit::{NetworkId, TokenInfo},
     PessimisticProofOutput,
 };

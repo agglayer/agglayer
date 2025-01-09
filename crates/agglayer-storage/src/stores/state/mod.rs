@@ -8,12 +8,14 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
     EpochNumber, Height, LocalNetworkStateData, NetworkId,
 };
-use pessimistic_proof::{
+use pessimistic_proof::local_exit_tree::LocalExitTree;
+use pessimistic_proof::utils::smt::{Node, Smt};
+use pessimistic_proof_core::{
     keccak::digest::Digest,
-    local_balance_tree::LOCAL_BALANCE_TREE_DEPTH,
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    nullifier_tree::NULLIFIER_TREE_DEPTH,
-    utils::smt::{Node, Smt},
+    local_state::{
+        local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, local_exit_tree::hasher::Keccak256Hasher,
+        nullifier_tree::NULLIFIER_TREE_DEPTH,
+    },
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
 use tracing::{info, warn};

@@ -25,6 +25,7 @@ agglayer-clock.workspace = true
 agglayer-storage.workspace = true
 agglayer-types.workspace = true
 pessimistic-proof.workspace = true
+pessimistic-proof-core.workspace = true
 
 # Optional dependencies
 mockall = { workspace = true, optional = true }

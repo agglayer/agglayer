@@ -13,6 +13,7 @@ agglayer-primitives.workspace = true
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-types = { path = "../agglayer-types" }
 pessimistic-proof = { path = "../pessimistic-proof" }
+pessimistic-proof-core = { path = "../pessimistic-proof-core" }
 
 anyhow.workspace = true
 async-trait.workspace = true

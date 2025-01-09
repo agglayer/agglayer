@@ -3,9 +3,9 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 
 use agglayer_types::{Address, Height, Metadata, NetworkId, Signature, U256};
-use pessimistic_proof::bridge_exit::{LeafType, TokenInfo};
-use pessimistic_proof::global_index::GlobalIndex;
-use pessimistic_proof::keccak::keccak256;
+use pessimistic_proof_core::bridge_exit::{LeafType, TokenInfo};
+use pessimistic_proof_core::global_index::GlobalIndex;
+use pessimistic_proof_core::keccak::keccak256;
 use serde::ser::SerializeSeq as _;
 use serde::{Deserialize, Serialize};
 

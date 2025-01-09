@@ -40,6 +40,27 @@ where
 {
     const MAX_NUM_LEAVES: u32 = ((1u64 << TREE_DEPTH) - 1) as u32;
 
+    /// Creates a new empty [`LocalExitTree`].
+    pub fn new() -> Self {
+        LocalExitTree {
+            leaf_count: 0,
+            frontier: [H::Digest::default(); TREE_DEPTH],
+        }
+    }
+
+    /// Creates a new [`LocalExitTree`] and populates its leaves.
+    pub fn from_leaves(
+        leaves: impl Iterator<Item = H::Digest>,
+    ) -> Result<Self, LocalExitTreeError> {
+        let mut tree = Self::new();
+
+        for leaf in leaves {
+            tree.add_leaf(leaf)?;
+        }
+
+        Ok(tree)
+    }
+
     /// Appends a leaf to the tree.
     pub fn add_leaf(&mut self, leaf: H::Digest) -> Result<u32, LocalExitTreeError> {
         if self.leaf_count >= Self::MAX_NUM_LEAVES {
@@ -92,6 +113,16 @@ where
     }
 }
 
+impl<H, const TREE_DEPTH: usize> Default for LocalExitTree<H, TREE_DEPTH>
+where
+    H: Hasher,
+    H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a>,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Returns the bit value at index `bit_idx` in `target`
 fn get_bit_at(target: u32, bit_idx: usize) -> u32 {
     (target >> bit_idx) & 1
@@ -105,7 +136,7 @@ where
     H::Digest: Serialize + DeserializeOwned,
 {
     #[serde_as(as = "[_; TREE_DEPTH]")]
-    pub(crate) siblings: [H::Digest; TREE_DEPTH],
+    pub siblings: [H::Digest; TREE_DEPTH],
 }
 
 impl<H, const TREE_DEPTH: usize> LETMerkleProof<H, TREE_DEPTH>

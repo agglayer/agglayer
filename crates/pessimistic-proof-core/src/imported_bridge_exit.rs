@@ -224,6 +224,23 @@ impl ImportedBridgeExit {
             }
         }
     }
+
+    /// Returns the considered L1 Info Root against which the claim is done.
+    pub fn l1_info_root(&self) -> Digest {
+        match &self.claim_data {
+            Claim::Mainnet(claim) => claim.proof_ger_l1root.root,
+            Claim::Rollup(claim) => claim.proof_ger_l1root.root,
+        }
+    }
+
+    /// Returns the considered L1 Info Tree leaf index against which the claim
+    /// is done.
+    pub fn l1_leaf_index(&self) -> u32 {
+        match &self.claim_data {
+            Claim::Mainnet(claim) => claim.l1_leaf.l1_info_tree_index,
+            Claim::Rollup(claim) => claim.l1_leaf.l1_info_tree_index,
+        }
+    }
 }
 
 pub fn commit_imported_bridge_exits<E: Borrow<ImportedBridgeExit>>(
@@ -237,7 +254,7 @@ mod tests {
     use hex_literal::hex;
 
     use super::*;
-    use crate::local_exit_tree::LocalExitTree;
+    use crate::local_state::local_exit_tree::LocalExitTree;
 
     #[test]
     fn can_parse_empty_l1infotree() {

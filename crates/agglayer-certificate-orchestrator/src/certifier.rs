@@ -1,8 +1,8 @@
 use agglayer_types::LocalNetworkStateData;
 use agglayer_types::{Certificate, Height, NetworkId};
-use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
-use pessimistic_proof::multi_batch_header::MultiBatchHeader;
-use pessimistic_proof::LocalNetworkState;
+use pessimistic_proof_core::local_state::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof_core::multi_batch_header::MultiBatchHeader;
+use pessimistic_proof_core::LocalNetworkState;
 
 use crate::error::CertificationError;
 

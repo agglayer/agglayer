@@ -1,14 +1,15 @@
 use std::borrow::Borrow;
 
+use pessimistic_proof_core::global_index::GlobalIndex;
+use pessimistic_proof_core::keccak::digest::Digest;
+use pessimistic_proof_core::keccak::keccak256_combine;
+use pessimistic_proof_core::local_state::local_exit_tree::{
+    hasher::Keccak256Hasher, LETMerkleProof,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    bridge_exit::BridgeExit,
-    global_index::GlobalIndex,
-    keccak::{digest::Digest, keccak256_combine},
-    local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
-};
+use crate::bridge_exit::BridgeExit;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L1InfoTreeLeafInner {
@@ -241,6 +242,12 @@ pub struct ImportedBridgeExit {
     pub claim_data: Claim,
     /// The global index of the imported bridge exit.
     pub global_index: GlobalIndex,
+}
+
+impl From<ImportedBridgeExit> for pessimistic_proof_core::imported_bridge_exit::ImportedBridgeExit {
+    fn from(_value: ImportedBridgeExit) -> Self {
+        todo!()
+    }
 }
 
 impl ImportedBridgeExit {

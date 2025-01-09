@@ -1,9 +1,9 @@
-use hasher::Keccak256Hasher;
+use pessimistic_proof_core::keccak::digest::Digest;
+use pessimistic_proof_core::local_state::local_exit_tree::hasher::Keccak256Hasher;
 use rs_merkle::{Hasher as MerkleHasher, MerkleTree};
 use tiny_keccak::{Hasher as _, Keccak};
 
 use super::*;
-use crate::keccak::digest::Digest;
 
 #[test]
 fn test_local_exit_tree_basic() {

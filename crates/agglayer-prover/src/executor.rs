@@ -8,8 +8,8 @@ use std::{
 use agglayer_config::prover::{NetworkProverConfig, ProverConfig};
 use agglayer_prover_types::Error;
 use futures::{Future, TryFutureExt};
-use pessimistic_proof::{
-    local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
+use pessimistic_proof_core::{
+    local_state::local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
 };
 use sp1_sdk::network::prover::NetworkProver;

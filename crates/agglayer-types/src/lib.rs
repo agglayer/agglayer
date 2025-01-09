@@ -1,24 +1,28 @@
+use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use agglayer_primitives::{address, Address, Signature, B256, U256};
-use pessimistic_proof::global_index::GlobalIndex;
-pub use pessimistic_proof::keccak::digest::Digest;
-use pessimistic_proof::keccak::keccak256_combine;
-use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
-use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof::bridge_exit::BridgeExit;
+pub use pessimistic_proof::bridge_exit::NetworkId;
+use pessimistic_proof::imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit};
+use pessimistic_proof::local_balance_tree::LOCAL_BALANCE_TREE_DEPTH;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
-use pessimistic_proof::local_state::StateCommitment;
-use pessimistic_proof::multi_batch_header::signature_commitment;
-use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
+use pessimistic_proof::nullifier_tree::NULLIFIER_TREE_DEPTH;
 use pessimistic_proof::utils::smt::{Smt, SmtError};
-use pessimistic_proof::LocalNetworkState;
-use pessimistic_proof::{
-    bridge_exit::{BridgeExit, TokenInfo},
-    imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
-    local_balance_tree::LocalBalancePath,
+use pessimistic_proof::{local_balance_tree::LocalBalanceTree, nullifier_tree::NullifierTree};
+pub use pessimistic_proof_core::keccak::digest::Digest;
+use pessimistic_proof_core::{
+    bridge_exit::TokenInfo,
+    global_index::GlobalIndex,
+    keccak::keccak256_combine,
+    local_state::{
+        local_balance_tree::LocalBalancePath,
+        local_exit_tree::hasher::Keccak256Hasher,
+        nullifier_tree::{FromBool, NullifierKey, NullifierPath},
+        StateCommitment,
+    },
     multi_batch_header::MultiBatchHeader,
-    nullifier_tree::{NullifierKey, NullifierPath},
-    ProofError,
+    LocalNetworkState, ProofError,
 };
 use serde::{Deserialize, Serialize};
 use sp1_sdk::provers::ProofOpts;
@@ -33,7 +37,6 @@ pub type CertificateId = Digest;
 pub type Height = u64;
 pub type Metadata = Digest;
 
-pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
 
 /// ELF of the pessimistic proof program
@@ -327,10 +330,8 @@ pub fn compute_signature_info(
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &ethers::signers::LocalWallet,
 ) -> (Digest, Signature) {
-    let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
-        new_local_exit_root,
-        imported_bridge_exits,
-    );
+    let combined_hash = signature_commitment(new_local_exit_root, imported_bridge_exits);
+
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
     let signature = Signature::new(
         U256::from_limbs(signature.r.0),
@@ -454,11 +455,19 @@ pub struct LocalNetworkStateData {
 impl From<LocalNetworkStateData> for LocalNetworkState {
     fn from(state: LocalNetworkStateData) -> Self {
         LocalNetworkState {
-            exit_tree: state.exit_tree,
-            balance_tree: LocalBalanceTree::new_with_root(state.balance_tree.root),
-            nullifier_tree: NullifierTree::new_with_root(state.nullifier_tree.root),
+            exit_tree: state.exit_tree.into(),
+            balance_tree: LocalBalanceTree::new_with_root(state.balance_tree.root).into(),
+            nullifier_tree: NullifierTree::new_with_root(state.nullifier_tree.root).into(),
         }
     }
+}
+
+pub fn signature_commitment(
+    new_local_exit_root: Digest,
+    imported_bridge_exits: impl IntoIterator<Item = impl Borrow<ImportedBridgeExit>>,
+) -> Digest {
+    let imported_hash = commit_imported_bridge_exits(imported_bridge_exits.into_iter());
+    keccak256_combine([new_local_exit_root.as_slice(), imported_hash.as_slice()])
 }
 
 impl LocalNetworkStateData {
@@ -492,7 +501,7 @@ impl LocalNetworkStateData {
             let bridge_exits = certificate
                 .bridge_exits
                 .iter()
-                .filter(|b| b.amount_token_info().origin_network != certificate.network_id);
+                .filter(|b| b.amount_token_info().origin_network != *certificate.network_id);
 
             // Set of dedup tokens mutated in the transition
             let mutated_tokens: BTreeSet<TokenInfo> = {
@@ -561,29 +570,32 @@ impl LocalNetworkStateData {
                 .collect::<Result<BTreeMap<_, _>, Error>>()?
         };
 
-        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> =
-            certificate
-                .imported_bridge_exits
-                .iter()
-                .map(|exit| {
-                    let nullifier_key: NullifierKey = exit.global_index.into();
-                    let nullifier_error = |source| Error::NullifierPathGenerationFailed {
-                        source,
-                        global_index: exit.global_index,
-                    };
-                    let nullifier_path = self
-                        .nullifier_tree
-                        .get_non_inclusion_proof(nullifier_key)
-                        .map_err(nullifier_error)?;
-                    self.nullifier_tree
-                        .insert(nullifier_key, Digest::from_bool(true))
-                        .map_err(nullifier_error)?;
-                    Ok((exit.clone(), nullifier_path))
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
+        let imported_hash = commit_imported_bridge_exits(certificate.imported_bridge_exits.iter());
 
-        let imported_hash =
-            commit_imported_bridge_exits(imported_bridge_exits.iter().map(|(exit, _)| exit));
+        let imported_bridge_exits: Vec<(
+            pessimistic_proof_core::imported_bridge_exit::ImportedBridgeExit,
+            NullifierPath<Keccak256Hasher>,
+        )> = certificate
+            .imported_bridge_exits
+            .iter()
+            .map(|exit| {
+                let nullifier_key: NullifierKey = exit.global_index.into();
+                let nullifier_error = |source| Error::NullifierPathGenerationFailed {
+                    source,
+                    global_index: exit.global_index,
+                };
+                let nullifier_path = self
+                    .nullifier_tree
+                    .get_non_inclusion_proof(nullifier_key)
+                    .map_err(nullifier_error)?;
+                self.nullifier_tree
+                    .insert(nullifier_key, Digest::from_bool(true))
+                    .map_err(nullifier_error)?;
+                let ib: pessimistic_proof_core::imported_bridge_exit::ImportedBridgeExit =
+                    exit.clone().into();
+                Ok((ib, nullifier_path))
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
 
         // Check that the certificate referred to the right target
         let computed = self.exit_tree.get_root();
@@ -595,9 +607,14 @@ impl LocalNetworkStateData {
         }
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
-            origin_network: certificate.network_id,
+            origin_network: *certificate.network_id,
             prev_local_exit_root: certificate.prev_local_exit_root,
-            bridge_exits: certificate.bridge_exits.clone(),
+            bridge_exits: certificate
+                .bridge_exits
+                .iter()
+                .cloned()
+                .map(Into::into)
+                .collect(),
             imported_bridge_exits,
             balances_proofs,
             prev_balance_root,

@@ -1,12 +1,9 @@
+use pessimistic_proof_core::local_state::local_exit_tree::hasher::Hasher;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-pub mod hasher;
-use hasher::Hasher;
-
 use crate::local_exit_tree::data::LocalExitTreeData;
-
 pub mod data;
 #[cfg(test)]
 mod tests;
@@ -23,6 +20,17 @@ where
     pub leaf_count: u32,
     #[serde_as(as = "[_; TREE_DEPTH]")]
     pub frontier: [H::Digest; TREE_DEPTH],
+}
+
+impl<H, const TREE_DEPTH: usize> From<LocalExitTree<H, TREE_DEPTH>>
+    for pessimistic_proof_core::local_state::local_exit_tree::LocalExitTree<H, TREE_DEPTH>
+where
+    H: Hasher,
+    H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a>,
+{
+    fn from(_value: LocalExitTree<H, TREE_DEPTH>) -> Self {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug, Error, Serialize, Deserialize, PartialEq, Eq)]

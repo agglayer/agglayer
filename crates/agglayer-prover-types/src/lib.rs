@@ -3,7 +3,7 @@ use bincode::{
     config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding},
     DefaultOptions, Options as _,
 };
-use pessimistic_proof::ProofError;
+use pessimistic_proof_core::ProofError;
 use serde::{Deserialize, Serialize};
 
 pub const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!("generated/agglayer.prover.bin");

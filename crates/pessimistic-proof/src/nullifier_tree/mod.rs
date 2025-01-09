@@ -1,12 +1,8 @@
+use pessimistic_proof_core::local_state::{
+    local_exit_tree::hasher::Hasher, nullifier_tree::FromBool,
+};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
-use crate::{
-    bridge_exit::NetworkId,
-    local_exit_tree::hasher::Hasher,
-    utils::smt::{SmtNonInclusionProof, ToBits},
-    ProofError,
-};
 
 // 32 bits for the network id and 32 bits for the LET index
 // TODO: consider using less than 32 bits for the network id - unlikely that
@@ -33,28 +29,15 @@ where
     empty_hash_at_height: [H::Digest; NULLIFIER_TREE_DEPTH],
 }
 
-pub type NullifierPath<H> = SmtNonInclusionProof<H, NULLIFIER_TREE_DEPTH>;
-
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-pub struct NullifierKey {
-    pub network_id: NetworkId,
-    pub let_index: u32,
-}
-
-impl ToBits<64> for NullifierKey {
-    fn to_bits(&self) -> [bool; 64] {
-        std::array::from_fn(|i| {
-            if i < 32 {
-                (*self.network_id >> i) & 1 == 1
-            } else {
-                (self.let_index >> (i - 32)) & 1 == 1
-            }
-        })
+impl<H> From<NullifierTree<H>>
+    for pessimistic_proof_core::local_state::nullifier_tree::NullifierTree<H>
+where
+    H: Hasher,
+    H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a> + FromBool,
+{
+    fn from(_value: NullifierTree<H>) -> Self {
+        todo!()
     }
-}
-
-pub trait FromBool {
-    fn from_bool(b: bool) -> Self;
 }
 
 impl<H> Default for NullifierTree<H>
@@ -89,27 +72,10 @@ where
             empty_hash_at_height,
         }
     }
+
     pub fn new_with_root(root: H::Digest) -> Self {
         let mut res = Self::new();
         res.root = root;
         res
-    }
-
-    // TODO: Consider batching the updates per network for efficiency
-    pub fn verify_and_update(
-        &mut self,
-        key: NullifierKey,
-        path_to_update: &NullifierPath<H>,
-    ) -> Result<(), ProofError> {
-        self.root = path_to_update
-            .verify_and_update(
-                key,
-                H::Digest::from_bool(true),
-                self.root,
-                &self.empty_hash_at_height,
-            )
-            .ok_or(ProofError::InvalidNullifierPath)?;
-
-        Ok(())
     }
 }
