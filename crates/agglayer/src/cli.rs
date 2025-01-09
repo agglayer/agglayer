@@ -3,8 +3,12 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueHint};
 
+use crate::version;
+
 /// Agglayer command line interface.
 #[derive(Parser)]
+#[command(version = version())]
+#[command(propagate_version = true)]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) cmd: Commands,

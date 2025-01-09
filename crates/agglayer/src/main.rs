@@ -9,8 +9,8 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.cmd {
-        cli::Commands::Run { cfg } => agglayer_node::main(cfg)?,
-        cli::Commands::Prover { cfg } => agglayer_prover::main(cfg)?,
+        cli::Commands::Run { cfg } => agglayer_node::main(cfg, &version())?,
+        cli::Commands::Prover { cfg } => agglayer_prover::main(cfg, &version())?,
         cli::Commands::ProverConfig => println!(
             "{}",
             toml::to_string_pretty(&agglayer_config::prover::ProverConfig::default()).unwrap()
@@ -34,4 +34,12 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Common version information about the executed agglayer binary.
+pub fn version() -> String {
+    let pkg_name = env!("CARGO_PKG_NAME");
+    let git_describe = env!("VERGEN_GIT_DESCRIBE");
+    let timestamp = env!("VERGEN_GIT_COMMIT_TIMESTAMP");
+    format!("{pkg_name} ({git_describe}) [git commit timestamp: {timestamp}]")
 }
