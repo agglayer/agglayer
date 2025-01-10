@@ -1,36 +1,41 @@
-#![allow(clippy::too_many_arguments)]
-
 use std::{fmt::Display, ops::Deref};
 
-use agglayer_primitives::{address, Address, U256};
-use hex_literal::hex;
-use pessimistic_proof_core::bridge_exit::{LeafType, TokenInfo};
-use pessimistic_proof_core::keccak::digest::Digest;
-use pessimistic_proof_core::keccak::keccak256;
-use pessimistic_proof_core::keccak::keccak256_combine;
+use agglayer_primitives::{Address, U256};
+pub use pessimistic_proof_core::bridge_exit::{LeafType, TokenInfo};
+use pessimistic_proof_core::{
+    bridge_exit::L1_ETH,
+    keccak::{digest::Digest, keccak256, keccak256_combine},
+};
 use serde::{Deserialize, Serialize};
 
-//pub(crate) const L1_NETWORK_ID: NetworkId = NetworkId(0);
-pub(crate) const L1_ETH: TokenInfo = TokenInfo {
-    origin_network: 0,
-    origin_token_address: address!("0000000000000000000000000000000000000000"),
-};
+use crate::utils::Hashable;
+
+impl Hashable for TokenInfo {
+    fn hash(&self) -> Digest {
+        keccak256_combine([
+            &self.origin_network.to_be_bytes(),
+            self.origin_token_address.as_slice(),
+        ])
+    }
+}
 
 /// Represents a token bridge exit from the network.
 // TODO: Change it to an enum depending on `leaf_type`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BridgeExit {
-    /// Leaf type whether message of transfer.
     pub leaf_type: LeafType,
+
     /// Unique ID for the token being transferred.
     pub token_info: TokenInfo,
-    /// Network which the token is transferred to.
+
+    /// Network which the token is transferred to
     pub dest_network: NetworkId,
-    /// Address which will own the received token.
+    /// Address which will own the received token
     pub dest_address: Address,
-    /// Token amount sent.
+
+    /// Token amount sent
     pub amount: U256,
-    /// Optional hash of the metadata.
+
     pub metadata: Option<Digest>,
 }
 
@@ -39,17 +44,13 @@ impl From<BridgeExit> for pessimistic_proof_core::bridge_exit::BridgeExit {
         Self {
             leaf_type: value.leaf_type,
             token_info: value.token_info,
-            dest_network: *value.dest_network,
+            dest_network: value.dest_network.into(),
             dest_address: value.dest_address,
             amount: value.amount,
-            metadata: value.metadata.unwrap_or(EMPTY_METADATA_HASH).0.into(),
+            metadata: value.metadata,
         }
     }
 }
-
-const EMPTY_METADATA_HASH: Digest = Digest(hex!(
-    "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
-));
 
 impl BridgeExit {
     /// Creates a new [`BridgeExit`].
@@ -75,23 +76,26 @@ impl BridgeExit {
         }
     }
 
-    /// Hashes the [`BridgeExit`] to be inserted in a
-    /// [`crate::local_exit_tree::LocalExitTree`].
-    pub fn hash(&self) -> Digest {
-        keccak256_combine([
-            [self.leaf_type as u8].as_slice(),
-            &u32::to_be_bytes(self.token_info.origin_network.into()),
-            self.token_info.origin_token_address.as_slice(),
-            &u32::to_be_bytes(self.dest_network.into()),
-            self.dest_address.as_slice(),
-            &self.amount.to_be_bytes::<32>(),
-            &self.metadata.unwrap_or(EMPTY_METADATA_HASH).0,
-        ])
-    }
-
     pub fn is_transfer(&self) -> bool {
         self.leaf_type == LeafType::Transfer
     }
+}
+
+impl Hashable for BridgeExit {
+    fn hash(&self) -> Digest {
+        pessimistic_proof_core::bridge_exit::bridge_exit_hasher(
+            self.leaf_type as u8,
+            self.token_info.origin_network,
+            self.token_info.origin_token_address,
+            *self.dest_network,
+            self.dest_address,
+            self.amount,
+            self.metadata,
+        )
+    }
+}
+
+impl BridgeExit {
     pub fn is_message(&self) -> bool {
         self.leaf_type == LeafType::Message
     }
@@ -119,7 +123,7 @@ impl Display for NetworkId {
 
 impl NetworkId {
     pub const BITS: usize = u32::BITS as usize;
-    pub fn new(value: u32) -> Self {
+    pub const fn new(value: u32) -> Self {
         Self(value)
     }
 }
@@ -146,11 +150,10 @@ impl Deref for NetworkId {
 
 #[cfg(test)]
 mod tests {
-    use pessimistic_proof_core::local_state::local_exit_tree::{
-        hasher::Keccak256Hasher, LocalExitTree,
-    };
+    use pessimistic_proof_core::local_exit_tree::hasher::Keccak256Hasher;
 
     use super::*;
+    use crate::local_exit_tree::LocalExitTree;
 
     #[test]
     fn test_deposit_hash() {

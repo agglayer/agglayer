@@ -1,13 +1,10 @@
-use pessimistic_proof_core::local_state::{
-    local_exit_tree::hasher::Hasher, nullifier_tree::FromBool,
-};
+use pessimistic_proof_core::local_exit_tree::hasher::{Hasher, Keccak256Hasher};
+pub use pessimistic_proof_core::nullifier_tree::FromBool;
+pub use pessimistic_proof_core::nullifier_tree::NullifierKey;
+pub use pessimistic_proof_core::nullifier_tree::NullifierPath;
+pub use pessimistic_proof_core::nullifier_tree::NULLIFIER_TREE_DEPTH;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
-// 32 bits for the network id and 32 bits for the LET index
-// TODO: consider using less than 32 bits for the network id - unlikely that
-// we'll have 4 billion chains :)
-pub const NULLIFIER_TREE_DEPTH: usize = 64;
 
 // TODO: This is basically the same as the local balance tree, consider
 // refactoring TODO: Consider using an Indexed Merkle Tree instead of an SMT. See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
@@ -27,17 +24,6 @@ where
     /// `i`.
     #[serde_as(as = "[_; NULLIFIER_TREE_DEPTH]")]
     empty_hash_at_height: [H::Digest; NULLIFIER_TREE_DEPTH],
-}
-
-impl<H> From<NullifierTree<H>>
-    for pessimistic_proof_core::local_state::nullifier_tree::NullifierTree<H>
-where
-    H: Hasher,
-    H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a> + FromBool,
-{
-    fn from(_value: NullifierTree<H>) -> Self {
-        todo!()
-    }
 }
 
 impl<H> Default for NullifierTree<H>
@@ -77,5 +63,16 @@ where
         let mut res = Self::new();
         res.root = root;
         res
+    }
+}
+
+impl From<NullifierTree<Keccak256Hasher>>
+    for pessimistic_proof_core::nullifier_tree::NullifierTree<Keccak256Hasher>
+{
+    fn from(tree: NullifierTree<Keccak256Hasher>) -> Self {
+        Self {
+            root: tree.root,
+            empty_hash_at_height: tree.empty_hash_at_height,
+        }
     }
 }

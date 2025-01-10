@@ -9,8 +9,8 @@ use crate::{
     global_index::GlobalIndex,
     imported_bridge_exit,
     keccak::{digest::Digest, keccak256_combine},
-    local_state::local_exit_tree::{hasher::Keccak256Hasher, LocalExitTreeError},
-    local_state::{LocalNetworkState, StateCommitment},
+    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTreeError},
+    local_state::{NetworkState, StateCommitment},
     multi_batch_header::MultiBatchHeader,
 };
 
@@ -140,18 +140,18 @@ impl PessimisticProofOutput {
 
 const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;
 
-const EMPTY_LER: Digest = Digest(hex!(
+pub const EMPTY_LER: Digest = Digest(hex!(
     "27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"
 ));
 
-const EMPTY_PP_ROOT: Digest = Digest(hex!(
+pub const EMPTY_PP_ROOT: Digest = Digest(hex!(
     "c89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184"
 ));
 
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
 /// [`LocalNetworkState`].
 pub fn generate_pessimistic_proof(
-    initial_network_state: LocalNetworkState,
+    initial_network_state: NetworkState,
     batch_header: &MultiBatchHeader<Keccak256Hasher>,
 ) -> Result<PessimisticProofOutput, ProofError> {
     let StateCommitment {
@@ -229,24 +229,4 @@ pub fn generate_pessimistic_proof(
         new_local_exit_root: batch_header.target.exit_root,
         new_pessimistic_root,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn empty_tree_roots() {
-        let empty_state = LocalNetworkState::default();
-
-        let ler = empty_state.exit_tree.get_root();
-        let ppr = keccak256_combine([
-            empty_state.balance_tree.root.as_slice(),
-            empty_state.nullifier_tree.root.as_slice(),
-            empty_state.exit_tree.leaf_count.to_le_bytes().as_slice(),
-        ]);
-
-        assert_eq!(EMPTY_LER, ler);
-        assert_eq!(EMPTY_PP_ROOT, ppr);
-    }
 }

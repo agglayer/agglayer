@@ -5,18 +5,14 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::{
-    bridge_exit::TokenInfo,
-    local_state::{
-        local_exit_tree::hasher::Hasher,
-        smt::{SmtMerkleProof, ToBits},
-    },
-    ProofError,
+    bridge_exit::TokenInfo, local_exit_tree::hasher::Hasher, utils::smt::SmtMerkleProof, ProofError,
 };
 
 /// The key is [`TokenInfo`] which can be packed into 192 bits (32 for network
 /// id and 160 for token address).
 pub const LOCAL_BALANCE_TREE_DEPTH: usize = 192;
 
+// TODO: This is basically the same as the nullifier tree, consider refactoring
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
@@ -29,28 +25,9 @@ where
     /// The Merkle Root of the nullifier tree
     #[serde_as(as = "_")]
     pub root: H::Digest,
-    /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
-    /// `i`.
-    #[serde_as(as = "[_; LOCAL_BALANCE_TREE_DEPTH]")]
-    empty_hash_at_height: [H::Digest; LOCAL_BALANCE_TREE_DEPTH],
 }
 
 pub type LocalBalancePath<H> = SmtMerkleProof<H, LOCAL_BALANCE_TREE_DEPTH>;
-
-impl ToBits<192> for TokenInfo {
-    fn to_bits(&self) -> [bool; 192] {
-        let address_bytes = self.origin_token_address.0;
-        // Security: We assume here that `address_bytes` is a fixed-size array of
-        // 20 bytes. The following code could panic otherwise.
-        std::array::from_fn(|i| {
-            if i < 32 {
-                (self.origin_network >> i) & 1 == 1
-            } else {
-                ((address_bytes[(i - 32) / 8]) >> (i % 8)) & 1 == 1
-            }
-        })
-    }
-}
 
 pub trait FromU256 {
     fn from_u256(u: U256) -> Self;

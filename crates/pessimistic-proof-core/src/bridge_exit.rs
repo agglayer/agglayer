@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use agglayer_primitives::{address, Address, U256};
+use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 
 use crate::keccak::{digest::Digest, keccak256_combine};
@@ -16,19 +17,9 @@ pub const L1_ETH: TokenInfo = TokenInfo {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Copy)]
 pub struct TokenInfo {
     /// Network which the token originates from
-    pub origin_network: u32,
+    pub origin_network: NetworkId,
     /// The address of the token on the origin network
     pub origin_token_address: Address,
-}
-
-impl TokenInfo {
-    /// Computes the Keccak digest of [`TokenInfo`].
-    pub fn hash(&self) -> Digest {
-        keccak256_combine([
-            &self.origin_network.to_be_bytes(),
-            self.origin_token_address.as_slice(),
-        ])
-    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,39 +45,62 @@ impl TryFrom<u8> for LeafType {
 }
 
 /// Represents a token bridge exit from the network.
+// TODO: Change it to an enum depending on `leaf_type`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BridgeExit {
-    /// Leaf type whether message of transfer.
     pub leaf_type: LeafType,
+
     /// Unique ID for the token being transferred.
     pub token_info: TokenInfo,
-    /// Network which the token is transferred to.
+
+    /// Network which the token is transferred to
     pub dest_network: NetworkId,
-    /// Address which will own the received token.
+    /// Address which will own the received token
     pub dest_address: Address,
-    /// Token amount sent.
+
+    /// Token amount sent
     pub amount: U256,
-    /// Hash of the metadata.
-    pub metadata: Digest,
+
+    pub metadata: Option<Digest>,
+}
+
+const EMPTY_METADATA_HASH: Digest = Digest(hex!(
+    "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+));
+
+pub fn bridge_exit_hasher<T: Into<[u8; 20]>>(
+    leaf_type: u8,
+    origin_network: u32,
+    origin_token_address: T,
+    dest_network: u32,
+    dest_address: T,
+    amount: U256,
+    metadata: Option<Digest>,
+) -> Digest {
+    keccak256_combine([
+        [leaf_type].as_slice(),
+        &u32::to_be_bytes(origin_network),
+        &origin_token_address.into(),
+        &u32::to_be_bytes(dest_network),
+        &dest_address.into(),
+        &amount.to_be_bytes::<32>(),
+        &metadata.unwrap_or(EMPTY_METADATA_HASH).0,
+    ])
 }
 
 impl BridgeExit {
     /// Hashes the [`BridgeExit`] to be inserted in a
     /// [`crate::local_exit_tree::LocalExitTree`].
     pub fn hash(&self) -> Digest {
-        keccak256_combine([
-            [self.leaf_type as u8].as_slice(),
-            &u32::to_be_bytes(self.token_info.origin_network.into()),
-            self.token_info.origin_token_address.as_slice(),
-            &u32::to_be_bytes(self.dest_network.into()),
-            self.dest_address.as_slice(),
-            &self.amount.to_be_bytes::<32>(),
-            &self.metadata.0,
-        ])
-    }
-
-    pub fn is_transfer(&self) -> bool {
-        self.leaf_type == LeafType::Transfer
+        bridge_exit_hasher(
+            self.leaf_type as u8,
+            self.token_info.origin_network,
+            self.token_info.origin_token_address,
+            self.dest_network,
+            self.dest_address,
+            self.amount,
+            self.metadata,
+        )
     }
 
     pub fn is_message(&self) -> bool {

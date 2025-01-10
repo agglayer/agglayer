@@ -15,7 +15,6 @@ path = "src/bin/convertor.rs"
 agglayer-primitives.workspace = true
 agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
 pessimistic-proof = { path = "../pessimistic-proof" }
-pessimistic-proof-core = { path = "../pessimistic-proof-core" }
 
 base64.workspace = true
 bincode.workspace = true

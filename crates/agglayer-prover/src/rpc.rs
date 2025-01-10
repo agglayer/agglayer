@@ -5,8 +5,8 @@ use agglayer_telemetry::prover::{
     PROVING_REQUEST_FAILED, PROVING_REQUEST_RECV, PROVING_REQUEST_SUCCEEDED,
 };
 use bincode::Options;
-use pessimistic_proof_core::{
-    local_state::local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
+use pessimistic_proof::{
+    local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
 };
 use tower::{buffer::Buffer, util::BoxService, Service, ServiceExt};

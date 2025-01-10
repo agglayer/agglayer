@@ -1,15 +1,15 @@
 use bincode::config::Options;
-pub use pessimistic_proof_core::{LocalNetworkState, PessimisticProofOutput};
+use pessimistic_proof::NetworkState;
+pub use pessimistic_proof::PessimisticProofOutput;
 use sp1_sdk::SP1PublicValues;
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
 
 use crate::PESSIMISTIC_PROOF_ELF;
 
-pub type Hasher = pessimistic_proof_core::local_state::local_exit_tree::hasher::Keccak256Hasher;
-pub type Digest =
-    <Hasher as pessimistic_proof_core::local_state::local_exit_tree::hasher::Hasher>::Digest;
-pub type MultiBatchHeader = pessimistic_proof_core::multi_batch_header::MultiBatchHeader<Hasher>;
+pub type Hasher = pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+pub type Digest = <Hasher as pessimistic_proof::local_exit_tree::hasher::Hasher>::Digest;
+pub type MultiBatchHeader = pessimistic_proof::multi_batch_header::MultiBatchHeader<Hasher>;
 
 pub struct ProofOutput {}
 
@@ -36,7 +36,7 @@ impl Runner {
     }
 
     /// Convert inputs to stdin.
-    pub fn prepare_stdin(state: &LocalNetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
+    pub fn prepare_stdin(state: &NetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
         let mut stdin = SP1Stdin::new();
         stdin.write(state);
         stdin.write(batch_header);
@@ -53,7 +53,7 @@ impl Runner {
     /// Execute the ELF with given inputs.
     pub fn execute(
         &self,
-        state: &LocalNetworkState,
+        state: &NetworkState,
         batch_header: &MultiBatchHeader,
     ) -> anyhow::Result<(PessimisticProofOutput, ExecutionReport)> {
         let stdin = Self::prepare_stdin(state, batch_header);
@@ -72,7 +72,7 @@ impl Runner {
     /// Generate one plonk proof.
     pub fn generate_plonk_proof(
         &self,
-        state: &LocalNetworkState,
+        state: &NetworkState,
         batch_header: &MultiBatchHeader,
     ) -> anyhow::Result<(
         SP1ProofWithPublicValues,

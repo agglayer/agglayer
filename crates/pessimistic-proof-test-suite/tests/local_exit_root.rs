@@ -1,7 +1,6 @@
-use pessimistic_proof_core::{
-    bridge_exit::BridgeExit,
-    local_state::local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-};
+use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof::local_exit_tree::LocalExitTree;
+use pessimistic_proof::{bridge_exit::BridgeExit, utils::Hashable as _};
 use pessimistic_proof_test_suite::event_data::{load_json_data_file, BridgeEvent, EventData};
 
 const JSON_FILE_NAME: &str = "bridge_events_10k.json";

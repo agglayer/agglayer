@@ -17,7 +17,12 @@ thiserror.workspace = true
 tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "patch-v2.0.2", features = [
     "keccak",
 ] }
+rand = { version = "0.8.5", optional = true }
 
 [dev-dependencies]
 rs_merkle = { version = "1.4", default-features = false }
 rand = "0.8.5"
+
+[features]
+default = []
+testutils = ["rand"]

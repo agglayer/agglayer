@@ -1,22 +1,16 @@
-#![allow(clippy::needless_range_loop)]
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 
-use pessimistic_proof_core::local_state::{
+use pessimistic_proof_core::utils::smt::SmtMerkleProof;
+use pessimistic_proof_core::{
     local_exit_tree::hasher::Hasher,
-    smt::{SmtMerkleProof, SmtNonInclusionProof, ToBits},
+    utils::smt::{SmtNonInclusionProof, ToBits},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use crate::utils::empty_hash::empty_hash_at_height;
-
-// pub trait ToBits<const NUM_BITS: usize> {
-//     fn to_bits(&self) -> [bool; NUM_BITS];
-// }
+use super::empty_hash::empty_hash_at_height;
 
 #[derive(Error, Debug, Eq, PartialEq, Serialize, Deserialize, Clone)]
 pub enum SmtError {
@@ -90,28 +84,6 @@ where
     #[serde_as(as = "[_; DEPTH]")]
     empty_hash_at_height: [H::Digest; DEPTH],
 }
-
-// #[serde_as]
-// #[derive(Clone, Debug, Serialize, Deserialize)]
-// pub struct SmtMerkleProof<H, const DEPTH: usize>
-// where
-//     H: Hasher,
-//     H::Digest: Copy + Eq + Hash + Serialize + DeserializeOwned,
-// {
-//     #[serde_as(as = "[_; DEPTH]")]
-//     siblings: [H::Digest; DEPTH],
-// }
-
-// #[serde_as]
-// #[derive(Clone, Debug, Serialize, Deserialize)]
-// pub struct SmtNonInclusionProof<H, const DEPTH: usize>
-// where
-//     H: Hasher,
-//     H::Digest: Copy + Eq + Serialize + DeserializeOwned,
-// {
-//     #[serde_as(as = "Vec<_>")]
-//     siblings: Vec<H::Digest>,
-// }
 
 impl<H, const DEPTH: usize> Default for Smt<H, DEPTH>
 where
@@ -299,6 +271,7 @@ where
 
         Ok(SmtMerkleProof { siblings })
     }
+
     pub fn get_inclusion_proof<K>(&self, key: K) -> Result<SmtMerkleProof<H, DEPTH>, SmtError>
     where
         K: ToBits<DEPTH>,
@@ -335,7 +308,8 @@ where
         let mut siblings = vec![];
         let mut hash = self.root;
         let bits = key.to_bits();
-        for i in 0..DEPTH {
+
+        for item in bits.iter().take(DEPTH) {
             if self.empty_hash_at_height.contains(&hash) {
                 return Ok(SmtNonInclusionProof { siblings });
             }
@@ -346,8 +320,8 @@ where
                     return Ok(SmtNonInclusionProof { siblings });
                 }
             };
-            siblings.push(if bits[i] { node.left } else { node.right });
-            hash = if bits[i] { node.right } else { node.left };
+            siblings.push(if *item { node.left } else { node.right });
+            hash = if *item { node.right } else { node.left };
         }
         if hash != self.empty_hash_at_height[0] {
             return Err(SmtError::KeyPresent);
@@ -361,7 +335,7 @@ where
 mod tests {
     use std::hash::Hash;
 
-    use pessimistic_proof_core::local_state::local_exit_tree::hasher::Keccak256Hasher;
+    use pessimistic_proof_core::local_exit_tree::hasher::Keccak256Hasher;
     use rand::{prelude::SliceRandom, random, thread_rng, Rng};
     use rs_merkle::{Hasher as MerkleHasher, MerkleTree};
     use tiny_keccak::{Hasher as _, Keccak};

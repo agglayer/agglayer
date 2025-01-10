@@ -8,8 +8,8 @@ use std::{
 use agglayer_config::prover::{NetworkProverConfig, ProverConfig};
 use agglayer_prover_types::Error;
 use futures::{Future, TryFutureExt};
-use pessimistic_proof_core::{
-    local_state::local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
+use pessimistic_proof::{
+    local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
 };
 use sp1_sdk::network::prover::NetworkProver;
@@ -153,7 +153,9 @@ impl From<Request> for SP1Stdin {
     fn from(request: Request) -> Self {
         let mut stdin = SP1Stdin::new();
 
-        stdin.write(&request.initial_state);
+        let initial_state = pessimistic_proof::NetworkState::from(request.initial_state);
+
+        stdin.write(&initial_state);
         stdin.write(&request.batch_header);
 
         stdin

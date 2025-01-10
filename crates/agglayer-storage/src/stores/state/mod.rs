@@ -8,14 +8,12 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
     EpochNumber, Height, LocalNetworkStateData, NetworkId,
 };
-use pessimistic_proof::local_exit_tree::LocalExitTree;
-use pessimistic_proof::utils::smt::{Node, Smt};
-use pessimistic_proof_core::{
+use pessimistic_proof::{
     keccak::digest::Digest,
-    local_state::{
-        local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, local_exit_tree::hasher::Keccak256Hasher,
-        nullifier_tree::NULLIFIER_TREE_DEPTH,
-    },
+    local_balance_tree::LOCAL_BALANCE_TREE_DEPTH,
+    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
+    nullifier_tree::NULLIFIER_TREE_DEPTH,
+    utils::smt::{Node, Smt},
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
 use tracing::{info, warn};
@@ -222,11 +220,11 @@ impl StateWriter for StateStore {
         let mut atomic_batch = WriteBatch::default();
         // Store the LET
         {
-            let new_leaf_count = new_state.exit_tree.leaf_count;
+            let new_leaf_count = new_state.exit_tree.leaf_count();
             let start_leaf_count = new_leaf_count - new_leaves.len() as u32;
 
             if let Some(stored_exit_tree) = self.read_local_exit_tree(network_id.into())? {
-                if stored_exit_tree.leaf_count != start_leaf_count {
+                if stored_exit_tree.leaf_count() != start_leaf_count {
                     return Err(Error::InconsistentState {
                         network_id: network_id.into(),
                     });
@@ -266,7 +264,7 @@ impl StateWriter for StateStore {
                             network_id,
                             key_type: LET::KeyType::Frontier(layer),
                         },
-                        LET::Value::Frontier(*new_state.exit_tree.frontier[layer as usize]),
+                        LET::Value::Frontier(*new_state.exit_tree.frontier()[layer as usize]),
                     );
                 });
 
@@ -381,10 +379,9 @@ impl StateStore {
             frontier[i] = Digest(*l);
         }
 
-        Ok(Some(LocalExitTree::<Keccak256Hasher> {
-            frontier,
-            leaf_count,
-        }))
+        Ok(Some(LocalExitTree::<Keccak256Hasher>::from_parts(
+            leaf_count, frontier,
+        )))
     }
 
     fn read_smt<C, const DEPTH: usize>(

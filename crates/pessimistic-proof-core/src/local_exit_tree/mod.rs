@@ -1,4 +1,3 @@
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
@@ -6,8 +5,7 @@ use thiserror::Error;
 pub mod hasher;
 use hasher::Hasher;
 
-#[cfg(test)]
-mod tests;
+pub mod data;
 
 /// Represents a local exit tree as defined by the LxLy bridge.
 #[serde_as]
@@ -40,33 +38,11 @@ where
 {
     const MAX_NUM_LEAVES: u32 = ((1u64 << TREE_DEPTH) - 1) as u32;
 
-    /// Creates a new empty [`LocalExitTree`].
-    pub fn new() -> Self {
-        LocalExitTree {
-            leaf_count: 0,
-            frontier: [H::Digest::default(); TREE_DEPTH],
-        }
-    }
-
-    /// Creates a new [`LocalExitTree`] and populates its leaves.
-    pub fn from_leaves(
-        leaves: impl Iterator<Item = H::Digest>,
-    ) -> Result<Self, LocalExitTreeError> {
-        let mut tree = Self::new();
-
-        for leaf in leaves {
-            tree.add_leaf(leaf)?;
-        }
-
-        Ok(tree)
-    }
-
     /// Appends a leaf to the tree.
     pub fn add_leaf(&mut self, leaf: H::Digest) -> Result<u32, LocalExitTreeError> {
         if self.leaf_count >= Self::MAX_NUM_LEAVES {
             return Err(LocalExitTreeError::LeafIndexOverflow);
         }
-
         // the index at which the new entry will be inserted
         let frontier_insertion_index: usize = {
             let leaf_count_after_insertion = self.leaf_count + 1;
@@ -113,52 +89,7 @@ where
     }
 }
 
-impl<H, const TREE_DEPTH: usize> Default for LocalExitTree<H, TREE_DEPTH>
-where
-    H: Hasher,
-    H::Digest: Copy + Default + Serialize + for<'a> Deserialize<'a>,
-{
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Returns the bit value at index `bit_idx` in `target`
 fn get_bit_at(target: u32, bit_idx: usize) -> u32 {
     (target >> bit_idx) & 1
-}
-
-#[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LETMerkleProof<H, const TREE_DEPTH: usize = 32>
-where
-    H: Hasher,
-    H::Digest: Serialize + DeserializeOwned,
-{
-    #[serde_as(as = "[_; TREE_DEPTH]")]
-    pub siblings: [H::Digest; TREE_DEPTH],
-}
-
-impl<H, const TREE_DEPTH: usize> LETMerkleProof<H, TREE_DEPTH>
-where
-    H: Hasher,
-    H::Digest: Eq + Copy + Default + Serialize + DeserializeOwned,
-{
-    pub fn verify(&self, leaf: H::Digest, leaf_index: u32, root: H::Digest) -> bool {
-        let mut entry = leaf;
-        let mut index = leaf_index;
-        for &sibling in &self.siblings {
-            entry = if index & 1 == 0 {
-                H::merge(&entry, &sibling)
-            } else {
-                H::merge(&sibling, &entry)
-            };
-            index >>= 1;
-        }
-        if index != 0 {
-            return false;
-        }
-
-        entry == root
-    }
 }

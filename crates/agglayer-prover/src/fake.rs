@@ -7,10 +7,9 @@ use agglayer_prover_types::v1::proof_generation_service_server::{
 };
 use agglayer_prover_types::Error;
 use bincode::Options;
-use pessimistic_proof_core::{
-    local_state::local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
-    LocalNetworkState,
-};
+use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
+use pessimistic_proof::multi_batch_header::MultiBatchHeader;
+use pessimistic_proof::LocalNetworkState;
 use sp1_sdk::MockProver;
 use sp1_sdk::Prover;
 use sp1_sdk::SP1Context;
@@ -98,12 +97,14 @@ impl ProofGenerationService for FakeProver {
         let initial_state: LocalNetworkState = agglayer_prover_types::default_bincode_options()
             .deserialize(&request.initial_state)
             .map_err(|_| tonic::Status::invalid_argument("Unable to deserialize initial state"))?;
+
         let batch_header: MultiBatchHeader<Keccak256Hasher> =
             agglayer_prover_types::default_bincode_options()
                 .deserialize(&request.batch_header)
                 .map_err(|_| {
                     tonic::Status::invalid_argument("Unable to deserialize batch header")
                 })?;
+
         let request = Request {
             initial_state,
             batch_header,

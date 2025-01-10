@@ -3,10 +3,8 @@ use serde_with::serde_as;
 
 use crate::{
     bridge_exit::NetworkId,
-    local_state::{
-        local_exit_tree::hasher::Hasher,
-        smt::{SmtNonInclusionProof, ToBits},
-    },
+    local_exit_tree::hasher::Hasher,
+    utils::smt::{SmtNonInclusionProof, ToBits},
     ProofError,
 };
 
@@ -15,8 +13,8 @@ use crate::{
 // we'll have 4 billion chains :)
 pub const NULLIFIER_TREE_DEPTH: usize = 64;
 
-// TODO: Consider using an Indexed Merkle Tree instead of an SMT.
-// See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
+// TODO: This is basically the same as the local balance tree, consider
+// refactoring TODO: Consider using an Indexed Merkle Tree instead of an SMT. See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
@@ -32,7 +30,7 @@ where
     /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
     /// `i`.
     #[serde_as(as = "[_; NULLIFIER_TREE_DEPTH]")]
-    empty_hash_at_height: [H::Digest; NULLIFIER_TREE_DEPTH],
+    pub empty_hash_at_height: [H::Digest; NULLIFIER_TREE_DEPTH],
 }
 
 pub type NullifierPath<H> = SmtNonInclusionProof<H, NULLIFIER_TREE_DEPTH>;

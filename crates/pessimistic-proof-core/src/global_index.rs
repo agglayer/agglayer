@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::NetworkId,
     keccak::{digest::Digest, keccak256},
-    local_state::nullifier_tree::NullifierKey,
+    nullifier_tree::NullifierKey,
 };
 
 /// The [`GlobalIndex`] uniquely references one leaf within one Global Exit
@@ -29,7 +29,6 @@ impl GlobalIndex {
         } else {
             self.rollup_index + 1
         }
-        .into()
     }
 
     pub fn hash(&self) -> Digest {

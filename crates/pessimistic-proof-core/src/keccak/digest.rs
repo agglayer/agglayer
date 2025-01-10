@@ -4,7 +4,7 @@ use agglayer_primitives::U256;
 use hex::FromHex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::local_state::{local_balance_tree::FromU256, nullifier_tree::FromBool};
+use crate::{local_balance_tree::FromU256, nullifier_tree::FromBool};
 
 #[derive(Default, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Digest(pub [u8; 32]);
@@ -50,7 +50,9 @@ impl fmt::UpperHex for Digest {
 
 impl Digest {
     pub const ZERO: Digest = Digest([0u8; 32]);
+}
 
+impl Digest {
     pub fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
     }
@@ -119,6 +121,7 @@ impl Serialize for Digest {
 const DIGEST_FROM_BOOL_TRUE: Digest = Digest([
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ]);
+
 const DIGEST_FROM_BOOL_FALSE: Digest = Digest([
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ]);
@@ -156,7 +159,7 @@ impl From<Digest> for Vec<u8> {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testutils"))]
 impl rand::distributions::Distribution<Digest> for rand::distributions::Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Digest {
         let raw: [u8; 32] = rng.gen();

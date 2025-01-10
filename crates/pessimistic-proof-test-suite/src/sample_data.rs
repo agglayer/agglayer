@@ -3,33 +3,30 @@
 use std::path::PathBuf;
 
 use agglayer_primitives::{address, U256};
-use agglayer_types::Certificate;
+use agglayer_types::{Certificate, NetworkId};
 use hex_literal::hex;
 use pessimistic_proof::bridge_exit::BridgeExit;
-use pessimistic_proof_core::{
-    bridge_exit::TokenInfo, local_state::local_exit_tree, LocalNetworkState,
-};
+use pessimistic_proof::bridge_exit::TokenInfo;
+use pessimistic_proof::local_exit_tree;
+use pessimistic_proof::local_state::LocalNetworkState;
 
 use crate::{
     event_data::{load_json_data_file, parse_json_file, DepositEventData},
     forest::Forest,
 };
 
-type TreeHasher = local_exit_tree::hasher::Keccak256Hasher;
+type TreeHasher = pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 type LocalExitTree = local_exit_tree::LocalExitTree<TreeHasher>;
-//type LocalBalanceTree = local_balance_tree::LocalBalanceTree<TreeHasher>;
-
-type NetworkId = u32;
 
 lazy_static::lazy_static! {
-    pub static ref NETWORK_A: NetworkId = 0u32;
-    pub static ref NETWORK_B: NetworkId = 1u32;
+    pub static ref NETWORK_A: NetworkId = 0u32.into();
+    pub static ref NETWORK_B: NetworkId = 1u32.into();
     pub static ref USDC: TokenInfo = TokenInfo {
-        origin_network: *NETWORK_A,
+        origin_network: **NETWORK_A,
         origin_token_address: address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
     };
     pub static ref ETH: TokenInfo = TokenInfo {
-        origin_network: *NETWORK_A,
+        origin_network: **NETWORK_A,
         origin_token_address: address!("0000000000000000000000000000000000000000"),
     };
 }
@@ -37,8 +34,8 @@ lazy_static::lazy_static! {
 pub fn empty_state() -> LocalNetworkState {
     LocalNetworkState {
         exit_tree: LocalExitTree::new(),
-        balance_tree: pessimistic_proof::local_balance_tree::LocalBalanceTree::new().into(),
-        nullifier_tree: pessimistic_proof::nullifier_tree::NullifierTree::new().into(),
+        balance_tree: pessimistic_proof::local_balance_tree::LocalBalanceTree::new(),
+        nullifier_tree: pessimistic_proof::nullifier_tree::NullifierTree::new(),
     }
 }
 

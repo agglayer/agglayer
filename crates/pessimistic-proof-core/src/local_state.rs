@@ -7,24 +7,17 @@ use crate::{
     bridge_exit::L1_NETWORK_ID,
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
     keccak::digest::Digest,
-    local_state::{
-        local_balance_tree::LocalBalanceTree,
-        local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-        nullifier_tree::{NullifierKey, NullifierTree},
-    },
+    local_balance_tree::LocalBalanceTree,
+    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::{signature_commitment, MultiBatchHeader},
+    nullifier_tree::{NullifierKey, NullifierTree},
     ProofError,
 };
-
-pub mod local_balance_tree;
-pub mod local_exit_tree;
-pub mod nullifier_tree;
-pub mod smt;
 
 /// State representation of one network without the leaves, taken as input by
 /// the prover.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LocalNetworkState {
+pub struct NetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
     pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// Commitment to the balance for each token.
@@ -43,16 +36,7 @@ pub struct StateCommitment {
     pub nullifier_root: Digest,
 }
 
-impl StateCommitment {
-    pub fn display_to_hex(&self) -> String {
-        format!(
-            "exit_root: {}, ler_leaf_count: {}, balance_root: {}, nullifier_root: {}",
-            self.exit_root, self.ler_leaf_count, self.balance_root, self.nullifier_root,
-        )
-    }
-}
-
-impl LocalNetworkState {
+impl NetworkState {
     /// Returns the roots.
     pub fn roots(&self) -> StateCommitment {
         StateCommitment {
@@ -119,7 +103,7 @@ impl LocalNetworkState {
             multi_batch_header
                 .imported_bridge_exits
                 .iter()
-                .map(|(exit, _)| exit),
+                .map(|(exit, _)| exit.global_index),
         );
 
         if let Some(batch_imported_exits_root) = multi_batch_header.imported_exits_root {
@@ -245,7 +229,7 @@ impl LocalNetworkState {
             multi_batch_header
                 .imported_bridge_exits
                 .iter()
-                .map(|(exit, _)| exit),
+                .map(|(exit, _)| exit.global_index),
         );
 
         // Check batch header signature

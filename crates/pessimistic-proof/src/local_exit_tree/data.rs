@@ -1,13 +1,11 @@
-#![allow(clippy::needless_range_loop)]
-use std::fmt::Debug;
-
-use pessimistic_proof_core::local_state::local_exit_tree::hasher::Hasher;
-use pessimistic_proof_core::local_state::local_exit_tree::LETMerkleProof;
+use pessimistic_proof_core::local_exit_tree::{
+    data::LETMerkleProof, hasher::Hasher, LocalExitTreeError,
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::local_exit_tree::LocalExitTreeError;
 use crate::utils::empty_hash::empty_hash_at_height;
+
 /// Represents a local exit tree as defined by the LxLy bridge.
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -130,9 +128,9 @@ where
         }
         let mut siblings = [Default::default(); TREE_DEPTH];
         let mut index = leaf_index;
-        for height in 0..TREE_DEPTH {
-            let sibling = self.get(height, index ^ 1)?;
-            siblings[height] = sibling;
+
+        for (height, sibling) in siblings.iter_mut().enumerate().take(TREE_DEPTH) {
+            *sibling = self.get(height, index ^ 1)?;
             index >>= 1;
         }
 
@@ -142,13 +140,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use pessimistic_proof_core::{
-        local_state::local_exit_tree::hasher::Keccak256Hasher,
-        local_state::local_exit_tree::{LocalExitTree, LocalExitTreeError},
-    };
+    use pessimistic_proof_core::local_exit_tree::hasher::Keccak256Hasher;
     use rand::{random, thread_rng, Rng};
 
-    use crate::local_exit_tree::data::LocalExitTreeData;
+    use crate::local_exit_tree::{data::LocalExitTreeData, LocalExitTree, LocalExitTreeError};
 
     const TREE_DEPTH: usize = 32;
     type H = Keccak256Hasher;

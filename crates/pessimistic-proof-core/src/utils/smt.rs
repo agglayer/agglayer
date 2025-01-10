@@ -3,24 +3,38 @@ use std::hash::Hash;
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
-use thiserror::Error;
 
-use crate::local_state::local_exit_tree::hasher::Hasher;
+use crate::{bridge_exit::TokenInfo, local_exit_tree::hasher::Hasher};
 
 pub trait ToBits<const NUM_BITS: usize> {
     fn to_bits(&self) -> [bool; NUM_BITS];
 }
 
-#[derive(Error, Debug, Eq, PartialEq, Serialize, Deserialize, Clone)]
-pub enum SmtError {
-    #[error("trying to insert a key already in the SMT")]
-    KeyAlreadyPresent,
-    #[error("trying to generate a Merkle proof for a key not in the SMT")]
-    KeyNotPresent,
-    #[error("trying to generate a non-inclusion proof for a key present in the SMT")]
-    KeyPresent,
-    #[error("depth out of bounds")]
-    DepthOutOfBounds,
+impl ToBits<192> for TokenInfo {
+    fn to_bits(&self) -> [bool; 192] {
+        let address_bytes = self.origin_token_address.0;
+        // Security: We assume here that `address_bytes` is a fixed-size array of
+        // 20 bytes. The following code could panic otherwise.
+        std::array::from_fn(|i| {
+            if i < 32 {
+                (self.origin_network >> i) & 1 == 1
+            } else {
+                ((address_bytes[(i - 32) / 8]) >> (i % 8)) & 1 == 1
+            }
+        })
+    }
+}
+
+impl ToBits<8> for u8 {
+    fn to_bits(&self) -> [bool; 8] {
+        std::array::from_fn(|i| (self >> i) & 1 == 1)
+    }
+}
+
+impl ToBits<32> for u32 {
+    fn to_bits(&self) -> [bool; 32] {
+        std::array::from_fn(|i| (self >> i) & 1 == 1)
+    }
 }
 
 #[serde_as]
@@ -172,11 +186,5 @@ where
         }
 
         Some(entry)
-    }
-}
-
-impl ToBits<32> for u32 {
-    fn to_bits(&self) -> [bool; 32] {
-        std::array::from_fn(|i| (self >> i) & 1 == 1)
     }
 }

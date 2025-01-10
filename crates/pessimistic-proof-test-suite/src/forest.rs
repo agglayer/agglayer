@@ -1,21 +1,19 @@
 use agglayer_primitives::{Address, U256};
 use agglayer_types::{compute_signature_info, Certificate, LocalNetworkStateData};
 use ethers_signers::{LocalWallet, Signer};
-use pessimistic_proof::local_exit_tree::data::LocalExitTreeData;
-use pessimistic_proof::utils::smt::Smt;
+pub use pessimistic_proof::bridge_exit::LeafType;
 use pessimistic_proof::{
-    bridge_exit::BridgeExit,
+    bridge_exit::{BridgeExit, TokenInfo},
+    global_index::GlobalIndex,
     imported_bridge_exit::{
         Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
         MerkleProof,
     },
-};
-use pessimistic_proof_core::{
-    bridge_exit::{LeafType, TokenInfo},
-    global_index::GlobalIndex,
     keccak::{digest::Digest, keccak256, keccak256_combine},
-    local_state::local_exit_tree::hasher::Keccak256Hasher,
-    LocalNetworkState, PessimisticProofOutput,
+    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher},
+    local_state::LocalNetworkState,
+    utils::{smt::Smt, Hashable as _},
+    PessimisticProofOutput,
 };
 use rand::{random, thread_rng};
 
@@ -130,7 +128,7 @@ impl Forest {
                 bridge_exit: exit,
                 global_index: GlobalIndex {
                     mainnet_flag: true,
-                    rollup_index: *NETWORK_A,
+                    rollup_index: **NETWORK_A,
                     leaf_index: index,
                 },
                 claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
@@ -179,7 +177,7 @@ impl Forest {
             compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
 
         Certificate {
-            network_id: (*NETWORK_B).into(),
+            network_id: (*NETWORK_B),
             height: 0,
             prev_local_exit_root,
             new_local_exit_root,
@@ -205,7 +203,7 @@ impl Forest {
             keccak256_combine([
                 self.state_b.balance_tree.root.as_slice(),
                 self.state_b.nullifier_tree.root.as_slice(),
-                self.state_b.exit_tree.leaf_count.to_le_bytes().as_slice(),
+                self.state_b.exit_tree.leaf_count().to_le_bytes().as_slice(),
             ])
         );
     }
@@ -223,9 +221,9 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
 }
 
 fn exit_to_a(token_info: TokenInfo, amount: U256) -> BridgeExit {
-    exit(token_info, *NETWORK_A, amount)
+    exit(token_info, **NETWORK_A, amount)
 }
 
 fn exit_to_b(token_info: TokenInfo, amount: U256) -> BridgeExit {
-    exit(token_info, *NETWORK_B, amount)
+    exit(token_info, **NETWORK_B, amount)
 }

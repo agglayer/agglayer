@@ -3,7 +3,7 @@ use std::{fs::File, io::BufReader};
 use agglayer_primitives::U256;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use pessimistic_proof::bridge_exit::BridgeExit;
-use pessimistic_proof_core::bridge_exit::TokenInfo;
+use pessimistic_proof::bridge_exit::TokenInfo;
 use serde::{de::DeserializeOwned, Deserialize, Deserializer};
 use serde_json::Number;
 
@@ -73,7 +73,7 @@ impl From<DepositEventData> for BridgeExit {
         Self {
             leaf_type: deposit_event_data.leaf_type.try_into().unwrap(),
             token_info: TokenInfo {
-                origin_network: deposit_event_data.origin_network.into(),
+                origin_network: deposit_event_data.origin_network,
                 origin_token_address: deposit_event_data.origin_address.parse().unwrap(),
             },
             dest_network: deposit_event_data.destination_network.into(),
@@ -83,7 +83,7 @@ impl From<DepositEventData> for BridgeExit {
                 .decode(deposit_event_data.metadata)
                 .ok()
                 .as_ref()
-                .map(|data| pessimistic_proof_core::keccak::keccak256(data)),
+                .map(|data| pessimistic_proof::keccak::keccak256(data)),
         }
     }
 }
