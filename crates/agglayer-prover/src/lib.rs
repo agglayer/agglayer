@@ -28,6 +28,10 @@ mod rpc;
 pub fn main(cfg: PathBuf) -> Result<()> {
     // Load the configuration file
     let config: Arc<ProverConfig> = Arc::new(toml::from_str(&std::fs::read_to_string(cfg)?)?);
+    println!(
+        "-------------------------------:\n{:#?}\n------------------",
+        config
+    );
 
     let global_cancellation_token = CancellationToken::new();
 

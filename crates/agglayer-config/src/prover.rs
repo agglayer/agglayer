@@ -44,17 +44,36 @@ pub struct ProverConfig {
     #[serde(default = "default_max_buffered_queries")]
     pub max_buffered_queries: usize,
 
-    /// The CPU prover configuration.
+    // /// The CPU prover configuration.
+    // #[serde(default)]
+    // pub cpu_prover: CpuProverConfig,
+    //
+    // /// The network prover configuration.
+    // #[serde(default)]
+    // pub network_prover: NetworkProverConfig,
+    //
+    // /// The GPU prover configuration.
+    // #[serde(default)]
+    // pub gpu_prover: GpuProverConfig,
     #[serde(default)]
-    pub cpu_prover: CpuProverConfig,
+    pub primary_prover: AgglayerProverType,
 
-    /// The network prover configuration.
     #[serde(default)]
-    pub network_prover: NetworkProverConfig,
+    pub fallback_prover: Option<AgglayerProverType>,
+}
 
-    /// The GPU prover configuration.
-    #[serde(default)]
-    pub gpu_prover: GpuProverConfig,
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum AgglayerProverType {
+    NetworkProver(NetworkProverConfig),
+    CpuProver(CpuProverConfig),
+    GpuProver(GpuProverConfig),
+    MockProver(MockProverConfig),
+}
+
+impl Default for AgglayerProverType {
+    fn default() -> Self {
+        AgglayerProverType::NetworkProver(NetworkProverConfig::default())
+    }
 }
 
 impl Default for ProverConfig {
@@ -67,12 +86,22 @@ impl Default for ProverConfig {
             max_concurrency_limit: default_max_concurrency_limit(),
             max_request_duration: default_max_request_duration(),
             max_buffered_queries: default_max_buffered_queries(),
-            cpu_prover: CpuProverConfig::default(),
-            network_prover: NetworkProverConfig::default(),
-            gpu_prover: GpuProverConfig::default(),
+            // cpu_prover: CpuProverConfig::default(),
+            // network_prover: NetworkProverConfig::default(),
+            // gpu_prover: GpuProverConfig::default(),
+            primary_prover: AgglayerProverType::NetworkProver(NetworkProverConfig::default()),
+            fallback_prover: None,
             grpc: Default::default(),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct Smor {
+    pub timeout: u64,
+    pub name: String,
+    pub primary_prover: crate::prover::AgglayerProverType,
 }
 
 #[serde_as]
@@ -181,6 +210,41 @@ impl Default for GpuProverConfig {
     fn default() -> Self {
         Self {
             enabled: default_activation_gpu_prover(),
+            max_concurrency_limit: default_max_concurrency_limit(),
+            proving_request_timeout: None,
+            proving_timeout: default_cpu_proving_timeout(),
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct MockProverConfig {
+    #[serde(default = "default_max_concurrency_limit")]
+    pub max_concurrency_limit: usize,
+
+    #[serde_as(as = "Option<crate::with::HumanDuration>")]
+    pub proving_request_timeout: Option<Duration>,
+
+    #[serde(default = "default_cpu_proving_timeout")]
+    #[serde(with = "crate::with::HumanDuration")]
+    pub proving_timeout: Duration,
+}
+
+impl MockProverConfig {
+    // This constant represents the number of second added to the proving_timeout
+    pub const DEFAULT_PROVING_TIMEOUT_PADDING: Duration = Duration::from_secs(1);
+
+    pub fn get_proving_request_timeout(&self) -> Duration {
+        self.proving_request_timeout
+            .unwrap_or_else(|| self.proving_timeout + Self::DEFAULT_PROVING_TIMEOUT_PADDING)
+    }
+}
+
+impl Default for MockProverConfig {
+    fn default() -> Self {
+        Self {
             max_concurrency_limit: default_max_concurrency_limit(),
             proving_request_timeout: None,
             proving_timeout: default_cpu_proving_timeout(),

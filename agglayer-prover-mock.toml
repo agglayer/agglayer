@@ -1,0 +1,24 @@
+grpc-endpoint = "0.0.0.0:3003"
+max-concurrency-limit = 100
+max-request-duration = 300
+max-buffered-queries = 100
+
+[log]
+environment = "production"      # "production" or "development"
+level = "debug"
+outputs = ["stderr"]
+format = "json"
+
+[telemetry]
+prometheus-addr = "0.0.0.0:5843"
+
+[primary-prover.MockProver]
+max-concurrency-limit = 100
+proving-timeout = "5m"
+
+[grpc]
+# size is define in bytes e.g. 100 * 1024 * 1024
+# same for `max-encoding-message-size`
+# default value is equal to 4MB
+max-decoding-message-size = 104857600
+

@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use agglayer_config::prover::{NetworkProverConfig, ProverConfig};
+use agglayer_config::prover::{AgglayerProverType, NetworkProverConfig, ProverConfig};
 use agglayer_prover_types::Error;
 use futures::{Future, TryFutureExt};
 use pessimistic_proof::{
@@ -35,8 +35,8 @@ pub(crate) const ELF: &[u8] =
 
 #[derive(Clone)]
 pub struct Executor {
-    network: Option<BoxCloneService<Request, Response, Error>>,
-    local: Option<BoxCloneService<Request, Response, Error>>,
+    primary: BoxCloneService<Request, Response, Error>,
+    fallback: Option<BoxCloneService<Request, Response, Error>>,
 }
 
 impl Executor {
@@ -89,60 +89,72 @@ impl Executor {
 
     #[cfg(test)]
     pub fn new_with_services(
-        network: Option<BoxCloneService<Request, Response, Error>>,
-        local: Option<BoxCloneService<Request, Response, Error>>,
+        primary: BoxCloneService<Request, Response, Error>,
+        fallback: Option<BoxCloneService<Request, Response, Error>>,
     ) -> Self {
-        Self { network, local }
+        Self { primary, fallback }
     }
 
     pub fn new(config: &ProverConfig) -> Self {
-        let network = if config.network_prover.enabled {
-            debug!("Creating network prover executor...");
-            let network_prover = ProverClient::builder().network().build();
-            let (proving_key, verification_key) = network_prover.setup(ELF);
-            Some(Self::build_network_service(
-                config
-                    .network_prover
-                    .proving_request_timeout
-                    .unwrap_or_else(|| {
-                        config.network_prover.proving_timeout
-                            + NetworkProverConfig::DEFAULT_PROVING_TIMEOUT_PADDING
-                    }),
-                NetworkExecutor {
-                    prover: Arc::new(network_prover),
-                    proving_key,
-                    verification_key,
-                    timeout: config.network_prover.proving_timeout,
-                },
-            ))
-        } else {
-            None
+        let primary = match &config.primary_prover {
+            AgglayerProverType::NetworkProver(network_prover_config) => {
+                debug!("Creating network prover executor...");
+                let network_prover = ProverClient::builder().network().build();
+                let (proving_key, verification_key) = network_prover.setup(ELF);
+                Self::build_network_service(
+                    network_prover_config
+                        .proving_request_timeout
+                        .unwrap_or_else(|| {
+                            network_prover_config.proving_timeout
+                                + NetworkProverConfig::DEFAULT_PROVING_TIMEOUT_PADDING
+                        }),
+                    NetworkExecutor {
+                        prover: Arc::new(network_prover),
+                        proving_key,
+                        verification_key,
+                        timeout: network_prover_config.proving_timeout,
+                    },
+                )
+            }
+            AgglayerProverType::CpuProver(cpu_prover_config) => {
+                debug!("Creating CPU prover executor...");
+                let prover = CpuProver::new();
+                let (proving_key, verification_key) = prover.setup(ELF);
+
+                Self::build_local_service(
+                    cpu_prover_config.get_proving_request_timeout(),
+                    cpu_prover_config.max_concurrency_limit,
+                    LocalExecutor {
+                        prover: Arc::new(prover),
+                        proving_key,
+                        verification_key,
+                        timeout: cpu_prover_config.proving_timeout,
+                    },
+                )
+            }
+            AgglayerProverType::MockProver(mock_prover_config) => {
+                debug!("Creating Mock prover executor...");
+                let prover = CpuProver::mock();
+                let (proving_key, verification_key) = prover.setup(ELF);
+
+                Self::build_local_service(
+                    mock_prover_config.get_proving_request_timeout(),
+                    mock_prover_config.max_concurrency_limit,
+                    LocalExecutor {
+                        prover: Arc::new(prover),
+                        proving_key,
+                        verification_key,
+                        timeout: mock_prover_config.proving_timeout,
+                    },
+                )
+            }
+            agglayer_config::prover::AgglayerProverType::GpuProver(_) => todo!(),
         };
 
-        let local = if config.cpu_prover.enabled {
-            debug!("Creating CPU prover executor...");
-            let prover = CpuProver::new();
-            let (proving_key, verification_key) = prover.setup(ELF);
-
-            Some(Self::build_local_service(
-                config.cpu_prover.get_proving_request_timeout(),
-                config.cpu_prover.max_concurrency_limit,
-                LocalExecutor {
-                    prover: Arc::new(prover),
-                    proving_key,
-                    verification_key,
-                    timeout: config.cpu_prover.proving_timeout,
-                },
-            ))
-        } else {
-            None
-        };
-
-        if network.is_none() && local.is_none() {
-            panic!("No prover enabled");
+        Self {
+            primary,
+            fallback: None,
         }
-
-        Self { network, local }
     }
 }
 
@@ -178,30 +190,36 @@ impl Service<Request> for Executor {
     }
 
     fn call(&mut self, req: Request) -> Self::Future {
-        let network = self.network.as_mut().map(|s| s.call(req.clone()));
+        let primary = self.primary.call(req.clone());
 
-        let local = self.local.clone();
-
+        let fallback = self.fallback.clone();
         let fut = async move {
-            match (network, local) {
-                (Some(network), None) => match network.await {
-                    Ok(res) => Ok(res),
-                    Err(err) => {
-                        error!("Network prover failed: {:?}", err);
+            match primary.await {
+                Ok(res) => Ok(res),
+                Err(err) => {
+                    error!("Network prover failed: {:?}", err);
+                    if let Some(mut _fallback) = fallback {
+                        error!("Primary prover failed: {:?}", err);
+                        _fallback.ready().await?.call(req).await
+                    } else {
                         Err(err)
                     }
-                },
-                (Some(network), Some(mut local)) => match network.await {
-                    Ok(res) => Ok(res),
-                    Err(err) => {
-                        error!("Network prover failed: {:?}", err);
-                        local.ready().await?.call(req).await
-                    }
-                },
-
-                (None, Some(mut local)) => local.ready().await?.call(req).await,
-                _ => unreachable!(),
+                }
             }
+            // match (primary, fallback) {
+            //     (Some(network), None) => ,
+            //     (Some(network), Some(mut fallback)) => match network.await {
+            //         Ok(res) => Ok(res),
+            //         Err(err) => {
+            //             error!("Network prover failed: {:?}", err);
+            //             fallback.ready().await?.call(req).await
+            //         }
+            //     },
+            //
+            //     (None, Some(mut local)) =>
+            // local.ready().await?.call(req).await,
+            //     _ => unreachable!(),
+            // }
         };
 
         Box::pin(fut)
