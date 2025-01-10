@@ -2,7 +2,7 @@ FROM --platform=${BUILDPLATFORM} rust:slim-bullseye AS chef
 
 ARG CIRCUIT_ARTIFACTS_URL_BASE=https://sp1-circuits.s3-us-east-2.amazonaws.com
 ARG CIRCUIT_TYPE=plonk
-ARG CIRCUIT_VERSION=v3.0.0
+ARG CIRCUIT_VERSION=v4.0.0-rc.3
 ARG PROTOC_VERSION=28.2
 ARG CHEF_VERSION=0.1.68
 
