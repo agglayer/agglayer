@@ -14,10 +14,8 @@ use pessimistic_proof::{
 };
 use sp1_sdk::{
     network::{prover::NetworkProver, FulfillmentStrategy},
-    ProverClient,
-};
-use sp1_sdk::{
-    CpuProver, Prover, SP1ProofWithPublicValues, SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
+    CpuProver, Prover, ProverClient, SP1ProofWithPublicValues, SP1ProvingKey, SP1Stdin,
+    SP1VerifyingKey,
 };
 use tokio::task::spawn_blocking;
 use tower::{
