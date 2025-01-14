@@ -129,7 +129,6 @@ impl Executor {
                     prover: Arc::new(prover),
                     proving_key,
                     verification_key,
-                    timeout: config.cpu_prover.proving_timeout,
                 },
             ))
         } else {
@@ -213,7 +212,6 @@ struct LocalExecutor {
     proving_key: SP1ProvingKey,
     verification_key: SP1VerifyingKey,
     prover: Arc<CpuProver>,
-    timeout: Duration,
 }
 
 impl Service<Request> for LocalExecutor {
@@ -234,7 +232,7 @@ impl Service<Request> for LocalExecutor {
         let proving_key = self.proving_key.clone();
         let verification_key = self.verification_key.clone();
 
-        debug!("Proving with CPU prover with timeout: {:?}", self.timeout);
+        debug!("Proving with CPU prover");
         Box::pin(
             spawn_blocking(move || {
                 debug!("Starting the proving of the requested MultiBatchHeader");
