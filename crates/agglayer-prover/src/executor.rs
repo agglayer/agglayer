@@ -153,7 +153,9 @@ impl From<Request> for SP1Stdin {
     fn from(request: Request) -> Self {
         let mut stdin = SP1Stdin::new();
 
-        stdin.write(&request.initial_state);
+        let initial_state = pessimistic_proof::NetworkState::from(request.initial_state);
+
+        stdin.write(&initial_state);
         stdin.write(&request.batch_header);
 
         stdin

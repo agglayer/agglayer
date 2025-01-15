@@ -1,5 +1,7 @@
 use agglayer_primitives::U256;
-use pessimistic_proof::{bridge_exit::TokenInfo, generate_pessimistic_proof, LocalNetworkState};
+use pessimistic_proof::bridge_exit::TokenInfo;
+use pessimistic_proof::core::generate_pessimistic_proof;
+use pessimistic_proof::local_state::LocalNetworkState;
 use pessimistic_proof_test_suite::{
     forest::Forest,
     sample_data::{ETH, USDC},

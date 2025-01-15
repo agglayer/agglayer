@@ -1,4 +1,4 @@
-use crate::local_exit_tree::hasher::Hasher;
+use pessimistic_proof_core::local_exit_tree::hasher::Hasher;
 
 /// Returns an array whose `i`th element is the root of an empty Merkle tree of
 /// depth `i`.

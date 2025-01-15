@@ -4,7 +4,10 @@ use serde_with::serde_as;
 use crate::{
     bridge_exit::NetworkId,
     local_exit_tree::hasher::Hasher,
-    utils::smt::{SmtNonInclusionProof, ToBits},
+    utils::{
+        smt::{SmtNonInclusionProof, ToBits},
+        FromBool,
+    },
     ProofError,
 };
 
@@ -30,7 +33,7 @@ where
     /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
     /// `i`.
     #[serde_as(as = "[_; NULLIFIER_TREE_DEPTH]")]
-    empty_hash_at_height: [H::Digest; NULLIFIER_TREE_DEPTH],
+    pub empty_hash_at_height: [H::Digest; NULLIFIER_TREE_DEPTH],
 }
 
 pub type NullifierPath<H> = SmtNonInclusionProof<H, NULLIFIER_TREE_DEPTH>;
@@ -45,25 +48,11 @@ impl ToBits<64> for NullifierKey {
     fn to_bits(&self) -> [bool; 64] {
         std::array::from_fn(|i| {
             if i < 32 {
-                (*self.network_id >> i) & 1 == 1
+                (self.network_id >> i) & 1 == 1
             } else {
                 (self.let_index >> (i - 32)) & 1 == 1
             }
         })
-    }
-}
-
-pub trait FromBool {
-    fn from_bool(b: bool) -> Self;
-}
-
-impl<H> Default for NullifierTree<H>
-where
-    H: Hasher,
-    H::Digest: Copy + Eq + Default + Serialize + for<'a> Deserialize<'a> + FromBool,
-{
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -72,29 +61,6 @@ where
     H: Hasher,
     H::Digest: Copy + Eq + Default + Serialize + for<'a> Deserialize<'a> + FromBool,
 {
-    pub fn new() -> Self {
-        let mut empty_hash_at_height = [H::Digest::default(); NULLIFIER_TREE_DEPTH];
-        for height in 1..NULLIFIER_TREE_DEPTH {
-            empty_hash_at_height[height] = H::merge(
-                &empty_hash_at_height[height - 1],
-                &empty_hash_at_height[height - 1],
-            );
-        }
-        let root = H::merge(
-            &empty_hash_at_height[NULLIFIER_TREE_DEPTH - 1],
-            &empty_hash_at_height[NULLIFIER_TREE_DEPTH - 1],
-        );
-        NullifierTree {
-            root,
-            empty_hash_at_height,
-        }
-    }
-    pub fn new_with_root(root: H::Digest) -> Self {
-        let mut res = Self::new();
-        res.root = root;
-        res
-    }
-
     // TODO: Consider batching the updates per network for efficiency
     pub fn verify_and_update(
         &mut self,

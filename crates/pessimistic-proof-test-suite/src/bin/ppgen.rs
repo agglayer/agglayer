@@ -3,10 +3,8 @@ use std::{path::PathBuf, time::Instant};
 use agglayer_primitives::Address;
 use agglayer_types::{Certificate, U256};
 use clap::Parser;
-use pessimistic_proof::{
-    bridge_exit::{NetworkId, TokenInfo},
-    PessimisticProofOutput,
-};
+use pessimistic_proof::bridge_exit::{NetworkId, TokenInfo};
+use pessimistic_proof::PessimisticProofOutput;
 use pessimistic_proof_test_suite::{
     runner::Runner,
     sample_data::{self as data},
@@ -153,7 +151,7 @@ impl From<PessimisticProofOutput> for VerifierInputs {
             prev_local_exit_root: format!("0x{}", hex::encode(v.prev_local_exit_root)),
             prev_pessimistic_root: format!("0x{}", hex::encode(v.prev_pessimistic_root)),
             l1_info_root: format!("0x{}", hex::encode(v.l1_info_root)),
-            origin_network: v.origin_network,
+            origin_network: v.origin_network.into(),
             consensus_hash: format!("0x{}", hex::encode(v.consensus_hash)),
             new_local_exit_root: format!("0x{}", hex::encode(v.new_local_exit_root)),
             new_pessimistic_root: format!("0x{}", hex::encode(v.new_pessimistic_root)),

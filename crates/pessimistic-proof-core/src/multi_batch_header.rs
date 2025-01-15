@@ -1,5 +1,5 @@
 #![allow(clippy::too_many_arguments)]
-use std::{borrow::Borrow, collections::BTreeMap, hash::Hash};
+use std::{collections::BTreeMap, hash::Hash};
 
 use agglayer_primitives::{Address, Signature, U256};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -7,6 +7,7 @@ use serde_with::serde_as;
 
 use crate::{
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
+    global_index::GlobalIndex,
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
     keccak::{digest::Digest, keccak256_combine},
     local_balance_tree::LocalBalancePath,
@@ -56,47 +57,10 @@ where
     pub target: StateCommitment,
 }
 
-impl<H> MultiBatchHeader<H>
-where
-    H: Hasher,
-    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned,
-{
-    /// Creates a new [`MultiBatchHeader`].
-    pub fn new(
-        origin_network: NetworkId,
-        prev_local_exit_root: H::Digest,
-        bridge_exits: Vec<BridgeExit>,
-        imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<H>)>,
-        imported_exits_root: Option<H::Digest>,
-        balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
-        prev_balance_root: H::Digest,
-        prev_nullifier_root: H::Digest,
-        signer: Address,
-        signature: Signature,
-        target: StateCommitment,
-        l1_info_root: H::Digest,
-    ) -> Self {
-        Self {
-            origin_network,
-            prev_local_exit_root,
-            bridge_exits,
-            imported_bridge_exits,
-            imported_exits_root,
-            balances_proofs,
-            prev_balance_root,
-            prev_nullifier_root,
-            signer,
-            signature,
-            target,
-            l1_info_root,
-        }
-    }
-}
-
 pub fn signature_commitment(
     new_local_exit_root: Digest,
-    imported_bridge_exits: impl IntoIterator<Item = impl Borrow<ImportedBridgeExit>>,
+    imported_bridge_exits: impl Iterator<Item = GlobalIndex>,
 ) -> Digest {
-    let imported_hash = commit_imported_bridge_exits(imported_bridge_exits.into_iter());
+    let imported_hash = commit_imported_bridge_exits(imported_bridge_exits);
     keccak256_combine([new_local_exit_root.as_slice(), imported_hash.as_slice()])
 }

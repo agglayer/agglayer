@@ -56,7 +56,7 @@ async fn from_pending_to_settle() {
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
 
-            let signer = pessimistic_proof::Address::new([0; 20]);
+            let signer = agglayer_types::Address::new([0; 20]);
             let _ = new_state
                 .apply_certificate(
                     &certificate,
@@ -162,7 +162,7 @@ async fn from_proven_to_settle() {
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
 
-            let signer = pessimistic_proof::Address::new([0; 20]);
+            let signer = agglayer_types::Address::new([0; 20]);
             let _ = new_state
                 .apply_certificate(
                     &certificate,
@@ -384,6 +384,5 @@ async fn from_settle_to_settle() {
         .unwrap()
         .unwrap();
 
-    println!("Header: {:?}", header);
     assert!(header.status == CertificateStatus::Settled);
 }

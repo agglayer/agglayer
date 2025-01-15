@@ -1,8 +1,9 @@
 use agglayer_primitives::{Address, U256};
 use agglayer_types::{compute_signature_info, Certificate, LocalNetworkStateData};
 use ethers_signers::{LocalWallet, Signer};
+pub use pessimistic_proof::bridge_exit::LeafType;
 use pessimistic_proof::{
-    bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo},
+    bridge_exit::{BridgeExit, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit::{
         Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
@@ -10,10 +11,13 @@ use pessimistic_proof::{
     },
     keccak::{digest::Digest, keccak256, keccak256_combine},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
-    utils::smt::Smt,
-    LocalNetworkState, PessimisticProofOutput,
+    local_state::LocalNetworkState,
+    utils::{smt::Smt, Hashable as _},
+    PessimisticProofOutput,
 };
 use rand::{random, thread_rng};
+
+type NetworkId = u32;
 
 use super::sample_data::{NETWORK_A, NETWORK_B};
 
@@ -170,7 +174,7 @@ impl Forest {
             compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
 
         Certificate {
-            network_id: *NETWORK_B,
+            network_id: (*NETWORK_B),
             height: 0,
             prev_local_exit_root,
             new_local_exit_root,
@@ -196,7 +200,7 @@ impl Forest {
             keccak256_combine([
                 self.state_b.balance_tree.root.as_slice(),
                 self.state_b.nullifier_tree.root.as_slice(),
-                self.state_b.exit_tree.leaf_count.to_le_bytes().as_slice(),
+                self.state_b.exit_tree.leaf_count().to_le_bytes().as_slice(),
             ])
         );
     }
@@ -206,7 +210,7 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
     BridgeExit {
         leaf_type: LeafType::Transfer,
         token_info,
-        dest_network,
+        dest_network: dest_network.into(),
         dest_address: random::<[u8; 20]>().into(),
         amount,
         metadata: Some(keccak256(&[])),
@@ -214,9 +218,9 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
 }
 
 fn exit_to_a(token_info: TokenInfo, amount: U256) -> BridgeExit {
-    exit(token_info, *NETWORK_A, amount)
+    exit(token_info, **NETWORK_A, amount)
 }
 
 fn exit_to_b(token_info: TokenInfo, amount: U256) -> BridgeExit {
-    exit(token_info, *NETWORK_B, amount)
+    exit(token_info, **NETWORK_B, amount)
 }

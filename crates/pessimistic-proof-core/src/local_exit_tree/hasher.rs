@@ -10,7 +10,6 @@ pub trait Hasher {
     fn merge(left: &Self::Digest, right: &Self::Digest) -> Self::Digest;
 }
 
-// pub type NewKeccak256Hasher = Keccak256Hasher;
 /// A Keccak hasher with a 256-bit security level.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Keccak256Hasher;
