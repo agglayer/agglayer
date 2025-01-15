@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use agglayer_types::{Certificate, LocalNetworkStateData, NetworkId};
-use pessimistic_proof::{generate_pessimistic_proof, keccak::digest::Digest, LocalNetworkState};
+use pessimistic_proof::utils::Hashable as _;
+use pessimistic_proof::{
+    core::generate_pessimistic_proof, keccak::digest::Digest, LocalNetworkState,
+};
 use rstest::{fixture, rstest};
 use tracing::info;
 
@@ -34,7 +37,7 @@ fn can_retrieve_list_of_network() {
 
 fn equal_state(lhs: &LocalNetworkStateData, rhs: &LocalNetworkStateData) -> bool {
     // local exit tree
-    assert_eq!(lhs.exit_tree.leaf_count, rhs.exit_tree.leaf_count);
+    assert_eq!(lhs.exit_tree.leaf_count(), rhs.exit_tree.leaf_count());
     assert_eq!(lhs.exit_tree.get_root(), rhs.exit_tree.get_root());
 
     // balance tree
@@ -174,7 +177,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         info!("Certificate {idx}: successful witness generation");
         let initial_state = LocalNetworkState::from(lns.clone());
 
-        generate_pessimistic_proof(initial_state, &multi_batch_header).unwrap();
+        generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
         info!("Certificate {idx}: successful native execution");
 
         for b in &certificate.bridge_exits {

@@ -1,5 +1,6 @@
 use bincode::config::Options;
-pub use pessimistic_proof::{LocalNetworkState, PessimisticProofOutput};
+use pessimistic_proof::NetworkState;
+pub use pessimistic_proof::PessimisticProofOutput;
 use sp1_sdk::SP1PublicValues;
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
@@ -35,7 +36,7 @@ impl Runner {
     }
 
     /// Convert inputs to stdin.
-    pub fn prepare_stdin(state: &LocalNetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
+    pub fn prepare_stdin(state: &NetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
         let mut stdin = SP1Stdin::new();
         stdin.write(state);
         stdin.write(batch_header);
@@ -52,7 +53,7 @@ impl Runner {
     /// Execute the ELF with given inputs.
     pub fn execute(
         &self,
-        state: &LocalNetworkState,
+        state: &NetworkState,
         batch_header: &MultiBatchHeader,
     ) -> anyhow::Result<(PessimisticProofOutput, ExecutionReport)> {
         let stdin = Self::prepare_stdin(state, batch_header);
@@ -71,7 +72,7 @@ impl Runner {
     /// Generate one plonk proof.
     pub fn generate_plonk_proof(
         &self,
-        state: &LocalNetworkState,
+        state: &NetworkState,
         batch_header: &MultiBatchHeader,
     ) -> anyhow::Result<(
         SP1ProofWithPublicValues,

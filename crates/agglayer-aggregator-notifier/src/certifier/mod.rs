@@ -15,9 +15,10 @@ use agglayer_types::{
     primitives::Address, Certificate, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 use bincode::Options as _;
+use pessimistic_proof::core::generate_pessimistic_proof;
+use pessimistic_proof::local_state::LocalNetworkState;
 use pessimistic_proof::{
-    generate_pessimistic_proof, local_exit_tree::hasher::Keccak256Hasher,
-    multi_batch_header::MultiBatchHeader, LocalNetworkState,
+    local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
 };
 use sp1_sdk::{CpuProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey};
 use tonic::{codec::CompressionEncoding, transport::Channel};
@@ -127,7 +128,6 @@ where
         let mut state = state.clone();
         let (multi_batch_header, initial_state) =
             self.witness_execution(&certificate, &mut state).await?;
-
         info!(
             "Successfully executed the native PP for the Certificate {}",
             certificate_id
@@ -206,7 +206,7 @@ where
                 certificate,
                 height,
                 new_state: state,
-                network: multi_batch_header.origin_network,
+                network: multi_batch_header.origin_network.into(),
             })
         }
     }
@@ -262,7 +262,7 @@ where
             .map_err(|source| CertificationError::Types { source })?;
 
         // Perform the native PP execution
-        let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)
+        let _ = generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
             .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
         Ok((multi_batch_header, initial_state))

@@ -3,7 +3,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 
 use agglayer_types::{Address, Height, Metadata, NetworkId, Signature, U256};
-use pessimistic_proof::bridge_exit::{LeafType, TokenInfo};
+use pessimistic_proof::bridge_exit::LeafType;
+use pessimistic_proof::bridge_exit::TokenInfo;
 use pessimistic_proof::global_index::GlobalIndex;
 use pessimistic_proof::keccak::keccak256;
 use serde::ser::SerializeSeq as _;

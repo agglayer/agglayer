@@ -50,7 +50,7 @@ fn cycles_on_sample_inputs_inner(
         .unwrap();
 
     let (new_roots, stats) = Runner::new()
-        .execute(&old_state, &multi_batch_header)
+        .execute(&old_state.into(), &multi_batch_header)
         .expect("execution failed");
 
     // Double check the roots match what is calculated by the proof-external state.

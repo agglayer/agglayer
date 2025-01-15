@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use agglayer_types::{Certificate, LocalNetworkStateData, Proof};
+use agglayer_types::{Address, Certificate, LocalNetworkStateData, Proof};
 use pessimistic_proof::LocalNetworkState;
 use tower::timeout::TimeoutLayer;
 use tower::{service_fn, Service, ServiceBuilder, ServiceExt};
@@ -12,7 +12,8 @@ async fn executor_normal_behavior() {
     let network = Executor::build_network_service(
         Duration::from_secs(1),
         service_fn(|r: Request| async move {
-            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
+            let Proof::SP1(mut proof) =
+                Proof::new_for_test(&r.initial_state.into(), &r.batch_header);
             proof.sp1_version = "from_network".to_string();
 
             Ok(Response { proof })
@@ -54,7 +55,8 @@ async fn executor_normal_behavior_only_network() {
     let network = Executor::build_network_service(
         Duration::from_secs(1),
         service_fn(|r: Request| async move {
-            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
+            let Proof::SP1(mut proof) =
+                Proof::new_for_test(&r.initial_state.into(), &r.batch_header);
             proof.sp1_version = "from_network".to_string();
 
             Ok(Response { proof })
@@ -99,7 +101,8 @@ async fn executor_fallback_behavior_cpu() {
         Duration::from_secs(1),
         1,
         service_fn(|r: Request| async move {
-            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
+            let Proof::SP1(mut proof) =
+                Proof::new_for_test(&r.initial_state.into(), &r.batch_header);
             proof.sp1_version = "from_local".to_string();
 
             Ok(Response { proof })
@@ -156,7 +159,7 @@ async fn executor_fallback_because_of_timeout_cpu() {
 
     let mut executor = Executor::new_with_services(Some(network), Some(local));
 
-    let signer = pessimistic_proof::Address::new([0; 20]);
+    let signer = Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
     let certificate =
         Certificate::new_for_test(0.into(), 0).with_new_local_exit_root(state.exit_tree.get_root());
@@ -185,7 +188,8 @@ async fn executor_fails_because_of_timeout_cpu() {
         Duration::from_millis(100),
         service_fn(|r: Request| async move {
             tokio::time::sleep(Duration::from_secs(20)).await;
-            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
+            let Proof::SP1(mut proof) =
+                Proof::new_for_test(&r.initial_state.into(), &r.batch_header);
             proof.sp1_version = "from_network".to_string();
 
             Ok(Response { proof })
@@ -197,7 +201,8 @@ async fn executor_fails_because_of_timeout_cpu() {
         1,
         service_fn(|r: Request| async move {
             tokio::time::sleep(Duration::from_secs(20)).await;
-            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
+            let Proof::SP1(mut proof) =
+                Proof::new_for_test(&r.initial_state.into(), &r.batch_header);
             proof.sp1_version = "from_local".to_string();
 
             Ok(Response { proof })
@@ -208,7 +213,7 @@ async fn executor_fails_because_of_timeout_cpu() {
         .layer(TimeoutLayer::new(Duration::from_millis(100)))
         .service(Executor::new_with_services(Some(network), Some(local)));
 
-    let signer = pessimistic_proof::Address::new([0; 20]);
+    let signer = Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
     let certificate =
         Certificate::new_for_test(0.into(), 0).with_new_local_exit_root(state.exit_tree.get_root());
@@ -236,7 +241,8 @@ async fn executor_fails_because_of_concurrency_cpu() {
         Duration::from_millis(100),
         service_fn(|r: Request| async move {
             tokio::time::sleep(Duration::from_secs(20)).await;
-            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
+            let Proof::SP1(mut proof) =
+                Proof::new_for_test(&r.initial_state.into(), &r.batch_header);
             proof.sp1_version = "from_network".to_string();
 
             Ok(Response { proof })
@@ -248,7 +254,8 @@ async fn executor_fails_because_of_concurrency_cpu() {
         1,
         service_fn(|r: Request| async move {
             tokio::time::sleep(Duration::from_secs(20)).await;
-            let Proof::SP1(mut proof) = Proof::new_for_test(&r.initial_state, &r.batch_header);
+            let Proof::SP1(mut proof) =
+                Proof::new_for_test(&r.initial_state.into(), &r.batch_header);
             proof.sp1_version = "from_local".to_string();
 
             Ok(Response { proof })
@@ -259,7 +266,7 @@ async fn executor_fails_because_of_concurrency_cpu() {
         .layer(TimeoutLayer::new(Duration::from_secs(1)))
         .service(Executor::new_with_services(Some(network), Some(local)));
 
-    let signer = pessimistic_proof::Address::new([0; 20]);
+    let signer = Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
     let certificate =
         Certificate::new_for_test(0.into(), 0).with_new_local_exit_root(state.exit_tree.get_root());

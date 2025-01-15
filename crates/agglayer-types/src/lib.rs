@@ -8,8 +8,9 @@ use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::multi_batch_header::signature_commitment;
-use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
+use pessimistic_proof::nullifier_tree::{NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::{Smt, SmtError};
+use pessimistic_proof::utils::{FromBool as _, Hashable as _};
 use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
@@ -250,7 +251,7 @@ impl Proof {
         })
     }
     pub fn new_for_test(
-        state: &LocalNetworkState,
+        state: &pessimistic_proof::NetworkState,
         multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
     ) -> Self {
         let mock = MockProver::new();
@@ -331,7 +332,7 @@ pub fn compute_signature_info(
 ) -> (Digest, Signature) {
     let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
         new_local_exit_root,
-        imported_bridge_exits,
+        imported_bridge_exits.iter().map(|exit| exit.global_index),
     );
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
     let signature = Signature::new(
@@ -432,8 +433,12 @@ impl Certificate {
 
     pub fn signer(&self) -> Option<Address> {
         // retrieve signer
-        let combined_hash =
-            signature_commitment(self.new_local_exit_root, &self.imported_bridge_exits);
+        let combined_hash = signature_commitment(
+            self.new_local_exit_root,
+            self.imported_bridge_exits
+                .iter()
+                .map(|exit| exit.global_index),
+        );
 
         self.signature
             .recover_address_from_prehash(&B256::new(combined_hash.0))
@@ -460,6 +465,12 @@ impl From<LocalNetworkStateData> for LocalNetworkState {
             balance_tree: LocalBalanceTree::new_with_root(state.balance_tree.root),
             nullifier_tree: NullifierTree::new_with_root(state.nullifier_tree.root),
         }
+    }
+}
+
+impl From<LocalNetworkStateData> for pessimistic_proof::NetworkState {
+    fn from(state: LocalNetworkStateData) -> Self {
+        LocalNetworkState::from(state).into()
     }
 }
 
@@ -494,7 +505,7 @@ impl LocalNetworkStateData {
             let bridge_exits = certificate
                 .bridge_exits
                 .iter()
-                .filter(|b| b.amount_token_info().origin_network != certificate.network_id);
+                .filter(|b| b.amount_token_info().origin_network != *certificate.network_id);
 
             // Set of dedup tokens mutated in the transition
             let mutated_tokens: BTreeSet<TokenInfo> = {
@@ -584,8 +595,11 @@ impl LocalNetworkStateData {
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
 
-        let imported_hash =
-            commit_imported_bridge_exits(imported_bridge_exits.iter().map(|(exit, _)| exit));
+        let imported_hash = commit_imported_bridge_exits(
+            imported_bridge_exits
+                .iter()
+                .map(|(exit, _)| exit.global_index),
+        );
 
         // Check that the certificate referred to the right target
         let computed = self.exit_tree.get_root();
@@ -597,17 +611,25 @@ impl LocalNetworkStateData {
         }
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
-            origin_network: certificate.network_id,
+            origin_network: *certificate.network_id,
             prev_local_exit_root: certificate.prev_local_exit_root,
-            bridge_exits: certificate.bridge_exits.clone(),
-            imported_bridge_exits,
+            bridge_exits: certificate
+                .bridge_exits
+                .iter()
+                .cloned()
+                .map(Into::into)
+                .collect(),
+            imported_bridge_exits: imported_bridge_exits
+                .into_iter()
+                .map(|(ib, ex)| (ib.into(), ex))
+                .collect(),
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
             signer,
             signature: certificate.signature,
             imported_exits_root: Some(imported_hash),
-            target: self.get_roots(),
+            target: self.get_roots().into(),
             l1_info_root,
         })
     }
@@ -627,7 +649,7 @@ impl LocalNetworkStateData {
     pub fn get_roots(&self) -> StateCommitment {
         StateCommitment {
             exit_root: self.exit_tree.get_root(),
-            ler_leaf_count: self.exit_tree.leaf_count,
+            ler_leaf_count: self.exit_tree.leaf_count(),
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }
