@@ -4,7 +4,7 @@ use agglayer_primitives::U256;
 use hex::FromHex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{local_balance_tree::FromU256, nullifier_tree::FromBool};
+use crate::utils::{FromBool, FromU256};
 
 #[derive(Default, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Digest(pub [u8; 32]);
@@ -50,9 +50,7 @@ impl fmt::UpperHex for Digest {
 
 impl Digest {
     pub const ZERO: Digest = Digest([0u8; 32]);
-}
 
-impl Digest {
     pub fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
     }

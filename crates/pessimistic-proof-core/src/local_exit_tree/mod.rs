@@ -5,7 +5,7 @@ use thiserror::Error;
 pub mod hasher;
 use hasher::Hasher;
 
-pub mod data;
+pub mod proof;
 
 /// Represents a local exit tree as defined by the LxLy bridge.
 #[serde_as]

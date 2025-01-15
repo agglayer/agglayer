@@ -309,7 +309,7 @@ where
         let mut hash = self.root;
         let bits = key.to_bits();
 
-        for item in bits.iter().take(DEPTH) {
+        for bit in bits.iter().take(DEPTH) {
             if self.empty_hash_at_height.contains(&hash) {
                 return Ok(SmtNonInclusionProof { siblings });
             }
@@ -320,8 +320,8 @@ where
                     return Ok(SmtNonInclusionProof { siblings });
                 }
             };
-            siblings.push(if *item { node.left } else { node.right });
-            hash = if *item { node.right } else { node.left };
+            siblings.push(if *bit { node.left } else { node.right });
+            hash = if *bit { node.right } else { node.left };
         }
         if hash != self.empty_hash_at_height[0] {
             return Err(SmtError::KeyPresent);

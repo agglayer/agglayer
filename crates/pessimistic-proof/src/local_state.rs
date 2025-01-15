@@ -19,12 +19,6 @@ pub struct LocalNetworkState {
     pub nullifier_tree: NullifierTree<Keccak256Hasher>,
 }
 
-impl LocalNetworkState {
-    pub fn into_core(self) -> pessimistic_proof_core::NetworkState {
-        self.into()
-    }
-}
-
 impl From<LocalNetworkState> for pessimistic_proof_core::NetworkState {
     fn from(state: LocalNetworkState) -> Self {
         pessimistic_proof_core::NetworkState {

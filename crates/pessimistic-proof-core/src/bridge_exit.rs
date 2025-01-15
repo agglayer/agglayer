@@ -68,21 +68,21 @@ const EMPTY_METADATA_HASH: Digest = Digest(hex!(
     "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
 ));
 
-pub fn bridge_exit_hasher<T: Into<[u8; 20]>>(
+pub fn bridge_exit_hasher(
     leaf_type: u8,
     origin_network: u32,
-    origin_token_address: T,
+    origin_token_address: Address,
     dest_network: u32,
-    dest_address: T,
+    dest_address: Address,
     amount: U256,
     metadata: Option<Digest>,
 ) -> Digest {
     keccak256_combine([
         [leaf_type].as_slice(),
         &u32::to_be_bytes(origin_network),
-        &origin_token_address.into(),
+        origin_token_address.as_slice(),
         &u32::to_be_bytes(dest_network),
-        &dest_address.into(),
+        dest_address.as_slice(),
         &amount.to_be_bytes::<32>(),
         &metadata.unwrap_or(EMPTY_METADATA_HASH).0,
     ])

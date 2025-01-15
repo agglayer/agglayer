@@ -5,7 +5,10 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::{
-    bridge_exit::TokenInfo, local_exit_tree::hasher::Hasher, utils::smt::SmtMerkleProof, ProofError,
+    bridge_exit::TokenInfo,
+    local_exit_tree::hasher::Hasher,
+    utils::{smt::SmtMerkleProof, FromU256},
+    ProofError,
 };
 
 /// The key is [`TokenInfo`] which can be packed into 192 bits (32 for network
@@ -28,10 +31,6 @@ where
 }
 
 pub type LocalBalancePath<H> = SmtMerkleProof<H, LOCAL_BALANCE_TREE_DEPTH>;
-
-pub trait FromU256 {
-    fn from_u256(u: U256) -> Self;
-}
 
 impl<H> LocalBalanceTree<H>
 where

@@ -1,8 +1,8 @@
 use pessimistic_proof_core::local_exit_tree::hasher::{Hasher, Keccak256Hasher};
-pub use pessimistic_proof_core::nullifier_tree::FromBool;
 pub use pessimistic_proof_core::nullifier_tree::NullifierKey;
 pub use pessimistic_proof_core::nullifier_tree::NullifierPath;
 pub use pessimistic_proof_core::nullifier_tree::NULLIFIER_TREE_DEPTH;
+use pessimistic_proof_core::utils::FromBool;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 

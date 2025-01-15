@@ -7,8 +7,10 @@ use agglayer_types::{Certificate, NetworkId};
 use hex_literal::hex;
 use pessimistic_proof::bridge_exit::BridgeExit;
 use pessimistic_proof::bridge_exit::TokenInfo;
+use pessimistic_proof::local_balance_tree::LocalBalanceTree;
 use pessimistic_proof::local_exit_tree;
 use pessimistic_proof::local_state::LocalNetworkState;
+use pessimistic_proof::nullifier_tree::NullifierTree;
 
 use crate::{
     event_data::{load_json_data_file, parse_json_file, DepositEventData},
@@ -34,14 +36,14 @@ lazy_static::lazy_static! {
 pub fn empty_state() -> LocalNetworkState {
     LocalNetworkState {
         exit_tree: LocalExitTree::new(),
-        balance_tree: pessimistic_proof::local_balance_tree::LocalBalanceTree::new(),
-        nullifier_tree: pessimistic_proof::nullifier_tree::NullifierTree::new(),
+        balance_tree: LocalBalanceTree::new(),
+        nullifier_tree: NullifierTree::new(),
     }
 }
 
-fn sample_exit_tree_01() -> pessimistic_proof::local_exit_tree::LocalExitTree<TreeHasher> {
+fn sample_exit_tree_01() -> LocalExitTree {
     const LEAF_COUNT: u32 = 1853;
-    pessimistic_proof::local_exit_tree::LocalExitTree::from_parts(
+    LocalExitTree::from_parts(
         LEAF_COUNT,
         [
             hex!("4a3c0e05a537700590e5cfa29654e7db5b36fbe85b24e7f34bdec7ed2b194aa6").into(),
@@ -87,10 +89,7 @@ pub fn sample_state_01() -> Forest {
 }
 
 pub fn sample_state_00() -> Forest {
-    Forest::new_with_local_exit_tree(
-        [],
-        pessimistic_proof::local_exit_tree::LocalExitTree::default(),
-    )
+    Forest::new_with_local_exit_tree([], LocalExitTree::default())
 }
 
 pub fn sample_bridge_exits_01() -> impl Iterator<Item = BridgeExit> + Clone {

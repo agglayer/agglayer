@@ -1,5 +1,5 @@
 use pessimistic_proof_core::local_exit_tree::{
-    data::LETMerkleProof, hasher::Hasher, LocalExitTreeError,
+    hasher::Hasher, proof::LETMerkleProof, LocalExitTreeError,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;

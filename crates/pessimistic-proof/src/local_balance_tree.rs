@@ -2,8 +2,8 @@ use std::hash::Hash;
 
 pub use pessimistic_proof_core::local_balance_tree::{LocalBalancePath, LOCAL_BALANCE_TREE_DEPTH};
 use pessimistic_proof_core::{
-    local_balance_tree::FromU256,
     local_exit_tree::hasher::{Hasher, Keccak256Hasher},
+    utils::FromU256,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;

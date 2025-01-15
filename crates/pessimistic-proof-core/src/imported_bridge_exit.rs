@@ -5,7 +5,7 @@ use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
     keccak::{digest::Digest, keccak256_combine},
-    local_exit_tree::{data::LETMerkleProof, hasher::Keccak256Hasher},
+    local_exit_tree::{hasher::Keccak256Hasher, proof::LETMerkleProof},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -4,7 +4,10 @@ use serde_with::serde_as;
 use crate::{
     bridge_exit::NetworkId,
     local_exit_tree::hasher::Hasher,
-    utils::smt::{SmtNonInclusionProof, ToBits},
+    utils::{
+        smt::{SmtNonInclusionProof, ToBits},
+        FromBool,
+    },
     ProofError,
 };
 
@@ -51,10 +54,6 @@ impl ToBits<64> for NullifierKey {
             }
         })
     }
-}
-
-pub trait FromBool {
-    fn from_bool(b: bool) -> Self;
 }
 
 impl<H> NullifierTree<H>

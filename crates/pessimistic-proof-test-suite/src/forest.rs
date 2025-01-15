@@ -10,7 +10,7 @@ use pessimistic_proof::{
         MerkleProof,
     },
     keccak::{digest::Digest, keccak256, keccak256_combine},
-    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher},
+    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
     local_state::LocalNetworkState,
     utils::{smt::Smt, Hashable as _},
     PessimisticProofOutput,
@@ -39,7 +39,7 @@ impl Default for Forest {
             local_exit_tree_data_a: LocalExitTreeData::new(),
             l1_info_tree: Default::default(),
             state_b: LocalNetworkStateData {
-                exit_tree: pessimistic_proof::local_exit_tree::LocalExitTree::new(),
+                exit_tree: LocalExitTree::new(),
                 balance_tree: local_balance_tree,
                 nullifier_tree: Smt::new(),
             },
@@ -56,16 +56,13 @@ impl Forest {
 
     /// Create a new forest based on given initial balances.
     pub fn new(initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>) -> Self {
-        Self::new_with_local_exit_tree(
-            initial_balances,
-            pessimistic_proof::local_exit_tree::LocalExitTree::new(),
-        )
+        Self::new_with_local_exit_tree(initial_balances, LocalExitTree::new())
     }
 
     /// Override the local exit tree for network B
     pub fn new_with_local_exit_tree(
         initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>,
-        local_exit_tree: pessimistic_proof::local_exit_tree::LocalExitTree<Keccak256Hasher>,
+        local_exit_tree: LocalExitTree<Keccak256Hasher>,
     ) -> Self {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {

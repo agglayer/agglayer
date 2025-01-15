@@ -4,7 +4,7 @@ use agglayer_primitives::{ruint::UintTryFrom, B256, U256, U512};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bridge_exit::L1_NETWORK_ID,
+    bridge_exit::{L1_ETH, L1_NETWORK_ID},
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
     keccak::digest::Digest,
     local_balance_tree::LocalBalanceTree,
@@ -184,7 +184,7 @@ impl NetworkState {
             }
 
             // For ETH transfers, we need to check that the origin network is the L1 network
-            if bridge_exit.token_info.origin_token_address.is_zero()
+            if bridge_exit.token_info.origin_token_address == L1_ETH.origin_token_address
                 && bridge_exit.token_info.origin_network != L1_NETWORK_ID
             {
                 return Err(ProofError::InvalidL1TokenInfo(bridge_exit.token_info));
