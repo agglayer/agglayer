@@ -35,10 +35,14 @@ pub trait RollupContract {
         proof_signers: HashMap<u32, Address>,
     ) -> Result<Address, ()>;
 
-    async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()>;
+    async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
 
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
 }
+
+/// Polling tick interval used to check for one block to be finalized.
+const CHECK_BLOCK_FINALIZED_TICK_INTERVAL: tokio::time::Duration =
+    tokio::time::Duration::from_secs(10);
 
 pub struct L1RpcClient<RpcProvider> {
     rpc: Arc<RpcProvider>,
@@ -54,6 +58,16 @@ pub enum L1RpcInitializationError {
     InitL1InfoRootMapEventNotFound(String),
     #[error("Event InitL1InfoRootMap returned null value for L1 info root, leaf count: {0}")]
     InvalidL1InfoRootFromEvent(u32),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum L1RpcError {
+    #[error("Failed to get the `UpdateL1InfoTreeV2` events: {0}")]
+    UpdateL1InfoTreeV2EventFailure(String),
+    #[error("Unable to find `UpdateL1InfoTreeV2` events")]
+    UpdateL1InfoTreeV2EventNotFound,
+    #[error("Unable to fetch the latest finalized block")]
+    LastFinalizedBlockNotFound,
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
@@ -130,7 +144,7 @@ where
         self.default_l1_info_tree_entry
     }
 
-    async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()> {
+    async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError> {
         // Get `UpdateL1InfoTreeV2` event for the given leaf count from the latest block
         let filter = Filter::new()
             .address(self.l1_info_tree.address())
@@ -143,7 +157,7 @@ where
             .client()
             .get_logs(&filter)
             .await
-            .map_err(|_| ())?;
+            .map_err(|e| L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string()))?;
 
         // Extract event details
         let (l1_info_root, event_block_number) = events
@@ -156,7 +170,7 @@ where
                     _ => None,
                 }
             })
-            .ok_or(())?;
+            .ok_or(L1RpcError::UpdateL1InfoTreeV2EventNotFound)?;
 
         debug!(
             "Retrieved UpdateL1InfoTreeV2 event from block {}. L1 info tree leaf count: {}, root: \
@@ -167,7 +181,7 @@ where
         // Await for the related block to be finalized
         // NOTE: Cannot use block subscription because the provider is not websocket
         {
-            let mut tick = tokio::time::interval(tokio::time::Duration::from_secs(10));
+            let mut tick = tokio::time::interval(CHECK_BLOCK_FINALIZED_TICK_INTERVAL);
             let mut finalized_block_number: U64 = 0.into();
             while finalized_block_number < event_block_number {
                 tick.tick().await;
@@ -179,7 +193,7 @@ where
                     .ok()
                     .flatten()
                     .and_then(|block| block.number)
-                    .ok_or(())?;
+                    .ok_or(L1RpcError::LastFinalizedBlockNotFound)?;
 
                 debug!(
                     "Awaiting L1 info tree leaf count ({}) set at block {} to be finalized. \

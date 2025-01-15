@@ -2,7 +2,7 @@ use std::{sync::Arc, thread, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
 use agglayer_config::Config;
-use agglayer_contracts::Settler;
+use agglayer_contracts::{L1RpcError, Settler};
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{LocalNetworkStateData, NetworkId};
@@ -202,7 +202,7 @@ mockall::mock! {
             proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
         ) -> Result<ethers::types::Address, ()>;
 
-        async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()>;
+        async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
     }
     #[async_trait::async_trait]
