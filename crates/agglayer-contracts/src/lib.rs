@@ -6,7 +6,7 @@ use ethers::prelude::*;
 use ethers::providers::Middleware;
 use ethers_contract::{ContractCall, ContractError};
 use polygon_rollup_manager::{PolygonRollupManagerErrors, RollupIDToRollupDataReturn};
-use tracing::debug;
+use tracing::{debug, error};
 
 #[rustfmt::skip]
 #[allow(warnings)]
@@ -44,6 +44,9 @@ pub trait RollupContract {
 const CHECK_BLOCK_FINALIZED_TICK_INTERVAL: tokio::time::Duration =
     tokio::time::Duration::from_secs(10);
 
+/// Conservative time for finality on Ethereum.
+const TIME_TO_FINALITY_ETHEREUM: tokio::time::Duration = tokio::time::Duration::from_secs(30 * 60);
+
 pub struct L1RpcClient<RpcProvider> {
     rpc: Arc<RpcProvider>,
     inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
@@ -68,6 +71,8 @@ pub enum L1RpcError {
     UpdateL1InfoTreeV2EventNotFound,
     #[error("Unable to fetch the latest finalized block")]
     LastFinalizedBlockNotFound,
+    #[error("Timeout exceeded while waiting for block {0} to be finalized.")]
+    FinalizationTimeoutExceeded(u64),
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
@@ -182,24 +187,40 @@ where
         // NOTE: Cannot use block subscription because the provider is not websocket
         {
             let mut tick = tokio::time::interval(CHECK_BLOCK_FINALIZED_TICK_INTERVAL);
+            let mut timeout_tick = tokio::time::interval(TIME_TO_FINALITY_ETHEREUM);
             let mut finalized_block_number: U64 = 0.into();
-            while finalized_block_number < event_block_number {
-                tick.tick().await;
 
-                finalized_block_number = self
-                    .rpc
-                    .get_block(BlockNumber::Finalized)
-                    .await
-                    .ok()
-                    .flatten()
-                    .and_then(|block| block.number)
-                    .ok_or(L1RpcError::LastFinalizedBlockNotFound)?;
+            loop {
+                tokio::select! {
+                    _ = tick.tick() => {
+                        finalized_block_number = self
+                            .rpc
+                            .get_block(BlockNumber::Finalized)
+                            .await
+                            .ok()
+                            .flatten()
+                            .and_then(|block| block.number)
+                            .ok_or(L1RpcError::LastFinalizedBlockNotFound)?;
 
-                debug!(
-                    "Awaiting L1 info tree leaf count ({}) set at block {} to be finalized. \
-                     Latest finalized block: {}",
-                    l1_leaf_count, event_block_number, finalized_block_number,
-                );
+                        debug!(
+                            "Awaiting L1 info tree leaf count ({}) set at block {} to be finalized. \
+                             Latest finalized block: {}",
+                            l1_leaf_count, event_block_number, finalized_block_number,
+                        );
+
+                        if finalized_block_number >= event_block_number {
+                            break;
+                        }
+                    },
+                    _ = timeout_tick.tick() => {
+                        error!(
+                            "Timeout occurred while waiting for block {} to be finalized. \
+                             Latest finalized block: {}",
+                            event_block_number, finalized_block_number
+                        );
+                        return Err(L1RpcError::FinalizationTimeoutExceeded(event_block_number.as_u64()));
+                    }
+                }
             }
         }
 
