@@ -47,6 +47,13 @@ impl Default for Forest {
 }
 
 impl Forest {
+    pub fn with_signer_seed(mut self, seed: u32) -> Self {
+        let fake_priv_key = keccak256_combine([b"FAKEKEY:", seed.to_be_bytes().as_slice()]);
+        self.wallet = LocalWallet::from_bytes(fake_priv_key.as_bytes()).unwrap();
+
+        self
+    }
+
     pub fn with_signer(mut self, signer: LocalWallet) -> Self {
         self.wallet = signer;
 

@@ -21,10 +21,8 @@ use pessimistic_proof::{
     ProofError,
 };
 use serde::{Deserialize, Serialize};
-use sp1_sdk::provers::ProofOpts;
 use sp1_sdk::{
-    MockProver, Prover, SP1Context, SP1Proof, SP1ProofKind, SP1ProofWithPublicValues,
-    SP1PublicValues, SP1Stdin,
+    Prover, ProverClient, SP1Proof, SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin,
 };
 
 pub type EpochNumber = u64;
@@ -245,7 +243,6 @@ impl Proof {
     pub fn dummy() -> Self {
         Self::SP1(SP1ProofWithPublicValues {
             proof: SP1Proof::Core(vec![]),
-            stdin: SP1Stdin::new(),
             public_values: SP1PublicValues::new(),
             sp1_version: "".to_string(),
         })
@@ -254,17 +251,14 @@ impl Proof {
         state: &pessimistic_proof::NetworkState,
         multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
     ) -> Self {
-        let mock = MockProver::new();
+        let mock = ProverClient::builder().mock().build();
         let (p, _v) = mock.setup(ELF);
 
         let mut stdin = SP1Stdin::new();
         stdin.write(state);
         stdin.write(multi_batch_header);
 
-        let opts = ProofOpts::default();
-        let context = SP1Context::default();
-        let kind = SP1ProofKind::Plonk;
-        let proof = mock.prove(&p, stdin, opts, context, kind).unwrap();
+        let proof = mock.prove(&p, &stdin).plonk().run().unwrap();
 
         Proof::SP1(proof)
     }
