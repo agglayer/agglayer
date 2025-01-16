@@ -220,11 +220,11 @@ impl StateWriter for StateStore {
         let mut atomic_batch = WriteBatch::default();
         // Store the LET
         {
-            let new_leaf_count = new_state.exit_tree.leaf_count;
+            let new_leaf_count = new_state.exit_tree.leaf_count();
             let start_leaf_count = new_leaf_count - new_leaves.len() as u32;
 
             if let Some(stored_exit_tree) = self.read_local_exit_tree(network_id.into())? {
-                if stored_exit_tree.leaf_count != start_leaf_count {
+                if stored_exit_tree.leaf_count() != start_leaf_count {
                     return Err(Error::InconsistentState {
                         network_id: network_id.into(),
                     });
@@ -264,7 +264,7 @@ impl StateWriter for StateStore {
                             network_id,
                             key_type: LET::KeyType::Frontier(layer),
                         },
-                        LET::Value::Frontier(*new_state.exit_tree.frontier[layer as usize]),
+                        LET::Value::Frontier(*new_state.exit_tree.frontier()[layer as usize]),
                     );
                 });
 
@@ -379,10 +379,9 @@ impl StateStore {
             frontier[i] = Digest(*l);
         }
 
-        Ok(Some(LocalExitTree::<Keccak256Hasher> {
-            frontier,
-            leaf_count,
-        }))
+        Ok(Some(LocalExitTree::<Keccak256Hasher>::from_parts(
+            leaf_count, frontier,
+        )))
     }
 
     fn read_smt<C, const DEPTH: usize>(

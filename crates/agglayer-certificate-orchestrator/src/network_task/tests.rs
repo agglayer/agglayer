@@ -895,7 +895,7 @@ async fn process_next_certificate() {
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
 
-            let signer = pessimistic_proof::Address::new([0; 20]);
+            let signer = agglayer_types::Address::new([0; 20]);
             let _ = new_state
                 .apply_certificate(
                     &certificate,

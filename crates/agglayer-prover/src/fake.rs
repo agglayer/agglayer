@@ -97,12 +97,14 @@ impl ProofGenerationService for FakeProver {
         let initial_state: LocalNetworkState = agglayer_prover_types::default_bincode_options()
             .deserialize(&request.initial_state)
             .map_err(|_| tonic::Status::invalid_argument("Unable to deserialize initial state"))?;
+
         let batch_header: MultiBatchHeader<Keccak256Hasher> =
             agglayer_prover_types::default_bincode_options()
                 .deserialize(&request.batch_header)
                 .map_err(|_| {
                     tonic::Status::invalid_argument("Unable to deserialize batch header")
                 })?;
+
         let request = Request {
             initial_state,
             batch_header,

@@ -10,6 +10,7 @@ use agglayer_types::{
     LocalNetworkStateData, NetworkId,
 };
 use agglayer_types::{CertificateHeader, Digest};
+use pessimistic_proof::utils::Hashable as _;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};

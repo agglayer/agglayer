@@ -115,7 +115,7 @@ async fn epoch_packer_can_settle_one_certificate() {
 
     let per_epoch_store = MockPerEpochStore::new();
 
-    let proof = Proof::new_for_test(&state.local_state(), &batch_header);
+    let proof = Proof::new_for_test(&state.local_state().into(), &batch_header);
 
     pending_store
         .expect_get_proof()

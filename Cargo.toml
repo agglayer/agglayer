@@ -29,6 +29,7 @@ agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
 agglayer-types = { path = "crates/agglayer-types" }
 pessimistic-proof = { path = "crates/pessimistic-proof" }
+pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Core dependencies
