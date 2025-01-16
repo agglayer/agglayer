@@ -79,6 +79,6 @@ rstest = "0.22.0"
 test-log = "0.2.16"
 
 # SP1 dependencies
-sp1-core-machine = "=3.3.0"
-sp1-sdk = "=3.3.0"
-sp1-prover = "=3.3.0"
+sp1-core-machine = "=4.0.0"
+sp1-sdk = "=4.0.0"
+sp1-prover = "=4.0.0"

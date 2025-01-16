@@ -12,10 +12,10 @@ use pessimistic_proof::{
     local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
 };
-use sp1_sdk::network::prover::NetworkProver;
 use sp1_sdk::{
-    provers::ProofOpts, CpuProver, Prover, SP1Context, SP1ProofKind, SP1ProofWithPublicValues,
-    SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
+    network::{prover::NetworkProver, FulfillmentStrategy},
+    CpuProver, Prover, ProverClient, SP1ProofWithPublicValues, SP1ProvingKey, SP1Stdin,
+    SP1VerifyingKey,
 };
 use tokio::task::spawn_blocking;
 use tower::{
@@ -96,8 +96,8 @@ impl Executor {
     pub fn new(config: &ProverConfig) -> Self {
         let network = if config.network_prover.enabled {
             debug!("Creating network prover executor...");
-            let network_prover = NetworkProver::new();
-            let (_proving_key, verification_key) = network_prover.setup(ELF);
+            let network_prover = ProverClient::builder().network().build();
+            let (proving_key, verification_key) = network_prover.setup(ELF);
             Some(Self::build_network_service(
                 config
                     .network_prover
@@ -108,6 +108,7 @@ impl Executor {
                     }),
                 NetworkExecutor {
                     prover: Arc::new(network_prover),
+                    proving_key,
                     verification_key,
                     timeout: config.network_prover.proving_timeout,
                 },
@@ -128,7 +129,6 @@ impl Executor {
                     prover: Arc::new(prover),
                     proving_key,
                     verification_key,
-                    timeout: config.cpu_prover.proving_timeout,
                 },
             ))
         } else {
@@ -212,7 +212,6 @@ struct LocalExecutor {
     proving_key: SP1ProvingKey,
     verification_key: SP1VerifyingKey,
     prover: Arc<CpuProver>,
-    timeout: Duration,
 }
 
 impl Service<Request> for LocalExecutor {
@@ -229,22 +228,18 @@ impl Service<Request> for LocalExecutor {
     fn call(&mut self, req: Request) -> Self::Future {
         let prover = self.prover.clone();
         let stdin = req.into();
-        let opts = ProofOpts {
-            timeout: Some(self.timeout),
-            ..Default::default()
-        };
-        let kind = SP1ProofKind::Plonk;
 
         let proving_key = self.proving_key.clone();
         let verification_key = self.verification_key.clone();
 
-        debug!("Proving with CPU prover with timeout: {:?}", self.timeout);
+        debug!("Proving with CPU prover");
         Box::pin(
             spawn_blocking(move || {
-                let context = SP1Context::default();
                 debug!("Starting the proving of the requested MultiBatchHeader");
                 let proof = prover
-                    .prove(&proving_key, stdin, opts, context, kind)
+                    .prove(&proving_key, &stdin)
+                    .plonk()
+                    .run()
                     .map_err(|error| Error::ProverFailed(error.to_string()))?;
 
                 debug!("Proving completed. Verifying the proof...");
@@ -265,6 +260,7 @@ impl Service<Request> for LocalExecutor {
 #[derive(Clone)]
 struct NetworkExecutor {
     prover: Arc<NetworkProver>,
+    proving_key: SP1ProvingKey,
     verification_key: SP1VerifyingKey,
     timeout: Duration,
 }
@@ -285,18 +281,18 @@ impl Service<Request> for NetworkExecutor {
         let stdin = req.into();
 
         let verification_key = self.verification_key.clone();
+        let proving_key = self.proving_key.clone();
         let timeout = self.timeout;
 
         debug!("Proving with network prover with timeout: {:?}", timeout);
         let fut = async move {
             debug!("Starting the proving of the requested MultiBatchHeader");
             let proof = prover
-                .prove(
-                    ELF,
-                    stdin,
-                    sp1_sdk::network::proto::network::ProofMode::Plonk,
-                    Some(timeout),
-                )
+                .prove(&proving_key, &stdin)
+                .plonk()
+                .timeout(timeout)
+                .strategy(FulfillmentStrategy::Reserved)
+                .run_async()
                 .await
                 .map_err(|error| Error::ProverFailed(error.to_string()))?;
 
