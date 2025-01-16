@@ -15,7 +15,7 @@ pub struct ProofOutput {}
 
 /// A convenient interface to run the pessimistic proof ELF bytecode.
 pub struct Runner {
-    client: sp1_sdk::ProverClient,
+    client: sp1_sdk::EnvProver,
 }
 
 impl Default for Runner {
@@ -27,11 +27,11 @@ impl Default for Runner {
 impl Runner {
     /// Create a new pessimistic proof client.
     pub fn new() -> Self {
-        Self::from_client(sp1_sdk::ProverClient::new())
+        Self::from_client(sp1_sdk::ProverClient::from_env())
     }
 
     /// Create a new pessimistic proof client from a custom generic client.
-    pub fn from_client(client: sp1_sdk::ProverClient) -> Self {
+    pub fn from_client(client: sp1_sdk::EnvProver) -> Self {
         Self { client }
     }
 
@@ -57,7 +57,7 @@ impl Runner {
         batch_header: &MultiBatchHeader,
     ) -> anyhow::Result<(PessimisticProofOutput, ExecutionReport)> {
         let stdin = Self::prepare_stdin(state, batch_header);
-        let (public_vals, report) = self.client.execute(PESSIMISTIC_PROOF_ELF, stdin).run()?;
+        let (public_vals, report) = self.client.execute(PESSIMISTIC_PROOF_ELF, &stdin).run()?;
 
         let output = Self::extract_output(public_vals);
 
@@ -82,7 +82,7 @@ impl Runner {
         let stdin = Self::prepare_stdin(state, batch_header);
         let (pk, vk) = self.client.setup(PESSIMISTIC_PROOF_ELF);
 
-        let proof = self.client.prove(&pk, stdin).plonk().run()?;
+        let proof = self.client.prove(&pk, &stdin).plonk().run()?;
         let output = Self::extract_output(proof.public_values.clone());
 
         Ok((proof, vk, output))

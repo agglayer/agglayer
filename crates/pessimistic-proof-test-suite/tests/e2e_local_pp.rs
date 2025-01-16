@@ -8,7 +8,7 @@ use pessimistic_proof_test_suite::{
     PESSIMISTIC_PROOF_ELF,
 };
 use rand::random;
-use sp1_sdk::{utils, ProverClient, SP1Stdin};
+use sp1_sdk::{utils, Prover as _, ProverClient, SP1Stdin};
 
 fn u(x: u64) -> U256 {
     x.try_into().unwrap()
@@ -121,9 +121,9 @@ fn test_sp1_simple() {
     stdin.write(&multi_batch_header);
 
     // Generate the proof for the given program and input.
-    let client = ProverClient::new();
+    let client = ProverClient::builder().mock().build();
     let (pk, vk) = client.setup(PESSIMISTIC_PROOF_ELF);
-    let proof = client.prove(&pk, stdin).run().unwrap();
+    let proof = client.prove(&pk, &stdin).plonk().run().unwrap();
 
     // Verify proof and public values
     client.verify(&proof, &vk).expect("verification failed");

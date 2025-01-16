@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use agglayer_prover_types::v1::proof_generation_service_server::{
     ProofGenerationService, ProofGenerationServiceServer,
@@ -10,10 +9,7 @@ use bincode::Options;
 use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::multi_batch_header::MultiBatchHeader;
 use pessimistic_proof::LocalNetworkState;
-use sp1_sdk::MockProver;
-use sp1_sdk::Prover;
-use sp1_sdk::SP1Context;
-use sp1_sdk::SP1ProofKind;
+use sp1_sdk::{CpuProver, Prover as _, ProverClient};
 use tonic::codec::CompressionEncoding;
 use tonic::transport::Server;
 use tracing::info;
@@ -24,13 +20,13 @@ use crate::executor::Request;
 use crate::executor::ELF;
 
 pub struct FakeProver {
-    prover: Arc<MockProver>,
+    prover: Arc<CpuProver>,
     proving_key: sp1_sdk::SP1ProvingKey,
 }
 
 impl Default for FakeProver {
     fn default() -> Self {
-        let prover = MockProver::new();
+        let prover = ProverClient::builder().mock().build();
         let (proving_key, _verifying_key) = prover.setup(ELF);
 
         Self {
@@ -111,21 +107,11 @@ impl ProofGenerationService for FakeProver {
         };
         let stdin = request.into();
 
-        let proof_opts = sp1_sdk::provers::ProofOpts {
-            timeout: Some(Duration::from_secs(60)),
-            ..Default::default()
-        };
-        let context = SP1Context::default();
-
         let result = self
             .prover
-            .prove(
-                &self.proving_key,
-                stdin,
-                proof_opts,
-                context,
-                SP1ProofKind::Plonk,
-            )
+            .prove(&self.proving_key, &stdin)
+            .plonk()
+            .run()
             .map_err(|error| Error::ProverFailed(error.to_string()));
         match result {
             Ok(proof) => {
