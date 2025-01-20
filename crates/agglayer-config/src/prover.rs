@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
@@ -6,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{shutdown::ShutdownConfig, telemetry::TelemetryConfig, Log};
+use crate::{shutdown::ShutdownConfig, telemetry::TelemetryConfig, ConfigurationError, Log};
 
 /// The Agglayer Prover configuration.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -67,6 +68,21 @@ impl Default for ProverConfig {
             fallback_prover: None,
             grpc: Default::default(),
         }
+    }
+}
+
+impl ProverConfig {
+    pub fn try_load(path: &Path) -> Result<Self, ConfigurationError> {
+        let reader = std::fs::read_to_string(path).map_err(|source| {
+            ConfigurationError::UnableToReadConfigFile {
+                path: path.to_path_buf(),
+                source,
+            }
+        })?;
+
+        let deserializer = toml::de::Deserializer::new(&reader);
+        serde::Deserialize::deserialize(deserializer)
+            .map_err(ConfigurationError::DeserializationError)
     }
 }
 

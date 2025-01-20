@@ -194,7 +194,7 @@ impl Service<Request> for Executor {
             match primary.await {
                 Ok(res) => Ok(res),
                 Err(err) => {
-                    error!("Network prover failed: {:?}", err);
+                    error!("Primary prover failed: {:?}", err);
                     if let Some(mut _fallback) = fallback {
                         // If fallback prover is set, try to use it
                         info!("Repeating proving request with fallback prover...");
