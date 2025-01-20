@@ -26,7 +26,7 @@ async fn executor_normal_behavior() {
         service_fn(|_: Request| async { panic!("Shouldn't be called") }),
     );
 
-    let mut executor = Executor::new_with_services(Some(network), Some(local));
+    let mut executor = Executor::new_with_services(network, Some(local));
 
     let mut state = LocalNetworkStateData::default();
     let certificate = Certificate::new_for_test(0.into(), 0);
@@ -63,7 +63,7 @@ async fn executor_normal_behavior_only_network() {
         }),
     );
 
-    let mut executor = Executor::new_with_services(Some(network), None);
+    let mut executor = Executor::new_with_services(network, None);
 
     let mut state = LocalNetworkStateData::default();
     let certificate = Certificate::new_for_test(0.into(), 0);
@@ -109,7 +109,7 @@ async fn executor_fallback_behavior_cpu() {
         }),
     );
 
-    let mut executor = Executor::new_with_services(Some(network), Some(local));
+    let mut executor = Executor::new_with_services(network, Some(local));
 
     let mut state = LocalNetworkStateData::default();
     let certificate = Certificate::new_for_test(0.into(), 0);
@@ -157,7 +157,7 @@ async fn executor_fallback_because_of_timeout_cpu() {
         }),
     );
 
-    let mut executor = Executor::new_with_services(Some(network), Some(local));
+    let mut executor = Executor::new_with_services(network, Some(local));
 
     let signer = Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
@@ -211,7 +211,7 @@ async fn executor_fails_because_of_timeout_cpu() {
 
     let mut executor = ServiceBuilder::new()
         .layer(TimeoutLayer::new(Duration::from_millis(100)))
-        .service(Executor::new_with_services(Some(network), Some(local)));
+        .service(Executor::new_with_services(network, Some(local)));
 
     let signer = Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();
@@ -264,7 +264,7 @@ async fn executor_fails_because_of_concurrency_cpu() {
 
     let mut executor = ServiceBuilder::new()
         .layer(TimeoutLayer::new(Duration::from_secs(1)))
-        .service(Executor::new_with_services(Some(network), Some(local)));
+        .service(Executor::new_with_services(network, Some(local)));
 
     let signer = Address::new([0; 20]);
     let mut state = LocalNetworkStateData::default();

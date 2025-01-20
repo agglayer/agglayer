@@ -1,6 +1,7 @@
 use std::{sync::Arc, thread, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
+use agglayer_config::prover::AgglayerProverType;
 use agglayer_config::Config;
 use agglayer_contracts::Settler;
 use agglayer_prover::fake::FakeProver;
@@ -117,10 +118,10 @@ async fn prover_timeout() {
     let mut l1_rpc = MockL1Rpc::new();
     let prover_config = agglayer_config::prover::ProverConfig {
         grpc_endpoint: next_available_addr(),
-        cpu_prover: agglayer_config::prover::CpuProverConfig {
+        primary_prover: AgglayerProverType::CpuProver(agglayer_config::prover::CpuProverConfig {
             proving_timeout: Duration::from_secs(1),
             ..Default::default()
-        },
+        }),
         ..Default::default()
     };
 

@@ -18,16 +18,5 @@ prometheus-addr = "0.0.0.0:3000"
 [shutdown]
 runtime-timeout = "5s"
 
-[cpu-prover]
-enabled = true
-max-concurrency-limit = 100
-proving-timeout = "5m"
-
-[network-prover]
-enabled = false
-proving-timeout = "5m"
-
-[gpu-prover]
-enabled = false
-max-concurrency-limit = 100
+[primary-prover.NetworkProver]
 proving-timeout = "5m"
