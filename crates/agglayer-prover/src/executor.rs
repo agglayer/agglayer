@@ -93,8 +93,10 @@ impl Executor {
         Self { primary, fallback }
     }
 
-    pub fn new(config: &ProverConfig) -> Self {
-        let primary = match &config.primary_prover {
+    fn create_prover(
+        prover_type: &AgglayerProverType,
+    ) -> BoxCloneService<Request, Response, Error> {
+        match prover_type {
             AgglayerProverType::NetworkProver(network_prover_config) => {
                 debug!("Creating network prover executor...");
                 let network_prover = ProverClient::builder().network().build();
@@ -145,11 +147,19 @@ impl Executor {
                 )
             }
             AgglayerProverType::GpuProver(_) => todo!(),
-        };
+        }
+    }
 
-        Self {
-            primary,
-            fallback: None,
+    pub fn new(config: &ProverConfig) -> Self {
+        let primary = Self::create_prover(&config.primary_prover);
+        if let Some(fallback_prover) = &config.fallback_prover {
+            let fallback = Some(Self::create_prover(fallback_prover));
+            Self { primary, fallback }
+        } else {
+            Self {
+                primary,
+                fallback: None,
+            }
         }
     }
 }
