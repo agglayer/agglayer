@@ -18,5 +18,5 @@ prometheus-addr = "0.0.0.0:3000"
 [shutdown]
 runtime-timeout = "5s"
 
-[primary-prover.NetworkProver]
+[primary-prover.network-prover]
 proving-timeout = "5m"

@@ -88,6 +88,7 @@ impl ProverConfig {
 
 /// Type of the prover to be used for generation of the pessimistic proof
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub enum AgglayerProverType {
     NetworkProver(NetworkProverConfig),
     CpuProver(CpuProverConfig),
