@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use agglayer_config::prover::{AgglayerProverType, CpuProverConfig, NetworkProverConfig};
+use agglayer_config::prover::{AgglayerProverType, CpuProverConfig, MockProverConfig, NetworkProverConfig};
 use agglayer_config::{prover::ProverConfig, Config};
 use insta::assert_toml_snapshot;
 use pretty_assertions::assert_eq;
@@ -144,4 +144,21 @@ fn network_and_cpu_prover() {
             proving_timeout: std::time::Duration::from_secs(600),
         }))
     );
+}
+
+#[test]
+fn mock_prover() {
+    let input = "./tests/fixtures/validate_config/prover_config_mock_prover.toml";
+    let config = ProverConfig::try_load(Path::new(input)).unwrap();
+
+    assert_eq!(
+        config.primary_prover,
+        AgglayerProverType::MockProver(MockProverConfig {
+            max_concurrency_limit: 10,
+            proving_request_timeout: Some(std::time::Duration::from_secs(300)),
+            proving_timeout: std::time::Duration::from_secs(600),
+        })
+    );
+
+    assert_eq!(config.fallback_prover, None);
 }

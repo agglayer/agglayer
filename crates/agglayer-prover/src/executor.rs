@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use agglayer_config::prover::{AgglayerProverType, NetworkProverConfig, ProverConfig};
+use agglayer_config::prover::{AgglayerProverType, ProverConfig};
 use agglayer_prover_types::Error;
 use futures::{Future, TryFutureExt};
 use pessimistic_proof::{
