@@ -4,7 +4,8 @@ use agglayer_types::{Address, Certificate, LocalNetworkStateData, Proof};
 use pessimistic_proof::LocalNetworkState;
 use tower::timeout::TimeoutLayer;
 use tower::{service_fn, Service, ServiceBuilder, ServiceExt};
-
+use tower::limit::ConcurrencyLimitLayer;
+use agglayer_config::prover::{AgglayerProverType, MockProverConfig, ProverConfig};
 use crate::executor::{Executor, Request, Response};
 
 #[tokio::test]
@@ -303,4 +304,48 @@ async fn executor_fails_because_of_concurrency_cpu() {
         })
         .await;
     assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn executor_normal_behavior_mock_prover() {
+    let mock_prover_config = ProverConfig {
+        primary_prover: AgglayerProverType::MockProver(MockProverConfig::default()),
+            ..Default::default()
+    };
+    let mut executor = tower::ServiceBuilder::new()
+        .timeout(Duration::from_secs(100))
+        .layer(ConcurrencyLimitLayer::new(10))
+        .service(Executor::new(&mock_prover_config))
+        .into_inner()
+        .boxed();
+
+    let mut state = LocalNetworkStateData::default();
+    let certificate = Certificate::new_for_test(0.into(), 0);
+    let signer = certificate.get_signer();
+
+    let batch_header = state
+        .apply_certificate(
+            &certificate,
+            signer,
+            certificate.l1_info_root().unwrap().unwrap_or_default(),
+        )
+        .unwrap();
+
+    let executor = executor
+        .ready()
+        .await
+        .expect("valid executor");
+
+    println!(">>>>>>>>>>>>>>>>> CHECKPOINT 1");
+
+
+    let result = executor
+        .call(Request {
+            initial_state: LocalNetworkState::default(),
+            batch_header,
+        })
+        .await;
+
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().proof.sp1_version, "from_network");
 }
