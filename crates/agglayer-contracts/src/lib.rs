@@ -196,66 +196,64 @@ where
         // NOTE: Cannot use block subscription because the provider is not websocket
         {
             let mut tick = tokio::time::interval(CHECK_BLOCK_FINALIZED_TICK_INTERVAL);
-            let mut timeout_tick = tokio::time::interval(TIME_TO_FINALITY_ETHEREUM);
             let mut finalized_block_number: U64 = 0.into();
 
-            // The first tick completes immediately
-            tick.tick().await;
-            timeout_tick.tick().await;
+            _ = tokio::time::timeout(TIME_TO_FINALITY_ETHEREUM, async {
+                loop {
+                    tick.tick().await;
 
-            loop {
-                tokio::select! {
-                    _ = tick.tick() => {
-                        finalized_block_number = self
+                    finalized_block_number = self
+                        .rpc
+                        .get_block(BlockNumber::Finalized)
+                        .await
+                        .ok()
+                        .flatten()
+                        .and_then(|block| block.number)
+                        .ok_or(L1RpcError::LatestFinalizedBlockNotFound)?;
+
+                    debug!(
+                        "Awaiting L1 info tree leaf count ({}) set at block {} to be finalized. \
+                         Latest finalized block: {}",
+                        l1_leaf_count, event_block_number, finalized_block_number,
+                    );
+
+                    // Check whether the block number containing the event is now finalized.
+                    if finalized_block_number >= event_block_number {
+                        // Verify that the hash of the block containing
+                        // the event did not change due to potential reorg
+                        let retrieved_block_hash = self
                             .rpc
-                            .get_block(BlockNumber::Finalized)
+                            .get_block(BlockId::Number(event_block_number.into()))
                             .await
                             .ok()
                             .flatten()
-                            .and_then(|block| block.number)
-                            .ok_or(L1RpcError::LatestFinalizedBlockNotFound)?;
+                            .and_then(|block| block.hash)
+                            .ok_or(L1RpcError::BlockHashNotFound(event_block_number.as_u64()))?;
 
-                        debug!(
-                            "Awaiting L1 info tree leaf count ({}) set at block {} to be finalized. \
-                             Latest finalized block: {}",
-                            l1_leaf_count, event_block_number, finalized_block_number,
-                        );
-
-                        // Check whether the block number containing the event is now finalized.
-                        if finalized_block_number >= event_block_number {
-                            // Verify that the hash of the block containing
-                            // the event did not change due to potential reorg
-                            let retrieved_block_hash = self
-                                  .rpc
-                                  .get_block(BlockId::Number(event_block_number.into()))
-                                  .await
-                                  .ok()
-                                  .flatten()
-                                  .and_then(|block| block.hash)
-                                  .ok_or(L1RpcError::BlockHashNotFound(event_block_number.as_u64()))?;
-
-                            if retrieved_block_hash != event_block_hash {
-                                error!(
-                                    "Reorg detected! Retrieved block hash ({:?}) does not match \
-                                     expected event block hash ({:?}).",
-                                    retrieved_block_hash, event_block_hash
-                                );
-                                return Err(L1RpcError::ReorgDetected(event_block_number.as_u64()));
-                            }
-
-                            break;
+                        if retrieved_block_hash != event_block_hash {
+                            error!(
+                                "Reorg detected! Retrieved block hash ({:?}) does not match \
+                                 expected event block hash ({:?}).",
+                                retrieved_block_hash, event_block_hash
+                            );
+                            return Err(L1RpcError::ReorgDetected(event_block_number.as_u64()));
                         }
-                    },
-                    _ = timeout_tick.tick() => {
-                        error!(
-                            "Timeout occurred while waiting for block {} to be finalized. \
-                             Latest finalized block: {}",
-                            event_block_number, finalized_block_number
-                        );
-                        return Err(L1RpcError::FinalizationTimeoutExceeded(event_block_number.as_u64()));
+
+                        break;
                     }
                 }
-            }
+
+                Ok(())
+            })
+            .await
+            .map_err(|_| {
+                error!(
+                    "Timeout occurred while waiting for block {} to be finalized. Latest \
+                     finalized block: {}",
+                    event_block_number, finalized_block_number
+                );
+                L1RpcError::FinalizationTimeoutExceeded(event_block_number.as_u64())
+            })??;
         }
 
         Ok(l1_info_root)
