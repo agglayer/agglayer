@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
@@ -6,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{shutdown::ShutdownConfig, telemetry::TelemetryConfig, Log};
+use crate::{shutdown::ShutdownConfig, telemetry::TelemetryConfig, ConfigurationError, Log};
 
 /// The Agglayer Prover configuration.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -44,17 +45,13 @@ pub struct ProverConfig {
     #[serde(default = "default_max_buffered_queries")]
     pub max_buffered_queries: usize,
 
-    /// The CPU prover configuration.
+    /// The primary prover to be used for generation of the pessimistic proof
     #[serde(default)]
-    pub cpu_prover: CpuProverConfig,
+    pub primary_prover: AgglayerProverType,
 
-    /// The network prover configuration.
+    /// The fallback prover to be used for generation of the pessimistic proof
     #[serde(default)]
-    pub network_prover: NetworkProverConfig,
-
-    /// The GPU prover configuration.
-    #[serde(default)]
-    pub gpu_prover: GpuProverConfig,
+    pub fallback_prover: Option<AgglayerProverType>,
 }
 
 impl Default for ProverConfig {
@@ -67,11 +64,41 @@ impl Default for ProverConfig {
             max_concurrency_limit: default_max_concurrency_limit(),
             max_request_duration: default_max_request_duration(),
             max_buffered_queries: default_max_buffered_queries(),
-            cpu_prover: CpuProverConfig::default(),
-            network_prover: NetworkProverConfig::default(),
-            gpu_prover: GpuProverConfig::default(),
+            primary_prover: AgglayerProverType::NetworkProver(NetworkProverConfig::default()),
+            fallback_prover: None,
             grpc: Default::default(),
         }
+    }
+}
+
+impl ProverConfig {
+    pub fn try_load(path: &Path) -> Result<Self, ConfigurationError> {
+        let reader = std::fs::read_to_string(path).map_err(|source| {
+            ConfigurationError::UnableToReadConfigFile {
+                path: path.to_path_buf(),
+                source,
+            }
+        })?;
+
+        let deserializer = toml::de::Deserializer::new(&reader);
+        serde::Deserialize::deserialize(deserializer)
+            .map_err(ConfigurationError::DeserializationError)
+    }
+}
+
+/// Type of the prover to be used for generation of the pessimistic proof
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AgglayerProverType {
+    NetworkProver(NetworkProverConfig),
+    CpuProver(CpuProverConfig),
+    GpuProver(GpuProverConfig),
+    MockProver(MockProverConfig),
+}
+
+impl Default for AgglayerProverType {
+    fn default() -> Self {
+        AgglayerProverType::NetworkProver(NetworkProverConfig::default())
     }
 }
 
@@ -79,9 +106,6 @@ impl Default for ProverConfig {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct CpuProverConfig {
-    #[serde(default = "default_activation_cpu_prover")]
-    pub enabled: bool,
-
     #[serde(default = "default_max_concurrency_limit")]
     pub max_concurrency_limit: usize,
 
@@ -106,7 +130,6 @@ impl CpuProverConfig {
 impl Default for CpuProverConfig {
     fn default() -> Self {
         Self {
-            enabled: default_activation_cpu_prover(),
             max_concurrency_limit: default_max_concurrency_limit(),
             proving_request_timeout: None,
             proving_timeout: default_cpu_proving_timeout(),
@@ -118,9 +141,6 @@ impl Default for CpuProverConfig {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct NetworkProverConfig {
-    #[serde(default = "default_activation_network_prover")]
-    pub enabled: bool,
-
     #[serde_as(as = "Option<crate::with::HumanDuration>")]
     pub proving_request_timeout: Option<Duration>,
 
@@ -142,7 +162,6 @@ impl NetworkProverConfig {
 impl Default for NetworkProverConfig {
     fn default() -> Self {
         Self {
-            enabled: default_activation_network_prover(),
             proving_request_timeout: None,
             proving_timeout: default_network_proving_timeout(),
         }
@@ -153,9 +172,6 @@ impl Default for NetworkProverConfig {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct GpuProverConfig {
-    #[serde(default = "default_activation_gpu_prover")]
-    pub enabled: bool,
-
     #[serde(default = "default_max_concurrency_limit")]
     pub max_concurrency_limit: usize,
 
@@ -180,7 +196,41 @@ impl GpuProverConfig {
 impl Default for GpuProverConfig {
     fn default() -> Self {
         Self {
-            enabled: default_activation_gpu_prover(),
+            max_concurrency_limit: default_max_concurrency_limit(),
+            proving_request_timeout: None,
+            proving_timeout: default_cpu_proving_timeout(),
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct MockProverConfig {
+    #[serde(default = "default_max_concurrency_limit")]
+    pub max_concurrency_limit: usize,
+
+    #[serde_as(as = "Option<crate::with::HumanDuration>")]
+    pub proving_request_timeout: Option<Duration>,
+
+    #[serde(default = "default_cpu_proving_timeout")]
+    #[serde(with = "crate::with::HumanDuration")]
+    pub proving_timeout: Duration,
+}
+
+impl MockProverConfig {
+    // This constant represents the number of second added to the proving_timeout
+    pub const DEFAULT_PROVING_TIMEOUT_PADDING: Duration = Duration::from_secs(1);
+
+    pub fn get_proving_request_timeout(&self) -> Duration {
+        self.proving_request_timeout
+            .unwrap_or_else(|| self.proving_timeout + Self::DEFAULT_PROVING_TIMEOUT_PADDING)
+    }
+}
+
+impl Default for MockProverConfig {
+    fn default() -> Self {
+        Self {
             max_concurrency_limit: default_max_concurrency_limit(),
             proving_request_timeout: None,
             proving_timeout: default_cpu_proving_timeout(),
@@ -234,18 +284,6 @@ fn same_as_default_max_encoding_message_size(value: &usize) -> bool {
 
 const fn default_socket_addr() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)
-}
-
-const fn default_activation_cpu_prover() -> bool {
-    true
-}
-
-const fn default_activation_network_prover() -> bool {
-    false
-}
-
-const fn default_activation_gpu_prover() -> bool {
-    false
 }
 
 pub(crate) fn default_prover_entrypoint() -> String {

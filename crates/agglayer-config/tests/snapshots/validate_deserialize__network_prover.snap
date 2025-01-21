@@ -7,9 +7,6 @@ max-concurrency-limit = 100
 max-request-duration = "5m"
 max-buffered-queries = 100
 
-[grpc]
-max-decoding-message-size = 104857600
-
 [log]
 level = "info"
 outputs = []
@@ -22,4 +19,5 @@ prometheus-addr = "0.0.0.0:3000"
 runtime-timeout = "5s"
 
 [primary-prover.network-prover]
-proving-timeout = "5m"
+proving-request-timeout = "5m"
+proving-timeout = "10m"
