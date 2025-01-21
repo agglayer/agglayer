@@ -112,7 +112,7 @@ pub struct CpuProverConfig {
     #[serde_as(as = "Option<crate::with::HumanDuration>")]
     pub proving_request_timeout: Option<Duration>,
 
-    #[serde(default = "default_cpu_proving_timeout")]
+    #[serde(default = "default_local_proving_timeout")]
     #[serde(with = "crate::with::HumanDuration")]
     pub proving_timeout: Duration,
 }
@@ -132,7 +132,7 @@ impl Default for CpuProverConfig {
         Self {
             max_concurrency_limit: default_max_concurrency_limit(),
             proving_request_timeout: None,
-            proving_timeout: default_cpu_proving_timeout(),
+            proving_timeout: default_local_proving_timeout(),
         }
     }
 }
@@ -178,7 +178,7 @@ pub struct GpuProverConfig {
     #[serde_as(as = "Option<crate::with::HumanDuration>")]
     pub proving_request_timeout: Option<Duration>,
 
-    #[serde(default = "default_cpu_proving_timeout")]
+    #[serde(default = "default_local_proving_timeout")]
     #[serde(with = "crate::with::HumanDuration")]
     pub proving_timeout: Duration,
 }
@@ -198,7 +198,7 @@ impl Default for GpuProverConfig {
         Self {
             max_concurrency_limit: default_max_concurrency_limit(),
             proving_request_timeout: None,
-            proving_timeout: default_cpu_proving_timeout(),
+            proving_timeout: default_local_proving_timeout(),
         }
     }
 }
@@ -213,7 +213,7 @@ pub struct MockProverConfig {
     #[serde_as(as = "Option<crate::with::HumanDuration>")]
     pub proving_request_timeout: Option<Duration>,
 
-    #[serde(default = "default_cpu_proving_timeout")]
+    #[serde(default = "default_local_proving_timeout")]
     #[serde(with = "crate::with::HumanDuration")]
     pub proving_timeout: Duration,
 }
@@ -233,7 +233,7 @@ impl Default for MockProverConfig {
         Self {
             max_concurrency_limit: default_max_concurrency_limit(),
             proving_request_timeout: None,
-            proving_timeout: default_cpu_proving_timeout(),
+            proving_timeout: default_local_proving_timeout(),
         }
     }
 }
@@ -302,7 +302,7 @@ const fn default_max_request_duration() -> Duration {
     Duration::from_secs(60 * 5)
 }
 
-const fn default_cpu_proving_timeout() -> Duration {
+const fn default_local_proving_timeout() -> Duration {
     Duration::from_secs(60 * 5)
 }
 

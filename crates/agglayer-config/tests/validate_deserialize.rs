@@ -7,7 +7,7 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn empty_rpcs() {
-    let input = "./tests/fixtures/valide_config/empty_rpcs.toml";
+    let input = "./tests/fixtures/validate_config/empty_rpcs.toml";
 
     let config = Config::try_load(Path::new(input)).unwrap();
 
@@ -26,7 +26,7 @@ fn empty_rpcs() {
 
 #[test]
 fn max_rpc_request_size() {
-    let input = "./tests/fixtures/valide_config/max_rpc_request_size.toml";
+    let input = "./tests/fixtures/validate_config/max_rpc_request_size.toml";
 
     let config = Config::try_load(Path::new(input)).unwrap();
 
@@ -47,7 +47,7 @@ fn max_rpc_request_size() {
 
 #[test]
 fn grpc_max_decoding_message_size() {
-    let input = "./tests/fixtures/valide_config/grpc_max_decoding_message_size.toml";
+    let input = "./tests/fixtures/validate_config/grpc_max_decoding_message_size.toml";
 
     let config = Config::try_load(Path::new(input)).unwrap();
 
@@ -71,7 +71,7 @@ fn grpc_max_decoding_message_size() {
 
 #[test]
 fn prover_grpc_max_decoding_message_size() {
-    let input = "./tests/fixtures/valide_config/prover_grpc_max_decoding_message_size.toml";
+    let input = "./tests/fixtures/validate_config/prover_grpc_max_decoding_message_size.toml";
 
     let config: ProverConfig = toml::from_str(&std::fs::read_to_string(input).unwrap()).unwrap();
 
@@ -92,7 +92,7 @@ fn prover_grpc_max_decoding_message_size() {
 
 #[test]
 fn network_prover() {
-    let input = "./tests/fixtures/valide_config/prover_config_network_prover.toml";
+    let input = "./tests/fixtures/validate_config/prover_config_network_prover.toml";
     let config = ProverConfig::try_load(Path::new(input)).unwrap();
 
     assert_eq!(
@@ -108,7 +108,7 @@ fn network_prover() {
 
 #[test]
 fn cpu_prover() {
-    let input = "./tests/fixtures/valide_config/prover_config_cpu_prover.toml";
+    let input = "./tests/fixtures/validate_config/prover_config_cpu_prover.toml";
     let config = ProverConfig::try_load(Path::new(input)).unwrap();
 
     assert_eq!(
@@ -125,7 +125,7 @@ fn cpu_prover() {
 
 #[test]
 fn network_and_cpu_prover() {
-    let input = "./tests/fixtures/valide_config/prover_config_primary_fallback_prover.toml";
+    let input = "./tests/fixtures/validate_config/prover_config_primary_fallback_prover.toml";
     let config = ProverConfig::try_load(Path::new(input)).unwrap();
 
     assert_eq!(

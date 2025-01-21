@@ -5,7 +5,7 @@ use insta::assert_toml_snapshot;
 
 #[test]
 fn auth_kebab_case() {
-    let input = "./tests/fixtures/valide_config/auth_kebab_case.toml";
+    let input = "./tests/fixtures/validate_config/auth_kebab_case.toml";
 
     let config = Config::try_load(Path::new(input)).unwrap();
 

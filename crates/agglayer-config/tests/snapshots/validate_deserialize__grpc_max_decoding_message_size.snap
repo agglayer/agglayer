@@ -60,7 +60,7 @@ input-backpressure-buffer-size = 1000
 [certificate-orchestrator.prover.sp1-local]
 
 [storage]
-db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
+db-path = "/tmp/agglayer/tests/fixtures/validate_config/storage"
 
 [prover.grpc]
 max-decoding-message-size = 104857600
