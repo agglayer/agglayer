@@ -203,7 +203,6 @@ where
                 );
 
                 let response = self.run_prechecks(&certificate, *next_expected_height);
-                warn!("============== PRECHECKS FINISHED");
 
                 if let Err(err) = &response {
                     let cert_id = certificate.hash();
