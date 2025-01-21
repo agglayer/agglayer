@@ -1,6 +1,6 @@
 use std::{path::Path, time::Duration};
 
-use agglayer_config::{log::LogLevel, TelemetryConfig};
+use agglayer_config::log::LogLevel;
 use agglayer_prover::fake::FakeProver;
 use ethers::{
     core::k256::ecdsa::SigningKey,
@@ -66,9 +66,9 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
     .unwrap();
 
     let mut config = agglayer_config::Config::new(tmp_dir);
-    let prover_config = agglayer_config::prover::ProverConfig {
+    let prover_config = agglayer_prover_config::ProverConfig {
         grpc_endpoint: next_available_addr(),
-        telemetry: TelemetryConfig {
+        telemetry: agglayer_prover_config::TelemetryConfig {
             addr: next_available_addr(),
         },
         ..Default::default()

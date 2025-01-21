@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use pessimistic_proof::error::ProofVerificationError;
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -21,9 +22,6 @@ use pessimistic_proof::{
     ProofError,
 };
 use serde::{Deserialize, Serialize};
-use sp1_sdk::{
-    Prover, ProverClient, SP1Proof, SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin,
-};
 
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
@@ -35,11 +33,7 @@ pub use agglayer_primitives as primitives;
 // Re-export common primitives again as agglayer-types root types
 pub use agglayer_primitives::{Address, Signature, SignatureError, B256, U256, U512};
 pub use pessimistic_proof::bridge_exit::NetworkId;
-use sp1_sdk::SP1VerificationError;
-
-/// ELF of the pessimistic proof program
-pub(crate) const ELF: &[u8] =
-    include_bytes!("../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");
+pub use pessimistic_proof::proof::Proof;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {
@@ -174,43 +168,6 @@ impl std::fmt::Display for GenerationType {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
-pub enum ProofVerificationError {
-    #[error("Version mismatch: {0}")]
-    VersionMismatch(String),
-    #[error("Core machine verification error: {0}")]
-    Core(String),
-    #[error("Recursion verification error: {0}")]
-    Recursion(String),
-    #[error("Plonk verification error: {0}")]
-    Plonk(String),
-    #[error("Groth16 verification error: {0}")]
-    Groth16(String),
-    #[error("Invalid public values")]
-    InvalidPublicValues,
-}
-
-impl From<SP1VerificationError> for ProofVerificationError {
-    fn from(err: SP1VerificationError) -> Self {
-        match err {
-            SP1VerificationError::VersionMismatch(version) => {
-                ProofVerificationError::VersionMismatch(version)
-            }
-            SP1VerificationError::Core(core) => ProofVerificationError::Core(core.to_string()),
-            SP1VerificationError::Recursion(recursion) => {
-                ProofVerificationError::Recursion(recursion.to_string())
-            }
-            SP1VerificationError::Plonk(error) => ProofVerificationError::Plonk(error.to_string()),
-            SP1VerificationError::Groth16(error) => {
-                ProofVerificationError::Groth16(error.to_string())
-            }
-            SP1VerificationError::InvalidPublicValues => {
-                ProofVerificationError::InvalidPublicValues
-            }
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CertificateStatus {
     Pending,
@@ -229,38 +186,6 @@ impl std::fmt::Display for CertificateStatus {
             CertificateStatus::InError { error } => write!(f, "InError: {}", error),
             CertificateStatus::Settled => write!(f, "Settled"),
         }
-    }
-}
-
-/// Proof is a wrapper around all the different types of proofs that can be
-/// generated
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Proof {
-    SP1(sp1_sdk::SP1ProofWithPublicValues),
-}
-
-impl Proof {
-    pub fn dummy() -> Self {
-        Self::SP1(SP1ProofWithPublicValues {
-            proof: SP1Proof::Core(vec![]),
-            public_values: SP1PublicValues::new(),
-            sp1_version: "".to_string(),
-        })
-    }
-    pub fn new_for_test(
-        state: &pessimistic_proof::NetworkState,
-        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
-    ) -> Self {
-        let mock = ProverClient::builder().mock().build();
-        let (p, _v) = mock.setup(ELF);
-
-        let mut stdin = SP1Stdin::new();
-        stdin.write(state);
-        stdin.write(multi_batch_header);
-
-        let proof = mock.prove(&p, &stdin).plonk().run().unwrap();
-
-        Proof::SP1(proof)
     }
 }
 

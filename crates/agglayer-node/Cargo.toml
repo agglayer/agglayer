@@ -64,7 +64,7 @@ tracing-capture = "0.1.0"
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
 agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
 agglayer-types = { path = "../agglayer-types", features = ["testutils"] }
-agglayer-prover = { path = "../agglayer-prover", features = ["testutils"] }
+agglayer-prover = { workspace = true, features = ["testutils"] }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
 [features]

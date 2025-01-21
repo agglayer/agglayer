@@ -56,6 +56,7 @@ dependencies = [
  "agglayer-config",
  "agglayer-node",
  "agglayer-prover",
+ "agglayer-prover-config",
  "anyhow",
  "assert_cmd",
  "clap",
@@ -74,6 +75,7 @@ dependencies = [
  "agglayer-config",
  "agglayer-contracts",
  "agglayer-prover",
+ "agglayer-prover-config",
  "agglayer-prover-types",
  "agglayer-storage",
  "agglayer-types",
@@ -155,6 +157,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
+ "agglayer-prover-config",
  "dirs",
  "ethers",
  "humantime-serde",
@@ -262,16 +265,17 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git#f8dfc9578331afdeee346c7733dfa818219c32d2"
 dependencies = [
- "agglayer-config",
+ "agglayer-prover-config",
  "agglayer-prover-types",
  "agglayer-telemetry",
- "agglayer-types",
  "anyhow",
  "bincode",
  "buildstructor",
  "futures",
  "pessimistic-proof",
+ "prover-engine",
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.8",
@@ -287,10 +291,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-prover-config"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git#f8dfc9578331afdeee346c7733dfa818219c32d2"
+dependencies = [
+ "dirs",
+ "ethers",
+ "humantime-serde",
+ "jsonrpsee",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.8",
+ "toml",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git#f8dfc9578331afdeee346c7733dfa818219c32d2"
 dependencies = [
- "agglayer-types",
  "anyhow",
  "bincode",
  "pessimistic-proof",
@@ -1839,7 +1862,7 @@ dependencies = [
  "http-body 0.4.6",
  "hyper 0.14.32",
  "itoa",
- "matchit",
+ "matchit 0.7.3",
  "memchr",
  "mime",
  "percent-encoding",
@@ -1868,7 +1891,7 @@ dependencies = [
  "hyper 1.5.2",
  "hyper-util",
  "itoa",
- "matchit",
+ "matchit 0.7.3",
  "memchr",
  "mime",
  "percent-encoding",
@@ -1880,6 +1903,44 @@ dependencies = [
  "serde_urlencoded",
  "sync_wrapper 1.0.2",
  "tokio",
+ "tower 0.5.2",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
+name = "axum"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d6fd624c75e18b3b4c6b9caf42b1afe24437daaee904069137d8bab077be8b8"
+dependencies = [
+ "axum-core 0.5.0",
+ "axum-macros",
+ "base64 0.22.1",
+ "bytes",
+ "form_urlencoded",
+ "futures-util",
+ "http 1.2.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.5.2",
+ "hyper-util",
+ "itoa",
+ "matchit 0.8.4",
+ "memchr",
+ "mime",
+ "percent-encoding",
+ "pin-project-lite",
+ "rustversion",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
+ "sha1",
+ "sync_wrapper 1.0.2",
+ "tokio",
+ "tokio-tungstenite 0.26.1",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
@@ -1922,6 +1983,37 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "axum-core"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df1362f362fd16024ae199c1970ce98f9661bf5ef94b9808fee734bc3698b733"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "http 1.2.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "rustversion",
+ "sync_wrapper 1.0.2",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
+name = "axum-macros"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "604fde5e028fea851ce1d8570bbdc034bec850d157f7569d10f347d06808c05c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -2014,7 +2106,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.11.0",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2034,7 +2126,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -4741,6 +4833,7 @@ dependencies = [
  "agglayer-contracts",
  "agglayer-node",
  "agglayer-prover",
+ "agglayer-prover-config",
  "agglayer-signer",
  "agglayer-storage",
  "agglayer-telemetry",
@@ -5347,6 +5440,12 @@ name = "matchit"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
+
+[[package]]
+name = "matchit"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "md-5"
@@ -6286,6 +6385,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "sp1-sdk",
  "thiserror 2.0.8",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -6766,7 +6866,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0f3e5beed80eb580c68e2c600937ac2c4eedabdfd5ef1e5b7ea4f3fba84497b"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
@@ -6799,7 +6899,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "157c5a9d7ea5c2ed2d9fb8f495b64759f7816c7eaea54ba3978f0d63000162e3"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.90",
@@ -6828,6 +6928,25 @@ name = "protobuf"
 version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
+
+[[package]]
+name = "prover-engine"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git#f8dfc9578331afdeee346c7733dfa818219c32d2"
+dependencies = [
+ "agglayer-telemetry",
+ "anyhow",
+ "axum 0.8.1",
+ "http 1.2.0",
+ "http-body-util",
+ "tokio",
+ "tokio-util",
+ "tonic 0.12.3",
+ "tonic-health",
+ "tonic-reflection",
+ "tower 0.4.13",
+ "tracing",
+]
 
 [[package]]
 name = "quick-error"
@@ -9037,6 +9156,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-tungstenite"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be4bf6fecd69fcdede0ec680aaf474cdab988f9de6bc73d3758f0160e3b7025a"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite 0.26.1",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9488,6 +9619,24 @@ dependencies = [
  "rustls-pki-types",
  "sha1",
  "thiserror 1.0.69",
+ "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413083a99c579593656008130e29255e54dcaae495be556cc26888f211648c24"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http 1.2.0",
+ "httparse",
+ "log",
+ "rand",
+ "sha1",
+ "thiserror 2.0.8",
  "utf-8",
 ]
 

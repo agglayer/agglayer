@@ -13,7 +13,7 @@ fn main() -> anyhow::Result<()> {
         cli::Commands::Prover { cfg } => agglayer_prover::main(cfg, &version())?,
         cli::Commands::ProverConfig => println!(
             "{}",
-            toml::to_string_pretty(&agglayer_config::prover::ProverConfig::default()).unwrap()
+            toml::to_string_pretty(&agglayer_prover_config::ProverConfig::default()).unwrap()
         ),
         cli::Commands::Config { base_dir } => println!(
             "{}",

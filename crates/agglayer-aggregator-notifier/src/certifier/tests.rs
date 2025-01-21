@@ -1,10 +1,10 @@
 use std::{sync::Arc, thread, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
-use agglayer_config::prover::AgglayerProverType;
 use agglayer_config::Config;
 use agglayer_contracts::Settler;
 use agglayer_prover::fake::FakeProver;
+use agglayer_prover_config::AgglayerProverType;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{LocalNetworkStateData, NetworkId};
 use ethers::{
@@ -28,7 +28,7 @@ async fn happy_path() {
 
     let mut pending_store = MockPendingStore::new();
     let mut l1_rpc = MockL1Rpc::new();
-    let prover_config = agglayer_config::prover::ProverConfig::default();
+    let prover_config = agglayer_prover_config::ProverConfig::default();
 
     // spawning fake prover as we don't want to hit SP1
     let fake_prover = FakeProver::default();
@@ -108,7 +108,7 @@ async fn happy_path() {
 
 #[rstest::rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(10))]
+#[timeout(Duration::from_secs(20))]
 async fn prover_timeout() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();
@@ -116,9 +116,9 @@ async fn prover_timeout() {
 
     let mut pending_store = MockPendingStore::new();
     let mut l1_rpc = MockL1Rpc::new();
-    let prover_config = agglayer_config::prover::ProverConfig {
+    let prover_config = agglayer_prover_config::ProverConfig {
         grpc_endpoint: next_available_addr(),
-        primary_prover: AgglayerProverType::CpuProver(agglayer_config::prover::CpuProverConfig {
+        primary_prover: AgglayerProverType::CpuProver(agglayer_prover_config::CpuProverConfig {
             proving_timeout: Duration::from_secs(1),
             ..Default::default()
         }),

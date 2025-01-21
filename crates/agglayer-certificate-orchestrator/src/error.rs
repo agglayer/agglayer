@@ -1,7 +1,5 @@
-use agglayer_types::{
-    CertificateId, CertificateStatusError, Height, NetworkId, ProofVerificationError,
-};
-use pessimistic_proof::ProofError;
+use agglayer_types::{CertificateId, CertificateStatusError, Height, NetworkId};
+use pessimistic_proof::{error::ProofVerificationError, ProofError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PreCertificationError {
