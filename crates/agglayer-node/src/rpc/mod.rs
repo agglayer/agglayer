@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use agglayer_certificate_orchestrator::CertificateSubmitter;
 use agglayer_config::epoch::BlockClockConfig;
@@ -41,6 +42,8 @@ mod rpc_middleware;
 
 #[cfg(test)]
 mod tests;
+
+const BUSY_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
@@ -335,6 +338,7 @@ where
     #[instrument(skip(self, certificate), fields(hash, rollup_id = *certificate.network_id), level = "info")]
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
         let hash = certificate.hash();
+        let network_id = certificate.network_id;
         tracing::Span::current().record("hash", hash.to_string());
 
         info!(
@@ -347,9 +351,11 @@ where
             Error::internal(e.to_string())
         });
 
-        self.certificate_submitter
-            .submit(certificate)
+        let submission = self.certificate_submitter.submit(certificate);
+        tokio::time::timeout(BUSY_REPLY_TIMEOUT, submission)
             .await
+            .map_err(|_| agglayer_certificate_orchestrator::InitialCheckError::Busy { network_id })
+            .and_then(std::convert::identity)
             .map_err(Error::send_certificate)?;
 
         Ok(hash)

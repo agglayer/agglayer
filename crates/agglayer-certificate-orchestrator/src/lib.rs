@@ -132,7 +132,7 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
 where
     PendingStore: PendingCertificateReader,
 {
-    const DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE: usize = 1000;
+    const DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE: usize = 5;
 
     /// Creates a new CertificateOrchestrator instance.
     #[allow(clippy::too_many_arguments)]
@@ -296,7 +296,10 @@ where
     ) -> Result<(), Error> {
         for (certificate, reply_sender) in cursors {
             let network_id = certificate.network_id;
-            self.spawn_network_task(network_id)?;
+            if let Err(err) = self.spawn_network_task(network_id) {
+                let _ = reply_sender.send(Err(InitialCheckError::Internal));
+                return Err(err);
+            }
 
             if let Some(sender) = self.spawned_network_tasks.get(&network_id) {
                 if let Ok(sender) = sender.try_reserve() {
@@ -307,7 +310,7 @@ where
                         "Failed to send the certificate {certificate_id} to the network task for \
                          network {network_id}",
                     );
-                    let _ = reply_sender.send(Err(InitialCheckError::Internal));
+                    let _ = reply_sender.send(Err(InitialCheckError::Busy { network_id }));
                 }
             } else {
                 warn!("Unable to find the network task for network {}", network_id);

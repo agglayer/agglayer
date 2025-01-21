@@ -111,6 +111,7 @@ type CertError = agglayer_certificate_orchestrator::InitialCheckError;
     "cert_submission",
     Error::send_certificate(CertError::CertificateSubmission)
 )]
+#[case("cert_busy", Error::send_certificate(CertError::Busy { network_id: 42.into() }))]
 #[case(
     "cert_past",
     Error::send_certificate(CertError::InPast {

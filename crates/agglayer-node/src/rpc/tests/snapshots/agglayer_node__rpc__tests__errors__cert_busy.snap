@@ -1,0 +1,14 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "SendCertificate { detail: \"Certificate processing task for network 42 is busy, try again later\" }"
+snapshot_kind: text
+---
+{
+  "code": -10006,
+  "data": {
+    "send-certificate": {
+      "detail": "Certificate processing task for network 42 is busy, try again later"
+    }
+  },
+  "message": "Cannot send certificate"
+}

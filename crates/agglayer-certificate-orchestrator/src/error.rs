@@ -21,6 +21,9 @@ pub enum InitialCheckError {
     #[error("Cannot replace an existing {status} certificate")]
     IllegalReplacement { status: CertificateStatus },
 
+    #[error("Certificate processing task for network {network_id} is busy, try again later")]
+    Busy { network_id: NetworkId },
+
     #[error("Internal error")]
     Internal,
 }
