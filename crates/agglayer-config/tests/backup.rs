@@ -4,7 +4,7 @@ use agglayer_config::Config;
 use insta::assert_toml_snapshot;
 
 #[test]
-fn empty_rpcs() {
+fn backup_enabled() {
     let input = "./tests/fixtures/valide_config/backup_enabled.toml";
 
     let config = Config::try_load(Path::new(input)).unwrap();

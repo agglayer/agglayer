@@ -1,2 +1,2 @@
-[storage.backup.enabled]
+[storage.backup]
 path = "./test/"

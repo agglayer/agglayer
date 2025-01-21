@@ -9,7 +9,7 @@ use rocksdb::backup::{
     BackupEngine as RocksBackupEngine, BackupEngineInfo as RocksBackupEngineInfo,
     BackupEngineOptions, RestoreOptions,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tokio::sync;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -20,6 +20,28 @@ use super::{BackupError, DB};
 pub struct BackupRequest {
     /// Optional epoch db to backup.
     pub epoch_db: Option<(Arc<DB>, u64)>,
+}
+
+struct BackupEngineConfig {
+    state_backup_path: PathBuf,
+    pending_backup_path: PathBuf,
+    epochs_backup_path: PathBuf,
+}
+
+impl BackupEngineConfig {
+    const DEFAULT_EPOCHS_DIR: &'static str = "epochs";
+    const DEFAULT_PENDING_DIR: &'static str = "pending";
+    const DEFAULT_STATE_DIR: &'static str = "state";
+}
+
+impl From<&Path> for BackupEngineConfig {
+    fn from(path: &Path) -> Self {
+        Self {
+            state_backup_path: path.join(Self::DEFAULT_STATE_DIR),
+            pending_backup_path: path.join(Self::DEFAULT_PENDING_DIR),
+            epochs_backup_path: path.join(Self::DEFAULT_EPOCHS_DIR),
+        }
+    }
 }
 
 /// Client used to request a backup.
@@ -40,11 +62,9 @@ impl BackupClient {
     /// This function will send the request to the backup engine.
     pub fn backup(&self, request: BackupRequest) -> Result<(), BackupError> {
         if let Some(sender) = &self.sender {
-            let slot = sender
-                .try_reserve()
+            sender
+                .try_send(request)
                 .map_err(|_| BackupError::UnableToSendBackupRequest)?;
-
-            slot.send(request);
         }
 
         Ok(())
@@ -59,10 +79,11 @@ pub struct BackupEngine {
     state_engine: RocksBackupEngine,
     state_db: Arc<DB>,
     pending_db: Arc<DB>,
-    epochs_path: PathBuf,
+    config: BackupEngineConfig,
     backup_request: sync::mpsc::Receiver<BackupRequest>,
     state_max_backup_number: usize,
     pending_max_backup_number: usize,
+    cancellation_token: CancellationToken,
 }
 
 // # Safety
@@ -80,27 +101,29 @@ impl BackupEngine {
         pending_db: Arc<DB>,
         state_max_backup_number: usize,
         pending_max_backup_number: usize,
+        cancellation_token: CancellationToken,
     ) -> Result<(Self, BackupClient), BackupError> {
         let env = rocksdb::Env::new()?;
-        let pending_opts = rocksdb::backup::BackupEngineOptions::new(path.join("pending"))?;
-        let state_opts = rocksdb::backup::BackupEngineOptions::new(path.join("state"))?;
+        let config: BackupEngineConfig = path.into();
+        let pending_opts = rocksdb::backup::BackupEngineOptions::new(&config.pending_backup_path)?;
+        let state_opts = rocksdb::backup::BackupEngineOptions::new(&config.state_backup_path)?;
 
         let (sender, backup_request) = sync::mpsc::channel(10);
 
-        let epochs_path = path.join("epochs");
-        std::fs::create_dir_all(&epochs_path)?;
+        std::fs::create_dir_all(&config.epochs_backup_path)?;
 
         Ok((
             Self {
                 state_engine: RocksBackupEngine::open(&state_opts, &env)?,
                 pending_engine: RocksBackupEngine::open(&pending_opts, &env)?,
+                config,
                 env,
                 state_db,
                 pending_db,
-                epochs_path,
                 backup_request,
                 state_max_backup_number,
                 pending_max_backup_number,
+                cancellation_token,
             },
             BackupClient {
                 sender: Some(sender),
@@ -115,7 +138,9 @@ impl BackupEngine {
 
         if let Some((db, epoch_number)) = request.epoch_db.as_ref() {
             let epochs_opts = rocksdb::backup::BackupEngineOptions::new(
-                self.epochs_path.join(format!("{}", epoch_number)),
+                self.config
+                    .epochs_backup_path
+                    .join(format!("{}", epoch_number)),
             )?;
 
             match RocksBackupEngine::open(&epochs_opts, &self.env) {
@@ -164,10 +189,10 @@ impl BackupEngine {
     }
 
     /// Run the backup engine, listen for new backup requests.
-    pub async fn run(mut self, cancellation_token: CancellationToken) -> Result<(), BackupError> {
+    pub async fn run(mut self) -> Result<(), BackupError> {
         loop {
             tokio::select! {
-                _ = cancellation_token.cancelled() => {
+                _ = self.cancellation_token.cancelled() => {
                     info!("Backup engine cancelled");
                     break;
                 }
@@ -187,7 +212,7 @@ impl BackupEngine {
 
         let mut engine = RocksBackupEngine::open(&opts, &env)?;
 
-        std::fs::create_dir_all(db_path).unwrap();
+        std::fs::create_dir_all(db_path)?;
 
         Ok(engine.restore_from_latest_backup(db_path, db_path, &RestoreOptions::default())?)
     }
@@ -199,7 +224,7 @@ impl BackupEngine {
 
         let mut engine = RocksBackupEngine::open(&opts, &env)?;
 
-        std::fs::create_dir_all(db_path).unwrap();
+        std::fs::create_dir_all(db_path)?;
 
         Ok(engine.restore_from_backup(db_path, db_path, &RestoreOptions::default(), version)?)
     }
@@ -207,20 +232,24 @@ impl BackupEngine {
     pub fn list_backups(path: &Path) -> Result<BackupReport, BackupError> {
         let env = rocksdb::Env::new()?;
 
-        let mut report = BackupReport::default();
-
-        let opts = BackupEngineOptions::new(path.join("state"))?;
+        let config: BackupEngineConfig = path.into();
+        let opts = BackupEngineOptions::new(&config.state_backup_path)?;
         let engine = RocksBackupEngine::open(&opts, &env)?;
 
-        report.state(engine.get_backup_info());
+        let state = engine
+            .get_backup_info()
+            .into_iter()
+            .map(BackupEngineInfo::from);
 
-        let opts = BackupEngineOptions::new(path.join("pending"))?;
+        let opts = BackupEngineOptions::new(&config.pending_backup_path)?;
         let engine = RocksBackupEngine::open(&opts, &env)?;
 
-        report.pending(engine.get_backup_info());
+        let pending = engine
+            .get_backup_info()
+            .into_iter()
+            .map(BackupEngineInfo::from);
 
-        let epoch_path = path.join("epochs");
-        let mut epochs = (read_dir(&epoch_path)?)
+        let mut epochs = (read_dir(&config.epochs_backup_path)?)
             .flatten()
             .filter_map(|d| {
                 d.file_name()
@@ -231,84 +260,89 @@ impl BackupEngine {
             })
             .collect::<Vec<_>>();
 
-        epochs.sort_by(|(p, _), (n, _)| p.cmp(n));
+        // We need to resort the epochs since the directory listing is not correctly
+        // ordered.
+        epochs.sort();
 
-        for (epoch_number, path) in epochs {
-            let opts = BackupEngineOptions::new(path)?;
-            let engine = RocksBackupEngine::open(&opts, &env)?;
-            report.epochs(epoch_number, engine.get_backup_info());
-        }
+        let epochs = epochs
+            .into_iter()
+            .map(|(epoch_number, path)| {
+                let opts = BackupEngineOptions::new(path)?;
+                let engine = RocksBackupEngine::open(&opts, &env)?;
 
-        Ok(report)
+                Ok::<_, BackupError>((
+                    epoch_number,
+                    engine
+                        .get_backup_info()
+                        .into_iter()
+                        .map(BackupEngineInfo::from)
+                        .collect::<Vec<_>>(),
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(BackupReport::new(state, pending, epochs))
     }
 }
 
 impl Drop for BackupEngine {
     fn drop(&mut self) {
+        info!("Waiting for all requested backups to complete");
+
         self.env.set_background_threads(0);
         self.env.set_low_priority_background_threads(0);
         self.env.set_high_priority_background_threads(0);
         self.env.set_bottom_priority_background_threads(0);
 
         self.env.join_all_threads();
+        self.cancellation_token.cancel();
     }
 }
 
-#[derive(Default, Serialize, Deserialize)]
-pub struct BackupReport {
-    epochs: BTreeMap<u64, Vec<BackupEngineInfo>>,
-    state: Vec<BackupEngineInfo>,
-    pending: Vec<BackupEngineInfo>,
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct BackupEngineInfo {
     pub backup_id: u32,
-    #[serde(serialize_with = "timestamp_to_readable")]
-    pub timestamp: i64,
+    // #[serde(serialize_with = "timestamp_to_readable")]
+    pub timestamp: chrono::DateTime<chrono::Utc>,
     pub size: u64,
     pub num_files: u32,
-}
-
-fn timestamp_to_readable<S>(timestamp: &i64, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    chrono::DateTime::<chrono::Utc>::from_timestamp(*timestamp, 0)
-        .unwrap_or_default()
-        .to_rfc2822()
-        .serialize(serializer)
 }
 
 impl From<RocksBackupEngineInfo> for BackupEngineInfo {
     fn from(info: RocksBackupEngineInfo) -> Self {
         Self {
             backup_id: info.backup_id,
-            timestamp: info.timestamp,
+            // We use the default timestamp if the conversion fails as this timestamp is purely
+            // informative.
+            timestamp: chrono::DateTime::<chrono::Utc>::from_timestamp(info.timestamp, 0)
+                .unwrap_or_default(),
             size: info.size,
             num_files: info.num_files,
         }
     }
 }
 
+#[derive(Default, Serialize)]
+pub struct BackupReport {
+    epochs: BTreeMap<u64, Vec<BackupEngineInfo>>,
+    state: Vec<BackupEngineInfo>,
+    pending: Vec<BackupEngineInfo>,
+}
+
 impl BackupReport {
-    pub fn state<V: IntoIterator<Item = T>, T: Into<BackupEngineInfo>>(&mut self, value: V) {
-        self.state = value.into_iter().map(Into::into).collect();
+    pub fn new(
+        state: impl Iterator<Item = BackupEngineInfo>,
+        pending: impl Iterator<Item = BackupEngineInfo>,
+        epochs: impl IntoIterator<Item = (u64, Vec<BackupEngineInfo>)>,
+    ) -> Self {
+        Self {
+            state: state.collect(),
+            pending: pending.collect(),
+            epochs: BTreeMap::from_iter(epochs),
+        }
     }
-
-    pub fn pending<V: IntoIterator<Item = T>, T: Into<BackupEngineInfo>>(&mut self, value: V) {
-        self.pending = value.into_iter().map(Into::into).collect();
-    }
-
-    pub fn epochs<V: IntoIterator<Item = T>, T: Into<BackupEngineInfo>>(
-        &mut self,
-        key: u64,
-        value: V,
-    ) {
-        self.epochs
-            .insert(key, value.into_iter().map(Into::into).collect());
-    }
-
+}
+impl BackupReport {
     pub fn get_state(&self) -> &[BackupEngineInfo] {
         self.state.as_slice()
     }

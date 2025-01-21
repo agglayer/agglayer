@@ -93,19 +93,19 @@ impl Node {
         // Initialize backup engine
         let backup_client = if let BackupConfig::Enabled {
             path,
-            state_max_backup_number,
-            pending_max_backup_number,
+            state_max_backup_count,
+            pending_max_backup_count,
         } = &config.storage.backup
         {
             let (backup_engine, client) = BackupEngine::new(
                 path,
                 state_db.clone(),
                 pending_db.clone(),
-                *state_max_backup_number,
-                *pending_max_backup_number,
+                *state_max_backup_count,
+                *pending_max_backup_count,
+                cancellation_token.clone(),
             )?;
-            let backup_engine_cancellation_token = cancellation_token.child_token();
-            tokio::spawn(async move { backup_engine.run(backup_engine_cancellation_token).await });
+            tokio::spawn(backup_engine.run());
 
             client
         } else {
@@ -162,7 +162,7 @@ impl Node {
             current_epoch,
             pending_store.clone(),
             state_store.clone(),
-            backup_client.clone(),
+            backup_client,
         )?);
 
         info!("Epoch synchronization started.");

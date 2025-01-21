@@ -17,9 +17,9 @@ fail = { workspace = true, features = ["failpoints"] }
 futures.workspace = true
 hex.workspace = true
 http-body-util = "0.1.2"
-hyper.workspace = true
 hyper-util = { version = "0.1.6", features = ["client"] }
-insta = { workspace = true, features = ["json"] }
+hyper.workspace = true
+insta.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.7" }
 lazy_static.workspace = true

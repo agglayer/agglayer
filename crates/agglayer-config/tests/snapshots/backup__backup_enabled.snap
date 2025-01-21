@@ -62,7 +62,7 @@ input-backpressure-buffer-size = 1000
 [storage]
 db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
 
-[storage.backup.enabled]
+[storage.backup]
 path = "./test/"
-state_max_backup_number = 100
-pending_max_backup_number = 100
+state_max_backup_count = 100
+pending_max_backup_count = 100

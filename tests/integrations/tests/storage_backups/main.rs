@@ -90,8 +90,8 @@ async fn purge_after_n_backup() {
     let mut config = agglayer_config::Config::new(&tmp_dir.path);
     config.storage.backup = BackupConfig::Enabled {
         path: backup_dir.path.clone(),
-        state_max_backup_number: 1,
-        pending_max_backup_number: 1,
+        state_max_backup_count: 1,
+        pending_max_backup_count: 1,
     };
 
     // L1 is a RAII guard
@@ -222,6 +222,9 @@ async fn report_contains_all_backups() {
 
     let backup_report = BackupEngine::list_backups(&backup_dir.path).unwrap();
 
+    // There are 4 backups because 2 actions triggers a backup per certs:
+    // - One when the L1 `tx_hash` is known
+    // - One when the `Certificate` is settled and the network state is updated
     assert_eq!(backup_report.get_state().len(), 4);
     assert_eq!(backup_report.get_pending().len(), 4);
 
@@ -312,7 +315,6 @@ async fn restore_at_particular_level() {
     assert_eq!(backup_report.get_state().len(), 4);
     assert_eq!(backup_report.get_pending().len(), 4);
 
-    println!("{}", serde_json::to_string_pretty(&backup_report).unwrap());
     BackupEngine::restore_at(
         &backup_dir.path.join("state"),
         &config.storage.state_db_path,

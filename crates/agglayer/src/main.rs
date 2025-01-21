@@ -35,35 +35,26 @@ fn main() -> anyhow::Result<()> {
             println!("{}", vkey);
         }
 
-        cli::Commands::Backups(cli::Backups::List { cfg }) => {
+        cli::Commands::Backup(cli::Backup::List { config_path: cfg }) => {
             let cfg = agglayer_config::Config::try_load(&cfg)?;
 
             if let BackupConfig::Enabled { path, .. } = cfg.storage.backup {
-                let result =
-                    agglayer_storage::storage::backup::BackupEngine::list_backups(&path).unwrap();
-
-                println!("{}", serde_json::to_string(&result).unwrap());
+                match agglayer_storage::storage::backup::BackupEngine::list_backups(&path) {
+                    Ok(result) => println!("{}", serde_json::to_string(&result).unwrap()),
+                    Err(error) => eprintln!("{}", error),
+                }
             }
         }
 
-        cli::Commands::Backups(cli::Backups::Restore { cfg, db_versions }) => {
+        cli::Commands::Backup(cli::Backup::Restore {
+            config_path: cfg,
+            db_versions,
+        }) => {
             let cfg = agglayer_config::Config::try_load(&cfg)?;
 
-            if let BackupConfig::Enabled { path, .. } = cfg.storage.backup {
+            if let BackupConfig::Enabled { ref path, .. } = cfg.storage.backup {
                 for (db_kind, version) in db_versions {
-                    let (db_path, backup_path) = match db_kind {
-                        cli::DbKind::State => {
-                            (cfg.storage.state_db_path.join("state"), path.join("state"))
-                        }
-                        cli::DbKind::Pending => (
-                            cfg.storage.pending_db_path.join("pending"),
-                            path.join("pending"),
-                        ),
-                        cli::DbKind::Epoch(epoch_number) => (
-                            cfg.storage.epochs_db_path.join(format!("{}", epoch_number)),
-                            path.join(format!("epochs/{}", epoch_number)),
-                        ),
-                    };
+                    let (db_path, backup_path) = db_kind.create_paths(&cfg, path);
 
                     agglayer_storage::storage::backup::BackupEngine::restore_at(
                         &backup_path,

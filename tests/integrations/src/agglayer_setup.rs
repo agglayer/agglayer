@@ -129,9 +129,9 @@ pub async fn start_agglayer(
     let toml = toml::to_string_pretty(&config).unwrap();
     std::fs::write(&config_file, toml).unwrap();
 
-    let gracefull_shutdown_token = shutdown_token.clone();
+    let graceful_shutdown_token = shutdown_token.clone();
     let handle = std::thread::spawn(move || {
-        agglayer_node::main(config_file, "test", Some(gracefull_shutdown_token)).unwrap();
+        agglayer_node::main(config_file, "test", Some(graceful_shutdown_token)).unwrap();
         _ = shutdown.send(());
     });
     let url = format!("ws://{}/", config.rpc_addr());

@@ -11,15 +11,16 @@ pub enum BackupConfig {
     Disabled,
 
     /// Backups are enabled.
+    #[serde(untagged)]
     Enabled {
         /// Path to the directory where backups are stored.
         path: PathBuf,
         /// Maximum number of backups to keep for the state storage.
         #[serde(default = "default_max_backup_number")]
-        state_max_backup_number: usize,
+        state_max_backup_count: usize,
         /// Maximum number of backups to keep for the pending storage.
         #[serde(default = "default_max_backup_number")]
-        pending_max_backup_number: usize,
+        pending_max_backup_count: usize,
     },
 }
 
@@ -30,8 +31,8 @@ impl BackupConfig {
     pub fn with_path<P: Into<PathBuf>>(path: P) -> Self {
         BackupConfig::Enabled {
             path: path.into(),
-            state_max_backup_number: default_max_backup_number(),
-            pending_max_backup_number: default_max_backup_number(),
+            state_max_backup_count: default_max_backup_number(),
+            pending_max_backup_count: default_max_backup_number(),
         }
     }
 
