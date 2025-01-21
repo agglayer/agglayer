@@ -70,9 +70,13 @@ pub enum L1RpcError {
     #[error("Unable to find `UpdateL1InfoTreeV2` events")]
     UpdateL1InfoTreeV2EventNotFound,
     #[error("Unable to fetch the latest finalized block")]
-    LastFinalizedBlockNotFound,
+    LatestFinalizedBlockNotFound,
     #[error("Timeout exceeded while waiting for block {0} to be finalized.")]
     FinalizationTimeoutExceeded(u64),
+    #[error("L1 Reorg detected for block number {0}")]
+    ReorgDetected(u64),
+    #[error("Cannot get the block hash for the block number {0}")]
+    BlockHashNotFound(u64),
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
@@ -165,13 +169,15 @@ where
             .map_err(|e| L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string()))?;
 
         // Extract event details
-        let (l1_info_root, event_block_number) = events
+        let (l1_info_root, event_block_number, event_block_hash) = events
             .first()
             .and_then(|log| {
                 match PolygonZkEVMGlobalExitRootV2Events::decode_log(&log.clone().into()).ok()? {
-                    PolygonZkEVMGlobalExitRootV2Events::UpdateL1InfoTreeV2Filter(event) => {
-                        Some((event.current_l1_info_root, log.block_number?))
-                    }
+                    PolygonZkEVMGlobalExitRootV2Events::UpdateL1InfoTreeV2Filter(event) => Some((
+                        event.current_l1_info_root,
+                        log.block_number?,
+                        log.block_hash?,
+                    )),
                     _ => None,
                 }
             })
@@ -190,6 +196,10 @@ where
             let mut timeout_tick = tokio::time::interval(TIME_TO_FINALITY_ETHEREUM);
             let mut finalized_block_number: U64 = 0.into();
 
+            // The first tick completes immediately
+            tick.tick().await;
+            timeout_tick.tick().await;
+
             loop {
                 tokio::select! {
                     _ = tick.tick() => {
@@ -200,7 +210,7 @@ where
                             .ok()
                             .flatten()
                             .and_then(|block| block.number)
-                            .ok_or(L1RpcError::LastFinalizedBlockNotFound)?;
+                            .ok_or(L1RpcError::LatestFinalizedBlockNotFound)?;
 
                         debug!(
                             "Awaiting L1 info tree leaf count ({}) set at block {} to be finalized. \
@@ -208,7 +218,28 @@ where
                             l1_leaf_count, event_block_number, finalized_block_number,
                         );
 
+                        // Check whether the block number containing the event is now finalized.
                         if finalized_block_number >= event_block_number {
+                            // Verify that the hash of the block containing
+                            // the event did not change due to potential reorg
+                            let retrieved_block_hash = self
+                                  .rpc
+                                  .get_block(BlockId::Number(event_block_number.into()))
+                                  .await
+                                  .ok()
+                                  .flatten()
+                                  .and_then(|block| block.hash)
+                                  .ok_or(L1RpcError::BlockHashNotFound(event_block_number.as_u64()))?;
+
+                            if retrieved_block_hash != event_block_hash {
+                                error!(
+                                    "Reorg detected! Retrieved block hash ({:?}) does not match \
+                                     expected event block hash ({:?}).",
+                                    retrieved_block_hash, event_block_hash
+                                );
+                                return Err(L1RpcError::ReorgDetected(event_block_number.as_u64()));
+                            }
+
                             break;
                         }
                     },
@@ -345,7 +376,7 @@ mod tests {
         );
 
         // check that the awaiting for finalization is done as expected
-        let latest_l1_leaf = 66653;
+        let latest_l1_leaf = 73587;
         let _l1_info_root = l1_rpc.get_l1_info_root(latest_l1_leaf).await.unwrap();
     }
 }

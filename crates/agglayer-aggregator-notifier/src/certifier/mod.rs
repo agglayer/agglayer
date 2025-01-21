@@ -257,7 +257,7 @@ where
                     });
                 }
 
-                declared_root
+                retrieved_root
             }
             // Inconsistent declared L1 info tree entry
             (l1_leaf, l1_info_root) => {
