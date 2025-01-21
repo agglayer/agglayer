@@ -51,7 +51,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-config",
  "agglayer-node",
@@ -68,7 +68,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-aggregator-notifier"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
@@ -103,7 +103,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-certificate-orchestrator"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-clock",
  "agglayer-config",
@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-clock"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "alloy 0.8.1",
  "async-trait",
@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-config"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "dirs",
  "ethers",
@@ -175,7 +175,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-contracts"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-primitives",
  "async-trait",
@@ -188,7 +188,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-gcp-kms"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-config",
  "ethers",
@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-node"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-aggregator-notifier",
  "agglayer-certificate-orchestrator",
@@ -252,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-primitives"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "alloy-primitives",
  "k256",
@@ -261,7 +261,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-prover"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-config",
  "agglayer-prover-types",
@@ -288,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-prover-types"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-types",
  "anyhow",
@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-storage"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
@@ -342,7 +342,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-telemetry"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "axum 0.7.9",
  "buildstructor",
@@ -360,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-test-suite"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
@@ -371,7 +371,7 @@ dependencies = [
 
 [[package]]
 name = "agglayer-types"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-primitives",
  "agglayer-types",
@@ -4732,7 +4732,7 @@ dependencies = [
 
 [[package]]
 name = "integrations"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-aggregator-notifier",
  "agglayer-certificate-orchestrator",
@@ -6274,7 +6274,7 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "pessimistic-proof"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-primitives",
  "bincode",
@@ -6310,7 +6310,7 @@ dependencies = [
 
 [[package]]
 name = "pessimistic-proof-test-suite"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "agglayer-types",
  "anyhow",
