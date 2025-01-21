@@ -114,16 +114,16 @@ type CertError = agglayer_certificate_orchestrator::InitialCheckError;
 #[case("cert_busy", Error::send_certificate(CertError::Busy { network_id: 42.into() }))]
 #[case(
     "cert_past",
-    Error::send_certificate(CertError::InPast {
+    Error::send_certificate(CertError::IllegalHeight {
         height: 55,
-        next_height: 57,
+        accepting: 57..=67,
     })
 )]
 #[case(
     "cert_future",
-    Error::send_certificate(CertError::FarFuture {
+    Error::send_certificate(CertError::IllegalHeight {
         height: 153,
-        max_height: 95,
+        accepting: 95..=105,
     })
 )]
 #[case(

@@ -1,14 +1,13 @@
 ---
 source: crates/agglayer-node/src/rpc/tests/errors.rs
-assertion_line: 144
-expression: "SendCertificate { detail: \"Certificate is too far in the future (height 153, max allowed 95)\" }"
+expression: "SendCertificate { detail: \"Certificate height (153) outside of acceptable range (95..=105)\" }"
 snapshot_kind: text
 ---
 {
   "code": -10006,
   "data": {
     "send-certificate": {
-      "detail": "Certificate is too far in the future (height 153, max allowed 95)"
+      "detail": "Certificate height (153) outside of acceptable range (95..=105)"
     }
   },
   "message": "Cannot send certificate"

@@ -318,22 +318,15 @@ where
 
         if let Some(SettledCertificate(settled_id, _, _, _)) = &self.latest_settled {
             if settled_id == &certificate.hash() {
-                warn!("=============== ALREADY SETTLED");
                 // TODO Return status from the RPC in case of success
                 return Ok(());
             }
         }
 
-        if height < next_height {
-            return Err(InitialCheckError::InPast {
-                height,
-                next_height,
-            });
-        }
-
-        let max_height = next_height + MAX_FUTURE_HEIGHT_DISTANCE;
-        if height > max_height {
-            return Err(InitialCheckError::FarFuture { height, max_height });
+        // Range of certificate heights we are currently accepting.
+        let accepting = next_height..=(next_height + MAX_FUTURE_HEIGHT_DISTANCE);
+        if !accepting.contains(&height) {
+            return Err(InitialCheckError::IllegalHeight { height, accepting });
         }
 
         // TODO signature check + rate limit
