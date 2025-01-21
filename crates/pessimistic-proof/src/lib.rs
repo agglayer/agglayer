@@ -26,3 +26,7 @@ pub use pessimistic_proof_core::proof::ProofError;
 pub mod core {
     pub use pessimistic_proof_core::generate_pessimistic_proof;
 }
+
+/// ELF of the pessimistic proof program
+pub const ELF: &[u8] =
+    include_bytes!("../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");
