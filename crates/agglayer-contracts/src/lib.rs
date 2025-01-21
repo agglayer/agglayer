@@ -124,8 +124,9 @@ where
             }
 
             debug!(
-                "Retrieved the default L1 Info Tree entry. leaf_count: {}, root: {:?}",
-                l1_leaf_count, l1_info_root
+                "Retrieved the default L1 Info Tree entry. leaf_count: {}, root: {}",
+                l1_leaf_count,
+                H256::from_slice(l1_info_root.as_slice())
             );
 
             // Use this entry as default
@@ -185,8 +186,10 @@ where
 
         debug!(
             "Retrieved UpdateL1InfoTreeV2 event from block {}. L1 info tree leaf count: {}, root: \
-             {:?}",
-            event_block_number, l1_leaf_count, l1_info_root
+             {}",
+            event_block_number,
+            l1_leaf_count,
+            H256::from_slice(l1_info_root.as_slice())
         );
 
         // Await for the related block to be finalized
