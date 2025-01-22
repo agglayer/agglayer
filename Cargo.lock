@@ -78,7 +78,7 @@ dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
  "agglayer-storage",
- "agglayer-types",
+ "agglayer-types 0.1.0",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -88,7 +88,7 @@ dependencies = [
  "futures",
  "hex",
  "mockall",
- "pessimistic-proof",
+ "pessimistic-proof 0.1.0",
  "pessimistic-proof-test-suite",
  "rstest",
  "serde",
@@ -109,9 +109,10 @@ version = "0.1.0"
 dependencies = [
  "agglayer-clock",
  "agglayer-config",
+ "agglayer-prover-types",
  "agglayer-storage",
  "agglayer-test-suite",
- "agglayer-types",
+ "agglayer-types 0.1.0",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -122,7 +123,7 @@ dependencies = [
  "lazy_static",
  "mockall",
  "parking_lot",
- "pessimistic-proof",
+ "pessimistic-proof 0.1.0",
  "rstest",
  "serde",
  "serde_json",
@@ -180,7 +181,7 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.1.0",
  "async-trait",
  "ethers",
  "ethers-contract",
@@ -212,8 +213,8 @@ dependencies = [
  "agglayer-prover",
  "agglayer-signer",
  "agglayer-storage",
- "agglayer-telemetry",
- "agglayer-types",
+ "agglayer-telemetry 0.1.0",
+ "agglayer-types 0.1.0",
  "alloy 0.8.1",
  "anyhow",
  "arc-swap",
@@ -231,7 +232,7 @@ dependencies = [
  "lazy_static",
  "mockall",
  "parking_lot",
- "pessimistic-proof",
+ "pessimistic-proof 0.1.0",
  "pessimistic-proof-test-suite",
  "pin-project 1.1.7",
  "rand",
@@ -263,18 +264,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-primitives"
+version = "0.2.1"
+source = "git+https://github.com/agglayer/agglayer.git?branch=release%2F0.2.1#581768e9a82b1cf20fac6536d86d1cfbd37641fb"
+dependencies = [
+ "alloy-primitives",
+ "k256",
+ "serde",
+]
+
+[[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#f8dfc9578331afdeee346c7733dfa818219c32d2"
+source = "git+https://github.com/agglayer/provers.git?branch=feature%2Frework-agglayer-prover-types#054e7e83f2a4e8bb0a20df7d00d15797b020f2ce"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
- "agglayer-telemetry",
+ "agglayer-telemetry 0.2.1",
+ "agglayer-types 0.2.1",
  "anyhow",
  "bincode",
  "buildstructor",
  "futures",
- "pessimistic-proof",
+ "pessimistic-proof 0.2.1",
  "prover-engine",
  "sp1-prover",
  "sp1-sdk",
@@ -293,7 +305,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#f8dfc9578331afdeee346c7733dfa818219c32d2"
+source = "git+https://github.com/agglayer/provers.git?branch=feature%2Frework-agglayer-prover-types#054e7e83f2a4e8bb0a20df7d00d15797b020f2ce"
 dependencies = [
  "dirs",
  "ethers",
@@ -312,13 +324,14 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#f8dfc9578331afdeee346c7733dfa818219c32d2"
+source = "git+https://github.com/agglayer/provers.git?branch=feature%2Frework-agglayer-prover-types#054e7e83f2a4e8bb0a20df7d00d15797b020f2ce"
 dependencies = [
  "anyhow",
  "bincode",
- "pessimistic-proof",
+ "pessimistic-proof 0.2.1",
  "prost 0.13.4",
  "serde",
+ "sp1-sdk",
  "thiserror 2.0.8",
  "tonic 0.12.3",
  "tonic-build",
@@ -343,7 +356,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
- "agglayer-types",
+ "agglayer-types 0.1.0",
  "arc-swap",
  "bincode",
  "criterion",
@@ -351,7 +364,7 @@ dependencies = [
  "insta",
  "mockall",
  "parking_lot",
- "pessimistic-proof",
+ "pessimistic-proof 0.1.0",
  "pessimistic-proof-test-suite",
  "rand",
  "rocksdb",
@@ -382,12 +395,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-telemetry"
+version = "0.2.1"
+source = "git+https://github.com/agglayer/agglayer.git?branch=release%2F0.2.1#581768e9a82b1cf20fac6536d86d1cfbd37641fb"
+dependencies = [
+ "axum 0.7.9",
+ "buildstructor",
+ "futures",
+ "lazy_static",
+ "opentelemetry",
+ "opentelemetry-prometheus",
+ "opentelemetry_sdk",
+ "prometheus",
+ "thiserror 2.0.8",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "agglayer-test-suite"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
- "pessimistic-proof",
+ "pessimistic-proof 0.1.0",
  "pessimistic-proof-test-suite",
  "rstest",
 ]
@@ -396,12 +428,29 @@ dependencies = [
 name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
- "agglayer-types",
+ "agglayer-primitives 0.1.0",
+ "agglayer-types 0.1.0",
  "bincode",
  "ethers",
  "hex",
- "pessimistic-proof",
+ "pessimistic-proof 0.1.0",
+ "rand",
+ "serde",
+ "serde_with",
+ "sp1-core-machine",
+ "sp1-sdk",
+ "thiserror 2.0.8",
+]
+
+[[package]]
+name = "agglayer-types"
+version = "0.2.1"
+source = "git+https://github.com/agglayer/agglayer.git?branch=release%2F0.2.1#581768e9a82b1cf20fac6536d86d1cfbd37641fb"
+dependencies = [
+ "agglayer-primitives 0.2.1",
+ "bincode",
+ "hex",
+ "pessimistic-proof 0.2.1",
  "rand",
  "serde",
  "serde_with",
@@ -2106,7 +2155,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2126,7 +2175,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -4836,8 +4885,8 @@ dependencies = [
  "agglayer-prover-config",
  "agglayer-signer",
  "agglayer-storage",
- "agglayer-telemetry",
- "agglayer-types",
+ "agglayer-telemetry 0.1.0",
+ "agglayer-types 0.1.0",
  "alloy 0.6.4",
  "anyhow",
  "arc-swap",
@@ -4855,7 +4904,7 @@ dependencies = [
  "lazy_static",
  "mockall",
  "parking_lot",
- "pessimistic-proof",
+ "pessimistic-proof 0.1.0",
  "pessimistic-proof-test-suite",
  "pin-project 1.1.7",
  "rand",
@@ -6375,11 +6424,11 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.1.0",
  "bincode",
  "hex",
  "hex-literal",
- "pessimistic-proof-core",
+ "pessimistic-proof-core 0.1.0",
  "rand",
  "rs_merkle",
  "serde",
@@ -6391,10 +6440,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pessimistic-proof"
+version = "0.2.1"
+source = "git+https://github.com/agglayer/agglayer.git?branch=release%2F0.2.1#581768e9a82b1cf20fac6536d86d1cfbd37641fb"
+dependencies = [
+ "agglayer-primitives 0.2.1",
+ "bincode",
+ "hex",
+ "hex-literal",
+ "pessimistic-proof-core 0.1.0 (git+https://github.com/agglayer/agglayer.git?branch=release%2F0.2.1)",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror 2.0.8",
+ "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.1.0",
  "bincode",
  "hex",
  "hex-literal",
@@ -6409,10 +6475,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pessimistic-proof-core"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/agglayer.git?branch=release%2F0.2.1#581768e9a82b1cf20fac6536d86d1cfbd37641fb"
+dependencies = [
+ "agglayer-primitives 0.2.1",
+ "bincode",
+ "hex",
+ "hex-literal",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror 2.0.8",
+ "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?branch=patch-v2.0.2)",
+ "tracing",
+]
+
+[[package]]
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
- "agglayer-types",
+ "agglayer-types 0.1.0",
  "anyhow",
  "base64 0.22.1",
  "bincode",
@@ -6422,7 +6505,7 @@ dependencies = [
  "hex-literal",
  "insta",
  "lazy_static",
- "pessimistic-proof",
+ "pessimistic-proof 0.1.0",
  "rand",
  "regex",
  "rstest",
@@ -6866,7 +6949,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0f3e5beed80eb580c68e2c600937ac2c4eedabdfd5ef1e5b7ea4f3fba84497b"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "log",
  "multimap",
  "once_cell",
@@ -6899,7 +6982,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "157c5a9d7ea5c2ed2d9fb8f495b64759f7816c7eaea54ba3978f0d63000162e3"
 dependencies = [
  "anyhow",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.90",
@@ -6932,9 +7015,9 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#f8dfc9578331afdeee346c7733dfa818219c32d2"
+source = "git+https://github.com/agglayer/provers.git?branch=feature%2Frework-agglayer-prover-types#054e7e83f2a4e8bb0a20df7d00d15797b020f2ce"
 dependencies = [
- "agglayer-telemetry",
+ "agglayer-telemetry 0.2.1",
  "anyhow",
  "axum 0.8.1",
  "http 1.2.0",
