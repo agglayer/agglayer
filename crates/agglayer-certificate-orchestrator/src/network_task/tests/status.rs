@@ -104,8 +104,9 @@ async fn from_pending_to_settle() {
     )
     .expect("Failed to create a new network task");
 
+    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
-    task.process_next_pending_certificate(&mut next_expected_height)
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
@@ -208,8 +209,9 @@ async fn from_proven_to_settle() {
     )
     .expect("Failed to create a new network task");
 
+    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
-    task.process_next_pending_certificate(&mut next_expected_height)
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
@@ -304,8 +306,9 @@ async fn from_candidate_to_settle() {
     )
     .expect("Failed to create a new network task");
 
+    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
-    task.process_next_pending_certificate(&mut next_expected_height)
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
@@ -343,6 +346,10 @@ async fn from_settle_to_settle() {
         .state
         .insert_certificate_header(&certificate, CertificateStatus::Settled)
         .expect("Failed to insert certificate header");
+    storage
+        .pending
+        .insert_pending_certificate(network_id, 1, &certificate)
+        .expect("unable to insert certificate in pending");
 
     certifier.expect_certify().never();
     certifier.expect_witness_execution().never();
@@ -363,8 +370,9 @@ async fn from_settle_to_settle() {
     )
     .expect("Failed to create a new network task");
 
+    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 1;
-    task.process_next_pending_certificate(&mut next_expected_height)
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use agglayer_clock::ClockRef;
 use agglayer_storage::{
@@ -134,19 +134,6 @@ where
                 0
             };
 
-        // Try to process a leftover pending certificate first.
-        if let Err(error) = self
-            .process_next_pending_certificate(&mut next_expected_height)
-            .await
-        {
-            error!("Error during the inital certification process: {}", error);
-
-            match error {
-                Error::InternalError(_) | Error::Storage(_) => return Err(error),
-                _ => {}
-            }
-        }
-
         loop {
             tokio::select! {
                 _ = cancellation_token.cancelled() => {
@@ -173,7 +160,11 @@ where
         stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
         next_expected_height: &mut u64,
     ) -> Result<(), Error> {
+        let next_pending_certificate = self.pick_pending_certificate(*next_expected_height)?;
+
         tokio::select! {
+            biased;
+
             Ok(agglayer_clock::Event::EpochEnded(epoch)) = stream_epoch.recv() => {
                 info!("Received an epoch event: {}", epoch);
 
@@ -193,6 +184,7 @@ where
                     }
                 }
             }
+
             Some((certificate, response_sender)) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
                 let certificate_id = certificate.hash();
                 let height = certificate.height;
@@ -214,31 +206,40 @@ where
                     warn!("Failed to send response ({response:?}) to {cert_id}");
                 }
             }
-        };
 
-        self.process_next_pending_certificate(next_expected_height)
-            .await
+            certificate = next_pending_certificate => {
+                self.process_pending_certificate(certificate, next_expected_height).await?;
+            }
+        }
+
+        Ok(())
     }
 
-    async fn process_next_pending_certificate(
+    /// Resolves to a pending certificate to process next.
+    ///
+    /// The future will just hang (pending) if there is no pending certificate to process so this
+    /// can be easily used within `select!`. It is, however, a one-time check at the time of the
+    /// call. It will not resolve if a certificate is inserted after the call.
+    fn pick_pending_certificate(
         &mut self,
+        height: u64,
+    ) -> Result<impl Future<Output = Certificate>, Error> {
+        let certificate = self
+            .pending_store
+            .get_certificate(self.network_id, height)?;
+        Ok(async {
+            match certificate {
+                Some(cert) => cert,
+                None => std::future::pending().await,
+            }
+        })
+    }
+
+    async fn process_pending_certificate(
+        &mut self,
+        certificate: Certificate,
         next_expected_height: &mut u64,
     ) -> Result<(), Error> {
-        // Get the certificate the pending certificate for the network at the height
-        let certificate = if let Some(certificate) = self
-            .pending_store
-            .get_certificate(self.network_id, *next_expected_height)?
-        {
-            certificate
-        } else {
-            debug!(
-                "No certificate found for network {} at height {}",
-                self.network_id, *next_expected_height,
-            );
-            // There is no certificate to certify at this height for now
-            return Ok(());
-        };
-
         let certificate_id = certificate.hash();
         let header =
             if let Some(header) = self.state_store.get_certificate_header(&certificate_id)? {
