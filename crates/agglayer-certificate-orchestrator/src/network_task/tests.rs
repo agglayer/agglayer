@@ -10,6 +10,7 @@ use agglayer_storage::{
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use mockall::predicate::{always, eq, in_iter};
 use rstest::rstest;
+use tokio::sync::oneshot;
 
 use super::*;
 use crate::{
@@ -17,11 +18,12 @@ use crate::{
     tests::{clock, mocks::MockCertifier},
 };
 
+mod prechecks;
 mod status;
 
 #[rstest]
-#[tokio::test]
-#[timeout(Duration::from_secs(1))]
+#[test_log::test(tokio::test)]
+#[timeout(Duration::from_secs(3))]
 async fn start_from_zero() {
     let mut pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
@@ -32,6 +34,23 @@ async fn start_from_zero() {
 
     let certificate = Certificate::new_for_test(network_id, 0);
     let certificate_id = certificate.hash();
+
+    state
+        .expect_get_certificate_header_by_cursor()
+        .once()
+        .with(eq(network_id), eq(0))
+        .returning(|_, _| Ok(None));
+
+    state
+        .expect_insert_certificate_header()
+        .once()
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_insert_pending_certificate()
+        .once()
+        .returning(|_, _, _| Ok(()));
+
     pending
         .expect_get_certificate()
         .once()
@@ -121,23 +140,21 @@ async fn start_from_zero() {
     let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
 
+    let (reply_sx, reply_rx) = oneshot::channel();
     let _ = sender
-        .send(NewCertificate {
-            certificate_id,
-            height: 0,
-        })
+        .send((Certificate::new_for_test(network_id, 0), reply_sx))
         .await;
 
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
     assert_eq!(next_expected_height, 1);
+    assert!(reply_rx.await.unwrap().is_ok());
 }
 
 #[rstest]
-#[tokio::test]
+#[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(1))]
 async fn one_per_epoch() {
     let mut pending = MockPendingStore::new();
@@ -151,6 +168,22 @@ async fn one_per_epoch() {
     let certificate2 = Certificate::new_for_test(network_id, 1);
     let certificate_id = certificate.hash();
     let certificate_id2 = certificate2.hash();
+
+    state
+        .expect_get_certificate_header_by_cursor()
+        .once()
+        .with(eq(network_id), eq(0))
+        .returning(|_, _| Ok(None));
+
+    state
+        .expect_insert_certificate_header()
+        .once()
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_insert_pending_certificate()
+        .once()
+        .returning(|_, _, _| Ok(()));
 
     pending
         .expect_get_certificate()
@@ -284,36 +317,34 @@ async fn one_per_epoch() {
     let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
 
+    let (reply0_sx, reply0_rx) = oneshot::channel();
     sender
-        .send(NewCertificate {
-            certificate_id,
-            height: 0,
-        })
+        .send((Certificate::new_for_test(network_id, 0), reply0_sx))
         .await
         .expect("Failed to send the certificate");
 
+    let (reply1_sx, mut reply1_rx) = oneshot::channel();
     sender
-        .send(NewCertificate {
-            certificate_id: certificate_id2,
-            height: 1,
-        })
+        .send((Certificate::new_for_test(network_id, 1), reply1_sx))
         .await
         .expect("Failed to send the certificate");
 
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
     assert_eq!(next_expected_height, 1);
     tokio::time::timeout(
         Duration::from_millis(100),
-        task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run),
+        task.make_progress(&mut epochs, &mut next_expected_height),
     )
     .await
     .expect_err("Should have timed out");
 
     assert_eq!(next_expected_height, 1);
+
+    assert!(reply0_rx.await.unwrap().is_ok());
+    assert!(reply1_rx.try_recv().is_err());
 }
 
 #[rstest]
@@ -339,6 +370,22 @@ async fn retries() {
     certs.push_back(certificate2.clone());
     let certs = Arc::new(Mutex::new(certs));
 
+    state
+        .expect_get_certificate_header_by_cursor()
+        .times(2)
+        .with(eq(network_id), eq(0))
+        .returning(|_, _| Ok(None));
+
+    state
+        .expect_insert_certificate_header()
+        .times(2)
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_insert_pending_certificate()
+        .times(2)
+        .returning(|_, _, _| Ok(()));
+
     pending
         .expect_get_certificate()
         .times(2)
@@ -346,15 +393,6 @@ async fn retries() {
         .returning(move |_network_id, _height| {
             let cert = certs.lock().unwrap().pop_front().unwrap();
             Ok(Some(cert))
-        });
-
-    pending
-        .expect_get_certificate()
-        .never()
-        .with(eq(network_id), eq(1))
-        .returning(|network_id, height| {
-            let c = Certificate::new_for_test(network_id, height);
-            Ok(Some(c))
         });
 
     state
@@ -436,15 +474,18 @@ async fn retries() {
         .expect_certify()
         .never()
         .with(always(), eq(network_id), eq(1))
-        .return_once(move |new_state, network_id, _height| {
-            let result = crate::CertifierOutput {
-                certificate: certificate2,
-                height: 1,
-                new_state,
-                network: network_id,
-            };
+        .return_once({
+            let certificate = certificate2.clone();
+            move |new_state, network_id, _height| {
+                let result = crate::CertifierOutput {
+                    certificate,
+                    height: 1,
+                    new_state,
+                    network: network_id,
+                };
 
-            Ok(result)
+                Ok(result)
+            }
         });
     pending
         .expect_set_latest_proven_certificate_per_network()
@@ -506,33 +547,31 @@ async fn retries() {
     let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
 
+    let (reply_tx, reply_rx) = oneshot::channel();
     sender
-        .send(NewCertificate {
-            certificate_id,
-            height: 0,
-        })
+        .send((certificate, reply_tx))
         .await
         .expect("Failed to send the certificate");
 
+    let (reply2_tx, reply2_rx) = oneshot::channel();
     sender
-        .send(NewCertificate {
-            certificate_id: certificate_id2,
-            height: 0,
-        })
+        .send((certificate2, reply2_tx))
         .await
         .expect("Failed to send the certificate");
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
     assert_eq!(next_expected_height, 0);
 
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
     assert_eq!(next_expected_height, 1);
+    assert!(reply_rx.await.unwrap().is_ok());
+    assert!(reply2_rx.await.unwrap().is_ok());
 }
 
 #[rstest]
@@ -550,6 +589,22 @@ async fn changing_epoch_triggers_certify() {
     let certificate2 = Certificate::new_for_test(network_id, 1);
     let certificate_id = certificate.hash();
     let certificate_id2 = certificate2.hash();
+
+    state
+        .expect_get_certificate_header_by_cursor()
+        .once()
+        .with(eq(network_id), eq(0))
+        .returning(|_, _| Ok(None));
+
+    state
+        .expect_insert_certificate_header()
+        .once()
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_insert_pending_certificate()
+        .once()
+        .returning(|_, _, _| Ok(()));
 
     pending
         .expect_get_certificate()
@@ -694,23 +749,19 @@ async fn changing_epoch_triggers_certify() {
     let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
 
+    let (reply0_sx, reply0_rx) = oneshot::channel();
     sender
-        .send(NewCertificate {
-            certificate_id,
-            height: 0,
-        })
+        .send((Certificate::new_for_test(network_id, 0), reply0_sx))
         .await
         .expect("Failed to send the certificate");
 
+    let (reply1_sx, mut reply1_rx) = oneshot::channel();
     sender
-        .send(NewCertificate {
-            certificate_id: certificate_id2,
-            height: 1,
-        })
+        .send((Certificate::new_for_test(network_id, 1), reply1_sx))
         .await
         .expect("Failed to send the certificate");
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
@@ -718,7 +769,7 @@ async fn changing_epoch_triggers_certify() {
 
     tokio::time::timeout(
         Duration::from_millis(100),
-        task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run),
+        task.make_progress(&mut epochs, &mut next_expected_height),
     )
     .await
     .expect_err("Should have timed out");
@@ -731,16 +782,18 @@ async fn changing_epoch_triggers_certify() {
         .get_sender()
         .send(agglayer_clock::Event::EpochEnded(0))
         .expect("Failed to send");
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
     assert_eq!(next_expected_height, 2);
+    assert!(reply0_rx.await.unwrap().is_ok());
+    assert!(reply1_rx.try_recv().is_err());
 }
 
 #[rstest]
-#[tokio::test]
+#[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(1))]
 async fn timeout_certifier() {
     let mut pending = MockPendingStore::new();
@@ -752,6 +805,22 @@ async fn timeout_certifier() {
 
     let certificate = Certificate::new_for_test(network_id, 0);
     let certificate_id = certificate.hash();
+
+    state
+        .expect_get_certificate_header_by_cursor()
+        .once()
+        .with(eq(network_id), eq(0))
+        .returning(|_, _| Ok(None));
+
+    state
+        .expect_insert_certificate_header()
+        .once()
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_insert_pending_certificate()
+        .once()
+        .returning(|_, _, _| Ok(()));
 
     pending
         .expect_get_certificate()
@@ -826,19 +895,17 @@ async fn timeout_certifier() {
     let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
 
+    let (reply_sx, reply_rx) = oneshot::channel();
     sender
-        .send(NewCertificate {
-            certificate_id,
-            height: 0,
-        })
+        .send((certificate, reply_sx))
         .await
         .expect("Failed to send the certificate");
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
     assert_eq!(next_expected_height, 0);
+    assert!(reply_rx.await.unwrap().is_ok());
 }
 
 #[rstest]
@@ -941,15 +1008,12 @@ async fn process_next_certificate() {
     let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
 
+    let (reply_sx, reply_rx) = oneshot::channel();
     sender
-        .send(NewCertificate {
-            certificate_id,
-            height: 0,
-        })
+        .send((certificate, reply_sx))
         .await
         .expect("Failed to send the certificate");
-    let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
 
@@ -957,8 +1021,10 @@ async fn process_next_certificate() {
     clock_ref.update_block_height(2);
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(0));
 
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+    task.make_progress(&mut epochs, &mut next_expected_height)
         .await
         .unwrap();
     assert_eq!(next_expected_height, 2);
+
+    assert!(reply_rx.await.unwrap().is_ok());
 }

@@ -1,7 +1,34 @@
+use std::ops::RangeInclusive;
+
 use agglayer_types::{
-    CertificateId, CertificateStatusError, Height, NetworkId, ProofVerificationError,
+    CertificateId, CertificateStatus, CertificateStatusError, Height, NetworkId,
+    ProofVerificationError,
 };
 use pessimistic_proof::ProofError;
+
+#[derive(thiserror::Error, Debug)]
+pub enum InitialCheckError {
+    #[error("Storage error: {0}")]
+    Storage(#[from] agglayer_storage::error::Error),
+
+    #[error("Certificate submission failed")]
+    CertificateSubmission,
+
+    #[error("Certificate height ({height}) outside of acceptable range ({accepting:?})")]
+    IllegalHeight {
+        height: u64,
+        accepting: RangeInclusive<u64>,
+    },
+
+    #[error("Cannot replace an existing {status} certificate")]
+    IllegalReplacement { status: CertificateStatus },
+
+    #[error("Certificate processing task for network {network_id} is busy, try again later")]
+    Busy { network_id: NetworkId },
+
+    #[error("Internal error")]
+    Internal,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum PreCertificationError {

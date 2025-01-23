@@ -1,5 +1,7 @@
 use std::sync::Arc;
+use std::time::Duration;
 
+use agglayer_certificate_orchestrator::CertificateSubmitter;
 use agglayer_config::epoch::BlockClockConfig;
 use agglayer_config::Config;
 use agglayer_config::Epoch;
@@ -11,9 +13,9 @@ use agglayer_storage::stores::PendingCertificateWriter;
 use agglayer_storage::stores::StateReader;
 use agglayer_storage::stores::StateWriter;
 use agglayer_telemetry::KeyValue;
-use agglayer_types::CertificateStatus;
-use agglayer_types::EpochConfiguration;
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId};
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, NetworkId,
+};
 use ethers::{
     contract::{ContractError, ContractRevert},
     providers::Middleware,
@@ -25,11 +27,9 @@ use jsonrpsee::{
     proc_macros::rpc,
     server::{middleware::http::ProxyGetRequestLayer, PingConfig, ServerBuilder, ServerHandle},
 };
-use tokio::{sync::mpsc, try_join};
-use tower_http::compression::CompressionLayer;
-use tower_http::cors::CorsLayer;
-use tracing::trace;
-use tracing::{debug, error, info, instrument};
+use tokio::try_join;
+use tower_http::{compression::CompressionLayer, cors::CorsLayer};
+use tracing::{debug, error, info, instrument, trace};
 
 use crate::{
     kernel::Kernel,
@@ -42,6 +42,8 @@ mod rpc_middleware;
 
 #[cfg(test)]
 mod tests;
+
+const BUSY_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
@@ -91,10 +93,10 @@ trait Agglayer {
 /// The RPC agglayer service implementation.
 pub(crate) struct AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore> {
     kernel: Kernel<Rpc>,
-    certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pending_store: Arc<PendingStore>,
-    state: Arc<StateStore>,
+    state_store: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
+    certificate_submitter: CertificateSubmitter,
     config: Arc<Config>,
 }
 
@@ -104,18 +106,18 @@ impl<Rpc, PendingStore, StateStore, DebugStore>
     /// Create an instance of the RPC agglayer service.
     pub(crate) fn new(
         kernel: Kernel<Rpc>,
-        certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
         pending_store: Arc<PendingStore>,
-        state: Arc<StateStore>,
+        state_store: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
+        certificate_submitter: CertificateSubmitter,
         config: Arc<Config>,
     ) -> Self {
         Self {
             kernel,
-            certificate_sender,
             pending_store,
-            state,
+            state_store,
             debug_store,
+            certificate_submitter,
             config,
         }
     }
@@ -336,6 +338,7 @@ where
     #[instrument(skip(self, certificate), fields(hash, rollup_id = *certificate.network_id), level = "info")]
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
         let hash = certificate.hash();
+        let network_id = certificate.network_id;
         tracing::Span::current().record("hash", hash.to_string());
 
         info!(
@@ -343,43 +346,17 @@ where
             "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
         );
 
-        // TODO: Batch the different queries.
-        // Insert the certificate header into the state store.
-        _ = self
-            .state
-            .insert_certificate_header(&certificate, CertificateStatus::Pending)
-            .map_err(|e| {
-                error!("Failed to insert certificate into state store: {e}");
-                Error::internal(e.to_string())
-            })?;
-
-        // Insert the certificate into the pending store.
-        _ = self
-            .pending_store
-            .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
-            .map_err(|e| {
-                error!("Failed to insert certificate into pending store: {e}");
-                Error::internal(e.to_string())
-            })?;
-
         _ = self.debug_store.add_certificate(&certificate).map_err(|e| {
             error!("Failed to insert certificate into debug store: {e}");
             Error::internal(e.to_string())
         });
 
-        if let Err(error) = self
-            .certificate_sender
-            .send((
-                certificate.network_id,
-                certificate.height,
-                certificate.hash(),
-            ))
+        let submission = self.certificate_submitter.submit(certificate);
+        tokio::time::timeout(BUSY_REPLY_TIMEOUT, submission)
             .await
-        {
-            error!("Failed to send certificate: {error}");
-
-            return Err(Error::send_certificate(error));
-        }
+            .map_err(|_| agglayer_certificate_orchestrator::InitialCheckError::Busy { network_id })
+            .and_then(std::convert::identity)
+            .map_err(Error::send_certificate)?;
 
         Ok(hash)
     }
@@ -389,7 +366,7 @@ where
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader> {
         trace!("Received request to get certificate header for certificate {certificate_id}");
-        match self.state.get_certificate_header(&certificate_id) {
+        match self.state_store.get_certificate_header(&certificate_id) {
             Ok(Some(header)) => Ok(header),
             Ok(None) => Err(Error::resource_not_found(format!(
                 "Certificate({})",
@@ -433,7 +410,7 @@ where
         );
 
         let settled_certificate_id_and_height = self
-            .state
+            .state_store
             .get_latest_settled_certificate_per_network(&network_id)
             .map_err(|e| {
                 error!("Failed to get latest settled certificate: {e}");
@@ -470,7 +447,7 @@ where
         .map(|v| v.0);
 
         if let Some(certificate_id) = certificate_id {
-            match self.state.get_certificate_header(&certificate_id) {
+            match self.state_store.get_certificate_header(&certificate_id) {
                 Ok(Some(header)) => Ok(Some(header)),
                 Ok(None) => Err(Error::resource_not_found(format!(
                     "Certificate({})",
@@ -496,7 +473,7 @@ where
     ) -> RpcResult<(Certificate, Option<CertificateHeader>)> {
         match self.debug_store.get_certificate(&certificate_id) {
             Ok(Some(cert)) => match self
-                .state
+                .state_store
                 .get_certificate_header(&certificate_id)
                 .map(|header| (cert, header))
             {
@@ -523,7 +500,7 @@ where
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>> {
         let id = match self
-            .state
+            .state_store
             .get_latest_settled_certificate_per_network(&network_id)
         {
             Ok(Some((_, SettledCertificate(id, _, _, _)))) => id,
@@ -536,7 +513,7 @@ where
             }
         };
 
-        match self.state.get_certificate_header(&id) {
+        match self.state_store.get_certificate_header(&id) {
             Ok(Some(header)) => Ok(Some(header)),
             Ok(None) => Err(Error::resource_not_found(format!("Certificate({})", id))),
             Err(e) => {
@@ -564,7 +541,7 @@ where
             }
         };
 
-        match self.state.get_certificate_header(&id) {
+        match self.state_store.get_certificate_header(&id) {
             Ok(Some(CertificateHeader {
                 status: CertificateStatus::Settled,
                 ..

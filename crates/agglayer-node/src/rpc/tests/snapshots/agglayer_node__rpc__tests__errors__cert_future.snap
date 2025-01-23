@@ -1,0 +1,14 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "SendCertificate { detail: \"Certificate height (153) outside of acceptable range (95..=105)\" }"
+snapshot_kind: text
+---
+{
+  "code": -10006,
+  "data": {
+    "send-certificate": {
+      "detail": "Certificate height (153) outside of acceptable range (95..=105)"
+    }
+  },
+  "message": "Cannot send certificate"
+}
