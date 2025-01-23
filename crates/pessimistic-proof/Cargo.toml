@@ -28,3 +28,4 @@ workspace = true
 [features]
 default = ["sp1"]
 sp1 = ["dep:sp1-sdk"]
+testutils = []

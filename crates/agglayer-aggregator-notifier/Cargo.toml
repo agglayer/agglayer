@@ -36,6 +36,7 @@ sp1-prover.workspace = true
 [dev-dependencies]
 agglayer-prover = { workspace = true, features = ["testutils"] }
 agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
+pessimistic-proof = { workspace = true, features = ["testutils"] }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
 async-trait.workspace = true

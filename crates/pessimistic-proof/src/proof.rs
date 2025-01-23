@@ -46,6 +46,7 @@ impl Proof {
         })
     }
 
+    #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(
         state: &NetworkState,
         multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,

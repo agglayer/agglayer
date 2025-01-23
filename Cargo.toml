@@ -31,10 +31,7 @@ pessimistic-proof = { path = "crates/pessimistic-proof" }
 pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", features = [
-    "testutils",
-], branch = "feature/rework-agglayer-prover-types" }
-
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", branch = "feature/rework-agglayer-prover-types" }
 agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", branch = "feature/rework-agglayer-prover-types" }
 agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", branch = "feature/rework-agglayer-prover-types" }
 
