@@ -1,0 +1,16 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "Validation(DryRun { detail: \"Reverting\" })"
+snapshot_kind: text
+---
+{
+  "code": -10003,
+  "data": {
+    "validation": {
+      "dry-run": {
+        "detail": "Reverting"
+      }
+    }
+  },
+  "message": "Validation failed: Dry run failed"
+}
