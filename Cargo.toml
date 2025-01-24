@@ -23,7 +23,6 @@ agglayer-config = { path = "crates/agglayer-config" }
 agglayer-contracts = { path = "crates/agglayer-contracts" }
 agglayer-node = { path = "crates/agglayer-node" }
 agglayer-primitives = { path = "crates/agglayer-primitives" }
-agglayer-prover = { path = "crates/agglayer-prover", features = ["testutils"] }
 agglayer-signer = { path = "crates/agglayer-signer" }
 agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
@@ -31,6 +30,10 @@ agglayer-types = { path = "crates/agglayer-types" }
 pessimistic-proof = { path = "crates/pessimistic-proof" }
 pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
+
+agglayer-prover = { git = "https://github.com/agglayer/provers.git" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git" }
 
 # Core dependencies
 alloy = { version = "0.8.1", features = ["full"] }
