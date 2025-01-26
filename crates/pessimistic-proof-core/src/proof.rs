@@ -2,7 +2,6 @@ use agglayer_primitives::Address;
 pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
-use sp1_zkvm::lib::utils::words_to_bytes_le;
 use thiserror::Error;
 
 use crate::{
@@ -95,6 +94,9 @@ pub enum ProofError {
     /// The signature on the state transition is invalid.
     #[error("Invalid signature.")]
     InvalidSignature,
+    /// The auth-proof from the chain is invalid.
+    #[error("Invalid auth proof: {0}.")]
+    InvalidAuthProof(String),
     /// The signer recovered from the signature differs from the one declared as
     /// witness.
     #[error("Invalid signer. declared: {declared}, recovered: {recovered}")]
@@ -139,9 +141,10 @@ impl PessimisticProofOutput {
     }
 }
 
-enum PessimisticConsensusType {
-    //Ecdsa = 0,
-    Sp1 = 1,
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+pub enum PessimisticConsensusType {
+    ECDSA = 0,
+    SP1 = 1,
 }
 
 pub const EMPTY_LER: Digest = Digest(hex!(
@@ -168,16 +171,6 @@ pub fn generate_pessimistic_proof(
         prev_lbr.as_slice(),
         prev_nr.as_slice(),
         prev_ler_leaf_count.to_le_bytes().as_slice(),
-    ]);
-
-    // let consensus_hash = keccak256_combine([
-    //     &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
-    //     //    batch_header.signer.as_slice(),
-    // ]);
-    let consensus_hash = keccak256_combine([
-        &(PessimisticConsensusType::Sp1 as u32).to_be_bytes(),
-        words_to_bytes_le(&batch_header.vkey).as_slice(),
-        batch_header.consensus_config.as_slice(),
     ]);
 
     let new_pessimistic_root = keccak256_combine([
@@ -234,7 +227,7 @@ pub fn generate_pessimistic_proof(
         prev_pessimistic_root,
         l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
-        consensus_hash,
+        consensus_hash: batch_header.auth_proof.auth_hash(),
         new_local_exit_root: batch_header.target.exit_root,
         new_pessimistic_root,
     })

@@ -114,7 +114,6 @@ fn test_sp1_simple() {
     let mut stdin = SP1Stdin::new();
     stdin.write(&initial_state);
     stdin.write(&multi_batch_header);
-    stdin.write_proof(*consensus_proof.try_as_compressed().unwrap(), vkey.vk);
 
     // Generate the proof for the given program and input.
     let client = ProverClient::builder().mock().build();

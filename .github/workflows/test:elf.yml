@@ -64,6 +64,6 @@ jobs:
       - name: Check vKey
         run: |
           CALCULATED_VKEY=$(cargo run -p agglayer -- vkey)
-          echo "Commited vKey=$ORIGINAL_VKEY"
+          echo "Committed vKey=$ORIGINAL_VKEY"
           echo "Calculated vKey=$CALCULATED_VKEY"
           diff <(echo $CALCULATED_VKEY) <( echo $ORIGINAL_VKEY )
