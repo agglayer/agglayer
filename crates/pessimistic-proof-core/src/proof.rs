@@ -124,8 +124,8 @@ pub struct PessimisticProofOutput {
     pub l1_info_root: Digest,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
-    /// The consensus hash.
-    pub consensus_hash: Digest,
+    /// The auth hash.
+    pub auth_hash: Digest,
     /// The new local exit root.
     pub new_local_exit_root: Digest,
     /// The new pessimistic root which commits to the balance and nullifier
@@ -227,7 +227,7 @@ pub fn generate_pessimistic_proof(
         prev_pessimistic_root,
         l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
-        consensus_hash: batch_header.auth_proof.auth_hash(),
+        auth_hash: batch_header.auth_proof.auth_hash(),
         new_local_exit_root: batch_header.target.exit_root,
         new_pessimistic_root,
     })

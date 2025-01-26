@@ -136,8 +136,8 @@ pub struct VerifierInputs {
     pub l1_info_root: String,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
-    /// The consensus hash.
-    pub consensus_hash: String,
+    /// The auth hash.
+    pub auth_hash: String,
     /// The new local exit root.
     pub new_local_exit_root: String,
     /// The new pessimistic root which commits to the balance and nullifier
@@ -152,7 +152,7 @@ impl From<PessimisticProofOutput> for VerifierInputs {
             prev_pessimistic_root: format!("0x{}", hex::encode(v.prev_pessimistic_root)),
             l1_info_root: format!("0x{}", hex::encode(v.l1_info_root)),
             origin_network: v.origin_network.into(),
-            consensus_hash: format!("0x{}", hex::encode(v.consensus_hash)),
+            auth_hash: format!("0x{}", hex::encode(v.auth_hash)),
             new_local_exit_root: format!("0x{}", hex::encode(v.new_local_exit_root)),
             new_pessimistic_root: format!("0x{}", hex::encode(v.new_pessimistic_root)),
         }
