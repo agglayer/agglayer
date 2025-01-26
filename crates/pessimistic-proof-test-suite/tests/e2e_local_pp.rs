@@ -29,7 +29,6 @@ fn e2e_local_pp_simple_helper(
     let multi_batch_header = initial_state
         .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
         .unwrap();
-
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
 }
 
@@ -115,6 +114,7 @@ fn test_sp1_simple() {
     let mut stdin = SP1Stdin::new();
     stdin.write(&initial_state);
     stdin.write(&multi_batch_header);
+    stdin.write_proof(*consensus_proof.try_as_compressed().unwrap(), vkey.vk);
 
     // Generate the proof for the given program and input.
     let client = ProverClient::builder().mock().build();

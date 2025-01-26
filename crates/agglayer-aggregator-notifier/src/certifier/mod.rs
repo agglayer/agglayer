@@ -305,8 +305,14 @@ where
         let initial_state = LocalNetworkState::from(state.clone());
 
         let signer = Address::new(*signer.as_fixed_bytes());
+
+        let (vkey, consensus_config) = {
+            // TODO
+            Default::default()
+        };
+
         let multi_batch_header = state
-            .apply_certificate(certificate, signer, l1_info_root)
+            .apply_certificate(certificate, signer, l1_info_root, vkey, consensus_config)
             .map_err(|source| CertificationError::Types { source })?;
 
         // Perform the native PP execution
