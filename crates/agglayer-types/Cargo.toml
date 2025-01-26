@@ -21,6 +21,8 @@ rand.workspace = true
 [dev-dependencies]
 agglayer-types = { path = ".", features = ["testutils"] }
 
+pessimistic-proof = { path = "../pessimistic-proof" }
+
 [features]
 default = []
 testutils = ["dep:ethers"]

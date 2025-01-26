@@ -1,0 +1,14 @@
+[workspace]
+[package]
+version = "0.1.0"
+name = "sp1-ecdsa-verification-program"
+edition = "2021"
+
+[dependencies]
+sp1-zkvm = "3.3.0"
+alloy-primitives = { version = "0.8.12", features = ["k256"] }
+
+[patch.crates-io.ecdsa-core]
+git = "https://github.com/sp1-patches/signatures"
+package = "ecdsa"
+tag = "ecdsa-v0.16.9-patch-v1"

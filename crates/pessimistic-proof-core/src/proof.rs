@@ -2,6 +2,7 @@ use agglayer_primitives::Address;
 pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
+use sp1_zkvm::lib::utils::words_to_bytes_le;
 use thiserror::Error;
 
 use crate::{
@@ -138,7 +139,10 @@ impl PessimisticProofOutput {
     }
 }
 
-const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;
+enum PessimisticConsensusType {
+    //Ecdsa = 0,
+    Sp1 = 1,
+}
 
 pub const EMPTY_LER: Digest = Digest(hex!(
     "27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"
@@ -166,9 +170,14 @@ pub fn generate_pessimistic_proof(
         prev_ler_leaf_count.to_le_bytes().as_slice(),
     ]);
 
+    // let consensus_hash = keccak256_combine([
+    //     &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
+    //     //    batch_header.signer.as_slice(),
+    // ]);
     let consensus_hash = keccak256_combine([
-        &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
-        batch_header.signer.as_slice(),
+        &(PessimisticConsensusType::Sp1 as u32).to_be_bytes(),
+        words_to_bytes_le(&batch_header.vkey).as_slice(),
+        batch_header.consensus_config.as_slice(),
     ]);
 
     let new_pessimistic_root = keccak256_combine([

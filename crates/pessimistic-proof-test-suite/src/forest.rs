@@ -160,7 +160,7 @@ impl Forest {
 
         let new_local_exit_root = self.state_b.exit_tree.get_root();
 
-        let (_combined_hash, signature) =
+        let (_combined_hash, _signature) =
             compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
 
         Certificate {
@@ -170,7 +170,7 @@ impl Forest {
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            signature,
+            //consensus_proof: (),
             metadata: Default::default(),
         }
     }
