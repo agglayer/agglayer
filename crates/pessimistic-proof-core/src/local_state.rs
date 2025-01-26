@@ -1,8 +1,11 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use agglayer_primitives::{ruint::UintTryFrom, B256, U256, U512};
+use agglayer_primitives::{ruint::UintTryFrom, U256, U512};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest as Sha256Digest, Sha256};
 
+// #[cfg(target_os = "zkvm")]
+// use sp1_zkvm::lib::verify::verify_sp1_proof;
 use crate::{
     bridge_exit::{L1_ETH, L1_NETWORK_ID},
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
@@ -224,6 +227,7 @@ impl NetworkState {
         }
 
         // Verify that the signature is valid
+        // TODO: change this to SHA2 ?
         let combined_hash = signature_commitment(
             self.exit_tree.get_root(),
             multi_batch_header
@@ -232,18 +236,42 @@ impl NetworkState {
                 .map(|(exit, _)| exit.global_index),
         );
 
-        // Check batch header signature
-        let signer = multi_batch_header
-            .signature
-            .recover_address_from_prehash(&B256::new(combined_hash.0))
-            .map_err(|_| ProofError::InvalidSignature)?;
+        // TODO: figure out what else needs to be a pv in the consensus proof.
+        let consensus_public_values = [
+            combined_hash.as_slice(),
+            multi_batch_header.consensus_config.as_slice(),
+        ]
+        .concat();
 
-        if signer != multi_batch_header.signer {
-            return Err(ProofError::InvalidSigner {
-                declared: multi_batch_header.signer,
-                recovered: signer,
-            });
-        }
+        let _vkey = multi_batch_header.vkey;
+        let _public_values_digest = Sha256::digest(&consensus_public_values);
+        // TODO: add a native verify otherwise.
+        // #[cfg(target_os = "zkvm")]
+        // verify_sp1_proof(&vkey, &public_values_digest.into());
+
+        // TODO: add native verification for the consensus proof if
+        // `not(target_os="zkvm")`.
+
+        // let combined_hash = signature_commitment(
+        //     self.exit_tree.get_root(),
+        //     multi_batch_header
+        //         .imported_bridge_exits
+        //         .iter()
+        //         .map(|(exit, _)| exit.global_index),
+        // );
+
+        // // Check batch header signature
+        // let signer = multi_batch_header
+        //     .signature
+        //     .recover_address_from_prehash(&B256::new(combined_hash.0))
+        //     .map_err(|_| ProofError::InvalidSignature)?;
+
+        // if signer != multi_batch_header.signer {
+        //     return Err(ProofError::InvalidSigner {
+        //         declared: multi_batch_header.signer,
+        //         recovered: signer,
+        //     });
+        // }
 
         Ok(self.roots())
     }
