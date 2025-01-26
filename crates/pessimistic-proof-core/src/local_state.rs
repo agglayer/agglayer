@@ -230,7 +230,6 @@ impl NetworkState {
         match &multi_batch_header.auth_proof {
             AuthProofData::ECDSA(auth_proof_ecdsa) => {
                 // Verify that the signature is valid
-                // TODO: change this to SHA2?
                 let combined_hash = signature_commitment(
                     multi_batch_header.target.exit_root,
                     multi_batch_header

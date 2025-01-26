@@ -1,4 +1,6 @@
-use agglayer_types::{compute_signature_info, Address, Certificate, LocalNetworkStateData, U256};
+use agglayer_types::{
+    compute_signature_info, Address, AuthProof, Certificate, LocalNetworkStateData, U256,
+};
 use ethers_signers::{LocalWallet, Signer};
 pub use pessimistic_proof::bridge_exit::LeafType;
 use pessimistic_proof::{
@@ -170,7 +172,7 @@ impl Forest {
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            signature,
+            auth_proof: AuthProof::ECDSA { signature },
             metadata: Default::default(),
         }
     }
