@@ -16,6 +16,7 @@ use crate::{
 };
 
 pub type Vkey = [u32; 8];
+pub type PlonkVkey = Vec<u8>;
 pub type PlonkProof = Vec<u8>;
 
 /// Auth Proof which is either one ECDSA signature, or one Plonk proof.
@@ -39,6 +40,7 @@ impl AuthProofData {
             AuthProofData::SP1(auth_proof_sp1) => keccak256_combine([
                 &auth_proof_sp1.auth_type.to_be_bytes(),
                 words_to_bytes_le(&auth_proof_sp1.auth_vkey).as_slice(),
+                auth_proof_sp1.auth_plonk_vkey.as_slice(),
                 auth_proof_sp1.auth_params.as_slice(),
             ]),
         }
@@ -61,8 +63,10 @@ pub struct AuthProofSP1Data {
     pub auth_params: Digest,
     /// Auth type.
     pub auth_type: u32,
-    /// SP1 verification key for the auth proof.
+    /// SP1 verifying key for the SP1 auth proof program.
     pub auth_vkey: Vkey,
+    /// Plonk verifying key for a specific SP1 version.
+    pub auth_plonk_vkey: PlonkVkey,
     /// Snark plonk proof.
     pub plonk_proof: PlonkProof,
 }

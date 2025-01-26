@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use pessimistic_proof::auth_proof::{AuthProofData, AuthProofECDSAData, AuthProofSP1Data, Vkey};
+use pessimistic_proof::auth_proof::{
+    AuthProofData, AuthProofECDSAData, AuthProofSP1Data, PlonkVkey, Vkey,
+};
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -326,13 +328,23 @@ impl AuthProof {
 pub type PlonkProof = Vec<u8>;
 
 /// SP1 variant of the auth proof values submitted via the [`Certificate`].
-// TODO: Add sp1 version and/or plonk_vk_bytes directly
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AuthProofSP1 {
     /// Chain-specific commitment forwarded through the PP.
     pub auth_params: Digest,
     /// Snark plonk proof.
     pub plonk_proof: PlonkProof,
+    /// SP1 version in order to look up the right plonk vkey.
+    pub sp1_version: (),
+}
+
+impl AuthProofSP1 {
+    /// Look-up the plonk vkey used for this auth-proof based on the
+    /// sp1-version.
+    fn auth_plonk_vkey(&self) -> PlonkVkey {
+        // TODO: setup one look-up table `sp1 version => plonk vkey`
+        Default::default()
+    }
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -668,6 +680,7 @@ impl LocalNetworkStateData {
                 AuthProofData::ECDSA(AuthProofECDSAData { signer, signature })
             }
             AuthProof::SP1 { auth_proof } => AuthProofData::SP1(AuthProofSP1Data {
+                auth_plonk_vkey: auth_proof.auth_plonk_vkey(),
                 auth_params: auth_proof.auth_params,
                 plonk_proof: auth_proof.plonk_proof,
                 auth_type,

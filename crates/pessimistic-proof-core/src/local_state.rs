@@ -271,7 +271,7 @@ impl NetworkState {
                     &auth_proof_sp1.plonk_proof,
                     auth_proof_public_values.hash().as_slice(),
                     &String::from_utf8_lossy(auth_proof_vkey_hash.as_slice()),
-                    *sp1_verifier::PLONK_VK_BYTES,
+                    auth_proof_sp1.auth_plonk_vkey.as_slice(),
                 )
                 .map_err(|e| ProofError::InvalidAuthProof(e.to_string()))?;
             }
