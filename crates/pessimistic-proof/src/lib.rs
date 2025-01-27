@@ -19,9 +19,10 @@ pub mod keccak {
     pub use pessimistic_proof_core::keccak::*;
 }
 
+pub use pessimistic_proof_core::auth_proof;
 pub use pessimistic_proof_core::local_state::NetworkState;
 pub use pessimistic_proof_core::multi_batch_header;
-pub use pessimistic_proof_core::proof::ProofError;
+pub use pessimistic_proof_core::proof::{PessimisticConsensusType, ProofError};
 
 pub mod core {
     pub use pessimistic_proof_core::generate_pessimistic_proof;

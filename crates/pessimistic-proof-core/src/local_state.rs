@@ -2,8 +2,11 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use agglayer_primitives::{ruint::UintTryFrom, B256, U256, U512};
 use serde::{Deserialize, Serialize};
+use sp1_verifier::PlonkVerifier;
+use sp1_zkvm::lib::utils::words_to_bytes_le;
 
 use crate::{
+    auth_proof::{AuthProofData, AuthProofPublicValues},
     bridge_exit::{L1_ETH, L1_NETWORK_ID},
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
     keccak::digest::Digest,
@@ -223,26 +226,55 @@ impl NetworkState {
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
         }
 
-        // Verify that the signature is valid
-        let combined_hash = signature_commitment(
-            self.exit_tree.get_root(),
-            multi_batch_header
-                .imported_bridge_exits
-                .iter()
-                .map(|(exit, _)| exit.global_index),
-        );
+        // Verify the auth proof which can be either one signature or one sp1 proof.
+        match &multi_batch_header.auth_proof {
+            AuthProofData::ECDSA(auth_proof_ecdsa) => {
+                // Verify that the signature is valid
+                let combined_hash = signature_commitment(
+                    multi_batch_header.target.exit_root,
+                    multi_batch_header
+                        .imported_bridge_exits
+                        .iter()
+                        .map(|(exit, _)| exit.global_index),
+                );
 
-        // Check batch header signature
-        let signer = multi_batch_header
-            .signature
-            .recover_address_from_prehash(&B256::new(combined_hash.0))
-            .map_err(|_| ProofError::InvalidSignature)?;
+                // Check batch header signature
+                let signer = auth_proof_ecdsa
+                    .signature
+                    .recover_address_from_prehash(&B256::new(combined_hash.0))
+                    .map_err(|_| ProofError::InvalidSignature)?;
 
-        if signer != multi_batch_header.signer {
-            return Err(ProofError::InvalidSigner {
-                declared: multi_batch_header.signer,
-                recovered: signer,
-            });
+                if signer != auth_proof_ecdsa.signer {
+                    return Err(ProofError::InvalidSigner {
+                        declared: auth_proof_ecdsa.signer,
+                        recovered: signer,
+                    });
+                }
+            }
+            AuthProofData::SP1(auth_proof_sp1) => {
+                let auth_proof_public_values = AuthProofPublicValues {
+                    prev_local_exit_root: multi_batch_header.prev_local_exit_root,
+                    l1_info_root: multi_batch_header.l1_info_root,
+                    origin_network: multi_batch_header.origin_network,
+                    auth_params: auth_proof_sp1.auth_params,
+                    commit_imported_bridge_exits: commit_imported_bridge_exits(
+                        multi_batch_header
+                            .imported_bridge_exits
+                            .iter()
+                            .map(|(exit, _)| exit.global_index),
+                    ),
+                };
+
+                let auth_proof_vkey_hash = words_to_bytes_le(auth_proof_sp1.auth_vkey.as_slice());
+
+                PlonkVerifier::verify(
+                    &auth_proof_sp1.plonk_proof,
+                    auth_proof_public_values.hash().as_slice(),
+                    &String::from_utf8_lossy(auth_proof_vkey_hash.as_slice()),
+                    auth_proof_sp1.auth_plonk_vkey.as_slice(),
+                )
+                .map_err(|e| ProofError::InvalidAuthProof(e.to_string()))?;
+            }
         }
 
         Ok(self.roots())

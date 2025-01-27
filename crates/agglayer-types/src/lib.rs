@@ -1,5 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use pessimistic_proof::auth_proof::{
+    AuthProofData, AuthProofECDSAData, AuthProofSP1Data, PlonkVkey, Vkey,
+};
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -11,7 +14,6 @@ use pessimistic_proof::multi_batch_header::signature_commitment;
 use pessimistic_proof::nullifier_tree::{NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::{Smt, SmtError};
 use pessimistic_proof::utils::{FromBool as _, Hashable as _};
-use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
@@ -20,6 +22,7 @@ use pessimistic_proof::{
     nullifier_tree::{NullifierKey, NullifierPath},
     ProofError,
 };
+use pessimistic_proof::{LocalNetworkState, PessimisticConsensusType};
 use serde::{Deserialize, Serialize};
 use sp1_sdk::{
     Prover, ProverClient, SP1Proof, SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin,
@@ -127,6 +130,12 @@ pub enum Error {
     /// The operation cannot be applied on the smt.
     #[error(transparent)]
     InvalidSmtOperation(#[from] SmtError),
+    /// The auth type received from the Certificate differs with the one
+    /// retrieved from L1.
+    #[error(
+        "Mismatch on the received auth type. declared: {declared}, retrieved from L1: {retrieved}"
+    )]
+    MismatchAuthType { declared: u32, retrieved: u32 },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -292,10 +301,50 @@ pub struct Certificate {
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits included in this state transition.
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
-    /// Signature committed to the bridge exits and imported bridge exits.
-    pub signature: Signature,
     /// Fixed size field of arbitrary data for the chain needs.
     pub metadata: Metadata,
+    /// Auth proof which is either one ECDSA or one SP1 plonk proof.
+    #[serde(flatten)]
+    pub auth_proof: AuthProof,
+}
+
+/// Auth proof values submitted via the [`Certificate`].
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum AuthProof {
+    ECDSA { signature: Signature },
+    SP1 { auth_proof: AuthProofSP1 },
+}
+
+impl AuthProof {
+    fn auth_type(&self) -> PessimisticConsensusType {
+        match self {
+            AuthProof::ECDSA { signature: _ } => PessimisticConsensusType::ECDSA,
+            AuthProof::SP1 { auth_proof: _ } => PessimisticConsensusType::SP1,
+        }
+    }
+}
+
+pub type PlonkProof = Vec<u8>;
+
+/// SP1 variant of the auth proof values submitted via the [`Certificate`].
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AuthProofSP1 {
+    /// Chain-specific commitment forwarded through the PP.
+    pub auth_params: Digest,
+    /// Snark plonk proof.
+    pub plonk_proof: PlonkProof,
+    /// SP1 version in order to look up the right plonk vkey.
+    pub sp1_version: (),
+}
+
+impl AuthProofSP1 {
+    /// Look-up the plonk vkey used for this auth-proof based on the
+    /// sp1-version.
+    fn auth_plonk_vkey(&self) -> PlonkVkey {
+        // TODO: setup one look-up table `sp1 version => plonk vkey`
+        Default::default()
+    }
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -312,7 +361,7 @@ impl Default for Certificate {
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            signature,
+            auth_proof: AuthProof::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -364,7 +413,7 @@ impl Certificate {
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            signature,
+            auth_proof: AuthProof::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -426,17 +475,22 @@ impl Certificate {
     }
 
     pub fn signer(&self) -> Option<Address> {
-        // retrieve signer
-        let combined_hash = signature_commitment(
-            self.new_local_exit_root,
-            self.imported_bridge_exits
-                .iter()
-                .map(|exit| exit.global_index),
-        );
+        match self.auth_proof {
+            AuthProof::ECDSA { signature } => {
+                // retrieve signer
+                let combined_hash = signature_commitment(
+                    self.new_local_exit_root,
+                    self.imported_bridge_exits
+                        .iter()
+                        .map(|exit| exit.global_index),
+                );
 
-        self.signature
-            .recover_address_from_prehash(&B256::new(combined_hash.0))
-            .ok()
+                signature
+                    .recover_address_from_prehash(&B256::new(combined_hash.0))
+                    .ok()
+            }
+            _ => None,
+        }
     }
 }
 
@@ -604,6 +658,36 @@ impl LocalNetworkStateData {
             });
         }
 
+        // TODO: Fetch `auth_type` and `auth_vkey` from L1
+        // TODO: Eventually, cross check `auth_params` with the L1 too
+        let (auth_type, auth_vkey) = {
+            let auth_vkey_from_l1: Vkey = Default::default();
+            let auth_type_from_l1 = PessimisticConsensusType::ECDSA as u32;
+            let auth_type_from_certificate = certificate.auth_proof.auth_type() as u32;
+
+            if auth_type_from_l1 != auth_type_from_certificate {
+                return Err(Error::MismatchAuthType {
+                    declared: auth_type_from_certificate,
+                    retrieved: auth_type_from_l1,
+                });
+            }
+
+            (auth_type_from_l1, auth_vkey_from_l1)
+        };
+
+        let auth_proof = match certificate.auth_proof.clone() {
+            AuthProof::ECDSA { signature } => {
+                AuthProofData::ECDSA(AuthProofECDSAData { signer, signature })
+            }
+            AuthProof::SP1 { auth_proof } => AuthProofData::SP1(AuthProofSP1Data {
+                auth_plonk_vkey: auth_proof.auth_plonk_vkey(),
+                auth_params: auth_proof.auth_params,
+                plonk_proof: auth_proof.plonk_proof,
+                auth_type,
+                auth_vkey,
+            }),
+        };
+
         Ok(MultiBatchHeader::<Keccak256Hasher> {
             origin_network: *certificate.network_id,
             prev_local_exit_root: certificate.prev_local_exit_root,
@@ -620,11 +704,10 @@ impl LocalNetworkStateData {
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
-            signer,
-            signature: certificate.signature,
             imported_exits_root: Some(imported_hash),
             target: self.get_roots().into(),
             l1_info_root,
+            auth_proof,
         })
     }
 

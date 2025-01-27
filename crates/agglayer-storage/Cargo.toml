@@ -29,7 +29,7 @@ rand.workspace = true
 rstest.workspace = true
 sp1-sdk.workspace = true
 
-agglayer-types = {workspace = true, features = ["testutils"] }
+agglayer-types = { workspace = true, features = ["testutils"] }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
 agglayer-storage = { path = ".", features = ["testutils"] }

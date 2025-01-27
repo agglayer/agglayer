@@ -29,7 +29,6 @@ fn e2e_local_pp_simple_helper(
     let multi_batch_header = initial_state
         .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
         .unwrap();
-
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
 }
 

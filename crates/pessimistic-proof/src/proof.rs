@@ -8,13 +8,12 @@ impl DisplayToHex for PessimisticProofOutput {
     fn display_to_hex(&self) -> String {
         format!(
             "prev_local_exit_root: {}, prev_pessimistic_root: {}, l1_info_root: {}, \
-             origin_network: {}, consensus_hash: {}, new_local_exit_root: {}, \
-             new_pessimistic_root: {}",
+             origin_network: {}, auth_hash: {}, new_local_exit_root: {}, new_pessimistic_root: {}",
             self.prev_local_exit_root,
             self.prev_pessimistic_root,
             self.l1_info_root,
             self.origin_network,
-            self.consensus_hash,
+            self.auth_hash,
             self.new_local_exit_root,
             self.new_pessimistic_root,
         )
