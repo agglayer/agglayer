@@ -41,6 +41,9 @@ lazy_static! {
     pub static ref VERIFY_SIGNATURE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
         .u64_counter("verify_signature")
         .with_description("Number of signature verifications")
+    // TODO: THIS IS WRONG. This is the number of times we checked the signer is the expected signer,
+    // but we never checked these signatures.
+    // Should we rename and adjust that, or are we limited by metrics backward-compat for some alerting?
         .build();
 
     pub static ref CHECK_TX: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)

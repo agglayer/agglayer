@@ -14,6 +14,7 @@ use agglayer_storage::{
 };
 use agglayer_types::{Certificate, CertificateId, CertificateStatus, Digest, Height, NetworkId};
 use ethers::providers::{self, MockProvider, Provider};
+use ethers::signers::Signer;
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
@@ -114,7 +115,14 @@ impl TestContext {
 
     pub(crate) fn get_default_config() -> Config {
         let tmp = TempDBDir::new();
-        Config::new(&tmp.path)
+        let mut cfg = Config::new(&tmp.path);
+        for network_id in 0..10 {
+            cfg.proof_signers.insert(
+                network_id,
+                Certificate::wallet_for_test(NetworkId::new(network_id)).address(),
+            );
+        }
+        cfg
     }
 
     async fn new_raw_rpc() -> RawRpcContext {

@@ -214,9 +214,9 @@ async fn interop_executor_verify_zkp_failure() {
     mock.assert_request("eth_call", [tx_verify_batch, block])
         .unwrap();
 }
-/// Test that check if the verify_signature method
+/// Test that checks if the verify_tx_signer method
 #[tokio::test]
-async fn interop_executor_verify_signature() {
+async fn interop_executor_verify_tx_signer() {
     let config = Arc::new(Config::new_for_test());
 
     let (provider, mock) = providers::Provider::mocked();
@@ -238,7 +238,7 @@ async fn interop_executor_verify_signature() {
         push_response!(mock, to_hex: TrustedSequencerReturn(sequencer_address));
         push_response!(mock, response.clone());
 
-        assert!(kernel.verify_signature(&signed_tx).await.is_ok());
+        assert!(kernel.verify_tx_signer(&signed_tx).await.is_ok());
     }
 
     // Wrong signature with different sequencer_address
@@ -247,7 +247,7 @@ async fn interop_executor_verify_signature() {
         push_response!(mock, response);
 
         assert!(matches!(
-            kernel.verify_signature(&signed_tx).await,
+            kernel.verify_tx_signer(&signed_tx).await,
             Err(crate::kernel::SignatureVerificationError::InvalidSigner { signer, trusted_sequencer })
             if signer == sequencer_address && trusted_sequencer == H160::zero()
         ));
@@ -282,9 +282,9 @@ async fn interop_executor_verify_signature() {
         .unwrap();
 }
 
-/// Test that check if the verify_signature method works with proof signer.
+/// Test that checks if the verify_tx_signer method works with proof signer.
 #[tokio::test]
-async fn interop_executor_verify_signature_proof_signer() {
+async fn interop_executor_verify_tx_signer_proof_signer() {
     let mut config = Config::new_for_test();
 
     let sequencer_wallet = LocalWallet::new(&mut rand::thread_rng());
@@ -307,7 +307,7 @@ async fn interop_executor_verify_signature_proof_signer() {
     // valid signature with valid sequencer_address
     {
         push_response!(mock, response);
-        assert!(kernel.verify_signature(&signed_tx).await.is_ok());
+        assert!(kernel.verify_tx_signer(&signed_tx).await.is_ok());
     }
 
     let tx_rollup_data = transaction_request!(

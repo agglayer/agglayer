@@ -229,7 +229,7 @@ where
             return Err(Error::rollup_not_registered(tx.tx.rollup_id));
         }
 
-        self.kernel.verify_signature(&tx).await.map_err(|e| {
+        self.kernel.verify_tx_signer(&tx).await.map_err(|e| {
             error!(error = %e, hash, "Failed to verify the signature of transaction {hash}: {e}");
             Error::signature_mismatch(e)
         })?;
@@ -336,29 +336,35 @@ where
     #[instrument(skip(self, certificate), fields(hash, rollup_id = *certificate.network_id), level = "info")]
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
         let hash = certificate.hash();
-        tracing::Span::current().record("hash", hash.to_string());
+        let hash_string = hash.to_string();
+        tracing::Span::current().record("hash", &hash_string);
 
         info!(
             %hash,
             "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
         );
 
-        // TODO: Batch the different queries.
-        // Insert the certificate header into the state store.
-        _ = self
-            .state
-            .insert_certificate_header(&certificate, CertificateStatus::Pending)
-            .map_err(|e| {
-                error!("Failed to insert certificate into state store: {e}");
-                Error::internal(e.to_string())
-            })?;
+        self.kernel.verify_certificate_signer(&certificate).await.map_err(|e| {
+            error!(error = %e, hash = hash_string, "Failed to verify the signature of certificate {hash}: {e}");
+            Error::signature_mismatch(e)
+        })?;
 
+        // TODO: Batch the different queries.
         // Insert the certificate into the pending store.
         _ = self
             .pending_store
             .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
             .map_err(|e| {
                 error!("Failed to insert certificate into pending store: {e}");
+                Error::internal(e.to_string())
+            })?;
+
+        // Insert the certificate header into the state store.
+        _ = self
+            .state
+            .insert_certificate_header(&certificate, CertificateStatus::Pending)
+            .map_err(|e| {
+                error!("Failed to insert certificate into state store: {e}");
                 Error::internal(e.to_string())
             })?;
 

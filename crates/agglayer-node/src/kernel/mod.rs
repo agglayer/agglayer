@@ -6,7 +6,12 @@ use agglayer_contracts::{
     polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
     polygon_zk_evm::PolygonZkEvm,
 };
-use ethers::prelude::*;
+use agglayer_types::Certificate;
+use ethers::{
+    contract::{ContractCall, ContractError},
+    providers::{Middleware, ProviderError},
+    types::{Address, TransactionReceipt, H160, H256, U64},
+};
 use thiserror::Error;
 use tracing::{info, instrument, warn};
 
@@ -158,9 +163,14 @@ pub(crate) enum SignatureVerificationError<RpcProvider>
 where
     RpcProvider: Middleware,
 {
-    /// The signer could not be recovered from the signature.
-    #[error("could not recover signer: {0}")]
-    CouldNotRecoverSigner(SignatureError),
+    /// The signer could not be recovered from the transaction signature.
+    #[error("could not recover transaction signer: {0}")]
+    CouldNotRecoverTxSigner(#[source] ethers::types::SignatureError),
+
+    /// The signer could not be recovered from the certificate signature.
+    #[error("could not recover certificate signer: {0}")]
+    CouldNotRecoverCertSigner(#[source] alloy::primitives::SignatureError),
+
     /// The signer of the proof is not the trusted sequencer for the given
     /// rollup id.
     #[error("invalid signer: expected {trusted_sequencer}, got {signer}")]
@@ -170,6 +180,7 @@ where
         /// The trusted sequencer address.
         trusted_sequencer: Address,
     },
+
     /// Generic network error when attempting to retrieve the trusted sequencer
     /// address from the rollup contract.
     #[error("contract error: {0}")]
@@ -294,7 +305,7 @@ where
     /// Verify that the signer of the given [`SignedTx`] is the trusted
     /// sequencer for the rollup id specified in the proof.
     #[instrument(skip(self), level = "debug")]
-    pub(crate) async fn verify_signature(
+    pub(crate) async fn verify_tx_signer(
         &self,
         signed_tx: &SignedTx,
     ) -> Result<(), SignatureVerificationError<RpcProvider>> {
@@ -304,7 +315,35 @@ where
 
         let signer = signed_tx
             .signer()
-            .map_err(|e| SignatureVerificationError::CouldNotRecoverSigner(e))?;
+            .map_err(SignatureVerificationError::CouldNotRecoverTxSigner)?;
+
+        if signer != sequencer_address {
+            return Err(SignatureVerificationError::InvalidSigner {
+                signer,
+                trusted_sequencer: sequencer_address,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Verify that the signer of the given [`Certificate`] is the trusted
+    /// sequencer for the rollup id it specified.
+    #[instrument(skip(self), level = "debug")]
+    pub(crate) async fn verify_certificate_signer(
+        &self,
+        cert: &Certificate,
+    ) -> Result<(), SignatureVerificationError<RpcProvider>> {
+        let sequencer_address = self
+            .get_trusted_sequencer_address(cert.network_id.to_u32())
+            .await?;
+
+        let signer = cert
+            .signer()
+            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?;
+
+        // Convert signer from alloy to ethers
+        let signer = H160::from(signer.0 .0);
 
         if signer != sequencer_address {
             return Err(SignatureVerificationError::InvalidSigner {
