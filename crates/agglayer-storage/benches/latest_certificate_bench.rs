@@ -8,7 +8,7 @@ use agglayer_storage::{
     columns::latest_settled_certificate_per_network::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
-    storage::{state_db_cf_definitions, DB},
+    storage::{backup::BackupClient, state_db_cf_definitions, DB},
     stores::{state::StateStore, StateReader as _},
 };
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -47,7 +47,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
             )
             .expect("Unable to put certificate into storage");
         }
-        let store = StateStore::new(db.clone());
+        let store = StateStore::new(db.clone(), BackupClient::noop());
         let now = Instant::now();
         let iterator = store.get_active_networks().expect("Unable to get keys");
         let elapsed = now.elapsed();

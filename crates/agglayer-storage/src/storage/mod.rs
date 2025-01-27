@@ -10,6 +10,8 @@ use crate::columns::{Codec, ColumnSchema};
 pub(crate) mod cf_definitions;
 pub(crate) mod iterators;
 
+pub mod backup;
+
 pub use cf_definitions::debug::debug_db_cf_definitions;
 pub use cf_definitions::epochs::epochs_db_cf_definitions;
 pub use cf_definitions::pending::pending_db_cf_definitions;
@@ -25,6 +27,18 @@ pub enum DBError {
 
     #[error("Trying to access an unknown ColumnFamily")]
     ColumnFamilyNotFound,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum BackupError {
+    #[error("Unable to send backup request")]
+    UnableToSendBackupRequest,
+
+    #[error("RocksDB error: {0}")]
+    RocksDB(#[from] rocksdb::Error),
+
+    #[error("IO Error: {0}")]
+    IO(#[from] std::io::Error),
 }
 
 /// A physical storage storage component with an active RocksDB.

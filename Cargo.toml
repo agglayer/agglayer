@@ -82,6 +82,7 @@ fail = { version = "0.5.1", default-features = false }
 insta = { git = "https://github.com/freyskeyd/insta", branch = "chore/updating-deps-to-avoid-serialize-error", features = [
     "toml",
     "yaml",
+    "json",
 ] }
 mockall = "0.13.1"
 rand = "0.8.5"
