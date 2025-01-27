@@ -56,12 +56,14 @@ dependencies = [
  "agglayer-config",
  "agglayer-node",
  "agglayer-prover",
+ "agglayer-storage",
  "anyhow",
  "assert_cmd",
  "clap",
  "dirs",
  "dotenvy",
  "insta",
+ "serde_json",
  "toml",
  "vergen-git2",
 ]
@@ -324,6 +326,7 @@ dependencies = [
  "agglayer-types",
  "arc-swap",
  "bincode",
+ "chrono",
  "criterion",
  "hex",
  "insta",
@@ -338,6 +341,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.8",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 
