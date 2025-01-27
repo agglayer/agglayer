@@ -221,8 +221,8 @@ impl<Rpc: 'static + Middleware> From<TxStatusError<Rpc>> for Error {
     }
 }
 
-impl From<CertificateSubmissionError> for Error {
-    fn from(error: CertificateSubmissionError) -> Self {
+impl<Rpc: Middleware> From<CertificateSubmissionError<Rpc>> for Error {
+    fn from(error: CertificateSubmissionError<Rpc>) -> Self {
         let detail = error.to_string();
         Self::SendCertificate { detail }
     }
