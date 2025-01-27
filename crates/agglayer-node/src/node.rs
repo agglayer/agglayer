@@ -32,6 +32,8 @@ use crate::{
     service::AgglayerService,
 };
 
+mod api;
+
 pub(crate) struct Node {
     pub(crate) rpc_handle: JoinHandle<()>,
     pub(crate) certificate_orchestrator_handle: JoinHandle<()>,
@@ -233,15 +235,23 @@ impl Node {
         ));
 
         // Bind the core to the RPC server.
-        let server_handle = AgglayerImpl::new(service).start().await?;
+        let json_rpc_router = AgglayerImpl::new(service).start().await?;
+
+        let health_router =
+            axum::Router::new().route("/health", axum::routing::get(api::rest::health));
+
+        let router = axum::Router::new()
+            .merge(health_router)
+            .merge(json_rpc_router);
+
+        let listener = tokio::net::TcpListener::bind(config.rpc_addr()).await?;
+        let api_graceful_shutdown = cancellation_token.clone();
+        let api_server = axum::serve(listener, router)
+            .with_graceful_shutdown(async move { api_graceful_shutdown.cancelled().await });
 
         let rpc_handle = tokio::spawn(async move {
-            tokio::select! {
-                _ = server_handle.stopped() => {},
-                _ = cancellation_token.cancelled() => {
-                    debug!("Node RPC shutdown requested.");
-                }
-            }
+            _ = api_server.await;
+            debug!("Node RPC shutdown requested.");
         });
 
         let node = Self {

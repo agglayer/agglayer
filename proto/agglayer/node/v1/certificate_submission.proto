@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package agglayer.node.v1;
+
+import "agglayer/protocol/types/v1/certificate.proto";
+
+// Service for submitting certificate to an agglayer node.
+service CertificateSubmissionService {
+  // Method used to submit a certificate.
+  rpc SubmitCertificate(SubmitCertificateRequest) returns (SubmitCertificateResponse);
+}
+
+// Type used to submit a certificate.
+message SubmitCertificateRequest {
+  // The certificate to submit.
+  protocol.types.v1.Certificate certificate = 1;
+}
+
+// Type used as response to a certificate submission.
+message SubmitCertificateResponse {}
+
+// The kind of error that occurred and that are reported by the service.
+enum ErrorKind {
+  // Unspecified error.
+  ERROR_KIND_UNSPECIFIED = 0;
+  // The signature verification failed.
+  ERROR_KIND_SIGNATURE_VERIFICATION = 1;
+}

@@ -19,8 +19,8 @@ use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::server::ServerHandle;
 use rstest::*;
+use tokio_util::sync::CancellationToken;
 
 use crate::{kernel::Kernel, rpc::AgglayerImpl, service::AgglayerService};
 
@@ -86,8 +86,8 @@ pub(crate) struct RawRpcContext {
 }
 
 pub(crate) struct TestContext {
-    pub(crate) server_handle: ServerHandle,
     pub(crate) client: jsonrpsee::http_client::HttpClient,
+    pub(crate) cancellation_token: CancellationToken,
     pub(crate) certificate_receiver:
         tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
@@ -99,14 +99,27 @@ impl TestContext {
     }
 
     async fn new_with_config(config: Config) -> Self {
+        let cancellation_token = CancellationToken::new();
         let raw_rpc = Self::new_raw_rpc_with_config(config).await;
-        let server_handle = raw_rpc.rpc.start().await.unwrap();
+        let router = raw_rpc.rpc.start().await.unwrap();
 
         let url = format!("http://{}/", raw_rpc.config.rpc_addr());
         let client = HttpClientBuilder::default().build(url).unwrap();
 
+        let listener = tokio::net::TcpListener::bind(raw_rpc.config.rpc_addr())
+            .await
+            .unwrap();
+        let api_graceful_shutdown = cancellation_token.clone();
+        let api_server = axum::serve(listener, router).with_graceful_shutdown(async move {
+            api_graceful_shutdown.cancelled().await;
+        });
+
+        tokio::spawn(async move {
+            _ = api_server.await;
+        });
+
         Self {
-            server_handle,
+            cancellation_token,
             client,
             certificate_receiver: raw_rpc.certificate_receiver,
         }
@@ -178,7 +191,7 @@ impl TestContext {
 
 impl Drop for TestContext {
     fn drop(&mut self) {
-        _ = self.server_handle.stop();
+        self.cancellation_token.cancel();
     }
 }
 

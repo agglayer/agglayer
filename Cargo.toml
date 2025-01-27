@@ -16,6 +16,12 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 
 [workspace.dependencies]
 # Project dependencies
+## APIs
+agglayer-grpc-api = { path = "crates/agglayer-grpc-api" }
+agglayer-grpc-client = { path = "crates/agglayer-grpc-client" }
+agglayer-grpc-server = { path = "crates/agglayer-grpc-server" }
+agglayer-grpc-types = { path = "crates/agglayer-grpc-types" }
+
 agglayer-aggregator-notifier = { path = "crates/agglayer-aggregator-notifier" }
 agglayer-certificate-orchestrator = { path = "crates/agglayer-certificate-orchestrator" }
 agglayer-clock = { path = "crates/agglayer-clock" }
@@ -29,6 +35,7 @@ agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
 agglayer-types = { path = "crates/agglayer-types" }
 agglayer-utils = { path = "crates/agglayer-utils" }
+
 pessimistic-proof = { path = "crates/pessimistic-proof" }
 pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }

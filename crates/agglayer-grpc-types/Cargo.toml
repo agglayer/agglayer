@@ -1,0 +1,16 @@
+[package]
+name = "agglayer-grpc-types"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+prost = "0.13.4"
+pbjson = "0.7.0"
+
+[lints]
+workspace = true
+
+[features]
+default = []

@@ -10,6 +10,7 @@ workspace = true
 [dependencies]
 alloy.workspace = true
 anyhow.workspace = true
+axum = { version = "0.8.1", features = ["tokio", "http1", "http2"] }
 arc-swap.workspace = true
 buildstructor.workspace = true
 ethers = { workspace = true, features = ["solc"] }
@@ -41,6 +42,8 @@ agglayer-rate-limiting.workspace = true
 agglayer-signer.workspace = true
 agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true
+agglayer-grpc-types = { path = "../agglayer-grpc-types" }
+agglayer-grpc-api = { path = "../agglayer-grpc-api" }
 agglayer-types.workspace = true
 pessimistic-proof.workspace = true
 
@@ -48,7 +51,7 @@ pessimistic-proof.workspace = true
 alloy = { workspace = true, features = ["full", "node-bindings"] }
 ethers.workspace = true
 http-body-util = "0.1.2"
-hyper-util = { version = "0.1.6", features = ["client"] }
+hyper-util = { version = "0.1.10", features = ["client"] }
 insta.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.7" }

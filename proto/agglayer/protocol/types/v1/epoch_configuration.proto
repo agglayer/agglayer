@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package agglayer.protocol.types.v1;
+
+// Epoch configuration type.
+message EpochConfiguration {
+  // The genesis block of the epoch.
+  uint64 genesis_block = 1;
+  // The epoch duration.
+  uint64 epoch_duration = 2;
+}

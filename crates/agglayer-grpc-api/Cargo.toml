@@ -1,0 +1,22 @@
+[package]
+name = "agglayer-grpc-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agglayer-config.workspace = true
+agglayer-grpc-server.workspace = true
+agglayer-grpc-types.workspace = true
+agglayer-types.workspace = true
+
+prost = "0.13.4"
+tonic.workspace = true
+tonic-types = "0.12.3"
+tracing.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
