@@ -45,6 +45,6 @@ impl TempDBDir {
 
 impl Drop for TempDBDir {
     fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.path).unwrap();
+        _ = std::fs::remove_dir_all(&self.path);
     }
 }
