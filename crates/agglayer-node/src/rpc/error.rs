@@ -99,6 +99,9 @@ impl StatusError {
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
 #[serde(rename_all = "kebab-case")]
 pub enum Error {
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(String),
+
     #[error("Rollup {rollup_id} not registered")]
     #[serde(rename_all = "kebab-case")]
     RollupNotRegistered { rollup_id: u32 },
@@ -138,6 +141,10 @@ impl Error {
         Self::Internal(detail.into())
     }
 
+    pub(crate) fn invalid_argument<S: Into<String>>(detail: S) -> Self {
+        Self::InvalidArgument(detail.into())
+    }
+
     pub(crate) fn resource_not_found<S: Into<String>>(resource: S) -> Self {
         Self::ResourceNotFound(resource.into())
     }
@@ -172,6 +179,7 @@ impl Error {
     /// Get the jsonrpc error code for this error.
     pub fn code(&self) -> i32 {
         match self {
+            Self::InvalidArgument(_) => jsonrpsee::types::error::INVALID_PARAMS_CODE,
             Self::Internal(_) => jsonrpsee::types::error::INTERNAL_ERROR_CODE,
             Self::ResourceNotFound { .. } => code::RESOURCE_NOT_FOUND,
             Self::RollupNotRegistered { .. } => code::ROLLUP_NOT_REGISTERED,

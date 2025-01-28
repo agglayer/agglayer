@@ -103,8 +103,7 @@ impl PerEpochReader for DummyPendingStore {
 impl PerEpochWriter for DummyPendingStore {
     fn add_certificate(
         &self,
-        _network_id: NetworkId,
-        _height: Height,
+        _certificate_id: CertificateId,
         _mode: ExecutionMode,
     ) -> Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
         Ok((0, 0))

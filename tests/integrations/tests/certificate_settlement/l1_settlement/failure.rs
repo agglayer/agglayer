@@ -55,7 +55,7 @@ async fn transaction_with_receipt_status_0_retry() {
     let scenario = FailScenario::setup();
 
     fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::status_0",
+        "notifier::packer::settle_certificate::gas_estimate::low_gas",
         "return",
     )
     .expect("Failed to configure failpoint");
@@ -77,10 +77,11 @@ async fn transaction_with_receipt_status_0_retry() {
 
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
 
+    println!("{:?}", result);
     assert!(matches!(result.status, CertificateStatus::InError { .. }));
 
     fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::status_0",
+        "notifier::packer::settle_certificate::gas_estimate::low_gas",
         "off",
     )
     .expect("Failed to configure failpoint");
@@ -96,6 +97,7 @@ async fn transaction_with_receipt_status_0_retry() {
 
     scenario.teardown();
 }
+
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]

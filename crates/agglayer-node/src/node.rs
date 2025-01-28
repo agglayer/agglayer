@@ -30,7 +30,11 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use crate::{epoch_synchronizer::EpochSynchronizer, kernel::Kernel, rpc::AgglayerImpl};
+use crate::{
+    epoch_synchronizer::EpochSynchronizer,
+    kernel::Kernel,
+    rpc::{admin::AdminAgglayerImpl, AgglayerImpl},
+};
 
 pub(crate) struct Node {
     pub(crate) rpc_handle: JoinHandle<()>,
@@ -243,6 +247,16 @@ impl Node {
             .await?;
 
         info!("Certificate orchestrator started.");
+
+        let admin_handle = AdminAgglayerImpl::new(
+            pending_store.clone(),
+            state_store.clone(),
+            debug_store.clone(),
+            config.clone(),
+        )
+        .start()
+        .await?;
+
         // Bind the core to the RPC server.
         let server_handle = AgglayerImpl::new(
             core,
@@ -258,6 +272,7 @@ impl Node {
         let rpc_handle = tokio::spawn(async move {
             tokio::select! {
                 _ = server_handle.stopped() => {},
+                _ = admin_handle.stopped() => {},
                 _ = cancellation_token.cancelled() => {
                     debug!("Node RPC shutdown requested.");
                 }

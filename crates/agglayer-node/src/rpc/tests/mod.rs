@@ -23,6 +23,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::ServerHandle;
 use rstest::*;
 
+use super::admin::AdminAgglayerImpl;
 use crate::{kernel::Kernel, rpc::AgglayerImpl};
 
 mod errors;
@@ -82,14 +83,21 @@ async fn healthcheck_method_can_be_called() {
 
 pub(crate) struct RawRpcContext {
     pub(crate) rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore, DebugStore>,
-    config: Arc<Config>,
+    pub(crate) admin_rpc: AdminAgglayerImpl<PendingStore, StateStore, DebugStore>,
+    pub(crate) config: Arc<Config>,
+    pub(crate) state_store: Arc<StateStore>,
+    pub(crate) pending_store: Arc<PendingStore>,
     pub(crate) certificate_receiver:
         tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
 
 pub(crate) struct TestContext {
     pub(crate) server_handle: ServerHandle,
+    pub(crate) admin_server_handle: ServerHandle,
+    pub(crate) state_store: Arc<StateStore>,
+    pub(crate) pending_store: Arc<PendingStore>,
     pub(crate) client: jsonrpsee::http_client::HttpClient,
+    pub(crate) admin_client: jsonrpsee::http_client::HttpClient,
     pub(crate) certificate_receiver:
         tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
@@ -107,9 +115,17 @@ impl TestContext {
         let url = format!("http://{}/", raw_rpc.config.rpc_addr());
         let client = HttpClientBuilder::default().build(url).unwrap();
 
+        let admin_server_handle = raw_rpc.admin_rpc.start().await.unwrap();
+        let url = format!("http://{}/", raw_rpc.config.admin_rpc_addr());
+        let admin_client = HttpClientBuilder::default().build(url).unwrap();
+
         Self {
             server_handle,
+            admin_server_handle,
+            state_store: raw_rpc.state_store,
+            pending_store: raw_rpc.pending_store,
             client,
+            admin_client,
             certificate_receiver: raw_rpc.certificate_receiver,
         }
     }
@@ -138,6 +154,9 @@ impl TestContext {
         }
         config.rpc.port = addr.port();
 
+        let admin_addr = next_available_addr();
+        config.rpc.admin_port = admin_addr.port();
+
         let config = Arc::new(config);
 
         let state_db = Arc::new(
@@ -162,15 +181,24 @@ impl TestContext {
         let rpc = AgglayerImpl::new(
             kernel,
             certificate_sender,
-            pending_store,
-            state_store,
-            debug_store,
+            pending_store.clone(),
+            state_store.clone(),
+            debug_store.clone(),
+            config.clone(),
+        );
+        let admin_rpc = AdminAgglayerImpl::new(
+            pending_store.clone(),
+            state_store.clone(),
+            debug_store.clone(),
             config.clone(),
         );
 
         RawRpcContext {
             rpc,
+            admin_rpc,
             config,
+            state_store,
+            pending_store,
             certificate_receiver,
         }
     }
@@ -179,6 +207,7 @@ impl TestContext {
 impl Drop for TestContext {
     fn drop(&mut self) {
         _ = self.server_handle.stop();
+        _ = self.admin_server_handle.stop();
     }
 }
 

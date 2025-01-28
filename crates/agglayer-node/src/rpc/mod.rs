@@ -14,6 +14,7 @@ use agglayer_telemetry::KeyValue;
 use agglayer_types::CertificateStatus;
 use agglayer_types::EpochConfiguration;
 use agglayer_types::{Certificate, CertificateHeader, CertificateId, Height, NetworkId};
+use ethers::types::TransactionReceipt;
 use ethers::{
     contract::{ContractError, ContractRevert},
     providers::Middleware,
@@ -29,6 +30,7 @@ use tokio::{sync::mpsc, try_join};
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
 use tracing::trace;
+use tracing::warn;
 use tracing::{debug, error, info, instrument};
 
 use crate::{
@@ -42,6 +44,8 @@ mod rpc_middleware;
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) mod admin;
 
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
@@ -80,12 +84,6 @@ trait Agglayer {
         &self,
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>>;
-
-    #[method(name = "debugGetCertificate")]
-    async fn debug_get_certificate(
-        &self,
-        certificate_id: CertificateId,
-    ) -> RpcResult<(Certificate, Option<CertificateHeader>)>;
 }
 
 /// The RPC agglayer service implementation.
@@ -198,6 +196,83 @@ where
         info!("Listening on {addr}");
 
         Ok(server.start(service))
+    }
+    #[instrument(skip(self, certificate), level = "info")]
+    async fn validate_pre_existing_certificate(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<(), Error> {
+        // Get pre-existing certificate in pending
+        if let Some(certificate) = self
+            .pending_store
+            .get_certificate(certificate.network_id, certificate.height)
+            .map_err(|e| {
+                error!("Failed to communicate with pending store: {e}");
+                Error::internal(e.to_string())
+            })?
+        {
+            let pre_existing_certificate_id = certificate.hash();
+            warn!(
+                pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
+                "Certificate already exists in pending store for network {} at height {}",
+                certificate.network_id,
+                certificate.height
+            );
+            if let Some(CertificateHeader {
+                status: CertificateStatus::InError { .. },
+                settlement_tx_hash,
+                ..
+            }) = self
+                .state
+                .get_certificate_header(&pre_existing_certificate_id)
+                .map_err(|e| {
+                    error!("Failed to communicate with state store: {e}");
+                    Error::internal(e.to_string())
+                })?
+            {
+                match settlement_tx_hash {
+                    None => {
+                        info!(
+                            "Replacing pending certificate {} that is in error",
+                            pre_existing_certificate_id
+                        );
+                    }
+                    Some(tx_hash) => {
+                        let l1_transaction = self
+                            .kernel
+                            .check_tx_status(H256::from_slice(tx_hash.as_ref()))
+                            .await
+                            .map_err(|e| {
+                                error!("Failed to check transaction status: {e}");
+                                Error::internal(e.to_string())
+                            })?;
+
+                        if matches!(l1_transaction, Some(TransactionReceipt { status: Some(status), .. }) if status.as_u64() == 0)
+                        {
+                            info!(
+                                %pre_existing_certificate_id,
+                                %tx_hash,
+                                ?l1_transaction,
+                                "Replacing pending certificate in error that has already been settled, but transaction recript status is in failure"
+                            );
+                        } else {
+                            let message = "Unable to replace a pending certificate in error that \
+                                           has already been settled";
+                            warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
+
+                            return Err(Error::invalid_argument(message));
+                        }
+                    }
+                }
+            } else {
+                let message = "Unable to replace a pending certificate that is not in error";
+                info!(%pre_existing_certificate_id, message);
+
+                return Err(Error::invalid_argument(message));
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -353,6 +428,8 @@ where
             Error::signature_mismatch(e)
         })?;
 
+        self.validate_pre_existing_certificate(&certificate).await?;
+
         // TODO: Batch the different queries.
         // Insert the certificate into the pending store.
         _ = self
@@ -497,34 +574,6 @@ where
             }
         } else {
             Ok(None)
-        }
-    }
-
-    async fn debug_get_certificate(
-        &self,
-        certificate_id: CertificateId,
-    ) -> RpcResult<(Certificate, Option<CertificateHeader>)> {
-        match self.debug_store.get_certificate(&certificate_id) {
-            Ok(Some(cert)) => match self
-                .state
-                .get_certificate_header(&certificate_id)
-                .map(|header| (cert, header))
-            {
-                Ok(result) => Ok(result),
-                Err(error) => {
-                    error!("Failed to get certificate header: {}", error);
-                    Err(Error::internal("Unable to get certificate header"))
-                }
-            },
-            Ok(None) => Err(Error::resource_not_found(format!(
-                "Certificate({})",
-                certificate_id
-            ))),
-            Err(error) => {
-                error!("Failed to get certificate: {}", error);
-
-                Err(Error::internal("Unable to get certificate"))
-            }
         }
     }
 

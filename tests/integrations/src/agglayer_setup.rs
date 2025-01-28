@@ -105,7 +105,9 @@ pub async fn start_agglayer(
     let key_path = config_path.join(uuid);
 
     let addr = next_available_addr();
+    let admin_addr = next_available_addr();
     config.rpc.port = addr.port();
+    config.rpc.admin_port = admin_addr.port();
 
     config.telemetry.addr = next_available_addr();
     config.log.level = LogLevel::Debug;
