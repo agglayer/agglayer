@@ -84,23 +84,21 @@ where
         let hash = format!("{:?}", tx.hash());
         tracing::Span::current().record("hash", &hash);
 
-        info!(
-            hash,
-            "Received transaction {hash} for rollup {}", tx.tx.rollup_id
-        );
-        let rollup_id_str = tx.tx.rollup_id.to_string();
+        let rollup_id = tx.tx.rollup_id;
+        info!(hash, rollup_id, "Received transaction");
+
+        let rollup_id_str = rollup_id.to_string();
         let metrics_attrs = &[KeyValue::new("rollup_id", rollup_id_str)];
 
         agglayer_telemetry::SEND_TX.add(1, metrics_attrs);
 
-        let rollup_id = tx.tx.rollup_id;
         if !self.kernel.check_rollup_registered(rollup_id) {
             // Return an invalid params error if the rollup is not registered.
             return Err(SendTxError::RollupNotRegistered { rollup_id });
         }
 
         self.kernel.verify_signature(&tx).await.inspect_err(|e| {
-            error!(error = %e, hash, "Failed to verify the signature of transaction {hash}: {e}");
+            error!(error = %e, hash, "Failed to verify the signature of transaction");
         })?;
 
         agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
@@ -125,8 +123,7 @@ where
                             error_code = %e,
                             error = error.to_string(),
                             hash,
-                            "Failed to dry-run the verify_batches_trusted_aggregator for \
-                             transaction {hash}: {error}"
+                            "Failed to dry-run the verify_batches_trusted_aggregator"
                         );
                         error
                     })
@@ -140,8 +137,7 @@ where
                         error!(
                             error = %e,
                             hash,
-                            "Failed to verify the batch local_exit_root and state_root of \
-                             transaction {hash}: {e}"
+                            "Failed to verify the batch local_exit_root and state_root"
                         );
                         SendTxError::RootVerification(e)
                     })
@@ -155,13 +151,13 @@ where
             error!(
                 error = %e,
                 hash,
-                "Failed to settle transaction {hash} on L1: {e}"
+                "Failed to settle transaction on L1"
             )
         })?;
 
         agglayer_telemetry::SETTLE.add(1, metrics_attrs);
 
-        info!(hash, "Successfully settled transaction {hash}");
+        info!(hash, "Successfully settled transaction");
 
         Ok(receipt.transaction_hash)
     }
@@ -200,7 +196,7 @@ where
 
         info!(
             %hash,
-            "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
+            "Received certificate for rollup {} at height {}", *certificate.network_id, certificate.height
         );
 
         // TODO: Batch the different queries.
