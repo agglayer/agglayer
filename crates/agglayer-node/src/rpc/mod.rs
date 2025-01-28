@@ -353,12 +353,6 @@ where
             Error::signature_mismatch(e)
         })?;
 
-        let metrics_attrs = &[
-            KeyValue::new("rollup_id", certificate.network_id.to_string()),
-            KeyValue::new("type", "cert"),
-        ];
-        agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
-
         // TODO: Batch the different queries.
         // Insert the certificate into the pending store.
         _ = self
