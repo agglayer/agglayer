@@ -9,6 +9,7 @@ use agglayer_contracts::polygon_rollup_manager::{
     RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
 };
 use agglayer_contracts::polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn};
+use agglayer_types::Certificate;
 use ethers::core::utils;
 use ethers::prelude::*;
 use ethers::signers::LocalWallet;
@@ -334,6 +335,62 @@ async fn interop_executor_verify_tx_signature_proof_signer() {
             .unwrap_err(),
         MockError::EmptyRequests
     ));
+}
+
+/// Test that checks if the verify_cert_signature method
+#[tokio::test]
+async fn verify_cert_signature() {
+    let signer1 = Certificate::wallet_for_test(1.into()).address();
+    let signer2 = Certificate::wallet_for_test(2.into()).address();
+    let signer3 = Certificate::wallet_for_test(3.into()).address();
+    let mut config = Config::new_for_test();
+    // Proof signer for network 1 is ok
+    config.proof_signers.insert(1, signer1);
+    // Proof signer for network 2 is wrong
+    config.proof_signers.insert(2, signer3);
+    // No proof signer for network 3
+    let config = Arc::new(config);
+
+    let (provider, _) = providers::Provider::mocked();
+    let kernel = Kernel::new(Arc::new(provider), config);
+
+    {
+        // valid signature
+        let signed_cert = Certificate::new_for_test(1.into(), 0);
+        assert!(kernel.verify_cert_signature(&signed_cert).await.is_ok());
+    }
+
+    {
+        // valid signature with wrong signer
+        let signed_cert = Certificate::new_for_test(2.into(), 0);
+        assert!(matches!(
+            kernel.verify_cert_signature(&signed_cert).await,
+            Err(crate::kernel::SignatureVerificationError::InvalidSigner { signer, trusted_sequencer })
+            if signer == signer2 && trusted_sequencer == signer3
+        ));
+    }
+
+    {
+        // valid signature with no signer
+        let signed_cert = Certificate::new_for_test(3.into(), 0);
+        assert!(matches!(
+            kernel.verify_cert_signature(&signed_cert).await,
+            Err(crate::kernel::SignatureVerificationError::ContractError(
+                ContractError::MiddlewareError { .. }
+            )),
+        ));
+    }
+
+    {
+        // wrong signature with valid signer
+        let mut signed_cert = Certificate::new_for_test(1.into(), 0);
+        signed_cert.new_local_exit_root.0[0] += 1;
+        assert!(matches!(
+            kernel.verify_cert_signature(&signed_cert).await,
+            Err(crate::kernel::SignatureVerificationError::InvalidSigner { signer: _, trusted_sequencer })
+            if trusted_sequencer == signer1
+        ));
+    }
 }
 
 mod interop_executor_execute {
