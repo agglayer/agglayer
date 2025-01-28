@@ -10,6 +10,7 @@ mod kernel;
 mod logging;
 mod rate_limiting;
 mod rpc;
+pub mod service;
 mod signed_tx;
 pub mod utils;
 mod zkevm_node_client;

@@ -5,11 +5,13 @@ use jsonrpsee::types::error::ErrorObjectOwned;
 use serde::Serialize;
 
 use crate::{
-    kernel::{CheckTxStatusError, SignatureVerificationError, ZkevmNodeVerificationError},
     rate_limiting::RateLimited as RateLimitedError,
+    service::{
+        self, CertificateRetrievalError, CertificateSubmissionError, SendTxError, TxStatusError,
+    },
 };
 
-/// RPC error codes.
+/// JsonRPC error codes.
 pub mod code {
     /// Rollup is not registered.
     pub const ROLLUP_NOT_REGISTERED: i32 = -10001;
@@ -46,6 +48,13 @@ pub enum ValidationError {
     RootVerification { detail: String },
 }
 
+impl ValidationError {
+    fn dry_run(err: impl ToString) -> Self {
+        let detail = err.to_string();
+        Self::DryRun { detail }
+    }
+}
+
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
 #[serde(rename_all = "kebab-case")]
 pub enum SettlementError {
@@ -57,6 +66,12 @@ pub enum SettlementError {
 
     #[error("Contract error")]
     Contract { detail: String },
+}
+
+impl SettlementError {
+    fn io_error(err: impl ToString) -> Self {
+        Self::IoError(err.to_string())
+    }
 }
 
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
@@ -72,19 +87,20 @@ pub enum StatusError {
     TxStatus { detail: String },
 }
 
-impl StatusError {
-    pub(crate) fn tx_not_found(hash: H256) -> Self {
-        Self::TxNotFound { hash }
-    }
-
-    pub(crate) fn tx_status<R: Middleware>(err: CheckTxStatusError<R>) -> Self {
-        let detail = err.to_string();
-        Self::TxStatus { detail }
-    }
-
-    pub(crate) fn l1_block<R: Middleware>(err: CheckTxStatusError<R>) -> Self {
-        let detail = err.to_string();
-        Self::L1Block { detail }
+impl<Rpc: 'static + Middleware> From<TxStatusError<Rpc>> for StatusError {
+    fn from(error: TxStatusError<Rpc>) -> Self {
+        use TxStatusError as E;
+        match error {
+            E::StatusCheck(error) => {
+                let detail = error.to_string();
+                Self::TxStatus { detail }
+            }
+            E::L1BlockRetrieval(error) => {
+                let detail = error.to_string();
+                Self::L1Block { detail }
+            }
+            E::TxNotFound { hash } => Self::TxNotFound { hash },
+        }
     }
 }
 
@@ -134,39 +150,8 @@ pub enum Error {
 }
 
 impl Error {
-    pub(crate) fn internal<S: Into<String>>(detail: S) -> Self {
+    pub fn internal<S: Into<String>>(detail: S) -> Self {
         Self::Internal(detail.into())
-    }
-
-    pub(crate) fn resource_not_found<S: Into<String>>(resource: S) -> Self {
-        Self::ResourceNotFound(resource.into())
-    }
-
-    pub(crate) fn rollup_not_registered(rollup_id: u32) -> Self {
-        Self::RollupNotRegistered { rollup_id }
-    }
-
-    pub(crate) fn signature_mismatch<R: Middleware>(err: SignatureVerificationError<R>) -> Self {
-        let detail = err.to_string();
-        Self::SignatureMismatch { detail }
-    }
-
-    pub(crate) fn dry_run(detail: String) -> Self {
-        ValidationError::DryRun { detail }.into()
-    }
-
-    pub(crate) fn root_verification(err: ZkevmNodeVerificationError) -> Self {
-        let detail = err.to_string();
-        ValidationError::RootVerification { detail }.into()
-    }
-
-    pub(crate) fn settlement<R: Middleware>(err: crate::kernel::SettlementError<R>) -> Self {
-        err.into()
-    }
-
-    pub(crate) fn send_certificate<T>(err: tokio::sync::mpsc::error::SendError<T>) -> Self {
-        let detail = err.to_string();
-        Self::SendCertificate { detail }
     }
 
     /// Get the jsonrpc error code for this error.
@@ -185,18 +170,24 @@ impl Error {
     }
 }
 
-impl<R: Middleware> From<crate::kernel::SettlementError<R>> for Error {
-    fn from(err: crate::kernel::SettlementError<R>) -> Self {
-        use crate::kernel::SettlementError as E;
+impl<Rpc: 'static + Middleware> From<SendTxError<Rpc>> for Error {
+    fn from(err: SendTxError<Rpc>) -> Self {
+        use SendTxError as E;
         match err {
-            E::NoReceipt => SettlementError::NoReceipt.into(),
-            E::ProviderError(e) => SettlementError::IoError(e.to_string()).into(),
-            E::ContractError(e) => {
-                let detail = e.to_string();
-                SettlementError::Contract { detail }.into()
+            E::RateLimited(error) => error.into(),
+            E::SignatureError(error) => {
+                let detail = error.to_string();
+                Self::SignatureMismatch { detail }
             }
-            E::RateLimited(e) => e.into(),
-            e @ E::Timeout(_) => SettlementError::IoError(e.to_string()).into(),
+            E::RollupNotRegistered { rollup_id } => Self::RollupNotRegistered { rollup_id },
+            E::DryRunZkEvm(error) => ValidationError::dry_run(error).into(),
+            E::DryRunRollupManager(error) => ValidationError::dry_run(error).into(),
+            E::DryRunOther(error) => ValidationError::dry_run(error).into(),
+            E::RootVerification(error) => {
+                let detail = error.to_string();
+                ValidationError::RootVerification { detail }.into()
+            }
+            E::Settlement(error) => error.into(),
         }
     }
 }
@@ -205,6 +196,46 @@ impl From<RateLimitedError> for Error {
     fn from(error: RateLimitedError) -> Self {
         let detail = error.to_string();
         Self::RateLimited { detail, error }
+    }
+}
+
+impl<Rpc: 'static + Middleware> From<service::error::SettlementError<Rpc>> for Error {
+    fn from(error: service::error::SettlementError<Rpc>) -> Self {
+        use service::error::SettlementError as E;
+        match error {
+            E::NoReceipt => SettlementError::NoReceipt.into(),
+            E::ContractError(error) => {
+                let detail = error.to_string();
+                SettlementError::Contract { detail }.into()
+            }
+            E::ProviderError(error) => SettlementError::io_error(error).into(),
+            E::RateLimited(error) => error.into(),
+            error @ E::Timeout(_) => SettlementError::io_error(error).into(),
+        }
+    }
+}
+
+impl<Rpc: 'static + Middleware> From<TxStatusError<Rpc>> for Error {
+    fn from(error: TxStatusError<Rpc>) -> Self {
+        StatusError::from(error).into()
+    }
+}
+
+impl From<CertificateSubmissionError> for Error {
+    fn from(error: CertificateSubmissionError) -> Self {
+        let detail = error.to_string();
+        Self::SendCertificate { detail }
+    }
+}
+
+impl From<CertificateRetrievalError> for Error {
+    fn from(err: CertificateRetrievalError) -> Self {
+        match err {
+            CertificateRetrievalError::Storage(error) => Self::internal(error.to_string()),
+            CertificateRetrievalError::NotFound { certificate_id } => {
+                Self::ResourceNotFound(format!("Certificate({certificate_id})"))
+            }
+        }
     }
 }
 

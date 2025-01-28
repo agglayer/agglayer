@@ -21,7 +21,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::ServerHandle;
 use rstest::*;
 
-use crate::{kernel::Kernel, rpc::AgglayerImpl};
+use crate::{kernel::Kernel, rpc::AgglayerImpl, service::AgglayerService};
 
 mod errors;
 mod get_certificate_header;
@@ -47,17 +47,16 @@ async fn healthcheck_method_can_be_called() {
 
     let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-    let _server_handle = AgglayerImpl::new(
+    let service = AgglayerService::new(
         kernel,
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         config.clone(),
-    )
-    .start()
-    .await
-    .unwrap();
+    );
+
+    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
 
     let http_client = Client::builder(TokioExecutor::new()).build_http();
     let uri = format!("http://{}/health", config.rpc_addr());
@@ -150,7 +149,7 @@ impl TestContext {
 
         let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-        let rpc = AgglayerImpl::new(
+        let service = AgglayerService::new(
             kernel,
             certificate_sender,
             pending_store,
@@ -158,6 +157,8 @@ impl TestContext {
             debug_store,
             config.clone(),
         );
+
+        let rpc = AgglayerImpl::new(Arc::new(service));
 
         RawRpcContext {
             rpc,

@@ -9,6 +9,7 @@ use super::next_available_addr;
 use crate::{
     kernel::Kernel,
     rpc::{tests::DummyStore, AgglayerImpl},
+    service::AgglayerService,
 };
 
 #[test_log::test(tokio::test)]
@@ -31,17 +32,16 @@ async fn send_certificate_method_can_be_called() {
 
     let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-    let _server_handle = AgglayerImpl::new(
+    let service = AgglayerService::new(
         kernel,
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         config.clone(),
-    )
-    .start()
-    .await
-    .unwrap();
+    );
+
+    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
@@ -73,17 +73,16 @@ async fn send_certificate_method_can_be_called_and_fail() {
 
     let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-    let _server_handle = AgglayerImpl::new(
+    let service = AgglayerService::new(
         kernel,
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         config.clone(),
-    )
-    .start()
-    .await
-    .unwrap();
+    );
+
+    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();

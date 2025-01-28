@@ -1,0 +1,12 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "ResourceNotFound(\"Certificate(0x5151515151515151515151515151515151515151515151515151515151515151)\")"
+snapshot_kind: text
+---
+{
+  "code": -10008,
+  "data": {
+    "resource-not-found": "Certificate(0x5151515151515151515151515151515151515151515151515151515151515151)"
+  },
+  "message": "Resource not found: Certificate(0x5151515151515151515151515151515151515151515151515151515151515151)"
+}

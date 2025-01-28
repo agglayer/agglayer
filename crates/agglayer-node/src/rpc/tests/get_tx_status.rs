@@ -18,7 +18,7 @@ use jsonrpsee::rpc_params;
 use super::next_available_addr;
 use crate::rpc::tests::DummyStore;
 use crate::rpc::{self, TxStatus};
-use crate::{kernel::Kernel, rpc::AgglayerImpl};
+use crate::{kernel::Kernel, rpc::AgglayerImpl, service::AgglayerService};
 
 #[test_log::test(tokio::test)]
 async fn check_tx_status() {
@@ -51,17 +51,16 @@ async fn check_tx_status() {
     let kernel = Kernel::new(Arc::new(client), config.clone());
 
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
-    let _server_handle = AgglayerImpl::new(
+    let service = AgglayerService::new(
         kernel,
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         config.clone(),
-    )
-    .start()
-    .await
-    .unwrap();
+    );
+
+    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
@@ -107,17 +106,16 @@ async fn check_tx_status_fail() {
     let state = Arc::new(StateStore::new(store_db));
     let debug = Arc::new(DebugStore::new_with_path(&tmp.path.join("debug")).unwrap());
 
-    let _server_handle = AgglayerImpl::new(
+    let service = AgglayerService::new(
         kernel,
         certificate_sender,
         store,
         state,
         debug,
         config.clone(),
-    )
-    .start()
-    .await
-    .unwrap();
+    );
+
+    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
