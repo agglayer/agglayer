@@ -317,7 +317,7 @@ where
             .signer()
             .map_err(SignatureVerificationError::CouldNotRecoverTxSigner)?;
 
-        // k256 signature verification works by recovering the public key from the
+        // ECDSA-k256 signature verification works by recovering the public key from the
         // signature, and then checking that it is the expected one.
         if signer != sequencer_address {
             return Err(SignatureVerificationError::InvalidSigner {
@@ -347,7 +347,7 @@ where
         // Convert signer from alloy to ethers
         let signer = H160::from(signer.0 .0);
 
-        // k256 signature verification works by recovering the public key from the
+        // ECDSA-k256 signature verification works by recovering the public key from the
         // signature, and then checking that it is the expected one.
         if signer != sequencer_address {
             return Err(SignatureVerificationError::InvalidSigner {
