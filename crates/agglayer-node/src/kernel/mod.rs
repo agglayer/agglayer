@@ -340,12 +340,10 @@ where
             .get_trusted_sequencer_address(u32::from(cert.network_id))
             .await?;
 
-        let signer = cert
+        let signer: H160 = cert
             .signer()
-            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?;
-
-        // Convert signer from alloy to ethers
-        let signer = H160::from(signer.0 .0);
+            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)
+            .map(|signer| signer.into_array().into())?;
 
         // ECDSA-k256 signature verification works by recovering the public key from the
         // signature, and then checking that it is the expected one.
