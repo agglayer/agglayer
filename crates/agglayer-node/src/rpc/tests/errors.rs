@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use alloy::{primitives::SignatureError as AlloySignatureError, signers::k256};
 use ethers::{
     providers::ProviderError,
     types::{Bytes, SignatureError as EthSignatureError, H160, H256},
@@ -24,17 +25,23 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 #[case("rollup_not_reg", Error::rollup_not_registered(1337))]
 #[case(
     "sig_invalid_len",
-    Error::signature_mismatch(SignatureError::CouldNotRecoverSigner(
+    Error::signature_mismatch(SignatureError::CouldNotRecoverTxSigner(
         EthSignatureError::InvalidLength(42)
     ))
 )]
-#[case("sig_verif", Error::signature_mismatch(SignatureError::CouldNotRecoverSigner(
+#[case("sig_verif", Error::signature_mismatch(SignatureError::CouldNotRecoverTxSigner(
     EthSignatureError::VerificationError(H160([0x11; 20]), H160([0x22; 20]))
 )))]
 #[case(
     "sig_recov",
-    Error::signature_mismatch(SignatureError::CouldNotRecoverSigner(
+    Error::signature_mismatch(SignatureError::CouldNotRecoverTxSigner(
         EthSignatureError::RecoveryError
+    ))
+)]
+#[case(
+    "cert_sig",
+    Error::signature_mismatch(SignatureError::CouldNotRecoverCertSigner(
+        AlloySignatureError::K256(k256::ecdsa::Error::new())
     ))
 )]
 #[case(

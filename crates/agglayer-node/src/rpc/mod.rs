@@ -220,7 +220,11 @@ where
             "Received transaction {hash} for rollup {}", tx.tx.rollup_id
         );
         let rollup_id_str = tx.tx.rollup_id.to_string();
-        let metrics_attrs = &[KeyValue::new("rollup_id", rollup_id_str)];
+        let metrics_attrs_tx = &[
+            KeyValue::new("rollup_id", rollup_id_str),
+            KeyValue::new("type", "tx"),
+        ];
+        let metrics_attrs = &metrics_attrs_tx[..1];
 
         agglayer_telemetry::SEND_TX.add(1, metrics_attrs);
 
@@ -229,12 +233,12 @@ where
             return Err(Error::rollup_not_registered(tx.tx.rollup_id));
         }
 
-        self.kernel.verify_signature(&tx).await.map_err(|e| {
+        self.kernel.verify_tx_signature(&tx).await.map_err(|e| {
             error!(error = %e, hash, "Failed to verify the signature of transaction {hash}: {e}");
             Error::signature_mismatch(e)
         })?;
 
-        agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
+        agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs_tx);
 
         // Reserve a rate limiting slot.
         let guard = self
@@ -336,29 +340,41 @@ where
     #[instrument(skip(self, certificate), fields(hash, rollup_id = *certificate.network_id), level = "info")]
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
         let hash = certificate.hash();
-        tracing::Span::current().record("hash", hash.to_string());
+        let hash_string = hash.to_string();
+        tracing::Span::current().record("hash", &hash_string);
 
         info!(
             %hash,
             "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
         );
 
-        // TODO: Batch the different queries.
-        // Insert the certificate header into the state store.
-        _ = self
-            .state
-            .insert_certificate_header(&certificate, CertificateStatus::Pending)
-            .map_err(|e| {
-                error!("Failed to insert certificate into state store: {e}");
-                Error::internal(e.to_string())
-            })?;
+        self.kernel.verify_cert_signature(&certificate).await.map_err(|e| {
+            error!(error = %e, hash = hash_string, "Failed to verify the signature of certificate {hash}: {e}");
+            Error::signature_mismatch(e)
+        })?;
 
+        let metrics_attrs = &[
+            KeyValue::new("rollup_id", certificate.network_id.to_string()),
+            KeyValue::new("type", "cert"),
+        ];
+        agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
+
+        // TODO: Batch the different queries.
         // Insert the certificate into the pending store.
         _ = self
             .pending_store
             .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
             .map_err(|e| {
                 error!("Failed to insert certificate into pending store: {e}");
+                Error::internal(e.to_string())
+            })?;
+
+        // Insert the certificate header into the state store.
+        _ = self
+            .state
+            .insert_certificate_header(&certificate, CertificateStatus::Pending)
+            .map_err(|e| {
+                error!("Failed to insert certificate into state store: {e}");
                 Error::internal(e.to_string())
             })?;
 

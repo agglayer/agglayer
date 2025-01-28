@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use agglayer_primitives::SignatureError;
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -33,7 +34,7 @@ pub type Metadata = Digest;
 
 pub use agglayer_primitives as primitives;
 // Re-export common primitives again as agglayer-types root types
-pub use agglayer_primitives::{Address, Signature, SignatureError, B256, U256, U512};
+pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
 pub use pessimistic_proof::bridge_exit::NetworkId;
 use sp1_sdk::SP1VerificationError;
 
@@ -433,7 +434,7 @@ impl Certificate {
         }
     }
 
-    pub fn signer(&self) -> Option<Address> {
+    pub fn signer(&self) -> Result<Address, SignatureError> {
         // retrieve signer
         let combined_hash = signature_commitment(
             self.new_local_exit_root,
@@ -444,7 +445,6 @@ impl Certificate {
 
         self.signature
             .recover_address_from_prehash(&B256::new(combined_hash.0))
-            .ok()
     }
 }
 
