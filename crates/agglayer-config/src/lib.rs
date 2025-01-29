@@ -170,6 +170,11 @@ impl Config {
         std::net::SocketAddr::from((self.rpc.host, self.rpc.port))
     }
 
+    /// Get the admin RPC socket address from the configuration.
+    pub fn admin_rpc_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_port))
+    }
+
     pub fn path_contextualized(mut self, base_path: &Path) -> Self {
         self.storage = self.storage.path_contextualized(base_path);
 

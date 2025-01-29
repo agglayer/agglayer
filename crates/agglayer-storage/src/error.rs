@@ -1,4 +1,4 @@
-use agglayer_types::{EpochNumber, Height, NetworkId};
+use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
 
 use crate::storage::DBError;
 
@@ -13,6 +13,9 @@ pub enum Error {
 
     #[error("No certificate found")]
     NoCertificate,
+
+    #[error("No certificate header found")]
+    NoCertificateHeader,
 
     #[error("No proof found")]
     NoProof,
@@ -51,4 +54,6 @@ pub enum CertificateCandidateError {
         "Invalid certificate candidate for network {0}: {1} wasn't expected, current height {2}"
     )]
     UnexpectedHeight(NetworkId, Height, Height),
+    #[error("Invalid certificate candidate for network {0}: {1} wasn't expected")]
+    InconsistentCertificateContext(NetworkId, CertificateId),
 }

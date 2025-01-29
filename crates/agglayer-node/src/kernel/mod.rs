@@ -33,7 +33,7 @@ pub(crate) mod tests;
 /// batching, Epoch management, among other things.
 #[derive(Debug)]
 pub(crate) struct Kernel<RpcProvider> {
-    rpc: Arc<RpcProvider>,
+    pub(crate) rpc: Arc<RpcProvider>,
     rate_limiter: RateLimiter,
     config: Arc<Config>,
 }
