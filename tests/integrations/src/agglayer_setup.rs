@@ -56,7 +56,11 @@ pub async fn start_l1() -> L1Docker {
     l1
 }
 
-pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver<()>, WsClient) {
+pub async fn start_agglayer(
+    tmp_dir: &Path,
+    l1: &L1Docker,
+    token: Option<CancellationToken>,
+) -> (oneshot::Receiver<()>, WsClient) {
     let (shutdown, receiver) = oneshot::channel();
 
     // Make the mock prover pass
@@ -80,7 +84,7 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
     let endpoint = prover_config.grpc_endpoint;
 
     config.prover_entrypoint = format!("http://{}", endpoint);
-    let cancellation = CancellationToken::new();
+    let cancellation = token.unwrap_or_default();
     FakeProver::spawn_at(fake_prover, endpoint, cancellation.clone())
         .await
         .unwrap();
@@ -100,7 +104,9 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
     let key_path = tmp_dir.join(uuid);
 
     let addr = next_available_addr();
+    let admin_addr = next_available_addr();
     config.rpc.port = addr.port();
+    config.rpc.admin_port = admin_addr.port();
 
     config.telemetry.addr = next_available_addr();
     config.log.level = LogLevel::Debug;
@@ -155,9 +161,12 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
     (receiver, client)
 }
 
-pub async fn setup_network(tmp_dir: &Path) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
+pub async fn setup_network(
+    tmp_dir: &Path,
+    token: Option<CancellationToken>,
+) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
     let l1 = start_l1().await;
-    let (receiver, client) = start_agglayer(tmp_dir, &l1).await;
+    let (receiver, client) = start_agglayer(tmp_dir, &l1, token).await;
 
     (receiver, l1, client)
 }

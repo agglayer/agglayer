@@ -1,5 +1,5 @@
 ---
-source: crates/agglayer-config/tests/validate_deserialize.rs
+source: crates/agglayer-config/tests/backup.rs
 expression: config
 ---
 prover-entrypoint = "http://127.0.0.1:8080"
@@ -20,7 +20,6 @@ format = "pretty"
 port = 9090
 admin-port = 9091
 host = "0.0.0.0"
-max-request-body-size = 104857600
 request-timeout = "3m"
 
 [rate-limiting]
@@ -63,3 +62,8 @@ input-backpressure-buffer-size = 1000
 
 [storage]
 db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
+
+[storage.backup]
+path = "./test/"
+state-max-backup-count = 100
+pending-max-backup-count = 100

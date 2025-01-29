@@ -26,7 +26,7 @@ async fn sent_transaction_recover() {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) = setup_network(&tmp_dir.path).await;
+    let (agglayer_shutdowned, l1, client) = setup_network(&tmp_dir.path, None).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
@@ -50,7 +50,7 @@ async fn sent_transaction_recover() {
     )
     .expect("Failed to configure failpoint");
 
-    let (_agglayer_shutdowned, client) = start_agglayer(&tmp_dir.path, &l1).await;
+    let (_agglayer_shutdowned, client) = start_agglayer(&tmp_dir.path, &l1, None).await;
 
     println!("Node recovered, waiting for settlement...");
 

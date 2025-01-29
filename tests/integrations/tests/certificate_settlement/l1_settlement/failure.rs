@@ -26,7 +26,7 @@ async fn transaction_with_receipt_status_0() {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path).await;
+    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
@@ -55,13 +55,13 @@ async fn transaction_with_receipt_status_0_retry() {
     let scenario = FailScenario::setup();
 
     fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::status_0",
+        "notifier::packer::settle_certificate::gas_estimate::low_gas",
         "return",
     )
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path).await;
+    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
@@ -77,10 +77,11 @@ async fn transaction_with_receipt_status_0_retry() {
 
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
 
+    println!("{:?}", result);
     assert!(matches!(result.status, CertificateStatus::InError { .. }));
 
     fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::status_0",
+        "notifier::packer::settle_certificate::gas_estimate::low_gas",
         "off",
     )
     .expect("Failed to configure failpoint");
@@ -96,6 +97,7 @@ async fn transaction_with_receipt_status_0_retry() {
 
     scenario.teardown();
 }
+
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
@@ -110,7 +112,7 @@ async fn transaction_without_receipt_status() {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path).await;
+    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
@@ -145,7 +147,7 @@ async fn transaction_fails_due_to_out_of_gas() {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path).await;
+    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
