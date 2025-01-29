@@ -39,10 +39,6 @@ where
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits claimed in this batch.
     pub imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<H>)>,
-    /// Commitment to the imported bridge exits. None if zero imported bridge
-    /// exit.
-    #[serde_as(as = "Option<_>")]
-    pub imported_exits_root: Option<H::Digest>,
     /// L1 info root used to import bridge exits.
     #[serde_as(as = "_")]
     pub l1_info_root: H::Digest,
