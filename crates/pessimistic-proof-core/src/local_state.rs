@@ -103,25 +103,6 @@ impl NetworkState {
             }
         }
 
-        // Check batch_header.imported_exits_root
-        let imported_exits_root = commit_imported_bridge_exits(
-            multi_batch_header
-                .imported_bridge_exits
-                .iter()
-                .map(|(exit, _)| exit.global_index),
-        );
-
-        if let Some(batch_imported_exits_root) = multi_batch_header.imported_exits_root {
-            if imported_exits_root != batch_imported_exits_root {
-                return Err(ProofError::InvalidImportedExitsRoot {
-                    declared: batch_imported_exits_root,
-                    computed: imported_exits_root,
-                });
-            }
-        } else if !multi_batch_header.imported_bridge_exits.is_empty() {
-            return Err(ProofError::MismatchImportedExitsRoot);
-        }
-
         // Apply the imported bridge exits
         for (imported_bridge_exit, nullifier_path) in &multi_batch_header.imported_bridge_exits {
             if imported_bridge_exit.global_index.network_id() == multi_batch_header.origin_network {

@@ -544,12 +544,6 @@ impl LocalNetworkStateData {
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
 
-        let imported_hash = commit_imported_bridge_exits(
-            imported_bridge_exits
-                .iter()
-                .map(|(exit, _)| exit.global_index),
-        );
-
         // Check that the certificate referred to the right target
         let computed = self.exit_tree.get_root();
         if computed != certificate.new_local_exit_root {
@@ -584,7 +578,6 @@ impl LocalNetworkStateData {
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
-            imported_exits_root: Some(imported_hash),
             target: self.get_roots().into(),
             l1_info_root,
             aggchain_proof,
