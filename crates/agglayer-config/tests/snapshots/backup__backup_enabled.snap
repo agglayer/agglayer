@@ -64,5 +64,5 @@ db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
 
 [storage.backup]
 path = "./test/"
-state_max_backup_count = 100
-pending_max_backup_count = 100
+state-max-backup-count = 100
+pending-max-backup-count = 100
