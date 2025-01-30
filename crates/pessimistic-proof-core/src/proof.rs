@@ -2,7 +2,6 @@ use agglayer_primitives::Address;
 pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
-use sp1_zkvm::lib::utils::words_to_bytes_le;
 use thiserror::Error;
 
 use crate::{
@@ -122,8 +121,8 @@ pub struct PessimisticProofOutput {
     pub l1_info_root: Digest,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
-    /// The consensus hash.
-    pub consensus_hash: Digest,
+    /// The aggchain hash.
+    pub aggchain_hash: Digest,
     /// The new local exit root.
     pub new_local_exit_root: Digest,
     /// The new pessimistic root which commits to the balance and nullifier
@@ -137,11 +136,6 @@ impl PessimisticProofOutput {
             .with_big_endian()
             .with_fixint_encoding()
     }
-}
-
-enum PessimisticConsensusType {
-    //Ecdsa = 0,
-    Sp1 = 1,
 }
 
 pub const EMPTY_LER: Digest = Digest(hex!(
@@ -168,16 +162,6 @@ pub fn generate_pessimistic_proof(
         prev_lbr.as_slice(),
         prev_nr.as_slice(),
         prev_ler_leaf_count.to_le_bytes().as_slice(),
-    ]);
-
-    // let consensus_hash = keccak256_combine([
-    //     &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
-    //     //    batch_header.signer.as_slice(),
-    // ]);
-    let consensus_hash = keccak256_combine([
-        &(PessimisticConsensusType::Sp1 as u32).to_be_bytes(),
-        words_to_bytes_le(&batch_header.vkey).as_slice(),
-        batch_header.consensus_config.as_slice(),
     ]);
 
     let new_pessimistic_root = keccak256_combine([
@@ -234,7 +218,7 @@ pub fn generate_pessimistic_proof(
         prev_pessimistic_root,
         l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
-        consensus_hash,
+        aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),
         new_local_exit_root: batch_header.target.exit_root,
         new_pessimistic_root,
     })

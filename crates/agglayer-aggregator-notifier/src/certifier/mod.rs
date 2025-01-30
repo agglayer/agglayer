@@ -140,6 +140,7 @@ where
         stdin.write(&network_state);
         stdin.write(&multi_batch_header);
 
+        // TODO: Propagate the stark proof or build the SP1Stdin directly here
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
                 default_bincode_options()
@@ -305,17 +306,13 @@ where
         let initial_state = LocalNetworkState::from(state.clone());
 
         let signer = Address::new(*signer.as_fixed_bytes());
-
-        let (vkey, consensus_config) = {
-            // TODO
-            Default::default()
-        };
-
         let multi_batch_header = state
-            .apply_certificate(certificate, signer, l1_info_root, vkey, consensus_config)
+            .apply_certificate(certificate, signer, l1_info_root)
             .map_err(|source| CertificationError::Types { source })?;
 
-        // Perform the native PP execution
+        // Perform the native PP execution without the STARK verification
+        // TODO: Replace this by one native execution within SP1 to have the STARK
+        // verification
         let _ = generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
             .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 

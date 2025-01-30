@@ -1,16 +1,12 @@
 #![allow(clippy::too_many_arguments)]
 use std::{collections::BTreeMap, hash::Hash};
 
-//use agglayer_primitives::{Address, Signature};
 use agglayer_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
-// #[cfg(not(target_os = "zkvm"))]
-// use sp1_sdk::SP1Proof;
-
-// use sp1_sdk::SP1Proof;
 use crate::{
+    aggchain_proof::AggchainProofData,
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
@@ -20,8 +16,6 @@ use crate::{
     local_state::StateCommitment,
     nullifier_tree::NullifierPath,
 };
-
-pub type Vkey = [u32; 8];
 
 /// Represents the chain state transition for the pessimistic proof.
 #[serde_as]
@@ -56,15 +50,10 @@ where
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
     pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
-    /// SP1 verification key for the consensus proof.
-    pub vkey: Vkey,
-    /// Consensus config.
-    pub consensus_config: Digest,
     /// State commitment target hashes.
     pub target: StateCommitment,
-    // /// Consensus proof.
-    // #[cfg(not(target_os = "zkvm"))]
-    // pub consensus_proof: SP1Proof,
+    /// Aggchain proof.
+    pub aggchain_proof: AggchainProofData,
 }
 
 pub fn signature_commitment(
