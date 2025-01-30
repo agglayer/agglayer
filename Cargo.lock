@@ -215,6 +215,7 @@ dependencies = [
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
  "agglayer-types 0.1.0",
+ "agglayer-utils",
  "alloy",
  "anyhow",
  "arc-swap",
@@ -457,6 +458,13 @@ dependencies = [
  "sp1-core-machine",
  "sp1-sdk",
  "thiserror 2.0.11",
+]
+
+[[package]]
+name = "agglayer-utils"
+version = "0.1.0"
+dependencies = [
+ "tracing",
 ]
 
 [[package]]

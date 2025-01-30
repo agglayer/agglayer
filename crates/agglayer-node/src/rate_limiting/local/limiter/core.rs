@@ -1,5 +1,5 @@
 use super::{state::State, RawState, SlotTracker};
-use crate::log_assert;
+use agglayer_utils::log_assert;
 
 /// Rate limiter with non-trivial state.
 ///

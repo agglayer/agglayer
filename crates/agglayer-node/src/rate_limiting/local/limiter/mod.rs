@@ -1,5 +1,5 @@
 use super::state::{self, RawState};
-use crate::log_assert;
+use agglayer_utils::log_assert;
 
 mod core;
 mod slot_tracker;

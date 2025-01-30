@@ -41,6 +41,7 @@ agglayer-types.workspace = true
 agglayer-signer = { path = "../agglayer-signer" }
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
+agglayer-utils.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
 
