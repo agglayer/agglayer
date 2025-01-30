@@ -34,6 +34,9 @@ pub(crate) trait AdminAgglayer {
         status: CertificateStatus,
     ) -> RpcResult<()>;
 
+    #[method(name = "setLatestProvenCertificate")]
+    async fn set_latest_proven_certificate(&self, certificate_id: CertificateId) -> RpcResult<()>;
+
     #[method(name = "removePendingCertificate")]
     async fn remove_pending_certificate(
         &self,
@@ -203,6 +206,40 @@ where
             Err(error) => {
                 error!("Failed to insert pending certificate: {}", error);
                 Err(Error::internal("Unable to insert pending certificate"))
+            }
+        }
+    }
+
+    #[instrument(skip(self, certificate_id), level = "debug")]
+    async fn set_latest_proven_certificate(&self, certificate_id: CertificateId) -> RpcResult<()> {
+        let certificate = if let Some(certificate) = self
+            .state
+            .get_certificate_header(&certificate_id)
+            .map_err(|error| {
+                error!("Failed to get certificate header: {}", error);
+                Error::internal("Unable to get certificate header")
+            })? {
+            certificate
+        } else {
+            return Err(Error::resource_not_found(format!(
+                "CertificateHeader({})",
+                certificate_id
+            )));
+        };
+
+        match self
+            .pending_store
+            .set_latest_proven_certificate_per_network(
+                &certificate.network_id,
+                &certificate.height,
+                &certificate.certificate_id,
+            ) {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                error!("Failed to update latest proven certificate: {}", error);
+                Err(Error::internal(
+                    "Unable to update latest proven certificate",
+                ))
             }
         }
     }
