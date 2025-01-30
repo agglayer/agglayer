@@ -294,9 +294,9 @@ where
             .inspect_err(|e| error!("Failed to get latest pending certificate: {e}"))?;
 
         let certificate_id = [
-            settled_certificate_id_and_height,
-            proven_certificate_id_and_height,
             pending_certificate_id_and_height,
+            proven_certificate_id_and_height,
+            settled_certificate_id_and_height,
         ]
         .into_iter()
         .flatten()
