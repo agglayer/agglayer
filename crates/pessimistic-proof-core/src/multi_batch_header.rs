@@ -62,5 +62,16 @@ pub fn signature_commitment(
     imported_bridge_exits: impl Iterator<Item = GlobalIndex>,
 ) -> Digest {
     let imported_hash = commit_imported_bridge_exits(imported_bridge_exits);
-    keccak256_combine([new_local_exit_root.as_slice(), imported_hash.as_slice()])
+    signature_commitment_from_roots(new_local_exit_root, imported_hash)
+}
+
+#[inline]
+pub(crate) fn signature_commitment_from_roots(
+    new_local_exit_root: Digest,
+    imported_bridge_exits_root: Digest,
+) -> Digest {
+    keccak256_combine([
+        new_local_exit_root.as_slice(),
+        imported_bridge_exits_root.as_slice(),
+    ])
 }

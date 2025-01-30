@@ -9,7 +9,7 @@ use crate::{
     keccak::digest::Digest,
     local_balance_tree::LocalBalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    multi_batch_header::{signature_commitment, MultiBatchHeader},
+    multi_batch_header::{signature_commitment_from_roots, MultiBatchHeader},
     nullifier_tree::{NullifierKey, NullifierTree},
     ProofError,
 };
@@ -224,13 +224,8 @@ impl NetworkState {
         }
 
         // Verify that the signature is valid
-        let combined_hash = signature_commitment(
-            self.exit_tree.get_root(),
-            multi_batch_header
-                .imported_bridge_exits
-                .iter()
-                .map(|(exit, _)| exit.global_index),
-        );
+        let combined_hash =
+            signature_commitment_from_roots(self.exit_tree.get_root(), imported_exits_root);
 
         // Check batch header signature
         let signer = multi_batch_header
