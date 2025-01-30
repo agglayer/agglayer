@@ -1,0 +1,19 @@
+[package]
+name = "ecdsa-proof-lib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alloy-primitives = { version = "0.8.15", features = ["serde", "k256"] }
+k256 = "0.13.4"
+serde = { version = "1.0.217", features = ["derive"] }
+tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-4.0.0", features = [
+    "keccak",
+] }
+
+pessimistic-proof-core = { path = "../../../pessimistic-proof-core/" }
+
+[patch.crates-io.ecdsa-core]
+git = "https://github.com/sp1-patches/signatures"
+package = "ecdsa"
+tag = "patch-0.16.9-sp1-4.0.0"

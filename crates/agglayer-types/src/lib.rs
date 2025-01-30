@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use agglayer_primitives::SignatureError;
+use pessimistic_proof::aggchain_proof::{AggchainProofData, AggchainProofECDSAData};
 use pessimistic_proof::error::ProofVerificationError;
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
@@ -9,8 +10,7 @@ use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE
 use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
-use pessimistic_proof::multi_batch_header::Vkey;
-//use pessimistic_proof::multi_batch_header::signature_commitment;
+use pessimistic_proof::multi_batch_header::signature_commitment;
 use pessimistic_proof::nullifier_tree::{NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::{Smt, SmtError};
 use pessimistic_proof::utils::{FromBool as _, Hashable as _};
@@ -219,8 +219,8 @@ pub struct Certificate {
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits included in this state transition.
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
-    // /// Consensus proof.
-    // pub consensus_proof: SP1Proof,
+    /// Signature committed to the bridge exits and imported bridge exits.
+    pub signature: Signature,
     /// Fixed size field of arbitrary data for the chain needs.
     pub metadata: Metadata,
 }
@@ -231,7 +231,8 @@ impl Default for Certificate {
         let network_id = Default::default();
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_new_local_exit_root, _signature) = compute_signature_info(exit_root, &[], &wallet);
+        let (_new_local_exit_root, signature, _signer) =
+            compute_signature_info(exit_root, &[], &wallet);
         Self {
             network_id,
             height: Default::default(),
@@ -239,7 +240,7 @@ impl Default for Certificate {
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            //signature,
+            signature,
             metadata: Default::default(),
         }
     }
@@ -250,11 +251,14 @@ pub fn compute_signature_info(
     new_local_exit_root: Digest,
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &ethers::signers::LocalWallet,
-) -> (Digest, Signature) {
+) -> (Digest, Signature, Address) {
+    use ethers::signers::Signer;
+
     let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
         new_local_exit_root,
         imported_bridge_exits.iter().map(|exit| exit.global_index),
     );
+
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
     let signature = Signature::new(
         U256::from_limbs(signature.r.0),
@@ -262,7 +266,7 @@ pub fn compute_signature_info(
         signature.recovery_id().unwrap().is_y_odd(),
     );
 
-    (combined_hash, signature)
+    (combined_hash, signature, wallet.address().0.into())
 }
 
 impl Certificate {
@@ -282,9 +286,8 @@ impl Certificate {
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_, _signature) = compute_signature_info(exit_root, &[], &wallet);
+        let (_, signature, _signer) = compute_signature_info(exit_root, &[], &wallet);
 
-        //let consensus_proof = todo!();
         Self {
             network_id,
             height,
@@ -292,9 +295,8 @@ impl Certificate {
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            //signature,
+            signature,
             metadata: Default::default(),
-            //consensus_proof,
         }
     }
 
@@ -356,17 +358,15 @@ impl Certificate {
 
     pub fn signer(&self) -> Result<Address, SignatureError> {
         // retrieve signer
-        // let combined_hash = signature_commitment(
-        //     self.new_local_exit_root,
-        //     self.imported_bridge_exits
-        //         .iter()
-        //         .map(|exit| exit.global_index),
-        // );
+        let combined_hash = signature_commitment(
+            self.new_local_exit_root,
+            self.imported_bridge_exits
+                .iter()
+                .map(|exit| exit.global_index),
+        );
 
-        // self.signature
-        //     .recover_address_from_prehash(&B256::new(combined_hash.0))
-
-        None
+        self.signature
+            .recover_address_from_prehash(&B256::new(combined_hash.0))
     }
 }
 
@@ -412,10 +412,8 @@ impl LocalNetworkStateData {
     pub fn apply_certificate(
         &mut self,
         certificate: &Certificate,
-        _signer: Address,
+        signer: Address,
         l1_info_root: Digest,
-        vkey: Vkey,
-        consensus_config: Digest,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
@@ -536,6 +534,12 @@ impl LocalNetworkStateData {
             });
         }
 
+        // TODO: Construct it properly from the Certificate
+        let aggchain_proof = AggchainProofData::ECDSA(AggchainProofECDSAData {
+            signer,
+            signature: certificate.signature,
+        });
+
         Ok(MultiBatchHeader::<Keccak256Hasher> {
             origin_network: *certificate.network_id,
             prev_local_exit_root: certificate.prev_local_exit_root,
@@ -552,12 +556,10 @@ impl LocalNetworkStateData {
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
-            vkey,
-            consensus_config,
             imported_exits_root: Some(imported_hash),
             target: self.get_roots().into(),
             l1_info_root,
-            //consensus_proof: certificate.consensus_proof.clone(),
+            aggchain_proof,
         })
     }
 
@@ -568,11 +570,9 @@ impl LocalNetworkStateData {
         certificate: &Certificate,
         signer: Address,
         l1_info_root: Digest,
-        vkey: Vkey,
-        consensus_config: Digest,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         self.clone()
-            .apply_certificate(certificate, signer, l1_info_root, vkey, consensus_config)
+            .apply_certificate(certificate, signer, l1_info_root)
     }
 
     pub fn get_roots(&self) -> StateCommitment {

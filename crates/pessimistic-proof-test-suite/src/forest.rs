@@ -1,12 +1,13 @@
 use agglayer_types::{compute_signature_info, Address, Certificate, LocalNetworkStateData, U256};
+use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer};
 pub use pessimistic_proof::bridge_exit::LeafType;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit::{
-        Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner,
-        MerkleProof,
+        commit_imported_bridge_exits, Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf,
+        L1InfoTreeLeafInner, MerkleProof,
     },
     keccak::{digest::Digest, keccak256, keccak256_combine},
     local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
@@ -15,10 +16,29 @@ use pessimistic_proof::{
     PessimisticProofOutput,
 };
 use rand::random;
+use sp1_sdk::{ProverClient, SP1Proof, SP1Stdin, SP1VerifyingKey};
 
 type NetworkId = u32;
 
 use super::sample_data::{NETWORK_A, NETWORK_B};
+use crate::AGGCHAIN_PROOF_ECDSA_ELF;
+
+pub fn compute_aggchain_proof(
+    aggchain_ecdsa_witness: AggchainECDSA,
+) -> (SP1Proof, SP1VerifyingKey, [u8; 32]) {
+    let mut stdin = SP1Stdin::new();
+    stdin.write(&aggchain_ecdsa_witness);
+
+    let client = ProverClient::from_env();
+    let (pk, vk) = client.setup(AGGCHAIN_PROOF_ECDSA_ELF);
+    let proof = client
+        .prove(&pk, &stdin)
+        .compressed()
+        .run()
+        .expect("proving failed");
+
+    (proof.proof, vk, aggchain_ecdsa_witness.aggchain_params())
+}
 
 /// Trees for the network B, as well as the LET for network A.
 #[derive(Clone, Debug)]
@@ -160,7 +180,7 @@ impl Forest {
 
         let new_local_exit_root = self.state_b.exit_tree.get_root();
 
-        let (_combined_hash, _signature) =
+        let (_combined_hash, signature, _signer) =
             compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
 
         Certificate {
@@ -170,7 +190,7 @@ impl Forest {
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            //consensus_proof: (),
+            signature,
             metadata: Default::default(),
         }
     }
@@ -184,6 +204,57 @@ impl Forest {
         let imported_bridge_events = imported_bridge_events.iter().cloned();
         let bridge_exits = bridge_events.iter().map(|(tok, amt)| exit_to_a(*tok, *amt));
         self.apply_bridge_exits(imported_bridge_events, bridge_exits)
+    }
+
+    /// Apply a sequence of events and return the corresponding [`Certificate`].
+    pub fn apply_events_with_aggchain_proof(
+        &mut self,
+        imported_bridge_events: &[(TokenInfo, U256)],
+        bridge_events: &[(TokenInfo, U256)],
+    ) -> (Certificate, SP1VerifyingKey, [u8; 32], SP1Proof) {
+        let imported_bridge_events = imported_bridge_events.iter().cloned();
+        let bridge_exits = bridge_events.iter().map(|(tok, amt)| exit_to_a(*tok, *amt));
+
+        let prev_local_exit_root = self.state_b.exit_tree.get_root();
+
+        let imported_bridge_exits = self.imported_bridge_exits(imported_bridge_events);
+        let bridge_exits = bridge_exits
+            .into_iter()
+            .inspect(|exit| {
+                self.state_b.exit_tree.add_leaf(exit.hash()).unwrap();
+            })
+            .collect();
+
+        let new_local_exit_root = self.state_b.exit_tree.get_root();
+
+        let (_combined_hash, signature, signer) =
+            compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
+
+        let certificate = Certificate {
+            network_id: NETWORK_B,
+            height: 0,
+            prev_local_exit_root,
+            new_local_exit_root,
+            bridge_exits,
+            imported_bridge_exits: imported_bridge_exits.clone(),
+            signature,
+            metadata: Default::default(),
+        };
+
+        let (aggchain_proof, aggchain_vkey, aggchain_params) =
+            compute_aggchain_proof(AggchainECDSA {
+                signer,
+                signature: signature.into(),
+                commit_imported_bridge_exits: *commit_imported_bridge_exits(
+                    imported_bridge_exits.iter().map(|i| i.global_index),
+                ),
+                prev_local_exit_root: *prev_local_exit_root,
+                new_local_exit_root: *new_local_exit_root,
+                l1_info_root: *certificate.l1_info_root().unwrap().unwrap(),
+                origin_network: *NETWORK_B,
+            });
+
+        (certificate, aggchain_vkey, aggchain_params, aggchain_proof)
     }
 
     pub fn get_signer(&self) -> Address {
