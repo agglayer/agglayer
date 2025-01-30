@@ -320,7 +320,7 @@ async fn returns_no_certificate_header() {
 }
 
 #[test_log::test(tokio::test)]
-async fn returns_the_highest_height() {
+async fn returns_the_settled_one_at_same_height() {
     let path = TempDBDir::new();
 
     let config = Config::new(&path.path);
@@ -338,13 +338,23 @@ async fn returns_the_highest_height() {
     let network_id = 1.into();
 
     let settled_certificate = Certificate::new_for_test(network_id, 10);
-    let pending_certificate = Certificate::new_for_test(network_id, 3);
+
+    let mut pending_certificate = Certificate::new_for_test(network_id, 5);
+    pending_certificate.height = 10;
+    let pending_certificate = pending_certificate.with_new_local_exit_root([2; 32].into());
+
+    let mut proven_certificate = Certificate::new_for_test(network_id, 3);
+    proven_certificate.height = 10;
+    let proven_certificate = proven_certificate.with_new_local_exit_root([1; 32].into());
 
     state_db
         .insert_certificate_header(&settled_certificate, CertificateStatus::Settled)
         .expect("unable to insert settled certificate header");
     state_db
         .insert_certificate_header(&pending_certificate, CertificateStatus::Pending)
+        .expect("unable to insert pending certificate header");
+    state_db
+        .insert_certificate_header(&proven_certificate, CertificateStatus::Proven)
         .expect("unable to insert pending certificate header");
 
     state_db
@@ -358,8 +368,12 @@ async fn returns_the_highest_height() {
         .expect("unable to set latest settled certificate");
 
     pending_db
-        .insert_pending_certificate(network_id, 3, &pending_certificate)
+        .insert_pending_certificate(network_id, 10, &pending_certificate)
         .expect("unable to insert pending certificate");
+
+    pending_db
+        .set_latest_proven_certificate_per_network(&network_id, &10, &proven_certificate.hash())
+        .expect("unable to set latest proven certificate");
 
     drop(pending_db);
     drop(state_db);
