@@ -121,13 +121,6 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Install SP1UP
-        run: curl -L https://sp1.succinct.xyz | bash
-
-      - name: Install SP1 toolchain
-        run: /home/runner/.sp1/bin/sp1up
-        shell: bash
-
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
 
@@ -152,13 +145,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Install SP1UP
-        run: curl -L https://sp1.succinct.xyz | bash
-
-      - name: Install SP1 toolchain
-        run: /home/runner/.sp1/bin/sp1up
-        shell: bash
 
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
