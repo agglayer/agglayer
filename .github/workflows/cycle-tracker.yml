@@ -26,13 +26,6 @@ jobs:
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install SP1UP
-        run: curl -L https://sp1.succinct.xyz | bash
-
-      - name: Install SP1 toolchain
-        run: /home/runner/.sp1/bin/sp1up
-        shell: bash
-
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
