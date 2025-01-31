@@ -1,4 +1,4 @@
-name: Checking PR semantic
+name: Checking PR title
 
 on:
   pull_request_target:
@@ -23,12 +23,3 @@ jobs:
         with:
           ignoreLabels: |
             release
-
-  commits:
-    name: Validate PR commits
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: wagoid/commitlint-github-action@v6
