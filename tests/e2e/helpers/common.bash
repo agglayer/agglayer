@@ -139,7 +139,6 @@ function send_eoa_transaction() {
         echo "Failed to calculate gas price" >&3
         exit 1
     fi
-    echo "cast send --gas-price $comp_gas_price --rpc-url $rpc_url --private-key $private_key $receiver_addr --value $value --legacy" >&3
     cast_output=$(cast send --gas-price $comp_gas_price --rpc-url "$rpc_url" --private-key "$private_key" "$receiver_addr" --value "$value" --legacy 2>&1)
     if [[ $? -ne 0 ]]; then
         echo "Error: Failed to send transaction. Output:"
