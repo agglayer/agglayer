@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use agglayer_primitives::SignatureError;
+use pessimistic_proof::aggchain_proof::{AggchainProofData, AggchainProofECDSAData};
 use pessimistic_proof::error::ProofVerificationError;
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
@@ -230,7 +231,8 @@ impl Default for Certificate {
         let network_id = Default::default();
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_new_local_exit_root, signature) = compute_signature_info(exit_root, &[], &wallet);
+        let (_new_local_exit_root, signature, _signer) =
+            compute_signature_info(exit_root, &[], &wallet);
         Self {
             network_id,
             height: Default::default(),
@@ -249,11 +251,14 @@ pub fn compute_signature_info(
     new_local_exit_root: Digest,
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &ethers::signers::LocalWallet,
-) -> (Digest, Signature) {
+) -> (Digest, Signature, Address) {
+    use ethers::signers::Signer;
+
     let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
         new_local_exit_root,
         imported_bridge_exits.iter().map(|exit| exit.global_index),
     );
+
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
     let signature = Signature::new(
         U256::from_limbs(signature.r.0),
@@ -261,7 +266,7 @@ pub fn compute_signature_info(
         signature.recovery_id().unwrap().is_y_odd(),
     );
 
-    (combined_hash, signature)
+    (combined_hash, signature, wallet.address().0.into())
 }
 
 impl Certificate {
@@ -281,7 +286,7 @@ impl Certificate {
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_, signature) = compute_signature_info(exit_root, &[], &wallet);
+        let (_, signature, _signer) = compute_signature_info(exit_root, &[], &wallet);
 
         Self {
             network_id,
@@ -529,6 +534,12 @@ impl LocalNetworkStateData {
             });
         }
 
+        // TODO: Construct it properly from the Certificate
+        let aggchain_proof = AggchainProofData::ECDSA(AggchainProofECDSAData {
+            signer,
+            signature: certificate.signature,
+        });
+
         Ok(MultiBatchHeader::<Keccak256Hasher> {
             origin_network: *certificate.network_id,
             prev_local_exit_root: certificate.prev_local_exit_root,
@@ -545,11 +556,10 @@ impl LocalNetworkStateData {
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
-            signer,
-            signature: certificate.signature,
             imported_exits_root: Some(imported_hash),
             target: self.get_roots().into(),
             l1_info_root,
+            aggchain_proof,
         })
     }
 

@@ -303,7 +303,9 @@ where
             .apply_certificate(certificate, signer, l1_info_root)
             .map_err(|source| CertificationError::Types { source })?;
 
-        // Perform the native PP execution
+        // Perform the native PP execution without the STARK verification
+        // TODO: Replace this by one native execution within SP1 to have the STARK
+        // verification
         let _ = generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
             .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 

@@ -94,6 +94,9 @@ pub enum ProofError {
     /// The signature on the state transition is invalid.
     #[error("Invalid signature.")]
     InvalidSignature,
+    /// The aggchain-proof from the chain is invalid.
+    #[error("Invalid aggchain proof: {0}.")]
+    InvalidAggchainProof(String),
     /// The signer recovered from the signature differs from the one declared as
     /// witness.
     #[error("Invalid signer. declared: {declared}, recovered: {recovered}")]
@@ -121,8 +124,8 @@ pub struct PessimisticProofOutput {
     pub l1_info_root: Digest,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
-    /// The consensus hash.
-    pub consensus_hash: Digest,
+    /// The aggchain hash.
+    pub aggchain_hash: Digest,
     /// The new local exit root.
     pub new_local_exit_root: Digest,
     /// The new pessimistic root which commits to the balance and nullifier
@@ -137,8 +140,6 @@ impl PessimisticProofOutput {
             .with_fixint_encoding()
     }
 }
-
-const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;
 
 pub const EMPTY_LER: Digest = Digest(hex!(
     "27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"
@@ -164,11 +165,6 @@ pub fn generate_pessimistic_proof(
         prev_lbr.as_slice(),
         prev_nr.as_slice(),
         prev_ler_leaf_count.to_le_bytes().as_slice(),
-    ]);
-
-    let consensus_hash = keccak256_combine([
-        &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
-        batch_header.signer.as_slice(),
     ]);
 
     let new_pessimistic_root = keccak256_combine([
@@ -225,7 +221,7 @@ pub fn generate_pessimistic_proof(
         prev_pessimistic_root,
         l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
-        consensus_hash,
+        aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),
         new_local_exit_root: batch_header.target.exit_root,
         new_pessimistic_root,
     })

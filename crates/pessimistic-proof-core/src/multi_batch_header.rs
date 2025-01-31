@@ -1,11 +1,12 @@
 #![allow(clippy::too_many_arguments)]
 use std::{collections::BTreeMap, hash::Hash};
 
-use agglayer_primitives::{Address, Signature, U256};
+use agglayer_primitives::U256;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::{
+    aggchain_proof::AggchainProofData,
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
@@ -49,12 +50,10 @@ where
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
     pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
-    /// Signer committing to the state transition.
-    pub signer: Address,
-    /// Signature committing to the state transition.
-    pub signature: Signature,
     /// State commitment target hashes.
     pub target: StateCommitment,
+    /// Aggchain proof.
+    pub aggchain_proof: AggchainProofData,
 }
 
 pub fn signature_commitment(

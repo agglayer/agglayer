@@ -1,14 +1,15 @@
 use agglayer_types::primitives::U256;
-use pessimistic_proof::bridge_exit::TokenInfo;
+use pessimistic_proof::aggchain_proof::{AggchainProofSP1Data, AggchainType};
 use pessimistic_proof::core::generate_pessimistic_proof;
 use pessimistic_proof::local_state::LocalNetworkState;
+use pessimistic_proof::{aggchain_proof::AggchainProofData, bridge_exit::TokenInfo};
 use pessimistic_proof_test_suite::{
     forest::Forest,
     sample_data::{ETH, USDC},
     PESSIMISTIC_PROOF_ELF,
 };
 use rand::random;
-use sp1_sdk::{utils, Prover as _, ProverClient, SP1Stdin};
+use sp1_sdk::{utils, HashableKey, ProverClient, SP1Stdin};
 
 fn u(x: u64) -> U256 {
     x.try_into().unwrap()
@@ -24,12 +25,12 @@ fn e2e_local_pp_simple_helper(
 
     let mut forest = Forest::new(initial_balances);
     let initial_state = forest.state_b.clone();
-    let certificate = forest.apply_events(&imported_events, &events);
+    let (certificate, _aggchain_vkey, _aggchain_params, _aggchain_proof) =
+        forest.apply_events_with_aggchain_proof(&imported_events, &events);
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
         .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
         .unwrap();
-
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
 }
 
@@ -84,7 +85,9 @@ fn e2e_local_pp_random() {
     let bridge_events = get_events();
 
     let initial_state = forest.state_b.clone();
-    let certificate = forest.apply_events(&imported_bridge_events, &bridge_events);
+    let (certificate, _aggchain_vkey, _aggchain_params, _aggchain_proof) =
+        forest.apply_events_with_aggchain_proof(&imported_bridge_events, &bridge_events);
+
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
         .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
@@ -104,22 +107,37 @@ fn test_sp1_simple() {
     let imported_bridge_events = vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))];
     let bridge_events = vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))];
 
+    println!("execute aggchain proof");
     let initial_state = forest.state_b.clone();
-    let certificate = forest.apply_events(&imported_bridge_events, &bridge_events);
+    let (certificate, aggchain_vkey, aggchain_params, aggchain_proof) =
+        forest.apply_events_with_aggchain_proof(&imported_bridge_events, &bridge_events);
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
-    let multi_batch_header = initial_state
+    let mut multi_batch_header = initial_state
         .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
         .unwrap();
 
+    println!("aggchain proof generated!");
+    // Set the aggchain proof to the sp1 variant
+    multi_batch_header.aggchain_proof = AggchainProofData::SP1(AggchainProofSP1Data {
+        aggchain_params: aggchain_params.into(),
+        aggchain_vkey: aggchain_vkey.hash_u32(),
+        stark_proof: Default::default(), // TODO: remove useless
+    });
+
+    println!("pp incoming");
     let initial_state = LocalNetworkState::from(initial_state);
     let mut stdin = SP1Stdin::new();
     stdin.write(&initial_state);
     stdin.write(&multi_batch_header);
+    stdin.write_proof(
+        *aggchain_proof.try_as_compressed().unwrap(),
+        aggchain_vkey.vk,
+    );
 
     // Generate the proof for the given program and input.
-    let client = ProverClient::builder().mock().build();
+    let client = ProverClient::from_env();
     let (pk, vk) = client.setup(PESSIMISTIC_PROOF_ELF);
-    let proof = client.prove(&pk, &stdin).plonk().run().unwrap();
+    let proof = client.prove(&pk, &stdin).run().unwrap();
 
     // Verify proof and public values
     client.verify(&proof, &vk).expect("verification failed");
