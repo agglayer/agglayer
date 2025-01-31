@@ -26,9 +26,12 @@ jobs:
 
   commits:
     name: Validate PR commits
+    if: (github.actor != 'dependabot[bot]') && (contains(github.head_ref, 'dependabot/') == false)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: .github/commitlint.config.ts
