@@ -26,6 +26,7 @@ jobs:
 
   commits:
     name: Validate PR commits
+    if: (github.actor != 'dependabot[bot]') && (contains(github.head_ref, 'dependabot/') == false)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
