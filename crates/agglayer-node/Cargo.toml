@@ -17,7 +17,6 @@ futures.workspace = true
 hex.workspace = true
 hyper.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
-parking_lot.workspace = true
 pin-project.workspace = true
 reqwest = "0.12.12"
 serde = { workspace = true, features = ["derive"] }
@@ -41,9 +40,9 @@ agglayer-types.workspace = true
 agglayer-signer = { path = "../agglayer-signer" }
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
-agglayer-utils.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 agglayer-aggregator-notifier = { path = "../agglayer-aggregator-notifier" }
+agglayer-rate-limiting.workspace = true
 
 [dev-dependencies]
 alloy = { workspace = true, features = ["full", "node-bindings"] }

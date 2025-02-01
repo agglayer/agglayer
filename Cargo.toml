@@ -23,6 +23,7 @@ agglayer-config = { path = "crates/agglayer-config" }
 agglayer-contracts = { path = "crates/agglayer-contracts" }
 agglayer-node = { path = "crates/agglayer-node" }
 agglayer-primitives = { path = "crates/agglayer-primitives" }
+agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
 agglayer-signer = { path = "crates/agglayer-signer" }
 agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }

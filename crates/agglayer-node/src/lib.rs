@@ -1,6 +1,7 @@
 use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 
 use agglayer_config::Config;
+use agglayer_rate_limiting as rate_limiting;
 use anyhow::{bail, Result};
 use node::Node;
 use tokio_util::sync::CancellationToken;
@@ -8,7 +9,6 @@ use tracing::{debug, info};
 
 mod kernel;
 mod logging;
-mod rate_limiting;
 mod rpc;
 pub mod service;
 mod signed_tx;
