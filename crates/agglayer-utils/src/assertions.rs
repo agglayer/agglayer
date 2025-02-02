@@ -9,7 +9,7 @@ macro_rules! log_assert {
         let cond = $cond;
         ::std::debug_assert!(cond);
         if (!cond) {
-            $crate::utils::assertions::error!(
+            $crate::assertions::error!(
                 "INVARIANT VIOLATED in {}:{}: {}",
                 ::std::file!(),
                 ::std::line!(),
@@ -21,7 +21,7 @@ macro_rules! log_assert {
         let cond = $cond;
         ::std::debug_assert!(cond, $($fmt,)+);
         if (!cond) {
-            $crate::utils::assertions::error!(
+            $crate::assertions::error!(
                 "INVARIANT VIOLATED in {}:{}: {}",
                 ::std::file!(),
                 ::std::line!(),
@@ -39,7 +39,7 @@ macro_rules! log_assert_eq {
             (lhs, rhs) => {
                 ::std::assert_eq!(lhs, rhs);
                 if !(*lhs == *rhs) {
-                    $crate::utils::assertions::error!(
+                    $crate::assertions::error!(
                         "INVARIANT VIOLATED in {}:{}: left: {lhs:?}, right: {rhs:?}",
                         ::std::file!(),
                         ::std::line!(),
@@ -53,7 +53,7 @@ macro_rules! log_assert_eq {
             (lhs, rhs) => {
                 ::std::assert_eq!(lhs, rhs, $($fmt,)+);
                 if !(*lhs == *rhs) {
-                    $crate::utils::assertions::error!(
+                    $crate::assertions::error!(
                         "INVARIANT VIOLATED in {}:{}: left: {lhs:?}, right: {rhs:?}, {}",
                         ::std::file!(),
                         ::std::line!(),

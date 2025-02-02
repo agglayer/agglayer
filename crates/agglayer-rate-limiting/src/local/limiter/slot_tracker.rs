@@ -27,7 +27,7 @@ impl SlotTracker {
 
 impl Drop for SlotTracker {
     fn drop(&mut self) {
-        crate::log_assert_eq!(self.0, 0, "slots not released");
+        agglayer_utils::log_assert_eq!(self.0, 0, "slots not released");
     }
 }
 

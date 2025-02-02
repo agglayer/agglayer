@@ -211,6 +211,7 @@ dependencies = [
  "agglayer-config",
  "agglayer-contracts",
  "agglayer-prover",
+ "agglayer-rate-limiting",
  "agglayer-signer",
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
@@ -231,7 +232,6 @@ dependencies = [
  "jsonrpsee-test-utils",
  "lazy_static",
  "mockall",
- "parking_lot",
  "pessimistic-proof 0.1.0",
  "pessimistic-proof-test-suite",
  "pin-project 1.1.8",
@@ -335,6 +335,19 @@ dependencies = [
  "thiserror 2.0.11",
  "tonic 0.12.3",
  "tonic-build",
+]
+
+[[package]]
+name = "agglayer-rate-limiting"
+version = "0.1.0"
+dependencies = [
+ "agglayer-config",
+ "agglayer-utils",
+ "parking_lot",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.11",
+ "tokio",
 ]
 
 [[package]]
@@ -457,6 +470,13 @@ dependencies = [
  "sp1-core-machine",
  "sp1-sdk",
  "thiserror 2.0.11",
+]
+
+[[package]]
+name = "agglayer-utils"
+version = "0.1.0"
+dependencies = [
+ "tracing",
 ]
 
 [[package]]
