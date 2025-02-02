@@ -1,5 +1,6 @@
-use super::{state::State, RawState, SlotTracker};
 use agglayer_utils::log_assert;
+
+use super::{state::State, RawState, SlotTracker};
 
 /// Rate limiter with non-trivial state.
 ///
