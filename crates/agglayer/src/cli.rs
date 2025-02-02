@@ -88,11 +88,8 @@ impl DbKind {
         path: &Path,
     ) -> (PathBuf, PathBuf) {
         match self {
-            Self::State => (cfg.storage.state_db_path.join("state"), path.join("state")),
-            Self::Pending => (
-                cfg.storage.pending_db_path.join("pending"),
-                path.join("pending"),
-            ),
+            Self::State => (cfg.storage.state_db_path.clone(), path.join("state")),
+            Self::Pending => (cfg.storage.pending_db_path.clone(), path.join("pending")),
             Self::Epoch(epoch_number) => (
                 cfg.storage.epochs_db_path.join(format!("{}", epoch_number)),
                 path.join(format!("epochs/{}", epoch_number)),
@@ -138,4 +135,53 @@ fn parse_db_kind_version(s: &str) -> Result<(DbKind, u32), String> {
         .map_err(|e| format!("Invalid version '{}': {}", parts[1], e))?;
 
     Ok((db_kind, version))
+}
+
+#[cfg(test)]
+mod tests {
+    use agglayer_config::Config;
+
+    use super::*;
+
+    #[test]
+    fn testing_path_state() {
+        let path_normal = PathBuf::from("/tmp/normal");
+        let config = Config::new(&path_normal);
+
+        let path_normal = path_normal.join("storage");
+        let kind = DbKind::State;
+        let path_backup = PathBuf::from("/tmp/storage/backup");
+        let (destination, backup) = kind.create_paths(&config, &path_backup);
+
+        assert_eq!(destination, path_normal.join("state"));
+        assert_eq!(backup, path_backup.join("state"));
+    }
+
+    #[test]
+    fn testing_path_pending() {
+        let path_normal = PathBuf::from("/tmp/normal");
+        let config = Config::new(&path_normal);
+
+        let path_normal = path_normal.join("storage");
+        let kind = DbKind::Pending;
+        let path_backup = PathBuf::from("/tmp/storage/backup");
+        let (destination, backup) = kind.create_paths(&config, &path_backup);
+
+        assert_eq!(destination, path_normal.join("pending"));
+        assert_eq!(backup, path_backup.join("pending"));
+    }
+
+    #[test]
+    fn testing_path_epochs() {
+        let path_normal = PathBuf::from("/tmp/normal");
+        let config = Config::new(&path_normal);
+
+        let path_normal = path_normal.join("storage");
+        let kind = DbKind::Epoch(10);
+        let path_backup = PathBuf::from("/tmp/storage/backup");
+        let (destination, backup) = kind.create_paths(&config, &path_backup);
+
+        assert_eq!(destination, path_normal.join("epochs/10"));
+        assert_eq!(backup, path_backup.join("epochs/10"));
+    }
 }
