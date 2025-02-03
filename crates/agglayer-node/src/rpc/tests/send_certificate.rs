@@ -13,11 +13,7 @@ use crate::{
 };
 
 #[test_log::test(tokio::test)]
-async fn send_certificate_method_can_be_called() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init();
-
+async fn send_certificate_method_can_be_called_and_succeed() {
     let mut config = Config::new_for_test();
     config
         .proof_signers
@@ -104,10 +100,6 @@ async fn send_certificate_method_can_be_called_and_fail() {
 
 #[test_log::test(tokio::test)]
 async fn send_certificate_method_requires_known_signer() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init();
-
     let mut config = Config::new_for_test();
     // Willingly insert a signer that is not the one that’ll be used down below
     config
