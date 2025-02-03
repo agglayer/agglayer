@@ -24,12 +24,15 @@ pub enum CertificateRetrievalError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum CertificateSubmissionError {
+pub enum CertificateSubmissionError<Rpc: Middleware> {
     #[error(transparent)]
     Storage(#[from] StorageError),
 
     #[error("Failed to send the certificate to the orchestrator")]
     OrchestratorNotResponsive,
+
+    #[error("Failed to validate certificate signature: {0}")]
+    SignatureError(#[source] SignatureVerificationError<Rpc>),
 }
 
 #[derive(Debug, thiserror::Error)]
