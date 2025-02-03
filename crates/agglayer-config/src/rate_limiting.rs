@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, time::Duration};
 
 use serde::{Deserialize, Serialize};
+use serde_with::DisplayFromStr;
 
 pub type NetworkId = u32;
 
@@ -44,33 +45,6 @@ struct RateLimitOverride {
     send_tx: Option<TimeRateLimit>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
-#[serde(try_from = "BTreeMap<String, RateLimitOverride>")]
-pub struct PerNetworkRateLimitOverride(BTreeMap<NetworkId, RateLimitOverride>);
-
-impl PerNetworkRateLimitOverride {
-    pub const fn new() -> Self {
-        Self(BTreeMap::new())
-    }
-}
-
-impl TryFrom<BTreeMap<String, RateLimitOverride>> for PerNetworkRateLimitOverride {
-    type Error = <NetworkId as std::str::FromStr>::Err;
-
-    fn try_from(overrides: BTreeMap<String, RateLimitOverride>) -> Result<Self, Self::Error> {
-        overrides
-            .into_iter()
-            .map(|(k, v)| Ok((k.parse::<NetworkId>()?, v)))
-            .collect::<Result<Self, Self::Error>>()
-    }
-}
-
-impl FromIterator<(NetworkId, RateLimitOverride)> for PerNetworkRateLimitOverride {
-    fn from_iter<T: IntoIterator<Item = (NetworkId, RateLimitOverride)>>(iter: T) -> Self {
-        Self(iter.into_iter().collect())
-    }
-}
-
 /// Rate limiting configuration for a single network.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NetworkRateLimitingConfig<'a> {
@@ -80,6 +54,7 @@ pub struct NetworkRateLimitingConfig<'a> {
 
 /// Full rate limiting config.
 /// Contains the defaults and the per-network overrides.
+#[serde_with::serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct RateLimitingConfig {
@@ -89,7 +64,8 @@ pub struct RateLimitingConfig {
 
     /// Per-network rate limiting overrides.
     #[serde(default)]
-    network: PerNetworkRateLimitOverride,
+    #[serde_as(as = "BTreeMap<DisplayFromStr, _>")]
+    network: BTreeMap<NetworkId, RateLimitOverride>,
 }
 
 impl RateLimitingConfig {
@@ -98,15 +74,13 @@ impl RateLimitingConfig {
 
     /// New rate limiting config with no network-specific settings.
     pub const fn new(send_tx: TimeRateLimit) -> Self {
-        Self {
-            send_tx,
-            network: PerNetworkRateLimitOverride::new(),
-        }
+        let network = BTreeMap::new();
+        Self { send_tx, network }
     }
 
     /// Override `sendTx`setting for given network.
     pub fn with_send_tx_override(mut self, nid: NetworkId, limit: TimeRateLimit) -> Self {
-        self.network.0.entry(nid).or_default().send_tx = Some(limit);
+        self.network.entry(nid).or_default().send_tx = Some(limit);
         self
     }
 
@@ -120,7 +94,7 @@ impl RateLimitingConfig {
     }
 
     fn override_for(&self, nid: NetworkId) -> Option<&RateLimitOverride> {
-        self.network.0.get(&nid)
+        self.network.get(&nid)
     }
 }
 
@@ -191,7 +165,7 @@ mod test {
 
         let expected = RateLimitingConfig {
             send_tx: default_send_tx_limit.clone(),
-            network: PerNetworkRateLimitOverride::from_iter([(1, network_1_override)]),
+            network: BTreeMap::from_iter([(1, network_1_override)]),
         };
 
         assert_eq!(config, expected);
