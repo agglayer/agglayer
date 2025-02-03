@@ -64,4 +64,23 @@ setup() {
     claim_frequency="10"
     run wait_for_claim "$timeout" "$claim_frequency" "$l1_rpc_url"
     assert_success
+
+    local agglayer_rpc=$(kurtosis port print $enclave agglayer agglayer)
+
+    local retries=3
+    while true ; do
+        echo "Checking certificate created..." >&3
+        run cast rpc --rpc-url $agglayer_rpc "interop_getLatestSettledCertificateHeader" 1
+        assert_success
+        if [[ $(echo $output) != "null" ]]; then
+            break
+        fi
+
+        retries=$((retries - 1))
+        if [[ $retries == 0 ]]; then
+            exit 1
+        fi
+
+        sleep 30
+    done
 }
