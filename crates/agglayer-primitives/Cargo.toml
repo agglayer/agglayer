@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-alloy-primitives = { version = "0.8.15", features = ["serde", "k256"] }
+alloy-primitives = { version = "0.8.20", features = ["serde", "k256"] }
 k256 = "0.13.4"
 serde = { version = "1.0.217", features = ["derive"] }
 
