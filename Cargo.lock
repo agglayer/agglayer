@@ -276,7 +276,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e96ddc3ce9fd850731a7b1aa5fcf28e69254cd17"
+source = "git+https://github.com/agglayer/provers.git#ad126f78667bca35d596a953d638117e19621a47"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
@@ -288,6 +288,8 @@ dependencies = [
  "futures",
  "pessimistic-proof 0.2.1",
  "prover-engine",
+ "prover-executor",
+ "prover-logger",
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.11",
@@ -305,18 +307,20 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e96ddc3ce9fd850731a7b1aa5fcf28e69254cd17"
+source = "git+https://github.com/agglayer/provers.git#ad126f78667bca35d596a953d638117e19621a47"
 dependencies = [
  "dirs",
  "ethers",
  "humantime-serde",
  "jsonrpsee",
+ "prover-config",
+ "prover-logger",
+ "prover-utils",
  "serde",
  "serde_with",
  "thiserror 2.0.11",
  "toml",
  "tracing",
- "tracing-appender",
  "tracing-subscriber",
  "url",
 ]
@@ -324,7 +328,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e96ddc3ce9fd850731a7b1aa5fcf28e69254cd17"
+source = "git+https://github.com/agglayer/provers.git#ad126f78667bca35d596a953d638117e19621a47"
 dependencies = [
  "anyhow",
  "bincode",
@@ -6644,9 +6648,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
+name = "prover-config"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git#ad126f78667bca35d596a953d638117e19621a47"
+dependencies = [
+ "prover-utils",
+ "serde",
+ "serde_with",
+]
+
+[[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e96ddc3ce9fd850731a7b1aa5fcf28e69254cd17"
+source = "git+https://github.com/agglayer/provers.git#ad126f78667bca35d596a953d638117e19621a47"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -6660,6 +6674,60 @@ dependencies = [
  "tonic-reflection",
  "tower 0.4.13",
  "tracing",
+]
+
+[[package]]
+name = "prover-executor"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git#ad126f78667bca35d596a953d638117e19621a47"
+dependencies = [
+ "agglayer-prover-config",
+ "agglayer-prover-types",
+ "agglayer-telemetry 0.2.1",
+ "agglayer-types 0.2.1",
+ "anyhow",
+ "bincode",
+ "buildstructor",
+ "futures",
+ "pessimistic-proof 0.2.1",
+ "prover-config",
+ "prover-engine",
+ "prover-logger",
+ "serde",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror 2.0.11",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tonic 0.12.3",
+ "tonic-health",
+ "tonic-reflection",
+ "tower 0.4.13",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "prover-logger"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git#ad126f78667bca35d596a953d638117e19621a47"
+dependencies = [
+ "serde",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "prover-utils"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git#ad126f78667bca35d596a953d638117e19621a47"
+dependencies = [
+ "humantime-serde",
+ "serde",
+ "serde_with",
+ "toml",
 ]
 
 [[package]]
