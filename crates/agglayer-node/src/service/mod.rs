@@ -89,7 +89,11 @@ where
             "Received transaction {hash} for rollup {}", tx.tx.rollup_id
         );
         let rollup_id_str = tx.tx.rollup_id.to_string();
-        let metrics_attrs = &[KeyValue::new("rollup_id", rollup_id_str)];
+        let metrics_attrs_tx = &[
+            KeyValue::new("rollup_id", rollup_id_str),
+            KeyValue::new("type", "tx"),
+        ];
+        let metrics_attrs = &metrics_attrs_tx[..1];
 
         agglayer_telemetry::SEND_TX.add(1, metrics_attrs);
 
@@ -99,11 +103,11 @@ where
             return Err(SendTxError::RollupNotRegistered { rollup_id });
         }
 
-        self.kernel.verify_signature(&tx).await.inspect_err(|e| {
+        self.kernel.verify_tx_signature(&tx).await.inspect_err(|e| {
             error!(error = %e, hash, "Failed to verify the signature of transaction {hash}: {e}");
         })?;
 
-        agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs);
+        agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs_tx);
 
         // Reserve a rate limiting slot.
         let guard = self
@@ -194,25 +198,31 @@ where
     pub async fn send_certificate(
         &self,
         certificate: Certificate,
-    ) -> Result<CertificateId, CertificateSubmissionError> {
+    ) -> Result<CertificateId, CertificateSubmissionError<Rpc>> {
         let hash = certificate.hash();
-        tracing::Span::current().record("hash", hash.to_string());
+        let hash_string = hash.to_string();
+        tracing::Span::current().record("hash", &hash_string);
 
         info!(
             %hash,
             "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
         );
 
-        // TODO: Batch the different queries.
-        // Insert the certificate header into the state store.
-        self.state
-            .insert_certificate_header(&certificate, CertificateStatus::Pending)
-            .inspect_err(|e| error!("Failed to insert certificate into state store: {e}"))?;
+        self.kernel.verify_cert_signature(&certificate).await.map_err(|e| {
+            error!(error = %e, hash = hash_string, "Failed to verify the signature of certificate {hash}: {e}");
+            CertificateSubmissionError::SignatureError(e)
+        })?;
 
+        // TODO: Batch the different queries.
         // Insert the certificate into the pending store.
         self.pending_store
             .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
             .inspect_err(|e| error!("Failed to insert certificate into pending store: {e}"))?;
+
+        // Insert the certificate header into the state store.
+        self.state
+            .insert_certificate_header(&certificate, CertificateStatus::Pending)
+            .inspect_err(|e| error!("Failed to insert certificate into state store: {e}"))?;
 
         self.debug_store
             .add_certificate(&certificate)
