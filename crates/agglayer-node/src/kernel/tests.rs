@@ -215,7 +215,8 @@ async fn interop_executor_verify_zkp_failure() {
     mock.assert_request("eth_call", [tx_verify_batch, block])
         .unwrap();
 }
-/// Test that checks if the verify_tx_signature method
+
+/// Basic tests for the verify_tx_signature method
 #[tokio::test]
 async fn interop_executor_verify_tx_signature() {
     let config = Arc::new(Config::new_for_test());
@@ -337,7 +338,7 @@ async fn interop_executor_verify_tx_signature_proof_signer() {
     ));
 }
 
-/// Test that checks if the verify_cert_signature method
+/// Basic tests for the verify_cert_signature method
 #[tokio::test]
 async fn verify_cert_signature() {
     let signer1 = Certificate::wallet_for_test(1.into()).address();
