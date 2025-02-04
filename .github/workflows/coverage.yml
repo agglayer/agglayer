@@ -5,6 +5,7 @@ on:
     branches:
       - main
   workflow_dispatch:
+  merge_group:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
