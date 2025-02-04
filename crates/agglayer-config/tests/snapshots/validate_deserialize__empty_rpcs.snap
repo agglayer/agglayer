@@ -1,6 +1,7 @@
 ---
 source: crates/agglayer-config/tests/validate_deserialize.rs
 expression: config
+snapshot_kind: text
 ---
 prover-entrypoint = "http://127.0.0.1:8080"
 
@@ -23,6 +24,9 @@ request-timeout = "3m"
 
 [rate-limiting]
 send-tx = "unlimited"
+
+[rate-limiting.send-certificate]
+max-per-epoch = 1
 
 [rate-limiting.network]
 
