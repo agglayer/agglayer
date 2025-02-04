@@ -33,9 +33,10 @@ pessimistic-proof = { path = "crates/pessimistic-proof" }
 pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
-agglayer-prover = { git = "https://github.com/agglayer/provers.git" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", branch = "refactor/remove-pessimistic-proof-dep" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", branch = "refactor/remove-pessimistic-proof-dep" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", branch = "refactor/remove-pessimistic-proof-dep" }
+prover-config = { git = "https://github.com/agglayer/provers.git", branch = "refactor/remove-pessimistic-proof-dep" }
 
 # Core dependencies
 alloy = { version = "0.8.1", features = ["full"] }

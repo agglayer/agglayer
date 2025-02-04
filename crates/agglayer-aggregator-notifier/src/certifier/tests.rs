@@ -4,7 +4,6 @@ use agglayer_certificate_orchestrator::Certifier;
 use agglayer_config::Config;
 use agglayer_contracts::Settler;
 use agglayer_prover::fake::FakeProver;
-use agglayer_prover_config::AgglayerProverType;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{LocalNetworkStateData, NetworkId};
 use ethers::{
@@ -15,9 +14,10 @@ use ethers::{
 use fail::FailScenario;
 use mockall::predicate::{always, eq};
 use pessimistic_proof_test_suite::forest::Forest;
+use prover_config::ProverType;
 use tokio_util::sync::CancellationToken;
 
-use crate::CertifierClient;
+use crate::{CertifierClient, ELF};
 
 #[rstest::rstest]
 #[test_log::test(tokio::test)]
@@ -31,7 +31,7 @@ async fn happy_path() {
     let prover_config = agglayer_prover_config::ProverConfig::default();
 
     // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::default();
+    let fake_prover = FakeProver::new(ELF);
     let endpoint = prover_config.grpc_endpoint;
     let cancellation = CancellationToken::new();
 
@@ -118,7 +118,7 @@ async fn prover_timeout() {
     let mut l1_rpc = MockL1Rpc::new();
     let prover_config = agglayer_prover_config::ProverConfig {
         grpc_endpoint: next_available_addr(),
-        primary_prover: AgglayerProverType::CpuProver(agglayer_prover_config::CpuProverConfig {
+        primary_prover: ProverType::CpuProver(prover_config::CpuProverConfig {
             proving_timeout: Duration::from_secs(1),
             ..Default::default()
         }),
@@ -133,7 +133,7 @@ async fn prover_timeout() {
     let prover_cancellation_token = cancellation.clone();
 
     thread::spawn(move || {
-        agglayer_prover::start_prover(prover_config, prover_cancellation_token);
+        agglayer_prover::start_prover(prover_config, prover_cancellation_token, ELF);
     });
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
