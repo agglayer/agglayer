@@ -27,6 +27,9 @@ request-timeout = "3m"
 [rate-limiting]
 send-tx = "unlimited"
 
+[rate-limiting.send-certificate]
+max-per-epoch = 1
+
 [rate-limiting.network]
 
 [outbound.rpc.settle]

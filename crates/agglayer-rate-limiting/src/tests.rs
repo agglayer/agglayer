@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use agglayer_config::rate_limiting::{NetworkId, TimeRateLimit};
+use agglayer_config::rate_limiting::{EpochRateLimit, NetworkId, TimeRateLimit};
 use tokio::time::Instant;
 
 use super::{RateLimited, RateLimiter, RateLimitingConfig};
@@ -31,9 +31,11 @@ const DISABLED: TimeRateLimit = TimeRateLimit::Limited {
     time_interval: Duration::from_secs(100),
 };
 
+const ONE_PER_EPOCH: EpochRateLimit = EpochRateLimit::limited(1);
+
 #[test]
 fn concurrent_access() {
-    let limiter = RateLimiter::new(RateLimitingConfig::new(THREE_PER_100S));
+    let limiter = RateLimiter::new(RateLimitingConfig::new(THREE_PER_100S, ONE_PER_EPOCH));
     let now = Instant::now();
 
     let success_count = AtomicU32::new(0);
@@ -63,7 +65,7 @@ fn concurrent_access() {
 
 #[test]
 fn per_network() {
-    let limiter = RateLimiter::new(RateLimitingConfig::new(ONE_PER_100S));
+    let limiter = RateLimiter::new(RateLimitingConfig::new(ONE_PER_100S, ONE_PER_EPOCH));
     let now = Instant::now();
 
     let network_ids = [2, 42, 1337, 95];
@@ -85,8 +87,8 @@ fn per_network() {
 
 #[test]
 fn network_exempt() {
-    let config =
-        RateLimitingConfig::new(ONE_PER_100S).with_send_tx_override(42, TimeRateLimit::Unlimited);
+    let config = RateLimitingConfig::new(ONE_PER_100S, ONE_PER_EPOCH)
+        .with_send_tx_override(42, TimeRateLimit::Unlimited);
     let limiter = RateLimiter::new(config);
     let now = Instant::now();
     let at = |secs: u64| now + Duration::from_secs(secs);
@@ -111,7 +113,8 @@ fn network_exempt() {
 
 #[test]
 fn network_disabled() {
-    let config = RateLimitingConfig::new(ONE_PER_100S).with_send_tx_override(55, DISABLED);
+    let config =
+        RateLimitingConfig::new(ONE_PER_100S, ONE_PER_EPOCH).with_send_tx_override(55, DISABLED);
     let limiter = RateLimiter::new(config);
     let now = Instant::now();
 
