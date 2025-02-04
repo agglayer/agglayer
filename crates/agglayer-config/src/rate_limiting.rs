@@ -38,11 +38,37 @@ impl TimeRateLimit {
     }
 }
 
+/// Epoch-based rate limiting
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum EpochRateLimit {
+    /// Don't apply any rate limiting, allowing the client to make requests as
+    /// often as desired.
+    Unlimited,
+
+    /// Apply rate limit of `max_per_epoch` events in any given epoch.
+    #[serde(untagged, rename_all = "kebab-case")]
+    Limited { max_per_epoch: u32 },
+}
+
+impl EpochRateLimit {
+    /// Default rate limiting for the `sendCertificate` call.
+    pub const fn send_certificate_default() -> Self {
+        Self::limited(1)
+    }
+
+    /// Create a time-based rate limiting
+    pub const fn limited(max_per_epoch: u32) -> Self {
+        Self::Limited { max_per_epoch }
+    }
+}
+
 /// Rate limiting override for each endpoint
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 struct RateLimitOverride {
     send_tx: Option<TimeRateLimit>,
+    send_certificate: Option<EpochRateLimit>,
 }
 
 /// Rate limiting configuration for a single network.
@@ -50,6 +76,9 @@ struct RateLimitOverride {
 pub struct NetworkRateLimitingConfig<'a> {
     /// Rate limit for `sendTx` for given network.
     pub send_tx: &'a TimeRateLimit,
+
+    /// Rate limit for `sendCertificate` for given network.
+    pub send_certificate: &'a EpochRateLimit,
 }
 
 /// Full rate limiting config.
@@ -62,6 +91,10 @@ pub struct RateLimitingConfig {
     #[serde(default = "TimeRateLimit::send_tx_default")]
     send_tx: TimeRateLimit,
 
+    /// Settlement rate limiting for the `sendCertificate` call.
+    #[serde(default = "EpochRateLimit::send_certificate_default")]
+    send_certificate: EpochRateLimit,
+
     /// Per-network rate limiting overrides.
     #[serde(default)]
     #[serde_as(as = "BTreeMap<DisplayFromStr, _>")]
@@ -70,12 +103,18 @@ pub struct RateLimitingConfig {
 
 impl RateLimitingConfig {
     /// Default rate limiting configuration.
-    pub const DEFAULT: Self = Self::new(TimeRateLimit::send_tx_default());
+    pub const DEFAULT: Self = Self::new(
+        TimeRateLimit::send_tx_default(),
+        EpochRateLimit::send_certificate_default(),
+    );
 
     /// New rate limiting config with no network-specific settings.
-    pub const fn new(send_tx: TimeRateLimit) -> Self {
-        let network = BTreeMap::new();
-        Self { send_tx, network }
+    pub const fn new(send_tx: TimeRateLimit, send_certificate: EpochRateLimit) -> Self {
+        Self {
+            send_tx,
+            send_certificate,
+            network: BTreeMap::new(),
+        }
     }
 
     /// Override `sendTx`setting for given network.
@@ -87,10 +126,18 @@ impl RateLimitingConfig {
     /// Get rate limiting configuration for given network.
     pub fn config_for(&self, network_id: NetworkId) -> NetworkRateLimitingConfig {
         let overrides = self.override_for(network_id);
+
         let send_tx = overrides
             .and_then(|l| l.send_tx.as_ref())
             .unwrap_or(&self.send_tx);
-        NetworkRateLimitingConfig { send_tx }
+        let send_certificate = overrides
+            .and_then(|l| l.send_certificate.as_ref())
+            .unwrap_or(&self.send_certificate);
+
+        NetworkRateLimitingConfig {
+            send_tx,
+            send_certificate,
+        }
     }
 
     fn override_for(&self, nid: NetworkId) -> Option<&RateLimitOverride> {
@@ -110,7 +157,11 @@ mod test {
 
     #[test]
     fn default_config() {
-        let config_str = "send-tx = \"unlimited\"";
+        #[rustfmt::skip]
+        let config_str = "send-tx = \"unlimited\"\n\
+            \n\
+            [send-certificate]\n\
+            max-per-epoch = 1\n";
         let parsed_default_config: RateLimitingConfig = toml::from_str(config_str).unwrap();
         assert_eq!(parsed_default_config, RateLimitingConfig::DEFAULT);
 
@@ -120,9 +171,9 @@ mod test {
 
     #[test]
     fn unlimited() {
-        let config_str = "send-tx = \"unlimited\"";
+        let config_str = "send-tx = \"unlimited\"\nsend-certificate = \"unlimited\"\n";
         let config: RateLimitingConfig = toml::from_str(config_str).unwrap();
-        let expected = RateLimitingConfig::new(TimeRateLimit::Unlimited);
+        let expected = RateLimitingConfig::new(TimeRateLimit::Unlimited, EpochRateLimit::Unlimited);
         assert_eq!(config, expected);
     }
 
@@ -131,7 +182,7 @@ mod test {
     #[case(2, "30min", 1800)]
     #[case(50, "90s", 90)]
     #[case(0, "2min", 120)]
-    fn basic(#[case] limit: u32, #[case] interval_str: String, #[case] interval_secs: u64) {
+    fn basic_send_tx(#[case] limit: u32, #[case] interval_str: String, #[case] interval_secs: u64) {
         #[rustfmt::skip]
         let config_str = format!(
             "[send-tx]\n\
@@ -139,10 +190,13 @@ mod test {
             time-interval = {interval_str:?}\n"
         );
         let config: RateLimitingConfig = toml::from_str(&config_str).unwrap();
-        let expected = RateLimitingConfig::new(TimeRateLimit::Limited {
-            max_per_interval: limit,
-            time_interval: Duration::from_secs(interval_secs),
-        });
+        let expected = RateLimitingConfig::new(
+            TimeRateLimit::Limited {
+                max_per_interval: limit,
+                time_interval: Duration::from_secs(interval_secs),
+            },
+            EpochRateLimit::send_certificate_default(),
+        );
         assert_eq!(config, expected);
     }
 
@@ -152,25 +206,50 @@ mod test {
         let config_str = "[send-tx]\n\
             max-per-interval = 3\n\
             time-interval = \"30min\"\n\
+            \n\
+            [send-certificate]\n\
+            max-per-epoch = 7\n\
+            \n\
             [network.1.send-tx]\n\
             max-per-interval = 4\n\
-            time-interval = \"40min\"\n";
-        let config: RateLimitingConfig = toml::from_str(config_str).unwrap();
+            time-interval = \"40min\"\n\
+            \n\
+            [network.1.send-certificate]\n\
+            max-per-epoch = 12\n";
+        let config: RateLimitingConfig = toml::from_str(&config_str).unwrap();
 
         let default_send_tx_limit = TimeRateLimit::limited(3, Duration::from_secs(1800));
+        let default_send_cert_limit = EpochRateLimit::limited(7);
         let network_1_send_tx_limit = TimeRateLimit::limited(4, Duration::from_secs(2400));
+        let network_1_send_cert_limit = EpochRateLimit::limited(12);
         let network_1_override = RateLimitOverride {
             send_tx: Some(network_1_send_tx_limit.clone()),
+            send_certificate: Some(network_1_send_cert_limit.clone()),
         };
 
         let expected = RateLimitingConfig {
             send_tx: default_send_tx_limit.clone(),
+            send_certificate: default_send_cert_limit.clone(),
             network: BTreeMap::from_iter([(1, network_1_override)]),
         };
 
         assert_eq!(config, expected);
+
         assert_eq!(config.config_for(1).send_tx, &network_1_send_tx_limit);
+        assert_eq!(
+            config.config_for(1).send_certificate,
+            &network_1_send_cert_limit
+        );
+
         assert_eq!(config.config_for(2).send_tx, &default_send_tx_limit);
-        assert_eq!(config.config_for(1337).send_tx, &default_send_tx_limit);
+        assert_eq!(
+            config.config_for(2).send_certificate,
+            &default_send_cert_limit
+        );
+
+        assert_eq!(
+            config.config_for(1337).send_certificate,
+            &default_send_cert_limit
+        );
     }
 }
