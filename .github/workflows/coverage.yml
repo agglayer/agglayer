@@ -16,6 +16,8 @@ concurrency:
 jobs:
   rust-unit-coverage:
     name: Unit & Linter coverage
+    # Dosen't run on merge_group but required for status checks
+    if: ${{ github.event_name != 'merge_group' }}
     runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v4

@@ -1,0 +1,292 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  merge_group:
+  pull_request:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest-16-cores
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/unit-test
+
+  build_contracts_image:
+    runs-on: ubuntu-latest-16-cores
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          repository: 0xPolygonHermez/zkevm-contracts
+          ref: v9.0.0-rc.3-pp
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Setup docker
+        run: |
+          npm i
+      - name: Build docker
+        run: |
+          # Script from contract repo
+          set -e
+          rm -rf docker/gethData/geth_data
+          DEV_PERIOD=1 docker compose -f docker/docker-compose.yml up -d geth
+          sleep 5
+          node docker/scripts/fund-accounts.js
+          cp docker/scripts/v2/deploy_parameters_docker.json deployment/v2/deploy_parameters.json
+          cp docker/scripts/v2/create_rollup_parameters_docker.json deployment/v2/create_rollup_parameters.json
+          npm run deploy:testnet:v2:localhost
+          rm -rf docker/deploymentOutput
+          mkdir docker/deploymentOutput
+          mv deployment/v2/deploy_output.json docker/deploymentOutput
+          mv deployment/v2/genesis.json docker/deploymentOutput
+          [ -f deployment/v2/genesis_sovereign.json ] && mv deployment/v2/genesis_sovereign.json docker/deploymentOutput
+          mv deployment/v2/create_rollup_output.json docker/deploymentOutput
+          DEV_PERIOD=1 docker compose -f docker/docker-compose.yml down
+          sudo chmod -R go+rxw docker/gethData
+          ls -lah docker
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: hermeznetwork/geth-zkevm-contracts
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: hermeznetwork/geth-zkevm-contracts:latest
+          file: docker/Dockerfile
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: ${{ format('type=docker,dest={0}/{1}.tar', '/tmp', 'contracts-image') }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "contracts-image"
+          path: /tmp/contracts-image.tar
+
+  integrations:
+    name: Integration tests
+    needs:
+      - build_contracts_image
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 30
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: "contracts-image"
+          path: "/tmp"
+
+      - name: Load image
+        run: |
+          echo ${{ needs.build_contracts_image.outputs.tags }}
+          docker load --input /tmp/contracts-image.tar
+          docker image ls -a
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
+
+      - name: Install Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Test
+        run: cargo nextest run --workspace -P integrations
+
+  docker-build-local:
+    name: E2E Tests | Docker build
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      push: false
+      local-artifact-name: "docker-image"
+      local-artifact-dir: "/tmp"
+
+  e2e-kurtosis-cdk:
+    name: E2E Tests | Kurtosis-CDK
+    runs-on: ubuntu-latest
+    needs:
+      - docker-build-local
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: "docker-image"
+          path: "/tmp"
+
+      - name: Load image
+        run: |
+          echo ${{ needs.docker-build-local.outputs.tags }}
+          docker load --input /tmp/docker-image.tar
+          docker image ls -a
+
+      - name: Checkout kurtosis-cdk
+        uses: actions/checkout@v4
+        with:
+          repository: 0xpolygon/kurtosis-cdk
+          ref: ${{ env.KURTOSIS_CDK_GIT_REF }}
+
+      - name: Replace param with local agglayer-rs docker img
+        run: |
+          new_value="${{ needs.docker-build-local.outputs.tags }}"
+
+          # Escape special characters in the new value
+          escaped_new_value=$(sed 's/[\/&]/\\&/g' <<< "$new_value")
+
+          sed -i "s/zkevm_agglayer_image: .*/zkevm_agglayer_image: $escaped_new_value/" "params.yml"
+
+          # Debug
+          cat params.yml
+
+      - name: Install kurtosis
+        run: |
+          echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
+          sudo apt update
+          sudo apt install kurtosis-cli=1.3.1
+          kurtosis analytics disable
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Run kurtosis
+        run: kurtosis run --enclave cdk-v1 --args-file params.yml --image-download always .
+
+      - name: Expose RPC URL
+        run: echo "ETH_RPC_URL=$(kurtosis port print cdk-v1 cdk-erigon-node-001 http-rpc)" >> $GITHUB_ENV
+
+      - name: Check that batches are progressing
+        continue-on-error: true
+        env:
+          ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
+          TIMEOUT_SECONDS: 900
+        run: ./.github/scripts/monitor-verified-batches.sh --rpc-url "$ETH_RPC_URL"
+
+      - name: debug
+        run: kurtosis service logs cdk-v1 agglayer
+
+  pushing-docker-image:
+    name: Docker | Publish image to registry
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || ( github.event_name == 'workflow_dispatch' )
+    permissions:
+      packages: write
+    needs:
+      - docker-build-local
+      - e2e-kurtosis-cdk
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: "docker-image"
+          path: "/tmp"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load image
+        run: |
+          echo ${{ needs.docker-build-local.outputs.tags }}
+          docker load --input /tmp/docker-image.tar
+
+      - name: Publishing image
+        env:
+          DOCKER_IMAGE: ${{ needs.docker-build-local.outputs.tags }}
+        run: docker push ${{ env.DOCKER_IMAGE }}
+
+  check_elf:
+    runs-on: ubuntu-latest-16-cores
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
+    name: ELF Checking
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Define source checksum
+        run: |
+          echo CHECKSUM="$(sha256sum crates/pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf | awk '{ print $1 }')" >> "$GITHUB_ENV"
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - uses: taiki-e/install-action@protoc
+
+      - name: Define vKey
+        run: |
+          echo ORIGINAL_VKEY="$(cargo run -p agglayer -- vkey)" >> "$GITHUB_ENV"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - uses: taiki-e/install-action@protoc
+
+      - name: Install cargo-make
+        run: cargo install --debug --locked cargo-make
+
+      - run: cargo make pp-elf
+
+      - name: ELF is up to date
+        run: diff <(sha256sum crates/pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf | awk '{ print $1 }') <( echo $CHECKSUM )
+
+      - name: Check vKey
+        run: |
+          CALCULATED_VKEY=$(cargo run -p agglayer -- vkey)
+          echo "Commited vKey=$ORIGINAL_VKEY"
+          echo "Calculated vKey=$CALCULATED_VKEY"
+          diff <(echo $CALCULATED_VKEY) <( echo $ORIGINAL_VKEY )

@@ -1,5 +1,10 @@
 name: Build and host documentation on GH pages
+
 on:
+  merge_group:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -7,6 +12,7 @@ on:
 jobs:
   build:
     name: Build documentation
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
