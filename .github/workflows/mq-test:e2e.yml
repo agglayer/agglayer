@@ -1,15 +1,8 @@
 name: Test - e2e
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - "**"
+  merge_group:
   workflow_dispatch:
-    branches:
-      - "**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
@@ -23,7 +16,7 @@ env:
 jobs:
   docker-build-local:
     name: E2E Tests | Docker build
-    uses: ./.github/workflows/util:docker.yml
+    uses: ./.github/workflows/docker-build.yml
     secrets: inherit
     with:
       push: false

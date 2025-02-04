@@ -1,8 +1,8 @@
-name: Util | Docker
+name: Docker build
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}  
+  IMAGE_NAME: ${{ github.repository }}
 
 on:
   workflow_call:

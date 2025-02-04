@@ -1,15 +1,8 @@
-name: Test - units
+name: MQ - Testing
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - "**"
+  merge_group:
   workflow_dispatch:
-    branches:
-      - "**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
@@ -133,24 +126,7 @@ jobs:
   unit:
     name: Unit Tests
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 30
     steps:
-      - name: Checkout sources
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Set up rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - uses: taiki-e/install-action@nextest
-      - uses: taiki-e/install-action@protoc
-
-      - name: Install Anvil
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Test
-        run: cargo nextest run --workspace && cargo test --doc --workspace
+      - uses: ./.github/actions/unit-test

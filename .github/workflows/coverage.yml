@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-  workflow_dispatch:
 
-concurrency: 
+concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
@@ -40,9 +40,9 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Install cargo-sonar and run Clippy
         run: |
-            cargo install cargo-sonar
-            cargo clippy --all-features --all-targets --message-format=json > clippy.json
-            cargo sonar --clippy
+          cargo install cargo-sonar
+          cargo clippy --all-features --all-targets --message-format=json > clippy.json
+          cargo sonar --clippy
 
       - name: Build with coverage
         env:
@@ -64,7 +64,7 @@ jobs:
         uses: SonarSource/sonarcloud-github-action@master
         continue-on-error: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
