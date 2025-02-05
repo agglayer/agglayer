@@ -3,6 +3,9 @@ name: Cycle tracker
 on:
   workflow_dispatch:
   merge_group:
+  pull_request:
+    branches:
+      - main
   schedule:
     - cron: "0 13 * * 3"
 
@@ -14,7 +17,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  unit:
+  cycle_tracker:
     name: Cycle tracker report
     runs-on: ubuntu-latest
     timeout-minutes: 30

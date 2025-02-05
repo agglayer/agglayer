@@ -1,11 +1,13 @@
-name: Security
+name: Audit
 
 on:
-  push:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
     paths:
       - "**/Cargo.toml"
       - "**/Cargo.lock"
-  workflow_dispatch:
   merge_group:
   schedule:
     - cron: "0 0 * * *"
