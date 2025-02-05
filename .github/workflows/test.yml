@@ -16,6 +16,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+  KURTOSIS_CDK_GIT_REF: v0.2.11
 
 jobs:
   unit:
