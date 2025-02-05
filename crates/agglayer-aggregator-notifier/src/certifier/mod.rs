@@ -139,7 +139,6 @@ where
         let mut stdin = SP1Stdin::new();
         stdin.write(&network_state);
         stdin.write(&multi_batch_header);
-        // stdin.write_proof(proof, vk)
 
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
