@@ -90,7 +90,6 @@ impl NetworkState {
             });
         }
 
-        // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
         let mut new_balances = BTreeMap::new();
         for (k, v) in &multi_batch_header.balances_proofs {
             if new_balances.insert(*k, U512::from(v.0)).is_some() {
