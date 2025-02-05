@@ -12,20 +12,21 @@ pub trait ToBits<const NUM_BITS: usize> {
 
 impl ToBits<192> for TokenInfo {
     fn to_bits(&self) -> [bool; 192] {
-        let address_bytes = self.origin_token_address.0;
-        // Security: We assume here that `address_bytes` is a fixed-size array of
-        // 20 bytes. The following code could panic otherwise.
-        std::array::from_fn(|i| {
-            if i < 32 {
-                (self.origin_network >> i) & 1 == 1
-            } else {
-                ((address_bytes[(i - 32) / 8]) >> (i % 8)) & 1 == 1
-            }
-        })
+        let mut bits = [false; 192];
+        for i in 0..32 {
+            bits[i] = (self.origin_network >> i) & 1 == 1;
+        }
+        for i in 32..192 {
+            let byte_index = (i - 32) / 8;
+            let bit_index = i % 8;
+            bits[i] = (self.origin_token_address.0[byte_index] >> bit_index) & 1 == 1;
+        }
+        bits
     }
 }
 
 impl ToBits<8> for u8 {
+    #[inline]
     fn to_bits(&self) -> [bool; 8] {
         std::array::from_fn(|i| (self >> i) & 1 == 1)
     }

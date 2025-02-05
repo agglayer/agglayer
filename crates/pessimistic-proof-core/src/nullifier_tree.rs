@@ -46,13 +46,14 @@ pub struct NullifierKey {
 
 impl ToBits<64> for NullifierKey {
     fn to_bits(&self) -> [bool; 64] {
-        std::array::from_fn(|i| {
-            if i < 32 {
-                (self.network_id >> i) & 1 == 1
-            } else {
-                (self.let_index >> (i - 32)) & 1 == 1
-            }
-        })
+        let mut bits = [false; 64];
+        for i in 0..32 {
+            bits[i] = (self.network_id >> i) & 1 == 1;
+        }
+        for i in 32..64 {
+            bits[i] = (self.let_index >> (i - 32)) & 1 == 1;
+        }
+        bits
     }
 }
 
