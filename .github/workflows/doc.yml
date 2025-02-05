@@ -12,7 +12,6 @@ on:
 jobs:
   build:
     name: Build documentation
-    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,6 +38,7 @@ jobs:
   deploy:
     name: Deploy documentation
     needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       pages: write
       id-token: write
