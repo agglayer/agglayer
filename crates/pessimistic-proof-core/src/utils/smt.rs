@@ -82,8 +82,7 @@ where
         hash == root
     }
 
-    pub fn verify_with_bits(&self, bits: [bool; DEPTH], value: H::Digest, root: H::Digest) -> bool
-    {
+    pub fn verify_with_bits(&self, bits: [bool; DEPTH], value: H::Digest, root: H::Digest) -> bool {
         let mut hash = value;
         for i in 0..DEPTH {
             hash = if bits[DEPTH - i - 1] {
@@ -169,8 +168,7 @@ where
         bits: [bool; DEPTH],
         root: H::Digest,
         empty_hash_at_height: &[H::Digest; DEPTH],
-    ) -> bool
-    {
+    ) -> bool {
         if self.siblings.len() > DEPTH {
             return false;
         }

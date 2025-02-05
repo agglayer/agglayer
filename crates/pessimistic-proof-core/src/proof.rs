@@ -204,8 +204,16 @@ pub fn generate_pessimistic_proof(
     // empty roots of the different trees involved. Therefore, we do
     // one mapping of empty tree hash <> 0x00..0 on the public inputs.
     let (prev_local_exit_root, prev_pessimistic_root) = (
-        if prev_ler == EMPTY_LER { [0; 32].into() } else { prev_ler },
-        if prev_pessimistic_root == EMPTY_PP_ROOT { [0; 32].into() } else { prev_pessimistic_root },
+        if prev_ler == EMPTY_LER {
+            [0; 32].into()
+        } else {
+            prev_ler
+        },
+        if prev_pessimistic_root == EMPTY_PP_ROOT {
+            [0; 32].into()
+        } else {
+            prev_pessimistic_root
+        },
     );
 
     Ok(PessimisticProofOutput {
