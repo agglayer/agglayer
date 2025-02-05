@@ -151,7 +151,7 @@ pub const EMPTY_PP_ROOT: Digest = Digest(hex!(
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
 /// [`LocalNetworkState`].
 pub fn generate_pessimistic_proof(
-    initial_network_state: NetworkState,
+    mut initial_network_state: NetworkState,
     batch_header: &MultiBatchHeader<Keccak256Hasher>,
 ) -> Result<PessimisticProofOutput, ProofError> {
     let StateCommitment {
@@ -177,8 +177,7 @@ pub fn generate_pessimistic_proof(
         batch_header.target.ler_leaf_count.to_le_bytes().as_slice(),
     ]);
 
-    let mut network_state = initial_network_state;
-    let computed_target = network_state.apply_batch_header(batch_header)?;
+    let computed_target = initial_network_state.apply_batch_header(batch_header)?;
 
     if computed_target.exit_root != batch_header.target.exit_root {
         return Err(ProofError::InvalidNewLocalExitRoot {
@@ -204,21 +203,10 @@ pub fn generate_pessimistic_proof(
     // NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
     // empty roots of the different trees involved. Therefore, we do
     // one mapping of empty tree hash <> 0x00..0 on the public inputs.
-    let (prev_local_exit_root, prev_pessimistic_root) = {
-        let prev_ler = if prev_ler == EMPTY_LER {
-            [0; 32].into()
-        } else {
-            prev_ler
-        };
-
-        let prev_pp_root = if prev_pessimistic_root == EMPTY_PP_ROOT {
-            [0; 32].into()
-        } else {
-            prev_pessimistic_root
-        };
-
-        (prev_ler, prev_pp_root)
-    };
+    let (prev_local_exit_root, prev_pessimistic_root) = (
+        if prev_ler == EMPTY_LER { [0; 32].into() } else { prev_ler },
+        if prev_pessimistic_root == EMPTY_PP_ROOT { [0; 32].into() } else { prev_pessimistic_root },
+    );
 
     Ok(PessimisticProofOutput {
         prev_local_exit_root,
