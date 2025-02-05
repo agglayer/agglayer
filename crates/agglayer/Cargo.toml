@@ -9,11 +9,15 @@ clap = { workspace = true, features = ["derive", "env", "string"] }
 dirs.workspace = true
 dotenvy.workspace = true
 toml.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
 
-agglayer-node = { path = "../agglayer-node" }
-agglayer-prover = { workspace = true }
-agglayer-prover-config = { workspace = true }
 agglayer-config = { path = "../agglayer-config" }
+agglayer-node = { path = "../agglayer-node" }
+agglayer-prover-config = { workspace = true }
+agglayer-prover.workspace = true
+pessimistic-proof.workspace = true
 
 [dev-dependencies]
 assert_cmd = "2.0.14"
