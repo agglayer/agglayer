@@ -82,6 +82,20 @@ where
         hash == root
     }
 
+    pub fn verify_with_bits(&self, bits: [bool; DEPTH], value: H::Digest, root: H::Digest) -> bool
+    {
+        let mut hash = value;
+        for i in 0..DEPTH {
+            hash = if bits[DEPTH - i - 1] {
+                H::merge(&self.siblings[i], &hash)
+            } else {
+                H::merge(&hash, &self.siblings[i])
+            };
+        }
+
+        hash == root
+    }
+
     /// Verify the inclusion proof (i.e. that `(key, old_value)` is in the SMT)
     /// and return the updated root of the SMT with `(key, new_value)`
     /// inserted, or `None` if the inclusion proof is invalid.
@@ -95,10 +109,10 @@ where
     where
         K: ToBits<DEPTH> + Copy,
     {
-        if !self.verify(key, old_value, root) {
+        let bits = key.to_bits();
+        if !self.verify_with_bits(bits, old_value, root) {
             return None;
         }
-        let bits = key.to_bits();
         let mut hash = new_value;
         for i in 0..DEPTH {
             hash = if bits[DEPTH - i - 1] {
@@ -150,6 +164,36 @@ where
         entry == root
     }
 
+    pub fn verify_with_bits(
+        &self,
+        bits: [bool; DEPTH],
+        root: H::Digest,
+        empty_hash_at_height: &[H::Digest; DEPTH],
+    ) -> bool
+    {
+        if self.siblings.len() > DEPTH {
+            return false;
+        }
+        if self.siblings.is_empty() {
+            let empty_root = H::merge(
+                &empty_hash_at_height[DEPTH - 1],
+                &empty_hash_at_height[DEPTH - 1],
+            );
+            return root == empty_root;
+        }
+        let mut entry = empty_hash_at_height[DEPTH - self.siblings.len()];
+        for i in (0..self.siblings.len()).rev() {
+            let sibling = self.siblings[i];
+            entry = if bits[i] {
+                H::merge(&sibling, &entry)
+            } else {
+                H::merge(&entry, &sibling)
+            };
+        }
+
+        entry == root
+    }
+
     /// Verify the non-inclusion proof (i.e. that `key` is not in the SMT) and
     /// return the updated root of the SMT with `(key, value)` inserted, or
     /// `None` if the inclusion proof is invalid.
@@ -163,12 +207,12 @@ where
     where
         K: Copy + ToBits<DEPTH>,
     {
-        if !self.verify(key, root, empty_hash_at_height) {
+        let bits = key.to_bits();
+        if !self.verify_with_bits(bits, root, empty_hash_at_height) {
             return None;
         }
 
         let mut entry = new_value;
-        let bits = key.to_bits();
         for i in (self.siblings.len()..DEPTH).rev() {
             let sibling = empty_hash_at_height[DEPTH - i - 1];
             entry = if bits[i] {
