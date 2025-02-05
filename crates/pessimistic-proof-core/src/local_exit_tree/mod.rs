@@ -26,6 +26,11 @@ where
     /// computed by log2(leaf_count). After that, all values are zeroed out.
     #[serde_as(as = "[_; TREE_DEPTH]")]
     pub frontier: [H::Digest; TREE_DEPTH],
+
+    /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
+    /// `i`.
+    #[serde_as(as = "[_; TREE_DEPTH]")]
+    pub empty_hash_at_height: [H::Digest; TREE_DEPTH],
 }
 
 #[derive(Clone, Debug, Error, Serialize, Deserialize, PartialEq, Eq)]
@@ -82,16 +87,13 @@ where
         // `root` is the hash of the node we’re going to fill next.
         // Here, we compute the root, starting from the next (yet unfilled) leaf hash.
         let mut root = H::Digest::default();
-        let mut empty_hash_at_height = H::Digest::default();
 
         for height in 0..TREE_DEPTH {
             if get_bit_at(self.leaf_count, height) == 1 {
                 root = H::merge(&self.frontier[height], &root);
             } else {
-                root = H::merge(&root, &empty_hash_at_height);
+                root = H::merge(&root, &self.empty_hash_at_height[height]);
             }
-
-            empty_hash_at_height = H::merge(&empty_hash_at_height, &empty_hash_at_height);
         }
 
         root
