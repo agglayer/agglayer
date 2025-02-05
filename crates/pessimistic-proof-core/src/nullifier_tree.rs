@@ -11,10 +11,8 @@ use crate::{
     ProofError,
 };
 
-// 32 bits for the network id and 32 bits for the LET index
-// TODO: consider using less than 32 bits for the network id - unlikely that
-// we'll have 4 billion chains :)
-pub const NULLIFIER_TREE_DEPTH: usize = 64;
+// 16 bits for the network id and 32 bits for the LET index
+pub const NULLIFIER_TREE_DEPTH: usize = 48;
 
 // TODO: This is basically the same as the local balance tree, consider
 // refactoring TODO: Consider using an Indexed Merkle Tree instead of an SMT. See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
@@ -44,14 +42,14 @@ pub struct NullifierKey {
     pub let_index: u32,
 }
 
-impl ToBits<64> for NullifierKey {
-    fn to_bits(&self) -> [bool; 64] {
-        let mut bits = [false; 64];
-        for i in 0..32 {
+impl ToBits<48> for NullifierKey {
+    fn to_bits(&self) -> [bool; 48] {
+        let mut bits = [false; 48];
+        for i in 0..16 {
             bits[i] = (self.network_id >> i) & 1 == 1;
         }
-        for i in 32..64 {
-            bits[i] = (self.let_index >> (i - 32)) & 1 == 1;
+        for i in 16..48 {
+            bits[i] = (self.let_index >> (i - 16)) & 1 == 1;
         }
         bits
     }

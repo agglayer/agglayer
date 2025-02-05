@@ -11,9 +11,9 @@ use crate::{
     ProofError,
 };
 
-/// The key is [`TokenInfo`] which can be packed into 192 bits (32 for network
+/// The key is [`TokenInfo`] which can be packed into 176 bits (16 for network
 /// id and 160 for token address).
-pub const LOCAL_BALANCE_TREE_DEPTH: usize = 192;
+pub const LOCAL_BALANCE_TREE_DEPTH: usize = 176;
 
 // TODO: This is basically the same as the nullifier tree, consider refactoring
 /// A commitment to the set of per-network nullifier trees maintained by the

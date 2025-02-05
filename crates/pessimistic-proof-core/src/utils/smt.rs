@@ -10,14 +10,14 @@ pub trait ToBits<const NUM_BITS: usize> {
     fn to_bits(&self) -> [bool; NUM_BITS];
 }
 
-impl ToBits<192> for TokenInfo {
-    fn to_bits(&self) -> [bool; 192] {
-        let mut bits = [false; 192];
-        for i in 0..32 {
+impl ToBits<176> for TokenInfo {
+    fn to_bits(&self) -> [bool; 176] {
+        let mut bits = [false; 176];
+        for i in 0..16 {
             bits[i] = (self.origin_network >> i) & 1 == 1;
         }
-        for i in 32..192 {
-            let byte_index = (i - 32) / 8;
+        for i in 16..176 {
+            let byte_index = (i - 16) / 8;
             let bit_index = i % 8;
             bits[i] = (self.origin_token_address.0[byte_index] >> bit_index) & 1 == 1;
         }
