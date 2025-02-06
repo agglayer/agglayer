@@ -16,6 +16,15 @@ pub enum AggchainProof {
     SP1 { aggchain_proof: AggchainProofSP1 },
 }
 
+impl From<AggchainProof> for AggchainType {
+    fn from(value: AggchainProof) -> Self {
+        match value {
+            AggchainProof::ECDSA { .. } => AggchainType::ECDSA,
+            AggchainProof::SP1 { .. } => AggchainType::SP1,
+        }
+    }
+}
+
 pub type StarkProof = SP1ReduceProof<InnerSC>;
 
 /// SP1 variant of the aggchain proof values submitted via the [`Certificate`].
