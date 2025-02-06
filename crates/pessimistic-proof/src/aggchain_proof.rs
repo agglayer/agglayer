@@ -14,15 +14,6 @@ pub enum AggchainProof {
     SP1 { aggchain_proof: AggchainProofSP1 },
 }
 
-impl AggchainProof {
-    pub fn aggchain_type(&self) -> AggchainType {
-        match self {
-            AggchainProof::ECDSA { signature: _ } => AggchainType::ECDSA,
-            AggchainProof::SP1 { aggchain_proof: _ } => AggchainType::SP1,
-        }
-    }
-}
-
 // TODO: Replace with the proper format (fixed size buffer of ~7kb)
 pub type StarkProof = [u8; 32];
 
