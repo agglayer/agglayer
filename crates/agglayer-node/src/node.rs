@@ -32,7 +32,7 @@ use crate::{
     service::AgglayerService,
 };
 
-mod api;
+pub(crate) mod api;
 
 pub(crate) struct Node {
     pub(crate) rpc_handle: JoinHandle<()>,

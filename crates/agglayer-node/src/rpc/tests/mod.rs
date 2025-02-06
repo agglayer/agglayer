@@ -21,6 +21,7 @@ use hyper_util::rt::TokioExecutor;
 use jsonrpsee::http_client::HttpClientBuilder;
 use rstest::*;
 use tokio_util::sync::CancellationToken;
+use tracing::debug;
 
 use crate::{kernel::Kernel, rpc::AgglayerImpl, service::AgglayerService};
 
@@ -57,8 +58,24 @@ async fn healthcheck_method_can_be_called() {
         config.clone(),
     );
 
-    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+    let json_rpc_router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
 
+    let router = axum::Router::new()
+        .route(
+            "/health",
+            axum::routing::get(crate::node::api::rest::health),
+        )
+        .merge(json_rpc_router);
+
+    let listener = tokio::net::TcpListener::bind(config.rpc_addr())
+        .await
+        .unwrap();
+    let api_server = axum::serve(listener, router);
+
+    let _rpc_handle = tokio::spawn(async move {
+        _ = api_server.await;
+        debug!("Node RPC shutdown requested.");
+    });
     let http_client = Client::builder(TokioExecutor::new()).build_http();
     let uri = format!("http://{}/health", config.rpc_addr());
 
