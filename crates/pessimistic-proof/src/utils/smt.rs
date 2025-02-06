@@ -338,7 +338,7 @@ mod tests {
     use pessimistic_proof_core::local_exit_tree::hasher::Keccak256Hasher;
     use rand::{
         prelude::{IndexedRandom as _, SliceRandom as _},
-        random, rng as thread_rng, Rng,
+        random, rng, Rng,
     };
     use rs_merkle::{Hasher as MerkleHasher, MerkleTree};
     use tiny_keccak::{Hasher as _, Keccak};
@@ -373,7 +373,7 @@ mod tests {
     #[test]
     fn test_compare_with_other_impl() {
         const DEPTH: usize = 8;
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let num_keys = rng.random_range(0..=1 << DEPTH);
         let mut smt = Smt::<H, DEPTH>::new();
         let mut kvs: Vec<_> = (0..=u8::MAX).map(|i| (i, random())).collect();
@@ -393,7 +393,7 @@ mod tests {
 
     #[test]
     fn test_order_consistency() {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let num_keys = rng.random_range(0..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let mut kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn test_inclusion_proof() {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let num_keys = rng.random_range(1..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn test_inclusion_proof_wrong_value() {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let num_keys = rng.random_range(1..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
@@ -444,7 +444,7 @@ mod tests {
 
     #[test]
     fn test_non_inclusion_proof() {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let num_keys = rng.random_range(0..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn test_non_inclusion_proof_failing() {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let num_keys = rng.random_range(1..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
@@ -499,20 +499,20 @@ mod tests {
 
     #[test]
     fn test_non_inclusion_proof_and_update_nonempty() {
-        let num_keys = thread_rng().random_range(1..100);
+        let num_keys = rng().random_range(1..100);
         test_non_inclusion_proof_and_update(num_keys)
     }
 
     #[test]
     fn test_inclusion_proof_and_update() {
-        let num_keys = thread_rng().random_range(1..100);
+        let num_keys = rng().random_range(1..100);
         let mut smt = Smt::<H, DEPTH>::new();
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
         check_no_duplicates(&kvs);
         for (key, value) in kvs.iter() {
             smt.insert(*key, *value).unwrap();
         }
-        let (key, value) = kvs[thread_rng().random_range(0..num_keys)];
+        let (key, value) = kvs[rng().random_range(0..num_keys)];
         let proof = smt.get_inclusion_proof(key).unwrap();
         assert!(proof.verify(key, value, smt.root));
         let new_value = random();
@@ -526,13 +526,13 @@ mod tests {
     #[test]
     fn test_inclusion_proof_zero_doesnt_update() {
         let mut smt = Smt::<H, DEPTH>::new();
-        let num_keys = thread_rng().random_range(1..100);
+        let num_keys = rng().random_range(1..100);
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
         check_no_duplicates(&kvs);
         for (key, value) in kvs.iter() {
             smt.insert(*key, *value).unwrap();
         }
-        let (key, value) = kvs[thread_rng().random_range(0..num_keys)];
+        let (key, value) = kvs[rng().random_range(0..num_keys)];
         assert_ne!(value, smt.empty_hash_at_height[0], "Check your rng");
         let root = smt.root;
         let proof = smt.get_inclusion_proof_zero(key);
@@ -542,7 +542,7 @@ mod tests {
 
     #[test]
     fn test_traverse_and_prune() {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let num_keys = rng.random_range(0..100);
         let kvs: Vec<(u32, _)> = (0..num_keys).map(|_| (random(), random())).collect();
         check_no_duplicates(&kvs);
