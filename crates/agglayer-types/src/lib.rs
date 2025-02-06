@@ -126,6 +126,13 @@ pub enum Error {
     /// SP1-based Aggchain proof not yet supported.
     #[error("SP1-based Aggchain proof not yet supported")]
     AggchainProofSP1Unsupported,
+    /// The aggchain type received from the Certificate differs with the one
+    /// retrieved from L1.
+    #[error(
+        "Mismatch on the received aggchain type. declared: {declared}, retrieved from L1: \
+         {retrieved}"
+    )]
+    MismatchAggchainType { declared: u32, retrieved: u32 },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -544,13 +551,33 @@ impl LocalNetworkStateData {
             });
         }
 
-        // TODO: Construct it properly from the Certificate
-        let aggchain_proof = match &certificate.aggchain_proof {
+        // TODO: Fetch `aggchain_type` and `aggchain_vkey` from L1
+        // TODO: Eventually, cross check `aggchain_params` with the L1 too
+        let (aggchain_type, aggchain_vkey) = {
+            let aggchain_vkey_from_l1: Vkey = Default::default();
+            let aggchain_type_from_l1 = AggchainType::ECDSA as u32;
+            let aggchain_type_from_certificate = certificate.aggchain_proof.aggchain_type() as u32;
+
+            if aggchain_type_from_l1 != aggchain_type_from_certificate {
+                return Err(Error::MismatchAggchainType {
+                    declared: aggchain_type_from_certificate,
+                    retrieved: aggchain_type_from_l1,
+                });
+            }
+
+            (aggchain_type_from_l1, aggchain_vkey_from_l1)
+        };
+
+        let aggchain_proof = match certificate.aggchain_proof.clone() {
             AggchainProof::ECDSA { signature } => {
-                let signature = *signature;
                 AggchainProofData::ECDSA(AggchainProofECDSAData { signer, signature })
             }
-            AggchainProof::SP1 { .. } => return Err(Error::AggchainProofSP1Unsupported),
+            AggchainProof::SP1 { aggchain_proof } => AggchainProofData::SP1(AggchainProofSP1Data {
+                aggchain_params: aggchain_proof.aggchain_params,
+                stark_proof: aggchain_proof.stark_proof.to_vec(),
+                aggchain_type,
+                aggchain_vkey,
+            }),
         };
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
