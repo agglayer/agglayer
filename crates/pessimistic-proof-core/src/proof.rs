@@ -39,8 +39,8 @@ pub enum ProofError {
     /// one computed by the prover.
     #[error("Invalid new local exit root. declared: {declared}, computed: {computed}")]
     InvalidNewLocalExitRoot { declared: Digest, computed: Digest },
-    /// The new leaf count of the local exit root declared by the chain does not match the
-    /// one computed by the prover.
+    /// The new leaf count of the local exit root declared by the chain does not
+    /// match the one computed by the prover.
     #[error("Invalid new local exit root leaf count. declared: {declared}, computed: {computed}")]
     InvalidNewLocalExitRootLeafCount { declared: u32, computed: u32 },
     /// The new balance root declared by the agglayer does not match the
