@@ -87,7 +87,7 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
 
     let wallet = get_signer(1);
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let (_key, uuid) = LocalWallet::encrypt_keystore(
         tmp_dir,
         &mut rng,
