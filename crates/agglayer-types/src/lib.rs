@@ -123,6 +123,9 @@ pub enum Error {
     /// The operation cannot be applied on the smt.
     #[error(transparent)]
     InvalidSmtOperation(#[from] SmtError),
+    /// SP1-based Aggchain proof not yet supported.
+    #[error("SP1-based Aggchain proof not yet supported")]
+    AggchainProofSP1Unsupported,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -547,7 +550,7 @@ impl LocalNetworkStateData {
                 let signature = *signature;
                 AggchainProofData::ECDSA(AggchainProofECDSAData { signer, signature })
             }
-            AggchainProof::SP1 { .. } => todo!("not yet implemented"),
+            AggchainProof::SP1 { .. } => return Err(Error::AggchainProofSP1Unsupported),
         };
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
