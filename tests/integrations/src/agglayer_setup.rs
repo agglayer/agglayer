@@ -89,7 +89,7 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
 
     let (_key, uuid) = LocalWallet::encrypt_keystore(
         tmp_dir,
-        &mut Compat(rand::rng()),
+        &mut ethers::core::rand::thread_rng(),
         wallet.signer().to_bytes(),
         "randpsswd",
         None,
@@ -152,27 +152,6 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
     assert!(!handle.is_finished());
 
     (receiver, client)
-}
-
-struct Compat<T>(pub T);
-impl<T> ethers::core::rand::CryptoRng for Compat<T> where T: rand::CryptoRng {}
-impl<T> ethers::core::rand::RngCore for Compat<T>
-where
-    T: rand::RngCore,
-{
-    fn next_u32(&mut self) -> u32 {
-        self.0.next_u32()
-    }
-    fn next_u64(&mut self) -> u64 {
-        self.0.next_u64()
-    }
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.0.fill_bytes(dest);
-    }
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ethers::core::rand::Error> {
-        self.0.fill_bytes(dest);
-        Ok(())
-    }
 }
 
 pub async fn setup_network(tmp_dir: &Path) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
