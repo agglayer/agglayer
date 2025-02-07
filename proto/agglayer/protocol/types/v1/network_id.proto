@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package agglayer.protocol.types.v1;
-
-// Network identifier.
-message NetworkId {
-  // network id (RollupId)
-  uint32 id = 1;
-}

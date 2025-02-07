@@ -241,12 +241,12 @@ impl serde::Serialize for GetLatestKnownCertificateHeaderRequest {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if self.network_id.is_some() {
+        if self.network_id != 0 {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestKnownCertificateHeaderRequest", len)?;
-        if let Some(v) = self.network_id.as_ref() {
-            struct_ser.serialize_field("networkId", v)?;
+        if self.network_id != 0 {
+            struct_ser.serialize_field("networkId", &self.network_id)?;
         }
         struct_ser.end()
     }
@@ -313,12 +313,14 @@ impl<'de> serde::Deserialize<'de> for GetLatestKnownCertificateHeaderRequest {
                             if network_id__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("networkId"));
                             }
-                            network_id__ = map_.next_value()?;
+                            network_id__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
                         }
                     }
                 }
                 Ok(GetLatestKnownCertificateHeaderRequest {
-                    network_id: network_id__,
+                    network_id: network_id__.unwrap_or_default(),
                 })
             }
         }
@@ -425,12 +427,12 @@ impl serde::Serialize for GetLatestPendingCertificateHeaderRequest {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if self.network_id.is_some() {
+        if self.network_id != 0 {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestPendingCertificateHeaderRequest", len)?;
-        if let Some(v) = self.network_id.as_ref() {
-            struct_ser.serialize_field("networkId", v)?;
+        if self.network_id != 0 {
+            struct_ser.serialize_field("networkId", &self.network_id)?;
         }
         struct_ser.end()
     }
@@ -497,12 +499,14 @@ impl<'de> serde::Deserialize<'de> for GetLatestPendingCertificateHeaderRequest {
                             if network_id__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("networkId"));
                             }
-                            network_id__ = map_.next_value()?;
+                            network_id__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
                         }
                     }
                 }
                 Ok(GetLatestPendingCertificateHeaderRequest {
-                    network_id: network_id__,
+                    network_id: network_id__.unwrap_or_default(),
                 })
             }
         }
@@ -609,12 +613,12 @@ impl serde::Serialize for GetLatestSettledCertificateHeaderRequest {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if self.network_id.is_some() {
+        if self.network_id != 0 {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestSettledCertificateHeaderRequest", len)?;
-        if let Some(v) = self.network_id.as_ref() {
-            struct_ser.serialize_field("networkId", v)?;
+        if self.network_id != 0 {
+            struct_ser.serialize_field("networkId", &self.network_id)?;
         }
         struct_ser.end()
     }
@@ -681,12 +685,14 @@ impl<'de> serde::Deserialize<'de> for GetLatestSettledCertificateHeaderRequest {
                             if network_id__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("networkId"));
                             }
-                            network_id__ = map_.next_value()?;
+                            network_id__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
                         }
                     }
                 }
                 Ok(GetLatestSettledCertificateHeaderRequest {
-                    network_id: network_id__,
+                    network_id: network_id__.unwrap_or_default(),
                 })
             }
         }

@@ -15,7 +15,7 @@ impl CertificateSubmissionService for Server {
         &self,
         request: tonic::Request<SubmitCertificateRequest>,
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
-        let _certificate = request.into_inner();
+        let _certificate = request.into_inner().certificate.unwrap();
         let mut error_details = ErrorDetails::new();
         let context =
             "agglayer-node.grpc-api.v1.certificate_submission_service.certificate_submission";

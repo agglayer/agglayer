@@ -9,8 +9,11 @@ serde.workspace = true
 prost = "0.13.4"
 pbjson = "0.7.0"
 
+agglayer-types = { workspace = true, optional = true }
+
 [lints]
 workspace = true
 
 [features]
-default = []
+default = ["compat"]
+compat = ["dep:agglayer-types"]

@@ -3,7 +3,6 @@ syntax = "proto3";
 package agglayer.protocol.types.v1;
 
 import "agglayer/protocol/types/v1/bytes.proto";
-import "agglayer/protocol/types/v1/network_id.proto";
 
 // Represents a token bridge exit from the network.
 message BridgeExit {
@@ -14,7 +13,7 @@ message BridgeExit {
   TokenInfo token_info = 2;
 
   // Network which the token is transferred to
-  NetworkId dest_network = 3;
+  uint32 dest_network = 3;
 
   // Address which will own the received token
   FixedBytes20 dest_address = 4;
@@ -40,7 +39,7 @@ enum LeafType {
 // network.
 message TokenInfo {
   // Network which the token originates from
-  NetworkId origin_network = 1;
+  uint32 origin_network = 1;
   // The address of the token on the origin network
   FixedBytes20 origin_token_address = 2;
 }

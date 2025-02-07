@@ -4,7 +4,6 @@ package agglayer.node.v1;
 
 import "agglayer/protocol/types/v1/certificate_header.proto";
 import "agglayer/protocol/types/v1/epoch_configuration.proto";
-import "agglayer/protocol/types/v1/network_id.proto";
 
 // Service for submitting certificate to an agglayer node.
 service ConfigurationService {
@@ -41,7 +40,7 @@ message GetEpochConfigurationResponse {
 // Request to get the latest known certificate header for a network.
 message GetLatestKnownCertificateHeaderRequest {
   // The network identifier.
-  protocol.types.v1.NetworkId network_id = 1;
+  uint32 network_id = 1;
 }
 
 // Response to the latest known certificate header request.
@@ -53,7 +52,7 @@ message GetLatestKnownCertificateHeaderResponse {
 // Request to get the latest settled certificate header for a network.
 message GetLatestSettledCertificateHeaderRequest {
   // The network identifier.
-  protocol.types.v1.NetworkId network_id = 1;
+  uint32 network_id = 1;
 }
 
 // Response to the latest settled certificate header request.
@@ -65,7 +64,7 @@ message GetLatestSettledCertificateHeaderResponse {
 // Request to get the latest pending certificate header for a network.
 message GetLatestPendingCertificateHeaderRequest {
   // The network identifier.
-  protocol.types.v1.NetworkId network_id = 1;
+  uint32 network_id = 1;
 }
 
 // Response to the latest pending certificate header request.

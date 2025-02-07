@@ -4,12 +4,11 @@ package agglayer.protocol.types.v1;
 
 import "agglayer/protocol/types/v1/bytes.proto";
 import "agglayer/protocol/types/v1/certificate.proto";
-import "agglayer/protocol/types/v1/network_id.proto";
 
 // Certificate header type.
 message CertificateHeader {
   // NetworkID for the certificate.
-  NetworkId network_id = 1;
+  uint32 network_id = 1;
   // Height of the certificate.
   uint64 height = 2;
   // Epoch number where the certificate was settled.

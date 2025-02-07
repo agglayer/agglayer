@@ -235,6 +235,7 @@ dependencies = [
 name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
+ "agglayer-types 0.1.0",
  "pbjson",
  "prost 0.13.4",
  "serde",
