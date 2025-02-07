@@ -3,6 +3,7 @@ syntax = "proto3";
 package agglayer.protocol.types.v1;
 
 import "agglayer/protocol/types/v1/bridge_exit.proto";
+import "agglayer/protocol/types/v1/bytes.proto";
 import "agglayer/protocol/types/v1/claim.proto";
 
 // Represents a token bridge exit originating on another network but claimed on
@@ -15,7 +16,7 @@ message ImportedBridgeExit {
   BridgeExit bridge_exit = 1;
 
   /// The global index of the imported bridge exit.
-  bytes global_index = 2;
+  FixedBytes32 global_index = 2;
 
   // Which type of claim the imported bridge exit is from.
   oneof claim {

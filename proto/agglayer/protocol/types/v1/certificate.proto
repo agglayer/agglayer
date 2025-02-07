@@ -3,6 +3,7 @@ syntax = "proto3";
 package agglayer.protocol.types.v1;
 
 import "agglayer/protocol/types/v1/bridge_exit.proto";
+import "agglayer/protocol/types/v1/bytes.proto";
 import "agglayer/protocol/types/v1/imported_bridge_exit.proto";
 import "agglayer/protocol/types/v1/network_id.proto";
 
@@ -13,9 +14,9 @@ message Certificate {
   // Simple increment to count the Certificate per network.
   uint64 height = 2;
   // Previous local exit root.
-  bytes prev_local_exit_root = 3;
+  FixedBytes32 prev_local_exit_root = 3;
   // New local exit root.
-  bytes new_local_exit_root = 4;
+  FixedBytes32 new_local_exit_root = 4;
   // List of bridge exits included in this state transition.
   repeated BridgeExit bridge_exits = 5;
   // List of imported bridge exits included in this state transition.
@@ -23,10 +24,15 @@ message Certificate {
   // Signature committed to the bridge exits and imported bridge exits.
   bytes signature = 7;
   // Fixed size field of arbitrary data for the chain needs.
-  bytes metadata = 8;
-
+  FixedBytes32 metadata = 8;
   // Aggchain proof.
-  bytes aggchain_proof = 9;
-  // Aggchain config.
-  bytes aggchain_config = 10;
+  FixedBytes32 aggchain_proof = 9;
+  // Aggchain params.
+  bytes aggchain_params = 10;
+}
+
+// Certificate identifier.
+message CertificateId {
+  // bytes representation of the certificate id.
+  FixedBytes32 value = 1;
 }

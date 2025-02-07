@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package agglayer.protocol.types.v1;
 
+import "agglayer/protocol/types/v1/bytes.proto";
+
 // Represents a claim from the mainnet.
 message ClaimFromMainnet {
   // Proof from bridge exit leaf to MER
@@ -17,9 +19,9 @@ message L1InfoTreeLeaf {
   // l1 info tree leaf index
   uint32 l1_info_tree_index = 1;
   // Rollup exit root
-  bytes rer = 2;
+  FixedBytes32 rer = 2;
   // Mainnet exit root
-  bytes mer = 3;
+  FixedBytes32 mer = 3;
   // Inner leaf
   L1InfoTreeLeafInner inner = 4;
 }
@@ -27,9 +29,9 @@ message L1InfoTreeLeaf {
 // Represents the inner part of a leaf in the L1InfoTree.
 message L1InfoTreeLeafInner {
   // The global exit root.
-  bytes global_exit_root = 1;
+  FixedBytes32 global_exit_root = 1;
   // Block hash.
-  bytes block_hash = 2;
+  FixedBytes32 block_hash = 2;
   // Timestamp.
   uint64 timestamp = 3;
 }
@@ -37,9 +39,9 @@ message L1InfoTreeLeafInner {
 // Represents a Merkle proof.
 message MerkleProof {
   // The root of the Merkle tree.
-  bytes root = 1;
+  FixedBytes32 root = 1;
   // The path from the leaf to the root.
-  repeated bytes siblings = 2;
+  repeated FixedBytes32 siblings = 2;
 }
 
 // Represents a claim from the rollup.

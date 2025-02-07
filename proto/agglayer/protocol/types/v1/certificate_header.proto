@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package agglayer.protocol.types.v1;
 
+import "agglayer/protocol/types/v1/bytes.proto";
+import "agglayer/protocol/types/v1/certificate.proto";
 import "agglayer/protocol/types/v1/network_id.proto";
 
 // Certificate header type.
@@ -15,19 +17,19 @@ message CertificateHeader {
   // Certificate index in the epoch.
   optional uint64 certificate_index = 4;
   // Certificate ID.
-  bytes certificate_id = 5;
+  CertificateId certificate_id = 5;
   // Previous local exit root.
-  bytes prev_local_exit_root = 6;
+  FixedBytes32 prev_local_exit_root = 6;
   // New local exit root.
-  bytes new_local_exit_root = 7;
+  FixedBytes32 new_local_exit_root = 7;
   // Fixed size field of arbitrary data for the chain needs.
-  bytes metadata = 8;
+  FixedBytes32 metadata = 8;
   // Certificate status.
   CertificateStatus status = 9;
   // Certificate status error details.
   CertificateStatusError error = 10;
   // Settlement transaction hash.
-  optional bytes settlement_tx_hash = 11;
+  FixedBytes32 settlement_tx_hash = 11;
 }
 
 // Certificate status type.

@@ -16,13 +16,13 @@ impl serde::Serialize for BridgeExit {
         if self.dest_network.is_some() {
             len += 1;
         }
-        if !self.dest_address.is_empty() {
+        if self.dest_address.is_some() {
             len += 1;
         }
-        if !self.amount.is_empty() {
+        if self.amount.is_some() {
             len += 1;
         }
-        if !self.metadata.is_empty() {
+        if self.metadata.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.BridgeExit", len)?;
@@ -37,20 +37,14 @@ impl serde::Serialize for BridgeExit {
         if let Some(v) = self.dest_network.as_ref() {
             struct_ser.serialize_field("destNetwork", v)?;
         }
-        if !self.dest_address.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("destAddress", pbjson::private::base64::encode(&self.dest_address).as_str())?;
+        if let Some(v) = self.dest_address.as_ref() {
+            struct_ser.serialize_field("destAddress", v)?;
         }
-        if !self.amount.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("amount", pbjson::private::base64::encode(&self.amount).as_str())?;
+        if let Some(v) = self.amount.as_ref() {
+            struct_ser.serialize_field("amount", v)?;
         }
-        if !self.metadata.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("metadata", pbjson::private::base64::encode(&self.metadata).as_str())?;
+        if let Some(v) = self.metadata.as_ref() {
+            struct_ser.serialize_field("metadata", v)?;
         }
         struct_ser.end()
     }
@@ -158,25 +152,19 @@ impl<'de> serde::Deserialize<'de> for BridgeExit {
                             if dest_address__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("destAddress"));
                             }
-                            dest_address__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            dest_address__ = map_.next_value()?;
                         }
                         GeneratedField::Amount => {
                             if amount__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("amount"));
                             }
-                            amount__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            amount__ = map_.next_value()?;
                         }
                         GeneratedField::Metadata => {
                             if metadata__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("metadata"));
                             }
-                            metadata__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            metadata__ = map_.next_value()?;
                         }
                     }
                 }
@@ -184,9 +172,9 @@ impl<'de> serde::Deserialize<'de> for BridgeExit {
                     leaf_type: leaf_type__.unwrap_or_default(),
                     token_info: token_info__,
                     dest_network: dest_network__,
-                    dest_address: dest_address__.unwrap_or_default(),
-                    amount: amount__.unwrap_or_default(),
-                    metadata: metadata__.unwrap_or_default(),
+                    dest_address: dest_address__,
+                    amount: amount__,
+                    metadata: metadata__,
                 })
             }
         }
@@ -207,10 +195,10 @@ impl serde::Serialize for Certificate {
         if self.height != 0 {
             len += 1;
         }
-        if !self.prev_local_exit_root.is_empty() {
+        if self.prev_local_exit_root.is_some() {
             len += 1;
         }
-        if !self.new_local_exit_root.is_empty() {
+        if self.new_local_exit_root.is_some() {
             len += 1;
         }
         if !self.bridge_exits.is_empty() {
@@ -222,13 +210,13 @@ impl serde::Serialize for Certificate {
         if !self.signature.is_empty() {
             len += 1;
         }
-        if !self.metadata.is_empty() {
+        if self.metadata.is_some() {
             len += 1;
         }
-        if !self.aggchain_proof.is_empty() {
+        if self.aggchain_proof.is_some() {
             len += 1;
         }
-        if !self.aggchain_config.is_empty() {
+        if !self.aggchain_params.is_empty() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.Certificate", len)?;
@@ -240,15 +228,11 @@ impl serde::Serialize for Certificate {
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("height", ToString::to_string(&self.height).as_str())?;
         }
-        if !self.prev_local_exit_root.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("prevLocalExitRoot", pbjson::private::base64::encode(&self.prev_local_exit_root).as_str())?;
+        if let Some(v) = self.prev_local_exit_root.as_ref() {
+            struct_ser.serialize_field("prevLocalExitRoot", v)?;
         }
-        if !self.new_local_exit_root.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("newLocalExitRoot", pbjson::private::base64::encode(&self.new_local_exit_root).as_str())?;
+        if let Some(v) = self.new_local_exit_root.as_ref() {
+            struct_ser.serialize_field("newLocalExitRoot", v)?;
         }
         if !self.bridge_exits.is_empty() {
             struct_ser.serialize_field("bridgeExits", &self.bridge_exits)?;
@@ -261,20 +245,16 @@ impl serde::Serialize for Certificate {
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("signature", pbjson::private::base64::encode(&self.signature).as_str())?;
         }
-        if !self.metadata.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("metadata", pbjson::private::base64::encode(&self.metadata).as_str())?;
+        if let Some(v) = self.metadata.as_ref() {
+            struct_ser.serialize_field("metadata", v)?;
         }
-        if !self.aggchain_proof.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("aggchainProof", pbjson::private::base64::encode(&self.aggchain_proof).as_str())?;
+        if let Some(v) = self.aggchain_proof.as_ref() {
+            struct_ser.serialize_field("aggchainProof", v)?;
         }
-        if !self.aggchain_config.is_empty() {
+        if !self.aggchain_params.is_empty() {
             #[allow(clippy::needless_borrow)]
             #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("aggchainConfig", pbjson::private::base64::encode(&self.aggchain_config).as_str())?;
+            struct_ser.serialize_field("aggchainParams", pbjson::private::base64::encode(&self.aggchain_params).as_str())?;
         }
         struct_ser.end()
     }
@@ -301,8 +281,8 @@ impl<'de> serde::Deserialize<'de> for Certificate {
             "metadata",
             "aggchain_proof",
             "aggchainProof",
-            "aggchain_config",
-            "aggchainConfig",
+            "aggchain_params",
+            "aggchainParams",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -316,7 +296,7 @@ impl<'de> serde::Deserialize<'de> for Certificate {
             Signature,
             Metadata,
             AggchainProof,
-            AggchainConfig,
+            AggchainParams,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -347,7 +327,7 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                             "signature" => Ok(GeneratedField::Signature),
                             "metadata" => Ok(GeneratedField::Metadata),
                             "aggchainProof" | "aggchain_proof" => Ok(GeneratedField::AggchainProof),
-                            "aggchainConfig" | "aggchain_config" => Ok(GeneratedField::AggchainConfig),
+                            "aggchainParams" | "aggchain_params" => Ok(GeneratedField::AggchainParams),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -376,7 +356,7 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                 let mut signature__ = None;
                 let mut metadata__ = None;
                 let mut aggchain_proof__ = None;
-                let mut aggchain_config__ = None;
+                let mut aggchain_params__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::NetworkId => {
@@ -397,17 +377,13 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                             if prev_local_exit_root__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("prevLocalExitRoot"));
                             }
-                            prev_local_exit_root__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            prev_local_exit_root__ = map_.next_value()?;
                         }
                         GeneratedField::NewLocalExitRoot => {
                             if new_local_exit_root__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("newLocalExitRoot"));
                             }
-                            new_local_exit_root__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            new_local_exit_root__ = map_.next_value()?;
                         }
                         GeneratedField::BridgeExits => {
                             if bridge_exits__.is_some() {
@@ -433,23 +409,19 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                             if metadata__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("metadata"));
                             }
-                            metadata__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            metadata__ = map_.next_value()?;
                         }
                         GeneratedField::AggchainProof => {
                             if aggchain_proof__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("aggchainProof"));
                             }
-                            aggchain_proof__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            aggchain_proof__ = map_.next_value()?;
                         }
-                        GeneratedField::AggchainConfig => {
-                            if aggchain_config__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("aggchainConfig"));
+                        GeneratedField::AggchainParams => {
+                            if aggchain_params__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("aggchainParams"));
                             }
-                            aggchain_config__ = 
+                            aggchain_params__ = 
                                 Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
                             ;
                         }
@@ -458,14 +430,14 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                 Ok(Certificate {
                     network_id: network_id__,
                     height: height__.unwrap_or_default(),
-                    prev_local_exit_root: prev_local_exit_root__.unwrap_or_default(),
-                    new_local_exit_root: new_local_exit_root__.unwrap_or_default(),
+                    prev_local_exit_root: prev_local_exit_root__,
+                    new_local_exit_root: new_local_exit_root__,
                     bridge_exits: bridge_exits__.unwrap_or_default(),
                     imported_bridge_exits: imported_bridge_exits__.unwrap_or_default(),
                     signature: signature__.unwrap_or_default(),
-                    metadata: metadata__.unwrap_or_default(),
-                    aggchain_proof: aggchain_proof__.unwrap_or_default(),
-                    aggchain_config: aggchain_config__.unwrap_or_default(),
+                    metadata: metadata__,
+                    aggchain_proof: aggchain_proof__,
+                    aggchain_params: aggchain_params__.unwrap_or_default(),
                 })
             }
         }
@@ -492,16 +464,16 @@ impl serde::Serialize for CertificateHeader {
         if self.certificate_index.is_some() {
             len += 1;
         }
-        if !self.certificate_id.is_empty() {
+        if self.certificate_id.is_some() {
             len += 1;
         }
-        if !self.prev_local_exit_root.is_empty() {
+        if self.prev_local_exit_root.is_some() {
             len += 1;
         }
-        if !self.new_local_exit_root.is_empty() {
+        if self.new_local_exit_root.is_some() {
             len += 1;
         }
-        if !self.metadata.is_empty() {
+        if self.metadata.is_some() {
             len += 1;
         }
         if self.status != 0 {
@@ -532,25 +504,17 @@ impl serde::Serialize for CertificateHeader {
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("certificateIndex", ToString::to_string(&v).as_str())?;
         }
-        if !self.certificate_id.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("certificateId", pbjson::private::base64::encode(&self.certificate_id).as_str())?;
+        if let Some(v) = self.certificate_id.as_ref() {
+            struct_ser.serialize_field("certificateId", v)?;
         }
-        if !self.prev_local_exit_root.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("prevLocalExitRoot", pbjson::private::base64::encode(&self.prev_local_exit_root).as_str())?;
+        if let Some(v) = self.prev_local_exit_root.as_ref() {
+            struct_ser.serialize_field("prevLocalExitRoot", v)?;
         }
-        if !self.new_local_exit_root.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("newLocalExitRoot", pbjson::private::base64::encode(&self.new_local_exit_root).as_str())?;
+        if let Some(v) = self.new_local_exit_root.as_ref() {
+            struct_ser.serialize_field("newLocalExitRoot", v)?;
         }
-        if !self.metadata.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("metadata", pbjson::private::base64::encode(&self.metadata).as_str())?;
+        if let Some(v) = self.metadata.as_ref() {
+            struct_ser.serialize_field("metadata", v)?;
         }
         if self.status != 0 {
             let v = CertificateStatus::try_from(self.status)
@@ -561,9 +525,7 @@ impl serde::Serialize for CertificateHeader {
             struct_ser.serialize_field("error", v)?;
         }
         if let Some(v) = self.settlement_tx_hash.as_ref() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("settlementTxHash", pbjson::private::base64::encode(&v).as_str())?;
+            struct_ser.serialize_field("settlementTxHash", v)?;
         }
         struct_ser.end()
     }
@@ -706,33 +668,25 @@ impl<'de> serde::Deserialize<'de> for CertificateHeader {
                             if certificate_id__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("certificateId"));
                             }
-                            certificate_id__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            certificate_id__ = map_.next_value()?;
                         }
                         GeneratedField::PrevLocalExitRoot => {
                             if prev_local_exit_root__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("prevLocalExitRoot"));
                             }
-                            prev_local_exit_root__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            prev_local_exit_root__ = map_.next_value()?;
                         }
                         GeneratedField::NewLocalExitRoot => {
                             if new_local_exit_root__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("newLocalExitRoot"));
                             }
-                            new_local_exit_root__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            new_local_exit_root__ = map_.next_value()?;
                         }
                         GeneratedField::Metadata => {
                             if metadata__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("metadata"));
                             }
-                            metadata__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            metadata__ = map_.next_value()?;
                         }
                         GeneratedField::Status => {
                             if status__.is_some() {
@@ -750,9 +704,7 @@ impl<'de> serde::Deserialize<'de> for CertificateHeader {
                             if settlement_tx_hash__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("settlementTxHash"));
                             }
-                            settlement_tx_hash__ = 
-                                map_.next_value::<::std::option::Option<::pbjson::private::BytesDeserialize<_>>>()?.map(|x| x.0)
-                            ;
+                            settlement_tx_hash__ = map_.next_value()?;
                         }
                     }
                 }
@@ -761,10 +713,10 @@ impl<'de> serde::Deserialize<'de> for CertificateHeader {
                     height: height__.unwrap_or_default(),
                     epoch_number: epoch_number__,
                     certificate_index: certificate_index__,
-                    certificate_id: certificate_id__.unwrap_or_default(),
-                    prev_local_exit_root: prev_local_exit_root__.unwrap_or_default(),
-                    new_local_exit_root: new_local_exit_root__.unwrap_or_default(),
-                    metadata: metadata__.unwrap_or_default(),
+                    certificate_id: certificate_id__,
+                    prev_local_exit_root: prev_local_exit_root__,
+                    new_local_exit_root: new_local_exit_root__,
+                    metadata: metadata__,
                     status: status__.unwrap_or_default(),
                     error: error__,
                     settlement_tx_hash: settlement_tx_hash__,
@@ -772,6 +724,97 @@ impl<'de> serde::Deserialize<'de> for CertificateHeader {
             }
         }
         deserializer.deserialize_struct("agglayer.protocol.types.v1.CertificateHeader", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for CertificateId {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.value.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.CertificateId", len)?;
+        if let Some(v) = self.value.as_ref() {
+            struct_ser.serialize_field("value", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for CertificateId {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "value",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Value,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "value" => Ok(GeneratedField::Value),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = CertificateId;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.protocol.types.v1.CertificateId")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<CertificateId, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut value__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Value => {
+                            if value__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("value"));
+                            }
+                            value__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(CertificateId {
+                    value: value__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.protocol.types.v1.CertificateId", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for CertificateStatus {
@@ -1344,6 +1387,196 @@ impl<'de> serde::Deserialize<'de> for EpochConfiguration {
         deserializer.deserialize_struct("agglayer.protocol.types.v1.EpochConfiguration", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for FixedBytes20 {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.value.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.FixedBytes20", len)?;
+        if !self.value.is_empty() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("value", pbjson::private::base64::encode(&self.value).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for FixedBytes20 {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "value",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Value,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "value" => Ok(GeneratedField::Value),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = FixedBytes20;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.protocol.types.v1.FixedBytes20")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<FixedBytes20, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut value__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Value => {
+                            if value__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("value"));
+                            }
+                            value__ = 
+                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(FixedBytes20 {
+                    value: value__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.protocol.types.v1.FixedBytes20", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for FixedBytes32 {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.value.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.FixedBytes32", len)?;
+        if !self.value.is_empty() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("value", pbjson::private::base64::encode(&self.value).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for FixedBytes32 {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "value",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Value,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "value" => Ok(GeneratedField::Value),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = FixedBytes32;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.protocol.types.v1.FixedBytes32")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<FixedBytes32, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut value__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Value => {
+                            if value__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("value"));
+                            }
+                            value__ = 
+                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(FixedBytes32 {
+                    value: value__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.protocol.types.v1.FixedBytes32", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for ImportedBridgeExit {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -1355,7 +1588,7 @@ impl serde::Serialize for ImportedBridgeExit {
         if self.bridge_exit.is_some() {
             len += 1;
         }
-        if !self.global_index.is_empty() {
+        if self.global_index.is_some() {
             len += 1;
         }
         if self.claim.is_some() {
@@ -1365,10 +1598,8 @@ impl serde::Serialize for ImportedBridgeExit {
         if let Some(v) = self.bridge_exit.as_ref() {
             struct_ser.serialize_field("bridgeExit", v)?;
         }
-        if !self.global_index.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("globalIndex", pbjson::private::base64::encode(&self.global_index).as_str())?;
+        if let Some(v) = self.global_index.as_ref() {
+            struct_ser.serialize_field("globalIndex", v)?;
         }
         if let Some(v) = self.claim.as_ref() {
             match v {
@@ -1463,9 +1694,7 @@ impl<'de> serde::Deserialize<'de> for ImportedBridgeExit {
                             if global_index__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("globalIndex"));
                             }
-                            global_index__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            global_index__ = map_.next_value()?;
                         }
                         GeneratedField::Mainnet => {
                             if claim__.is_some() {
@@ -1485,7 +1714,7 @@ impl<'de> serde::Deserialize<'de> for ImportedBridgeExit {
                 }
                 Ok(ImportedBridgeExit {
                     bridge_exit: bridge_exit__,
-                    global_index: global_index__.unwrap_or_default(),
+                    global_index: global_index__,
                     claim: claim__,
                 })
             }
@@ -1504,10 +1733,10 @@ impl serde::Serialize for L1InfoTreeLeaf {
         if self.l1_info_tree_index != 0 {
             len += 1;
         }
-        if !self.rer.is_empty() {
+        if self.rer.is_some() {
             len += 1;
         }
-        if !self.mer.is_empty() {
+        if self.mer.is_some() {
             len += 1;
         }
         if self.inner.is_some() {
@@ -1517,15 +1746,11 @@ impl serde::Serialize for L1InfoTreeLeaf {
         if self.l1_info_tree_index != 0 {
             struct_ser.serialize_field("l1InfoTreeIndex", &self.l1_info_tree_index)?;
         }
-        if !self.rer.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("rer", pbjson::private::base64::encode(&self.rer).as_str())?;
+        if let Some(v) = self.rer.as_ref() {
+            struct_ser.serialize_field("rer", v)?;
         }
-        if !self.mer.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("mer", pbjson::private::base64::encode(&self.mer).as_str())?;
+        if let Some(v) = self.mer.as_ref() {
+            struct_ser.serialize_field("mer", v)?;
         }
         if let Some(v) = self.inner.as_ref() {
             struct_ser.serialize_field("inner", v)?;
@@ -1615,17 +1840,13 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeaf {
                             if rer__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("rer"));
                             }
-                            rer__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            rer__ = map_.next_value()?;
                         }
                         GeneratedField::Mer => {
                             if mer__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("mer"));
                             }
-                            mer__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            mer__ = map_.next_value()?;
                         }
                         GeneratedField::Inner => {
                             if inner__.is_some() {
@@ -1637,8 +1858,8 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeaf {
                 }
                 Ok(L1InfoTreeLeaf {
                     l1_info_tree_index: l1_info_tree_index__.unwrap_or_default(),
-                    rer: rer__.unwrap_or_default(),
-                    mer: mer__.unwrap_or_default(),
+                    rer: rer__,
+                    mer: mer__,
                     inner: inner__,
                 })
             }
@@ -1654,25 +1875,21 @@ impl serde::Serialize for L1InfoTreeLeafInner {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.global_exit_root.is_empty() {
+        if self.global_exit_root.is_some() {
             len += 1;
         }
-        if !self.block_hash.is_empty() {
+        if self.block_hash.is_some() {
             len += 1;
         }
         if self.timestamp != 0 {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.L1InfoTreeLeafInner", len)?;
-        if !self.global_exit_root.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("globalExitRoot", pbjson::private::base64::encode(&self.global_exit_root).as_str())?;
+        if let Some(v) = self.global_exit_root.as_ref() {
+            struct_ser.serialize_field("globalExitRoot", v)?;
         }
-        if !self.block_hash.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("blockHash", pbjson::private::base64::encode(&self.block_hash).as_str())?;
+        if let Some(v) = self.block_hash.as_ref() {
+            struct_ser.serialize_field("blockHash", v)?;
         }
         if self.timestamp != 0 {
             #[allow(clippy::needless_borrow)]
@@ -1753,17 +1970,13 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeafInner {
                             if global_exit_root__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("globalExitRoot"));
                             }
-                            global_exit_root__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            global_exit_root__ = map_.next_value()?;
                         }
                         GeneratedField::BlockHash => {
                             if block_hash__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("blockHash"));
                             }
-                            block_hash__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            block_hash__ = map_.next_value()?;
                         }
                         GeneratedField::Timestamp => {
                             if timestamp__.is_some() {
@@ -1776,8 +1989,8 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeafInner {
                     }
                 }
                 Ok(L1InfoTreeLeafInner {
-                    global_exit_root: global_exit_root__.unwrap_or_default(),
-                    block_hash: block_hash__.unwrap_or_default(),
+                    global_exit_root: global_exit_root__,
+                    block_hash: block_hash__,
                     timestamp: timestamp__.unwrap_or_default(),
                 })
             }
@@ -1867,20 +2080,18 @@ impl serde::Serialize for MerkleProof {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.root.is_empty() {
+        if self.root.is_some() {
             len += 1;
         }
         if !self.siblings.is_empty() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.MerkleProof", len)?;
-        if !self.root.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("root", pbjson::private::base64::encode(&self.root).as_str())?;
+        if let Some(v) = self.root.as_ref() {
+            struct_ser.serialize_field("root", v)?;
         }
         if !self.siblings.is_empty() {
-            struct_ser.serialize_field("siblings", &self.siblings.iter().map(pbjson::private::base64::encode).collect::<Vec<_>>())?;
+            struct_ser.serialize_field("siblings", &self.siblings)?;
         }
         struct_ser.end()
     }
@@ -1950,23 +2161,18 @@ impl<'de> serde::Deserialize<'de> for MerkleProof {
                             if root__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("root"));
                             }
-                            root__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            root__ = map_.next_value()?;
                         }
                         GeneratedField::Siblings => {
                             if siblings__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("siblings"));
                             }
-                            siblings__ = 
-                                Some(map_.next_value::<Vec<::pbjson::private::BytesDeserialize<_>>>()?
-                                    .into_iter().map(|x| x.0).collect())
-                            ;
+                            siblings__ = Some(map_.next_value()?);
                         }
                     }
                 }
                 Ok(MerkleProof {
-                    root: root__.unwrap_or_default(),
+                    root: root__,
                     siblings: siblings__.unwrap_or_default(),
                 })
             }
@@ -2078,17 +2284,15 @@ impl serde::Serialize for TokenInfo {
         if self.origin_network.is_some() {
             len += 1;
         }
-        if !self.origin_token_address.is_empty() {
+        if self.origin_token_address.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.TokenInfo", len)?;
         if let Some(v) = self.origin_network.as_ref() {
             struct_ser.serialize_field("originNetwork", v)?;
         }
-        if !self.origin_token_address.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("originTokenAddress", pbjson::private::base64::encode(&self.origin_token_address).as_str())?;
+        if let Some(v) = self.origin_token_address.as_ref() {
+            struct_ser.serialize_field("originTokenAddress", v)?;
         }
         struct_ser.end()
     }
@@ -2166,15 +2370,13 @@ impl<'de> serde::Deserialize<'de> for TokenInfo {
                             if origin_token_address__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("originTokenAddress"));
                             }
-                            origin_token_address__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            origin_token_address__ = map_.next_value()?;
                         }
                     }
                 }
                 Ok(TokenInfo {
                     origin_network: origin_network__,
-                    origin_token_address: origin_token_address__.unwrap_or_default(),
+                    origin_token_address: origin_token_address__,
                 })
             }
         }

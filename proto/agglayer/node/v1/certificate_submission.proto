@@ -7,7 +7,8 @@ import "agglayer/protocol/types/v1/certificate.proto";
 // Service for submitting certificate to an agglayer node.
 service CertificateSubmissionService {
   // Method used to submit a certificate.
-  rpc SubmitCertificate(SubmitCertificateRequest) returns (SubmitCertificateResponse);
+  rpc SubmitCertificate(SubmitCertificateRequest)
+      returns (SubmitCertificateResponse);
 }
 
 // Type used to submit a certificate.
@@ -17,7 +18,10 @@ message SubmitCertificateRequest {
 }
 
 // Type used as response to a certificate submission.
-message SubmitCertificateResponse {}
+message SubmitCertificateResponse {
+  // The certificate id of the submitted certificate.
+  protocol.types.v1.CertificateId certificate_id = 1;
+}
 
 // The kind of error that occurred and that are reported by the service.
 enum ErrorKind {
