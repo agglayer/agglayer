@@ -106,7 +106,7 @@ pub struct Config {
     pub prover_entrypoint: String,
 
     #[serde(default, skip_serializing_if = "crate::default")]
-    pub prover: prover::ClientProverConfig,
+    pub prover: agglayer_prover_config::ClientProverConfig,
 
     #[serde(default)]
     #[serde(skip_serializing_if = "is_false")]

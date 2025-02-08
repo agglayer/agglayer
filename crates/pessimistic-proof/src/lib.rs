@@ -2,6 +2,7 @@ pub mod local_exit_tree;
 
 pub mod proof;
 pub use proof::PessimisticProofOutput;
+pub use proof::Proof;
 
 pub mod local_balance_tree;
 
@@ -26,6 +27,8 @@ pub use pessimistic_proof_core::proof::ProofError;
 pub mod core {
     pub use pessimistic_proof_core::generate_pessimistic_proof;
 }
+
+pub mod error;
 
 /// ELF of the pessimistic proof program
 pub const ELF: &[u8] =

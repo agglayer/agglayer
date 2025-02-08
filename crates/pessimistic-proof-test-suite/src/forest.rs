@@ -14,14 +14,14 @@ use pessimistic_proof::{
     utils::{smt::Smt, Hashable as _},
     PessimisticProofOutput,
 };
-use rand::{random, thread_rng};
+use rand::random;
 
 type NetworkId = u32;
 
 use super::sample_data::{NETWORK_A, NETWORK_B};
 
 /// Trees for the network B, as well as the LET for network A.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Forest {
     pub wallet: LocalWallet,
     pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
@@ -31,18 +31,7 @@ pub struct Forest {
 
 impl Default for Forest {
     fn default() -> Self {
-        let local_balance_tree = Smt::new();
-
-        Self {
-            wallet: LocalWallet::new(&mut thread_rng()),
-            local_exit_tree_data_a: LocalExitTreeData::new(),
-            l1_info_tree: Default::default(),
-            state_b: LocalNetworkStateData {
-                exit_tree: LocalExitTree::new(),
-                balance_tree: local_balance_tree,
-                nullifier_tree: Smt::new(),
-            },
-        }
+        Self::new([])
     }
 }
 
@@ -56,7 +45,6 @@ impl Forest {
 
     pub fn with_signer(mut self, signer: LocalWallet) -> Self {
         self.wallet = signer;
-
         self
     }
 
@@ -78,7 +66,7 @@ impl Forest {
         }
 
         Self {
-            wallet: LocalWallet::new(&mut thread_rng()),
+            wallet: Certificate::wallet_for_test(NETWORK_B),
             local_exit_tree_data_a: LocalExitTreeData::new(),
             l1_info_tree: Default::default(),
             state_b: LocalNetworkStateData {
@@ -92,13 +80,13 @@ impl Forest {
     /// Imported bridge exits from network A to network B.
     pub fn imported_bridge_exits(
         &mut self,
-        events: &[(TokenInfo, U256)],
+        events: impl IntoIterator<Item = (TokenInfo, U256)>,
     ) -> Vec<ImportedBridgeExit> {
         let mut res = Vec::new();
 
         let exits: Vec<BridgeExit> = events
-            .iter()
-            .map(|(token, amount)| exit_to_b(*token, *amount))
+            .into_iter()
+            .map(|(token, amount)| exit_to_b(token, amount))
             .collect();
 
         // Append all the leafs in LET A (mainnet)
@@ -131,7 +119,7 @@ impl Forest {
                 bridge_exit: exit,
                 global_index: GlobalIndex {
                     mainnet_flag: true,
-                    rollup_index: **NETWORK_A,
+                    rollup_index: *NETWORK_A,
                     leaf_index: index,
                 },
                 claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
@@ -149,38 +137,34 @@ impl Forest {
         res
     }
 
-    /// Bridge exits from network B to network A.
-    pub fn bridge_exits(&mut self, events: &[(TokenInfo, U256)]) -> Vec<BridgeExit> {
-        let mut res = Vec::new();
-        for (token, amount) in events {
-            let exit = exit_to_a(*token, *amount);
-            self.state_b.exit_tree.add_leaf(exit.hash()).unwrap();
-            res.push(exit);
-        }
-
-        res
-    }
-
     /// Local state associated with this forest.
     pub fn local_state(&self) -> LocalNetworkState {
         LocalNetworkState::from(self.state_b.clone())
     }
 
     /// Apply a sequence of events and return the corresponding [`Certificate`].
-    pub fn apply_events(
+    pub fn apply_bridge_exits(
         &mut self,
-        imported_bridge_events: &[(TokenInfo, U256)],
-        bridge_events: &[(TokenInfo, U256)],
+        imported_bridge_events: impl IntoIterator<Item = (TokenInfo, U256)>,
+        bridge_exits: impl IntoIterator<Item = BridgeExit>,
     ) -> Certificate {
         let prev_local_exit_root = self.state_b.exit_tree.get_root();
+
         let imported_bridge_exits = self.imported_bridge_exits(imported_bridge_events);
-        let bridge_exits = self.bridge_exits(bridge_events);
+        let bridge_exits = bridge_exits
+            .into_iter()
+            .inspect(|exit| {
+                self.state_b.exit_tree.add_leaf(exit.hash()).unwrap();
+            })
+            .collect();
+
         let new_local_exit_root = self.state_b.exit_tree.get_root();
+
         let (_combined_hash, signature) =
             compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
 
         Certificate {
-            network_id: (*NETWORK_B),
+            network_id: NETWORK_B,
             height: 0,
             prev_local_exit_root,
             new_local_exit_root,
@@ -189,6 +173,17 @@ impl Forest {
             signature,
             metadata: Default::default(),
         }
+    }
+
+    /// Apply a sequence of events and return the corresponding [`Certificate`].
+    pub fn apply_events(
+        &mut self,
+        imported_bridge_events: &[(TokenInfo, U256)],
+        bridge_events: &[(TokenInfo, U256)],
+    ) -> Certificate {
+        let imported_bridge_events = imported_bridge_events.iter().cloned();
+        let bridge_exits = bridge_events.iter().map(|(tok, amt)| exit_to_a(*tok, *amt));
+        self.apply_bridge_exits(imported_bridge_events, bridge_exits)
     }
 
     pub fn get_signer(&self) -> Address {
@@ -224,9 +219,9 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
 }
 
 fn exit_to_a(token_info: TokenInfo, amount: U256) -> BridgeExit {
-    exit(token_info, **NETWORK_A, amount)
+    exit(token_info, *NETWORK_A, amount)
 }
 
 fn exit_to_b(token_info: TokenInfo, amount: U256) -> BridgeExit {
-    exit(token_info, **NETWORK_B, amount)
+    exit(token_info, *NETWORK_B, amount)
 }

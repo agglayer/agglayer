@@ -1,5 +1,3 @@
-#![cfg_attr(feature = "coverage", feature(coverage_attribute))]
-
 /// ELF of the pessimistic proof program
 const ELF: &[u8] =
     include_bytes!("../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");

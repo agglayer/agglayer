@@ -17,6 +17,13 @@ where
 {
     /// The number of inserted (non-empty) leaves.
     pub leaf_count: u32,
+
+    /// The frontier, with hashes from bottom to top, only of the rightmost
+    /// non-empty node. This is not a path in the tree, and only contains
+    /// full subtrees.
+    ///
+    /// It contains meaningful values only up to the current root of the tree,
+    /// computed by log2(leaf_count). After that, all values are zeroed out.
     #[serde_as(as = "[_; TREE_DEPTH]")]
     pub frontier: [H::Digest; TREE_DEPTH],
 }
@@ -72,6 +79,8 @@ where
 
     /// Computes and returns the root of the tree.
     pub fn get_root(&self) -> H::Digest {
+        // `root` is the hash of the node we’re going to fill next.
+        // Here, we compute the root, starting from the next (yet unfilled) leaf hash.
         let mut root = H::Digest::default();
         let mut empty_hash_at_height = H::Digest::default();
 

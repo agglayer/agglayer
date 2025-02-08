@@ -1,0 +1,23 @@
+name: Checking commit
+
+on:
+  pull_request:
+    branches:
+      - main
+  merge_group:
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  commits:
+    name: Validate PR commits
+    if: ${{ github.event_name == 'merge_group' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v6

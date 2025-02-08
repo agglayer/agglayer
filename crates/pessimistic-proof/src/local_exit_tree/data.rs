@@ -16,10 +16,19 @@ where
 {
     /// The layers of the Merkle tree from bottom to top (i.e., the leaves are
     /// in `layers[0]`)
+    ///
+    /// This tree is contiguous: due to the structure of the LET, the empty
+    /// trees must be right children only.
+    ///
+    /// So if `layers[0]` has `n` exit leaf hashes, then `layers[1] has
+    /// `round_up(n/2)` hashes, etc.
     #[serde_as(as = "[_; TREE_DEPTH]")]
     pub layers: [Vec<H::Digest>; TREE_DEPTH],
+
     /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
     /// `i`.
+    ///
+    /// This is a constant, but until const traits land we cannot make it one.
     #[serde_as(as = "[_; TREE_DEPTH]")]
     empty_hash_at_height: [H::Digest; TREE_DEPTH],
 }

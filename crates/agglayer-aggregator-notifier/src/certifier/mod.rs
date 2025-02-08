@@ -6,21 +6,24 @@ use agglayer_contracts::RollupContract;
 use agglayer_prover_types::{
     default_bincode_options,
     v1::{
-        proof_generation_service_client::ProofGenerationServiceClient, ProofGenerationRequest,
-        ProofGenerationResponse,
+        generate_proof_request::Stdin,
+        pessimistic_proof_service_client::PessimisticProofServiceClient, ErrorKind,
+        GenerateProofRequest, GenerateProofResponse,
     },
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
     primitives::Address, Certificate, Height, LocalNetworkStateData, NetworkId, Proof,
 };
-use bincode::Options as _;
+use bincode::Options;
 use pessimistic_proof::core::generate_pessimistic_proof;
 use pessimistic_proof::local_state::LocalNetworkState;
 use pessimistic_proof::{
     local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
 };
-use sp1_sdk::{CpuProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey};
+use sp1_sdk::{
+    CpuProver, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
+};
 use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, instrument, warn};
 
@@ -34,7 +37,7 @@ pub struct CertifierClient<PendingStore, L1Rpc> {
     /// The pending store to fetch and store certificates and proofs.
     pending_store: Arc<PendingStore>,
     /// The prover service client.
-    prover: ProofGenerationServiceClient<Channel>,
+    prover: PessimisticProofServiceClient<Channel>,
     /// The local CPU verifier to verify the generated proofs.
     verifier: Arc<CpuProver>,
     /// The verifying key of the SP1 proof system.
@@ -58,7 +61,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
 
         debug!("Connecting to the prover service...");
 
-        let prover = ProofGenerationServiceClient::connect(prover)
+        let prover = PessimisticProofServiceClient::connect(prover)
             .await?
             .max_decoding_message_size(config.prover.grpc.max_decoding_message_size)
             .max_encoding_message_size(config.prover.grpc.max_encoding_message_size)
@@ -132,45 +135,90 @@ where
             "Successfully executed the native PP for the Certificate {}",
             certificate_id
         );
+        let network_state = pessimistic_proof::NetworkState::from(initial_state);
+        let mut stdin = SP1Stdin::new();
+        stdin.write(&network_state);
+        stdin.write(&multi_batch_header);
 
-        let request = ProofGenerationRequest {
-            initial_state: default_bincode_options()
-                .serialize(&initial_state)
-                .map_err(|source| CertificationError::Serialize { source })?,
-            batch_header: default_bincode_options()
-                .serialize(&multi_batch_header)
-                .map_err(|source| CertificationError::Serialize { source })?,
+        let request = GenerateProofRequest {
+            stdin: Some(Stdin::Sp1Stdin(
+                default_bincode_options()
+                    .serialize(&stdin)
+                    .map_err(|source| CertificationError::Serialize { source })?,
+            )),
         };
 
         info!("Sending the Proof generation request to the agglayer-prover service...");
-        let prover_response: tonic::Response<ProofGenerationResponse> = prover_client
+        let prover_response: tonic::Response<GenerateProofResponse> = prover_client
             .generate_proof(request)
             .await
-            .map_err(|error| {
-                debug!("Failed to generate the p-proof: {:?}", error);
+            .map_err(|source_error| {
+                debug!("Failed to generate the p-proof: {:?}", source_error);
                 if let Ok(error) = default_bincode_options()
-                    .deserialize::<agglayer_prover_types::Error>(error.details())
-                {
-                    match error {
-                        agglayer_prover_types::Error::UnableToExecuteProver => {
+                    .deserialize::<agglayer_prover_types::v1::GenerateProofError>(
+                    source_error.details(),
+                ) {
+                    match error.error_type() {
+                        ErrorKind::UnableToExecuteProver => {
                             CertificationError::InternalError("Unable to execute prover".into())
                         }
-                        agglayer_prover_types::Error::ProverFailed(error) => {
-                            CertificationError::InternalError(error)
+                        ErrorKind::ProverFailed => {
+                            CertificationError::InternalError(source_error.message().to_string())
                         }
-                        agglayer_prover_types::Error::ProofVerificationFailed(error) => {
-                            CertificationError::ProofVerificationFailed { source: error }
+                        ErrorKind::ProofVerificationFailed => {
+                            let proof_error: Result<
+                                pessimistic_proof::error::ProofVerificationError,
+                                _,
+                            > = default_bincode_options().deserialize(&error.error);
+
+                            match proof_error {
+                                Ok(error) => {
+                                    CertificationError::ProofVerificationFailed { source: error }
+                                }
+                                Err(_source) => {
+                                    warn!(
+                                        "Failed to deserialize the error details coming from the \
+                                         prover: {source_error:?}"
+                                    );
+
+                                    CertificationError::InternalError(
+                                        source_error.message().to_string(),
+                                    )
+                                }
+                            }
                         }
-                        agglayer_prover_types::Error::ExecutorFailed(source) => {
-                            CertificationError::NativeExecutionFailed { source }
+
+                        ErrorKind::ExecutorFailed => {
+                            let proof_error: Result<pessimistic_proof::ProofError, _> =
+                                default_bincode_options().deserialize(&error.error);
+
+                            match proof_error {
+                                Ok(error) => {
+                                    CertificationError::NativeExecutionFailed { source: error }
+                                }
+                                Err(_source) => {
+                                    warn!(
+                                        "Failed to deserialize the error details coming from the \
+                                         prover: {source_error:?}"
+                                    );
+
+                                    CertificationError::InternalError(
+                                        source_error.message().to_string(),
+                                    )
+                                }
+                            }
+                        }
+                        ErrorKind::Unspecified => {
+                            CertificationError::InternalError(source_error.message().to_string())
                         }
                     }
                 } else {
                     warn!(
-                        "Failed to deserialize the error details coming from the prover: {error:?}"
+                        "Failed to deserialize the error details coming from the prover: \
+                         {source_error:?}"
                     );
 
-                    CertificationError::InternalError(error.message().to_string())
+                    CertificationError::InternalError(source_error.message().to_string())
                 }
             })?;
 

@@ -139,6 +139,7 @@ impl ServerBuilder {
         cancellation_token: CancellationToken,
     ) -> Result<
         WithGracefulShutdown<
+            tokio::net::TcpListener,
             axum::routing::IntoMakeService<Router>,
             axum::Router,
             impl futures::Future<Output = ()>,

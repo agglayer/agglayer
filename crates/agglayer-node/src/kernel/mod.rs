@@ -40,7 +40,7 @@ pub(crate) struct Kernel<RpcProvider> {
 
 /// Errors related to the ZkEVM node proof verification process.
 #[derive(Error, Debug)]
-pub(crate) enum ZkevmNodeVerificationError {
+pub enum ZkevmNodeVerificationError {
     /// The given rollup id is not specified in the configuration.
     #[error("invalid rollup id: {0}")]
     InvalidRollupId(u32),
@@ -159,7 +159,7 @@ where
 
 /// Errors related to signature verification process.
 #[derive(Error, Debug)]
-pub(crate) enum SignatureVerificationError<RpcProvider>
+pub enum SignatureVerificationError<RpcProvider>
 where
     RpcProvider: Middleware,
 {
@@ -189,7 +189,7 @@ where
 
 /// Errors related to settlement process.
 #[derive(Error, Debug)]
-pub(crate) enum SettlementError<RpcProvider>
+pub enum SettlementError<RpcProvider>
 where
     RpcProvider: Middleware,
 {
@@ -207,7 +207,7 @@ where
 }
 
 #[derive(Error, Debug)]
-pub(crate) enum CheckTxStatusError<RpcProvider: Middleware> {
+pub enum CheckTxStatusError<RpcProvider: Middleware> {
     #[error("middleware error: {0}")]
     ProviderError(RpcProvider::Error),
 }

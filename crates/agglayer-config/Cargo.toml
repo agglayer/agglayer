@@ -17,6 +17,8 @@ tracing-appender.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 url = { workspace = true, features = ["serde"] }
 
+agglayer-prover-config.workspace = true
+
 [dev-dependencies]
 insta = { workspace = true, features = ["toml", "redactions", "filters"] }
 pretty_assertions = "1.4.0"

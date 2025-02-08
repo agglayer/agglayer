@@ -7,5 +7,5 @@ feature:
 pessimistic-proof:
 - changed-files:
   - any-glob-to-any-file:
-    - 'crates/pessimistic-proof/**/*'
+    - 'crates/pessimistic-proof-core/**/*'
     - 'crates/pessimistic-proof-program/**/*'

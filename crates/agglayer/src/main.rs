@@ -3,6 +3,7 @@ use std::process::exit;
 use agglayer_config::storage::backup::BackupConfig;
 use clap::Parser;
 use cli::Cli;
+use pessimistic_proof::ELF;
 
 mod cli;
 
@@ -13,10 +14,10 @@ fn main() -> anyhow::Result<()> {
 
     match cli.cmd {
         cli::Commands::Run { cfg } => agglayer_node::main(cfg, &version(), None)?,
-        cli::Commands::Prover { cfg } => agglayer_prover::main(cfg, &version())?,
+        cli::Commands::Prover { cfg } => agglayer_prover::main(cfg, &version(), ELF)?,
         cli::Commands::ProverConfig => println!(
             "{}",
-            toml::to_string_pretty(&agglayer_config::prover::ProverConfig::default()).unwrap()
+            toml::to_string_pretty(&agglayer_prover_config::ProverConfig::default()).unwrap()
         ),
         cli::Commands::Config { base_dir } => println!(
             "{}",
@@ -31,7 +32,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         cli::Commands::Vkey => {
-            let vkey = agglayer_prover::get_vkey();
+            let vkey = agglayer_prover::get_vkey(ELF);
             println!("{}", vkey);
         }
 

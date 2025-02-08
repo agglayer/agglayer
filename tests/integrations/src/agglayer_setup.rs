@@ -1,12 +1,13 @@
 use std::{path::Path, time::Duration};
 
-use agglayer_config::{log::LogLevel, Config, TelemetryConfig};
+use agglayer_config::log::LogLevel;
 use agglayer_prover::fake::FakeProver;
 use ethers::{
     core::k256::ecdsa::SigningKey,
     signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet},
 };
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use pessimistic_proof::ELF;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
@@ -70,16 +71,16 @@ pub async fn start_agglayer(
     .unwrap();
 
     let mut config = config.unwrap_or_else(|| agglayer_config::Config::new(config_path));
-    let prover_config = agglayer_config::prover::ProverConfig {
+    let prover_config = agglayer_prover_config::ProverConfig {
         grpc_endpoint: next_available_addr(),
-        telemetry: TelemetryConfig {
+        telemetry: agglayer_prover_config::TelemetryConfig {
             addr: next_available_addr(),
         },
         ..Default::default()
     };
 
     // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::default();
+    let fake_prover = FakeProver::new(ELF);
     let endpoint = prover_config.grpc_endpoint;
 
     config.prover_entrypoint = format!("http://{}", endpoint);

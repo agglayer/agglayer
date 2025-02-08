@@ -1,0 +1,10 @@
+
+[primary-prover.network-prover]
+proving-request-timeout = "5m"
+proving-timeout = "10m"
+
+
+[fallback-prover.cpu-prover]
+max-concurrency-limit = 10
+proving-request-timeout = "5m"
+proving-timeout = "10m"

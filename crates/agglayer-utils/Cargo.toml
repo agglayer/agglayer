@@ -1,0 +1,11 @@
+[package]
+name = "agglayer-utils"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+tracing.workspace = true
