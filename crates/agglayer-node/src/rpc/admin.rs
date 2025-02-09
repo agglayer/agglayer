@@ -173,7 +173,7 @@ where
                     Err(Error::internal("Unable to get certificate header"))
                 }
             },
-            Ok(None) => Err(Error::resource_not_found(format!(
+            Ok(None) => Err(Error::ResourceNotFound(format!(
                 "Certificate({})",
                 certificate_id
             ))),
@@ -233,7 +233,7 @@ where
             })? {
             certificate
         } else {
-            return Err(Error::resource_not_found(format!(
+            return Err(Error::ResourceNotFound(format!(
                 "CertificateHeader({})",
                 certificate_id
             )));
@@ -271,7 +271,7 @@ where
             })? {
             certificate
         } else {
-            return Err(Error::resource_not_found(format!(
+            return Err(Error::ResourceNotFound(format!(
                 "CertificateHeader({})",
                 certificate_id
             )));
@@ -328,7 +328,7 @@ where
             })? {
             certificate.hash()
         } else {
-            return Err(Error::resource_not_found(format!(
+            return Err(Error::ResourceNotFound(format!(
                 "PendingCertificate({:?}, {:?})",
                 network_id, height
             )));

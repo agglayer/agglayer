@@ -1,6 +1,6 @@
 use std::{path::Path, time::Duration};
 
-use agglayer_config::log::LogLevel;
+use agglayer_config::{log::LogLevel, Config};
 use agglayer_prover::fake::FakeProver;
 use ethers::{
     core::k256::ecdsa::SigningKey,

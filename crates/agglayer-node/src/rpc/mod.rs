@@ -161,83 +161,6 @@ where
 
         Ok(server.start(service))
     }
-    #[instrument(skip(self, certificate), level = "info")]
-    async fn validate_pre_existing_certificate(
-        &self,
-        certificate: &Certificate,
-    ) -> Result<(), Error> {
-        // Get pre-existing certificate in pending
-        if let Some(certificate) = self
-            .pending_store
-            .get_certificate(certificate.network_id, certificate.height)
-            .map_err(|e| {
-                error!("Failed to communicate with pending store: {e}");
-                Error::internal(e.to_string())
-            })?
-        {
-            let pre_existing_certificate_id = certificate.hash();
-            warn!(
-                pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
-                "Certificate already exists in pending store for network {} at height {}",
-                certificate.network_id,
-                certificate.height
-            );
-            if let Some(CertificateHeader {
-                status: CertificateStatus::InError { .. },
-                settlement_tx_hash,
-                ..
-            }) = self
-                .state
-                .get_certificate_header(&pre_existing_certificate_id)
-                .map_err(|e| {
-                    error!("Failed to communicate with state store: {e}");
-                    Error::internal(e.to_string())
-                })?
-            {
-                match settlement_tx_hash {
-                    None => {
-                        info!(
-                            "Replacing pending certificate {} that is in error",
-                            pre_existing_certificate_id
-                        );
-                    }
-                    Some(tx_hash) => {
-                        let l1_transaction = self
-                            .kernel
-                            .check_tx_status(H256::from_slice(tx_hash.as_ref()))
-                            .await
-                            .map_err(|e| {
-                                error!("Failed to check transaction status: {e}");
-                                Error::internal(e.to_string())
-                            })?;
-
-                        if matches!(l1_transaction, Some(TransactionReceipt { status: Some(status), .. }) if status.as_u64() == 0)
-                        {
-                            info!(
-                                %pre_existing_certificate_id,
-                                %tx_hash,
-                                ?l1_transaction,
-                                "Replacing pending certificate in error that has already been settled, but transaction recript status is in failure"
-                            );
-                        } else {
-                            let message = "Unable to replace a pending certificate in error that \
-                                           has already been settled";
-                            warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
-
-                            return Err(Error::invalid_argument(message));
-                        }
-                    }
-                }
-            } else {
-                let message = "Unable to replace a pending certificate that is not in error";
-                info!(%pre_existing_certificate_id, message);
-
-                return Err(Error::invalid_argument(message));
-            }
-        }
-
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -258,7 +181,6 @@ where
     }
 
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
-        self.validate_pre_existing_certificate(&certificate).await?;
         Ok(self.service.send_certificate(certificate).await?)
     }
 

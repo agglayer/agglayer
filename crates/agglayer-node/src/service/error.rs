@@ -4,6 +4,7 @@ use agglayer_contracts::{
     polygon_rollup_manager::PolygonRollupManagerErrors, polygon_zk_evm::PolygonZkEvmErrors,
 };
 pub use agglayer_storage::error::Error as StorageError;
+use agglayer_types::CertificateId;
 pub use agglayer_types::Digest;
 use ethers::{contract::ContractError, providers::Middleware, types::H256};
 
@@ -31,8 +32,29 @@ pub enum CertificateSubmissionError<Rpc: Middleware> {
     #[error("Failed to send the certificate to the orchestrator")]
     OrchestratorNotResponsive,
 
+    #[error(transparent)]
+    Validation(#[from] CertificateValidationError<Rpc>),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CertificateValidationError<Rpc: Middleware> {
     #[error("Failed to validate certificate signature: {0}")]
     SignatureError(#[source] SignatureVerificationError<Rpc>),
+
+    #[error("Unable to replace a pending certificate {certificate_id}, reason: {reason}")]
+    UnableToReplacePendingCertificate {
+        certificate_id: CertificateId,
+        reason: String,
+    },
+
+    #[error("Certificate {certificate_id} already settled with tx hash {tx_hash}")]
+    AlreadySettled {
+        certificate_id: CertificateId,
+        tx_hash: Digest,
+    },
+
+    #[error(transparent)]
+    CheckTxStatusError(#[from] CheckTxStatusError<Rpc>),
 }
 
 #[derive(Debug, thiserror::Error)]

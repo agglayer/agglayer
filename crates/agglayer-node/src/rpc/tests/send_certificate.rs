@@ -1,15 +1,8 @@
 use agglayer_config::Config;
+use agglayer_storage::stores::{PendingCertificateWriter, StateReader, StateWriter};
+use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{Certificate, CertificateId, NetworkId};
-use ethers::{providers, signers::Signer as _};
-use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder, rpc_params};
-
-use super::next_available_addr;
-use crate::{
-    kernel::Kernel,
-    rpc::{tests::DummyStore, AgglayerImpl},
-    service::AgglayerService,
-};
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, CertificateStatus, NetworkId};
+use agglayer_types::{CertificateHeader, CertificateStatus};
 use ethers::signers::Signer as _;
 use jsonrpsee::{core::client::ClientT, rpc_params};
 
@@ -72,6 +65,7 @@ async fn send_certificate_method_requires_known_signer() {
 
     assert!(send_request.is_err());
 }
+
 #[test_log::test(tokio::test)]
 async fn pending_certificate_in_error_can_be_replaced() {
     let path = TempDBDir::new();
@@ -202,47 +196,4 @@ async fn pending_certificate_in_error_force_push() {
 
     assert!(res.settlement_tx_hash.is_some());
     assert_eq!(res.status, CertificateStatus::Candidate);
-}
-
-#[test_log::test(tokio::test)]
-async fn send_certificate_method_requires_known_signer() {
-    let mut config = Config::new_for_test();
-    // Willingly insert a signer that is not the one that’ll be used down below
-    config
-        .proof_signers
-        .insert(1, Certificate::wallet_for_test(NetworkId::new(2)).address());
-    let addr = next_available_addr();
-    if let IpAddr::V4(ip) = addr.ip() {
-        config.rpc.host = ip;
-    }
-    config.rpc.port = addr.port();
-
-    let config = Arc::new(config);
-
-    let (provider, _mock) = providers::Provider::mocked();
-    let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
-
-    let kernel = Kernel::new(Arc::new(provider), config.clone());
-
-    let service = AgglayerService::new(
-        kernel,
-        certificate_sender,
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-        config.clone(),
-    );
-    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
-
-    let url = format!("http://{}/", config.rpc_addr());
-    let client = HttpClientBuilder::default().build(url).unwrap();
-
-    let send_request: Result<CertificateId, _> = client
-        .request(
-            "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), 0)],
-        )
-        .await;
-
-    assert!(send_request.is_err());
 }

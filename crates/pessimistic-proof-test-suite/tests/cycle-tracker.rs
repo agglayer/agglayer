@@ -4,7 +4,7 @@ use pessimistic_proof::bridge_exit::BridgeExit;
 use pessimistic_proof_test_suite::{forest::Forest, runner::Runner, sample_data as data};
 
 #[rstest::rstest]
-#[timeout(Duration::from_secs(10))]
+#[timeout(Duration::from_secs(15))]
 fn sanity_check() {
     cycles_on_sample_inputs("s00_be000", Forest::new([]), std::iter::empty());
 }

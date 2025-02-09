@@ -13,10 +13,14 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height,
     NetworkId,
 };
-use ethers::{providers::Middleware, types::H256};
+use error::CertificateValidationError;
+use ethers::{
+    providers::Middleware,
+    types::{TransactionReceipt, H256},
+};
 use futures::future::try_join;
 use tokio::sync::mpsc;
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 pub use self::error::{
     CertificateRetrievalError, CertificateSubmissionError, SendTxError, TxStatusError,
@@ -210,8 +214,10 @@ where
 
         self.kernel.verify_cert_signature(&certificate).await.map_err(|e| {
             error!(error = %e, hash = hash_string, "Failed to verify the signature of certificate {hash}: {e}");
-            CertificateSubmissionError::SignatureError(e)
+            CertificateValidationError::SignatureError(e)
         })?;
+
+        self.validate_pre_existing_certificate(&certificate).await?;
 
         // TODO: Batch the different queries.
         // Insert the certificate into the pending store.
@@ -294,9 +300,9 @@ where
             .inspect_err(|e| error!("Failed to get latest pending certificate: {e}"))?;
 
         let certificate_id = [
-            settled_certificate_id_and_height,
-            proven_certificate_id_and_height,
             pending_certificate_id_and_height,
+            proven_certificate_id_and_height,
+            settled_certificate_id_and_height,
         ]
         .into_iter()
         .flatten()
@@ -306,23 +312,6 @@ where
         certificate_id.map_or(Ok(None), |certificate_id| {
             self.fetch_certificate_header(certificate_id).map(Some)
         })
-    }
-
-    pub async fn debug_get_certificate(
-        &self,
-        certificate_id: CertificateId,
-    ) -> Result<(Certificate, Option<CertificateHeader>), CertificateRetrievalError> {
-        let cert = self
-            .debug_store
-            .get_certificate(&certificate_id)
-            .inspect_err(|e| error!("Failed to get certificate: {e}"))?
-            .ok_or(CertificateRetrievalError::NotFound { certificate_id })?;
-        let header = self
-            .state
-            .get_certificate_header(&certificate_id)
-            .inspect_err(|e| error!("Failed to get certificate header: {e}"))?;
-
-        Ok((cert, header))
     }
 
     pub fn get_latest_settled_certificate_header(
@@ -373,6 +362,89 @@ where
             .get_certificate_header(&certificate_id)
             .inspect_err(|err| error!("Failed to get certificate header: {err}"))?
             .ok_or(CertificateRetrievalError::NotFound { certificate_id })
+    }
+
+    #[instrument(skip(self, certificate), level = "info")]
+    async fn validate_pre_existing_certificate(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<(), CertificateSubmissionError<Rpc>> {
+        let certificate_id = certificate.hash();
+        // Get pre-existing certificate in pending
+        if let Some(certificate) = self
+            .pending_store
+            .get_certificate(certificate.network_id, certificate.height)
+            .inspect_err(|e| error!("Failed to communicate with pending store: {e}"))?
+        {
+            let pre_existing_certificate_id = certificate.hash();
+            warn!(
+                pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
+                "Certificate already exists in pending store for network {} at height {}",
+                certificate.network_id,
+                certificate.height
+            );
+            if let Some(CertificateHeader {
+                status: CertificateStatus::InError { .. },
+                settlement_tx_hash,
+                ..
+            }) = self
+                .state
+                .get_certificate_header(&pre_existing_certificate_id)
+                .inspect_err(|e| error!("Failed to communicate with state store: {e}"))?
+            {
+                match settlement_tx_hash {
+                    None => {
+                        info!(
+                            "Replacing pending certificate {} that is in error",
+                            pre_existing_certificate_id
+                        );
+                    }
+                    Some(tx_hash) => {
+                        let l1_transaction = self
+                            .kernel
+                            .check_tx_status(H256::from_slice(tx_hash.as_ref()))
+                            .await
+                            .inspect_err(|e| error!("Failed to check transaction status: {e}"))
+                            .map_err(CertificateValidationError::CheckTxStatusError)?;
+
+                        if matches!(l1_transaction, Some(TransactionReceipt { status: Some(status), .. }) if status.as_u64() == 0)
+                        {
+                            info!(
+                                %pre_existing_certificate_id,
+                                %tx_hash,
+                                ?l1_transaction,
+                                "Replacing pending certificate in error that has already been settled, but transaction recript status is in failure"
+                            );
+                        } else {
+                            let message = "Unable to replace a pending certificate in error that \
+                                           has already been settled";
+                            warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
+
+                            return Err(CertificateValidationError::AlreadySettled {
+                                certificate_id: pre_existing_certificate_id,
+                                tx_hash,
+                            }
+                            .into());
+                        }
+                    }
+                }
+            } else {
+                let message = "Unable to replace a pending certificate that is not in error";
+                info!(%pre_existing_certificate_id, message);
+
+                return Err(
+                    CertificateValidationError::UnableToReplacePendingCertificate {
+                        certificate_id,
+                        reason: format!(
+                            "Certificate {pre_existing_certificate_id} is not in error",
+                        ),
+                    }
+                    .into(),
+                );
+            }
+        }
+
+        Ok(())
     }
 }
 
