@@ -130,11 +130,14 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - uses: taiki-e/install-action@nextest
-      - uses: taiki-e/install-action@protoc
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest,protoc,cargo-hack
 
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
+
+      - run: cargo hack --each-feature --all check
 
       - name: Test
         run: cargo nextest run --workspace -P integrations
