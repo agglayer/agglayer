@@ -8,7 +8,6 @@ workspace = true
 
 [dependencies]
 axum = "0.8.1"
-buildstructor.workspace = true
 futures.workspace = true
 lazy_static.workspace = true
 opentelemetry = { version = "0.27.1", features = ["metrics"] }

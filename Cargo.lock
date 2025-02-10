@@ -122,7 +122,6 @@ dependencies = [
  "arc-swap",
  "async-trait",
  "bincode",
- "buildstructor",
  "ethers",
  "futures-util",
  "lazy_static",
@@ -224,7 +223,6 @@ dependencies = [
  "alloy",
  "anyhow",
  "arc-swap",
- "buildstructor",
  "ethers",
  "fail",
  "futures",
@@ -390,7 +388,6 @@ name = "agglayer-telemetry"
 version = "0.1.0"
 dependencies = [
  "axum 0.8.1",
- "buildstructor",
  "futures",
  "lazy_static",
  "opentelemetry",
@@ -4501,7 +4498,6 @@ dependencies = [
  "alloy",
  "anyhow",
  "arc-swap",
- "buildstructor",
  "ethers",
  "fail",
  "futures",
