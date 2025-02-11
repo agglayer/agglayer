@@ -60,6 +60,7 @@ ethers-gcp-kms-signer = "0.1.5"
 ethers-signers = "2.0.14"
 futures = "0.3.31"
 hex = "0.4.3"
+http = "1.2.0"
 hyper = "1.6.0"
 jsonrpsee = { version = "0.24.7", features = ["full"] }
 lazy_static = "1.5.0"

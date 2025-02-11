@@ -211,6 +211,7 @@ dependencies = [
  "agglayer-types 0.1.0",
  "prost 0.13.4",
  "tonic 0.12.3",
+ "tonic-reflection",
  "tonic-types",
  "tracing",
 ]
@@ -267,6 +268,7 @@ dependencies = [
  "fail",
  "futures",
  "hex",
+ "http 1.2.0",
  "http-body-util",
  "hyper 1.6.0",
  "hyper-util",
@@ -290,6 +292,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "toml",
+ "tonic 0.12.3",
  "tower 0.4.13",
  "tower-http",
  "tracing",

@@ -7,8 +7,8 @@ plugins:
   - local: protoc-gen-prost
     out: crates/agglayer-grpc-types/src/generated
     opt:
-      - file_descriptor_set
       - bytes=.
+      - file_descriptor_set
 
   - local: protoc-gen-prost-serde
     out: crates/agglayer-grpc-types/src/generated
