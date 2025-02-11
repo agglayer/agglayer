@@ -92,7 +92,7 @@ impl AggchainProofPublicValues {
             self.prev_local_exit_root.as_slice(),
             self.new_local_exit_root.as_slice(),
             self.l1_info_root.as_slice(),
-            &self.origin_network.to_be_bytes(),
+            &self.origin_network.to_le_bytes(),
             self.commit_imported_bridge_exits.as_slice(),
             self.aggchain_params.as_slice(),
         ]

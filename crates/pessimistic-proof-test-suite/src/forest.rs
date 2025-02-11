@@ -212,44 +212,20 @@ impl Forest {
         imported_bridge_events: &[(TokenInfo, U256)],
         bridge_events: &[(TokenInfo, U256)],
     ) -> (Certificate, SP1VerifyingKey, [u8; 32], SP1Proof) {
-        let imported_bridge_events = imported_bridge_events.iter().cloned();
-        let bridge_exits = bridge_events.iter().map(|(tok, amt)| exit_to_a(*tok, *amt));
-
-        let prev_local_exit_root = self.state_b.exit_tree.get_root();
-
-        let imported_bridge_exits = self.imported_bridge_exits(imported_bridge_events);
-        let bridge_exits = bridge_exits
-            .into_iter()
-            .inspect(|exit| {
-                self.state_b.exit_tree.add_leaf(exit.hash()).unwrap();
-            })
-            .collect();
-
-        let new_local_exit_root = self.state_b.exit_tree.get_root();
-
-        let (_combined_hash, signature, signer) =
-            compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
-
-        let certificate = Certificate {
-            network_id: NETWORK_B,
-            height: 0,
-            prev_local_exit_root,
-            new_local_exit_root,
-            bridge_exits,
-            imported_bridge_exits: imported_bridge_exits.clone(),
-            signature,
-            metadata: Default::default(),
-        };
+        let certificate = self.apply_events(imported_bridge_events, bridge_events);
 
         let (aggchain_proof, aggchain_vkey, aggchain_params) =
             compute_aggchain_proof(AggchainECDSA {
-                signer,
-                signature: signature.into(),
+                signer: certificate.signer().unwrap(),
+                signature: certificate.signature.into(),
                 commit_imported_bridge_exits: *commit_imported_bridge_exits(
-                    imported_bridge_exits.iter().map(|i| i.global_index),
+                    certificate
+                        .imported_bridge_exits
+                        .iter()
+                        .map(|i| i.global_index),
                 ),
-                prev_local_exit_root: *prev_local_exit_root,
-                new_local_exit_root: *new_local_exit_root,
+                prev_local_exit_root: *certificate.prev_local_exit_root,
+                new_local_exit_root: *certificate.new_local_exit_root,
                 l1_info_root: *certificate.l1_info_root().unwrap().unwrap(),
                 origin_network: *NETWORK_B,
             });
