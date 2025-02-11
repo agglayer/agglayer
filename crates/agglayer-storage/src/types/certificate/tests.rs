@@ -83,7 +83,7 @@ fn roundtrip_through_versioned(#[case] certificate: impl Codec + Into<Certificat
     let decoded = Certificate::decode(&bytes).unwrap();
     let orig: Certificate = certificate.into();
 
-    // TODO: This should really compare the certificates directly but that requires adding
+    // This should really compare the certificates directly but that requires adding
     // whole bunch of `Eq` impl to many types.
     assert_eq!(format!("{orig:?}"), format!("{decoded:?}"));
 }
