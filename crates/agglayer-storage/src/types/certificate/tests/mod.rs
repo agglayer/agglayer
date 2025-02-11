@@ -1,4 +1,5 @@
 use agglayer_types::U256;
+use pessimistic_proof_test_suite::sample_data;
 
 use super::*;
 use crate::columns::Codec;
@@ -7,6 +8,13 @@ use crate::columns::Codec;
 fn height_same_size_as_u64() {
     // Just a sanity check to see if the encoded types overlap properly.
     assert_eq!(u64::BITS, Height::BITS);
+}
+
+fn load_sample_certificate_bytes(filename: &str) -> Vec<u8> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/types/certificate/tests")
+        .join(filename);
+    hex::decode(std::fs::read(path).unwrap().trim_ascii()).unwrap()
 }
 
 impl CertificateV0 {
@@ -86,4 +94,19 @@ fn roundtrip_through_versioned(#[case] certificate: impl Codec + Into<Certificat
     // This should really compare the certificates directly but that requires adding
     // whole bunch of `Eq` impl to many types.
     assert_eq!(format!("{orig:?}"), format!("{decoded:?}"));
+}
+
+#[rstest::rstest]
+#[case("n15-cert_h0")]
+#[case("n15-cert_h1")]
+#[case("n15-cert_h2")]
+#[case("n15-cert_h3")]
+fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
+    let from_json = sample_data::load_certificate(&format!("{cert_name}.json"));
+
+    let bytes = load_sample_certificate_bytes(&format!("encoded_v0-{cert_name}.hex"));
+    let from_bytes = Certificate::decode(&bytes).expect("v0 certificate to decode successfully");
+
+    // Again comparing debug output due to lack of `Eq`.
+    assert_eq!(format!("{from_bytes:?}"), format!("{from_json:?}"));
 }
