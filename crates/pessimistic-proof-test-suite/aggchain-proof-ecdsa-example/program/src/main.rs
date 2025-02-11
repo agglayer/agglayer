@@ -38,6 +38,8 @@ pub fn main() {
 
     assert_eq!(recovered_signer.as_slice(), aggchain_ecdsa.signer);
 
+    // NOTE: Specific encoding given that the public inputs are re-constructed on
+    // the solidity side with such encoding.
     let aggchain_proof_inputs = bincode::DefaultOptions::new()
         .with_big_endian()
         .with_fixint_encoding()
