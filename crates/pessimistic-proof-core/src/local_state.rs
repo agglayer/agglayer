@@ -2,6 +2,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use agglayer_primitives::{ruint::UintTryFrom, B256, U256, U512};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 #[cfg(target_os = "zkvm")]
 use crate::aggchain_proof::AggchainProofPublicValues;
@@ -256,6 +257,7 @@ impl NetworkState {
             AggchainProofData::SP1(_) => {
                 // NOTE: No stark verification in the native rust code due to
                 // the sp1_zkvm::lib::verify::verify_sp1_proof syscall
+                warn!("verify_sp1_proof is not callable outside of SP1");
             }
             #[cfg(target_os = "zkvm")]
             AggchainProofData::SP1(aggchain_proof_sp1) => {
