@@ -1,14 +1,14 @@
-/// Definitions of the certificate storage format with backwards compatibility.
-///
-/// Currently, we have two versions of certificate storage format.
-/// All begin with `network_id: 32`, followed by a 64-bit field which encodes
-/// certificate height and/or format version. In the V0 format, this field
-/// corresponds to certificate height, providing backwards compatibility.
-///
-/// If the field is < [TAG_BEGIN], it is interpreted as height in storage format V0.
-/// If the field is >= [TAG_BEGIN], it is interpreted as an identifier of the storage
-/// format version. For versions > 0, the format is encoded in the former height field
-/// as `TAG_BEGIN + FORMAT_VERSION`. In this case, the height has to be stored elsewhere.
+//! Definitions of the certificate storage format with backwards compatibility.
+//!
+//! Currently, we have two versions of certificate storage format.
+//! All begin with `network_id: 32`, followed by a 64-bit field which encodes
+//! certificate height and/or format version. In the V0 format, this field
+//! corresponds to certificate height, providing backwards compatibility.
+//!
+//! If the field is < [TAG_BEGIN], it is interpreted as height in storage format V0.
+//! If the field is >= [TAG_BEGIN], it is interpreted as an identifier of the storage
+//! format version. For versions > 0, the format is encoded in the former height field
+//! as `TAG_BEGIN + FORMAT_VERSION`. In this case, the height has to be stored elsewhere.
 
 use agglayer_types::{Certificate, Digest, Height, Metadata, NetworkId, Signature};
 use bincode::Options;
