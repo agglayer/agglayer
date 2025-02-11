@@ -25,7 +25,7 @@ use ethers::{
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     epoch_synchronizer::EpochSynchronizer, kernel::Kernel, rpc::AgglayerImpl,
@@ -80,6 +80,13 @@ impl Node {
         config: Arc<Config>,
         cancellation_token: CancellationToken,
     ) -> Result<Self> {
+        if config.mock_verifier {
+            warn!(
+                "Mock verifier is being used. This should only be used for testing purposes and \
+                 not in production environments."
+            );
+        }
+
         // Initializing storage
         let pending_db = Arc::new(DB::open_cf(
             &config.storage.pending_db_path,

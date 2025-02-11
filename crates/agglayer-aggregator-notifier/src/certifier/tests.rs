@@ -125,7 +125,11 @@ async fn prover_timeout() {
         ..Default::default()
     };
 
-    config.prover_entrypoint = format!("http://127.0.0.1:{}", prover_config.grpc_endpoint.port());
+    config.prover_entrypoint = format!(
+        "http://{}:{}",
+        prover_config.grpc_endpoint.ip(),
+        prover_config.grpc_endpoint.port()
+    );
 
     let prover_config = Arc::new(prover_config);
 
