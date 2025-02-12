@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use agglayer_config::Config;
 use agglayer_grpc_server::node::v1::certificate_submission_service_server::CertificateSubmissionServiceServer;
 use tonic::codec::CompressionEncoding;
 
@@ -5,17 +8,17 @@ use tonic::codec::CompressionEncoding;
 pub struct Server;
 
 impl Server {
-    pub fn start(self) -> CertificateSubmissionServiceServer<Server> {
+    pub fn start(self, config: Arc<Config>) -> CertificateSubmissionServiceServer<Server> {
         CertificateSubmissionServiceServer::new(self)
-            // .max_decoding_message_size(config.grpc.max_decoding_message_size)
-            // .max_encoding_message_size(config.grpc.max_encoding_message_size)
+            .max_decoding_message_size(config.grpc.max_decoding_message_size)
+            .max_encoding_message_size(config.grpc.max_encoding_message_size)
             .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd)
     }
 
-    pub fn into_router(self) -> tonic::service::AxumRouter {
-        tonic::service::Routes::new(self.start()).into_axum_router()
-    }
+    // pub fn into_router(self) -> tonic::service::AxumRouter {
+    //     tonic::service::Routes::new(self.start()).into_axum_router()
+    // }
 
     pub fn reflection() -> (
         tonic_reflection::server::ServerReflectionServer<

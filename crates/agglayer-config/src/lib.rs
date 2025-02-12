@@ -5,6 +5,7 @@
 
 use std::{collections::HashMap, path::Path};
 
+use agglayer_prover_config::GrpcConfig;
 use ethers::types::Address;
 use outbound::OutboundConfig;
 use serde::{de::DeserializeSeed, Deserialize, Serialize};
@@ -111,6 +112,9 @@ pub struct Config {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_false")]
     pub debug_mode: bool,
+
+    #[serde(default, skip_serializing_if = "crate::default")]
+    pub grpc: GrpcConfig,
 }
 
 impl Config {
@@ -162,6 +166,7 @@ impl Config {
             prover_entrypoint: default_prover_entrypoint(),
             prover: Default::default(),
             debug_mode: false,
+            grpc: Default::default(),
         }
     }
 

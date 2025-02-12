@@ -239,7 +239,10 @@ impl Node {
         let json_rpc_router = AgglayerImpl::new(service).start().await?;
 
         let mut grpc_router = axum::Router::new();
-        grpc_router = add_rpc_service(grpc_router, agglayer_grpc_api::Server {}.start());
+        grpc_router = add_rpc_service(
+            grpc_router,
+            agglayer_grpc_api::Server {}.start(config.clone()),
+        );
         let (v1, v1alpha) = agglayer_grpc_api::Server::reflection();
         grpc_router = add_rpc_service(grpc_router, v1);
         grpc_router = add_rpc_service(grpc_router, v1alpha);

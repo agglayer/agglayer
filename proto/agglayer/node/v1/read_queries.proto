@@ -5,7 +5,7 @@ package agglayer.node.v1;
 import "agglayer/protocol/types/v1/certificate_header.proto";
 import "agglayer/protocol/types/v1/epoch_configuration.proto";
 
-// Service for submitting certificate to an agglayer node.
+// Service for querying the current epoch configuration.
 service ConfigurationService {
   // Method used to get the current epoch configuration.
   rpc GetEpochConfiguration(GetEpochConfigurationRequest)
