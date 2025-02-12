@@ -26,6 +26,8 @@ message Certificate {
   bytes aggchain_params = 8;
   // Aggchain proof.
   AggchainProof aggchain_proof = 9;
+  // custom chain data.
+  bytes custom_chain_data = 10;
 }
 
 // Aggchain proof.
