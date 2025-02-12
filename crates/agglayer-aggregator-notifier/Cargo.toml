@@ -13,6 +13,7 @@ agglayer-types.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 
 agglayer-prover-types.workspace = true
+prover-config.workspace = true
 agglayer-prover-config.workspace = true
 
 anyhow.workspace = true

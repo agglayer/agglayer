@@ -6,6 +6,7 @@ use agglayer_contracts::RollupContract;
 use agglayer_prover_types::{
     default_bincode_options,
     v1::{
+        generate_proof_request::Stdin,
         pessimistic_proof_service_client::PessimisticProofServiceClient, ErrorKind,
         GenerateProofRequest, GenerateProofResponse,
     },
@@ -20,7 +21,9 @@ use pessimistic_proof::local_state::LocalNetworkState;
 use pessimistic_proof::{
     local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
 };
-use sp1_sdk::{CpuProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey};
+use sp1_sdk::{
+    CpuProver, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
+};
 use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, instrument, warn};
 
@@ -52,7 +55,11 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         config: Arc<Config>,
     ) -> anyhow::Result<Self> {
         debug!("Initializing the CertifierClient verifier...");
-        let verifier = CpuProver::new();
+        let verifier = if config.mock_verifier {
+            sp1_sdk::ProverClient::builder().mock().build()
+        } else {
+            sp1_sdk::ProverClient::builder().cpu().build()
+        };
         let (_, verifying_key) = verifier.setup(ELF);
         debug!("CertifierClient verifier successfully initialized!");
 
@@ -132,14 +139,17 @@ where
             "Successfully executed the native PP for the Certificate {}",
             certificate_id
         );
+        let network_state = pessimistic_proof::NetworkState::from(initial_state);
+        let mut stdin = SP1Stdin::new();
+        stdin.write(&network_state);
+        stdin.write(&multi_batch_header);
 
         let request = GenerateProofRequest {
-            initial_state: default_bincode_options()
-                .serialize(&initial_state)
-                .map_err(|source| CertificationError::Serialize { source })?,
-            batch_header: default_bincode_options()
-                .serialize(&multi_batch_header)
-                .map_err(|source| CertificationError::Serialize { source })?,
+            stdin: Some(Stdin::Sp1Stdin(
+                default_bincode_options()
+                    .serialize(&stdin)
+                    .map_err(|source| CertificationError::Serialize { source })?,
+            )),
         };
 
         info!("Sending the Proof generation request to the agglayer-prover service...");

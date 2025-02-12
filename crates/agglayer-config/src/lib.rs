@@ -113,6 +113,10 @@ pub struct Config {
     #[serde(skip_serializing_if = "is_false")]
     pub debug_mode: bool,
 
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_false")]
+    pub mock_verifier: bool,
+
     #[serde(default, skip_serializing_if = "crate::default")]
     pub grpc: GrpcConfig,
 }
@@ -166,6 +170,7 @@ impl Config {
             prover_entrypoint: default_prover_entrypoint(),
             prover: Default::default(),
             debug_mode: false,
+            mock_verifier: false,
             grpc: Default::default(),
         }
     }
