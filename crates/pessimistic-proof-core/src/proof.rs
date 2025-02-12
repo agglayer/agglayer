@@ -39,6 +39,10 @@ pub enum ProofError {
     /// one computed by the prover.
     #[error("Invalid new local exit root. declared: {declared}, computed: {computed}")]
     InvalidNewLocalExitRoot { declared: Digest, computed: Digest },
+    /// The new leaf count of the local exit root declared by the chain does not
+    /// match the one computed by the prover.
+    #[error("Invalid new local exit root leaf count. declared: {declared}, computed: {computed}")]
+    InvalidNewLocalExitRootLeafCount { declared: u32, computed: u32 },
     /// The new balance root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid new balance root. declared: {declared}, computed: {computed}")]
@@ -198,6 +202,13 @@ pub fn generate_pessimistic_proof(
         return Err(ProofError::InvalidNewNullifierRoot {
             declared: batch_header.target.nullifier_root,
             computed: computed_target.nullifier_root,
+        });
+    }
+
+    if computed_target.ler_leaf_count != batch_header.target.ler_leaf_count {
+        return Err(ProofError::InvalidNewLocalExitRootLeafCount {
+            declared: batch_header.target.ler_leaf_count,
+            computed: computed_target.ler_leaf_count,
         });
     }
 
