@@ -233,6 +233,43 @@ fn can_read(network_id: NetworkId, store: StateStore) {
     ));
 }
 
+#[test]
+fn import_native_tokens() {
+    let certificates: Vec<Certificate> = ["cert_h0.json", "cert_h1.json", "cert_h2.json"]
+        .iter()
+        .map(|p| data::load_certificate(p))
+        .collect();
+
+    let mut lns = LocalNetworkStateData::default();
+
+    for (idx, certificate) in certificates.iter().enumerate() {
+        info!(
+            "Certificate ({idx}|{}) | {}, nib:{} b:{}",
+            certificate.height,
+            certificate.hash(),
+            certificate.imported_bridge_exits.len(),
+            certificate.bridge_exits.len(),
+        );
+
+        let signer = certificate.signer().unwrap();
+        let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
+
+        let multi_batch_header = lns
+            .make_multi_batch_header(certificate, signer, l1_info_root)
+            .unwrap();
+
+        info!("Certificate {idx}: successful witness generation");
+        let initial_state = LocalNetworkState::from(lns.clone());
+
+        generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
+        info!("Certificate {idx}: successful native execution");
+
+        lns.apply_certificate(certificate, signer, l1_info_root)
+            .unwrap();
+        info!("Certificate {idx}: successful state transition, waiting for the next");
+    }
+}
+
 #[rstest]
 #[case("n15-cert_h0")]
 #[case("n15-cert_h1")]
