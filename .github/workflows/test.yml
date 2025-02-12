@@ -28,6 +28,13 @@ jobs:
         uses: actions/checkout@v4
       - uses: ./.github/actions/unit-test
 
+  isolated-feature-checks:
+    name: 'isolated feature checks'
+    runs-on: ubuntu-latest-16-cores
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo hack --each-feature --all check
+
   build_contracts_image:
     runs-on: ubuntu-latest-16-cores
     if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
@@ -136,8 +143,6 @@ jobs:
 
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
-
-      - run: cargo hack --each-feature --all check
 
       - name: Test
         run: cargo nextest run --workspace -P integrations
