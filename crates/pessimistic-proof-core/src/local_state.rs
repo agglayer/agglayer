@@ -2,6 +2,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use agglayer_primitives::{ruint::UintTryFrom, B256, U256, U512};
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_os = "zkvm"))]
 use tracing::warn;
 
 #[cfg(target_os = "zkvm")]
