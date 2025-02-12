@@ -6,7 +6,7 @@ license.workspace = true
 
 [dependencies]
 serde.workspace = true
-prost = "0.13.4"
+prost.workspace = true
 pbjson = "0.7.0"
 
 agglayer-types = { workspace = true, optional = true }
