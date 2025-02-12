@@ -111,6 +111,10 @@ pub struct Config {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_false")]
     pub debug_mode: bool,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_false")]
+    pub mock_verifier: bool,
 }
 
 impl Config {
@@ -162,6 +166,7 @@ impl Config {
             prover_entrypoint: default_prover_entrypoint(),
             prover: Default::default(),
             debug_mode: false,
+            mock_verifier: false,
         }
     }
 

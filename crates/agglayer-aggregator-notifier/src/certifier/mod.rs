@@ -55,7 +55,11 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         config: Arc<Config>,
     ) -> anyhow::Result<Self> {
         debug!("Initializing the CertifierClient verifier...");
-        let verifier = CpuProver::new();
+        let verifier = if config.mock_verifier {
+            sp1_sdk::ProverClient::builder().mock().build()
+        } else {
+            sp1_sdk::ProverClient::builder().cpu().build()
+        };
         let (_, verifying_key) = verifier.setup(ELF);
         debug!("CertifierClient verifier successfully initialized!");
 

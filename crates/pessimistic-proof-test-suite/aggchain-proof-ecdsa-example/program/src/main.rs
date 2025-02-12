@@ -2,7 +2,6 @@
 sp1_zkvm::entrypoint!(main);
 
 use alloy_primitives::B256;
-use bincode::Options;
 use ecdsa_proof_lib::AggchainECDSA;
 use tiny_keccak::{Hasher, Keccak};
 
@@ -38,11 +37,5 @@ pub fn main() {
 
     assert_eq!(recovered_signer.as_slice(), aggchain_ecdsa.signer);
 
-    let aggchain_proof_inputs = bincode::DefaultOptions::new()
-        .with_big_endian()
-        .with_fixint_encoding()
-        .serialize(&aggchain_ecdsa.public_values())
-        .unwrap();
-
-    sp1_zkvm::io::commit_slice(&aggchain_proof_inputs);
+    sp1_zkvm::io::commit(&aggchain_ecdsa.public_values());
 }

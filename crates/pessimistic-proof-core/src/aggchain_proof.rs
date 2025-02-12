@@ -65,8 +65,6 @@ pub struct AggchainProofSP1Data {
     pub aggchain_params: Digest,
     /// SP1 verifying key for the SP1 aggchain proof program.
     pub aggchain_vkey: Vkey,
-    /// STARK proof.
-    pub stark_proof: StarkProof,
 }
 
 /// Public values to verify the SP1 aggchain proof.

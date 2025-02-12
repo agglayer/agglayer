@@ -119,7 +119,6 @@ fn test_sp1_simple() {
     multi_batch_header.aggchain_proof = AggchainProofData::SP1(AggchainProofSP1Data {
         aggchain_params: aggchain_params.into(),
         aggchain_vkey: aggchain_vkey.hash_u32(),
-        stark_proof: Default::default(),
     });
 
     let initial_state: NetworkState = LocalNetworkState::from(initial_state).into();
