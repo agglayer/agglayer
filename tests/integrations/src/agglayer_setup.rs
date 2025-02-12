@@ -7,6 +7,7 @@ use ethers::{
     signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet},
 };
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use pessimistic_proof::ELF;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
@@ -75,7 +76,7 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
     };
 
     // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::default();
+    let fake_prover = FakeProver::new(ELF);
     let endpoint = prover_config.grpc_endpoint;
 
     config.prover_entrypoint = format!("http://{}", endpoint);

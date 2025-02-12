@@ -1,6 +1,7 @@
 use anyhow::Context;
 use clap::Parser;
 use cli::Cli;
+use pessimistic_proof::ELF;
 
 mod cli;
 
@@ -11,7 +12,7 @@ fn main() -> anyhow::Result<()> {
 
     match cli.cmd {
         cli::Commands::Run { cfg } => agglayer_node::main(cfg, &version())?,
-        cli::Commands::Prover { cfg } => agglayer_prover::main(cfg, &version())?,
+        cli::Commands::Prover { cfg } => agglayer_prover::main(cfg, &version(), ELF)?,
         cli::Commands::ProverConfig => println!(
             "{}",
             toml::to_string_pretty(&agglayer_prover_config::ProverConfig::default())
@@ -35,7 +36,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         cli::Commands::Vkey => {
-            let vkey = agglayer_prover::get_vkey();
+            let vkey = agglayer_prover::get_vkey(ELF);
             println!("{}", vkey);
         }
     }
