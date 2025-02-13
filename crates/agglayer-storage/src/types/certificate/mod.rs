@@ -166,6 +166,7 @@ enum Impossible {}
 /// Defines encoding for certificates version >= 1.
 ///
 /// The enum implicitly introduces the version tag in the encoding.
+#[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 enum CertificateVx {
     // Reserve the tag 0, since version 0 is encoded differently.
