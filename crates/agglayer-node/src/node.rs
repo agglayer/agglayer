@@ -23,9 +23,15 @@ use ethers::{
     providers::{Http, Provider},
     signers::Signer,
 };
+use http::{Request, Response};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use tonic::{
+    body::{boxed, BoxBody},
+    server::NamedService,
+};
 use tower::Service;
+use tower::ServiceExt as _;
 use tracing::{debug, error, info, warn};
 
 use crate::{
@@ -264,7 +270,8 @@ impl Node {
 
         let listener = tokio::net::TcpListener::bind(config.rpc_addr()).await?;
         let api_graceful_shutdown = cancellation_token.clone();
-        info!("API listening on {}", config.rpc_addr());
+        info!(on = %config.rpc_addr(), "API listening");
+
         let api_server = axum::serve(listener, router)
             .with_graceful_shutdown(async move { api_graceful_shutdown.cancelled().await });
 
@@ -292,15 +299,6 @@ impl Node {
     }
 }
 
-use http::{Request, Response};
-use tonic::{
-    body::{boxed, BoxBody},
-    server::NamedService,
-};
-use tower::ServiceExt;
-
-pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
-
 fn add_rpc_service<S>(rpc_server: axum::Router, rpc_service: S) -> axum::Router
 where
     S: Service<Request<BoxBody>, Response = Response<BoxBody>, Error = Infallible>
@@ -310,7 +308,7 @@ where
         + Send
         + 'static,
     S::Future: Send + 'static,
-    S::Error: Into<BoxError> + Send,
+    S::Error: Into<anyhow::Error> + Send,
 {
     rpc_server.route_service(
         &format!("/{}/{{*rest}}", S::NAME),

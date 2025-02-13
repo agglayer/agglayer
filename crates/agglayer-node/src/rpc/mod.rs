@@ -154,6 +154,7 @@ where
             server_builder.set_rpc_middleware(rpc_middleware::from_config(config));
 
         let (stop_handle, server_handle) = jsonrpsee::server::stop_channel();
+        // Forget the server handle to avoid dropping it.
         std::mem::forget(server_handle);
 
         let service = self.into_rpc();
@@ -266,8 +267,10 @@ where
 
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.service
+            .poll_ready(cx)
+            .map_err(|_| unreachable!("Underlying jsonrpsee service should not return an error"))
     }
 
     fn call(&mut self, req: axum::http::Request<Body>) -> Self::Future {

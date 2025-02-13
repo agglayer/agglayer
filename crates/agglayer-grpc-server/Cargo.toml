@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-agglayer-grpc-types = { path = "../agglayer-grpc-types" }
+agglayer-grpc-types.workspace = true
 tonic.workspace = true
 
 [lints]

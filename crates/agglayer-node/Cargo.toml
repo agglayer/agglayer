@@ -40,12 +40,12 @@ agglayer-certificate-orchestrator.workspace = true
 agglayer-clock.workspace = true
 agglayer-config.workspace = true
 agglayer-contracts.workspace = true
+agglayer-grpc-api.workspace = true
+agglayer-grpc-types.workspace = true
 agglayer-rate-limiting.workspace = true
 agglayer-signer.workspace = true
 agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true
-agglayer-grpc-types = { path = "../agglayer-grpc-types" }
-agglayer-grpc-api = { path = "../agglayer-grpc-api" }
 agglayer-types.workspace = true
 pessimistic-proof.workspace = true
 

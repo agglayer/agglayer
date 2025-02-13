@@ -21,6 +21,7 @@ agglayer-grpc-api = { path = "crates/agglayer-grpc-api" }
 agglayer-grpc-client = { path = "crates/agglayer-grpc-client" }
 agglayer-grpc-server = { path = "crates/agglayer-grpc-server" }
 agglayer-grpc-types = { path = "crates/agglayer-grpc-types" }
+agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
 
 agglayer-aggregator-notifier = { path = "crates/agglayer-aggregator-notifier" }
 agglayer-certificate-orchestrator = { path = "crates/agglayer-certificate-orchestrator" }
@@ -29,17 +30,18 @@ agglayer-config = { path = "crates/agglayer-config" }
 agglayer-contracts = { path = "crates/agglayer-contracts" }
 agglayer-node = { path = "crates/agglayer-node" }
 agglayer-primitives = { path = "crates/agglayer-primitives" }
-agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
 agglayer-signer = { path = "crates/agglayer-signer" }
 agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
 agglayer-types = { path = "crates/agglayer-types" }
 agglayer-utils = { path = "crates/agglayer-utils" }
 
+## Pessimistic proof related
 pessimistic-proof = { path = "crates/pessimistic-proof" }
 pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
+## Prover related
 agglayer-prover = { git = "https://github.com/agglayer/provers.git" }
 agglayer-prover-config = { git = "https://github.com/agglayer/provers.git" }
 agglayer-prover-types = { git = "https://github.com/agglayer/provers.git" }

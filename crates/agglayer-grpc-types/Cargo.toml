@@ -15,5 +15,5 @@ agglayer-types = { workspace = true, optional = true }
 workspace = true
 
 [features]
-default = ["compat"]
+default = []
 compat = ["dep:agglayer-types"]

@@ -1,3 +1,4 @@
+use std::future::IntoFuture;
 use std::net::IpAddr;
 use std::sync::Arc;
 
@@ -127,13 +128,10 @@ impl TestContext {
             .await
             .unwrap();
         let api_graceful_shutdown = cancellation_token.clone();
-        let api_server = axum::serve(listener, router).with_graceful_shutdown(async move {
-            api_graceful_shutdown.cancelled().await;
-        });
+        let api_server = axum::serve(listener, router)
+            .with_graceful_shutdown(api_graceful_shutdown.cancelled_owned());
 
-        tokio::spawn(async move {
-            _ = api_server.await;
-        });
+        tokio::spawn(api_server.into_future());
 
         Self {
             cancellation_token,

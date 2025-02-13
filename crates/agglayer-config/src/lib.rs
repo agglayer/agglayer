@@ -106,7 +106,7 @@ pub struct Config {
     #[serde(skip_serializing_if = "String::is_empty")]
     pub prover_entrypoint: String,
 
-    #[serde(default, skip_serializing_if = "crate::default")]
+    #[serde(default, skip_serializing_if = "crate::is_default")]
     pub prover: agglayer_prover_config::ClientProverConfig,
 
     #[serde(default)]
@@ -117,7 +117,7 @@ pub struct Config {
     #[serde(skip_serializing_if = "is_false")]
     pub mock_verifier: bool,
 
-    #[serde(default, skip_serializing_if = "crate::default")]
+    #[serde(default, skip_serializing_if = "crate::is_default")]
     pub grpc: GrpcConfig,
 }
 
@@ -244,6 +244,6 @@ fn is_false(b: &bool) -> bool {
     !*b
 }
 
-pub(crate) fn default<T: Default + PartialEq>(t: &T) -> bool {
+pub(crate) fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     *t == Default::default()
 }

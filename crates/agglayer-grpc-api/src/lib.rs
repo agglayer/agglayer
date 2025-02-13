@@ -4,6 +4,10 @@ use agglayer_config::Config;
 use agglayer_grpc_server::node::v1::certificate_submission_service_server::CertificateSubmissionServiceServer;
 use tonic::codec::CompressionEncoding;
 
+mod certificate_submission_service;
+mod configuration_service;
+mod network_state_service;
+
 #[derive(Default)]
 pub struct Server;
 
@@ -15,10 +19,6 @@ impl Server {
             .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd)
     }
-
-    // pub fn into_router(self) -> tonic::service::AxumRouter {
-    //     tonic::service::Routes::new(self.start()).into_axum_router()
-    // }
 
     pub fn reflection() -> (
         tonic_reflection::server::ServerReflectionServer<
@@ -51,7 +51,3 @@ impl Server {
         (reflection_v1, reflection_v1alpha)
     }
 }
-
-mod certificate_submission_service;
-mod configuration_service;
-mod network_state_service;
