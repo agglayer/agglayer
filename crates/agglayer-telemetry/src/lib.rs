@@ -91,7 +91,6 @@ pub mod prover {
 
 pub struct ServerBuilder {}
 
-#[buildstructor::buildstructor]
 impl ServerBuilder {
     /// Function that builds a new Metrics server and returns a
     /// [`WithGracefulShutdown`] instance ready to be spawn.
@@ -104,27 +103,6 @@ impl ServerBuilder {
     /// - `build`: Builds the metrics server and returns a
     ///   [`WithGracefulShutdown`] instance.
     ///
-    /// # Examples
-    /// ```
-    /// # use std::sync::Arc;
-    /// # use agglayer_telemetry::ServerBuilder;
-    /// # use agglayer_telemetry::Error;
-    /// # use tokio_util::sync::CancellationToken;
-    /// # use std::net::SocketAddr;
-    /// #
-    ///
-    /// async fn build_metrics() -> Result<(), Error> {
-    ///     ServerBuilder::builder()
-    ///         .addr("127.0.0.1".parse::<SocketAddr>().unwrap())
-    ///         .cancellation_token(CancellationToken::new())
-    ///         .build()
-    ///         .await?;
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    ///
-    ///
     /// # Panics
     ///
     /// Panics on failure of the gather_metrics internal methods (unlikely)
@@ -132,7 +110,6 @@ impl ServerBuilder {
     /// # Errors
     ///
     /// This function will return an error if the provided addr is invalid
-    #[builder(entry = "builder", exit = "build", visibility = "pub")]
     pub async fn serve(
         addr: SocketAddr,
         registry: Option<Registry>,
