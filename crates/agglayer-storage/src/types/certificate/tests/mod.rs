@@ -1,5 +1,7 @@
 use agglayer_types::U256;
+use pessimistic_proof::aggchain_proof::StarkProof;
 use pessimistic_proof_test_suite::sample_data;
+use sp1_sdk::Prover;
 
 use super::*;
 use crate::columns::Codec;
@@ -60,6 +62,18 @@ impl CertificateV1 {
     }
 
     fn test1() -> Self {
+        let stark_proof = {
+            let client = sp1_sdk::ProverClient::builder().mock().build();
+            let (proving_key, _verif_key) = client.setup(pessimistic_proof::ELF);
+            let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
+                &proving_key,
+                sp1_sdk::SP1PublicValues::new(),
+                sp1_sdk::SP1ProofMode::Compressed,
+                sp1_sdk::SP1_CIRCUIT_VERSION,
+            );
+            *dummy_proof.proof.try_as_compressed().unwrap()
+        };
+
         Self {
             network_id: NetworkId::new(59),
             version: Default::default(),
@@ -70,8 +84,8 @@ impl CertificateV1 {
             imported_bridge_exits: Vec::new(),
             aggchain_proof: AggchainProofV1::SP1 {
                 aggchain_proof: AggchainProofSP1 {
-                    aggchain_params: Digest([0x9e; 32]),
-                    stark_proof: Default::default(),
+                    aggchain_params: Digest([0x58; 32]),
+                    stark_proof,
                 },
             },
             metadata: Digest([0xb9; 32]),
