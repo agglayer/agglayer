@@ -224,7 +224,7 @@ pub struct Certificate {
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
     /// Fixed size field of arbitrary data for the chain needs.
     pub metadata: Metadata,
-    /// Aggchain proof which is either one ECDSA or one SP1 plonk proof.
+    /// Aggchain proof which is either one ECDSA or one SP1 proof.
     #[serde(flatten)]
     pub aggchain_proof: AggchainProof,
 }
