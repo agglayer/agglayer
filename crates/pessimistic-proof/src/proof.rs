@@ -1,12 +1,14 @@
 pub use pessimistic_proof_core::PessimisticProofOutput;
+#[cfg(any(test, feature = "testutils"))]
 use pessimistic_proof_core::{
     local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader, NetworkState,
 };
 use serde::{Deserialize, Serialize};
-use sp1_sdk::{
-    Prover, ProverClient, SP1Proof, SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin,
-};
+#[cfg(any(test, feature = "testutils"))]
+use sp1_sdk::{Prover, ProverClient, SP1Stdin};
+use sp1_sdk::{SP1Proof, SP1ProofWithPublicValues, SP1PublicValues};
 
+#[cfg(any(test, feature = "testutils"))]
 use crate::ELF;
 
 pub trait DisplayToHex {
@@ -17,13 +19,13 @@ impl DisplayToHex for PessimisticProofOutput {
     fn display_to_hex(&self) -> String {
         format!(
             "prev_local_exit_root: {}, prev_pessimistic_root: {}, l1_info_root: {}, \
-             origin_network: {}, consensus_hash: {}, new_local_exit_root: {}, \
+             origin_network: {}, aggchain_hash: {}, new_local_exit_root: {}, \
              new_pessimistic_root: {}",
             self.prev_local_exit_root,
             self.prev_pessimistic_root,
             self.l1_info_root,
             self.origin_network,
-            self.consensus_hash,
+            self.aggchain_hash,
             self.new_local_exit_root,
             self.new_pessimistic_root,
         )
