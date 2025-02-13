@@ -3,7 +3,7 @@ use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer};
 pub use pessimistic_proof::bridge_exit::LeafType;
 use pessimistic_proof::{
-    aggchain_proof::{AggchainProof, AggchainProofSP1},
+    aggchain_proof::AggchainProof,
     bridge_exit::{BridgeExit, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit::{

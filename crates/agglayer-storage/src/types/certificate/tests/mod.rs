@@ -1,5 +1,4 @@
 use agglayer_types::U256;
-use pessimistic_proof::aggchain_proof::StarkProof;
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
 

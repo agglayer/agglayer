@@ -19,8 +19,6 @@ pub enum AggchainType {
 }
 
 pub type Vkey = [u32; 8];
-pub type StarkVkey = Vec<u8>;
-pub type StarkProof = Vec<u8>;
 
 /// Aggchain Proof which is either one ECDSA signature, or one stark proof.
 /// Contains all the necessary data for verification.
