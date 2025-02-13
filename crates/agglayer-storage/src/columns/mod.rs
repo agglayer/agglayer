@@ -6,6 +6,10 @@ pub enum CodecError {
     #[error(r#"Serialization error: {0}
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
     Serialization(#[from] bincode::Error),
+
+    #[error(r#"Magic number or network ID missing.
+        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
+    NoMagic,
 }
 
 pub fn default_bincode_options() -> impl bincode::Options {

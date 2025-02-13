@@ -22,7 +22,7 @@ impl CertificateV0 {
     fn test0() -> Self {
         Self {
             network_id: NetworkId::new(55),
-            height: 987.try_into().unwrap(),
+            height: 987,
             prev_local_exit_root: Digest([0x01; 32]),
             new_local_exit_root: Digest([0x67; 32]),
             bridge_exits: Vec::new(),
@@ -37,14 +37,11 @@ impl CertificateV0 {
     }
 }
 
-impl Codec for CertificateV0 {}
-
 impl CertificateV1 {
     fn test0() -> Self {
         Self {
             network_id: NetworkId::new(57),
-            version: Default::default(),
-            height: 987.try_into().unwrap(),
+            height: 987,
             prev_local_exit_root: Digest([0x02; 32]),
             new_local_exit_root: Digest([0x65; 32]),
             bridge_exits: Vec::new(),
@@ -75,7 +72,6 @@ impl CertificateV1 {
 
         Self {
             network_id: NetworkId::new(59),
-            version: Default::default(),
             height: 987.try_into().unwrap(),
             prev_local_exit_root: Digest([0x03; 32]),
             new_local_exit_root: Digest([0x61; 32]),
@@ -92,21 +88,18 @@ impl CertificateV1 {
     }
 }
 
-impl Codec for CertificateV1 {}
-
 #[rstest::rstest]
-#[case(CertificateV0::test0())]
-#[case(CertificateV1::test0())]
-#[case(CertificateV1::test1())]
+#[case(CertificateV0::test0().into())]
+#[case(CertificateV1::test0().into())]
+#[case(CertificateV1::test1().into())]
 #[case(Certificate::new_for_test(74.into(), 998))]
-fn roundtrip_through_versioned(#[case] certificate: impl Codec + Into<Certificate>) {
+fn roundtrip_through_versioned(#[case] certificate: Certificate) {
     let bytes = certificate.encode().unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();
-    let orig: Certificate = certificate.into();
 
     // This should really compare the certificates directly but that requires adding
     // whole bunch of `Eq` impl to many types.
-    assert_eq!(format!("{orig:?}"), format!("{decoded:?}"));
+    assert_eq!(format!("{certificate:?}"), format!("{decoded:?}"));
 }
 
 #[rstest::rstest]

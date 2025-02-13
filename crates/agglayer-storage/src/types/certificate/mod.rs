@@ -19,76 +19,20 @@ use pessimistic_proof::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::columns::default_bincode_options;
+use crate::columns::{default_bincode_options, CodecError};
 
-const TAG_BEGIN: u64 = 1u64 << 63;
-
-/// A height field restricted to values < [TAG_BEGIN].
-#[derive(Debug, Clone, Deserialize)]
-#[cfg_attr(test, derive(Serialize))]
-#[serde(try_from = "Height")]
-struct V0Height(Height);
-
-impl V0Height {
-    const ALLOWED_RANGE: std::ops::Range<Height> = 0..TAG_BEGIN;
-
-    const fn as_height(&self) -> Height {
-        self.0
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("Invalid certificate height ({0})")]
-struct InvalidHeight(Height);
-
-impl TryFrom<Height> for V0Height {
-    type Error = InvalidHeight;
-
-    fn try_from(height: Height) -> Result<Self, Self::Error> {
-        Some(Self(height))
-            .filter(|this| Self::ALLOWED_RANGE.contains(&this.0))
-            .ok_or(InvalidHeight(height))
-    }
-}
-
-/// A unit type representing a format version.
+/// Magic number to start the encoding for storage format versions >= 1.
 ///
-/// Encodes as a u64 [Self::TAG]. Decodes successfully only if a u64 value matches [Self::TAG].
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(try_from = "Height", into = "u64")]
-struct VersionTag<const VERSION: u64>;
-
-impl<const V: u64> VersionTag<V> {
-    const VERSION: u64 = V;
-    const TAG: u64 = TAG_BEGIN + Self::VERSION;
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("Invalid version tag ({0})")]
-struct InvalidVersionTag(u64);
-
-impl<const V: u64> TryFrom<Height> for VersionTag<V> {
-    type Error = InvalidVersionTag;
-
-    fn try_from(height: u64) -> Result<Self, Self::Error> {
-        (height == Self::TAG)
-            .then_some(Self)
-            .ok_or(InvalidVersionTag(height))
-    }
-}
-
-impl<const V: u64> From<VersionTag<V>> for u64 {
-    fn from(VersionTag: VersionTag<V>) -> Self {
-        <VersionTag<V>>::TAG
-    }
-}
+/// If the first 4 bytes are not this magic value, the byte string
+/// is interpreted as version 0 and the first 4 bytes correspond to the `NetworkId`.
+const MAGIC: [u8; 4] = 0xffff_ffff_u32.to_be_bytes();
 
 /// The pre-0.3 certificate format.
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 struct CertificateV0 {
     network_id: NetworkId,
-    height: V0Height,
+    height: Height,
     prev_local_exit_root: Digest,
     new_local_exit_root: Digest,
     bridge_exits: Vec<BridgeExit>,
@@ -112,7 +56,7 @@ impl From<CertificateV0> for Certificate {
 
         Certificate {
             network_id,
-            height: height.as_height(),
+            height,
             prev_local_exit_root,
             new_local_exit_root,
             bridge_exits,
@@ -127,7 +71,6 @@ impl From<CertificateV0> for Certificate {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CertificateV1 {
     network_id: NetworkId,
-    version: VersionTag<1>,
     height: Height,
     prev_local_exit_root: Digest,
     new_local_exit_root: Digest,
@@ -141,7 +84,6 @@ impl From<CertificateV1> for Certificate {
     fn from(certificate: CertificateV1) -> Self {
         let CertificateV1 {
             network_id,
-            version: VersionTag,
             height,
             prev_local_exit_root,
             new_local_exit_root,
@@ -179,7 +121,6 @@ impl From<&Certificate> for CertificateV1 {
 
         CertificateV1 {
             network_id: *network_id,
-            version: VersionTag,
             height: *height,
             prev_local_exit_root: *prev_local_exit_root,
             new_local_exit_root: *new_local_exit_root,
@@ -218,23 +159,51 @@ impl From<AggchainProofV1> for AggchainProof {
     }
 }
 
-type CurrentCertificate = CertificateV1;
+/// Uninhabited type to selectively disable enum arms.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+enum Impossible {}
+
+/// Defines encoding for certificates version >= 1.
+///
+/// The enum implicitly introduces the version tag in the encoding.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+enum CertificateVx {
+    // Reserve the tag 0, since version 0 is encoded differently.
+    V0(Impossible),
+
+    V1(CertificateV1),
+}
+
+impl From<&Certificate> for CertificateVx {
+    fn from(certificate: &Certificate) -> Self {
+        // Always use the latest version here.
+        Self::V1(certificate.into())
+    }
+}
+
+impl From<CertificateVx> for Certificate {
+    fn from(certificate: CertificateVx) -> Self {
+        match certificate {
+            CertificateVx::V0(impossible) => match impossible {},
+            CertificateVx::V1(certificate) => certificate.into(),
+        }
+    }
+}
 
 impl crate::columns::Codec for Certificate {
-    fn encode(&self) -> Result<Vec<u8>, crate::columns::CodecError> {
-        Ok(default_bincode_options().serialize(&CurrentCertificate::from(self))?)
+    fn encode(&self) -> Result<Vec<u8>, CodecError> {
+        Ok(default_bincode_options().serialize(&(MAGIC, CertificateVx::from(self)))?)
     }
 
-    fn decode(bytes: &[u8]) -> Result<Self, crate::columns::CodecError> {
-        let certificate = default_bincode_options()
-            .deserialize(bytes)
-            .map(CertificateV1::into)
-            .or_else(|_| {
-                default_bincode_options()
-                    .deserialize(bytes)
-                    .map(CertificateV0::into)
-            })?;
-        Ok(certificate)
+    fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
+        let (magic_or_version, more_bytes) =
+            bytes.split_at_checked(MAGIC.len()).ok_or(CodecError::NoMagic)?;
+
+        if magic_or_version == MAGIC.as_slice() {
+            Ok(default_bincode_options().deserialize::<CertificateVx>(more_bytes)?.into())
+        } else {
+            Ok(default_bincode_options().deserialize::<CertificateV0>(bytes)?.into())
+        }
     }
 }
 
