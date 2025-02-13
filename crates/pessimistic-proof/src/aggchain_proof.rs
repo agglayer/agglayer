@@ -24,5 +24,5 @@ pub struct AggchainProofSP1 {
     /// Chain-specific commitment forwarded through the PP.
     pub aggchain_params: Digest,
     /// STARK proof.
-    pub stark_proof: StarkProof,
+    pub stark_proof: Box<StarkProof>,
 }

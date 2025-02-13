@@ -70,7 +70,7 @@ impl CertificateV1 {
                 sp1_sdk::SP1ProofMode::Compressed,
                 sp1_sdk::SP1_CIRCUIT_VERSION,
             );
-            *dummy_proof.proof.try_as_compressed().unwrap()
+            dummy_proof.proof.try_as_compressed().unwrap()
         };
 
         Self {
