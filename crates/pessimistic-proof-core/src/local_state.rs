@@ -2,8 +2,13 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use agglayer_primitives::{ruint::UintTryFrom, B256, U256, U512};
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_os = "zkvm"))]
+use tracing::warn;
 
+#[cfg(target_os = "zkvm")]
+use crate::aggchain_proof::AggchainProofPublicValues;
 use crate::{
+    aggchain_proof::AggchainProofData,
     bridge_exit::{L1_ETH, L1_NETWORK_ID},
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
     keccak::digest::Digest,
@@ -223,26 +228,59 @@ impl NetworkState {
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
         }
 
-        // Verify that the signature is valid
-        let combined_hash = signature_commitment(
-            self.exit_tree.get_root(),
-            multi_batch_header
-                .imported_bridge_exits
-                .iter()
-                .map(|(exit, _)| exit.global_index),
-        );
+        // Verify the aggchain proof which can be either one signature or one sp1 proof.
+        // NOTE: The STARK is verified exclusively within the SP1 VM.
+        match &multi_batch_header.aggchain_proof {
+            AggchainProofData::ECDSA(aggchain_proof_ecdsa) => {
+                // Verify that the signature is valid
+                let combined_hash = signature_commitment(
+                    multi_batch_header.target.exit_root,
+                    multi_batch_header
+                        .imported_bridge_exits
+                        .iter()
+                        .map(|(exit, _)| exit.global_index),
+                );
 
-        // Check batch header signature
-        let signer = multi_batch_header
-            .signature
-            .recover_address_from_prehash(&B256::new(combined_hash.0))
-            .map_err(|_| ProofError::InvalidSignature)?;
+                // Check batch header signature
+                let signer = aggchain_proof_ecdsa
+                    .signature
+                    .recover_address_from_prehash(&B256::new(combined_hash.0))
+                    .map_err(|_| ProofError::InvalidSignature)?;
 
-        if signer != multi_batch_header.signer {
-            return Err(ProofError::InvalidSigner {
-                declared: multi_batch_header.signer,
-                recovered: signer,
-            });
+                if signer != aggchain_proof_ecdsa.signer {
+                    return Err(ProofError::InvalidSigner {
+                        declared: aggchain_proof_ecdsa.signer,
+                        recovered: signer,
+                    });
+                }
+            }
+            #[cfg(not(target_os = "zkvm"))]
+            AggchainProofData::SP1(_) => {
+                // NOTE: No stark verification in the native rust code due to
+                // the sp1_zkvm::lib::verify::verify_sp1_proof syscall
+                warn!("verify_sp1_proof is not callable outside of SP1");
+            }
+            #[cfg(target_os = "zkvm")]
+            AggchainProofData::SP1(aggchain_proof_sp1) => {
+                let aggchain_proof_public_values = AggchainProofPublicValues {
+                    prev_local_exit_root: multi_batch_header.prev_local_exit_root,
+                    new_local_exit_root: multi_batch_header.target.exit_root,
+                    l1_info_root: multi_batch_header.l1_info_root,
+                    origin_network: multi_batch_header.origin_network,
+                    aggchain_params: aggchain_proof_sp1.aggchain_params,
+                    commit_imported_bridge_exits: commit_imported_bridge_exits(
+                        multi_batch_header
+                            .imported_bridge_exits
+                            .iter()
+                            .map(|(exit, _)| exit.global_index),
+                    ),
+                };
+
+                sp1_zkvm::lib::verify::verify_sp1_proof(
+                    &aggchain_proof_sp1.aggchain_vkey,
+                    &aggchain_proof_public_values.hash().into(),
+                );
+            }
         }
 
         Ok(self.roots())

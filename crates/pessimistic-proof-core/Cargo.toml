@@ -14,11 +14,14 @@ tracing = "0.1.41"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 serde_with = { version = "3" }
+sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes.git", package = "sha2", tag = "patch-sha2-0.10.8-sp1-4.0.0" }
 thiserror = "2.0.8"
-tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "patch-v2.0.2", features = [
+tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-4.0.0", features = [
     "keccak",
 ] }
 rand = { version = "0.8.5", optional = true }
+sp1-verifier = { version = "=4.0.0" }
+sp1-zkvm = { version = "=4.0.0", features = ["verify"] }
 
 [dev-dependencies]
 rs_merkle = { version = "1.4", default-features = false }

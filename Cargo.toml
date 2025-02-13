@@ -2,7 +2,10 @@
 resolver = "2"
 default-members = ["crates/agglayer"]
 members = ["crates/*", "tests/integrations"]
-exclude = ["crates/pessimistic-proof-program"]
+exclude = [
+    "crates/pessimistic-proof-program",
+    "crates/pessimistic-proof-test-suite/aggchain-proof-ecdsa-example/program/",
+]
 
 [workspace.package]
 version = "0.1.0"
