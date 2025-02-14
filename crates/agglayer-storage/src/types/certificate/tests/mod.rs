@@ -148,3 +148,27 @@ fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
     // Again comparing debug output due to lack of `Eq`.
     assert_eq!(format!("{from_bytes:?}"), format!("{from_json:?}"));
 }
+
+#[test]
+fn bad_format() {
+    const NEXT_VERSION: u8 = 2;
+
+    assert!(matches!(
+        Certificate::decode(&[]).unwrap_err(),
+        CodecError::CertEmpty
+    ));
+
+    for v in 0..NEXT_VERSION {
+        assert!(matches!(
+            Certificate::decode(&[v]).unwrap_err(),
+            CodecError::Serialization(_)
+        ));
+    }
+
+    for v in NEXT_VERSION..=u8::MAX {
+        match Certificate::decode(&[v]).unwrap_err() {
+            CodecError::BadCertVersion { version } => assert_eq!(version, v),
+            err => panic!("Unexpected error: {err:?}"),
+        }
+    }
+}
