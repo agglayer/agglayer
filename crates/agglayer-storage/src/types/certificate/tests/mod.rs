@@ -2,13 +2,19 @@ use agglayer_types::U256;
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
 
-use super::*;
 use crate::columns::Codec;
 
-#[test]
-fn height_same_size_as_u64() {
-    // Just a sanity check to see if the encoded types overlap properly.
-    assert_eq!(u64::BITS, Height::BITS);
+use super::*;
+
+#[rstest::rstest]
+#[case(0.into(), [0, 0, 0, 0])]
+#[case(100.into(), [0, 0, 0, 100])]
+#[case(258.into(), [0, 0, 1, 2])]
+#[case(0x12345678.into(), [0x12, 0x34, 0x56, 0x78])]
+fn network_id_encoding(#[case] network_id: NetworkId, #[case] expected: [u8; 4]) {
+    let encoded = default_bincode_options().serialize(&network_id).unwrap();
+    assert_eq!(encoded, expected);
+    assert_eq!(network_id.to_u32().to_be_bytes(), expected);
 }
 
 fn load_sample_certificate_bytes(filename: &str) -> Vec<u8> {
@@ -18,10 +24,19 @@ fn load_sample_certificate_bytes(filename: &str) -> Vec<u8> {
     hex::decode(std::fs::read(path).unwrap().trim_ascii()).unwrap()
 }
 
+impl From<NetworkId> for NetworkIdV0 {
+    fn from(value: NetworkId) -> Self {
+        let [b3, b2, b1, b0] = value.to_u32().to_be_bytes();
+        assert_eq!(b3, 0);
+        NetworkIdV0([b2, b1, b0])
+    }
+}
+
 impl CertificateV0 {
     fn test0() -> Self {
         Self {
-            network_id: NetworkId::new(55),
+            version: VersionTag,
+            network_id: NetworkId::new(55).into(),
             height: 987,
             prev_local_exit_root: Digest([0x01; 32]),
             new_local_exit_root: Digest([0x67; 32]),
@@ -40,6 +55,7 @@ impl CertificateV0 {
 impl CertificateV1 {
     fn test0() -> Self {
         Self {
+            version: VersionTag,
             network_id: NetworkId::new(57),
             height: 987,
             prev_local_exit_root: Digest([0x02; 32]),
@@ -71,6 +87,7 @@ impl CertificateV1 {
         };
 
         Self {
+            version: VersionTag,
             network_id: NetworkId::new(59),
             height: 987.try_into().unwrap(),
             prev_local_exit_root: Digest([0x03; 32]),
@@ -89,17 +106,26 @@ impl CertificateV1 {
 }
 
 #[rstest::rstest]
-#[case(CertificateV0::test0().into())]
-#[case(CertificateV1::test0().into())]
-#[case(CertificateV1::test1().into())]
-#[case(Certificate::new_for_test(74.into(), 998))]
-fn roundtrip_through_versioned(#[case] certificate: Certificate) {
-    let bytes = certificate.encode().unwrap();
+#[case(CertificateV0::test0(), &[0x00, 0x00, 0x00, 55])]
+#[case(CertificateV1::test0(), &[0x01, 0x00, 0x00, 0x00, 57])]
+fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
+    let bytes = default_bincode_options().serialize(&cert).unwrap();
+    assert!(bytes.starts_with(start));
+}
+
+#[rstest::rstest]
+#[case(CertificateV0::test0())]
+#[case(CertificateV1::test0())]
+#[case(CertificateV1::test1())]
+#[case(CertificateV1::from(&Certificate::new_for_test(74.into(), 998)))]
+fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
+    let bytes = default_bincode_options().serialize(&orig).unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();
+    let converted: Certificate = orig.into();
 
     // This should really compare the certificates directly but that requires adding
     // whole bunch of `Eq` impl to many types.
-    assert_eq!(format!("{certificate:?}"), format!("{decoded:?}"));
+    assert_eq!(format!("{converted:?}"), format!("{decoded:?}"));
 }
 
 #[rstest::rstest]

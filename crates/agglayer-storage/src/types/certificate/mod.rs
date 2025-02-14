@@ -21,17 +21,43 @@ use serde::{Deserialize, Serialize};
 
 use crate::columns::{default_bincode_options, CodecError};
 
-/// Magic number to start the encoding for storage format versions >= 1.
-///
-/// If the first 4 bytes are not this magic value, the byte string
-/// is interpreted as version 0 and the first 4 bytes correspond to the `NetworkId`.
-const MAGIC: [u8; 4] = 0xffff_ffff_u32.to_be_bytes();
+/// A unit type serializing to a constant byte representing the storage version.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(try_from = "u8", into = "u8")]
+struct VersionTag<const VERSION: u8>;
+
+impl<const VERSION: u8> TryFrom<u8> for VersionTag<VERSION> {
+    type Error = CodecError;
+    fn try_from(byte: u8) -> Result<Self, Self::Error> {
+        (byte == VERSION)
+            .then_some(Self)
+            .ok_or(CodecError::BadCertVersion { version: byte })
+    }
+}
+
+impl<const VERSION: u8> From<VersionTag<VERSION>> for u8 {
+    fn from(VersionTag: VersionTag<VERSION>) -> Self {
+        VERSION
+    }
+}
+
+/// In v0, the first byte of network ID was reserved to specify the version.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[cfg_attr(test, derive(Serialize))]
+struct NetworkIdV0([u8; 3]);
+
+impl From<NetworkIdV0> for NetworkId {
+    fn from(NetworkIdV0([b2, b1, b0]): NetworkIdV0) -> NetworkId {
+        u32::from_be_bytes([0, b2, b1, b0]).into()
+    }
+}
 
 /// The pre-0.3 certificate format.
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 struct CertificateV0 {
-    network_id: NetworkId,
+    version: VersionTag<0>,
+    network_id: NetworkIdV0,
     height: Height,
     prev_local_exit_root: Digest,
     new_local_exit_root: Digest,
@@ -44,6 +70,7 @@ struct CertificateV0 {
 impl From<CertificateV0> for Certificate {
     fn from(certificate: CertificateV0) -> Self {
         let CertificateV0 {
+            version: VersionTag,
             network_id,
             height,
             prev_local_exit_root,
@@ -55,7 +82,7 @@ impl From<CertificateV0> for Certificate {
         } = certificate;
 
         Certificate {
-            network_id,
+            network_id: network_id.into(),
             height,
             prev_local_exit_root,
             new_local_exit_root,
@@ -70,6 +97,7 @@ impl From<CertificateV0> for Certificate {
 /// The new certificate format as stored in the database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CertificateV1 {
+    version: VersionTag<1>,
     network_id: NetworkId,
     height: Height,
     prev_local_exit_root: Digest,
@@ -83,6 +111,7 @@ struct CertificateV1 {
 impl From<CertificateV1> for Certificate {
     fn from(certificate: CertificateV1) -> Self {
         let CertificateV1 {
+            version: VersionTag,
             network_id,
             height,
             prev_local_exit_root,
@@ -120,6 +149,7 @@ impl From<&Certificate> for CertificateV1 {
         } = certificate;
 
         CertificateV1 {
+            version: VersionTag,
             network_id: *network_id,
             height: *height,
             prev_local_exit_root: *prev_local_exit_root,
@@ -159,51 +189,25 @@ impl From<AggchainProofV1> for AggchainProof {
     }
 }
 
-/// Uninhabited type to selectively disable enum arms.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-enum Impossible {}
+type CurrentCertificate = CertificateV1;
 
-/// Defines encoding for certificates version >= 1.
-///
-/// The enum implicitly introduces the version tag in the encoding.
-#[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize, Clone, Debug)]
-enum CertificateVx {
-    // Reserve the tag 0, since version 0 is encoded differently.
-    V0(Impossible),
-
-    V1(CertificateV1),
-}
-
-impl From<&Certificate> for CertificateVx {
-    fn from(certificate: &Certificate) -> Self {
-        // Always use the latest version here.
-        Self::V1(certificate.into())
-    }
-}
-
-impl From<CertificateVx> for Certificate {
-    fn from(certificate: CertificateVx) -> Self {
-        match certificate {
-            CertificateVx::V0(impossible) => match impossible {},
-            CertificateVx::V1(certificate) => certificate.into(),
-        }
-    }
+fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
+    bytes: &[u8],
+) -> Result<Certificate, CodecError> {
+    Ok(default_bincode_options().deserialize::<T>(bytes)?.into())
 }
 
 impl crate::columns::Codec for Certificate {
     fn encode(&self) -> Result<Vec<u8>, CodecError> {
-        Ok(default_bincode_options().serialize(&(MAGIC, CertificateVx::from(self)))?)
+        Ok(default_bincode_options().serialize(&CurrentCertificate::from(self))?)
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
-        let (magic_or_version, more_bytes) =
-            bytes.split_at_checked(MAGIC.len()).ok_or(CodecError::NoMagic)?;
-
-        if magic_or_version == MAGIC.as_slice() {
-            Ok(default_bincode_options().deserialize::<CertificateVx>(more_bytes)?.into())
-        } else {
-            Ok(default_bincode_options().deserialize::<CertificateV0>(bytes)?.into())
+        match bytes.first().copied() {
+            None => Err(CodecError::CertEmpty),
+            Some(0) => decode::<CertificateV0>(bytes),
+            Some(1) => decode::<CertificateV1>(bytes),
+            Some(version) => Err(CodecError::BadCertVersion { version }),
         }
     }
 }

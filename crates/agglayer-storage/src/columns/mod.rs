@@ -7,9 +7,13 @@ pub enum CodecError {
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
     Serialization(#[from] bincode::Error),
 
-    #[error(r#"Magic number or network ID missing.
+    #[error(r#"Certificate encoded to an empty byte sequence.
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    NoMagic,
+    CertEmpty,
+
+    #[error(r#"Unrecognized certificate storage format version {version}.
+        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
+    BadCertVersion { version: u8 },
 }
 
 pub fn default_bincode_options() -> impl bincode::Options {
