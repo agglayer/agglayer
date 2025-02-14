@@ -14,6 +14,7 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::ClientError;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
+use tracing::debug;
 
 use super::next_available_addr;
 use crate::rpc::tests::DummyStore;
@@ -60,7 +61,17 @@ async fn check_tx_status() {
         config.clone(),
     );
 
-    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+    let router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+
+    let listener = tokio::net::TcpListener::bind(config.rpc_addr())
+        .await
+        .unwrap();
+    let api_server = axum::serve(listener, router);
+
+    let _rpc_handle = tokio::spawn(async move {
+        _ = api_server.await;
+        debug!("Node RPC shutdown requested.");
+    });
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
@@ -115,8 +126,17 @@ async fn check_tx_status_fail() {
         config.clone(),
     );
 
-    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+    let router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
 
+    let listener = tokio::net::TcpListener::bind(config.rpc_addr())
+        .await
+        .unwrap();
+    let api_server = axum::serve(listener, router);
+
+    let _rpc_handle = tokio::spawn(async move {
+        _ = api_server.await;
+        debug!("Node RPC shutdown requested.");
+    });
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
 

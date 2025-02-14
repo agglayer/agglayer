@@ -207,6 +207,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-grpc-api"
+version = "0.1.0"
+dependencies = [
+ "agglayer-config",
+ "agglayer-grpc-server",
+ "agglayer-grpc-types",
+ "agglayer-types",
+ "prost 0.13.4",
+ "tonic 0.12.3",
+ "tonic-reflection",
+ "tonic-types",
+ "tracing",
+]
+
+[[package]]
+name = "agglayer-grpc-client"
+version = "0.1.0"
+dependencies = [
+ "agglayer-grpc-types",
+ "tonic 0.12.3",
+]
+
+[[package]]
+name = "agglayer-grpc-server"
+version = "0.1.0"
+dependencies = [
+ "agglayer-grpc-types",
+ "tonic 0.12.3",
+]
+
+[[package]]
+name = "agglayer-grpc-types"
+version = "0.1.0"
+dependencies = [
+ "agglayer-types",
+ "pbjson",
+ "prost 0.13.4",
+ "serde",
+]
+
+[[package]]
 name = "agglayer-node"
 version = "0.1.0"
 dependencies = [
@@ -215,6 +256,8 @@ dependencies = [
  "agglayer-clock",
  "agglayer-config",
  "agglayer-contracts",
+ "agglayer-grpc-api",
+ "agglayer-grpc-types",
  "agglayer-prover",
  "agglayer-rate-limiting",
  "agglayer-signer",
@@ -224,11 +267,13 @@ dependencies = [
  "alloy",
  "anyhow",
  "arc-swap",
+ "axum 0.8.1",
  "buildstructor",
  "ethers",
  "fail",
  "futures",
  "hex",
+ "http 1.2.0",
  "http-body-util",
  "hyper 1.6.0",
  "hyper-util",
@@ -252,6 +297,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "toml",
+ "tonic 0.12.3",
  "tower 0.4.13",
  "tower-http",
  "tracing",
@@ -6010,6 +6056,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 
 [[package]]
+name = "pbjson"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7e6349fa080353f4a597daffd05cb81572a9c031a6d4fff7e504947496fcc68"
+dependencies = [
+ "base64 0.21.7",
+ "serde",
+]
+
+[[package]]
 name = "pbkdf2"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9156,6 +9212,17 @@ dependencies = [
  "prost-types 0.13.4",
  "tokio",
  "tokio-stream",
+ "tonic 0.12.3",
+]
+
+[[package]]
+name = "tonic-types"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0081d8ee0847d01271392a5aebe960a4600f5d4da6c67648a6382a0940f8b367"
+dependencies = [
+ "prost 0.13.4",
+ "prost-types 0.13.4",
  "tonic 0.12.3",
 ]
 

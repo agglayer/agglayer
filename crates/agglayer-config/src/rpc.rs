@@ -39,7 +39,7 @@ pub struct RpcConfig {
     pub max_connections: u32,
     /// The maximum number of requests in a batch request. If `None`, the
     /// batch request limit is unlimited.
-    #[serde(skip_serializing_if = "crate::default")]
+    #[serde(skip_serializing_if = "crate::is_default")]
     pub batch_request_limit: Option<u32>,
     /// The interval at which to send ping messages
     #[serde(skip)]
