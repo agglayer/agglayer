@@ -50,6 +50,11 @@ impl CertificateV0 {
             metadata: Digest([0xa5; 32]),
         }
     }
+
+    fn with_network_id(mut self, network_id: NetworkId) -> Self {
+        self.network_id = network_id.into();
+        self
+    }
 }
 
 impl CertificateV1 {
@@ -107,6 +112,7 @@ impl CertificateV1 {
 
 #[rstest::rstest]
 #[case(CertificateV0::test0(), &[0x00, 0x00, 0x00, 55])]
+#[case(CertificateV0::test0().with_network_id(0x123456.into()), &[0x00, 0x12, 0x34, 0x56])]
 #[case(CertificateV1::test0(), &[0x01, 0x00, 0x00, 0x00, 57])]
 fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
     let bytes = default_bincode_options().serialize(&cert).unwrap();
