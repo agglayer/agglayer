@@ -154,7 +154,8 @@ where
             server_builder.set_rpc_middleware(rpc_middleware::from_config(config));
 
         let (stop_handle, server_handle) = jsonrpsee::server::stop_channel();
-        // Forget the server handle to avoid dropping it.
+        // Server handle isn't used as we're relying on axum to manage the server
+        // lifecycle.
         std::mem::forget(server_handle);
 
         let service = self.into_rpc();
@@ -270,6 +271,8 @@ where
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.service
             .poll_ready(cx)
+            // We can assume that the underlying service is always ready.
+            // [`jsonrpsee::server::TowerService`] is always ready.
             .map_err(|_| unreachable!("Underlying jsonrpsee service should not return an error"))
     }
 
