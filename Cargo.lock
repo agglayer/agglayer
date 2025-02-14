@@ -393,6 +393,64 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-service"
+version = "0.1.0"
+dependencies = [
+ "agglayer-aggregator-notifier",
+ "agglayer-certificate-orchestrator",
+ "agglayer-clock",
+ "agglayer-config",
+ "agglayer-contracts",
+ "agglayer-grpc-api",
+ "agglayer-grpc-types",
+ "agglayer-prover",
+ "agglayer-rate-limiting",
+ "agglayer-signer",
+ "agglayer-storage",
+ "agglayer-telemetry 0.1.0",
+ "agglayer-types",
+ "alloy",
+ "anyhow",
+ "arc-swap",
+ "axum 0.8.1",
+ "buildstructor",
+ "ethers",
+ "fail",
+ "futures",
+ "hex",
+ "http 1.2.0",
+ "http-body-util",
+ "hyper 1.6.0",
+ "hyper-util",
+ "insta",
+ "jsonrpsee",
+ "jsonrpsee-test-utils",
+ "lazy_static",
+ "mockall",
+ "pessimistic-proof",
+ "pessimistic-proof-test-suite",
+ "pin-project 1.1.8",
+ "rand",
+ "reqwest 0.12.12",
+ "rstest",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "test-log",
+ "thiserror 2.0.11",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "toml",
+ "tonic 0.12.3",
+ "tower 0.4.13",
+ "tower-http",
+ "tracing",
+ "tracing-capture",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "agglayer-signer"
 version = "0.1.0"
 dependencies = [

@@ -15,7 +15,7 @@ use agglayer_types::{
 };
 use ethers::{providers::Middleware, types::H256};
 use futures::future::try_join;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::{debug, error, info, instrument, trace};
 
 pub use self::error::{
@@ -24,11 +24,13 @@ pub use self::error::{
 use crate::{kernel::Kernel, signed_tx::SignedTx};
 
 pub mod error;
+mod init;
 
 /// The RPC agglayer service implementation.
-pub(crate) struct AgglayerService<Rpc, PendingStore, StateStore, DebugStore> {
+pub struct AgglayerService<Rpc, PendingStore, StateStore, DebugStore> {
     kernel: Kernel<Rpc>,
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
+    certificate_orchestrator_handle: JoinHandle<()>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
@@ -38,25 +40,6 @@ pub(crate) struct AgglayerService<Rpc, PendingStore, StateStore, DebugStore> {
 impl<Rpc, PendingStore, StateStore, DebugStore>
     AgglayerService<Rpc, PendingStore, StateStore, DebugStore>
 {
-    /// Create an instance of the RPC agglayer service.
-    pub(crate) fn new(
-        kernel: Kernel<Rpc>,
-        certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
-        pending_store: Arc<PendingStore>,
-        state: Arc<StateStore>,
-        debug_store: Arc<DebugStore>,
-        config: Arc<Config>,
-    ) -> Self {
-        Self {
-            kernel,
-            certificate_sender,
-            pending_store,
-            state,
-            debug_store,
-            config,
-        }
-    }
-
     /// Get access to the configuration.
     pub fn config(&self) -> &Config {
         &self.config
