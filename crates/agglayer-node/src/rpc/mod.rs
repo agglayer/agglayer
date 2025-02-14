@@ -167,7 +167,9 @@ where
 
         Ok(axum::Router::new()
             .route("/", axum::routing::post_service(service.clone()))
+            .route("/", axum::routing::get_service(service.clone()))
             .route("/json-rpc", axum::routing::post_service(service.clone()))
+            .route("/json-rpc", axum::routing::get_service(service.clone()))
             .layer(middleware))
     }
 }
