@@ -14,8 +14,7 @@ pub trait DebugWriter: Send + Sync {
 pub trait PerEpochWriter: Send + Sync {
     fn add_certificate(
         &self,
-        network_id: NetworkId,
-        height: Height,
+        certificate_id: CertificateId,
         mode: ExecutionMode,
     ) -> Result<(EpochNumber, CertificateIndex), Error>;
     fn start_packing(&self) -> Result<(), Error>;

@@ -1,4 +1,8 @@
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, CertificateStatus, Digest};
+use agglayer_storage::stores::StateWriter;
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
+    Digest,
+};
 use insta::assert_snapshot;
 use jsonrpsee::{
     core::{client::ClientT, ClientError},
@@ -172,8 +176,8 @@ async fn debug_fetch_unknown_certificate() {
     let context = TestContext::new_with_config(config).await;
 
     let payload: Result<(Certificate, Option<CertificateHeader>), ClientError> = context
-        .client
-        .request("interop_debugGetCertificate", rpc_params![Digest([0; 32])])
+        .admin_client
+        .request("admin_getCertificate", rpc_params![Digest([0; 32])])
         .await;
 
     let error = payload.unwrap_err();
@@ -203,8 +207,8 @@ async fn debug_fetch_known_certificate() {
     assert!(context.certificate_receiver.try_recv().is_ok());
 
     let (recv_cert, header): (Certificate, Option<CertificateHeader>) = context
-        .client
-        .request("interop_debugGetCertificate", rpc_params![id])
+        .admin_client
+        .request("admin_getCertificate", rpc_params![id])
         .await
         .unwrap();
 
@@ -236,8 +240,8 @@ async fn debug_get_certificate_after_sending_the_certificate() {
     assert!(context.certificate_receiver.try_recv().is_ok());
 
     let (recv_cert, header): (Certificate, Option<CertificateHeader>) = context
-        .client
-        .request("interop_debugGetCertificate", rpc_params![id])
+        .admin_client
+        .request("admin_getCertificate", rpc_params![id])
         .await
         .unwrap();
 
@@ -248,8 +252,8 @@ async fn debug_get_certificate_after_sending_the_certificate() {
     assert_eq!(header.status, CertificateStatus::Pending);
 
     let payload: Result<(Certificate, Option<CertificateHeader>), ClientError> = context
-        .client
-        .request("interop_debugGetCertificate", rpc_params![Digest([0; 32])])
+        .admin_client
+        .request("admin_getCertificate", rpc_params![Digest([0; 32])])
         .await;
 
     let error = payload.unwrap_err();
@@ -279,8 +283,8 @@ async fn debug_get_certificate_after_overwrite() {
     assert!(context.certificate_receiver.try_recv().is_ok());
 
     let (recv_cert, header): (Certificate, Option<CertificateHeader>) = context
-        .client
-        .request("interop_debugGetCertificate", rpc_params![id])
+        .admin_client
+        .request("admin_getCertificate", rpc_params![id])
         .await
         .unwrap();
 
@@ -294,6 +298,16 @@ async fn debug_get_certificate_after_overwrite() {
     certificate.prev_local_exit_root = [2; 32].into();
     let id2 = certificate.hash();
 
+    context
+        .state_store
+        .update_certificate_header_status(
+            &id,
+            &CertificateStatus::InError {
+                error: CertificateStatusError::InternalError("testing".to_string()),
+            },
+        )
+        .expect("unable to update certificate header status");
+
     let res: CertificateId = context
         .client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -305,8 +319,8 @@ async fn debug_get_certificate_after_overwrite() {
 
     // Retrieve 1
     let (recv_cert, header): (Certificate, Option<CertificateHeader>) = context
-        .client
-        .request("interop_debugGetCertificate", rpc_params![id])
+        .admin_client
+        .request("admin_getCertificate", rpc_params![id])
         .await
         .unwrap();
 
@@ -314,12 +328,12 @@ async fn debug_get_certificate_after_overwrite() {
     let header = header.unwrap();
     assert_eq!(header.certificate_id, id);
     assert_eq!(recv_cert.hash(), id);
-    assert_eq!(header.status, CertificateStatus::Pending);
+    assert!(matches!(header.status, CertificateStatus::InError { .. }));
 
     // Retrieve 2
     let (recv_cert, header): (Certificate, Option<CertificateHeader>) = context
-        .client
-        .request("interop_debugGetCertificate", rpc_params![id2])
+        .admin_client
+        .request("admin_getCertificate", rpc_params![id2])
         .await
         .unwrap();
 
@@ -351,14 +365,28 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
     assert!(context.certificate_receiver.try_recv().is_ok());
 
     let payload: Result<(Certificate, Option<CertificateHeader>), ClientError> = context
-        .client
-        .request("interop_debugGetCertificate", rpc_params![id])
+        .admin_client
+        .request("admin_getCertificate", rpc_params![id])
         .await;
 
     let error = payload.unwrap_err();
 
     let expected_message = format!("Resource not found: Certificate({:#})", id);
-    assert!(matches!(error, ClientError::Call(obj) if obj.message() == expected_message));
+    assert!(
+        matches!(&error, ClientError::Call(ref obj) if obj.message() == expected_message),
+        "{}, {:?}",
+        expected_message,
+        error
+    );
+    context
+        .state_store
+        .update_certificate_header_status(
+            &id,
+            &CertificateStatus::InError {
+                error: CertificateStatusError::InternalError("testing".to_string()),
+            },
+        )
+        .expect("unable to update certificate header status");
 
     let mut certificate = Certificate::new_for_test(1.into(), 0);
     certificate.prev_local_exit_root = [2; 32].into();
@@ -374,8 +402,8 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
     assert!(context.certificate_receiver.try_recv().is_ok());
 
     let payload: Result<(Certificate, Option<CertificateHeader>), ClientError> = context
-        .client
-        .request("interop_debugGetCertificate", rpc_params![id])
+        .admin_client
+        .request("admin_getCertificate", rpc_params![id])
         .await;
 
     let error = payload.unwrap_err();
@@ -384,8 +412,8 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
     assert!(matches!(error, ClientError::Call(obj) if obj.message() == expected_message));
 
     let payload: Result<(Certificate, Option<CertificateHeader>), ClientError> = context
-        .client
-        .request("interop_debugGetCertificate", rpc_params![id2])
+        .admin_client
+        .request("admin_getCertificate", rpc_params![id2])
         .await;
 
     let error = payload.unwrap_err();
