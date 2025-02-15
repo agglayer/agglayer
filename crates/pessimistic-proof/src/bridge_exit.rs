@@ -85,9 +85,9 @@ impl Hashable for BridgeExit {
     fn hash(&self) -> Digest {
         pessimistic_proof_core::bridge_exit::bridge_exit_hasher(
             self.leaf_type as u8,
-            self.token_info.origin_network,
+            self.token_info.origin_network as u16,
             self.token_info.origin_token_address,
-            *self.dest_network,
+            *self.dest_network as u16,
             self.dest_address,
             self.amount,
             self.metadata,
@@ -124,6 +124,8 @@ impl Display for NetworkId {
 impl NetworkId {
     pub const BITS: usize = u32::BITS as usize;
 
+    // TODO: Change type of `NetworkId` directly to hold a `u16`?
+    /// `NetworkId` must fit in 16 bits.
     pub const fn new(value: u32) -> Self {
         Self(value)
     }
@@ -135,6 +137,7 @@ impl NetworkId {
 
 impl From<u32> for NetworkId {
     fn from(value: u32) -> Self {
+        assert_eq!(value, (value as u16) as u32); // `NetworkId` must fit in 16 bits.
         Self(value)
     }
 }
