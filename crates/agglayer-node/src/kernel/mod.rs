@@ -185,6 +185,10 @@ where
     /// address from the rollup contract.
     #[error("contract error: {0}")]
     ContractError(#[from] ContractError<RpcProvider>),
+
+    /// SP1-based Aggchain proof not yet supported.
+    #[error("SP1-based Aggchain proof not yet supported")]
+    SP1AggchainProofUnsupported,
 }
 
 /// Errors related to settlement process.
@@ -342,8 +346,10 @@ where
 
         let signer: H160 = cert
             .signer()
-            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)
-            .map(|signer| signer.into_array().into())?;
+            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
+            .ok_or(SignatureVerificationError::SP1AggchainProofUnsupported)?
+            .into_array()
+            .into();
 
         // ECDSA-k256 signature verification works by recovering the public key from the
         // signature, and then checking that it is the expected one.
