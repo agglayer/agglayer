@@ -158,10 +158,9 @@ impl From<Digest> for Vec<u8> {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-impl rand::distributions::Distribution<Digest> for rand::distributions::Standard {
+impl rand::distr::Distribution<Digest> for rand::distr::StandardUniform {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Digest {
-        let raw: [u8; 32] = rng.gen();
-
+        let raw: [u8; 32] = rng.random();
         Digest(raw)
     }
 }

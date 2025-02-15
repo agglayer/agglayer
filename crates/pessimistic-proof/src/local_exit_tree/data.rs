@@ -150,7 +150,7 @@ where
 #[cfg(test)]
 mod tests {
     use pessimistic_proof_core::local_exit_tree::hasher::Keccak256Hasher;
-    use rand::{random, thread_rng, Rng};
+    use rand::{random, rng, Rng};
 
     use crate::local_exit_tree::{data::LocalExitTreeData, LocalExitTree, LocalExitTreeError};
 
@@ -176,13 +176,13 @@ mod tests {
 
     #[test]
     fn test_data_vs_frontier_root() {
-        let num_leaves = thread_rng().gen_range(1..100.min(1 << TREE_DEPTH));
+        let num_leaves = rng().random_range(1..100.min(1 << TREE_DEPTH));
         compare_let_data_let_frontier(num_leaves)
     }
 
     #[test]
     fn test_data_vs_frontier_add_leaf() -> Result<(), LocalExitTreeError> {
-        let num_leaves = thread_rng().gen_range(1usize..100.min(1 << TREE_DEPTH));
+        let num_leaves = rng().random_range(1usize..100.min(1 << TREE_DEPTH));
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
         let mut local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
             LocalExitTreeData::from_leaves(leaves.into_iter())?;
@@ -204,9 +204,9 @@ mod tests {
 
     #[test]
     fn test_merkle_proofs() {
-        let num_leaves = thread_rng().gen_range(1..=100.min(1 << TREE_DEPTH));
+        let num_leaves = rng().random_range(1..=100.min(1 << TREE_DEPTH));
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
-        let leaf_index = thread_rng().gen_range(0..num_leaves);
+        let leaf_index = rng().random_range(0..num_leaves);
         let leaf = leaves[leaf_index];
         let local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
             LocalExitTreeData::from_leaves(leaves.into_iter()).unwrap();
