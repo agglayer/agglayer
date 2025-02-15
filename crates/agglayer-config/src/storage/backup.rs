@@ -11,7 +11,7 @@ pub enum BackupConfig {
     Disabled,
 
     /// Backups are enabled.
-    #[serde(untagged)]
+    #[serde(untagged, rename_all = "kebab-case")]
     Enabled {
         /// Path to the directory where backups are stored.
         path: PathBuf,
