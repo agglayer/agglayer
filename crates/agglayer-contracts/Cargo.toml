@@ -12,6 +12,7 @@ ethers.workspace = true
 ethers-contract = "2.0.14"
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true
