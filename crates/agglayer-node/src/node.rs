@@ -3,14 +3,17 @@ use std::{convert::Infallible, num::NonZeroU64, sync::Arc};
 use agglayer_aggregator_notifier::{CertifierClient, EpochPackerClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
-use agglayer_config::{Config, Epoch};
+use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
 use agglayer_contracts::{
     polygon_rollup_manager::PolygonRollupManager,
     polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
 };
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
-    storage::DB,
+    storage::{
+        backup::{BackupClient, BackupEngine},
+        DB,
+    },
     stores::{
         debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
         PerEpochReader as _,
@@ -106,7 +109,28 @@ impl Node {
             agglayer_storage::storage::state_db_cf_definitions(),
         )?);
 
-        let state_store = Arc::new(StateStore::new(state_db.clone()));
+        // Initialize backup engine
+        let backup_client = if let BackupConfig::Enabled {
+            path,
+            state_max_backup_count,
+            pending_max_backup_count,
+        } = &config.storage.backup
+        {
+            let (backup_engine, client) = BackupEngine::new(
+                path,
+                state_db.clone(),
+                pending_db.clone(),
+                *state_max_backup_count,
+                *pending_max_backup_count,
+                cancellation_token.clone(),
+            )?;
+            tokio::spawn(backup_engine.run());
+
+            client
+        } else {
+            BackupClient::noop()
+        };
+        let state_store = Arc::new(StateStore::new(state_db.clone(), backup_client.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
         let debug_store = if config.debug_mode {
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path)?)
@@ -157,6 +181,7 @@ impl Node {
             current_epoch,
             pending_store.clone(),
             state_store.clone(),
+            backup_client,
         )?);
 
         info!("Epoch synchronization started.");

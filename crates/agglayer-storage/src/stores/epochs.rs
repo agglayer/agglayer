@@ -10,7 +10,7 @@ use super::{
     per_epoch::PerEpochStore, EpochStoreReader, EpochStoreWriter, MetadataWriter,
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
 };
-use crate::error::Error;
+use crate::{error::Error, storage::backup::BackupClient};
 
 pub struct EpochsStore<PendingStore, StateStore> {
     config: Arc<agglayer_config::Config>,
@@ -18,6 +18,7 @@ pub struct EpochsStore<PendingStore, StateStore> {
     open_epochs: RwLock<BTreeSet<u64>>,
     pending_store: Arc<PendingStore>,
     state_store: Arc<StateStore>,
+    backup_client: BackupClient,
 }
 
 impl<PendingStore, StateStore> EpochsStore<PendingStore, StateStore> {
@@ -26,6 +27,7 @@ impl<PendingStore, StateStore> EpochsStore<PendingStore, StateStore> {
         epoch_number: u64,
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
+        backup_client: BackupClient,
     ) -> Result<Self, Error> {
         let open_epochs = RwLock::new(BTreeSet::new());
         open_epochs.write().insert(epoch_number);
@@ -35,6 +37,7 @@ impl<PendingStore, StateStore> EpochsStore<PendingStore, StateStore> {
             open_epochs,
             pending_store,
             state_store,
+            backup_client,
         })
     }
 }
@@ -52,6 +55,7 @@ where
             self.pending_store.clone(),
             self.state_store.clone(),
             None,
+            self.backup_client.clone(),
         )
     }
 
@@ -66,6 +70,7 @@ where
             self.pending_store.clone(),
             self.state_store.clone(),
             Some(start_checkpoint),
+            self.backup_client.clone(),
         )
     }
 }
