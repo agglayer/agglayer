@@ -5,6 +5,7 @@
 
 use std::{collections::HashMap, path::Path};
 
+use agglayer_prover_config::GrpcConfig;
 use ethers::types::Address;
 use outbound::OutboundConfig;
 use serde::{de::DeserializeSeed, Deserialize, Serialize};
@@ -105,12 +106,19 @@ pub struct Config {
     #[serde(skip_serializing_if = "String::is_empty")]
     pub prover_entrypoint: String,
 
-    #[serde(default, skip_serializing_if = "crate::default")]
+    #[serde(default, skip_serializing_if = "crate::is_default")]
     pub prover: agglayer_prover_config::ClientProverConfig,
 
     #[serde(default)]
     #[serde(skip_serializing_if = "is_false")]
     pub debug_mode: bool,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_false")]
+    pub mock_verifier: bool,
+
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    pub grpc: GrpcConfig,
 }
 
 impl Config {
@@ -162,6 +170,8 @@ impl Config {
             prover_entrypoint: default_prover_entrypoint(),
             prover: Default::default(),
             debug_mode: false,
+            mock_verifier: false,
+            grpc: Default::default(),
         }
     }
 
@@ -234,6 +244,6 @@ fn is_false(b: &bool) -> bool {
     !*b
 }
 
-pub(crate) fn default<T: Default + PartialEq>(t: &T) -> bool {
+pub(crate) fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     *t == Default::default()
 }

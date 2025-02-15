@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package agglayer.protocol.types.v1;
+
+import "agglayer/protocol/types/v1/bytes.proto";
+
+// Represents a claim from the mainnet.
+message ClaimFromMainnet {
+  // Proof from bridge exit leaf to MER
+  MerkleProof proof_leaf_mer = 1;
+  // Proof from GER to L1Root
+  MerkleProof proof_ger_l1root = 2;
+  // L1InfoTree leaf
+  L1InfoTreeLeaf l1_leaf = 3;
+}
+
+// Represents a leaf in the L1InfoTree.
+message L1InfoTreeLeaf {
+  // l1 info tree leaf index
+  uint32 l1_info_tree_index = 1;
+  // Rollup exit root
+  FixedBytes32 rer = 2;
+  // Mainnet exit root
+  FixedBytes32 mer = 3;
+  // Inner leaf
+  L1InfoTreeLeafInner inner = 4;
+}
+
+// Represents the inner part of a leaf in the L1InfoTree.
+message L1InfoTreeLeafInner {
+  // The global exit root.
+  FixedBytes32 global_exit_root = 1;
+  // Block hash.
+  FixedBytes32 block_hash = 2;
+  // Timestamp.
+  uint64 timestamp = 3;
+}
+
+// Represents a Merkle proof.
+message MerkleProof {
+  // The root of the Merkle tree.
+  FixedBytes32 root = 1;
+  // The path from the leaf to the root.
+  repeated FixedBytes32 siblings = 2;
+}
+
+// Represents a claim from the rollup.
+message ClaimFromRollup {
+  // Proof from bridge exit leaf to LER
+  MerkleProof proof_leaf_ler = 1;
+  // Proof from LER to RER
+  MerkleProof proof_ler_rer = 2;
+  // Proof from GER to L1Root
+  MerkleProof proof_ger_l1root = 3;
+  // L1InfoTree leaf
+  L1InfoTreeLeaf l1_leaf = 4;
+}

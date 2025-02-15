@@ -1,0 +1,42 @@
+[tasks.generate-proto]
+command = "buf"
+args = ["generate", "--template", "buf.rust.gen.yaml"]
+dependencies = [
+    "install-buf",
+    "install-protoc-gen-prost",
+    "install-protoc-gen-prost-serde",
+    "install-protoc-gen-prost-crate",
+    "install-protoc-gen-tonic",
+]
+
+[tasks.install-buf]
+run_task = [
+    { name = "install-buf-linux", condition = { platforms = [
+        "linux",
+    ] } },
+    { name = "install-buf-mac", condition = { platforms = [
+        "mac",
+    ] } },
+]
+
+[tasks.install-buf-linux]
+script = '''
+npm install @bufbuild/buf
+'''
+
+[tasks.install-buf-mac]
+script = '''
+brew install bufbuild/buf/buf
+'''
+
+[tasks.install-protoc-gen-prost]
+install_crate = { crate_name = "protoc-gen-prost", version = "0.4.0" }
+
+[tasks.install-protoc-gen-prost-serde]
+install_crate = { crate_name = "protoc-gen-prost-serde", version = "0.2.3" }
+
+[tasks.install-protoc-gen-prost-crate]
+install_crate = { crate_name = "protoc-gen-prost-crate", version = "0.3.1" }
+
+[tasks.install-protoc-gen-tonic]
+install_crate = { crate_name = "protoc-gen-tonic", version = "0.4.1" }

@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package agglayer.protocol.types.v1;
+
+import "agglayer/protocol/types/v1/bridge_exit.proto";
+import "agglayer/protocol/types/v1/bytes.proto";
+import "agglayer/protocol/types/v1/imported_bridge_exit.proto";
+
+// Certificate type.
+message Certificate {
+  // NetworkID of the origin network.
+  uint32 network_id = 1;
+  // Simple increment to count the Certificate per network.
+  uint64 height = 2;
+  // Previous local exit root.
+  FixedBytes32 prev_local_exit_root = 3;
+  // New local exit root.
+  FixedBytes32 new_local_exit_root = 4;
+  // List of bridge exits included in this state transition.
+  repeated BridgeExit bridge_exits = 5;
+  // List of imported bridge exits included in this state transition.
+  repeated ImportedBridgeExit imported_bridge_exits = 6;
+  // Fixed size field of arbitrary data for the chain needs.
+  FixedBytes32 metadata = 7;
+  // Aggchain params.
+  bytes aggchain_params = 8;
+  // Aggchain proof.
+  AggchainProof aggchain_proof = 9;
+  // custom chain data.
+  bytes custom_chain_data = 10;
+}
+
+// Aggchain proof.
+message AggchainProof {
+  // The proof for the aggchain.
+  oneof proof {
+    // Signature committed to the bridge exits and imported bridge exits.
+    FixedBytes65 signature = 1;
+    // SP1 stark proof.
+    FixedBytes32 sp1_stark = 2;
+  }
+}
+
+// Certificate identifier.
+message CertificateId {
+  // bytes representation of the certificate id.
+  FixedBytes32 value = 1;
+}

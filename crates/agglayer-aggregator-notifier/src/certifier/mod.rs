@@ -55,7 +55,11 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         config: Arc<Config>,
     ) -> anyhow::Result<Self> {
         debug!("Initializing the CertifierClient verifier...");
-        let verifier = CpuProver::new();
+        let verifier = if config.mock_verifier {
+            sp1_sdk::ProverClient::builder().mock().build()
+        } else {
+            sp1_sdk::ProverClient::builder().cpu().build()
+        };
         let (_, verifying_key) = verifier.setup(ELF);
         debug!("CertifierClient verifier successfully initialized!");
 
@@ -140,6 +144,7 @@ where
         stdin.write(&network_state);
         stdin.write(&multi_batch_header);
 
+        // TODO: Propagate the stark proof or build the SP1Stdin directly here
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
                 default_bincode_options()
@@ -309,7 +314,9 @@ where
             .apply_certificate(certificate, signer, l1_info_root)
             .map_err(|source| CertificationError::Types { source })?;
 
-        // Perform the native PP execution
+        // Perform the native PP execution without the STARK verification
+        // TODO: Replace this by one native execution within SP1 to have the STARK
+        // verification
         let _ = generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
             .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
