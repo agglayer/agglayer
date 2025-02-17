@@ -4,6 +4,7 @@ use agglayer_config::Config;
 use agglayer_types::{Certificate, CertificateId, NetworkId};
 use ethers::{providers, signers::Signer as _};
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder, rpc_params};
+use tracing::debug;
 
 use super::next_available_addr;
 use crate::{
@@ -40,7 +41,17 @@ async fn send_certificate_method_can_be_called_and_succeed() {
         config.clone(),
     );
 
-    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+    let router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+
+    let listener = tokio::net::TcpListener::bind(config.rpc_addr())
+        .await
+        .unwrap();
+    let api_server = axum::serve(listener, router);
+
+    let _rpc_handle = tokio::spawn(async move {
+        _ = api_server.await;
+        debug!("Node RPC shutdown requested.");
+    });
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();

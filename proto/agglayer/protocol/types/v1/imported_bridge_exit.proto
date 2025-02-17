@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package agglayer.protocol.types.v1;
+
+import "agglayer/protocol/types/v1/bridge_exit.proto";
+import "agglayer/protocol/types/v1/bytes.proto";
+import "agglayer/protocol/types/v1/claim.proto";
+
+// Represents a token bridge exit originating on another network but claimed on
+// the current network.
+message ImportedBridgeExit {
+  /// The bridge exit initiated on another network, called the "sending"
+  /// network. Need to verify that the destination network matches the
+  /// current network, and that the bridge exit is included in an imported
+  /// LER
+  BridgeExit bridge_exit = 1;
+
+  /// The global index of the imported bridge exit.
+  FixedBytes32 global_index = 2;
+
+  // Which type of claim the imported bridge exit is from.
+  oneof claim {
+    /// The claim originated from the mainnet.
+    ClaimFromMainnet mainnet = 3;
+    /// The claim originated from the rollup.
+    ClaimFromRollup rollup = 4;
+  }
+}
