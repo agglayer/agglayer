@@ -86,12 +86,6 @@ pub struct BackupEngine {
     cancellation_token: CancellationToken,
 }
 
-// # Safety
-//
-// RocksBackupEngine is a simple pointer wrapper, so it's safe to send to
-// another thread since the underlying RocksDB backup engine is thread-safe.
-unsafe impl Send for BackupEngine {}
-
 impl BackupEngine {
     /// Create a new backup engine, return the engine and a client to request
     /// backups.
