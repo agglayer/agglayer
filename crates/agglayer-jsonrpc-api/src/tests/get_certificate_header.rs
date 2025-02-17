@@ -10,7 +10,7 @@ use serde_json::json;
 use super::context;
 use super::raw_rpc;
 use super::TestContext;
-use crate::rpc::{tests::RawRpcContext, AgglayerServer};
+use crate::{tests::RawRpcContext, AgglayerServer};
 
 #[rstest]
 #[awt]

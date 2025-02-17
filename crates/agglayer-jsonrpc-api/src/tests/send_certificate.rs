@@ -9,8 +9,8 @@ use tracing::debug;
 use super::next_available_addr;
 use crate::{
     kernel::Kernel,
-    rpc::{tests::DummyStore, AgglayerImpl},
     service::AgglayerService,
+    {tests::DummyStore, AgglayerImpl},
 };
 
 #[test_log::test(tokio::test)]
@@ -32,16 +32,19 @@ async fn send_certificate_method_can_be_called_and_succeed() {
 
     let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-    let service = AgglayerService::new(
-        kernel,
+    let service = AgglayerService::new(kernel);
+
+    let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         config.clone(),
     );
-
-    let router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+    let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
+        .start()
+        .await
+        .unwrap();
 
     let listener = tokio::net::TcpListener::bind(config.rpc_addr())
         .await
@@ -83,8 +86,9 @@ async fn send_certificate_method_can_be_called_and_fail() {
 
     let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-    let service = AgglayerService::new(
-        kernel,
+    let service = AgglayerService::new(kernel);
+
+    let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
@@ -92,7 +96,10 @@ async fn send_certificate_method_can_be_called_and_fail() {
         config.clone(),
     );
 
-    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+    let _server_handle = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
+        .start()
+        .await
+        .unwrap();
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
@@ -129,15 +136,20 @@ async fn send_certificate_method_requires_known_signer() {
 
     let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-    let service = AgglayerService::new(
-        kernel,
+    let service = AgglayerService::new(kernel);
+
+    let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         config.clone(),
     );
-    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+
+    let _server_handle = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
+        .start()
+        .await
+        .unwrap();
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();

@@ -1,5 +1,5 @@
 use std::future::IntoFuture;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use agglayer_config::Config;
@@ -16,107 +16,49 @@ use agglayer_storage::{
 use agglayer_types::{Certificate, CertificateId, CertificateStatus, Digest, Height, NetworkId};
 use ethers::providers::{self, MockProvider, Provider};
 use ethers::signers::Signer;
-use http_body_util::Empty;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
 use jsonrpsee::http_client::HttpClientBuilder;
 use rstest::*;
 use tokio_util::sync::CancellationToken;
-use tracing::debug;
 
-use crate::{kernel::Kernel, rpc::AgglayerImpl, service::AgglayerService};
+use crate::{kernel::Kernel, service::AgglayerService, AgglayerImpl};
 
+#[cfg(test)]
 mod errors;
+#[cfg(test)]
 mod get_certificate_header;
+#[cfg(test)]
 mod get_epoch_configuration;
+#[cfg(test)]
 mod get_latest_known_certificate_header;
+#[cfg(test)]
 mod get_tx_status;
+#[cfg(test)]
 mod send_certificate;
 
-#[test_log::test(tokio::test)]
-async fn healthcheck_method_can_be_called() {
-    use hyper::Request;
-
-    let mut config = Config::new_for_test();
-    let addr = next_available_addr();
-    if let std::net::IpAddr::V4(ip) = addr.ip() {
-        config.rpc.host = ip;
-    }
-    config.rpc.port = addr.port();
-
-    let config = Arc::new(config);
-    let (provider, _mock) = providers::Provider::mocked();
-    let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
-
-    let kernel = Kernel::new(Arc::new(provider), config.clone());
-
-    let service = AgglayerService::new(
-        kernel,
-        certificate_sender,
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-        config.clone(),
-    );
-
-    let json_rpc_router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
-
-    let router = axum::Router::new()
-        .route(
-            "/health",
-            axum::routing::get(crate::node::api::rest::health),
-        )
-        .merge(json_rpc_router);
-
-    let listener = tokio::net::TcpListener::bind(config.rpc_addr())
-        .await
-        .unwrap();
-    let api_server = axum::serve(listener, router);
-
-    let _rpc_handle = tokio::spawn(async move {
-        _ = api_server.await;
-        debug!("Node RPC shutdown requested.");
-    });
-    let http_client = Client::builder(TokioExecutor::new()).build_http();
-    let uri = format!("http://{}/health", config.rpc_addr());
-
-    let req = Request::builder()
-        .method("GET")
-        .uri(&uri)
-        .body(Empty::<hyper::body::Bytes>::new())
-        .expect("request builder");
-    let res = http_client.request(req).await.unwrap();
-
-    assert!(res.status().is_success());
-
-    let bytes = http_body_util::BodyExt::collect(res.into_body())
-        .await
-        .unwrap();
-    let out = String::from_utf8(bytes.to_bytes().to_vec()).unwrap();
-    assert_eq!(out.as_str(), "{\"health\":true}");
-}
-
-pub(crate) struct RawRpcContext {
-    pub(crate) rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore, DebugStore>,
+pub struct RawRpcContext {
+    pub rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore, DebugStore>,
     config: Arc<Config>,
-    pub(crate) certificate_receiver:
-        tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
+    pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
 
-pub(crate) struct TestContext {
-    pub(crate) client: jsonrpsee::http_client::HttpClient,
-    pub(crate) cancellation_token: CancellationToken,
-    pub(crate) certificate_receiver:
-        tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
+pub struct TestContext {
+    pub client: jsonrpsee::http_client::HttpClient,
+    pub config: Arc<Config>,
+    pub cancellation_token: CancellationToken,
+    pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
 
 impl TestContext {
+    pub fn next_available_address() -> SocketAddr {
+        next_available_addr()
+    }
+
     async fn new() -> Self {
         let config = Self::get_default_config();
         Self::new_with_config(config).await
     }
 
-    async fn new_with_config(config: Config) -> Self {
+    pub async fn new_with_config(config: Config) -> Self {
         let cancellation_token = CancellationToken::new();
         let raw_rpc = Self::new_raw_rpc_with_config(config).await;
         let router = raw_rpc.rpc.start().await.unwrap();
@@ -136,11 +78,12 @@ impl TestContext {
         Self {
             cancellation_token,
             client,
+            config: raw_rpc.config,
             certificate_receiver: raw_rpc.certificate_receiver,
         }
     }
 
-    pub(crate) fn get_default_config() -> Config {
+    pub fn get_default_config() -> Config {
         let tmp = TempDBDir::new();
         let mut cfg = Config::new(&tmp.path);
         for network_id in 0..10 {
@@ -185,16 +128,17 @@ impl TestContext {
 
         let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-        let service = AgglayerService::new(
-            kernel,
-            certificate_sender,
-            pending_store,
-            state_store,
-            debug_store,
-            config.clone(),
-        );
+        let service = AgglayerService::new(kernel);
 
-        let rpc = AgglayerImpl::new(Arc::new(service));
+        let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
+            certificate_sender,
+            pending_store.clone(),
+            state_store.clone(),
+            debug_store.clone(),
+            config.clone(),
+        ));
+
+        let rpc = AgglayerImpl::new(Arc::new(service), rpc_service);
 
         RawRpcContext {
             rpc,
@@ -223,10 +167,10 @@ async fn raw_rpc() -> RawRpcContext {
 fn next_available_addr() -> std::net::SocketAddr {
     use std::net::{TcpListener, TcpStream};
 
-    assert!(
-        std::env::var("NEXTEST").is_ok(),
-        "Due to concurrency issues, the rpc tests have to be run under `cargo nextest`",
-    );
+    // assert!(
+    //     std::env::var("NEXTEST").is_ok(),
+    //     "Due to concurrency issues, the rpc tests have to be run under `cargo
+    // nextest`", );
 
     let host = "127.0.0.1";
     // Request a random available port from the OS

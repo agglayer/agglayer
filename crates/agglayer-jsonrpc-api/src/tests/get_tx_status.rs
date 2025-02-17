@@ -17,9 +17,9 @@ use jsonrpsee::rpc_params;
 use tracing::debug;
 
 use super::next_available_addr;
-use crate::rpc::tests::DummyStore;
-use crate::rpc::{self, TxStatus};
-use crate::{kernel::Kernel, rpc::AgglayerImpl, service::AgglayerService};
+use crate::tests::DummyStore;
+use crate::TxStatus;
+use crate::{kernel::Kernel, service::AgglayerService, AgglayerImpl};
 
 #[test_log::test(tokio::test)]
 async fn check_tx_status() {
@@ -52,8 +52,9 @@ async fn check_tx_status() {
     let kernel = Kernel::new(Arc::new(client), config.clone());
 
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
-    let service = AgglayerService::new(
-        kernel,
+    let service = AgglayerService::new(kernel);
+
+    let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
@@ -61,7 +62,10 @@ async fn check_tx_status() {
         config.clone(),
     );
 
-    let router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+    let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
+        .start()
+        .await
+        .unwrap();
 
     let listener = tokio::net::TcpListener::bind(config.rpc_addr())
         .await
@@ -117,16 +121,15 @@ async fn check_tx_status_fail() {
     let state = Arc::new(StateStore::new(store_db));
     let debug = Arc::new(DebugStore::new_with_path(&tmp.path.join("debug")).unwrap());
 
-    let service = AgglayerService::new(
-        kernel,
-        certificate_sender,
-        store,
-        state,
-        debug,
-        config.clone(),
-    );
+    let service = AgglayerService::new(kernel);
 
-    let router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+    let rpc_service =
+        agglayer_rpc::AgglayerService::new(certificate_sender, store, state, debug, config.clone());
+
+    let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
+        .start()
+        .await
+        .unwrap();
 
     let listener = tokio::net::TcpListener::bind(config.rpc_addr())
         .await
@@ -148,7 +151,7 @@ async fn check_tx_status_fail() {
 
     match result.unwrap_err() {
         ClientError::Call(err) => {
-            assert_eq!(err.code(), rpc::error::code::STATUS_ERROR);
+            assert_eq!(err.code(), crate::error::code::STATUS_ERROR);
 
             let data_expected = serde_json::json! {
                 { "status": { "tx-not-found": { "hash":  fake_tx_hash} } }

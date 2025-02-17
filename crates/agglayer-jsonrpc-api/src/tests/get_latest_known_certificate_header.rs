@@ -13,7 +13,7 @@ use rstest::*;
 use serde_json::json;
 
 use super::TestContext;
-use crate::rpc::AgglayerServer as _;
+use crate::AgglayerServer as _;
 
 #[rstest]
 #[test_log::test(tokio::test)]

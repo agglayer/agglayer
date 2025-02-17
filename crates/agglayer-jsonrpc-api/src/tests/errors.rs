@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use agglayer_contracts::polygon_rollup_manager::PolygonRollupManagerErrors;
+use agglayer_rate_limiting::{self, component, Component};
 use agglayer_types::Digest;
 use alloy::{primitives::SignatureError as AlloySignatureError, signers::k256};
 use ethers::{
@@ -13,9 +14,7 @@ use jsonrpsee::types::ErrorObjectOwned;
 
 use crate::{
     kernel::{self, ZkevmNodeVerificationError},
-    rate_limiting::{self, component, Component},
-    rpc::Error,
-    service,
+    service, Error,
 };
 
 type RpcProvider = ethers::providers::Provider<ethers::providers::Http>;
@@ -102,11 +101,11 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 )]
 #[case(
     "rate_disallowed",
-    SendTxError::RateLimited(rate_limiting::RateLimited::SendTxDiabled {})
+    SendTxError::RateLimited(agglayer_rate_limiting::RateLimited::SendTxDiabled {})
 )]
 #[case(
     "rate_sendtx",
-    SendTxError::RateLimited(rate_limiting::RateLimited::SendTxRateLimited(WallClockLimitedInfo {
+    SendTxError::RateLimited(agglayer_rate_limiting::RateLimited::SendTxRateLimited(WallClockLimitedInfo {
         max_per_interval: 3,
         time_interval: Duration::from_secs(30 * 60),
         until_next: Some(Duration::from_secs(123)),
@@ -114,7 +113,7 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 )]
 #[case(
     "rate_sendtx_nonext",
-    SendTxError::RateLimited(rate_limiting::RateLimited::SendTxRateLimited(WallClockLimitedInfo {
+    SendTxError::RateLimited(agglayer_rate_limiting::RateLimited::SendTxRateLimited(WallClockLimitedInfo {
         max_per_interval: 4,
         time_interval: Duration::from_secs(40 * 60),
         until_next: None,
@@ -132,7 +131,7 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 )]
 #[case(
     "cert_notfound",
-    service::CertificateRetrievalError::NotFound { certificate_id: Digest([0x51; 32]) }
+    agglayer_rpc::CertificateRetrievalError::NotFound { certificate_id: Digest([0x51; 32]) }
 )]
 fn rpc_error_rendering(#[case] name: &str, #[case] err: impl Into<Error>) {
     let err: Error = err.into();

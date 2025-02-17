@@ -6,6 +6,7 @@ use agglayer_contracts::{
     polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
     polygon_zk_evm::PolygonZkEvm,
 };
+use agglayer_rate_limiting::RateLimiter;
 use agglayer_types::Certificate;
 use ethers::{
     contract::{ContractCall, ContractError},
@@ -15,11 +16,7 @@ use ethers::{
 use thiserror::Error;
 use tracing::{info, instrument, warn};
 
-use crate::{
-    rate_limiting::{self, RateLimiter},
-    signed_tx::SignedTx,
-    zkevm_node_client::ZkevmNodeClient,
-};
+use crate::{signed_tx::SignedTx, zkevm_node_client::ZkevmNodeClient};
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -32,7 +29,7 @@ pub(crate) mod tests;
 /// In the future, it may provide functionality for proof aggregation,
 /// batching, Epoch management, among other things.
 #[derive(Debug)]
-pub(crate) struct Kernel<RpcProvider> {
+pub struct Kernel<RpcProvider> {
     rpc: Arc<RpcProvider>,
     rate_limiter: RateLimiter,
     config: Arc<Config>,
@@ -64,7 +61,7 @@ pub enum ZkevmNodeVerificationError {
 }
 
 impl<RpcProvider> Kernel<RpcProvider> {
-    pub(crate) fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> Self {
+    pub fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> Self {
         Self {
             rpc,
             rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
@@ -201,7 +198,7 @@ where
     #[error("contract error: {0}")]
     ContractError(ContractError<RpcProvider>),
     #[error(transparent)]
-    RateLimited(#[from] crate::rate_limiting::RateLimited),
+    RateLimited(#[from] agglayer_rate_limiting::RateLimited),
     #[error("Settlement timed out after {}s", .0.as_secs())]
     Timeout(std::time::Duration),
 }
@@ -381,7 +378,7 @@ where
     pub(crate) async fn settle(
         &self,
         signed_tx: &SignedTx,
-        rate_guard: rate_limiting::SendTxSlotGuard,
+        rate_guard: agglayer_rate_limiting::SendTxSlotGuard,
     ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
         let hex_hash = signed_tx.hash();
         let hash = format!("{:?}", hex_hash);

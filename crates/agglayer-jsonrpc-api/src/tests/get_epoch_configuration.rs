@@ -13,7 +13,7 @@ use serde_json::json;
 use super::context;
 use super::raw_rpc;
 use super::TestContext;
-use crate::rpc::{tests::RawRpcContext, AgglayerServer};
+use crate::{tests::RawRpcContext, AgglayerServer};
 
 #[test_log::test(tokio::test)]
 async fn fetch_timeclock_config() {
