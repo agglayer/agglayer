@@ -299,7 +299,7 @@ where
                     })?
                     .into();
 
-                // Check that the retrieve l1 info root is equal to the declared one
+                // Check that the retrieved l1 info root is equal to the declared one
                 if declared_root != retrieved_root {
                     return Err(CertificationError::Types {
                         source: agglayer_types::Error::L1InfoRootIncorrect {
