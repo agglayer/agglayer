@@ -8,7 +8,7 @@ use tracing::warn;
 #[cfg(target_os = "zkvm")]
 use crate::aggchain_proof::AggchainProofPublicValues;
 use crate::{
-    aggchain_proof::AggchainProofData,
+    aggchain_proof::{AggchainProofData, AggchainProofECDSAData},
     bridge_exit::{L1_ETH, L1_NETWORK_ID},
     imported_bridge_exit::{commit_imported_bridge_exits, Error},
     keccak::digest::Digest,
@@ -232,27 +232,9 @@ impl NetworkState {
         // NOTE: The STARK is verified exclusively within the SP1 VM.
         match &multi_batch_header.aggchain_proof {
             AggchainProofData::ECDSA(aggchain_proof_ecdsa) => {
-                // Verify that the signature is valid
-                let combined_hash = signature_commitment(
-                    multi_batch_header.target.exit_root,
-                    multi_batch_header
-                        .imported_bridge_exits
-                        .iter()
-                        .map(|(exit, _)| exit.global_index),
-                );
-
-                // Check batch header signature
-                let signer = aggchain_proof_ecdsa
-                    .signature
-                    .recover_address_from_prehash(&B256::new(combined_hash.0))
-                    .map_err(|_| ProofError::InvalidSignature)?;
-
-                if signer != aggchain_proof_ecdsa.signer {
-                    return Err(ProofError::InvalidSigner {
-                        declared: aggchain_proof_ecdsa.signer,
-                        recovered: signer,
-                    });
-                }
+                // TODO: bubble up the new pp root to the public inputs
+                let new_pp_root =
+                    self.verify_signature(multi_batch_header, aggchain_proof_ecdsa)?;
             }
             #[cfg(not(target_os = "zkvm"))]
             AggchainProofData::SP1(_) => {
@@ -284,5 +266,126 @@ impl NetworkState {
         }
 
         Ok(self.roots())
+    }
+
+    /// Verify the signature and the pessimistic root
+    fn verify_signature(
+        &self,
+        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+        aggchain_proof_ecdsa: AggchainProofECDSAData,
+    ) -> Result<Digest, ProofError> {
+        let prev_height_from_batch = 0; // TODO: from batch header
+        let prev_pessimistic_root_from_batch = Digest::default(); // TODO: from batch header
+
+        // Compute v2 pp root
+        let pp_root_v2 = |lbr, lnr, ler_leaf_count| -> Digest {
+            keccak256_combine([
+                lbr.as_slice(),
+                lnr.as_slice(),
+                ler_leaf_count.to_le_bytes().as_slice(),
+            ])
+        };
+
+        // Compute v3 pp root
+        let pp_root_v3 = |lbr, lnr, ler_leaf_count, height| -> Digest {
+            keccak256_combine([
+                lbr.as_slice(),
+                lnr.as_slice(),
+                ler_leaf_count.to_le_bytes().as_slice(),
+                height.to_le_bytes().as_slice(),
+            ])
+        };
+
+        let verify_signature = |digest, signature| {
+            signature
+                .recover_address_from_prehash(&B256::new(digest))
+                .map_err(|_| ProofError::InvalidSignature)?
+        };
+
+        let post_migration = prev_pessimistic_root_from_batch
+            == pp_root_v3(
+                prev_lbr,
+                prev_lnr,
+                prev_ler_leaf_count,
+                prev_height_from_batch,
+            );
+
+        let pre_migration =
+            prev_pessimistic_root_from_batch == pp_root_v2(prev_lbr, prev_nr, prev_ler_leaf_count);
+
+        let commit_imported_bridge_exits = commit_imported_bridge_exits(
+            multi_batch_header
+                .imported_bridge_exits
+                .iter()
+                .map(|(exit, _)| exit.global_index),
+        );
+
+        let new_pessimistic_root = {
+            if post_migration {
+                // The last pp root is v3, so the migration already happened.
+                // Consequently, we must enforce the height increase.
+                if aggchain_proof_ecdsa.signer
+                    != verify_signature(
+                        keccak256_combine([
+                            multi_batch_header.target.exit_root,
+                            commit_imported_bridge_exits,
+                            prev_height_from_batch + 1,
+                        ]),
+                        aggchain_proof_ecdsa.signature,
+                    )
+                {}
+
+                pp_root_v3(
+                    multi_batch_header.target.balance_root,
+                    multi_batch_header.target.nullifier_root,
+                    multi_batch_header.target.ler_leaf_count,
+                    prev_height_from_batch + 1,
+                )
+            } else if pre_migration {
+                // the last pp root is v2, let's check if the signature includes the
+                // height or not, indicating whether the migration has to be done or not
+                let is_signed_v2 = aggchain_proof_ecdsa.signer
+                    == verify_signature(
+                        keccak256_combine([
+                            multi_batch_header.target.exit_root.as_slice(),
+                            commit_imported_bridge_exits.as_slice(),
+                        ]),
+                        aggchain_proof_ecdsa.signature,
+                    )?;
+
+                let is_signed_v3 = aggchain_proof_ecdsa.signer
+                    == verify_signature(
+                        keccak256_combine([
+                            multi_batch_header.target.exit_root.as_slice(),
+                            commit_imported_bridge_exits.as_slice(),
+                            height.to_le_bytes().as_slice(),
+                        ]),
+                        aggchain_proof_ecdsa.signature,
+                    )?;
+
+                if is_signed_v2 {
+                    pp_root_v2(
+                        multi_batch_header.target.balance_root,
+                        multi_batch_header.target.nullifier_root,
+                        multi_batch_header.target.ler_leaf_count,
+                    )
+                } else if is_signed_v3 {
+                    pp_root_v3(
+                        multi_batch_header.target.balance_root,
+                        multi_batch_header.target.nullifier_root,
+                        multi_batch_header.target.ler_leaf_count,
+                        prev_height_from_batch + 1,
+                    )
+                } else {
+                    return Err(ProofError::InvalidSignature);
+                }
+            } else {
+                unreachable!("unretrievable prev pp root");
+            }
+
+            new_pessimistic_root
+        };
+
+        new_pessimistic_root
     }
 }
