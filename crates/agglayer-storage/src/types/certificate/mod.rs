@@ -1,14 +1,18 @@
 //! Definitions of the certificate storage format with backwards compatibility.
 //!
-//! Currently, we have two versions of certificate storage format.
-//! All begin with `network_id: 32`, followed by a 64-bit field which encodes
-//! certificate height and/or format version. In the V0 format, this field
-//! corresponds to certificate height, providing backwards compatibility.
+//! Currently, we have two versions of certificate storage format. The first byte determines the
+//! storage format version.
 //!
-//! If the field is < [TAG_BEGIN], it is interpreted as height in storage format V0.
-//! If the field is >= [TAG_BEGIN], it is interpreted as an identifier of the storage
-//! format version. For versions > 0, the format is encoded in the former height field
-//! as `TAG_BEGIN + FORMAT_VERSION`. In this case, the height has to be stored elsewhere.
+//! In version 0, where backwards compatibility is required, the first byte happens to be the
+//! highest byte of network ID. This effectively limits the range of network IDs in v0 storage
+//! to [0, 2^24-1]. The current network IDs fall into this range, so the highest byte (with value 0)
+//! also acts as the version tag.
+//!
+//! In subsequent versions, we just have the version byte followed by a straightforward encoding of
+//! the certificate, restoring the full range of network IDs.
+//!
+//! In the unlikely scenario where it turns out we need more than 256 storage format versions,
+//! another byte can be allocated to specify a "sub-version" in one of the future versions.
 
 use agglayer_types::{Certificate, Digest, Height, Metadata, NetworkId, Signature};
 use bincode::Options;
@@ -31,7 +35,7 @@ impl<const VERSION: u8> TryFrom<u8> for VersionTag<VERSION> {
     fn try_from(byte: u8) -> Result<Self, Self::Error> {
         (byte == VERSION)
             .then_some(Self)
-            .ok_or(CodecError::BadCertVersion { version: byte })
+            .ok_or(CodecError::BadCertificateVersion { version: byte })
     }
 }
 
@@ -41,7 +45,9 @@ impl<const VERSION: u8> From<VersionTag<VERSION>> for u8 {
     }
 }
 
-/// In v0, the first byte of network ID was reserved to specify the version.
+/// A three-byte network ID used in v0.
+///
+/// In v0, the first byte of network ID was reserved to specify the storage format version.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 struct NetworkIdV0([u8; 3]);
@@ -52,7 +58,7 @@ impl From<NetworkIdV0> for NetworkId {
     }
 }
 
-/// The pre-0.3 certificate format.
+/// The pre-0.3 certificate format (`v0`).
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 struct CertificateV0 {
@@ -94,7 +100,7 @@ impl From<CertificateV0> for Certificate {
     }
 }
 
-/// The new certificate format as stored in the database.
+/// The new certificate format as stored in the database (`v1`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CertificateV1 {
     version: VersionTag<1>,
@@ -163,7 +169,7 @@ impl From<&Certificate> for CertificateV1 {
     }
 }
 
-// Duplicated since we need slightly different serde impls.
+// Duplicated from `agglayer-types` since we need slightly different serde impls.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum AggchainProofV1 {
@@ -189,6 +195,7 @@ impl From<AggchainProofV1> for AggchainProof {
     }
 }
 
+/// Type specifying the current certificate encoding format.
 type CurrentCertificate = CertificateV1;
 
 fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
@@ -204,10 +211,10 @@ impl crate::columns::Codec for Certificate {
 
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
         match bytes.first().copied() {
-            None => Err(CodecError::CertEmpty),
+            None => Err(CodecError::CertificateEmpty),
             Some(0) => decode::<CertificateV0>(bytes),
             Some(1) => decode::<CertificateV1>(bytes),
-            Some(version) => Err(CodecError::BadCertVersion { version }),
+            Some(version) => Err(CodecError::BadCertificateVersion { version }),
         }
     }
 }

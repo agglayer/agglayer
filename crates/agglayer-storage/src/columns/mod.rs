@@ -9,11 +9,11 @@ pub enum CodecError {
 
     #[error(r#"Certificate encoded to an empty byte sequence.
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    CertEmpty,
+    CertificateEmpty,
 
     #[error(r#"Unrecognized certificate storage format version {version}.
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    BadCertVersion { version: u8 },
+    BadCertificateVersion { version: u8 },
 }
 
 pub fn default_bincode_options() -> impl bincode::Options {
