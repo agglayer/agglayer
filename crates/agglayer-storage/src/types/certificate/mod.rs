@@ -160,7 +160,7 @@ impl From<&Certificate> for CertificateV1 {
             height: *height,
             prev_local_exit_root: *prev_local_exit_root,
             new_local_exit_root: *new_local_exit_root,
-            // TODO get rid of the clones
+            // TODO get rid of the clones <https://github.com/agglayer/agglayer/issues/618>
             bridge_exits: bridge_exits.clone(),
             imported_bridge_exits: imported_bridge_exits.clone(),
             aggchain_proof: aggchain_proof.clone().into(),
