@@ -1,0 +1,14 @@
+version: v2
+
+modules:
+  - path: proto
+    name: buf.build/agglayer/agglayer
+
+lint:
+  use:
+    - STANDARD
+    - COMMENTS
+
+breaking:
+  use:
+    - FILE

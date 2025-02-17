@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package agglayer.protocol.types.v1;
+
+// FixedBytes65 type.
+message FixedBytes65 {
+  // bytes representation of the bytearray.
+  bytes value = 1;
+}
+
+// FixedBytes32 type.
+message FixedBytes32 {
+  // bytes representation of the bytearray.
+  bytes value = 1;
+}
+
+// FixedBytes20 type.
+message FixedBytes20 {
+  // bytes representation of the bytearray.
+  bytes value = 1;
+}
