@@ -12,6 +12,16 @@ service ConfigurationService {
       returns (GetEpochConfigurationResponse);
 }
 
+// The kind of error that occurred and that are reported by the configuration
+// service.
+enum ConfigurationErrorKind {
+  // Unspecified error.
+  CONFIGURATION_ERROR_KIND_UNSPECIFIED = 0;
+  // The AggLayer isn't configured with a BlockClock configuration, thus no
+  // EpochConfiguration is available.
+  CONFIGURATION_ERROR_KIND_UNEXPECTED_CLOCK_CONFIGURATION = 1;
+}
+
 // Service for querying network state.
 service NetworkStateService {
   // Method used to get the latest known certificate header for a network.

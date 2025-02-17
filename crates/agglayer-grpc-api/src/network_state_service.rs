@@ -5,10 +5,10 @@ use agglayer_grpc_types::node::v1::{
     GetLatestSettledCertificateHeaderRequest, GetLatestSettledCertificateHeaderResponse,
 };
 
-use crate::Server;
+pub struct NetworkStateServer {}
 
 #[tonic::async_trait]
-impl NetworkStateService for Server {
+impl NetworkStateService for NetworkStateServer {
     async fn get_latest_known_certificate_header(
         &self,
         request: tonic::Request<GetLatestKnownCertificateHeaderRequest>,

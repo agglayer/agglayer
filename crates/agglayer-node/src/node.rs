@@ -1,4 +1,4 @@
-use std::{convert::Infallible, num::NonZeroU64, sync::Arc};
+use std::{num::NonZeroU64, sync::Arc};
 
 use agglayer_aggregator_notifier::{CertifierClient, EpochPackerClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
@@ -23,15 +23,8 @@ use ethers::{
     providers::{Http, Provider},
     signers::Signer,
 };
-use http::{Request, Response};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tonic::{
-    body::{boxed, BoxBody},
-    server::NamedService,
-};
-use tower::Service;
-use tower::ServiceExt as _;
 use tracing::{debug, error, info, warn};
 
 use crate::{
@@ -251,14 +244,12 @@ impl Node {
         // Bind the core to the RPC server.
         let json_rpc_router = AgglayerImpl::new(service).start().await?;
 
-        let mut grpc_router = axum::Router::new();
-        grpc_router = add_rpc_service(
-            grpc_router,
-            agglayer_grpc_api::Server {}.start(config.clone()),
-        );
-        let (v1, v1alpha) = agglayer_grpc_api::Server::reflection();
-        grpc_router = add_rpc_service(grpc_router, v1);
-        grpc_router = add_rpc_service(grpc_router, v1alpha);
+        let grpc_router = agglayer_grpc_api::Server::with_config(config.clone())
+            .build()
+            .map_err(|err| {
+                error!("Failed to build gRPC router: {}", err);
+                err
+            })?;
 
         let health_router =
             axum::Router::new().route("/health", axum::routing::get(api::rest::health));
@@ -297,21 +288,4 @@ impl Node {
         }
         debug!("Node shutdown completed.");
     }
-}
-
-fn add_rpc_service<S>(rpc_server: axum::Router, rpc_service: S) -> axum::Router
-where
-    S: Service<Request<BoxBody>, Response = Response<BoxBody>, Error = Infallible>
-        + NamedService
-        + Clone
-        + Sync
-        + Send
-        + 'static,
-    S::Future: Send + 'static,
-    S::Error: Into<anyhow::Error> + Send,
-{
-    rpc_server.route_service(
-        &format!("/{}/{{*rest}}", S::NAME),
-        rpc_service.map_request(|r: Request<axum::body::Body>| r.map(boxed)),
-    )
 }

@@ -6,10 +6,12 @@ use agglayer_types::Digest;
 use tonic_types::{ErrorDetails, StatusExt};
 use tracing::instrument;
 
-use crate::Server;
+const SERVICE_PATH: &str = "agglayer-node.grpc-api.v1.configuration-service";
+
+pub struct CertificateSubmissionServer {}
 
 #[tonic::async_trait]
-impl CertificateSubmissionService for Server {
+impl CertificateSubmissionService for CertificateSubmissionServer {
     #[instrument(skip(self), level = "debug", fields(certificate_id = tracing::field::Empty))]
     async fn submit_certificate(
         &self,
@@ -17,8 +19,7 @@ impl CertificateSubmissionService for Server {
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
         let _certificate = request.into_inner().certificate.unwrap();
         let mut error_details = ErrorDetails::new();
-        let context =
-            "agglayer-node.grpc-api.v1.certificate_submission_service.certificate_submission";
+        let context = format!("{}.{}", SERVICE_PATH, "submit-certificate");
 
         error_details.set_error_info(
             ErrorKind::SignatureVerification.as_str_name(),
