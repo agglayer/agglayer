@@ -155,7 +155,7 @@ fn bad_format() {
 
     assert!(matches!(
         Certificate::decode(&[]).unwrap_err(),
-        CodecError::CertEmpty
+        CodecError::CertificateEmpty
     ));
 
     for v in 0..NEXT_VERSION {
@@ -167,7 +167,7 @@ fn bad_format() {
 
     for v in NEXT_VERSION..=u8::MAX {
         match Certificate::decode(&[v]).unwrap_err() {
-            CodecError::BadCertVersion { version } => assert_eq!(version, v),
+            CodecError::BadCertificateVersion { version } => assert_eq!(version, v),
             err => panic!("Unexpected error: {err:?}"),
         }
     }
