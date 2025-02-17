@@ -1,0 +1,12 @@
+[package]
+name = "agglayer-grpc-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agglayer-grpc-types.workspace = true
+tonic.workspace = true
+
+[lints]
+workspace = true

@@ -22,13 +22,13 @@ fn bench_latest_certificate(c: &mut Criterion) {
         .duration_since(UNIX_EPOCH)
         .expect("Failed to get time since epoch");
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     path.push(format!(
         "{}/{}_{}",
         folder_name,
         time.as_nanos(),
-        rng.gen::<u64>()
+        rng.random::<u64>()
     ));
 
     std::fs::create_dir_all(path.clone()).expect("Failed to create temp dir");

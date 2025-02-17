@@ -93,10 +93,9 @@ pub async fn start_agglayer(
 
     let wallet = get_signer(1);
 
-    let mut rng = rand::thread_rng();
     let (_key, uuid) = LocalWallet::encrypt_keystore(
         config_path,
-        &mut rng,
+        &mut ethers::core::rand::thread_rng(),
         wallet.signer().to_bytes(),
         "randpsswd",
         None,

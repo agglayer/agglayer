@@ -1,0 +1,3 @@
+crates/agglayer-grpc-client/src/generated/** linguist-generated=true
+crates/agglayer-grpc-server/src/generated/** linguist-generated=true
+crates/agglayer-grpc-types/src/generated/** linguist-generated=true

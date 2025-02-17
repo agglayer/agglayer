@@ -1,0 +1,32 @@
+version: v2
+
+managed:
+  enabled: true
+
+plugins:
+  - local: protoc-gen-prost
+    out: crates/agglayer-grpc-types/src/generated
+    opt:
+      - bytes=.
+      - file_descriptor_set
+
+  - local: protoc-gen-prost-serde
+    out: crates/agglayer-grpc-types/src/generated
+
+  - local: protoc-gen-prost-crate
+    out: crates/agglayer-grpc-types/src/generated/
+    strategy: all
+    opt:
+      - no_features
+
+  - local: protoc-gen-tonic
+    out: crates/agglayer-grpc-server/src/generated
+    opt:
+      - no_client
+      - no_include
+
+  - local: protoc-gen-tonic
+    out: crates/agglayer-grpc-client/src/generated
+    opt:
+      - no_server
+      - no_include
