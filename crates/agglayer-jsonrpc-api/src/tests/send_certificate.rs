@@ -1,21 +1,19 @@
 use std::{net::IpAddr, sync::Arc};
 
 use agglayer_config::Config;
+use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{Certificate, CertificateId, NetworkId};
 use ethers::{providers, signers::Signer as _};
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder, rpc_params};
 use tracing::debug;
 
 use super::next_available_addr;
-use crate::{
-    kernel::Kernel,
-    service::AgglayerService,
-    {tests::DummyStore, AgglayerImpl},
-};
+use crate::{kernel::Kernel, service::AgglayerService, AgglayerImpl};
 
 #[test_log::test(tokio::test)]
 async fn send_certificate_method_can_be_called_and_succeed() {
-    let mut config = Config::new_for_test();
+    let db_dir = TempDBDir::new();
+    let mut config = Config::new(&db_dir.path);
     config
         .proof_signers
         .insert(1, Certificate::wallet_for_test(NetworkId::new(1)).address());
@@ -27,6 +25,7 @@ async fn send_certificate_method_can_be_called_and_succeed() {
 
     let config = Arc::new(config);
 
+    let storage = agglayer_test_suite::StorageContext::new_with_config(config.clone());
     let (provider, _mock) = providers::Provider::mocked();
     let (certificate_sender, mut certificate_receiver) = tokio::sync::mpsc::channel(1);
 
@@ -36,9 +35,9 @@ async fn send_certificate_method_can_be_called_and_succeed() {
 
     let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
+        storage.pending.clone(),
+        storage.state.clone(),
+        storage.debug.clone(),
         config.clone(),
     );
     let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
@@ -88,11 +87,12 @@ async fn send_certificate_method_can_be_called_and_fail() {
 
     let service = AgglayerService::new(kernel);
 
+    let storage = agglayer_test_suite::StorageContext::new_with_config(config.clone());
     let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
+        storage.pending.clone(),
+        storage.state.clone(),
+        storage.debug.clone(),
         config.clone(),
     );
 
@@ -138,11 +138,12 @@ async fn send_certificate_method_requires_known_signer() {
 
     let service = AgglayerService::new(kernel);
 
+    let storage = agglayer_test_suite::StorageContext::new_with_config(config.clone());
     let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
+        storage.pending.clone(),
+        storage.state.clone(),
+        storage.debug.clone(),
         config.clone(),
     );
 

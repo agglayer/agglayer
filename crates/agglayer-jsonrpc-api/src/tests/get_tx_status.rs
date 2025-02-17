@@ -17,12 +17,14 @@ use jsonrpsee::rpc_params;
 use tracing::debug;
 
 use super::next_available_addr;
-use crate::tests::DummyStore;
 use crate::TxStatus;
 use crate::{kernel::Kernel, service::AgglayerService, AgglayerImpl};
 
 #[test_log::test(tokio::test)]
 async fn check_tx_status() {
+    let db_dir = TempDBDir::new();
+    let mut config = Config::new(&db_dir.path);
+
     let anvil = Anvil::new().block_time(1u64).spawn();
     let client = Provider::<Http>::connect(&anvil.endpoint()).await;
     let accounts = client.get_accounts().await.unwrap();
@@ -40,7 +42,6 @@ async fn check_tx_status() {
         .unwrap()
         .transaction_hash;
 
-    let mut config = Config::new_for_test();
     let addr = next_available_addr();
     if let std::net::IpAddr::V4(ip) = addr.ip() {
         config.rpc.host = ip;
@@ -54,11 +55,12 @@ async fn check_tx_status() {
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
     let service = AgglayerService::new(kernel);
 
+    let storage = agglayer_test_suite::StorageContext::new_with_config(config.clone());
     let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
-        Arc::new(DummyStore {}),
+        storage.pending.clone(),
+        storage.state.clone(),
+        storage.debug.clone(),
         config.clone(),
     );
 

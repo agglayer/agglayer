@@ -40,6 +40,7 @@ agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
 agglayer-types = { path = "crates/agglayer-types" }
 agglayer-utils = { path = "crates/agglayer-utils" }
+agglayer-test-suite = { path = "crates/agglayer-test-suite" }
 
 ## Pessimistic proof related
 pessimistic-proof = { path = "crates/pessimistic-proof" }
