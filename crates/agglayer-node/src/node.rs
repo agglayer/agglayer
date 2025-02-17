@@ -245,6 +245,7 @@ impl Node {
             state_store.clone(),
             debug_store,
             config.clone(),
+            Arc::clone(&rollup_manager),
         ));
 
         // Bind the core to the RPC server.

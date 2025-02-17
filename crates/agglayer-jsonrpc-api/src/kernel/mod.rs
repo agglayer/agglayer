@@ -7,6 +7,7 @@ use agglayer_contracts::{
     polygon_zk_evm::PolygonZkEvm,
 };
 use agglayer_rate_limiting::RateLimiter;
+use agglayer_rpc::error::SignatureVerificationError;
 use agglayer_types::Certificate;
 use ethers::{
     contract::{ContractCall, ContractError},
@@ -152,36 +153,6 @@ where
     fn get_rollup_manager_contract(&self) -> PolygonRollupManager<RpcProvider> {
         PolygonRollupManager::new(self.config.l1.rollup_manager_contract, self.rpc.clone()).clone()
     }
-}
-
-/// Errors related to signature verification process.
-#[derive(Error, Debug)]
-pub enum SignatureVerificationError<RpcProvider>
-where
-    RpcProvider: Middleware,
-{
-    /// FEP (0.1): The signer could not be recovered from the [`SignedTx`].
-    #[error("could not recover transaction signer: {0}")]
-    CouldNotRecoverTxSigner(#[source] ethers::types::SignatureError),
-
-    /// The signer could not be recovered from the certificate signature.
-    #[error("could not recover certificate signer: {0}")]
-    CouldNotRecoverCertSigner(#[source] alloy::primitives::SignatureError),
-
-    /// The signer of the proof is not the trusted sequencer for the given
-    /// rollup id.
-    #[error("invalid signer: expected {trusted_sequencer}, got {signer}")]
-    InvalidSigner {
-        /// The recovered signer address.
-        signer: Address,
-        /// The trusted sequencer address.
-        trusted_sequencer: Address,
-    },
-
-    /// Generic network error when attempting to retrieve the trusted sequencer
-    /// address from the rollup contract.
-    #[error("contract error: {0}")]
-    ContractError(#[from] ContractError<RpcProvider>),
 }
 
 /// Errors related to settlement process.

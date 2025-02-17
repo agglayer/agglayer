@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
+use agglayer_contracts::RollupContract;
 use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -13,6 +14,8 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height,
     NetworkId,
 };
+use error::SignatureVerificationError;
+use ethers::types::H160;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, trace};
 
@@ -21,15 +24,18 @@ pub use self::error::{CertificateRetrievalError, CertificateSubmissionError};
 pub mod error;
 
 /// The RPC agglayer service implementation.
-pub struct AgglayerService<PendingStore, StateStore, DebugStore> {
+pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore> {
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
     config: Arc<Config>,
+    l1_rpc_provider: Arc<L1Rpc>,
 }
 
-impl<PendingStore, StateStore, DebugStore> AgglayerService<PendingStore, StateStore, DebugStore> {
+impl<L1Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
+{
     /// Create an instance of the RPC agglayer service.
     pub fn new(
         certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
@@ -37,6 +43,7 @@ impl<PendingStore, StateStore, DebugStore> AgglayerService<PendingStore, StateSt
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
         config: Arc<Config>,
+        l1_rpc_provider: Arc<L1Rpc>,
     ) -> Self {
         Self {
             certificate_sender,
@@ -44,6 +51,7 @@ impl<PendingStore, StateStore, DebugStore> AgglayerService<PendingStore, StateSt
             state,
             debug_store,
             config,
+            l1_rpc_provider,
         }
     }
 
@@ -53,25 +61,58 @@ impl<PendingStore, StateStore, DebugStore> AgglayerService<PendingStore, StateSt
     }
 }
 
-impl<PendingStore, StateStore, DebugStore> Drop
-    for AgglayerService<PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore> Drop
+    for AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer service");
     }
 }
 
-impl<PendingStore, StateStore, DebugStore> AgglayerService<PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    L1Rpc: RollupContract + 'static,
 {
+    /// Verify that the signer of the given [`Certificate`] is the trusted
+    /// sequencer for the rollup id it specified.
+    #[instrument(skip(self), level = "debug")]
+    pub(crate) async fn verify_cert_signature(
+        &self,
+        cert: &Certificate,
+    ) -> Result<(), SignatureVerificationError<L1Rpc::M>> {
+        let sequencer_address = self
+            .l1_rpc_provider
+            .get_trusted_sequencer_address(*cert.network_id, self.config.proof_signers.clone())
+            .await
+            .map_err(|_| {
+                SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(cert.network_id)
+            })?;
+
+        let signer: H160 = cert
+            .signer()
+            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)
+            .map(|signer| signer.into_array().into())?;
+
+        // ECDSA-k256 signature verification works by recovering the public key from the
+        // signature, and then checking that it is the expected one.
+        if signer != sequencer_address {
+            return Err(SignatureVerificationError::InvalidSigner {
+                signer,
+                trusted_sequencer: sequencer_address,
+            });
+        }
+
+        Ok(())
+    }
     #[instrument(skip(self, certificate), fields(hash, rollup_id = *certificate.network_id), level = "info")]
     pub async fn send_certificate(
         &self,
         certificate: Certificate,
-    ) -> Result<CertificateId, CertificateSubmissionError> {
+    ) -> Result<CertificateId, CertificateSubmissionError<L1Rpc::M>> {
         let hash = certificate.hash();
         let hash_string = hash.to_string();
         tracing::Span::current().record("hash", &hash_string);
@@ -81,11 +122,13 @@ where
             "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
         );
 
-        // self.kernel.verify_cert_signature(&certificate).await.map_err(|e| {
-        //     error!(error = %e, hash = hash_string, "Failed to verify the signature of
-        // certificate {hash}: {e}");
-        //     CertificateSubmissionError::SignatureError(e)
-        // })?;
+        self.verify_cert_signature(&certificate)
+            .await
+            .map_err(|e| {
+                error!(error = %e, hash = hash_string, "Failed to verify the signature of
+        certificate {hash}: {e}");
+                CertificateSubmissionError::SignatureError(e)
+            })?;
 
         // TODO: Batch the different queries.
         // Insert the certificate into the pending store.

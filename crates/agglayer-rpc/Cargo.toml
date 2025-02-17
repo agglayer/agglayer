@@ -5,13 +5,14 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agglayer-contracts.workspace = true
 agglayer-storage.workspace = true
 agglayer-config.workspace = true
 agglayer-rate-limiting.workspace = true
 agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 
-alloy-primitives = "0.8.20"
+alloy = { workspace = true }
 ethers = { workspace = true }
 futures = { workspace = true }
 thiserror = { workspace = true }

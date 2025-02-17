@@ -3,6 +3,9 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_contracts::polygon_rollup_manager::PolygonRollupManager;
+use agglayer_contracts::polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2;
+use agglayer_contracts::L1RpcClient;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::debug::DebugStore;
 use agglayer_storage::stores::pending::PendingStore;
@@ -31,7 +34,13 @@ mod get_tx_status;
 mod send_certificate;
 
 pub struct RawRpcContext {
-    pub rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore, DebugStore>,
+    pub rpc: AgglayerImpl<
+        Provider<MockProvider>,
+        L1RpcClient<Provider<MockProvider>>,
+        PendingStore,
+        StateStore,
+        DebugStore,
+    >,
     config: Arc<Config>,
     pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
@@ -121,16 +130,27 @@ impl TestContext {
         let (provider, _mock) = providers::Provider::mocked();
         let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-        let kernel = Kernel::new(Arc::new(provider), config.clone());
+        let rpc = Arc::new(provider);
+        let kernel = Kernel::new(rpc.clone(), config.clone());
 
         let service = AgglayerService::new(kernel);
 
+        let rollup_manager = Arc::new(L1RpcClient::new(
+            rpc.clone(),
+            PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
+            PolygonZkEVMGlobalExitRootV2::new(
+                config.l1.polygon_zkevm_global_exit_root_v2_contract,
+                rpc.clone(),
+            ),
+            (1, [1; 32]),
+        ));
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
             certificate_sender,
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
             config.clone(),
+            rollup_manager,
         ));
 
         let rpc = AgglayerImpl::new(Arc::new(service), rpc_service);

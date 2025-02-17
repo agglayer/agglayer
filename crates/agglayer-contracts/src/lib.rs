@@ -60,6 +60,20 @@ impl<RpcProvider> L1RpcClient<RpcProvider>
 where
     RpcProvider: Middleware + 'static,
 {
+    pub fn new(
+        rpc: Arc<RpcProvider>,
+        inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
+        l1_info_tree: polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2<RpcProvider>,
+        default_l1_info_tree_entry: (u32, [u8; 32]),
+    ) -> Self {
+        Self {
+            rpc,
+            inner,
+            l1_info_tree,
+            default_l1_info_tree_entry,
+        }
+    }
+
     pub async fn try_new(
         rpc: Arc<RpcProvider>,
         inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
@@ -104,12 +118,12 @@ where
             (l1_leaf_count, l1_info_root)
         };
 
-        Ok(Self {
+        Ok(Self::new(
             rpc,
             inner,
             l1_info_tree,
             default_l1_info_tree_entry,
-        })
+        ))
     }
 }
 

@@ -1,11 +1,12 @@
 //! Support for structured errors in RPC.
 
 use agglayer_rate_limiting::RateLimited as RateLimitedError;
+use agglayer_rpc::CertificateSubmissionError;
 use ethers::{middleware::Middleware, types::H256};
 use jsonrpsee::types::error::ErrorObjectOwned;
 use serde::Serialize;
 
-use crate::service::{self, CertificateSubmissionError, SendTxError, TxStatusError};
+use crate::service::{self, SendTxError, TxStatusError};
 
 /// JsonRPC error codes.
 pub mod code {
@@ -219,13 +220,6 @@ impl<Rpc: 'static + Middleware> From<TxStatusError<Rpc>> for Error {
 
 impl<Rpc: Middleware> From<CertificateSubmissionError<Rpc>> for Error {
     fn from(error: CertificateSubmissionError<Rpc>) -> Self {
-        let detail = error.to_string();
-        Self::SendCertificate { detail }
-    }
-}
-
-impl From<agglayer_rpc::CertificateSubmissionError> for Error {
-    fn from(error: agglayer_rpc::CertificateSubmissionError) -> Self {
         let detail = error.to_string();
         Self::SendCertificate { detail }
     }

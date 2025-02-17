@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use agglayer_contracts::polygon_rollup_manager::PolygonRollupManagerErrors;
 use agglayer_rate_limiting::{self, component, Component};
+use agglayer_rpc::error::SignatureVerificationError;
 use agglayer_types::Digest;
 use alloy::{primitives::SignatureError as AlloySignatureError, signers::k256};
 use ethers::{
@@ -22,7 +23,7 @@ type CheckTxStatusError = kernel::CheckTxStatusError<RpcProvider>;
 type ContractError = ethers::contract::ContractError<RpcProvider>;
 type SendTxError = service::SendTxError<RpcProvider>;
 type SettlementError = kernel::SettlementError<RpcProvider>;
-type SignatureError = kernel::SignatureVerificationError<RpcProvider>;
+type SignatureError = SignatureVerificationError<RpcProvider>;
 type TxStatusError = service::TxStatusError<RpcProvider>;
 type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 

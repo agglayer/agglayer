@@ -5,6 +5,7 @@ use std::{
     task::{Context, Poll},
 };
 
+use agglayer_contracts::RollupContract;
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter,
@@ -82,18 +83,18 @@ trait Agglayer {
 }
 
 /// The RPC agglayer service implementation.
-pub struct AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore> {
-    service: Arc<AgglayerService<Rpc>>,
-    rpc_service: Arc<agglayer_rpc::AgglayerService<PendingStore, StateStore, DebugStore>>,
+pub struct AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> {
+    service: Arc<AgglayerService<V0Rpc>>,
+    rpc_service: Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
 }
 
-impl<Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
 {
     /// Create an instance of the RPC agglayer service.
     pub fn new(
-        service: Arc<AgglayerService<Rpc>>,
-        rpc_service: Arc<agglayer_rpc::AgglayerService<PendingStore, StateStore, DebugStore>>,
+        service: Arc<AgglayerService<V0Rpc>>,
+        rpc_service: Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
     ) -> Self {
         Self {
             service,
@@ -102,18 +103,19 @@ impl<Rpc, PendingStore, StateStore, DebugStore>
     }
 }
 
-impl<Rpc, PendingStore, StateStore, DebugStore> Drop
-    for AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> Drop
+    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer JsonRPC server");
     }
 }
 
-impl<Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
 where
-    Rpc: Middleware + 'static,
+    V0Rpc: Middleware + 'static,
+    Rpc: RollupContract + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
@@ -184,10 +186,11 @@ where
 }
 
 #[async_trait]
-impl<Rpc, PendingStore, StateStore, DebugStore> AgglayerServer
-    for AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> AgglayerServer
+    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
 where
-    Rpc: Middleware + 'static,
+    V0Rpc: Middleware + 'static,
+    Rpc: RollupContract + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,

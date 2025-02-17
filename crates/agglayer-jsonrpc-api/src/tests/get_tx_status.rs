@@ -2,6 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agglayer_config::Config;
+use agglayer_contracts::polygon_rollup_manager::PolygonRollupManager;
+use agglayer_contracts::polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2;
+use agglayer_contracts::L1RpcClient;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::debug::DebugStore;
 use agglayer_storage::stores::pending::PendingStore;
@@ -50,11 +53,20 @@ async fn check_tx_status() {
 
     let config = Arc::new(config);
 
-    let kernel = Kernel::new(Arc::new(client), config.clone());
+    let rpc = Arc::new(client);
+    let kernel = Kernel::new(rpc.clone(), config.clone());
 
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
     let service = AgglayerService::new(kernel);
-
+    let rollup_manager = Arc::new(L1RpcClient::new(
+        rpc.clone(),
+        PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
+        PolygonZkEVMGlobalExitRootV2::new(
+            config.l1.polygon_zkevm_global_exit_root_v2_contract,
+            rpc.clone(),
+        ),
+        (1, [1; 32]),
+    ));
     let storage = agglayer_test_suite::StorageContext::new_with_config(config.clone());
     let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
@@ -62,6 +74,7 @@ async fn check_tx_status() {
         storage.state.clone(),
         storage.debug.clone(),
         config.clone(),
+        rollup_manager,
     );
 
     let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
@@ -104,6 +117,7 @@ async fn check_tx_status() {
 async fn check_tx_status_fail() {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let client = Provider::<Http>::connect(&anvil.endpoint()).await;
+    let rpc = Arc::new(client);
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
 
     let mut config = Config::new_for_test();
@@ -113,7 +127,7 @@ async fn check_tx_status_fail() {
     }
     let config = Arc::new(config);
 
-    let kernel = Kernel::new(Arc::new(client), config.clone());
+    let kernel = Kernel::new(rpc.clone(), config.clone());
 
     let tmp = TempDBDir::new();
     let db = Arc::new(DB::open_cf(tmp.path.as_path(), pending_db_cf_definitions()).unwrap());
@@ -124,9 +138,23 @@ async fn check_tx_status_fail() {
     let debug = Arc::new(DebugStore::new_with_path(&tmp.path.join("debug")).unwrap());
 
     let service = AgglayerService::new(kernel);
-
-    let rpc_service =
-        agglayer_rpc::AgglayerService::new(certificate_sender, store, state, debug, config.clone());
+    let rollup_manager = Arc::new(L1RpcClient::new(
+        rpc.clone(),
+        PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
+        PolygonZkEVMGlobalExitRootV2::new(
+            config.l1.polygon_zkevm_global_exit_root_v2_contract,
+            rpc.clone(),
+        ),
+        (1, [1; 32]),
+    ));
+    let rpc_service = agglayer_rpc::AgglayerService::new(
+        certificate_sender,
+        store,
+        state,
+        debug,
+        config.clone(),
+        rollup_manager,
+    );
 
     let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
         .start()

@@ -460,11 +460,12 @@ name = "agglayer-rpc"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-contracts",
  "agglayer-rate-limiting",
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
  "agglayer-types",
- "alloy-primitives",
+ "alloy",
  "ethers",
  "futures",
  "thiserror 2.0.11",

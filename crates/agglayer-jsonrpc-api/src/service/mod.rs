@@ -3,9 +3,7 @@ use ethers::{providers::Middleware, types::H256};
 use futures::future::try_join;
 use tracing::{debug, error, info, instrument};
 
-pub use self::error::{
-    CertificateRetrievalError, CertificateSubmissionError, SendTxError, TxStatusError,
-};
+pub use self::error::{CertificateRetrievalError, SendTxError, TxStatusError};
 use crate::{kernel::Kernel, signed_tx::SignedTx};
 
 pub mod error;

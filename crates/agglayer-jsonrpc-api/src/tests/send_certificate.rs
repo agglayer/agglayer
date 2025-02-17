@@ -1,6 +1,10 @@
 use std::{net::IpAddr, sync::Arc};
 
 use agglayer_config::Config;
+use agglayer_contracts::{
+    polygon_rollup_manager::PolygonRollupManager,
+    polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
+};
 use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{Certificate, CertificateId, NetworkId};
 use ethers::{providers, signers::Signer as _};
@@ -29,16 +33,26 @@ async fn send_certificate_method_can_be_called_and_succeed() {
     let (provider, _mock) = providers::Provider::mocked();
     let (certificate_sender, mut certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-    let kernel = Kernel::new(Arc::new(provider), config.clone());
+    let rpc = Arc::new(provider);
+    let kernel = Kernel::new(rpc.clone(), config.clone());
 
     let service = AgglayerService::new(kernel);
-
+    let rollup_manager = Arc::new(L1RpcClient::new(
+        rpc.clone(),
+        PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
+        PolygonZkEVMGlobalExitRootV2::new(
+            config.l1.polygon_zkevm_global_exit_root_v2_contract,
+            rpc.clone(),
+        ),
+        (1, [1; 32]),
+    ));
     let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
         storage.pending.clone(),
         storage.state.clone(),
         storage.debug.clone(),
         config.clone(),
+        rollup_manager,
     );
     let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
         .start()
@@ -83,17 +97,28 @@ async fn send_certificate_method_can_be_called_and_fail() {
     let (provider, _mock) = providers::Provider::mocked();
     let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-    let kernel = Kernel::new(Arc::new(provider), config.clone());
+    let rpc = Arc::new(provider);
+    let kernel = Kernel::new(rpc.clone(), config.clone());
 
     let service = AgglayerService::new(kernel);
 
     let storage = agglayer_test_suite::StorageContext::new_with_config(config.clone());
+    let rollup_manager = Arc::new(L1RpcClient::new(
+        rpc.clone(),
+        PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
+        PolygonZkEVMGlobalExitRootV2::new(
+            config.l1.polygon_zkevm_global_exit_root_v2_contract,
+            rpc.clone(),
+        ),
+        (1, [1; 32]),
+    ));
     let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
         storage.pending.clone(),
         storage.state.clone(),
         storage.debug.clone(),
         config.clone(),
+        rollup_manager,
     );
 
     let _server_handle = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
@@ -134,17 +159,28 @@ async fn send_certificate_method_requires_known_signer() {
     let (provider, _mock) = providers::Provider::mocked();
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-    let kernel = Kernel::new(Arc::new(provider), config.clone());
+    let rpc = Arc::new(provider);
+    let kernel = Kernel::new(rpc.clone(), config.clone());
 
     let service = AgglayerService::new(kernel);
 
     let storage = agglayer_test_suite::StorageContext::new_with_config(config.clone());
+    let rollup_manager = Arc::new(L1RpcClient::new(
+        rpc.clone(),
+        PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
+        PolygonZkEVMGlobalExitRootV2::new(
+            config.l1.polygon_zkevm_global_exit_root_v2_contract,
+            rpc.clone(),
+        ),
+        (1, [1; 32]),
+    ));
     let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,
         storage.pending.clone(),
         storage.state.clone(),
         storage.debug.clone(),
         config.clone(),
+        rollup_manager,
     );
 
     let _server_handle = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
