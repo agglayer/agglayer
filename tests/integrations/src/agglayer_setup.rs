@@ -132,7 +132,10 @@ pub async fn start_agglayer(
 
     let graceful_shutdown_token = shutdown_token.clone();
     let handle = std::thread::spawn(move || {
-        agglayer_node::main(config_file, "test", Some(graceful_shutdown_token)).unwrap();
+        if let Err(error) = agglayer_node::main(config_file, "test", Some(graceful_shutdown_token))
+        {
+            eprintln!("Error: {}", error);
+        }
         _ = shutdown.send(());
     });
     let url = format!("ws://{}/", config.rpc_addr());

@@ -302,7 +302,6 @@ impl Drop for BackupEngine {
 #[derive(Serialize)]
 pub struct BackupEngineInfo {
     pub backup_id: u32,
-    // #[serde(serialize_with = "timestamp_to_readable")]
     pub timestamp: chrono::DateTime<chrono::Utc>,
     pub size: u64,
     pub num_files: u32,
