@@ -39,6 +39,10 @@ pub enum ProofError {
     /// one computed by the prover.
     #[error("Invalid new local exit root. declared: {declared}, computed: {computed}")]
     InvalidNewLocalExitRoot { declared: Digest, computed: Digest },
+    /// The new leaf count of the local exit root declared by the chain does not
+    /// match the one computed by the prover.
+    #[error("Invalid new local exit root leaf count. declared: {declared}, computed: {computed}")]
+    InvalidNewLocalExitRootLeafCount { declared: u32, computed: u32 },
     /// The new balance root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid new balance root. declared: {declared}, computed: {computed}")]
@@ -121,8 +125,8 @@ pub struct PessimisticProofOutput {
     pub l1_info_root: Digest,
     /// The origin network of the pessimistic proof.
     pub origin_network: NetworkId,
-    /// The consensus hash.
-    pub consensus_hash: Digest,
+    /// The aggchain hash.
+    pub aggchain_hash: Digest,
     /// The new local exit root.
     pub new_local_exit_root: Digest,
     /// The new pessimistic root which commits to the balance and nullifier
@@ -137,8 +141,6 @@ impl PessimisticProofOutput {
             .with_fixint_encoding()
     }
 }
-
-const PESSIMISTIC_CONSENSUS_TYPE: u32 = 0;
 
 pub const EMPTY_LER: Digest = Digest(hex!(
     "27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"
@@ -164,11 +166,6 @@ pub fn generate_pessimistic_proof(
         prev_lbr.as_slice(),
         prev_nr.as_slice(),
         prev_ler_leaf_count.to_le_bytes().as_slice(),
-    ]);
-
-    let consensus_hash = keccak256_combine([
-        &PESSIMISTIC_CONSENSUS_TYPE.to_be_bytes(),
-        batch_header.signer.as_slice(),
     ]);
 
     let new_pessimistic_root = keccak256_combine([
@@ -201,6 +198,13 @@ pub fn generate_pessimistic_proof(
         });
     }
 
+    if computed_target.ler_leaf_count != batch_header.target.ler_leaf_count {
+        return Err(ProofError::InvalidNewLocalExitRootLeafCount {
+            declared: batch_header.target.ler_leaf_count,
+            computed: computed_target.ler_leaf_count,
+        });
+    }
+
     // NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
     // empty roots of the different trees involved. Therefore, we do
     // one mapping of empty tree hash <> 0x00..0 on the public inputs.
@@ -225,7 +229,7 @@ pub fn generate_pessimistic_proof(
         prev_pessimistic_root,
         l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
-        consensus_hash,
+        aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),
         new_local_exit_root: batch_header.target.exit_root,
         new_pessimistic_root,
     })

@@ -1,4 +1,9 @@
-use std::sync::Arc;
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
@@ -8,10 +13,12 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId,
 };
 use ethers::{providers::Middleware, types::H256};
+use futures::FutureExt;
+use hyper::StatusCode;
 use jsonrpsee::{
     core::async_trait,
     proc_macros::rpc,
-    server::{middleware::http::ProxyGetRequestLayer, PingConfig, ServerBuilder, ServerHandle},
+    server::{HttpBody, PingConfig, ServerBuilder},
 };
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::info;
@@ -102,7 +109,7 @@ where
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
 {
-    pub(crate) async fn start(self) -> anyhow::Result<ServerHandle> {
+    pub(crate) async fn start(self) -> anyhow::Result<axum::Router> {
         let config = self.service.config();
 
         // Create the RPC server.
@@ -141,29 +148,29 @@ where
         // health checks.
         let middleware = tower::ServiceBuilder::new()
             .layer(CompressionLayer::new())
-            .layer(ProxyGetRequestLayer::new("/health", "system_health")?)
             .layer(cors);
 
-        let addr = config.rpc_addr();
+        let service_builder =
+            server_builder.set_rpc_middleware(rpc_middleware::from_config(config));
 
-        let server = server_builder
-            .set_http_middleware(middleware)
-            .set_rpc_middleware(rpc_middleware::from_config(config))
-            .build(addr)
-            .await?;
+        let (stop_handle, server_handle) = jsonrpsee::server::stop_channel();
+        // Server handle isn't used as we're relying on axum to manage the server
+        // lifecycle.
+        std::mem::forget(server_handle);
 
-        // Create the RPC service
-        let mut service = self.into_rpc();
+        let service = self.into_rpc();
+        let service = JsonRpcService {
+            service: service_builder
+                .to_service_builder()
+                .build(service, stop_handle),
+        };
 
-        // Register the system_health method to serve health checks.
-        service.register_method(
-            "system_health",
-            |_, _, _| serde_json::json!({ "health": true }),
-        )?;
-
-        info!("Listening on {addr}");
-
-        Ok(server.start(service))
+        Ok(axum::Router::new()
+            .route("/", axum::routing::post_service(service.clone()))
+            .route("/", axum::routing::get_service(service.clone()))
+            .route("/json-rpc", axum::routing::post_service(service.clone()))
+            .route("/json-rpc", axum::routing::get_service(service.clone()))
+            .layer(middleware))
     }
 }
 
@@ -243,3 +250,45 @@ where
 }
 
 type TxStatus = String;
+
+#[derive(Clone)]
+struct JsonRpcService<S> {
+    service: S,
+}
+
+impl<Service, Body> tower::Service<axum::http::Request<Body>> for JsonRpcService<Service>
+where
+    Service: tower::Service<
+        axum::http::Request<Body>,
+        Error = jsonrpsee::core::BoxError,
+        Response = axum::http::Response<HttpBody>,
+        Future: Send + 'static,
+    >,
+{
+    type Response = axum::http::Response<HttpBody>;
+    type Error = std::convert::Infallible;
+
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.service
+            .poll_ready(cx)
+            // We can assume that the underlying service is always ready.
+            // [`jsonrpsee::server::TowerService`] is always ready.
+            .map_err(|_| unreachable!("Underlying jsonrpsee service should not return an error"))
+    }
+
+    fn call(&mut self, req: axum::http::Request<Body>) -> Self::Future {
+        self.service
+            .call(req)
+            .map(|result| match result {
+                Ok(response) => Ok(response),
+                Err(error) => Ok(axum::http::Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(HttpBody::from(error.to_string()))
+                    // We can unwrap here because we know the status code and body are valid.
+                    .unwrap()),
+            })
+            .boxed()
+    }
+}

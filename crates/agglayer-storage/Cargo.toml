@@ -9,7 +9,7 @@ arc-swap.workspace = true
 bincode.workspace = true
 hex.workspace = true
 parking_lot.workspace = true
-rand = { version = "0.8.5", optional = true }
+rand = { version = "0.9.0", optional = true }
 rocksdb = "0.23.0"
 serde.workspace = true
 thiserror.workspace = true
@@ -29,7 +29,7 @@ rand.workspace = true
 rstest.workspace = true
 sp1-sdk.workspace = true
 
-agglayer-types = {workspace = true, features = ["testutils"] }
+agglayer-types = { workspace = true, features = ["testutils"] }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
 agglayer-storage = { path = ".", features = ["testutils"] }
