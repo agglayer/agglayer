@@ -28,5 +28,4 @@ rs_merkle = { version = "1.4", default-features = false }
 workspace = true
 
 [features]
-default = []
 testutils = []

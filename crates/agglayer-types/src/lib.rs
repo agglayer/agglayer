@@ -379,9 +379,9 @@ impl Certificate {
                         .map(|exit| exit.global_index),
                 );
 
-                Ok(Some(signature.recover_address_from_prehash(&B256::new(
-                    combined_hash.0,
-                ))?))
+                signature
+                    .recover_address_from_prehash(&B256::new(combined_hash.0))
+                    .map(Some)
             }
             _ => Ok(None),
         }
