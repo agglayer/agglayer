@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package agglayer.protocol.types.v1;
+
+import "agglayer/protocol/types/v1/bytes.proto";
+
+// Represents a token bridge exit from the network.
+message BridgeExit {
+  // The type of the leaf.
+  LeafType leaf_type = 1;
+
+  // Unique ID for the token being transferred.
+  TokenInfo token_info = 2;
+
+  // Network which the token is transferred to
+  uint32 dest_network = 3;
+
+  // Address which will own the received token
+  FixedBytes20 dest_address = 4;
+
+  // Token amount sent
+  FixedBytes32 amount = 5;
+
+  // Metadata for the bridge exit
+  FixedBytes32 metadata = 6;
+}
+
+// The type of the leaf.
+enum LeafType {
+  // Unspecified leaf type.
+  LEAF_TYPE_UNSPECIFIED = 0;
+  // Transfer leaf type.
+  LEAF_TYPE_TRANSFER = 1;
+  // Message leaf type.
+  LEAF_TYPE_MESSAGE = 2;
+}
+
+// Encapsulates the information to uniquely identify a token on the origin
+// network.
+message TokenInfo {
+  // Network which the token originates from
+  uint32 origin_network = 1;
+  // The address of the token on the origin network
+  FixedBytes20 origin_token_address = 2;
+}

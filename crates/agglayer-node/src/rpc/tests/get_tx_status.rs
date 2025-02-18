@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agglayer_config::Config;
+use agglayer_storage::storage::backup::BackupClient;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::debug::DebugStore;
 use agglayer_storage::stores::pending::PendingStore;
@@ -14,6 +15,7 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::ClientError;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
+use tracing::debug;
 
 use super::next_available_addr;
 use crate::rpc::tests::DummyStore;
@@ -60,7 +62,17 @@ async fn check_tx_status() {
         config.clone(),
     );
 
-    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+    let router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+
+    let listener = tokio::net::TcpListener::bind(config.rpc_addr())
+        .await
+        .unwrap();
+    let api_server = axum::serve(listener, router);
+
+    let _rpc_handle = tokio::spawn(async move {
+        _ = api_server.await;
+        debug!("Node RPC shutdown requested.");
+    });
 
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
@@ -103,7 +115,7 @@ async fn check_tx_status_fail() {
     let tmp = TempDBDir::new();
     let store_db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
     let store = Arc::new(PendingStore::new(db));
-    let state = Arc::new(StateStore::new(store_db));
+    let state = Arc::new(StateStore::new(store_db, BackupClient::noop()));
     let debug = Arc::new(DebugStore::new_with_path(&tmp.path.join("debug")).unwrap());
 
     let service = AgglayerService::new(
@@ -115,8 +127,17 @@ async fn check_tx_status_fail() {
         config.clone(),
     );
 
-    let _server_handle = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+    let router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
 
+    let listener = tokio::net::TcpListener::bind(config.rpc_addr())
+        .await
+        .unwrap();
+    let api_server = axum::serve(listener, router);
+
+    let _rpc_handle = tokio::spawn(async move {
+        _ = api_server.await;
+        debug!("Node RPC shutdown requested.");
+    });
     let url = format!("http://{}/", config.rpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
 
