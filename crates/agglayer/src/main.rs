@@ -1,8 +1,7 @@
 use std::process::exit;
 
-use anyhow::Context;
 use agglayer_config::storage::backup::BackupConfig;
-
+use anyhow::Context;
 use clap::Parser;
 use cli::Cli;
 use pessimistic_proof::ELF;
