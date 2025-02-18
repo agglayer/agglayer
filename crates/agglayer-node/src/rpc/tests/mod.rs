@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCertificate;
+use agglayer_storage::storage::backup::BackupClient;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::debug::DebugStore;
 use agglayer_storage::stores::pending::PendingStore;
@@ -196,7 +197,7 @@ impl TestContext {
             DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions()).unwrap(),
         );
 
-        let state_store = Arc::new(StateStore::new(state_db));
+        let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
         let pending_store = Arc::new(PendingStore::new(pending_db));
         let debug_store = if config.debug_mode {
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap())

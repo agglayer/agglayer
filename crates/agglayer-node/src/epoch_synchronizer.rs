@@ -103,7 +103,7 @@ mod tests {
     use agglayer_config::Config;
     use agglayer_storage::{
         columns::epochs::end_checkpoint::EndCheckpointColumn,
-        storage::epochs_db_cf_definitions,
+        storage::{backup::BackupClient, epochs_db_cf_definitions},
         stores::{
             epochs::EpochsStore, pending::PendingStore, state::StateStore,
             PendingCertificateWriter, StateWriter,
@@ -277,8 +277,9 @@ mod tests {
     async fn lse_number_is_less_than_loe_real_db() {
         let tmp = TempDBDir::new();
         let config = Arc::new(Config::new(&tmp.path));
-        let state_store =
-            Arc::new(StateStore::new_with_path(&config.storage.state_db_path).unwrap());
+        let state_store = Arc::new(
+            StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+        );
         let pending_store =
             Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
 
@@ -288,6 +289,7 @@ mod tests {
                 15,
                 pending_store.clone(),
                 state_store.clone(),
+                BackupClient::noop(),
             )
             .unwrap(),
         );
@@ -402,8 +404,9 @@ mod tests {
     async fn current_epoch_should_be_open() {
         let tmp = TempDBDir::new();
         let config = Arc::new(Config::new(&tmp.path));
-        let state_store =
-            Arc::new(StateStore::new_with_path(&config.storage.state_db_path).unwrap());
+        let state_store = Arc::new(
+            StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+        );
         let pending_store =
             Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
 
@@ -413,6 +416,7 @@ mod tests {
                 15,
                 pending_store.clone(),
                 state_store.clone(),
+                BackupClient::noop(),
             )
             .unwrap(),
         );

@@ -25,7 +25,7 @@ use crate::{
         start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
-    storage::{epochs_db_cf_definitions, DB},
+    storage::{backup::BackupClient, epochs_db_cf_definitions, DB},
     types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
 
@@ -44,6 +44,7 @@ pub struct PerEpochStore<PendingStore, StateStore> {
     start_checkpoint: BTreeMap<NetworkId, Height>,
     end_checkpoint: RwLock<BTreeMap<NetworkId, Height>>,
     packing_lock: RwLock<bool>,
+    backup_client: BackupClient,
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
@@ -53,6 +54,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         optional_start_checkpoint: Option<BTreeMap<NetworkId, Height>>,
+        backup_client: BackupClient,
     ) -> Result<Self, Error> {
         // TODO: refactor this
         let path = config
@@ -153,6 +155,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             start_checkpoint,
             end_checkpoint: RwLock::new(end_checkpoint),
             packing_lock: RwLock::new(packed),
+            backup_client,
         })
     }
 
@@ -362,6 +365,15 @@ where
             &PerEpochMetadataKey::Packed,
             &PerEpochMetadataValue::Packed(true),
         )?;
+
+        if let Err(error) = self
+            .backup_client
+            .backup(crate::storage::backup::BackupRequest {
+                epoch_db: Some((self.db.clone(), *self.epoch_number)),
+            })
+        {
+            error!("Couldn't trigger the backup of the epoch DB: {}", error);
+        }
 
         *lock = true;
         match self
