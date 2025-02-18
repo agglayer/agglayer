@@ -16,8 +16,8 @@ impl serde::Serialize for AggchainProof {
                 aggchain_proof::Proof::Signature(v) => {
                     struct_ser.serialize_field("signature", v)?;
                 }
-                aggchain_proof::Proof::Sp1Stark(v) => {
-                    struct_ser.serialize_field("sp1Stark", v)?;
+                aggchain_proof::Proof::Sp1StarkV4(v) => {
+                    struct_ser.serialize_field("sp1StarkV4", v)?;
                 }
             }
         }
@@ -32,14 +32,14 @@ impl<'de> serde::Deserialize<'de> for AggchainProof {
     {
         const FIELDS: &[&str] = &[
             "signature",
-            "sp1_stark",
-            "sp1Stark",
+            "sp1_stark_v4",
+            "sp1StarkV4",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             Signature,
-            Sp1Stark,
+            Sp1StarkV4,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -62,7 +62,7 @@ impl<'de> serde::Deserialize<'de> for AggchainProof {
                     {
                         match value {
                             "signature" => Ok(GeneratedField::Signature),
-                            "sp1Stark" | "sp1_stark" => Ok(GeneratedField::Sp1Stark),
+                            "sp1StarkV4" | "sp1_stark_v4" => Ok(GeneratedField::Sp1StarkV4),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -92,11 +92,11 @@ impl<'de> serde::Deserialize<'de> for AggchainProof {
                             proof__ = map_.next_value::<::std::option::Option<_>>()?.map(aggchain_proof::Proof::Signature)
 ;
                         }
-                        GeneratedField::Sp1Stark => {
+                        GeneratedField::Sp1StarkV4 => {
                             if proof__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("sp1Stark"));
+                                return Err(serde::de::Error::duplicate_field("sp1StarkV4"));
                             }
-                            proof__ = map_.next_value::<::std::option::Option<_>>()?.map(aggchain_proof::Proof::Sp1Stark)
+                            proof__ = map_.next_value::<::std::option::Option<_>>()?.map(aggchain_proof::Proof::Sp1StarkV4)
 ;
                         }
                     }
@@ -107,6 +107,120 @@ impl<'de> serde::Deserialize<'de> for AggchainProof {
             }
         }
         deserializer.deserialize_struct("agglayer.protocol.types.v1.AggchainProof", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AggchainProofSp1v4 {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.aggchain_params.is_some() {
+            len += 1;
+        }
+        if !self.stark_proof.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.AggchainProofSP1v4", len)?;
+        if let Some(v) = self.aggchain_params.as_ref() {
+            struct_ser.serialize_field("aggchainParams", v)?;
+        }
+        if !self.stark_proof.is_empty() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("starkProof", pbjson::private::base64::encode(&self.stark_proof).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AggchainProofSp1v4 {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "aggchain_params",
+            "aggchainParams",
+            "stark_proof",
+            "starkProof",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            AggchainParams,
+            StarkProof,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "aggchainParams" | "aggchain_params" => Ok(GeneratedField::AggchainParams),
+                            "starkProof" | "stark_proof" => Ok(GeneratedField::StarkProof),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AggchainProofSp1v4;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.protocol.types.v1.AggchainProofSP1v4")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AggchainProofSp1v4, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut aggchain_params__ = None;
+                let mut stark_proof__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::AggchainParams => {
+                            if aggchain_params__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("aggchainParams"));
+                            }
+                            aggchain_params__ = map_.next_value()?;
+                        }
+                        GeneratedField::StarkProof => {
+                            if stark_proof__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("starkProof"));
+                            }
+                            stark_proof__ = 
+                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AggchainProofSp1v4 {
+                    aggchain_params: aggchain_params__,
+                    stark_proof: stark_proof__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.protocol.types.v1.AggchainProofSP1v4", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for BridgeExit {
@@ -851,12 +965,12 @@ impl serde::Serialize for CertificateId {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if self.value.is_some() {
+        if self.certificate_id.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.CertificateId", len)?;
-        if let Some(v) = self.value.as_ref() {
-            struct_ser.serialize_field("value", v)?;
+        if let Some(v) = self.certificate_id.as_ref() {
+            struct_ser.serialize_field("certificateId", v)?;
         }
         struct_ser.end()
     }
@@ -868,12 +982,13 @@ impl<'de> serde::Deserialize<'de> for CertificateId {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "value",
+            "certificate_id",
+            "certificateId",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
-            Value,
+            CertificateId,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -895,7 +1010,7 @@ impl<'de> serde::Deserialize<'de> for CertificateId {
                         E: serde::de::Error,
                     {
                         match value {
-                            "value" => Ok(GeneratedField::Value),
+                            "certificateId" | "certificate_id" => Ok(GeneratedField::CertificateId),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -915,19 +1030,19 @@ impl<'de> serde::Deserialize<'de> for CertificateId {
                 where
                     V: serde::de::MapAccess<'de>,
             {
-                let mut value__ = None;
+                let mut certificate_id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
-                        GeneratedField::Value => {
-                            if value__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("value"));
+                        GeneratedField::CertificateId => {
+                            if certificate_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("certificateId"));
                             }
-                            value__ = map_.next_value()?;
+                            certificate_id__ = map_.next_value()?;
                         }
                     }
                 }
                 Ok(CertificateId {
-                    value: value__,
+                    certificate_id: certificate_id__,
                 })
             }
         }

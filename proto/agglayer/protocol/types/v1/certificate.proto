@@ -36,13 +36,18 @@ message AggchainProof {
   oneof proof {
     // Signature committed to the bridge exits and imported bridge exits.
     FixedBytes65 signature = 1;
-    // SP1 stark proof.
-    FixedBytes32 sp1_stark = 2;
+    // SP1v4 stark proof.
+    AggchainProofSP1v4 sp1_stark_v4 = 2;
   }
+}
+
+message AggchainProofSP1v4 {
+  FixedBytes32 aggchain_params = 1;
+  bytes stark_proof = 2;
 }
 
 // Certificate identifier.
 message CertificateId {
   // bytes representation of the certificate id.
-  FixedBytes32 value = 1;
+  FixedBytes32 certificate_id = 1;
 }

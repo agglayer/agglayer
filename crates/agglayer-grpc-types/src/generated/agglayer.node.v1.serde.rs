@@ -233,7 +233,7 @@ impl<'de> serde::Deserialize<'de> for GetEpochConfigurationResponse {
         deserializer.deserialize_struct("agglayer.node.v1.GetEpochConfigurationResponse", FIELDS, GeneratedVisitor)
     }
 }
-impl serde::Serialize for GetLatestKnownCertificateHeaderRequest {
+impl serde::Serialize for GetLatestCertificateHeaderRequest {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -244,14 +244,14 @@ impl serde::Serialize for GetLatestKnownCertificateHeaderRequest {
         if self.network_id != 0 {
             len += 1;
         }
-        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestKnownCertificateHeaderRequest", len)?;
+        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestCertificateHeaderRequest", len)?;
         if self.network_id != 0 {
             struct_ser.serialize_field("networkId", &self.network_id)?;
         }
         struct_ser.end()
     }
 }
-impl<'de> serde::Deserialize<'de> for GetLatestKnownCertificateHeaderRequest {
+impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderRequest {
     #[allow(deprecated)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -296,13 +296,13 @@ impl<'de> serde::Deserialize<'de> for GetLatestKnownCertificateHeaderRequest {
         }
         struct GeneratedVisitor;
         impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = GetLatestKnownCertificateHeaderRequest;
+            type Value = GetLatestCertificateHeaderRequest;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct agglayer.node.v1.GetLatestKnownCertificateHeaderRequest")
+                formatter.write_str("struct agglayer.node.v1.GetLatestCertificateHeaderRequest")
             }
 
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetLatestKnownCertificateHeaderRequest, V::Error>
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetLatestCertificateHeaderRequest, V::Error>
                 where
                     V: serde::de::MapAccess<'de>,
             {
@@ -319,15 +319,15 @@ impl<'de> serde::Deserialize<'de> for GetLatestKnownCertificateHeaderRequest {
                         }
                     }
                 }
-                Ok(GetLatestKnownCertificateHeaderRequest {
+                Ok(GetLatestCertificateHeaderRequest {
                     network_id: network_id__.unwrap_or_default(),
                 })
             }
         }
-        deserializer.deserialize_struct("agglayer.node.v1.GetLatestKnownCertificateHeaderRequest", FIELDS, GeneratedVisitor)
+        deserializer.deserialize_struct("agglayer.node.v1.GetLatestCertificateHeaderRequest", FIELDS, GeneratedVisitor)
     }
 }
-impl serde::Serialize for GetLatestKnownCertificateHeaderResponse {
+impl serde::Serialize for GetLatestCertificateHeaderResponse {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -338,14 +338,14 @@ impl serde::Serialize for GetLatestKnownCertificateHeaderResponse {
         if self.certificate_header.is_some() {
             len += 1;
         }
-        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestKnownCertificateHeaderResponse", len)?;
+        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestCertificateHeaderResponse", len)?;
         if let Some(v) = self.certificate_header.as_ref() {
             struct_ser.serialize_field("certificateHeader", v)?;
         }
         struct_ser.end()
     }
 }
-impl<'de> serde::Deserialize<'de> for GetLatestKnownCertificateHeaderResponse {
+impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderResponse {
     #[allow(deprecated)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -390,13 +390,13 @@ impl<'de> serde::Deserialize<'de> for GetLatestKnownCertificateHeaderResponse {
         }
         struct GeneratedVisitor;
         impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = GetLatestKnownCertificateHeaderResponse;
+            type Value = GetLatestCertificateHeaderResponse;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct agglayer.node.v1.GetLatestKnownCertificateHeaderResponse")
+                formatter.write_str("struct agglayer.node.v1.GetLatestCertificateHeaderResponse")
             }
 
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetLatestKnownCertificateHeaderResponse, V::Error>
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetLatestCertificateHeaderResponse, V::Error>
                 where
                     V: serde::de::MapAccess<'de>,
             {
@@ -411,384 +411,12 @@ impl<'de> serde::Deserialize<'de> for GetLatestKnownCertificateHeaderResponse {
                         }
                     }
                 }
-                Ok(GetLatestKnownCertificateHeaderResponse {
+                Ok(GetLatestCertificateHeaderResponse {
                     certificate_header: certificate_header__,
                 })
             }
         }
-        deserializer.deserialize_struct("agglayer.node.v1.GetLatestKnownCertificateHeaderResponse", FIELDS, GeneratedVisitor)
-    }
-}
-impl serde::Serialize for GetLatestPendingCertificateHeaderRequest {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if self.network_id != 0 {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestPendingCertificateHeaderRequest", len)?;
-        if self.network_id != 0 {
-            struct_ser.serialize_field("networkId", &self.network_id)?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for GetLatestPendingCertificateHeaderRequest {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "network_id",
-            "networkId",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            NetworkId,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "networkId" | "network_id" => Ok(GeneratedField::NetworkId),
-                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = GetLatestPendingCertificateHeaderRequest;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct agglayer.node.v1.GetLatestPendingCertificateHeaderRequest")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetLatestPendingCertificateHeaderRequest, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut network_id__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::NetworkId => {
-                            if network_id__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("networkId"));
-                            }
-                            network_id__ = 
-                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
-                            ;
-                        }
-                    }
-                }
-                Ok(GetLatestPendingCertificateHeaderRequest {
-                    network_id: network_id__.unwrap_or_default(),
-                })
-            }
-        }
-        deserializer.deserialize_struct("agglayer.node.v1.GetLatestPendingCertificateHeaderRequest", FIELDS, GeneratedVisitor)
-    }
-}
-impl serde::Serialize for GetLatestPendingCertificateHeaderResponse {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if self.certificate_header.is_some() {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestPendingCertificateHeaderResponse", len)?;
-        if let Some(v) = self.certificate_header.as_ref() {
-            struct_ser.serialize_field("certificateHeader", v)?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for GetLatestPendingCertificateHeaderResponse {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "certificate_header",
-            "certificateHeader",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            CertificateHeader,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "certificateHeader" | "certificate_header" => Ok(GeneratedField::CertificateHeader),
-                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = GetLatestPendingCertificateHeaderResponse;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct agglayer.node.v1.GetLatestPendingCertificateHeaderResponse")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetLatestPendingCertificateHeaderResponse, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut certificate_header__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::CertificateHeader => {
-                            if certificate_header__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("certificateHeader"));
-                            }
-                            certificate_header__ = map_.next_value()?;
-                        }
-                    }
-                }
-                Ok(GetLatestPendingCertificateHeaderResponse {
-                    certificate_header: certificate_header__,
-                })
-            }
-        }
-        deserializer.deserialize_struct("agglayer.node.v1.GetLatestPendingCertificateHeaderResponse", FIELDS, GeneratedVisitor)
-    }
-}
-impl serde::Serialize for GetLatestSettledCertificateHeaderRequest {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if self.network_id != 0 {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestSettledCertificateHeaderRequest", len)?;
-        if self.network_id != 0 {
-            struct_ser.serialize_field("networkId", &self.network_id)?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for GetLatestSettledCertificateHeaderRequest {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "network_id",
-            "networkId",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            NetworkId,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "networkId" | "network_id" => Ok(GeneratedField::NetworkId),
-                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = GetLatestSettledCertificateHeaderRequest;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct agglayer.node.v1.GetLatestSettledCertificateHeaderRequest")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetLatestSettledCertificateHeaderRequest, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut network_id__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::NetworkId => {
-                            if network_id__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("networkId"));
-                            }
-                            network_id__ = 
-                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
-                            ;
-                        }
-                    }
-                }
-                Ok(GetLatestSettledCertificateHeaderRequest {
-                    network_id: network_id__.unwrap_or_default(),
-                })
-            }
-        }
-        deserializer.deserialize_struct("agglayer.node.v1.GetLatestSettledCertificateHeaderRequest", FIELDS, GeneratedVisitor)
-    }
-}
-impl serde::Serialize for GetLatestSettledCertificateHeaderResponse {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if self.certificate_header.is_some() {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestSettledCertificateHeaderResponse", len)?;
-        if let Some(v) = self.certificate_header.as_ref() {
-            struct_ser.serialize_field("certificateHeader", v)?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for GetLatestSettledCertificateHeaderResponse {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "certificate_header",
-            "certificateHeader",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            CertificateHeader,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "certificateHeader" | "certificate_header" => Ok(GeneratedField::CertificateHeader),
-                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = GetLatestSettledCertificateHeaderResponse;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct agglayer.node.v1.GetLatestSettledCertificateHeaderResponse")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetLatestSettledCertificateHeaderResponse, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut certificate_header__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::CertificateHeader => {
-                            if certificate_header__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("certificateHeader"));
-                            }
-                            certificate_header__ = map_.next_value()?;
-                        }
-                    }
-                }
-                Ok(GetLatestSettledCertificateHeaderResponse {
-                    certificate_header: certificate_header__,
-                })
-            }
-        }
-        deserializer.deserialize_struct("agglayer.node.v1.GetLatestSettledCertificateHeaderResponse", FIELDS, GeneratedVisitor)
+        deserializer.deserialize_struct("agglayer.node.v1.GetLatestCertificateHeaderResponse", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for SubmitCertificateRequest {

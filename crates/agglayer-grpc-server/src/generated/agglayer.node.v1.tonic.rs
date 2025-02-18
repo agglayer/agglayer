@@ -199,6 +199,8 @@ pub mod configuration_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with ConfigurationServiceServer.
     #[async_trait]
     pub trait ConfigurationService: std::marker::Send + std::marker::Sync + 'static {
+        /** Method used to get the current epoch configuration.
+*/
         async fn get_epoch_configuration(
             &self,
             request: tonic::Request<super::GetEpochConfigurationRequest>,
@@ -207,6 +209,8 @@ pub mod configuration_service_server {
             tonic::Status,
         >;
     }
+    /** Service for querying the current epoch configuration.
+*/
     #[derive(Debug)]
     pub struct ConfigurationServiceServer<T> {
         inner: Arc<T>,
@@ -384,28 +388,36 @@ pub mod network_state_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with NetworkStateServiceServer.
     #[async_trait]
     pub trait NetworkStateService: std::marker::Send + std::marker::Sync + 'static {
+        /** Method used to get the latest known certificate header for a network.
+*/
         async fn get_latest_known_certificate_header(
             &self,
-            request: tonic::Request<super::GetLatestKnownCertificateHeaderRequest>,
+            request: tonic::Request<super::GetLatestCertificateHeaderRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetLatestKnownCertificateHeaderResponse>,
+            tonic::Response<super::GetLatestCertificateHeaderResponse>,
             tonic::Status,
         >;
+        /** Method used to get the latest settled certificate header for a network.
+*/
         async fn get_latest_settled_certificate_header(
             &self,
-            request: tonic::Request<super::GetLatestSettledCertificateHeaderRequest>,
+            request: tonic::Request<super::GetLatestCertificateHeaderRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetLatestSettledCertificateHeaderResponse>,
+            tonic::Response<super::GetLatestCertificateHeaderResponse>,
             tonic::Status,
         >;
+        /** Method used to get the latest pending certificate header for a network.
+*/
         async fn get_latest_pending_certificate_header(
             &self,
-            request: tonic::Request<super::GetLatestPendingCertificateHeaderRequest>,
+            request: tonic::Request<super::GetLatestCertificateHeaderRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetLatestPendingCertificateHeaderResponse>,
+            tonic::Response<super::GetLatestCertificateHeaderResponse>,
             tonic::Status,
         >;
     }
+    /** Service for querying network state.
+*/
     #[derive(Debug)]
     pub struct NetworkStateServiceServer<T> {
         inner: Arc<T>,
@@ -490,9 +502,9 @@ pub mod network_state_service_server {
                     impl<
                         T: NetworkStateService,
                     > tonic::server::UnaryService<
-                        super::GetLatestKnownCertificateHeaderRequest,
+                        super::GetLatestCertificateHeaderRequest,
                     > for GetLatestKnownCertificateHeaderSvc<T> {
-                        type Response = super::GetLatestKnownCertificateHeaderResponse;
+                        type Response = super::GetLatestCertificateHeaderResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -500,7 +512,7 @@ pub mod network_state_service_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::GetLatestKnownCertificateHeaderRequest,
+                                super::GetLatestCertificateHeaderRequest,
                             >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
@@ -544,9 +556,9 @@ pub mod network_state_service_server {
                     impl<
                         T: NetworkStateService,
                     > tonic::server::UnaryService<
-                        super::GetLatestSettledCertificateHeaderRequest,
+                        super::GetLatestCertificateHeaderRequest,
                     > for GetLatestSettledCertificateHeaderSvc<T> {
-                        type Response = super::GetLatestSettledCertificateHeaderResponse;
+                        type Response = super::GetLatestCertificateHeaderResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -554,7 +566,7 @@ pub mod network_state_service_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::GetLatestSettledCertificateHeaderRequest,
+                                super::GetLatestCertificateHeaderRequest,
                             >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
@@ -598,9 +610,9 @@ pub mod network_state_service_server {
                     impl<
                         T: NetworkStateService,
                     > tonic::server::UnaryService<
-                        super::GetLatestPendingCertificateHeaderRequest,
+                        super::GetLatestCertificateHeaderRequest,
                     > for GetLatestPendingCertificateHeaderSvc<T> {
-                        type Response = super::GetLatestPendingCertificateHeaderResponse;
+                        type Response = super::GetLatestCertificateHeaderResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -608,7 +620,7 @@ pub mod network_state_service_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::GetLatestPendingCertificateHeaderRequest,
+                                super::GetLatestCertificateHeaderRequest,
                             >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);

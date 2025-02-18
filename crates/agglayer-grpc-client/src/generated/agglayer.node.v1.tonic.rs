@@ -134,6 +134,8 @@ pub mod configuration_service_client {
     )]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    /** Service for querying the current epoch configuration.
+*/
     #[derive(Debug, Clone)]
     pub struct ConfigurationServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -214,6 +216,8 @@ pub mod configuration_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
+        /** Method used to get the current epoch configuration.
+*/
         pub async fn get_epoch_configuration(
             &mut self,
             request: impl tonic::IntoRequest<super::GetEpochConfigurationRequest>,
@@ -256,6 +260,8 @@ pub mod network_state_service_client {
     )]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    /** Service for querying network state.
+*/
     #[derive(Debug, Clone)]
     pub struct NetworkStateServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -336,13 +342,13 @@ pub mod network_state_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
+        /** Method used to get the latest known certificate header for a network.
+*/
         pub async fn get_latest_known_certificate_header(
             &mut self,
-            request: impl tonic::IntoRequest<
-                super::GetLatestKnownCertificateHeaderRequest,
-            >,
+            request: impl tonic::IntoRequest<super::GetLatestCertificateHeaderRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetLatestKnownCertificateHeaderResponse>,
+            tonic::Response<super::GetLatestCertificateHeaderResponse>,
             tonic::Status,
         > {
             self.inner
@@ -367,13 +373,13 @@ pub mod network_state_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /** Method used to get the latest settled certificate header for a network.
+*/
         pub async fn get_latest_settled_certificate_header(
             &mut self,
-            request: impl tonic::IntoRequest<
-                super::GetLatestSettledCertificateHeaderRequest,
-            >,
+            request: impl tonic::IntoRequest<super::GetLatestCertificateHeaderRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetLatestSettledCertificateHeaderResponse>,
+            tonic::Response<super::GetLatestCertificateHeaderResponse>,
             tonic::Status,
         > {
             self.inner
@@ -398,13 +404,13 @@ pub mod network_state_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /** Method used to get the latest pending certificate header for a network.
+*/
         pub async fn get_latest_pending_certificate_header(
             &mut self,
-            request: impl tonic::IntoRequest<
-                super::GetLatestPendingCertificateHeaderRequest,
-            >,
+            request: impl tonic::IntoRequest<super::GetLatestCertificateHeaderRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetLatestPendingCertificateHeaderResponse>,
+            tonic::Response<super::GetLatestCertificateHeaderResponse>,
             tonic::Status,
         > {
             self.inner
