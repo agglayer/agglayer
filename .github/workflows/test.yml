@@ -18,6 +18,7 @@ env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
   KURTOSIS_CDK_GIT_REF: v0.2.11
+  ZKEVM_CONTRACT_GIT_REF: v9.0.0-rc.6-pp
 
 jobs:
   unit:
@@ -44,7 +45,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 0xPolygonHermez/zkevm-contracts
-          ref: v9.0.0-rc.3-pp
+          ref: ${{ env.ZKEVM_CONTRACT_GIT_REF }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

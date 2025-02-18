@@ -27,10 +27,10 @@ pub mod error;
 
 /// The RPC agglayer service implementation.
 pub(crate) struct AgglayerService<Rpc, PendingStore, StateStore, DebugStore> {
-    kernel: Kernel<Rpc>,
+    pub(crate) kernel: Kernel<Rpc>,
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
-    pending_store: Arc<PendingStore>,
-    state: Arc<StateStore>,
+    pub(crate) pending_store: Arc<PendingStore>,
+    pub(crate) state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
     config: Arc<Config>,
 }
@@ -306,23 +306,6 @@ where
         certificate_id.map_or(Ok(None), |certificate_id| {
             self.fetch_certificate_header(certificate_id).map(Some)
         })
-    }
-
-    pub async fn debug_get_certificate(
-        &self,
-        certificate_id: CertificateId,
-    ) -> Result<(Certificate, Option<CertificateHeader>), CertificateRetrievalError> {
-        let cert = self
-            .debug_store
-            .get_certificate(&certificate_id)
-            .inspect_err(|e| error!("Failed to get certificate: {e}"))?
-            .ok_or(CertificateRetrievalError::NotFound { certificate_id })?;
-        let header = self
-            .state
-            .get_certificate_header(&certificate_id)
-            .inspect_err(|e| error!("Failed to get certificate header: {e}"))?;
-
-        Ok((cert, header))
     }
 
     pub fn get_latest_settled_certificate_header(

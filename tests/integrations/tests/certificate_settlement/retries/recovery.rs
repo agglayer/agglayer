@@ -14,7 +14,7 @@ use rstest::rstest;
 
 #[rstest]
 #[tokio::test]
-#[timeout(Duration::from_secs(60))]
+#[timeout(Duration::from_secs(90))]
 async fn sent_transaction_recover() {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
@@ -26,7 +26,7 @@ async fn sent_transaction_recover() {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client, _) = setup_network(&tmp_dir.path, None).await;
+    let (agglayer_shutdowned, l1, client) = setup_network(&tmp_dir.path, None, None).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
@@ -50,7 +50,7 @@ async fn sent_transaction_recover() {
     )
     .expect("Failed to configure failpoint");
 
-    let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None).await;
+    let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
 
     println!("Node recovered, waiting for settlement...");
 

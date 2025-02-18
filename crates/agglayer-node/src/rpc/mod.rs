@@ -1,17 +1,17 @@
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter,
 };
+use agglayer_types::CertificateStatus;
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId,
 };
+use ethers::types::TransactionReceipt;
 use ethers::{providers::Middleware, types::H256};
 use futures::FutureExt;
 use hyper::StatusCode;
@@ -20,8 +20,10 @@ use jsonrpsee::{
     proc_macros::rpc,
     server::{HttpBody, PingConfig, ServerBuilder},
 };
-use tower_http::{compression::CompressionLayer, cors::CorsLayer};
-use tracing::info;
+use tower_http::compression::CompressionLayer;
+use tower_http::cors::CorsLayer;
+use tracing::warn;
+use tracing::{error, info, instrument};
 
 use self::error::{Error, RpcResult};
 use crate::{service::AgglayerService, signed_tx::SignedTx};
@@ -31,6 +33,8 @@ mod rpc_middleware;
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) mod admin;
 
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
@@ -69,12 +73,6 @@ trait Agglayer {
         &self,
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>>;
-
-    #[method(name = "debugGetCertificate")]
-    async fn debug_get_certificate(
-        &self,
-        certificate_id: CertificateId,
-    ) -> RpcResult<(Certificate, Option<CertificateHeader>)>;
 }
 
 /// The RPC agglayer service implementation.
@@ -172,6 +170,87 @@ where
             .route("/json-rpc", axum::routing::get_service(service.clone()))
             .layer(middleware))
     }
+
+    #[instrument(skip(self, certificate), level = "info")]
+    async fn validate_pre_existing_certificate(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<(), Error> {
+        // Get pre-existing certificate in pending
+        if let Some(certificate) = self
+            .service
+            .pending_store
+            .get_certificate(certificate.network_id, certificate.height)
+            .map_err(|e| {
+                error!("Failed to communicate with pending store: {e}");
+                Error::internal(e.to_string())
+            })?
+        {
+            let pre_existing_certificate_id = certificate.hash();
+            warn!(
+                pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
+                "Certificate already exists in pending store for network {} at height {}",
+                certificate.network_id,
+                certificate.height
+            );
+            if let Some(CertificateHeader {
+                status: CertificateStatus::InError { .. },
+                settlement_tx_hash,
+                ..
+            }) = self
+                .service
+                .state
+                .get_certificate_header(&pre_existing_certificate_id)
+                .map_err(|e| {
+                    error!("Failed to communicate with state store: {e}");
+                    Error::internal(e.to_string())
+                })?
+            {
+                match settlement_tx_hash {
+                    None => {
+                        info!(
+                            "Replacing pending certificate {} that is in error",
+                            pre_existing_certificate_id
+                        );
+                    }
+                    Some(tx_hash) => {
+                        let l1_transaction = self
+                            .service
+                            .kernel
+                            .check_tx_status(H256::from_slice(tx_hash.as_ref()))
+                            .await
+                            .map_err(|e| {
+                                error!("Failed to check transaction status: {e}");
+                                Error::internal(e.to_string())
+                            })?;
+
+                        if matches!(l1_transaction, Some(TransactionReceipt { status: Some(status), .. }) if status.as_u64() == 0)
+                        {
+                            info!(
+                                %pre_existing_certificate_id,
+                                %tx_hash,
+                                ?l1_transaction,
+                                "Replacing pending certificate in error that has already been settled, but transaction receipt status is in failure"
+                            );
+                        } else {
+                            let message = "Unable to replace a pending certificate in error that \
+                                           has already been settled";
+                            warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
+
+                            return Err(Error::InvalidArgument(message.to_string()));
+                        }
+                    }
+                }
+            } else {
+                let message = "Unable to replace a pending certificate that is not in error";
+                info!(%pre_existing_certificate_id, message);
+
+                return Err(Error::InvalidArgument(message.to_string()));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -192,6 +271,7 @@ where
     }
 
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
+        self.validate_pre_existing_certificate(&certificate).await?;
         Ok(self.service.send_certificate(certificate).await?)
     }
 
@@ -219,13 +299,6 @@ where
             .service
             .get_latest_known_certificate_header(network_id)?;
         Ok(header)
-    }
-
-    async fn debug_get_certificate(
-        &self,
-        certificate_id: CertificateId,
-    ) -> RpcResult<(Certificate, Option<CertificateHeader>)> {
-        Ok(self.service.debug_get_certificate(certificate_id).await?)
     }
 
     async fn get_latest_settled_certificate_header(
