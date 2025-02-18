@@ -1,6 +1,7 @@
 use std::process::exit;
 
 use agglayer_config::storage::backup::BackupConfig;
+use anyhow::Context;
 use clap::Parser;
 use cli::Cli;
 use pessimistic_proof::ELF;
@@ -17,16 +18,22 @@ fn main() -> anyhow::Result<()> {
         cli::Commands::Prover { cfg } => agglayer_prover::main(cfg, &version(), ELF)?,
         cli::Commands::ProverConfig => println!(
             "{}",
-            toml::to_string_pretty(&agglayer_prover_config::ProverConfig::default()).unwrap()
+            toml::to_string_pretty(&agglayer_prover_config::ProverConfig::default())
+                .context("Failed to serialize ProverConfig to TOML")?
         ),
         cli::Commands::Config { base_dir } => println!(
             "{}",
-            toml::to_string_pretty(&agglayer_config::Config::new(&base_dir)).unwrap()
+            toml::to_string_pretty(&agglayer_config::Config::new(&base_dir))
+                .context("Failed to serialize Config to TOML")?
         ),
         cli::Commands::ValidateConfig { path } => {
             match agglayer_config::Config::try_load(path.as_path()) {
                 Ok(config) => {
-                    println!("{}", toml::to_string_pretty(&config).unwrap());
+                    println!(
+                        "{}",
+                        toml::to_string_pretty(&config)
+                            .context("Failed to serialize ValidateConfig to TOML")?
+                    );
                 }
                 Err(error) => eprintln!("{}", error),
             }
