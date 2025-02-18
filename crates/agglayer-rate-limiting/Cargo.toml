@@ -15,4 +15,5 @@ thiserror.workspace = true
 tokio.workspace = true
 
 agglayer-config.workspace = true
+agglayer-types.workspace = true
 agglayer-utils.workspace = true
