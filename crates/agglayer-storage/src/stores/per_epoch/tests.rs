@@ -9,7 +9,6 @@ use agglayer_types::{Height, NetworkId, Proof};
 use parking_lot::RwLock;
 use rstest::{fixture, rstest};
 
-use crate::stores::interfaces::writer::StateWriter;
 use crate::stores::{PendingCertificateWriter as _, StateReader};
 use crate::{
     error::Error,
@@ -19,6 +18,7 @@ use crate::{
     },
     tests::TempDBDir,
 };
+use crate::{storage::backup::BackupClient, stores::interfaces::writer::StateWriter};
 
 #[fixture]
 fn store() -> PerEpochStore<PendingStore, StateStore> {
@@ -26,9 +26,12 @@ fn store() -> PerEpochStore<PendingStore, StateStore> {
     let config = Arc::new(Config::new(&tmp.path));
     let pending_store =
         Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
-    let state_store = Arc::new(StateStore::new_with_path(&config.storage.state_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
 
-    PerEpochStore::try_open(config, 0, pending_store, state_store, None).unwrap()
+    let backup_client = BackupClient::noop();
+    PerEpochStore::try_open(config, 0, pending_store, state_store, None, backup_client).unwrap()
 }
 
 #[rstest]
