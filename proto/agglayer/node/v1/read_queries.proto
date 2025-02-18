@@ -8,29 +8,24 @@ import "agglayer/protocol/types/v1/epoch_configuration.proto";
 // Service for querying the current epoch configuration.
 service ConfigurationService {
   // Method used to get the current epoch configuration.
-  rpc GetEpochConfiguration(GetEpochConfigurationRequest)
-      returns (GetEpochConfigurationResponse);
+  rpc GetEpochConfiguration(GetEpochConfigurationRequest) returns (GetEpochConfigurationResponse);
 }
 
 // Service for querying network state.
 service NetworkStateService {
   // Method used to get the latest known certificate header for a network.
-  rpc GetLatestKnownCertificateHeader(GetLatestKnownCertificateHeaderRequest)
-      returns (GetLatestKnownCertificateHeaderResponse);
+  rpc GetLatestKnownCertificateHeader(GetLatestKnownCertificateHeaderRequest) returns (GetLatestKnownCertificateHeaderResponse);
 
   // Method used to get the latest settled certificate header for a network.
-  rpc GetLatestSettledCertificateHeader(
-      GetLatestSettledCertificateHeaderRequest)
-      returns (GetLatestSettledCertificateHeaderResponse);
+  rpc GetLatestSettledCertificateHeader(GetLatestSettledCertificateHeaderRequest) returns (GetLatestSettledCertificateHeaderResponse);
 
   // Method used to get the latest pending certificate header for a network.
-  rpc GetLatestPendingCertificateHeader(
-      GetLatestPendingCertificateHeaderRequest)
-      returns (GetLatestPendingCertificateHeaderResponse);
+  rpc GetLatestPendingCertificateHeader(GetLatestPendingCertificateHeaderRequest) returns (GetLatestPendingCertificateHeaderResponse);
 }
 
 // Request to get the current epoch configuration.
 message GetEpochConfigurationRequest {}
+
 // Response to the current epoch configuration request.
 message GetEpochConfigurationResponse {
   // The epoch configuration.
