@@ -278,34 +278,50 @@ where
             .await
             .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
 
-        let l1_info_leaf_count = certificate
-            .l1_info_tree_leaf_count()
-            .unwrap_or_else(|| self.l1_rpc.default_l1_info_tree_entry().0);
-
-        let l1_info_root = self
-            .l1_rpc
-            .get_l1_info_root(l1_info_leaf_count)
-            .await
-            .map_err(|_| {
-                CertificationError::L1InfoRootNotFound(certificate_id, l1_info_leaf_count)
-            })?
-            .into();
-
         let declared_l1_info_root = certificate
             .l1_info_root()
             .map_err(|source| CertificationError::Types { source })?;
 
-        if let Some(declared) = declared_l1_info_root {
-            if declared != l1_info_root {
-                return Err(CertificationError::Types {
-                    source: agglayer_types::Error::L1InfoRootIncorrect {
-                        declared,
-                        retrieved: l1_info_root,
-                        leaf_count: l1_info_leaf_count,
-                    },
-                });
+        let declared_l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
+
+        let l1_info_root = match (declared_l1_info_leaf_count, declared_l1_info_root) {
+            // Use the default corresponding to the entry set by the event `InitL1InfoRootMap`
+            (None, None) => self.l1_rpc.default_l1_info_tree_entry().1.into(),
+            // Retrieve the event corresponding to the declared entry and await for finalization
+            (Some(declared_leaf), Some(declared_root)) => {
+                // Retrieve from contract and await for finalization
+                let retrieved_root = self
+                    .l1_rpc
+                    .get_l1_info_root(declared_leaf)
+                    .await
+                    .map_err(|_| {
+                        CertificationError::L1InfoRootNotFound(certificate_id, declared_leaf)
+                    })?
+                    .into();
+
+                // Check that the retrieved l1 info root is equal to the declared one
+                if declared_root != retrieved_root {
+                    return Err(CertificationError::Types {
+                        source: agglayer_types::Error::L1InfoRootIncorrect {
+                            declared: declared_root,
+                            retrieved: retrieved_root,
+                            leaf_count: declared_leaf,
+                        },
+                    });
+                }
+
+                retrieved_root
             }
-        }
+            // Inconsistent declared L1 info tree entry
+            (l1_leaf, l1_info_root) => {
+                return Err(CertificationError::Types {
+                    source: agglayer_types::Error::InconsistentL1InfoTreeInformation {
+                        l1_leaf,
+                        l1_info_root,
+                    },
+                })
+            }
+        };
 
         let initial_state = LocalNetworkState::from(state.clone());
 
