@@ -581,6 +581,7 @@ name = "agglayer-rate-limiting"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-types",
  "agglayer-utils",
  "parking_lot",
  "serde",
