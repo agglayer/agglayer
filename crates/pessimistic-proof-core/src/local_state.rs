@@ -10,7 +10,7 @@ use crate::aggchain_proof::AggchainProofPublicValues;
 use crate::{
     aggchain_proof::AggchainData,
     bridge_exit::{L1_ETH, L1_NETWORK_ID},
-    imported_bridge_exit::{commit_imported_bridge_exits, Error},
+    imported_bridge_exit::Error,
     keccak::digest::Digest,
     local_balance_tree::LocalBalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},

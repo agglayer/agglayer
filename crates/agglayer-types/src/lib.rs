@@ -17,7 +17,7 @@ use pessimistic_proof::utils::{FromBool as _, Hashable as _};
 use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
-    imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
+    imported_bridge_exit::ImportedBridgeExit,
     local_balance_tree::LocalBalancePath,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
