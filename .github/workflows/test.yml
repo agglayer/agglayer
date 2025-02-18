@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 0xPolygonHermez/zkevm-contracts
-          ref: ${{ env.KURTOSIS_CDK_GIT_REF }}
+          ref: ${{ env.ZKEVM_CONTRACT_GIT_REF }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
