@@ -141,8 +141,8 @@ impl From<CertificateV1> for Certificate {
     }
 }
 
-impl From<&Certificate> for CertificateV1 {
-    fn from(certificate: &Certificate) -> Self {
+impl From<Certificate> for CertificateV1 {
+    fn from(certificate: Certificate) -> Self {
         let Certificate {
             network_id,
             height,
@@ -156,15 +156,14 @@ impl From<&Certificate> for CertificateV1 {
 
         CertificateV1 {
             version: VersionTag,
-            network_id: *network_id,
-            height: *height,
-            prev_local_exit_root: *prev_local_exit_root,
-            new_local_exit_root: *new_local_exit_root,
-            // TODO get rid of the clones <https://github.com/agglayer/agglayer/issues/618>
-            bridge_exits: bridge_exits.clone(),
-            imported_bridge_exits: imported_bridge_exits.clone(),
-            aggchain_proof: aggchain_proof.clone().into(),
-            metadata: *metadata,
+            network_id,
+            height,
+            prev_local_exit_root,
+            new_local_exit_root,
+            bridge_exits,
+            imported_bridge_exits,
+            aggchain_proof: aggchain_proof.into(),
+            metadata,
         }
     }
 }
@@ -206,7 +205,8 @@ fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
 
 impl crate::columns::Codec for Certificate {
     fn encode(&self) -> Result<Vec<u8>, CodecError> {
-        Ok(default_bincode_options().serialize(&CurrentCertificate::from(self))?)
+        // TODO get rid of the clones <https://github.com/agglayer/agglayer/issues/618>
+        Ok(default_bincode_options().serialize(&CurrentCertificate::from(self.clone()))?)
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
