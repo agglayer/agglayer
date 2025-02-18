@@ -57,7 +57,7 @@ impl CertificateV0 {
     }
 }
 
-impl CertificateV1 {
+impl CertificateV1<'static> {
     fn test0() -> Self {
         Self {
             version: VersionTag,
@@ -65,8 +65,8 @@ impl CertificateV1 {
             height: 987,
             prev_local_exit_root: Digest([0x02; 32]),
             new_local_exit_root: Digest([0x65; 32]),
-            bridge_exits: Vec::new(),
-            imported_bridge_exits: Vec::new(),
+            bridge_exits: Vec::new().into(),
+            imported_bridge_exits: Vec::new().into(),
             aggchain_proof: AggchainProofV1::ECDSA {
                 signature: Signature::new(
                     U256::from_be_bytes([0x7a; 32]),
@@ -97,15 +97,48 @@ impl CertificateV1 {
             height: 987.try_into().unwrap(),
             prev_local_exit_root: Digest([0x03; 32]),
             new_local_exit_root: Digest([0x61; 32]),
-            bridge_exits: Vec::new(),
-            imported_bridge_exits: Vec::new(),
+            bridge_exits: Vec::new().into(),
+            imported_bridge_exits: Vec::new().into(),
             aggchain_proof: AggchainProofV1::SP1 {
-                aggchain_proof: AggchainProofSP1 {
+                aggchain_proof: Cow::Owned(AggchainProofSP1 {
                     aggchain_params: Digest([0x58; 32]),
                     stark_proof,
-                },
+                }),
             },
             metadata: Digest([0xb9; 32]),
+        }
+    }
+}
+
+impl CertificateV1<'_> {
+    fn into_owned(self) -> CertificateV1<'static> {
+        let Self {
+            version,
+            network_id,
+            height,
+            prev_local_exit_root,
+            new_local_exit_root,
+            bridge_exits,
+            imported_bridge_exits,
+            aggchain_proof,
+            metadata,
+        } = self;
+
+        CertificateV1 {
+            version,
+            network_id,
+            height,
+            prev_local_exit_root,
+            new_local_exit_root,
+            bridge_exits: bridge_exits.into_owned().into(),
+            imported_bridge_exits: imported_bridge_exits.into_owned().into(),
+            aggchain_proof: match aggchain_proof {
+                AggchainProofV1::ECDSA { signature } => AggchainProofV1::ECDSA { signature },
+                AggchainProofV1::SP1 { aggchain_proof } => AggchainProofV1::SP1 {
+                    aggchain_proof: Cow::Owned(aggchain_proof.into_owned()),
+                },
+            },
+            metadata,
         }
     }
 }
@@ -123,7 +156,7 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 #[case(CertificateV0::test0())]
 #[case(CertificateV1::test0())]
 #[case(CertificateV1::test1())]
-#[case(CertificateV1::from(&Certificate::new_for_test(74.into(), 998)))]
+#[case(CertificateV1::from(&Certificate::new_for_test(74.into(), 998)).into_owned())]
 fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
     let bytes = default_bincode_options().serialize(&orig).unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();

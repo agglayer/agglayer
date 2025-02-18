@@ -14,6 +14,8 @@
 //! In the unlikely scenario where it turns out we need more than 256 storage format versions,
 //! another byte can be allocated to specify a "sub-version" in one of the future versions.
 
+use std::borrow::Cow;
+
 use agglayer_types::{Certificate, Digest, Height, Metadata, NetworkId, Signature};
 use bincode::Options;
 use pessimistic_proof::{
@@ -102,19 +104,19 @@ impl From<CertificateV0> for Certificate {
 
 /// The new certificate format as stored in the database (`v1`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct CertificateV1 {
+struct CertificateV1<'a> {
     version: VersionTag<1>,
     network_id: NetworkId,
     height: Height,
     prev_local_exit_root: Digest,
     new_local_exit_root: Digest,
-    bridge_exits: Vec<BridgeExit>,
-    imported_bridge_exits: Vec<ImportedBridgeExit>,
-    aggchain_proof: AggchainProofV1,
+    bridge_exits: Cow<'a, [BridgeExit]>,
+    imported_bridge_exits: Cow<'a, [ImportedBridgeExit]>,
+    aggchain_proof: AggchainProofV1<'a>,
     metadata: Metadata,
 }
 
-impl From<CertificateV1> for Certificate {
+impl From<CertificateV1<'_>> for Certificate {
     fn from(certificate: CertificateV1) -> Self {
         let CertificateV1 {
             version: VersionTag,
@@ -133,16 +135,16 @@ impl From<CertificateV1> for Certificate {
             height,
             prev_local_exit_root,
             new_local_exit_root,
-            bridge_exits,
-            imported_bridge_exits,
+            bridge_exits: bridge_exits.into_owned(),
+            imported_bridge_exits: imported_bridge_exits.into_owned(),
             metadata,
             aggchain_proof: aggchain_proof.into(),
         }
     }
 }
 
-impl From<Certificate> for CertificateV1 {
-    fn from(certificate: Certificate) -> Self {
+impl<'a> From<&'a Certificate> for CertificateV1<'a> {
+    fn from(certificate: &'a Certificate) -> Self {
         let Certificate {
             network_id,
             height,
@@ -156,14 +158,14 @@ impl From<Certificate> for CertificateV1 {
 
         CertificateV1 {
             version: VersionTag,
-            network_id,
-            height,
-            prev_local_exit_root,
-            new_local_exit_root,
-            bridge_exits,
-            imported_bridge_exits,
+            network_id: *network_id,
+            height: *height,
+            prev_local_exit_root: *prev_local_exit_root,
+            new_local_exit_root: *new_local_exit_root,
+            bridge_exits: bridge_exits.into(),
+            imported_bridge_exits: imported_bridge_exits.into(),
             aggchain_proof: aggchain_proof.into(),
-            metadata,
+            metadata: *metadata,
         }
     }
 }
@@ -171,31 +173,41 @@ impl From<Certificate> for CertificateV1 {
 // Duplicated from `agglayer-types` since we need slightly different serde impls.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[allow(clippy::upper_case_acronyms)]
-pub enum AggchainProofV1 {
-    ECDSA { signature: Signature },
-    SP1 { aggchain_proof: AggchainProofSP1 },
+pub enum AggchainProofV1<'a> {
+    ECDSA {
+        signature: Signature,
+    },
+    SP1 {
+        aggchain_proof: Cow<'a, AggchainProofSP1>,
+    },
 }
 
-impl From<AggchainProof> for AggchainProofV1 {
-    fn from(proof: AggchainProof) -> Self {
+impl<'a> From<&'a AggchainProof> for AggchainProofV1<'a> {
+    fn from(proof: &'a AggchainProof) -> Self {
         match proof {
-            AggchainProof::ECDSA { signature } => Self::ECDSA { signature },
-            AggchainProof::SP1 { aggchain_proof } => Self::SP1 { aggchain_proof },
+            AggchainProof::ECDSA { signature } => Self::ECDSA {
+                signature: *signature,
+            },
+            AggchainProof::SP1 { aggchain_proof } => Self::SP1 {
+                aggchain_proof: Cow::Borrowed(aggchain_proof),
+            },
         }
     }
 }
 
-impl From<AggchainProofV1> for AggchainProof {
+impl From<AggchainProofV1<'_>> for AggchainProof {
     fn from(proof: AggchainProofV1) -> Self {
         match proof {
             AggchainProofV1::ECDSA { signature } => Self::ECDSA { signature },
-            AggchainProofV1::SP1 { aggchain_proof } => Self::SP1 { aggchain_proof },
+            AggchainProofV1::SP1 { aggchain_proof } => Self::SP1 {
+                aggchain_proof: aggchain_proof.into_owned(),
+            },
         }
     }
 }
 
 /// Type specifying the current certificate encoding format.
-type CurrentCertificate = CertificateV1;
+type CurrentCertificate<'a> = CertificateV1<'a>;
 
 fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
     bytes: &[u8],
@@ -206,7 +218,7 @@ fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
 impl crate::columns::Codec for Certificate {
     fn encode(&self) -> Result<Vec<u8>, CodecError> {
         // TODO get rid of the clones <https://github.com/agglayer/agglayer/issues/618>
-        Ok(default_bincode_options().serialize(&CurrentCertificate::from(self.clone()))?)
+        Ok(default_bincode_options().serialize(&CurrentCertificate::from(self))?)
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
