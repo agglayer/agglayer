@@ -230,7 +230,7 @@ where
                                 %pre_existing_certificate_id,
                                 %tx_hash,
                                 ?l1_transaction,
-                                "Replacing pending certificate in error that has already been settled, but transaction recript status is in failure"
+                                "Replacing pending certificate in error that has already been settled, but transaction receipt status is in failure"
                             );
                         } else {
                             let message = "Unable to replace a pending certificate in error that \

@@ -65,8 +65,8 @@ async fn retry_on_error() {
     scenario.teardown();
 }
 
-/// This test is test acknowledge that a certificate that has been proven and
-/// sent to L1 can't be replaced in the pending-pool.
+/// Validate that a certificate that has been proven and sent to L1 can't be
+/// replaced in the pending-pool.
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]

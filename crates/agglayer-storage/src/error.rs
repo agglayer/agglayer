@@ -54,6 +54,7 @@ pub enum CertificateCandidateError {
         "Invalid certificate candidate for network {0}: {1} wasn't expected, current height {2}"
     )]
     UnexpectedHeight(NetworkId, Height, Height),
+
     #[error("Invalid certificate candidate for network {0}: {1} wasn't expected")]
     InconsistentCertificateContext(NetworkId, CertificateId),
 }
