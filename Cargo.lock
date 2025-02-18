@@ -6142,6 +6142,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "sp1-core-machine",
+ "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.11",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
