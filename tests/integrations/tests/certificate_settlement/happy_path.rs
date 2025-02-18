@@ -20,7 +20,7 @@ async fn successfully_push_certificate() {
     let scenario = FailScenario::setup();
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path).await;
+    let (_handle, _l1, client, _) = setup_network(&tmp_dir.path, None).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
