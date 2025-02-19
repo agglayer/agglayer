@@ -29,16 +29,24 @@ message GetEpochConfigurationResponse {
 // Request to get the latest known/pending/settled certificate header for a network.
 message GetLatestCertificateHeaderRequest {
   // Which type of latest certificate we want to get.
-  LatestCertificateType type = 1;
+  LatestCertificateRequestType type = 1;
 
   // The network identifier.
   uint32 network_id = 2;
 }
 
-enum LatestCertificateType {
-  KNOWN = 0;
-  PENDING = 1;
-  SETTLED = 2;
+enum LatestCertificateRequestType {
+  // Default value
+  LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED = 0;
+
+  // Known certificate.
+  LATEST_CERTIFICATE_REQUEST_TYPE_KNOWN = 1;
+
+  // Pending certificate.
+  LATEST_CERTIFICATE_REQUEST_TYPE_PENDING = 2;
+
+  // Settled certificate.
+  LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED = 3;
 }
 
 // Response to the latest known/pending/settled certificate header request.

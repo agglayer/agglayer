@@ -249,7 +249,7 @@ impl serde::Serialize for GetLatestCertificateHeaderRequest {
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestCertificateHeaderRequest", len)?;
         if self.r#type != 0 {
-            let v = LatestCertificateType::try_from(self.r#type)
+            let v = LatestCertificateRequestType::try_from(self.r#type)
                 .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.r#type)))?;
             struct_ser.serialize_field("type", &v)?;
         }
@@ -325,7 +325,7 @@ impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderRequest {
                             if r#type__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("type"));
                             }
-                            r#type__ = Some(map_.next_value::<LatestCertificateType>()? as i32);
+                            r#type__ = Some(map_.next_value::<LatestCertificateRequestType>()? as i32);
                         }
                         GeneratedField::NetworkId => {
                             if network_id__.is_some() {
@@ -438,36 +438,38 @@ impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderResponse {
         deserializer.deserialize_struct("agglayer.node.v1.GetLatestCertificateHeaderResponse", FIELDS, GeneratedVisitor)
     }
 }
-impl serde::Serialize for LatestCertificateType {
+impl serde::Serialize for LatestCertificateRequestType {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::Known => "KNOWN",
-            Self::Pending => "PENDING",
-            Self::Settled => "SETTLED",
+            Self::Unspecified => "LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED",
+            Self::Known => "LATEST_CERTIFICATE_REQUEST_TYPE_KNOWN",
+            Self::Pending => "LATEST_CERTIFICATE_REQUEST_TYPE_PENDING",
+            Self::Settled => "LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED",
         };
         serializer.serialize_str(variant)
     }
 }
-impl<'de> serde::Deserialize<'de> for LatestCertificateType {
+impl<'de> serde::Deserialize<'de> for LatestCertificateRequestType {
     #[allow(deprecated)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "KNOWN",
-            "PENDING",
-            "SETTLED",
+            "LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED",
+            "LATEST_CERTIFICATE_REQUEST_TYPE_KNOWN",
+            "LATEST_CERTIFICATE_REQUEST_TYPE_PENDING",
+            "LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED",
         ];
 
         struct GeneratedVisitor;
 
         impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = LatestCertificateType;
+            type Value = LatestCertificateRequestType;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(formatter, "expected one of: {:?}", &FIELDS)
@@ -502,9 +504,10 @@ impl<'de> serde::Deserialize<'de> for LatestCertificateType {
                 E: serde::de::Error,
             {
                 match value {
-                    "KNOWN" => Ok(LatestCertificateType::Known),
-                    "PENDING" => Ok(LatestCertificateType::Pending),
-                    "SETTLED" => Ok(LatestCertificateType::Settled),
+                    "LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED" => Ok(LatestCertificateRequestType::Unspecified),
+                    "LATEST_CERTIFICATE_REQUEST_TYPE_KNOWN" => Ok(LatestCertificateRequestType::Known),
+                    "LATEST_CERTIFICATE_REQUEST_TYPE_PENDING" => Ok(LatestCertificateRequestType::Pending),
+                    "LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED" => Ok(LatestCertificateRequestType::Settled),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

@@ -37,8 +37,12 @@ message AggchainProof {
   }
 }
 
+// SP1v4 stark proof.
 message AggchainProofSP1v4 {
+  // Digest of the aggchain parameters.
   FixedBytes32 aggchain_params = 1;
+
+  // The actual stark proof.
   bytes stark_proof = 2;
 }
 
