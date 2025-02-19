@@ -179,7 +179,8 @@ pub enum CertificateStatusError {
 
     /// A simple error message, without type information attached.
     ///
-    /// Always used over the gRPC API, to abstract away server implementation details.
+    /// Always used over the gRPC API, to abstract away server implementation
+    /// details.
     #[error("{0}")]
     Message(String),
 }

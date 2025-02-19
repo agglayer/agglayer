@@ -1,8 +1,7 @@
 use agglayer_types::{GlobalIndex, U256};
 
-use crate::protocol::types::v1;
-
 use super::Error;
+use crate::protocol::types::v1;
 
 impl TryFrom<v1::FixedBytes32> for GlobalIndex {
     type Error = Error;

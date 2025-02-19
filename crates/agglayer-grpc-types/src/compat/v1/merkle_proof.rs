@@ -1,8 +1,7 @@
 use agglayer_types::{Digest, MerkleProof};
 
-use crate::protocol::types::v1;
-
 use super::Error;
+use crate::protocol::types::v1;
 
 impl TryFrom<v1::MerkleProof> for MerkleProof {
     type Error = Error;

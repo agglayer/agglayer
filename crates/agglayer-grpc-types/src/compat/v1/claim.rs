@@ -1,8 +1,7 @@
 use agglayer_types::{Claim, ClaimFromMainnet, ClaimFromRollup};
 
-use crate::protocol::types::v1;
-
 use super::Error;
+use crate::protocol::types::v1;
 
 impl TryFrom<v1::ClaimFromMainnet> for ClaimFromMainnet {
     type Error = Error;

@@ -1,9 +1,8 @@
 use agglayer_types::Address;
 use prost::bytes::Bytes;
 
-use crate::protocol::types::v1;
-
 use super::Error;
+use crate::protocol::types::v1;
 
 impl TryFrom<v1::FixedBytes20> for Address {
     type Error = Error;

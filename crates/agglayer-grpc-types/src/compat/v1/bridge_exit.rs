@@ -1,8 +1,7 @@
 use agglayer_types::{BridgeExit, LeafType, NetworkId};
 
-use crate::protocol::types::v1;
-
 use super::Error;
+use crate::protocol::types::v1;
 
 impl TryFrom<v1::BridgeExit> for BridgeExit {
     type Error = Error;

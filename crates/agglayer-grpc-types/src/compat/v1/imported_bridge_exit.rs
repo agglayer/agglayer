@@ -1,8 +1,7 @@
 use agglayer_types::ImportedBridgeExit;
 
-use crate::protocol::types::v1;
-
 use super::Error;
+use crate::protocol::types::v1;
 
 impl TryFrom<v1::ImportedBridgeExit> for ImportedBridgeExit {
     type Error = Error;

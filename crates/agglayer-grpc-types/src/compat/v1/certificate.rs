@@ -1,8 +1,7 @@
 use agglayer_types::{Certificate, NetworkId};
 
-use crate::protocol::types::v1;
-
 use super::Error;
+use crate::protocol::types::v1;
 
 impl TryFrom<v1::Certificate> for Certificate {
     type Error = Error;

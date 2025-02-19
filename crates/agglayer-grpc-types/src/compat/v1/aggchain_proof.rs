@@ -2,9 +2,8 @@ use agglayer_types::{AggchainProof, AggchainProofSP1};
 use bincode::Options as _;
 use prost::bytes::Bytes;
 
-use crate::protocol::types::v1;
-
 use super::Error;
+use crate::protocol::types::v1;
 
 fn sp1v4_bincode_options() -> impl bincode::Options {
     bincode::DefaultOptions::new()

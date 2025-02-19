@@ -1,8 +1,7 @@
 use agglayer_types::{CertificateHeader, CertificateStatus, CertificateStatusError, NetworkId};
 
-use crate::protocol::types::v1;
-
 use super::Error;
+use crate::protocol::types::v1;
 
 impl TryFrom<v1::CertificateStatusError> for CertificateStatusError {
     type Error = Error;
