@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use agglayer_primitives::SignatureError;
-use pessimistic_proof::aggchain_proof::{AggchainProofData, AggchainProofECDSAData};
+use pessimistic_proof::aggchain_proof::{AggchainProof, AggchainProofData, AggchainProofECDSAData};
 use pessimistic_proof::error::ProofVerificationError;
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
@@ -131,6 +131,9 @@ pub enum Error {
     /// The operation cannot be applied on the smt.
     #[error(transparent)]
     InvalidSmtOperation(#[from] SmtError),
+    /// SP1-based Aggchain proof not yet supported.
+    #[error("SP1-based Aggchain proof not yet supported")]
+    AggchainProofSP1Unsupported,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -227,10 +230,11 @@ pub struct Certificate {
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits included in this state transition.
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
-    /// Signature committed to the bridge exits and imported bridge exits.
-    pub signature: Signature,
     /// Fixed size field of arbitrary data for the chain needs.
     pub metadata: Metadata,
+    /// Aggchain proof which is either one ECDSA or one SP1 proof.
+    #[serde(flatten)]
+    pub aggchain_proof: AggchainProof,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -248,7 +252,7 @@ impl Default for Certificate {
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            signature,
+            aggchain_proof: AggchainProof::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -303,7 +307,7 @@ impl Certificate {
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            signature,
+            aggchain_proof: AggchainProof::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -364,17 +368,23 @@ impl Certificate {
         }
     }
 
-    pub fn signer(&self) -> Result<Address, SignatureError> {
-        // retrieve signer
-        let combined_hash = signature_commitment(
-            self.new_local_exit_root,
-            self.imported_bridge_exits
-                .iter()
-                .map(|exit| exit.global_index),
-        );
+    pub fn signer(&self) -> Result<Option<Address>, SignatureError> {
+        match self.aggchain_proof {
+            AggchainProof::ECDSA { signature } => {
+                // retrieve signer
+                let combined_hash = signature_commitment(
+                    self.new_local_exit_root,
+                    self.imported_bridge_exits
+                        .iter()
+                        .map(|exit| exit.global_index),
+                );
 
-        self.signature
-            .recover_address_from_prehash(&B256::new(combined_hash.0))
+                signature
+                    .recover_address_from_prehash(&B256::new(combined_hash.0))
+                    .map(Some)
+            }
+            _ => Ok(None),
+        }
     }
 }
 
@@ -543,10 +553,13 @@ impl LocalNetworkStateData {
         }
 
         // TODO: Construct it properly from the Certificate
-        let aggchain_proof = AggchainProofData::ECDSA(AggchainProofECDSAData {
-            signer,
-            signature: certificate.signature,
-        });
+        let aggchain_proof = match &certificate.aggchain_proof {
+            AggchainProof::ECDSA { signature } => {
+                let signature = *signature;
+                AggchainProofData::ECDSA(AggchainProofECDSAData { signer, signature })
+            }
+            AggchainProof::SP1 { .. } => return Err(Error::AggchainProofSP1Unsupported),
+        };
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
             origin_network: *certificate.network_id,

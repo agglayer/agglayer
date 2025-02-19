@@ -5,6 +5,8 @@ pub use pessimistic_proof_core::aggchain_proof::{
 };
 use pessimistic_proof_core::keccak::digest::Digest;
 use serde::{Deserialize, Serialize};
+use sp1_core_machine::reduce::SP1ReduceProof;
+use sp1_prover::InnerSC;
 
 // Aggchain proof values submitted via the [`Certificate`].
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -14,8 +16,7 @@ pub enum AggchainProof {
     SP1 { aggchain_proof: AggchainProofSP1 },
 }
 
-// TODO: Replace with the proper format (fixed size buffer of ~7kb)
-pub type StarkProof = [u8; 32];
+pub type StarkProof = SP1ReduceProof<InnerSC>;
 
 /// SP1 variant of the aggchain proof values submitted via the [`Certificate`].
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -23,5 +24,5 @@ pub struct AggchainProofSP1 {
     /// Chain-specific commitment forwarded through the PP.
     pub aggchain_params: Digest,
     /// STARK proof.
-    pub stark_proof: StarkProof,
+    pub stark_proof: Box<StarkProof>,
 }

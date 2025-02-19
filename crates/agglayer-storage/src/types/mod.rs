@@ -1,7 +1,9 @@
-use agglayer_types::{Certificate, CertificateHeader, CertificateId, Digest, NetworkId, Proof};
+use agglayer_types::{CertificateHeader, CertificateId, Digest, NetworkId, Proof};
 use serde::{Deserialize, Serialize};
 
 use crate::columns::Codec;
+
+mod certificate;
 
 macro_rules! default_codec_impl {
     ($($ident: ident),+) => {
@@ -57,7 +59,6 @@ impl Codec for SmtValue {}
 default_codec_impl!(
     u64,
     u32,
-    Certificate,
     CertificateId,
     CertificateHeader,
     MetadataKey,
