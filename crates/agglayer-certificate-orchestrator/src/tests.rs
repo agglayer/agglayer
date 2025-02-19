@@ -14,6 +14,7 @@ use agglayer_storage::{
         latest_proven_certificate_per_network::ProvenCertificate,
         latest_settled_certificate_per_network::SettledCertificate,
     },
+    storage::backup::BackupClient,
     stores::{
         epochs::EpochsStore, pending::PendingStore, per_epoch::PerEpochStore, state::StateStore,
         EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
@@ -102,8 +103,7 @@ impl PerEpochReader for DummyPendingStore {
 impl PerEpochWriter for DummyPendingStore {
     fn add_certificate(
         &self,
-        _network_id: NetworkId,
-        _height: Height,
+        _certificate_id: CertificateId,
         _mode: ExecutionMode,
     ) -> Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
         Ok((0, 0))
@@ -437,7 +437,8 @@ async fn test_certificate_orchestrator_can_stop() {
             .expect("Unable to create store"),
     );
     let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -445,6 +446,7 @@ async fn test_certificate_orchestrator_can_stop() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -500,7 +502,8 @@ async fn test_collect_certificates() {
             .expect("Unable to create store"),
     );
     let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
     );
 
     let epochs_store = Arc::new(
@@ -509,6 +512,7 @@ async fn test_collect_certificates() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -566,7 +570,8 @@ async fn test_collect_certificates_after_epoch() {
             .expect("Unable to create store"),
     );
     let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -574,6 +579,7 @@ async fn test_collect_certificates_after_epoch() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -633,7 +639,8 @@ async fn test_collect_certificates_when_empty() {
             .expect("Unable to create store"),
     );
     let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -641,6 +648,7 @@ async fn test_collect_certificates_when_empty() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -711,7 +719,8 @@ fn check() -> (
             .expect("Unable to create store"),
     );
     let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -719,6 +728,7 @@ fn check() -> (
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );

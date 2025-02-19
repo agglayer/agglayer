@@ -3,14 +3,17 @@ use std::{num::NonZeroU64, sync::Arc};
 use agglayer_aggregator_notifier::{CertifierClient, EpochPackerClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
-use agglayer_config::{Config, Epoch};
+use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
 use agglayer_contracts::{
     polygon_rollup_manager::PolygonRollupManager,
     polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
 };
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
-    storage::DB,
+    storage::{
+        backup::{BackupClient, BackupEngine},
+        DB,
+    },
     stores::{
         debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
         PerEpochReader as _,
@@ -28,7 +31,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    epoch_synchronizer::EpochSynchronizer, kernel::Kernel, rpc::AgglayerImpl,
+    epoch_synchronizer::EpochSynchronizer,
+    kernel::Kernel,
+    rpc::{admin::AdminAgglayerImpl, AgglayerImpl},
     service::AgglayerService,
 };
 
@@ -99,7 +104,28 @@ impl Node {
             agglayer_storage::storage::state_db_cf_definitions(),
         )?);
 
-        let state_store = Arc::new(StateStore::new(state_db.clone()));
+        // Initialize backup engine
+        let backup_client = if let BackupConfig::Enabled {
+            path,
+            state_max_backup_count,
+            pending_max_backup_count,
+        } = &config.storage.backup
+        {
+            let (backup_engine, client) = BackupEngine::new(
+                path,
+                state_db.clone(),
+                pending_db.clone(),
+                *state_max_backup_count,
+                *pending_max_backup_count,
+                cancellation_token.clone(),
+            )?;
+            tokio::spawn(backup_engine.run());
+
+            client
+        } else {
+            BackupClient::noop()
+        };
+        let state_store = Arc::new(StateStore::new(state_db.clone(), backup_client.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
         let debug_store = if config.debug_mode {
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path)?)
@@ -150,6 +176,7 @@ impl Node {
             current_epoch,
             pending_store.clone(),
             state_store.clone(),
+            backup_client,
         )?);
 
         info!("Epoch synchronization started.");
@@ -237,9 +264,18 @@ impl Node {
             data_sender,
             pending_store.clone(),
             state_store.clone(),
-            debug_store,
+            debug_store.clone(),
             config.clone(),
         ));
+
+        let admin_router = AdminAgglayerImpl::new(
+            pending_store.clone(),
+            state_store.clone(),
+            debug_store.clone(),
+            config.clone(),
+        )
+        .start()
+        .await?;
 
         // Bind the core to the RPC server.
         let json_rpc_router = AgglayerImpl::new(service).start().await?;
@@ -260,15 +296,23 @@ impl Node {
             .nest("/grpc", grpc_router);
 
         let listener = tokio::net::TcpListener::bind(config.rpc_addr()).await?;
-        let api_graceful_shutdown = cancellation_token.clone();
+        let admin_listener = tokio::net::TcpListener::bind(config.admin_rpc_addr()).await?;
         info!(on = %config.rpc_addr(), "API listening");
 
         let api_server = axum::serve(listener, router)
-            .with_graceful_shutdown(async move { api_graceful_shutdown.cancelled().await });
+            .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
+
+        let admin_server = axum::serve(admin_listener, admin_router)
+            .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
         let rpc_handle = tokio::spawn(async move {
-            _ = api_server.await;
-            debug!("Node RPC shutdown requested.");
+            tokio::select! {
+                _ = api_server => {},
+                _ = admin_server => {},
+                _ = cancellation_token.cancelled() => {
+                    debug!("Node RPC shutdown requested.");
+                }
+            }
         });
 
         let node = Self {

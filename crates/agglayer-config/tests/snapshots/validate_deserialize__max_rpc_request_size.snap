@@ -18,6 +18,7 @@ format = "pretty"
 
 [rpc]
 port = 9090
+admin-port = 9091
 host = "0.0.0.0"
 max-request-body-size = 104857600
 request-timeout = "3m"
