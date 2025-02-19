@@ -43,5 +43,4 @@ harness = false
 required-features = ["testutils"]
 
 [features]
-default = []
 testutils = ["rand", "mockall", "agglayer-types/testutils"]

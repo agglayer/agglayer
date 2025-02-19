@@ -95,10 +95,10 @@ fn default_port() -> u16 {
 }
 
 /// The default port for the local admin RPC server.
-/// If the `AGGLAYER_DEBUG_PORT` environment variable is set, it will take
+/// If the `AGGLAYER_ADMIN_PORT` environment variable is set, it will take
 /// precedence over
 fn default_admin_port() -> u16 {
-    from_env_or_default("AGGLAYER_DEBUG_PORT", DEFAULT_ADMIN_PORT)
+    from_env_or_default("AGGLAYER_ADMIN_PORT", DEFAULT_ADMIN_PORT)
 }
 /// The default host for the local RPC server.
 const fn default_host() -> Ipv4Addr {

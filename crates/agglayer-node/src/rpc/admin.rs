@@ -300,6 +300,7 @@ where
             hash = certificate_id.to_string(),
             "(ADMIN) Removing pending proof: {}", certificate_id
         );
+
         self.pending_store
             .remove_generated_proof(&certificate_id)
             .map_err(|error| {
