@@ -20,7 +20,7 @@ jobs:
         with:
           token: ${{ secrets.BUF_TOKEN }}
           input: "proto"
-          breaking_against: "${{ github.event.repository.clone_url }}#format=git,ref=${{ github.event.pull_request.base.sha || github.event.before }},subdir=proto"
+          breaking_against: "${{ github.event.repository.clone_url }}#format=git,ref=${{ github.event.pull_request.base.sha || 'HEAD~1,branch=main' }},subdir=proto"
           # Run breaking change, lint, and format checks for Protobuf sources against all branches,
           # 'proto' # subdirectory, then push to the BSR once validated
           lint: true
