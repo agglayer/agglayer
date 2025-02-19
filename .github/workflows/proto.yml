@@ -11,18 +11,33 @@ on:
 permissions:
   contents: read
   pull-requests: write
+
+env:
+  BREAKING_REF: branch=main
+
 jobs:
   buf:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Define BREAKING_REF for merge_group
+        if: github.event_name == 'merge_group'
+        run: echo "BREAKING_REF=ref=${{ github.event.merge_group.base_sha }}" >> $GITHUB_ENV
+ 
+      - name: Define BREAKING_REF for pull_request
+        if: github.event_name == 'pull_request'
+        run: echo "BREAKING_REF=ref=${{ github.event.pull_request.base.sha }}" >> $GITHUB_ENV
+
+      - name: Define BREAKING_REF for main
+        if: github.event_name == 'push'
+        run: echo "BREAKING_REF=ref=${{ github.event.before }}" >> $GITHUB_ENV
+
       - uses: bufbuild/buf-action@v1
         with:
           token: ${{ secrets.BUF_TOKEN }}
           input: "proto"
-          breaking_against: "${{ github.event.repository.clone_url }}#format=git,ref=${{ github.event.pull_request.base.sha || github.event.before }},subdir=proto"
-          # Run breaking change, lint, and format checks for Protobuf sources against all branches,
-          # 'proto' # subdirectory, then push to the BSR once validated
+          breaking_against: "${{ github.event.repository.clone_url }}#format=git,${{ env.BREAKING_REF }},subdir=proto"
           lint: true
           format: true
           breaking: true
