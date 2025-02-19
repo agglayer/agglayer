@@ -8,7 +8,7 @@ impl TryFrom<v1::CertificateStatusError> for CertificateStatusError {
 
     fn try_from(value: v1::CertificateStatusError) -> Result<Self, Self::Error> {
         Ok(CertificateStatusError::Message(
-            String::from_utf8_lossy(&*value.message).into(),
+            String::from_utf8_lossy(&value.message).into(),
         ))
     }
 }
