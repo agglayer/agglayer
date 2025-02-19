@@ -241,10 +241,18 @@ impl serde::Serialize for GetLatestCertificateHeaderRequest {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
+        if self.r#type != 0 {
+            len += 1;
+        }
         if self.network_id != 0 {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetLatestCertificateHeaderRequest", len)?;
+        if self.r#type != 0 {
+            let v = LatestCertificateType::try_from(self.r#type)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.r#type)))?;
+            struct_ser.serialize_field("type", &v)?;
+        }
         if self.network_id != 0 {
             struct_ser.serialize_field("networkId", &self.network_id)?;
         }
@@ -258,12 +266,14 @@ impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderRequest {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
+            "type",
             "network_id",
             "networkId",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
+            Type,
             NetworkId,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -286,6 +296,7 @@ impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderRequest {
                         E: serde::de::Error,
                     {
                         match value {
+                            "type" => Ok(GeneratedField::Type),
                             "networkId" | "network_id" => Ok(GeneratedField::NetworkId),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
@@ -306,9 +317,16 @@ impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderRequest {
                 where
                     V: serde::de::MapAccess<'de>,
             {
+                let mut r#type__ = None;
                 let mut network_id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
+                        GeneratedField::Type => {
+                            if r#type__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("type"));
+                            }
+                            r#type__ = Some(map_.next_value::<LatestCertificateType>()? as i32);
+                        }
                         GeneratedField::NetworkId => {
                             if network_id__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("networkId"));
@@ -320,6 +338,7 @@ impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderRequest {
                     }
                 }
                 Ok(GetLatestCertificateHeaderRequest {
+                    r#type: r#type__.unwrap_or_default(),
                     network_id: network_id__.unwrap_or_default(),
                 })
             }
@@ -417,6 +436,80 @@ impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderResponse {
             }
         }
         deserializer.deserialize_struct("agglayer.node.v1.GetLatestCertificateHeaderResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for LatestCertificateType {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Known => "KNOWN",
+            Self::Pending => "PENDING",
+            Self::Settled => "SETTLED",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for LatestCertificateType {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "KNOWN",
+            "PENDING",
+            "SETTLED",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = LatestCertificateType;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "KNOWN" => Ok(LatestCertificateType::Known),
+                    "PENDING" => Ok(LatestCertificateType::Pending),
+                    "SETTLED" => Ok(LatestCertificateType::Settled),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
     }
 }
 impl serde::Serialize for SubmitCertificateRequest {

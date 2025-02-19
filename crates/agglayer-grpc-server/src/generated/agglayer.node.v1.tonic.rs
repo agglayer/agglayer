@@ -199,8 +199,6 @@ pub mod configuration_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with ConfigurationServiceServer.
     #[async_trait]
     pub trait ConfigurationService: std::marker::Send + std::marker::Sync + 'static {
-        /** Method used to get the current epoch configuration.
-*/
         async fn get_epoch_configuration(
             &self,
             request: tonic::Request<super::GetEpochConfigurationRequest>,
@@ -209,8 +207,6 @@ pub mod configuration_service_server {
             tonic::Status,
         >;
     }
-    /** Service for querying the current epoch configuration.
-*/
     #[derive(Debug)]
     pub struct ConfigurationServiceServer<T> {
         inner: Arc<T>,
@@ -388,27 +384,7 @@ pub mod network_state_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with NetworkStateServiceServer.
     #[async_trait]
     pub trait NetworkStateService: std::marker::Send + std::marker::Sync + 'static {
-        /** Method used to get the latest known certificate header for a network.
-*/
-        async fn get_latest_known_certificate_header(
-            &self,
-            request: tonic::Request<super::GetLatestCertificateHeaderRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetLatestCertificateHeaderResponse>,
-            tonic::Status,
-        >;
-        /** Method used to get the latest settled certificate header for a network.
-*/
-        async fn get_latest_settled_certificate_header(
-            &self,
-            request: tonic::Request<super::GetLatestCertificateHeaderRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetLatestCertificateHeaderResponse>,
-            tonic::Status,
-        >;
-        /** Method used to get the latest pending certificate header for a network.
-*/
-        async fn get_latest_pending_certificate_header(
+        async fn get_latest_certificate_header(
             &self,
             request: tonic::Request<super::GetLatestCertificateHeaderRequest>,
         ) -> std::result::Result<
@@ -416,8 +392,6 @@ pub mod network_state_service_server {
             tonic::Status,
         >;
     }
-    /** Service for querying network state.
-*/
     #[derive(Debug)]
     pub struct NetworkStateServiceServer<T> {
         inner: Arc<T>,
@@ -494,16 +468,16 @@ pub mod network_state_service_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
-                "/agglayer.node.v1.NetworkStateService/GetLatestKnownCertificateHeader" => {
+                "/agglayer.node.v1.NetworkStateService/GetLatestCertificateHeader" => {
                     #[allow(non_camel_case_types)]
-                    struct GetLatestKnownCertificateHeaderSvc<T: NetworkStateService>(
+                    struct GetLatestCertificateHeaderSvc<T: NetworkStateService>(
                         pub Arc<T>,
                     );
                     impl<
                         T: NetworkStateService,
                     > tonic::server::UnaryService<
                         super::GetLatestCertificateHeaderRequest,
-                    > for GetLatestKnownCertificateHeaderSvc<T> {
+                    > for GetLatestCertificateHeaderSvc<T> {
                         type Response = super::GetLatestCertificateHeaderResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -517,7 +491,7 @@ pub mod network_state_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as NetworkStateService>::get_latest_known_certificate_header(
+                                <T as NetworkStateService>::get_latest_certificate_header(
                                         &inner,
                                         request,
                                     )
@@ -532,115 +506,7 @@ pub mod network_state_service_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = GetLatestKnownCertificateHeaderSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/agglayer.node.v1.NetworkStateService/GetLatestSettledCertificateHeader" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetLatestSettledCertificateHeaderSvc<T: NetworkStateService>(
-                        pub Arc<T>,
-                    );
-                    impl<
-                        T: NetworkStateService,
-                    > tonic::server::UnaryService<
-                        super::GetLatestCertificateHeaderRequest,
-                    > for GetLatestSettledCertificateHeaderSvc<T> {
-                        type Response = super::GetLatestCertificateHeaderResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<
-                                super::GetLatestCertificateHeaderRequest,
-                            >,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as NetworkStateService>::get_latest_settled_certificate_header(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = GetLatestSettledCertificateHeaderSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/agglayer.node.v1.NetworkStateService/GetLatestPendingCertificateHeader" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetLatestPendingCertificateHeaderSvc<T: NetworkStateService>(
-                        pub Arc<T>,
-                    );
-                    impl<
-                        T: NetworkStateService,
-                    > tonic::server::UnaryService<
-                        super::GetLatestCertificateHeaderRequest,
-                    > for GetLatestPendingCertificateHeaderSvc<T> {
-                        type Response = super::GetLatestCertificateHeaderResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<
-                                super::GetLatestCertificateHeaderRequest,
-                            >,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as NetworkStateService>::get_latest_pending_certificate_header(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = GetLatestPendingCertificateHeaderSvc(inner);
+                        let method = GetLatestCertificateHeaderSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -14,13 +14,7 @@ service ConfigurationService {
 // Service for querying network state.
 service NetworkStateService {
   // Method used to get the latest known certificate header for a network.
-  rpc GetLatestKnownCertificateHeader(GetLatestCertificateHeaderRequest) returns (GetLatestCertificateHeaderResponse);
-
-  // Method used to get the latest settled certificate header for a network.
-  rpc GetLatestSettledCertificateHeader(GetLatestCertificateHeaderRequest) returns (GetLatestCertificateHeaderResponse);
-
-  // Method used to get the latest pending certificate header for a network.
-  rpc GetLatestPendingCertificateHeader(GetLatestCertificateHeaderRequest) returns (GetLatestCertificateHeaderResponse);
+  rpc GetLatestCertificateHeader(GetLatestCertificateHeaderRequest) returns (GetLatestCertificateHeaderResponse);
 }
 
 // Request to get the current epoch configuration.
@@ -34,8 +28,17 @@ message GetEpochConfigurationResponse {
 
 // Request to get the latest known/pending/settled certificate header for a network.
 message GetLatestCertificateHeaderRequest {
+  // Which type of latest certificate we want to get.
+  LatestCertificateType type = 1;
+
   // The network identifier.
-  uint32 network_id = 1;
+  uint32 network_id = 2;
+}
+
+enum LatestCertificateType {
+  KNOWN = 0;
+  PENDING = 1;
+  SETTLED = 2;
 }
 
 // Response to the latest known/pending/settled certificate header request.

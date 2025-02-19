@@ -7,25 +7,7 @@ use crate::Server;
 
 #[tonic::async_trait]
 impl NetworkStateService for Server {
-    async fn get_latest_known_certificate_header(
-        &self,
-        request: tonic::Request<GetLatestCertificateHeaderRequest>,
-    ) -> Result<tonic::Response<GetLatestCertificateHeaderResponse>, tonic::Status> {
-        let _request = request.into_inner();
-        let response = GetLatestCertificateHeaderResponse::default();
-        Ok(tonic::Response::new(response))
-    }
-
-    async fn get_latest_settled_certificate_header(
-        &self,
-        request: tonic::Request<GetLatestCertificateHeaderRequest>,
-    ) -> Result<tonic::Response<GetLatestCertificateHeaderResponse>, tonic::Status> {
-        let _request = request.into_inner();
-        let response = GetLatestCertificateHeaderResponse::default();
-        Ok(tonic::Response::new(response))
-    }
-
-    async fn get_latest_pending_certificate_header(
+    async fn get_latest_certificate_header(
         &self,
         request: tonic::Request<GetLatestCertificateHeaderRequest>,
     ) -> Result<tonic::Response<GetLatestCertificateHeaderResponse>, tonic::Status> {
