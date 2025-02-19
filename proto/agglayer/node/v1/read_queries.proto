@@ -35,6 +35,7 @@ message GetLatestCertificateHeaderRequest {
   uint32 network_id = 2;
 }
 
+// The type of latest certificate we want to get.
 enum LatestCertificateRequestType {
   // Default value
   LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED = 0;
