@@ -6,7 +6,7 @@ use agglayer_types::Digest;
 use tonic_types::{ErrorDetails, StatusExt};
 use tracing::instrument;
 
-const SERVICE_PATH: &str = "agglayer-node.grpc-api.v1.configuration-service";
+const SERVICE_PATH: &str = "agglayer-node.grpc-api.v1.certificate-submission-service";
 
 pub struct CertificateSubmissionServer {}
 
