@@ -1,4 +1,5 @@
 use agglayer_types::U256;
+use prost::bytes::Bytes;
 
 use crate::protocol::types::v1;
 
@@ -14,5 +15,13 @@ impl TryFrom<v1::FixedBytes32> for U256 {
                 actual: value.value.len(),
             })?,
         ))
+    }
+}
+
+impl From<U256> for v1::FixedBytes32 {
+    fn from(value: U256) -> Self {
+        v1::FixedBytes32 {
+            value: Bytes::copy_from_slice(&value.to_be_bytes::<32>()),
+        }
     }
 }

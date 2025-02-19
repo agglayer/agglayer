@@ -1,4 +1,5 @@
 use agglayer_types::CertificateId;
+use prost::bytes::Bytes;
 
 use crate::protocol::types::v1;
 
@@ -15,5 +16,15 @@ impl TryFrom<v1::CertificateId> for CertificateId {
             expected: 32,
             actual: value.value.len(),
         })
+    }
+}
+
+impl From<CertificateId> for v1::CertificateId {
+    fn from(value: CertificateId) -> Self {
+        v1::CertificateId {
+            certificate_id: Some(v1::FixedBytes32 {
+                value: Bytes::copy_from_slice(&value.0),
+            }),
+        }
     }
 }

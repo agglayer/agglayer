@@ -24,3 +24,12 @@ impl TryFrom<v1::MerkleProof> for MerkleProof {
         Ok(MerkleProof::new(required_field!(value, root), siblings))
     }
 }
+
+impl From<MerkleProof> for v1::MerkleProof {
+    fn from(value: MerkleProof) -> Self {
+        v1::MerkleProof {
+            root: Some(value.root.into()),
+            siblings: value.siblings().iter().copied().map(Into::into).collect(),
+        }
+    }
+}

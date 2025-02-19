@@ -92,6 +92,10 @@ impl MerkleProof {
     pub fn verify(&self, leaf: Digest, leaf_index: u32) -> bool {
         self.proof.verify(leaf, leaf_index, self.root)
     }
+
+    pub fn siblings(&self) -> &[<Keccak256Hasher as Hasher>::Digest; 32] {
+        &self.proof.siblings
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -15,3 +15,13 @@ impl TryFrom<v1::ImportedBridgeExit> for ImportedBridgeExit {
         })
     }
 }
+
+impl From<ImportedBridgeExit> for v1::ImportedBridgeExit {
+    fn from(value: ImportedBridgeExit) -> Self {
+        v1::ImportedBridgeExit {
+            bridge_exit: Some(value.bridge_exit.into()),
+            claim: Some(value.claim_data.into()),
+            global_index: Some(value.global_index.into()),
+        }
+    }
+}

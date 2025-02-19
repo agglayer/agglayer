@@ -26,3 +26,20 @@ impl TryFrom<v1::BridgeExit> for BridgeExit {
         })
     }
 }
+
+impl From<BridgeExit> for v1::BridgeExit {
+    fn from(value: BridgeExit) -> Self {
+        v1::BridgeExit {
+            leaf_type: match value.leaf_type {
+                LeafType::Transfer => v1::LeafType::Transfer,
+                LeafType::Message => v1::LeafType::Message,
+            }
+            .into(),
+            token_info: Some(value.token_info.into()),
+            dest_network: value.dest_network.into(),
+            dest_address: Some(value.dest_address.into()),
+            amount: Some(value.amount.into()),
+            metadata: value.metadata.map(Into::into),
+        }
+    }
+}

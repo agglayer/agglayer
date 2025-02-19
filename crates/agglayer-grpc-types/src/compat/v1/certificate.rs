@@ -30,3 +30,24 @@ impl TryFrom<v1::Certificate> for Certificate {
         })
     }
 }
+
+impl TryFrom<Certificate> for v1::Certificate {
+    type Error = Error;
+
+    fn try_from(value: Certificate) -> Result<Self, Self::Error> {
+        Ok(v1::Certificate {
+            network_id: value.network_id.into(),
+            height: value.height,
+            prev_local_exit_root: Some(value.prev_local_exit_root.into()),
+            new_local_exit_root: Some(value.new_local_exit_root.into()),
+            bridge_exits: value.bridge_exits.into_iter().map(Into::into).collect(),
+            imported_bridge_exits: value
+                .imported_bridge_exits
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            aggchain_proof: Some(value.aggchain_proof.try_into()?),
+            metadata: Some(value.metadata.into()),
+        })
+    }
+}

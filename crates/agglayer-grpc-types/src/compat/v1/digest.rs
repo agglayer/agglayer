@@ -1,4 +1,5 @@
 use agglayer_types::Digest;
+use prost::bytes::Bytes;
 
 use crate::protocol::types::v1;
 
@@ -12,5 +13,13 @@ impl TryFrom<v1::FixedBytes32> for Digest {
             expected: 32,
             actual: value.value.len(),
         })
+    }
+}
+
+impl From<Digest> for v1::FixedBytes32 {
+    fn from(value: Digest) -> Self {
+        v1::FixedBytes32 {
+            value: Bytes::copy_from_slice(&value.0),
+        }
     }
 }

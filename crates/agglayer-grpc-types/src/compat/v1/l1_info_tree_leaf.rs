@@ -16,6 +16,16 @@ impl TryFrom<v1::L1InfoTreeLeafInner> for L1InfoTreeLeafInner {
     }
 }
 
+impl From<L1InfoTreeLeafInner> for v1::L1InfoTreeLeafInner {
+    fn from(value: L1InfoTreeLeafInner) -> Self {
+        v1::L1InfoTreeLeafInner {
+            global_exit_root: Some(value.global_exit_root.into()),
+            block_hash: Some(value.block_hash.into()),
+            timestamp: value.timestamp,
+        }
+    }
+}
+
 impl TryFrom<v1::L1InfoTreeLeaf> for L1InfoTreeLeaf {
     type Error = Error;
 
@@ -26,5 +36,16 @@ impl TryFrom<v1::L1InfoTreeLeaf> for L1InfoTreeLeaf {
             mer: required_field!(value, mer),
             inner: required_field!(value, inner),
         })
+    }
+}
+
+impl From<L1InfoTreeLeaf> for v1::L1InfoTreeLeaf {
+    fn from(value: L1InfoTreeLeaf) -> Self {
+        v1::L1InfoTreeLeaf {
+            l1_info_tree_index: value.l1_info_tree_index,
+            rer: Some(value.rer.into()),
+            mer: Some(value.mer.into()),
+            inner: Some(value.inner.into()),
+        }
     }
 }

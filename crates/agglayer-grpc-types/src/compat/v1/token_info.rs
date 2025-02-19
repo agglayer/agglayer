@@ -14,3 +14,12 @@ impl TryFrom<v1::TokenInfo> for TokenInfo {
         })
     }
 }
+
+impl From<TokenInfo> for v1::TokenInfo {
+    fn from(value: TokenInfo) -> Self {
+        v1::TokenInfo {
+            origin_network: value.origin_network,
+            origin_token_address: Some(value.origin_token_address.into()),
+        }
+    }
+}

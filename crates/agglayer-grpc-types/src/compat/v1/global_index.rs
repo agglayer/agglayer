@@ -11,3 +11,9 @@ impl TryFrom<v1::FixedBytes32> for GlobalIndex {
         Ok(GlobalIndex::from(U256::try_from(value)?))
     }
 }
+
+impl From<GlobalIndex> for v1::FixedBytes32 {
+    fn from(value: GlobalIndex) -> Self {
+        <U256 as From<GlobalIndex>>::from(value).into()
+    }
+}

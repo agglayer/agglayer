@@ -16,6 +16,16 @@ impl TryFrom<v1::ClaimFromMainnet> for ClaimFromMainnet {
     }
 }
 
+impl From<ClaimFromMainnet> for v1::ClaimFromMainnet {
+    fn from(value: ClaimFromMainnet) -> Self {
+        v1::ClaimFromMainnet {
+            proof_leaf_mer: Some(value.proof_leaf_mer.into()),
+            proof_ger_l1root: Some(value.proof_ger_l1root.into()),
+            l1_leaf: Some(value.l1_leaf.into()),
+        }
+    }
+}
+
 impl TryFrom<v1::ClaimFromRollup> for ClaimFromRollup {
     type Error = Error;
 
@@ -26,6 +36,17 @@ impl TryFrom<v1::ClaimFromRollup> for ClaimFromRollup {
             proof_ger_l1root: required_field!(value, proof_ger_l1root),
             l1_leaf: required_field!(value, l1_leaf),
         })
+    }
+}
+
+impl From<ClaimFromRollup> for v1::ClaimFromRollup {
+    fn from(value: ClaimFromRollup) -> Self {
+        v1::ClaimFromRollup {
+            proof_leaf_ler: Some(value.proof_leaf_ler.into()),
+            proof_ler_rer: Some(value.proof_ler_rer.into()),
+            proof_ger_l1root: Some(value.proof_ger_l1root.into()),
+            l1_leaf: Some(value.l1_leaf.into()),
+        }
     }
 }
 
@@ -47,5 +68,18 @@ impl TryFrom<v1::imported_bridge_exit::Claim> for Claim {
                     .map_err(|e| Error::ParsingField("claim_from_rollup", Box::new(e)))?,
             )),
         })
+    }
+}
+
+impl From<Claim> for v1::imported_bridge_exit::Claim {
+    fn from(value: Claim) -> Self {
+        match value {
+            Claim::Mainnet(claim_from_mainnet) => {
+                v1::imported_bridge_exit::Claim::Mainnet((*claim_from_mainnet).into())
+            }
+            Claim::Rollup(claim_from_rollup) => {
+                v1::imported_bridge_exit::Claim::Rollup((*claim_from_rollup).into())
+            }
+        }
     }
 }
