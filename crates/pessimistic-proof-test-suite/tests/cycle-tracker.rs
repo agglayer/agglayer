@@ -22,6 +22,7 @@ fn cycles_on_sample_inputs(
     mut state: Forest,
     bridge_exits: impl IntoIterator<Item = BridgeExit>,
 ) {
+    let start = std::time::Instant::now();
     let old_state = state.local_state();
     let certificate = state.clone().apply_bridge_exits([], bridge_exits);
 
@@ -34,12 +35,21 @@ fn cycles_on_sample_inputs(
         )
         .unwrap();
 
+    let elapsed = start.elapsed();
+    println!("Elapsed time after certificate application: {:?}", elapsed);
+
     let (new_roots, stats) = Runner::new()
         .execute(&old_state.into(), &multi_batch_header)
         .expect("execution failed");
 
+    let elapsed = start.elapsed();
+    println!("Elapsed time after execution: {:?}", elapsed);
+
     // Double check the roots match what is calculated by the proof-external state.
     state.assert_output_matches(&new_roots);
+
+    let elapsed = start.elapsed();
+    println!("Elapsed time after assertion: {:?}", elapsed);
 
     insta::assert_snapshot!(name, stats);
 }

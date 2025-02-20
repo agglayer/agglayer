@@ -188,7 +188,7 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-types",
  "async-trait",
  "ethers",
  "ethers-contract",

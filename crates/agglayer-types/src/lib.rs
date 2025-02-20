@@ -34,6 +34,8 @@ pub type Metadata = Digest;
 pub use agglayer_primitives as primitives;
 // Re-export common primitives again as agglayer-types root types
 pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
+pub use pessimistic_proof::aggchain_proof::AggchainType;
+pub use pessimistic_proof::aggchain_proof::Vkey;
 pub use pessimistic_proof::bridge_exit::NetworkId;
 pub use pessimistic_proof::proof::Proof;
 
