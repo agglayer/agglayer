@@ -1,5 +1,6 @@
 //! Error types for the top-level Agglayer service.
 
+use agglayer_contracts::L1RpcError;
 pub use agglayer_storage::error::Error as StorageError;
 pub use agglayer_types::Digest;
 use agglayer_types::NetworkId;
@@ -26,6 +27,17 @@ pub enum CertificateSubmissionError<Rpc: Middleware> {
 
     #[error("Failed to validate certificate signature: {0}")]
     SignatureError(#[source] SignatureVerificationError<Rpc>),
+
+    #[error("Unable to replace pending certificate at height {height} for network {network_id}")]
+    UnableToReplacePendingCertificate {
+        reason: String,
+        height: u64,
+        network_id: NetworkId,
+        stored_certificate_id: Digest,
+        replacement_certificate_id: Digest,
+        #[source]
+        source: Option<L1RpcError>,
+    },
 }
 
 /// Errors related to signature verification process.
@@ -56,4 +68,8 @@ pub enum SignatureVerificationError<Rpc: Middleware> {
     /// address from the rollup contract.
     #[error("contract error: {0}")]
     ContractError(#[from] ContractError<Rpc>),
+
+    /// SP1-based Aggchain proof not yet supported.
+    #[error("SP1-based Aggchain proof not yet supported")]
+    SP1AggchainProofUnsupported,
 }

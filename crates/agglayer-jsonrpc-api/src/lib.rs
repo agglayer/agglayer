@@ -1,11 +1,9 @@
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use agglayer_contracts::RollupContract;
+use agglayer_contracts::{L1TransactionFetcher, RollupContract};
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter,
@@ -22,7 +20,8 @@ use jsonrpsee::{
     proc_macros::rpc,
     server::{HttpBody, PingConfig, ServerBuilder},
 };
-use tower_http::{compression::CompressionLayer, cors::CorsLayer};
+use tower_http::compression::CompressionLayer;
+use tower_http::cors::CorsLayer;
 use tracing::info;
 
 use crate::{service::AgglayerService, signed_tx::SignedTx};
@@ -34,8 +33,13 @@ pub mod service;
 mod signed_tx;
 mod zkevm_node_client;
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(test)]
 pub mod tests;
+
+#[cfg(any(test, feature = "testutils"))]
+pub mod testutils;
+
+pub mod admin;
 
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
@@ -74,18 +78,13 @@ trait Agglayer {
         &self,
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>>;
-
-    #[method(name = "debugGetCertificate")]
-    async fn debug_get_certificate(
-        &self,
-        certificate_id: CertificateId,
-    ) -> RpcResult<(Certificate, Option<CertificateHeader>)>;
 }
 
 /// The RPC agglayer service implementation.
 pub struct AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> {
     service: Arc<AgglayerService<V0Rpc>>,
-    rpc_service: Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
+    pub(crate) rpc_service:
+        Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
 }
 
 impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
@@ -115,7 +114,7 @@ impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
     AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
 where
     V0Rpc: Middleware + 'static,
-    Rpc: RollupContract + 'static + Send + Sync,
+    Rpc: RollupContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
@@ -190,7 +189,7 @@ impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> AgglayerServer
     for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
 where
     V0Rpc: Middleware + 'static,
-    Rpc: RollupContract + 'static + Send + Sync,
+    Rpc: RollupContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
@@ -231,16 +230,6 @@ where
             .rpc_service
             .get_latest_known_certificate_header(network_id)?;
         Ok(header)
-    }
-
-    async fn debug_get_certificate(
-        &self,
-        certificate_id: CertificateId,
-    ) -> RpcResult<(Certificate, Option<CertificateHeader>)> {
-        Ok(self
-            .rpc_service
-            .debug_get_certificate(certificate_id)
-            .await?)
     }
 
     async fn get_latest_settled_certificate_header(

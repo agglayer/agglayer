@@ -19,7 +19,7 @@ env:
 jobs:
   cycle_tracker:
     name: Cycle tracker report
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 30
     steps:
       - name: Checkout sources

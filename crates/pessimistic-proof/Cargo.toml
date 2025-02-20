@@ -13,7 +13,9 @@ pessimistic-proof-core.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 serde_with = { version = "3" }
-sp1-sdk = { workspace = true, optional = true }
+sp1-core-machine.workspace = true
+sp1-prover.workspace = true
+sp1-sdk.workspace = true
 thiserror.workspace = true
 tiny-keccak = { version = "2.0", features = ["keccak"] }
 
@@ -26,6 +28,4 @@ rs_merkle = { version = "1.4", default-features = false }
 workspace = true
 
 [features]
-default = ["sp1"]
-sp1 = ["dep:sp1-sdk"]
 testutils = []

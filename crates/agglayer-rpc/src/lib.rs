@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
-use agglayer_contracts::RollupContract;
+use agglayer_contracts::{L1TransactionFetcher, RollupContract};
 use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -15,9 +15,9 @@ use agglayer_types::{
     NetworkId,
 };
 use error::SignatureVerificationError;
-use ethers::types::H160;
+use ethers::types::{TransactionReceipt, H160, H256};
 use tokio::sync::mpsc;
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 pub use self::error::{CertificateRetrievalError, CertificateSubmissionError};
 
@@ -26,8 +26,8 @@ pub mod error;
 /// The RPC agglayer service implementation.
 pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore> {
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
-    pending_store: Arc<PendingStore>,
-    state: Arc<StateStore>,
+    pub(crate) pending_store: Arc<PendingStore>,
+    pub(crate) state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
     config: Arc<Config>,
     l1_rpc_provider: Arc<L1Rpc>,
@@ -75,8 +75,107 @@ where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
-    L1Rpc: RollupContract + 'static,
+    L1Rpc: RollupContract + L1TransactionFetcher + 'static,
 {
+    #[instrument(skip(self, certificate), level = "info")]
+    async fn validate_pre_existing_certificate(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<(), CertificateSubmissionError<L1Rpc::M>> {
+        let new_certificate_id = certificate.hash();
+        // Get pre-existing certificate in pending
+        if let Some(certificate) = self
+            .pending_store
+            .get_certificate(certificate.network_id, certificate.height)?
+        {
+            let pre_existing_certificate_id = certificate.hash();
+            warn!(
+                pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
+                "Certificate already exists in pending store for network {} at height {}",
+                certificate.network_id,
+                certificate.height
+            );
+            if let Some(CertificateHeader {
+                status: CertificateStatus::InError { .. },
+                settlement_tx_hash,
+                ..
+            }) = self
+                .state
+                .get_certificate_header(&pre_existing_certificate_id)?
+            {
+                match settlement_tx_hash {
+                    None => {
+                        info!(
+                            "Replacing pending certificate {} that is in error",
+                            pre_existing_certificate_id
+                        );
+                    }
+                    Some(tx_hash) => {
+                        let l1_transaction = self
+                            .l1_rpc_provider
+                            .fetch_transaction_receipt(H256::from_slice(tx_hash.as_ref()))
+                            .await
+                            .map_err(|error| {
+                                warn!(
+                                    "Failed to fetch transaction receipt for certificate {}: {}",
+                                    pre_existing_certificate_id, error
+                                );
+
+                                CertificateSubmissionError::UnableToReplacePendingCertificate {
+                                    reason: error.to_string(),
+                                    height: certificate.height,
+                                    network_id: certificate.network_id,
+                                    stored_certificate_id: pre_existing_certificate_id,
+                                    replacement_certificate_id: new_certificate_id,
+                                    source: Some(error),
+                                }
+                            })?;
+
+                        if matches!(l1_transaction, TransactionReceipt { status: Some(status), .. } if status.as_u64() == 0)
+                        {
+                            info!(
+                                %pre_existing_certificate_id,
+                                %tx_hash,
+                                ?l1_transaction,
+                                "Replacing pending certificate in error that has already been settled, but transaction receipt status is in failure"
+                            );
+                        } else {
+                            let message = "Unable to replace a pending certificate in error that \
+                                           has already been settled";
+                            warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
+
+                            return Err(
+                                CertificateSubmissionError::UnableToReplacePendingCertificate {
+                                    reason: message.to_string(),
+                                    height: certificate.height,
+                                    network_id: certificate.network_id,
+                                    stored_certificate_id: pre_existing_certificate_id,
+                                    replacement_certificate_id: new_certificate_id,
+                                    source: None,
+                                },
+                            );
+                        }
+                    }
+                }
+            } else {
+                let message = "Unable to replace a pending certificate that is not in error";
+                info!(%pre_existing_certificate_id, message);
+
+                return Err(
+                    CertificateSubmissionError::UnableToReplacePendingCertificate {
+                        reason: message.to_string(),
+                        height: certificate.height,
+                        network_id: certificate.network_id,
+                        stored_certificate_id: pre_existing_certificate_id,
+                        replacement_certificate_id: new_certificate_id,
+                        source: None,
+                    },
+                );
+            }
+        }
+
+        Ok(())
+    }
     /// Verify that the signer of the given [`Certificate`] is the trusted
     /// sequencer for the rollup id it specified.
     #[instrument(skip(self), level = "debug")]
@@ -94,8 +193,10 @@ where
 
         let signer: H160 = cert
             .signer()
-            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)
-            .map(|signer| signer.into_array().into())?;
+            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
+            .ok_or(SignatureVerificationError::SP1AggchainProofUnsupported)?
+            .into_array()
+            .into();
 
         // ECDSA-k256 signature verification works by recovering the public key from the
         // signature, and then checking that it is the expected one.
@@ -121,7 +222,7 @@ where
             %hash,
             "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
         );
-
+        self.validate_pre_existing_certificate(&certificate).await?;
         self.verify_cert_signature(&certificate)
             .await
             .map_err(|e| {
@@ -211,9 +312,9 @@ where
             .inspect_err(|e| error!("Failed to get latest pending certificate: {e}"))?;
 
         let certificate_id = [
-            settled_certificate_id_and_height,
-            proven_certificate_id_and_height,
             pending_certificate_id_and_height,
+            proven_certificate_id_and_height,
+            settled_certificate_id_and_height,
         ]
         .into_iter()
         .flatten()
@@ -223,23 +324,6 @@ where
         certificate_id.map_or(Ok(None), |certificate_id| {
             self.fetch_certificate_header(certificate_id).map(Some)
         })
-    }
-
-    pub async fn debug_get_certificate(
-        &self,
-        certificate_id: CertificateId,
-    ) -> Result<(Certificate, Option<CertificateHeader>), CertificateRetrievalError> {
-        let cert = self
-            .debug_store
-            .get_certificate(&certificate_id)
-            .inspect_err(|e| error!("Failed to get certificate: {e}"))?
-            .ok_or(CertificateRetrievalError::NotFound { certificate_id })?;
-        let header = self
-            .state
-            .get_certificate_header(&certificate_id)
-            .inspect_err(|e| error!("Failed to get certificate header: {e}"))?;
-
-        Ok((cert, header))
     }
 
     pub fn get_latest_settled_certificate_header(

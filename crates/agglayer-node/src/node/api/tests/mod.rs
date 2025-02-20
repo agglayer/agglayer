@@ -1,6 +1,6 @@
-use std::future::IntoFuture;
+use std::future::IntoFuture as _;
 
-use agglayer_jsonrpc_api::tests::TestContext;
+use agglayer_jsonrpc_api::testutils::TestContext;
 use http::Request;
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;

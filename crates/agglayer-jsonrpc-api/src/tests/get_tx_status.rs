@@ -5,6 +5,7 @@ use agglayer_config::Config;
 use agglayer_contracts::polygon_rollup_manager::PolygonRollupManager;
 use agglayer_contracts::polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2;
 use agglayer_contracts::L1RpcClient;
+use agglayer_storage::storage::backup::BackupClient;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::debug::DebugStore;
 use agglayer_storage::stores::pending::PendingStore;
@@ -19,7 +20,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use tracing::debug;
 
-use super::next_available_addr;
+use crate::testutils::next_available_addr;
 use crate::TxStatus;
 use crate::{kernel::Kernel, service::AgglayerService, AgglayerImpl};
 
@@ -134,7 +135,7 @@ async fn check_tx_status_fail() {
     let tmp = TempDBDir::new();
     let store_db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
     let store = Arc::new(PendingStore::new(db));
-    let state = Arc::new(StateStore::new(store_db));
+    let state = Arc::new(StateStore::new(store_db, BackupClient::noop()));
     let debug = Arc::new(DebugStore::new_with_path(&tmp.path.join("debug")).unwrap());
 
     let service = AgglayerService::new(kernel);

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     columns::metadata::MetadataColumn,
-    storage::{state_db_cf_definitions, DB},
+    storage::{backup::BackupClient, state_db_cf_definitions, DB},
     stores::{state::StateStore, MetadataReader as _, MetadataWriter as _},
     tests::TempDBDir,
     types::{MetadataKey, MetadataValue},
@@ -13,7 +13,7 @@ fn can_retrieve_the_last_settled_epoch() {
     let tmp = TempDBDir::new();
     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
 
-    let store = StateStore::new(db.clone());
+    let store = StateStore::new(db.clone(), BackupClient::noop());
     assert!(store.get_latest_settled_epoch().unwrap().is_none());
 
     db.put::<MetadataColumn>(
@@ -30,7 +30,7 @@ fn can_set_the_latest_epoch_settled() {
     let tmp = TempDBDir::new();
     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
 
-    let store = StateStore::new(db.clone());
+    let store = StateStore::new(db.clone(), BackupClient::noop());
     assert!(store.get_latest_settled_epoch().unwrap().is_none());
 
     store

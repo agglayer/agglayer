@@ -10,7 +10,7 @@ pub mod error;
 
 /// The RPC agglayer service implementation.
 pub struct AgglayerService<Rpc> {
-    kernel: Kernel<Rpc>,
+    pub(crate) kernel: Kernel<Rpc>,
 }
 
 impl<Rpc> AgglayerService<Rpc> {
