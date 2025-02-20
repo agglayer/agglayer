@@ -4,12 +4,12 @@ use agglayer_config::Config;
 use agglayer_grpc_server::node::v1::{
     certificate_submission_service_server::CertificateSubmissionServiceServer,
     configuration_service_server::ConfigurationServiceServer,
-    network_state_service_server::NetworkStateServiceServer,
+    node_state_service_server::NodeStateServiceServer,
 };
 use certificate_submission_service::CertificateSubmissionServer;
 use configuration_service::ConfigurationServer;
 use http::{Request, Response};
-use network_state_service::NetworkStateServer;
+use node_state_service::NodeStateServer;
 use tonic::{
     body::{boxed, BoxBody},
     codec::CompressionEncoding,
@@ -20,7 +20,8 @@ use tower::ServiceExt as _;
 
 mod certificate_submission_service;
 mod configuration_service;
-mod network_state_service;
+mod node_state_service;
+
 #[derive(Default)]
 pub struct Server {}
 
@@ -93,8 +94,8 @@ impl Server {
             .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd);
 
-        let network_state_server = NetworkStateServer {};
-        let network_state_service = NetworkStateServiceServer::new(network_state_server)
+        let network_state_server = NodeStateServer {};
+        let network_state_service = NodeStateServiceServer::new(network_state_server)
             .max_decoding_message_size(config.grpc.max_decoding_message_size)
             .max_encoding_message_size(config.grpc.max_encoding_message_size)
             .send_compressed(CompressionEncoding::Zstd)
