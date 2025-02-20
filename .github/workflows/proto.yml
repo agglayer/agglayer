@@ -5,7 +5,7 @@ on:
       - main
   merge_group:
   workflow_dispatch:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
@@ -20,11 +20,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+        with:
+          ref: ${{ github.head_ref || github.event.pull_request.head.ref || github.ref }}
+
       - name: Define BREAKING_REF for merge_group
         if: github.event_name == 'merge_group'
         run: echo "BREAKING_REF=ref=${{ github.event.merge_group.base_sha }}" >> $GITHUB_ENV
- 
+
       - name: Define BREAKING_REF for pull_request
         if: github.event_name == 'pull_request'
         run: echo "BREAKING_REF=ref=${{ github.event.pull_request.base.sha }}" >> $GITHUB_ENV
@@ -33,12 +35,73 @@ jobs:
         if: github.event_name == 'push'
         run: echo "BREAKING_REF=ref=${{ github.event.before }}" >> $GITHUB_ENV
 
+      - name: Save initial state of proto-related files
+        run: git status --porcelain crates > before.txt
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install cargo-make
+        run: cargo install --debug --locked cargo-make
+
       - uses: bufbuild/buf-action@v1
         with:
           token: ${{ secrets.BUF_TOKEN }}
-          input: "proto"
+          setup_only: true
+
+      - name: Checking for build success
+        run: buf build --error-format=github-actions proto
+
+      - name: Checking for lint issues
+        run: buf lint --error-format=github-actions proto
+
+      - name: Checking format
+        run: buf format --error-format=github-actions proto
+
+      - name: Check retry attempt by admin
+        id: authorized_list
+        if: ${{ github.run_attempt > 1 }}
+        uses: morfien101/actions-authorized-user@v3
+        with:
+          username: ${{ github.triggering_actor }}
+          org: agglayer
+          team: "agglayer-developers"
+          github_token: ${{ secrets.TEAM_READ_GH_TOKEN }}
+          multi_user: false
+
+      - name: Generate protobuf sources
+        run: cargo make generate-proto
+
+      - name: Check for modifications
+        run: |
+          git status --porcelain crates > after.txt
+          if ! diff before.txt after.txt > /dev/null; then
+            echo "❌ Running 'cargo make generate-proto' modified some files! Ensure everything is committed."
+            git diff crates
+            exit 1
+          fi
+
+      - name: Breaking changes detection
+        uses: bufbuild/buf-action@v1
+        id: breaking
+        continue-on-error: ${{ steps.authorized_list.outputs.authorized == 'true' }}
+        with:
+          token: ${{ secrets.BUF_TOKEN }}
+          input: proto
           breaking_against: "${{ github.event.repository.clone_url }}#format=git,${{ env.BREAKING_REF }},subdir=proto"
-          lint: true
-          format: true
           breaking: true
-          push: false
+
+      - name: Wait for approval
+        if: ${{ steps.authorized_list.outputs.authorized == 'true' && steps.breaking.outcome == 'failure' }}
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ secrets.TEAM_READ_GH_TOKEN }}
+          issue-title: "Breaking changes attempt on protobuf definition"
+          issue-body: "Please approve or deny the breaking changes"
+          approvers: agglayer-admins
+          minimum-approvals: 1
