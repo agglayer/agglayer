@@ -10,6 +10,7 @@ dependencies = [
 ]
 
 [tasks.install-buf]
+condition = { env_not_set = ["GITHUB_RUN_ID"] }
 run_task = [
     { name = "install-buf-linux", condition = { platforms = [
         "linux",
