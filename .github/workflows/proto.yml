@@ -5,7 +5,7 @@ on:
       - main
   merge_group:
   workflow_dispatch:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.event.pull_request.head.ref || github.ref }}
 
       - name: Define BREAKING_REF for merge_group
         if: github.event_name == 'merge_group'
@@ -50,12 +52,27 @@ jobs:
       - uses: bufbuild/buf-action@v1
         with:
           token: ${{ secrets.BUF_TOKEN }}
-          input: "proto"
-          breaking_against: "${{ github.event.repository.clone_url }}#format=git,${{ env.BREAKING_REF }},subdir=proto"
-          lint: true
-          format: true
-          breaking: true
-          push: false
+          setup_only: true
+
+      - name: Checking for build success
+        run: buf build --error-format=github-actions proto
+
+      - name: Checking for lint issues
+        run: buf lint --error-format=github-actions proto
+
+      - name: Checking format
+        run: buf format --error-format=github-actions proto
+
+      - name: Check retry attempt by admin
+        id: authorized_list
+        if: ${{ github.run_attempt > 1 }}
+        uses: morfien101/actions-authorized-user@v3
+        with:
+          username: ${{ github.triggering_actor }}
+          org: agglayer
+          team: "agglayer-developers"
+          github_token: ${{ secrets.TEAM_READ_GH_TOKEN }}
+          multi_user: false
 
       - name: Generate protobuf sources
         run: cargo make generate-proto
@@ -68,3 +85,23 @@ jobs:
             git diff crates
             exit 1
           fi
+
+      - name: Breaking changes detection
+        uses: bufbuild/buf-action@v1
+        id: breaking
+        continue-on-error: ${{ steps.authorized_list.outputs.authorized == 'true' }}
+        with:
+          token: ${{ secrets.BUF_TOKEN }}
+          input: proto
+          breaking_against: "${{ github.event.repository.clone_url }}#format=git,${{ env.BREAKING_REF }},subdir=proto"
+          breaking: true
+
+      - name: Wait for approval
+        if: ${{ steps.authorized_list.outputs.authorized == 'true' && steps.breaking.outcome == 'failure' }}
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ secrets.TEAM_READ_GH_TOKEN }}
+          issue-title: "Breaking changes attempt on protobuf definition"
+          issue-body: "Please approve or deny the breaking changes"
+          approvers: agglayer-admins
+          minimum-approvals: 1
