@@ -24,7 +24,9 @@ agglayer-grpc-api = { path = "crates/agglayer-grpc-api" }
 agglayer-grpc-client = { path = "crates/agglayer-grpc-client" }
 agglayer-grpc-server = { path = "crates/agglayer-grpc-server" }
 agglayer-grpc-types = { path = "crates/agglayer-grpc-types" }
+agglayer-jsonrpc-api = { path = "crates/agglayer-jsonrpc-api" }
 agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
+agglayer-rpc = { path = "crates/agglayer-rpc" }
 
 agglayer-aggregator-notifier = { path = "crates/agglayer-aggregator-notifier" }
 agglayer-certificate-orchestrator = { path = "crates/agglayer-certificate-orchestrator" }
@@ -38,6 +40,7 @@ agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
 agglayer-types = { path = "crates/agglayer-types" }
 agglayer-utils = { path = "crates/agglayer-utils" }
+agglayer-test-suite = { path = "crates/agglayer-test-suite" }
 
 ## Pessimistic proof related
 pessimistic-proof = { path = "crates/pessimistic-proof" }

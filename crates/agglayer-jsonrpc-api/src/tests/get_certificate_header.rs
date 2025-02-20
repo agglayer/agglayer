@@ -1,20 +1,17 @@
-use agglayer_storage::stores::StateWriter;
+use agglayer_storage::stores::StateWriter as _;
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
     Digest,
 };
 use insta::assert_snapshot;
-use jsonrpsee::{
-    core::{client::ClientT, ClientError},
-    rpc_params,
-};
+use jsonrpsee::{core::client::ClientT, core::ClientError, rpc_params};
 use rstest::*;
 use serde_json::json;
 
-use super::context;
-use super::raw_rpc;
-use super::TestContext;
-use crate::rpc::{tests::RawRpcContext, AgglayerServer};
+use crate::testutils::context;
+use crate::testutils::raw_rpc;
+use crate::testutils::TestContext;
+use crate::{testutils::RawRpcContext, AgglayerServer};
 
 #[rstest]
 #[awt]

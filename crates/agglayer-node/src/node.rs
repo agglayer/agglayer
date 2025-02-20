@@ -8,6 +8,9 @@ use agglayer_contracts::{
     polygon_rollup_manager::PolygonRollupManager,
     polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
 };
+use agglayer_jsonrpc_api::admin::AdminAgglayerImpl;
+use agglayer_jsonrpc_api::service::AgglayerService;
+use agglayer_jsonrpc_api::{kernel::Kernel, AgglayerImpl};
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::{
@@ -37,12 +40,7 @@ use tower::Service;
 use tower::ServiceExt as _;
 use tracing::{debug, error, info, warn};
 
-use crate::{
-    epoch_synchronizer::EpochSynchronizer,
-    kernel::Kernel,
-    rpc::{admin::AdminAgglayerImpl, AgglayerImpl},
-    service::AgglayerService,
-};
+use crate::epoch_synchronizer::EpochSynchronizer;
 
 pub(crate) mod api;
 
@@ -266,13 +264,14 @@ impl Node {
         info!("Certificate orchestrator started.");
 
         // Set up the core service object.
-        let service = Arc::new(AgglayerService::new(
-            core,
+        let service = Arc::new(AgglayerService::new(core));
+        let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
             data_sender,
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
             config.clone(),
+            Arc::clone(&rollup_manager),
         ));
 
         let admin_router = AdminAgglayerImpl::new(
@@ -285,7 +284,7 @@ impl Node {
         .await?;
 
         // Bind the core to the RPC server.
-        let json_rpc_router = AgglayerImpl::new(service).start().await?;
+        let json_rpc_router = AgglayerImpl::new(service, rpc_service).start().await?;
 
         let mut grpc_router = axum::Router::new();
         grpc_router = add_rpc_service(
@@ -296,8 +295,7 @@ impl Node {
         grpc_router = add_rpc_service(grpc_router, v1);
         grpc_router = add_rpc_service(grpc_router, v1alpha);
 
-        let health_router =
-            axum::Router::new().route("/health", axum::routing::get(api::rest::health));
+        let health_router = api::rest::health_router();
 
         let router = axum::Router::new()
             .merge(health_router)

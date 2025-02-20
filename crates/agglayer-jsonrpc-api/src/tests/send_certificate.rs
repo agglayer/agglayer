@@ -1,25 +1,25 @@
 use agglayer_config::Config;
-use agglayer_storage::{
-    stores::{PendingCertificateWriter, StateReader, StateWriter as _},
-    tests::TempDBDir,
-};
+use agglayer_storage::stores::{PendingCertificateWriter as _, StateReader as _, StateWriter as _};
+use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{Certificate, CertificateHeader, CertificateId, CertificateStatus, NetworkId};
 use ethers::signers::Signer as _;
-use jsonrpsee::{core::client::ClientT, rpc_params};
+use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder, rpc_params};
 
-use crate::rpc::tests::TestContext;
+use crate::testutils::TestContext;
 
 #[test_log::test(tokio::test)]
 async fn send_certificate_method_can_be_called_and_succeed() {
-    let path = TempDBDir::new();
-    let mut config = Config::new(&path.path);
+    let db_dir = TempDBDir::new();
+    let mut config = Config::new(&db_dir.path);
     config
         .proof_signers
         .insert(1, Certificate::wallet_for_test(NetworkId::new(1)).address());
 
     let mut context = TestContext::new_with_config(config).await;
-    let _: CertificateId = context
-        .client
+
+    let url = format!("http://{}/", context.config.rpc_addr());
+    let client = HttpClientBuilder::default().build(url).unwrap();
+    let _: CertificateId = client
         .request(
             "interop_sendCertificate",
             rpc_params![Certificate::new_for_test(1.into(), 0)],
@@ -49,7 +49,8 @@ async fn send_certificate_method_can_be_called_and_fail() {
 
 #[test_log::test(tokio::test)]
 async fn send_certificate_method_requires_known_signer() {
-    let mut config = Config::new_for_test();
+    let path = TempDBDir::new();
+    let mut config = Config::new(&path.path);
     // Willingly insert a signer that is not the one that’ll be used down below
     config
         .proof_signers
@@ -66,6 +67,7 @@ async fn send_certificate_method_requires_known_signer() {
 
     assert!(send_request.is_err());
 }
+
 #[test_log::test(tokio::test)]
 async fn pending_certificate_in_error_can_be_replaced() {
     let path = TempDBDir::new();

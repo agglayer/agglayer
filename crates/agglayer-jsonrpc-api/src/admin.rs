@@ -13,7 +13,7 @@ use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::{error, info, instrument, warn};
 
 use super::error::RpcResult;
-use crate::rpc::{error::Error, rpc_middleware, JsonRpcService};
+use crate::{error::Error, rpc_middleware, JsonRpcService};
 
 #[rpc(server, namespace = "admin")]
 pub(crate) trait AdminAgglayer {
@@ -49,7 +49,7 @@ pub(crate) trait AdminAgglayer {
 }
 
 /// The Admin RPC agglayer service implementation.
-pub(crate) struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
@@ -58,7 +58,7 @@ pub(crate) struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
 
 impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
     /// Create an instance of the admin RPC agglayer service.
-    pub(crate) fn new(
+    pub fn new(
         pending_store: Arc<PendingStore>,
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
@@ -79,7 +79,7 @@ where
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
 {
-    pub(crate) async fn start(self) -> anyhow::Result<axum::Router> {
+    pub async fn start(self) -> anyhow::Result<axum::Router> {
         // Create the RPC service
         let config = self.config.clone();
 
