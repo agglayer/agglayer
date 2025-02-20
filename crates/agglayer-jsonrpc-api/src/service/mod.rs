@@ -22,7 +22,7 @@ impl<Rpc> AgglayerService<Rpc> {
 
 impl<Rpc> Drop for AgglayerService<Rpc> {
     fn drop(&mut self) {
-        info!("Shutting down the agglayer service");
+        info!("Shutting down the agglayer JSON-RPC service");
     }
 }
 

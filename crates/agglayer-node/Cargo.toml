@@ -68,7 +68,7 @@ test-log.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-capture = "0.1.0"
 
-agglayer-test-suite = { path = "../agglayer-test-suite" }
+agglayer-test-suite.workspace = true
 agglayer-jsonrpc-api = { workspace = true, features = ["testutils"] }
 agglayer-config = { workspace = true, features = ["testutils"] }
 agglayer-prover = { workspace = true, features = ["testutils"] }

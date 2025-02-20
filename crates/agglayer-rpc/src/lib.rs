@@ -65,7 +65,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore> Drop
     for AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
 {
     fn drop(&mut self) {
-        info!("Shutting down the agglayer service");
+        info!("Shutting down the agglayer RPC service");
     }
 }
 
