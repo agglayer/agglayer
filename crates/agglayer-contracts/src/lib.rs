@@ -85,9 +85,9 @@ pub enum L1RpcError {
     ReorgDetected(u64),
     #[error("Cannot get the block hash for the block number {0}")]
     BlockHashNotFound(u64),
-    #[error("unable to fetch transaction receipt for {0}")]
+    #[error("Unable to fetch transaction receipt for {0}")]
     UnableToFetchTransactionReceipt(String),
-    #[error("no transaction receipt found for {0}")]
+    #[error("No transaction receipt found for {0}")]
     TransactionReceiptNotFound(String),
 }
 
