@@ -92,7 +92,7 @@ jobs:
         # Make this job continue-on-error if:
         #   - the authorized attempt is true. See authorized step
         #   - The job is in merge_queue as if a breaking is detected, an approval will be asked to admins
-        continue-on-error: ${{ steps.authorized_list.outputs.authorized == 'true' ||  github.event_name == 'merge_group')}}
+        continue-on-error: ${{ steps.authorized_list.outputs.authorized == 'true' || github.event_name == 'merge_group' }}
         with:
           token: ${{ secrets.BUF_TOKEN }}
           input: proto
