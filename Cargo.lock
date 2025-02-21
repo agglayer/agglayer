@@ -217,10 +217,14 @@ dependencies = [
  "agglayer-grpc-server",
  "agglayer-grpc-types",
  "agglayer-types",
+ "anyhow",
+ "axum 0.8.1",
+ "http 1.2.0",
  "prost 0.13.4",
  "tonic 0.12.3",
  "tonic-reflection",
  "tonic-types",
+ "tower 0.4.13",
  "tracing",
 ]
 

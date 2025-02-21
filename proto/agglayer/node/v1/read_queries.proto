@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package agglayer.node.v1;
 
+import "agglayer/protocol/types/v1/certificate.proto";
 import "agglayer/protocol/types/v1/certificate_header.proto";
 import "agglayer/protocol/types/v1/epoch_configuration.proto";
 
@@ -11,8 +12,21 @@ service ConfigurationService {
   rpc GetEpochConfiguration(GetEpochConfigurationRequest) returns (GetEpochConfigurationResponse);
 }
 
-// Service for querying network state.
-service NetworkStateService {
+// The kind of error that occurred and that are reported by the configuration
+// service.
+enum ConfigurationErrorKind {
+  // Unspecified error.
+  CONFIGURATION_ERROR_KIND_UNSPECIFIED = 0;
+  // The AggLayer isn't configured with a BlockClock configuration, thus no
+  // EpochConfiguration is available.
+  CONFIGURATION_ERROR_KIND_UNEXPECTED_CLOCK_CONFIGURATION = 1;
+}
+
+// Service for querying node state.
+service NodeStateService {
+  // Method used to get a CertificateHeader for a particular CertificateId.
+  rpc GetCertificateHeader(GetCertificateHeaderRequest) returns (GetCertificateHeaderResponse);
+
   // Method used to get the latest known certificate header for a network.
   rpc GetLatestKnownCertificateHeader(GetLatestKnownCertificateHeaderRequest) returns (GetLatestKnownCertificateHeaderResponse);
 
@@ -21,6 +35,18 @@ service NetworkStateService {
 
   // Method used to get the latest pending certificate header for a network.
   rpc GetLatestPendingCertificateHeader(GetLatestPendingCertificateHeaderRequest) returns (GetLatestPendingCertificateHeaderResponse);
+}
+
+// Request to get a CertificateHeader for a particular CertificateId.
+message GetCertificateHeaderRequest {
+  // The certificate identifier.
+  protocol.types.v1.CertificateId certificate_id = 1;
+}
+
+// Response to the CertificateHeader request.
+message GetCertificateHeaderResponse {
+  // The certificate header.
+  protocol.types.v1.CertificateHeader certificate_header = 1;
 }
 
 // Request to get the current epoch configuration.
