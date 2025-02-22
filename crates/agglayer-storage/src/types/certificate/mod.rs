@@ -1,28 +1,30 @@
 //! Definitions of the certificate storage format with backwards compatibility.
 //!
-//! Currently, we have two versions of certificate storage format. The first byte determines the
-//! storage format version.
+//! Currently, we have two versions of certificate storage format. The first
+//! byte determines the storage format version.
 //!
-//! In version 0, where backwards compatibility is required, the first byte happens to be the
-//! highest byte of network ID. This effectively limits the range of network IDs in v0 storage
-//! to [0, 2^24-1]. The current network IDs fall into this range, so the highest byte (with value 0)
-//! also acts as the version tag.
+//! In version 0, where backwards compatibility is required, the first byte
+//! happens to be the highest byte of network ID. This effectively limits the
+//! range of network IDs in v0 storage to [0, 2^24-1]. The current network IDs
+//! fall into this range, so the highest byte (with value 0) also acts as the
+//! version tag.
 //!
-//! In subsequent versions, we just have the version byte followed by a straightforward encoding of
-//! the certificate, restoring the full range of network IDs.
+//! In subsequent versions, we just have the version byte followed by a
+//! straightforward encoding of the certificate, restoring the full range of
+//! network IDs.
 //!
-//! In the unlikely scenario where it turns out we need more than 256 storage format versions,
-//! another byte can be allocated to specify a "sub-version" in one of the future versions.
+//! In the unlikely scenario where it turns out we need more than 256 storage
+//! format versions, another byte can be allocated to specify a "sub-version" in
+//! one of the future versions.
 
 use std::borrow::Cow;
 
-use agglayer_types::{Certificate, Digest, Height, Metadata, NetworkId, Signature};
-use bincode::Options;
-use pessimistic_proof::{
-    aggchain_proof::{AggchainProof, AggchainProofSP1},
-    bridge_exit::BridgeExit,
-    imported_bridge_exit::ImportedBridgeExit,
+use agglayer_types::{
+    aggchain_proof::{AggchainData, Proof},
+    Certificate, Digest, Height, Metadata, NetworkId, Signature,
 };
+use bincode::Options;
+use pessimistic_proof::{bridge_exit::BridgeExit, imported_bridge_exit::ImportedBridgeExit};
 use serde::{Deserialize, Serialize};
 
 use crate::columns::{default_bincode_options, CodecError};
@@ -49,7 +51,8 @@ impl<const VERSION: u8> From<VersionTag<VERSION>> for u8 {
 
 /// A three-byte network ID used in v0.
 ///
-/// In v0, the first byte of network ID was reserved to specify the storage format version.
+/// In v0, the first byte of network ID was reserved to specify the storage
+/// format version.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 struct NetworkIdV0([u8; 3]);
@@ -96,7 +99,7 @@ impl From<CertificateV0> for Certificate {
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            aggchain_proof: AggchainProof::ECDSA { signature },
+            aggchain_data: AggchainData::ECDSA { signature },
             metadata,
         }
     }
@@ -112,7 +115,7 @@ struct CertificateV1<'a> {
     new_local_exit_root: Digest,
     bridge_exits: Cow<'a, [BridgeExit]>,
     imported_bridge_exits: Cow<'a, [ImportedBridgeExit]>,
-    aggchain_proof: AggchainProofV1<'a>,
+    aggchain_data: AggchainDataV1<'a>,
     metadata: Metadata,
 }
 
@@ -126,7 +129,7 @@ impl From<CertificateV1<'_>> for Certificate {
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            aggchain_proof,
+            aggchain_data,
             metadata,
         } = certificate;
 
@@ -138,7 +141,7 @@ impl From<CertificateV1<'_>> for Certificate {
             bridge_exits: bridge_exits.into_owned(),
             imported_bridge_exits: imported_bridge_exits.into_owned(),
             metadata,
-            aggchain_proof: aggchain_proof.into(),
+            aggchain_data: aggchain_data.into(),
         }
     }
 }
@@ -153,7 +156,7 @@ impl<'a> From<&'a Certificate> for CertificateV1<'a> {
             bridge_exits,
             imported_bridge_exits,
             metadata,
-            aggchain_proof,
+            aggchain_data,
         } = certificate;
 
         CertificateV1 {
@@ -164,43 +167,53 @@ impl<'a> From<&'a Certificate> for CertificateV1<'a> {
             new_local_exit_root: *new_local_exit_root,
             bridge_exits: bridge_exits.into(),
             imported_bridge_exits: imported_bridge_exits.into(),
-            aggchain_proof: aggchain_proof.into(),
+            aggchain_data: aggchain_data.into(),
             metadata: *metadata,
         }
     }
 }
 
-// Duplicated from `agglayer-types` since we need slightly different serde impls.
+// Duplicated from `agglayer-types` since we need slightly different serde
+// impls.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[allow(clippy::upper_case_acronyms)]
-pub enum AggchainProofV1<'a> {
+pub enum AggchainDataV1<'a> {
     ECDSA {
         signature: Signature,
     },
-    SP1 {
-        aggchain_proof: Cow<'a, AggchainProofSP1>,
+    GENERIC {
+        proof: Cow<'a, Proof>,
+        aggchain_params: Digest,
     },
 }
 
-impl<'a> From<&'a AggchainProof> for AggchainProofV1<'a> {
-    fn from(proof: &'a AggchainProof) -> Self {
+impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
+    fn from(proof: &'a AggchainData) -> Self {
         match proof {
-            AggchainProof::ECDSA { signature } => Self::ECDSA {
+            AggchainData::ECDSA { signature } => Self::ECDSA {
                 signature: *signature,
             },
-            AggchainProof::SP1 { aggchain_proof } => Self::SP1 {
-                aggchain_proof: Cow::Borrowed(aggchain_proof),
+            AggchainData::GENERIC {
+                proof,
+                aggchain_params,
+            } => Self::GENERIC {
+                proof: Cow::Borrowed(proof),
+                aggchain_params: *aggchain_params,
             },
         }
     }
 }
 
-impl From<AggchainProofV1<'_>> for AggchainProof {
-    fn from(proof: AggchainProofV1) -> Self {
+impl From<AggchainDataV1<'_>> for AggchainData {
+    fn from(proof: AggchainDataV1) -> Self {
         match proof {
-            AggchainProofV1::ECDSA { signature } => Self::ECDSA { signature },
-            AggchainProofV1::SP1 { aggchain_proof } => Self::SP1 {
-                aggchain_proof: aggchain_proof.into_owned(),
+            AggchainDataV1::ECDSA { signature } => Self::ECDSA { signature },
+            AggchainDataV1::GENERIC {
+                proof,
+                aggchain_params,
+            } => Self::GENERIC {
+                proof: proof.into_owned(),
+                aggchain_params,
             },
         }
     }

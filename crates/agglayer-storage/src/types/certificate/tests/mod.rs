@@ -1,10 +1,9 @@
-use agglayer_types::U256;
+use agglayer_types::{aggchain_proof::Proof, U256};
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
 
-use crate::columns::Codec;
-
 use super::*;
+use crate::columns::Codec;
 
 #[rstest::rstest]
 #[case(0.into(), [0, 0, 0, 0])]
@@ -67,7 +66,7 @@ impl CertificateV1<'static> {
             new_local_exit_root: Digest([0x65; 32]),
             bridge_exits: Vec::new().into(),
             imported_bridge_exits: Vec::new().into(),
-            aggchain_proof: AggchainProofV1::ECDSA {
+            aggchain_data: AggchainDataV1::ECDSA {
                 signature: Signature::new(
                     U256::from_be_bytes([0x7a; 32]),
                     U256::from_be_bytes([0x9b; 32]),
@@ -79,7 +78,7 @@ impl CertificateV1<'static> {
     }
 
     fn test1() -> Self {
-        let stark_proof = {
+        let proof = {
             let client = sp1_sdk::ProverClient::builder().mock().build();
             let (proving_key, _verif_key) = client.setup(pessimistic_proof::ELF);
             let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
@@ -91,6 +90,8 @@ impl CertificateV1<'static> {
             dummy_proof.proof.try_as_compressed().unwrap()
         };
 
+        let proof = Proof::SP1Stark(proof);
+
         Self {
             version: VersionTag,
             network_id: NetworkId::new(59),
@@ -99,11 +100,9 @@ impl CertificateV1<'static> {
             new_local_exit_root: Digest([0x61; 32]),
             bridge_exits: Vec::new().into(),
             imported_bridge_exits: Vec::new().into(),
-            aggchain_proof: AggchainProofV1::SP1 {
-                aggchain_proof: Cow::Owned(AggchainProofSP1 {
-                    aggchain_params: Digest([0x58; 32]),
-                    stark_proof,
-                }),
+            aggchain_data: AggchainDataV1::GENERIC {
+                proof: Cow::Owned(proof),
+                aggchain_params: Digest([0x58; 32]),
             },
             metadata: Digest([0xb9; 32]),
         }
@@ -120,7 +119,7 @@ impl CertificateV1<'_> {
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            aggchain_proof,
+            aggchain_data,
             metadata,
         } = self;
 
@@ -132,10 +131,14 @@ impl CertificateV1<'_> {
             new_local_exit_root,
             bridge_exits: bridge_exits.into_owned().into(),
             imported_bridge_exits: imported_bridge_exits.into_owned().into(),
-            aggchain_proof: match aggchain_proof {
-                AggchainProofV1::ECDSA { signature } => AggchainProofV1::ECDSA { signature },
-                AggchainProofV1::SP1 { aggchain_proof } => AggchainProofV1::SP1 {
-                    aggchain_proof: Cow::Owned(aggchain_proof.into_owned()),
+            aggchain_data: match aggchain_data {
+                AggchainDataV1::ECDSA { signature } => AggchainDataV1::ECDSA { signature },
+                AggchainDataV1::GENERIC {
+                    proof,
+                    aggchain_params,
+                } => AggchainDataV1::GENERIC {
+                    proof: Cow::Owned(proof.into_owned()),
+                    aggchain_params,
                 },
             },
             metadata,

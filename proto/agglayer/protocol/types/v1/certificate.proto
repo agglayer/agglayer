@@ -22,22 +22,33 @@ message Certificate {
   repeated ImportedBridgeExit imported_bridge_exits = 6;
   // Fixed size field of arbitrary data for the chain needs.
   FixedBytes32 metadata = 7;
-  // Aggchain params.
-  bytes aggchain_params = 8;
-  // Aggchain proof.
-  AggchainProof aggchain_proof = 9;
+  // Aggchain data.
+  AggchainData aggchain_data = 8;
   // custom chain data.
-  bytes custom_chain_data = 10;
+  bytes custom_chain_data = 9;
+}
+
+// Aggchaindata is the data sent by the aggchain.
+message AggchainData {
+  // The data of the aggchain.
+  oneof data {
+    // Signature committed to the bridge exits and imported bridge exits.
+    FixedBytes65 signature = 1;
+    // Generic Aggchain proof.
+    AggchainProof generic = 2;
+  }
 }
 
 // Aggchain proof.
 message AggchainProof {
+  // Aggchain params.
+  bytes aggchain_params = 1;
+  // Aggchain proof context to share non-sensitive data.
+  map<string, bytes> context = 2;
   // The proof for the aggchain.
   oneof proof {
-    // Signature committed to the bridge exits and imported bridge exits.
-    FixedBytes65 signature = 1;
     // SP1 stark proof.
-    FixedBytes32 sp1_stark = 2;
+    FixedBytes32 sp1_stark = 3;
   }
 }
 
