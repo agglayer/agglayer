@@ -8,6 +8,8 @@ license.workspace = true
 agglayer-config.workspace = true
 agglayer-grpc-server.workspace = true
 agglayer-grpc-types = { workspace = true, features = ["compat"] }
+agglayer-rpc.workspace = true
+agglayer-storage.workspace = true
 agglayer-types.workspace = true
 
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }

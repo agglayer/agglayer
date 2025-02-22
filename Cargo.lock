@@ -216,6 +216,8 @@ dependencies = [
  "agglayer-config",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
+ "agglayer-rpc",
+ "agglayer-storage",
  "agglayer-types",
  "anyhow",
  "axum 0.8.1",

@@ -59,6 +59,22 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore>
     pub fn config(&self) -> &Config {
         &self.config
     }
+    pub fn get_epoch_configuration(&self) -> Option<EpochConfiguration> {
+        info!("Received request to get epoch configuration");
+
+        if let Epoch::BlockClock(BlockClockConfig {
+            epoch_duration,
+            genesis_block,
+        }) = self.config.epoch
+        {
+            Some(EpochConfiguration {
+                epoch_duration: epoch_duration.into(),
+                genesis_block,
+            })
+        } else {
+            None
+        }
+    }
 }
 
 impl<L1Rpc, PendingStore, StateStore, DebugStore> Drop
@@ -267,23 +283,6 @@ where
     ) -> Result<CertificateHeader, CertificateRetrievalError> {
         trace!("Received request to get certificate header for certificate {certificate_id}");
         self.fetch_certificate_header(certificate_id)
-    }
-
-    pub fn get_epoch_configuration(&self) -> Option<EpochConfiguration> {
-        info!("Received request to get epoch configuration");
-
-        if let Epoch::BlockClock(BlockClockConfig {
-            epoch_duration,
-            genesis_block,
-        }) = self.config.epoch
-        {
-            Some(EpochConfiguration {
-                epoch_duration: epoch_duration.into(),
-                genesis_block,
-            })
-        } else {
-            None
-        }
     }
 
     pub fn get_latest_known_certificate_header(

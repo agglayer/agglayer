@@ -78,7 +78,18 @@ impl ServerBuilder {
 }
 
 impl Server {
-    pub fn with_config(config: Arc<Config>) -> ServerBuilder {
+    pub fn with_config<L1Rpc, PendingStore, StateStore, DebugStore>(
+        config: Arc<Config>,
+        rpc_service: Arc<
+            agglayer_rpc::AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>,
+        >,
+    ) -> ServerBuilder
+    where
+        L1Rpc: Send + Sync + 'static,
+        PendingStore: Send + Sync + 'static,
+        StateStore: Send + Sync + 'static,
+        DebugStore: Send + Sync + 'static,
+    {
         let certificate_submission_server = CertificateSubmissionServer {};
         let certificate_submission_service =
             CertificateSubmissionServiceServer::new(certificate_submission_server)
@@ -87,7 +98,9 @@ impl Server {
                 .send_compressed(CompressionEncoding::Zstd)
                 .accept_compressed(CompressionEncoding::Zstd);
 
-        let configuration_server = ConfigurationServer {};
+        let configuration_server = ConfigurationServer {
+            service: rpc_service.clone(),
+        };
         let configuration_service = ConfigurationServiceServer::new(configuration_server)
             .max_decoding_message_size(config.grpc.max_decoding_message_size)
             .max_encoding_message_size(config.grpc.max_encoding_message_size)
