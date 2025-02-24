@@ -31,6 +31,20 @@ service NodeStateService {
   rpc GetLatestCertificateHeader(GetLatestCertificateHeaderRequest) returns (GetLatestCertificateHeaderResponse);
 }
 
+// Error kind for GetCertificateHeader RPC.
+enum GetCertificateHeaderErrorKind {
+  // Unspecified error.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED = 0;
+  // Internal error.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_INTERNAL = 1;
+  // Missing certificate id.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_CERTIFICATE_ID = 2;
+  // Malformed certificate id.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_CERTIFICATE_ID = 3;
+  // Invalid request type.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_INVALID_REQUEST_TYPE = 4;
+}
+
 // Request to get a CertificateHeader for a particular CertificateId.
 message GetCertificateHeaderRequest {
   // The certificate identifier.

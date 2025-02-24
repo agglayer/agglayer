@@ -6,6 +6,7 @@ use agglayer_grpc_server::node::v1::{
     configuration_service_server::ConfigurationServiceServer,
     node_state_service_server::NodeStateServiceServer,
 };
+use agglayer_storage::stores::{DebugReader, PendingCertificateReader, StateReader};
 use certificate_submission_service::CertificateSubmissionServer;
 use configuration_service::ConfigurationServer;
 use http::{Request, Response};
@@ -86,9 +87,9 @@ impl Server {
     ) -> ServerBuilder
     where
         L1Rpc: Send + Sync + 'static,
-        PendingStore: Send + Sync + 'static,
-        StateStore: Send + Sync + 'static,
-        DebugStore: Send + Sync + 'static,
+        PendingStore: PendingCertificateReader + 'static,
+        StateStore: StateReader + 'static,
+        DebugStore: DebugReader + 'static,
     {
         let certificate_submission_server = CertificateSubmissionServer {};
         let certificate_submission_service =
@@ -107,7 +108,9 @@ impl Server {
             .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd);
 
-        let network_state_server = NodeStateServer {};
+        let network_state_server = NodeStateServer {
+            service: rpc_service.clone(),
+        };
         let network_state_service = NodeStateServiceServer::new(network_state_server)
             .max_decoding_message_size(config.grpc.max_decoding_message_size)
             .max_encoding_message_size(config.grpc.max_encoding_message_size)
@@ -122,3 +125,6 @@ impl Server {
             .add_reflection_service(agglayer_grpc_types::protocol::types::v1::FILE_DESCRIPTOR_SET)
     }
 }
+
+#[cfg(test)]
+mod tests;

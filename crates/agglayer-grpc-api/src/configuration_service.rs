@@ -7,7 +7,7 @@ use agglayer_grpc_types::node::v1::{
 use agglayer_rpc::AgglayerService;
 use tonic_types::{ErrorDetails, StatusExt as _};
 
-const SERVICE_PATH: &str = "agglayer-node.grpc-api.v1.configuration-service";
+pub(crate) const SERVICE_PATH: &str = "agglayer-node.grpc-api.v1.configuration-service";
 
 pub struct ConfigurationServer<L1Rpc, PendingStore, StateStore, DebugStore> {
     pub(crate) service: Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>>,

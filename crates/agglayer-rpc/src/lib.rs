@@ -88,6 +88,113 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore> Drop
 impl<L1Rpc, PendingStore, StateStore, DebugStore>
     AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
 where
+    PendingStore: PendingCertificateReader + 'static,
+    StateStore: StateReader + 'static,
+    DebugStore: DebugReader + 'static,
+    L1Rpc: Send + Sync + 'static,
+{
+    pub fn get_certificate_header(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<CertificateHeader, CertificateRetrievalError> {
+        trace!("Received request to get certificate header for certificate {certificate_id}");
+        self.fetch_certificate_header(certificate_id)
+    }
+
+    pub fn get_latest_known_certificate_header(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
+        debug!(
+            "Received request to get the latest known certificate header for rollup {network_id}",
+        );
+
+        let settled_certificate_id_and_height = self
+            .state
+            .get_latest_settled_certificate_per_network(&network_id)
+            .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
+            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
+
+        let proven_certificate_id_and_height = self
+            .pending_store
+            .get_latest_proven_certificate_per_network(&network_id)
+            .inspect_err(|e| error!("Failed to get latest proven certificate: {e}"))?
+            .map(|(_, height, id)| (id, height));
+
+        let pending_certificate_id_and_height = self
+            .pending_store
+            .get_latest_pending_certificate_for_network(&network_id)
+            .inspect_err(|e| error!("Failed to get latest pending certificate: {e}"))?;
+
+        let certificate_id = [
+            pending_certificate_id_and_height,
+            proven_certificate_id_and_height,
+            settled_certificate_id_and_height,
+        ]
+        .into_iter()
+        .flatten()
+        .max_by(|x, y| x.1.cmp(&y.1))
+        .map(|v| v.0);
+
+        certificate_id.map_or(Ok(None), |certificate_id| {
+            self.fetch_certificate_header(certificate_id).map(Some)
+        })
+    }
+
+    pub fn get_latest_settled_certificate_header(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
+        let id = match self
+            .state
+            .get_latest_settled_certificate_per_network(&network_id)
+            .inspect_err(|e| error!("Failed to get latest settled certificate id: {e}"))?
+        {
+            Some((_, SettledCertificate(id, _, _, _))) => id,
+            None => return Ok(None),
+        };
+
+        self.fetch_certificate_header(id).map(Some)
+    }
+
+    pub fn get_latest_pending_certificate_header(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
+        let id = match self
+            .pending_store
+            .get_latest_pending_certificate_for_network(&network_id)
+            .inspect_err(|e| error!("Failed to get latest pending certificate id: {e}"))?
+        {
+            Some((id, _height)) => id,
+            None => return Ok(None),
+        };
+
+        self.fetch_certificate_header(id)
+            .map(|header| match header.status {
+                CertificateStatus::Pending
+                | CertificateStatus::Proven
+                | CertificateStatus::Candidate
+                | CertificateStatus::InError { .. } => Some(header),
+                CertificateStatus::Settled => None,
+            })
+    }
+
+    /// Get the certificate header, raising an error if not found.
+    fn fetch_certificate_header(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<CertificateHeader, CertificateRetrievalError> {
+        self.state
+            .get_certificate_header(&certificate_id)
+            .inspect_err(|err| error!("Failed to get certificate header: {err}"))?
+            .ok_or(CertificateRetrievalError::NotFound { certificate_id })
+    }
+}
+
+impl<L1Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
+where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
@@ -275,104 +382,6 @@ where
             })?;
 
         Ok(hash)
-    }
-
-    pub fn get_certificate_header(
-        &self,
-        certificate_id: CertificateId,
-    ) -> Result<CertificateHeader, CertificateRetrievalError> {
-        trace!("Received request to get certificate header for certificate {certificate_id}");
-        self.fetch_certificate_header(certificate_id)
-    }
-
-    pub fn get_latest_known_certificate_header(
-        &self,
-        network_id: NetworkId,
-    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        debug!(
-            "Received request to get the latest known certificate header for rollup {network_id}",
-        );
-
-        let settled_certificate_id_and_height = self
-            .state
-            .get_latest_settled_certificate_per_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
-            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
-
-        let proven_certificate_id_and_height = self
-            .pending_store
-            .get_latest_proven_certificate_per_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest proven certificate: {e}"))?
-            .map(|(_, height, id)| (id, height));
-
-        let pending_certificate_id_and_height = self
-            .pending_store
-            .get_latest_pending_certificate_for_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest pending certificate: {e}"))?;
-
-        let certificate_id = [
-            pending_certificate_id_and_height,
-            proven_certificate_id_and_height,
-            settled_certificate_id_and_height,
-        ]
-        .into_iter()
-        .flatten()
-        .max_by(|x, y| x.1.cmp(&y.1))
-        .map(|v| v.0);
-
-        certificate_id.map_or(Ok(None), |certificate_id| {
-            self.fetch_certificate_header(certificate_id).map(Some)
-        })
-    }
-
-    pub fn get_latest_settled_certificate_header(
-        &self,
-        network_id: NetworkId,
-    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        let id = match self
-            .state
-            .get_latest_settled_certificate_per_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest settled certificate id: {e}"))?
-        {
-            Some((_, SettledCertificate(id, _, _, _))) => id,
-            None => return Ok(None),
-        };
-
-        self.fetch_certificate_header(id).map(Some)
-    }
-
-    pub fn get_latest_pending_certificate_header(
-        &self,
-        network_id: NetworkId,
-    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        let id = match self
-            .pending_store
-            .get_latest_pending_certificate_for_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest pending certificate id: {e}"))?
-        {
-            Some((id, _height)) => id,
-            None => return Ok(None),
-        };
-
-        self.fetch_certificate_header(id)
-            .map(|header| match header.status {
-                CertificateStatus::Pending
-                | CertificateStatus::Proven
-                | CertificateStatus::Candidate
-                | CertificateStatus::InError { .. } => Some(header),
-                CertificateStatus::Settled => None,
-            })
-    }
-
-    /// Get the certificate header, raising an error if not found.
-    fn fetch_certificate_header(
-        &self,
-        certificate_id: CertificateId,
-    ) -> Result<CertificateHeader, CertificateRetrievalError> {
-        self.state
-            .get_certificate_header(&certificate_id)
-            .inspect_err(|err| error!("Failed to get certificate header: {err}"))?
-            .ok_or(CertificateRetrievalError::NotFound { certificate_id })
     }
 }
 
