@@ -214,6 +214,7 @@ name = "agglayer-grpc-api"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-contracts",
  "agglayer-grpc-client",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
@@ -222,8 +223,10 @@ dependencies = [
  "agglayer-types",
  "anyhow",
  "axum 0.8.1",
+ "bincode",
  "http 1.2.0",
  "prost 0.13.4",
+ "serde",
  "tokio",
  "tonic 0.12.3",
  "tonic-reflection",

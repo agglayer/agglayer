@@ -1,12 +1,16 @@
 use std::{convert::Infallible, sync::Arc};
 
 use agglayer_config::Config;
+use agglayer_contracts::{L1TransactionFetcher, RollupContract};
 use agglayer_grpc_server::node::v1::{
     certificate_submission_service_server::CertificateSubmissionServiceServer,
     configuration_service_server::ConfigurationServiceServer,
     node_state_service_server::NodeStateServiceServer,
 };
-use agglayer_storage::stores::{DebugReader, PendingCertificateReader, StateReader};
+use agglayer_storage::stores::{
+    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
+    StateWriter,
+};
 use certificate_submission_service::CertificateSubmissionServer;
 use configuration_service::ConfigurationServer;
 use http::{Request, Response};
@@ -86,12 +90,14 @@ impl Server {
         >,
     ) -> ServerBuilder
     where
-        L1Rpc: Send + Sync + 'static,
-        PendingStore: PendingCertificateReader + 'static,
-        StateStore: StateReader + 'static,
-        DebugStore: DebugReader + 'static,
+        L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
+        PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
+        StateStore: StateReader + StateWriter + 'static,
+        DebugStore: DebugReader + DebugWriter + 'static,
     {
-        let certificate_submission_server = CertificateSubmissionServer {};
+        let certificate_submission_server = CertificateSubmissionServer {
+            service: rpc_service.clone(),
+        };
         let certificate_submission_service =
             CertificateSubmissionServiceServer::new(certificate_submission_server)
                 .max_decoding_message_size(config.grpc.max_decoding_message_size)

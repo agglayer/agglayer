@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 agglayer-config.workspace = true
+agglayer-contracts.workspace = true
 agglayer-grpc-server.workspace = true
 agglayer-grpc-types = { workspace = true, features = ["compat"] }
 agglayer-rpc.workspace = true
@@ -14,8 +15,10 @@ agglayer-types.workspace = true
 
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }
 anyhow = { workspace = true }
+bincode.workspace = true
 http.workspace = true
 prost.workspace = true
+serde.workspace = true
 tonic.workspace = true
 tonic-types = "0.12.3"
 tonic-reflection = "0.12.3"
