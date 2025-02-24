@@ -13,7 +13,7 @@ permissions:
   id-token: write
 
 jobs:
-  example-downlaod-backups:
+  example-download-backups:
     runs-on: ubuntu-latest
     steps:
       - name: Authenticate with GCP via OIDC
