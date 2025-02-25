@@ -115,7 +115,7 @@ fn test_sp1_simple() {
         .unwrap();
 
     // Set the aggchain proof to the sp1 variant
-    multi_batch_header.aggchain_proof = core::AggchainData::GENERIC {
+    multi_batch_header.aggchain_proof = core::AggchainData::Generic {
         aggchain_params: aggchain_params.into(),
         aggchain_vkey: aggchain_vkey.hash_u32(),
     };

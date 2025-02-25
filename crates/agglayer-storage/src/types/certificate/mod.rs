@@ -181,7 +181,7 @@ pub enum AggchainDataV1<'a> {
     ECDSA {
         signature: Signature,
     },
-    GENERIC {
+    Generic {
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
     },
@@ -193,10 +193,10 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
             AggchainData::ECDSA { signature } => Self::ECDSA {
                 signature: *signature,
             },
-            AggchainData::GENERIC {
+            AggchainData::Generic {
                 proof,
                 aggchain_params,
-            } => Self::GENERIC {
+            } => Self::Generic {
                 proof: Cow::Borrowed(proof),
                 aggchain_params: *aggchain_params,
             },
@@ -208,10 +208,10 @@ impl From<AggchainDataV1<'_>> for AggchainData {
     fn from(proof: AggchainDataV1) -> Self {
         match proof {
             AggchainDataV1::ECDSA { signature } => Self::ECDSA { signature },
-            AggchainDataV1::GENERIC {
+            AggchainDataV1::Generic {
                 proof,
                 aggchain_params,
-            } => Self::GENERIC {
+            } => Self::Generic {
                 proof: proof.into_owned(),
                 aggchain_params,
             },

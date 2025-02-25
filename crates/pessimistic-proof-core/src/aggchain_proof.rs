@@ -15,7 +15,7 @@ use crate::keccak::{digest::Digest, keccak256_combine};
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub enum AggchainType {
     ECDSA = 0,
-    GENERIC = 1,
+    Generic = 1,
 }
 
 pub type Vkey = [u32; 8];
@@ -32,7 +32,7 @@ pub enum AggchainData {
         signature: Signature,
     },
     /// Generic proof and its metadata.
-    GENERIC {
+    Generic {
         /// Chain-specific commitment forwarded by the PP.
         aggchain_params: Digest,
         /// Verifying key for the aggchain proof program.
@@ -48,11 +48,11 @@ impl AggchainData {
                 &(AggchainType::ECDSA as u32).to_be_bytes(),
                 signer.as_slice(),
             ]),
-            AggchainData::GENERIC {
+            AggchainData::Generic {
                 aggchain_params,
                 aggchain_vkey,
             } => keccak256_combine([
-                &(AggchainType::GENERIC as u32).to_be_bytes(),
+                &(AggchainType::Generic as u32).to_be_bytes(),
                 words_to_bytes_le(aggchain_vkey).as_slice(),
                 aggchain_params.as_slice(),
             ]),

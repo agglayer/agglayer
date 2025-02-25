@@ -565,7 +565,7 @@ impl LocalNetworkStateData {
                 let signature = *signature;
                 core::AggchainData::ECDSA { signer, signature }
             }
-            AggchainData::GENERIC { .. } => return Err(Error::AggchainProofSP1Unsupported),
+            AggchainData::Generic { .. } => return Err(Error::AggchainProofSP1Unsupported),
         };
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {

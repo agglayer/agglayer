@@ -100,7 +100,7 @@ impl CertificateV1<'static> {
             new_local_exit_root: Digest([0x61; 32]),
             bridge_exits: Vec::new().into(),
             imported_bridge_exits: Vec::new().into(),
-            aggchain_data: AggchainDataV1::GENERIC {
+            aggchain_data: AggchainDataV1::Generic {
                 proof: Cow::Owned(proof),
                 aggchain_params: Digest([0x58; 32]),
             },
@@ -133,10 +133,10 @@ impl CertificateV1<'_> {
             imported_bridge_exits: imported_bridge_exits.into_owned().into(),
             aggchain_data: match aggchain_data {
                 AggchainDataV1::ECDSA { signature } => AggchainDataV1::ECDSA { signature },
-                AggchainDataV1::GENERIC {
+                AggchainDataV1::Generic {
                     proof,
                     aggchain_params,
-                } => AggchainDataV1::GENERIC {
+                } => AggchainDataV1::Generic {
                     proof: Cow::Owned(proof.into_owned()),
                     aggchain_params,
                 },

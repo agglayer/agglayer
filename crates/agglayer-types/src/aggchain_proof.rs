@@ -12,7 +12,7 @@ pub enum AggchainData {
     ECDSA {
         signature: Signature,
     },
-    GENERIC {
+    Generic {
         /// proof of the aggchain proof.
         proof: Proof,
         /// Chain-specific commitment forwarded through the PP.
