@@ -3,4 +3,4 @@ source: crates/agglayer-storage/src/stores/state/tests.rs
 expression: hash
 snapshot_kind: text
 ---
-4ec0d573c6cc867e892a4f4e7139943bce01a04c377589e305a59e04235074ae
+fa71e58d6b6c2e969b58485a9171b0d7dd00b98a8e92eb4c28bb4daf914ff57e

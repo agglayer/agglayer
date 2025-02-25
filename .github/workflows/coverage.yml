@@ -61,17 +61,6 @@ jobs:
             --ignore '/*' \
             -o coverage.lcov
 
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.externalIssuesReportPaths=sonar-issues.json
-            -Dsonar.scm.revision=${{ github.event.pull_request.head.sha }}
-
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v5
         continue-on-error: true

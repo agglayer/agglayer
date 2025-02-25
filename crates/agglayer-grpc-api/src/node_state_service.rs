@@ -1,14 +1,27 @@
-use agglayer_grpc_server::node::v1::network_state_service_server::NetworkStateService;
+use agglayer_grpc_server::node::v1::node_state_service_server::NodeStateService;
 use agglayer_grpc_types::node::v1::{
+    GetCertificateHeaderRequest, GetCertificateHeaderResponse,
     GetLatestKnownCertificateHeaderRequest, GetLatestKnownCertificateHeaderResponse,
     GetLatestPendingCertificateHeaderRequest, GetLatestPendingCertificateHeaderResponse,
     GetLatestSettledCertificateHeaderRequest, GetLatestSettledCertificateHeaderResponse,
 };
 
-use crate::Server;
+#[allow(unused)]
+const SERVICE_PATH: &str = "agglayer-node.grpc-api.v1.node-state-service";
+
+pub struct NodeStateServer {}
 
 #[tonic::async_trait]
-impl NetworkStateService for Server {
+impl NodeStateService for NodeStateServer {
+    async fn get_certificate_header(
+        &self,
+        request: tonic::Request<GetCertificateHeaderRequest>,
+    ) -> Result<tonic::Response<GetCertificateHeaderResponse>, tonic::Status> {
+        let _request = request.into_inner();
+        let response = GetCertificateHeaderResponse::default();
+        Ok(tonic::Response::new(response))
+    }
+
     async fn get_latest_known_certificate_header(
         &self,
         request: tonic::Request<GetLatestKnownCertificateHeaderRequest>,

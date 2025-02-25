@@ -6,6 +6,8 @@ use agglayer_contracts::{
     polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
     polygon_zk_evm::PolygonZkEvm,
 };
+use agglayer_rate_limiting::RateLimiter;
+use agglayer_rpc::error::SignatureVerificationError;
 use agglayer_types::Certificate;
 use ethers::{
     contract::{ContractCall, ContractError},
@@ -15,11 +17,7 @@ use ethers::{
 use thiserror::Error;
 use tracing::{info, instrument, warn};
 
-use crate::{
-    rate_limiting::{self, RateLimiter},
-    signed_tx::SignedTx,
-    zkevm_node_client::ZkevmNodeClient,
-};
+use crate::{signed_tx::SignedTx, zkevm_node_client::ZkevmNodeClient};
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -32,7 +30,7 @@ pub(crate) mod tests;
 /// In the future, it may provide functionality for proof aggregation,
 /// batching, Epoch management, among other things.
 #[derive(Debug)]
-pub(crate) struct Kernel<RpcProvider> {
+pub struct Kernel<RpcProvider> {
     rpc: Arc<RpcProvider>,
     rate_limiter: RateLimiter,
     config: Arc<Config>,
@@ -64,7 +62,7 @@ pub enum ZkevmNodeVerificationError {
 }
 
 impl<RpcProvider> Kernel<RpcProvider> {
-    pub(crate) fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> Self {
+    pub fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> Self {
         Self {
             rpc,
             rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
@@ -157,36 +155,6 @@ where
     }
 }
 
-/// Errors related to signature verification process.
-#[derive(Error, Debug)]
-pub enum SignatureVerificationError<RpcProvider>
-where
-    RpcProvider: Middleware,
-{
-    /// FEP (0.1): The signer could not be recovered from the [`SignedTx`].
-    #[error("could not recover transaction signer: {0}")]
-    CouldNotRecoverTxSigner(#[source] ethers::types::SignatureError),
-
-    /// The signer could not be recovered from the certificate signature.
-    #[error("could not recover certificate signer: {0}")]
-    CouldNotRecoverCertSigner(#[source] alloy::primitives::SignatureError),
-
-    /// The signer of the proof is not the trusted sequencer for the given
-    /// rollup id.
-    #[error("invalid signer: expected {trusted_sequencer}, got {signer}")]
-    InvalidSigner {
-        /// The recovered signer address.
-        signer: Address,
-        /// The trusted sequencer address.
-        trusted_sequencer: Address,
-    },
-
-    /// Generic network error when attempting to retrieve the trusted sequencer
-    /// address from the rollup contract.
-    #[error("contract error: {0}")]
-    ContractError(#[from] ContractError<RpcProvider>),
-}
-
 /// Errors related to settlement process.
 #[derive(Error, Debug)]
 pub enum SettlementError<RpcProvider>
@@ -201,7 +169,7 @@ where
     #[error("contract error: {0}")]
     ContractError(ContractError<RpcProvider>),
     #[error(transparent)]
-    RateLimited(#[from] crate::rate_limiting::RateLimited),
+    RateLimited(#[from] agglayer_rate_limiting::RateLimited),
     #[error("Settlement timed out after {}s", .0.as_secs())]
     Timeout(std::time::Duration),
 }
@@ -342,8 +310,10 @@ where
 
         let signer: H160 = cert
             .signer()
-            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)
-            .map(|signer| signer.into_array().into())?;
+            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
+            .ok_or(SignatureVerificationError::SP1AggchainProofUnsupported)?
+            .into_array()
+            .into();
 
         // ECDSA-k256 signature verification works by recovering the public key from the
         // signature, and then checking that it is the expected one.
@@ -381,7 +351,7 @@ where
     pub(crate) async fn settle(
         &self,
         signed_tx: &SignedTx,
-        rate_guard: rate_limiting::SendTxSlotGuard,
+        rate_guard: agglayer_rate_limiting::SendTxSlotGuard,
     ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
         let hex_hash = signed_tx.hash();
         let hash = format!("{:?}", hex_hash);

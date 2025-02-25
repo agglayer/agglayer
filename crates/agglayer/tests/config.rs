@@ -7,7 +7,7 @@ fn config_display() -> Result<(), Box<dyn std::error::Error>> {
 
     let output = cmd.assert().success();
 
-    let result: &str = std::str::from_utf8(&output.get_output().stdout)?;
+    let result = std::str::from_utf8(&output.get_output().stdout)?;
 
     insta::assert_snapshot!(sanitize_config_folder_path(result));
 
@@ -21,7 +21,7 @@ fn prover_config_display() -> Result<(), Box<dyn std::error::Error>> {
 
     let output = cmd.assert().success();
 
-    let result: &str = std::str::from_utf8(&output.get_output().stdout)?;
+    let result = std::str::from_utf8(&output.get_output().stdout)?;
 
     insta::assert_snapshot!(sanitize_config_folder_path(result));
 

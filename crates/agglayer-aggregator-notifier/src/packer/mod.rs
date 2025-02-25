@@ -103,7 +103,7 @@ where
         };
 
         let dry_current_epoch = self.current_epoch.load();
-        match dry_current_epoch.add_certificate(network_id, height, ExecutionMode::DryRun) {
+        match dry_current_epoch.add_certificate(certificate_id, ExecutionMode::DryRun) {
             Err(error) => {
                 drop(dry_current_epoch);
                 error!(
@@ -327,8 +327,7 @@ where
                         continue;
                     }
 
-                    match related_epoch.add_certificate(network_id, height, ExecutionMode::Default)
-                    {
+                    match related_epoch.add_certificate(certificate_id, ExecutionMode::Default) {
                         Err(error) if max_retries == 0 => {
                             let error_msg = format!(
                                 "CRITICAL: Failed to add the certificate {} to the epoch after \

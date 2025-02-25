@@ -60,6 +60,7 @@ pub async fn start_agglayer(
     config_path: &Path,
     l1: &L1Docker,
     config: Option<agglayer_config::Config>,
+    token: Option<CancellationToken>,
 ) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
     let (shutdown, receiver) = oneshot::channel();
 
@@ -84,9 +85,7 @@ pub async fn start_agglayer(
     let endpoint = prover_config.grpc_endpoint;
 
     config.prover_entrypoint = format!("http://{}", endpoint);
-
-    let shutdown_token = CancellationToken::new();
-    let cancellation = shutdown_token.child_token();
+    let cancellation = token.unwrap_or_default();
     FakeProver::spawn_at(fake_prover, endpoint, cancellation.clone())
         .await
         .unwrap();
@@ -105,7 +104,9 @@ pub async fn start_agglayer(
     let key_path = config_path.join(uuid);
 
     let addr = next_available_addr();
+    let admin_addr = next_available_addr();
     config.rpc.port = addr.port();
+    config.rpc.admin_port = admin_addr.port();
 
     config.telemetry.addr = next_available_addr();
     config.log.level = LogLevel::Debug;
@@ -129,7 +130,7 @@ pub async fn start_agglayer(
     let toml = toml::to_string_pretty(&config).unwrap();
     std::fs::write(&config_file, toml).unwrap();
 
-    let graceful_shutdown_token = shutdown_token.clone();
+    let graceful_shutdown_token = cancellation.clone();
     let handle = std::thread::spawn(move || {
         if let Err(error) = agglayer_node::main(config_file, "test", Some(graceful_shutdown_token))
         {
@@ -161,17 +162,18 @@ pub async fn start_agglayer(
 
     assert!(!handle.is_finished());
 
-    (receiver, client, shutdown_token)
+    (receiver, client, cancellation)
 }
 
 pub async fn setup_network(
     tmp_dir: &Path,
     config: Option<Config>,
-) -> (oneshot::Receiver<()>, L1Docker, WsClient, CancellationToken) {
+    token: Option<CancellationToken>,
+) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
     let l1 = start_l1().await;
-    let (receiver, client, token) = start_agglayer(tmp_dir, &l1, config).await;
+    let (receiver, client, _token) = start_agglayer(tmp_dir, &l1, config, token).await;
 
-    (receiver, l1, client, token)
+    (receiver, l1, client)
 }
 
 pub fn get_signer(index: u32) -> Wallet<SigningKey> {

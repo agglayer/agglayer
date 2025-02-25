@@ -4,7 +4,7 @@ use std::{
 };
 
 use agglayer_config::Config;
-use agglayer_types::Certificate;
+use agglayer_types::{Certificate, CertificateStatus};
 use agglayer_types::{Height, NetworkId, Proof};
 use parking_lot::RwLock;
 use rstest::{fixture, rstest};
@@ -128,8 +128,7 @@ fn adding_a_certificate(
     store.end_checkpoint = RwLock::new(end_checkpoint.into());
 
     assert!(expected_result(store.add_certificate(
-        network_id,
-        height,
+        certificate_id,
         agglayer_types::ExecutionMode::Default
     )));
 
@@ -188,6 +187,7 @@ fn adding_multiple_certificates(
     use crate::stores::PendingCertificateWriter as _;
 
     let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
     let network = 0.into();
 
     store.start_checkpoint = start_checkpoint.into();
@@ -198,16 +198,18 @@ fn adding_multiple_certificates(
         pending_store
             .insert_pending_certificate(network, height, &certificate)
             .unwrap();
+        state_store
+            .insert_certificate_header(&certificate, CertificateStatus::Pending)
+            .unwrap();
+
         pending_store
             .insert_generated_proof(&certificate.hash(), &Proof::dummy())
             .unwrap();
 
         assert!(
-            expected_result(store.add_certificate(
-                network,
-                height,
-                agglayer_types::ExecutionMode::Default
-            )),
+            expected_result(
+                store.add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
+            ),
             "{}:{} failed to pass the test",
             network,
             height

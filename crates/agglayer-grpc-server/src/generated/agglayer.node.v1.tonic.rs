@@ -372,7 +372,7 @@ pub mod configuration_service_server {
     }
 }
 /// Generated server implementations.
-pub mod network_state_service_server {
+pub mod node_state_service_server {
     #![allow(
         unused_variables,
         dead_code,
@@ -381,9 +381,16 @@ pub mod network_state_service_server {
         clippy::let_unit_value,
     )]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with NetworkStateServiceServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with NodeStateServiceServer.
     #[async_trait]
-    pub trait NetworkStateService: std::marker::Send + std::marker::Sync + 'static {
+    pub trait NodeStateService: std::marker::Send + std::marker::Sync + 'static {
+        async fn get_certificate_header(
+            &self,
+            request: tonic::Request<super::GetCertificateHeaderRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetCertificateHeaderResponse>,
+            tonic::Status,
+        >;
         async fn get_latest_known_certificate_header(
             &self,
             request: tonic::Request<super::GetLatestKnownCertificateHeaderRequest>,
@@ -407,14 +414,14 @@ pub mod network_state_service_server {
         >;
     }
     #[derive(Debug)]
-    pub struct NetworkStateServiceServer<T> {
+    pub struct NodeStateServiceServer<T> {
         inner: Arc<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
         max_decoding_message_size: Option<usize>,
         max_encoding_message_size: Option<usize>,
     }
-    impl<T> NetworkStateServiceServer<T> {
+    impl<T> NodeStateServiceServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
@@ -465,9 +472,9 @@ pub mod network_state_service_server {
             self
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for NetworkStateServiceServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for NodeStateServiceServer<T>
     where
-        T: NetworkStateService,
+        T: NodeStateService,
         B: Body + std::marker::Send + 'static,
         B::Error: Into<StdError> + std::marker::Send + 'static,
     {
@@ -482,13 +489,62 @@ pub mod network_state_service_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
-                "/agglayer.node.v1.NetworkStateService/GetLatestKnownCertificateHeader" => {
+                "/agglayer.node.v1.NodeStateService/GetCertificateHeader" => {
                     #[allow(non_camel_case_types)]
-                    struct GetLatestKnownCertificateHeaderSvc<T: NetworkStateService>(
+                    struct GetCertificateHeaderSvc<T: NodeStateService>(pub Arc<T>);
+                    impl<
+                        T: NodeStateService,
+                    > tonic::server::UnaryService<super::GetCertificateHeaderRequest>
+                    for GetCertificateHeaderSvc<T> {
+                        type Response = super::GetCertificateHeaderResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetCertificateHeaderRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as NodeStateService>::get_certificate_header(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetCertificateHeaderSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/agglayer.node.v1.NodeStateService/GetLatestKnownCertificateHeader" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetLatestKnownCertificateHeaderSvc<T: NodeStateService>(
                         pub Arc<T>,
                     );
                     impl<
-                        T: NetworkStateService,
+                        T: NodeStateService,
                     > tonic::server::UnaryService<
                         super::GetLatestKnownCertificateHeaderRequest,
                     > for GetLatestKnownCertificateHeaderSvc<T> {
@@ -505,7 +561,7 @@ pub mod network_state_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as NetworkStateService>::get_latest_known_certificate_header(
+                                <T as NodeStateService>::get_latest_known_certificate_header(
                                         &inner,
                                         request,
                                     )
@@ -536,13 +592,13 @@ pub mod network_state_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/agglayer.node.v1.NetworkStateService/GetLatestSettledCertificateHeader" => {
+                "/agglayer.node.v1.NodeStateService/GetLatestSettledCertificateHeader" => {
                     #[allow(non_camel_case_types)]
-                    struct GetLatestSettledCertificateHeaderSvc<T: NetworkStateService>(
+                    struct GetLatestSettledCertificateHeaderSvc<T: NodeStateService>(
                         pub Arc<T>,
                     );
                     impl<
-                        T: NetworkStateService,
+                        T: NodeStateService,
                     > tonic::server::UnaryService<
                         super::GetLatestSettledCertificateHeaderRequest,
                     > for GetLatestSettledCertificateHeaderSvc<T> {
@@ -559,7 +615,7 @@ pub mod network_state_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as NetworkStateService>::get_latest_settled_certificate_header(
+                                <T as NodeStateService>::get_latest_settled_certificate_header(
                                         &inner,
                                         request,
                                     )
@@ -590,13 +646,13 @@ pub mod network_state_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/agglayer.node.v1.NetworkStateService/GetLatestPendingCertificateHeader" => {
+                "/agglayer.node.v1.NodeStateService/GetLatestPendingCertificateHeader" => {
                     #[allow(non_camel_case_types)]
-                    struct GetLatestPendingCertificateHeaderSvc<T: NetworkStateService>(
+                    struct GetLatestPendingCertificateHeaderSvc<T: NodeStateService>(
                         pub Arc<T>,
                     );
                     impl<
-                        T: NetworkStateService,
+                        T: NodeStateService,
                     > tonic::server::UnaryService<
                         super::GetLatestPendingCertificateHeaderRequest,
                     > for GetLatestPendingCertificateHeaderSvc<T> {
@@ -613,7 +669,7 @@ pub mod network_state_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as NetworkStateService>::get_latest_pending_certificate_header(
+                                <T as NodeStateService>::get_latest_pending_certificate_header(
                                         &inner,
                                         request,
                                     )
@@ -664,7 +720,7 @@ pub mod network_state_service_server {
             }
         }
     }
-    impl<T> Clone for NetworkStateServiceServer<T> {
+    impl<T> Clone for NodeStateServiceServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -677,8 +733,8 @@ pub mod network_state_service_server {
         }
     }
     /// Generated gRPC service name
-    pub const SERVICE_NAME: &str = "agglayer.node.v1.NetworkStateService";
-    impl<T> tonic::server::NamedService for NetworkStateServiceServer<T> {
+    pub const SERVICE_NAME: &str = "agglayer.node.v1.NodeStateService";
+    impl<T> tonic::server::NamedService for NodeStateServiceServer<T> {
         const NAME: &'static str = SERVICE_NAME;
     }
 }

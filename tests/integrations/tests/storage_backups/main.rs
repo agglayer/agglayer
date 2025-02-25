@@ -12,6 +12,7 @@ use jsonrpsee::core::client::ClientT as _;
 use jsonrpsee::rpc_params;
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
+use tokio_util::sync::CancellationToken;
 
 #[rstest]
 #[tokio::test]
@@ -27,9 +28,10 @@ async fn recover_with_backup() {
     let mut config = agglayer_config::Config::new(&tmp_dir.path);
     config.storage.backup = BackupConfig::with_path(backup_dir.path.clone());
 
+    let handle = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client, handle) =
-        setup_network(&tmp_dir.path, Some(config)).await;
+    let (agglayer_shutdowned, l1, client) =
+        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
@@ -61,7 +63,7 @@ async fn recover_with_backup() {
     .unwrap();
 
     let (agglayer_shutdowned, client, handle) =
-        start_agglayer(&tmp_dir.path, &l1, Some(config)).await;
+        start_agglayer(&tmp_dir.path, &l1, Some(config), None).await;
 
     let certificate: CertificateHeader = client
         .request("interop_getCertificateHeader", rpc_params![certificate_id])
@@ -94,9 +96,10 @@ async fn purge_after_n_backup() {
         pending_max_backup_count: 1,
     };
 
+    let handle = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client, handle) =
-        setup_network(&tmp_dir.path, Some(config)).await;
+    let (agglayer_shutdowned, l1, client) =
+        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
@@ -145,7 +148,7 @@ async fn purge_after_n_backup() {
     .unwrap();
 
     let (agglayer_shutdowned, client, handle) =
-        start_agglayer(&tmp_dir.path, &l1, Some(config)).await;
+        start_agglayer(&tmp_dir.path, &l1, Some(config), None).await;
 
     let certificate: CertificateHeader = client
         .request("interop_getCertificateHeader", rpc_params![certificate_id])
@@ -181,9 +184,10 @@ async fn report_contains_all_backups() {
     let mut config = agglayer_config::Config::new(&tmp_dir.path);
     config.storage.backup = BackupConfig::with_path(backup_dir.path.clone());
 
+    let handle = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client, handle) =
-        setup_network(&tmp_dir.path, Some(config)).await;
+    let (agglayer_shutdowned, l1, client) =
+        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
@@ -235,7 +239,7 @@ async fn report_contains_all_backups() {
     .unwrap();
 
     let (agglayer_shutdowned, client, handle) =
-        start_agglayer(&tmp_dir.path, &l1, Some(config)).await;
+        start_agglayer(&tmp_dir.path, &l1, Some(config), None).await;
 
     let certificate: CertificateHeader = client
         .request("interop_getCertificateHeader", rpc_params![certificate_id])
@@ -271,9 +275,10 @@ async fn restore_at_particular_level() {
     let mut config = agglayer_config::Config::new(&tmp_dir.path);
     config.storage.backup = BackupConfig::with_path(backup_dir.path.clone());
 
+    let handle = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client, handle) =
-        setup_network(&tmp_dir.path, Some(config)).await;
+    let (agglayer_shutdowned, l1, client) =
+        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
     let signer = get_signer(0);
 
     let state = Forest::default().with_signer(signer);
@@ -323,7 +328,7 @@ async fn restore_at_particular_level() {
     .unwrap();
 
     let (agglayer_shutdowned, client, handle) =
-        start_agglayer(&tmp_dir.path, &l1, Some(config)).await;
+        start_agglayer(&tmp_dir.path, &l1, Some(config), None).await;
 
     let certificate: CertificateHeader = client
         .request("interop_getCertificateHeader", rpc_params![certificate_id])

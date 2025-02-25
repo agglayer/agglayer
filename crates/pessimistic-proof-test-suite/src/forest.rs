@@ -3,6 +3,7 @@ use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer};
 pub use pessimistic_proof::bridge_exit::LeafType;
 use pessimistic_proof::{
+    aggchain_proof::AggchainProof,
     bridge_exit::{BridgeExit, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit::{
@@ -190,7 +191,7 @@ impl Forest {
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            signature,
+            aggchain_proof: AggchainProof::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -214,10 +215,15 @@ impl Forest {
     ) -> (Certificate, SP1VerifyingKey, [u8; 32], SP1Proof) {
         let certificate = self.apply_events(imported_bridge_events, bridge_events);
 
+        let signature = match certificate.aggchain_proof {
+            AggchainProof::ECDSA { signature } => signature,
+            AggchainProof::SP1 { .. } => unimplemented!("SP1 handling not implemented"),
+        };
+
         let (aggchain_proof, aggchain_vkey, aggchain_params) =
             compute_aggchain_proof(AggchainECDSA {
-                signer: certificate.signer().unwrap(),
-                signature: certificate.signature.into(),
+                signer: certificate.signer().unwrap().unwrap(),
+                signature: signature.into(),
                 commit_imported_bridge_exits: *commit_imported_bridge_exits(
                     certificate
                         .imported_bridge_exits

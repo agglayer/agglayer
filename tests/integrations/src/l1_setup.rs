@@ -29,6 +29,12 @@ impl L1Docker {
             .await
             .expect("Failed to start docker container");
 
+        if !docker.status.success() {
+            let status = docker.status;
+            let err = String::from_utf8_lossy(&docker.stderr);
+            panic!("Starting L1 docker container failed (status={status}): {err}");
+        }
+
         let id = String::from_utf8(docker.stdout).unwrap().replace('\n', "");
         let ws = format!("ws://127.0.0.1:{}", ws_port);
         let rpc = format!("http://127.0.0.1:{}", rpc_port);
