@@ -583,6 +583,7 @@ dependencies = [
  "serde",
  "serde_with",
  "sp1-core-machine",
+ "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.11",
 ]
