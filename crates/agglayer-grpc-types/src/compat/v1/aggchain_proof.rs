@@ -28,7 +28,7 @@ impl TryFrom<v1::AggchainData> for AggchainData {
                 proof: Proof::SP1Stark(Box::new(
                     sp1v4_bincode_options()
                         .deserialize(&sp1_v4.proof)
-                        .map_err(Error::DeserializingSp1v4Proof)?,
+                        .map_err(Error::DeserializingProof)?,
                 )),
             },
             None => return Err(Error::MissingField("data")),
@@ -55,7 +55,7 @@ impl TryFrom<AggchainData> for v1::AggchainData {
                     aggchain_params: Some(aggchain_params.into()),
                     proof: sp1v4_bincode_options()
                         .serialize(&proof)
-                        .map_err(Error::SerializingSp1v4Proof)?
+                        .map_err(Error::SerializingProof)?
                         .into(),
                 }),
             }),

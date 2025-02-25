@@ -24,8 +24,8 @@ pub enum Error {
     ParsingSignature(#[source] SignatureError),
 
     #[error("failed deserializing SP1v4 proof")]
-    DeserializingSp1v4Proof(#[source] bincode::Error),
+    DeserializingProof(#[source] bincode::Error),
 
     #[error("failed serializing SP1v4 proof")]
-    SerializingSp1v4Proof(#[source] bincode::Error),
+    SerializingProof(#[source] bincode::Error),
 }
