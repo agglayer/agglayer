@@ -179,14 +179,6 @@ pub enum CertificateStatusError {
 
     #[error("L1 Info root not found for l1 leaf count: {0}")]
     L1InfoRootNotFound(u32),
-
-    /// A simple error message, without type information attached.
-    ///
-    /// This can be used eg. when round-tripping an error message through some
-    /// text-only system, that does not need to preserve which exact variant
-    /// had been emitted.
-    #[error("{0}")]
-    Message(String),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
