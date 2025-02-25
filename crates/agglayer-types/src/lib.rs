@@ -178,21 +178,25 @@ pub enum CertificateStatus {
     /// It will then be queued to be sent to agglayer-prover for PP generation.
     Pending,
 
-    /// Pessimistic proof has been generated for the certificate and stored in the rocksdb in the agglayer node.
+    /// Pessimistic proof has been generated for the certificate and stored in
+    /// the rocksdb in the agglayer node.
     Proven,
 
-    /// Certificate proof has been acknowledged by L1, but the contract call has not returned its verification feedback yet.
+    /// Certificate proof has been acknowledged by L1, but the contract call has
+    /// not returned its verification feedback yet.
     ///
     /// Waiting for L1 to execute the contract call.
     Candidate,
 
     /// Hit some error while moving the certificate through the pipeline.
     ///
-    /// For example, proving failed (Pending -> InError), L1 reorg'd (Candidate -> InError)...
-    /// See the documentation of `CertificateStatusError` for more details.
+    /// For example, proving failed (Pending -> InError), L1 reorg'd (Candidate
+    /// -> InError)... See the documentation of `CertificateStatusError` for
+    /// more details.
     ///
-    /// Note that a certificate can be InError in agglayer but settled on L1, eg. if there was
-    /// an error in agglayer but the certificate was valid and settled on L1.
+    /// Note that a certificate can be InError in agglayer but settled on L1,
+    /// eg. if there was an error in agglayer but the certificate was valid
+    /// and settled on L1.
     InError { error: CertificateStatusError },
 
     /// Transaction to settle the certificate was completed successfully on L1.
