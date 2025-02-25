@@ -701,7 +701,6 @@ impl serde::Serialize for LatestCertificateRequestType {
     {
         let variant = match self {
             Self::Unspecified => "LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED",
-            Self::Known => "LATEST_CERTIFICATE_REQUEST_TYPE_KNOWN",
             Self::Pending => "LATEST_CERTIFICATE_REQUEST_TYPE_PENDING",
             Self::Settled => "LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED",
         };
@@ -716,7 +715,6 @@ impl<'de> serde::Deserialize<'de> for LatestCertificateRequestType {
     {
         const FIELDS: &[&str] = &[
             "LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED",
-            "LATEST_CERTIFICATE_REQUEST_TYPE_KNOWN",
             "LATEST_CERTIFICATE_REQUEST_TYPE_PENDING",
             "LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED",
         ];
@@ -760,7 +758,6 @@ impl<'de> serde::Deserialize<'de> for LatestCertificateRequestType {
             {
                 match value {
                     "LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED" => Ok(LatestCertificateRequestType::Unspecified),
-                    "LATEST_CERTIFICATE_REQUEST_TYPE_KNOWN" => Ok(LatestCertificateRequestType::Known),
                     "LATEST_CERTIFICATE_REQUEST_TYPE_PENDING" => Ok(LatestCertificateRequestType::Pending),
                     "LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED" => Ok(LatestCertificateRequestType::Settled),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),

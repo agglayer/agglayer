@@ -921,12 +921,12 @@ impl serde::Serialize for CertificateId {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if self.certificate_id.is_some() {
+        if self.value.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.CertificateId", len)?;
-        if let Some(v) = self.certificate_id.as_ref() {
-            struct_ser.serialize_field("certificateId", v)?;
+        if let Some(v) = self.value.as_ref() {
+            struct_ser.serialize_field("value", v)?;
         }
         struct_ser.end()
     }
@@ -938,13 +938,12 @@ impl<'de> serde::Deserialize<'de> for CertificateId {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "certificate_id",
-            "certificateId",
+            "value",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
-            CertificateId,
+            Value,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -966,7 +965,7 @@ impl<'de> serde::Deserialize<'de> for CertificateId {
                         E: serde::de::Error,
                     {
                         match value {
-                            "certificateId" | "certificate_id" => Ok(GeneratedField::CertificateId),
+                            "value" => Ok(GeneratedField::Value),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -986,19 +985,19 @@ impl<'de> serde::Deserialize<'de> for CertificateId {
                 where
                     V: serde::de::MapAccess<'de>,
             {
-                let mut certificate_id__ = None;
+                let mut value__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
-                        GeneratedField::CertificateId => {
-                            if certificate_id__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("certificateId"));
+                        GeneratedField::Value => {
+                            if value__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("value"));
                             }
-                            certificate_id__ = map_.next_value()?;
+                            value__ = map_.next_value()?;
                         }
                     }
                 }
                 Ok(CertificateId {
-                    certificate_id: certificate_id__,
+                    value: value__,
                 })
             }
         }

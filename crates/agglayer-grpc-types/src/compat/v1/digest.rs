@@ -8,10 +8,7 @@ impl TryFrom<v1::FixedBytes32> for Digest {
     type Error = Error;
 
     fn try_from(value: v1::FixedBytes32) -> Result<Self, Self::Error> {
-        Digest::try_from(&*value.value).map_err(|_| Error::WrongBytesLength {
-            expected: 32,
-            actual: value.value.len(),
-        })
+        Ok(Digest::from(<[u8; 32]>::try_from(value)?))
     }
 }
 

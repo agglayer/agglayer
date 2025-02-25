@@ -8,20 +8,15 @@ impl TryFrom<v1::CertificateId> for CertificateId {
     type Error = Error;
 
     fn try_from(value: v1::CertificateId) -> Result<Self, Self::Error> {
-        let value = value
-            .certificate_id
-            .ok_or(Error::MissingField("certificate_id"))?;
-        CertificateId::try_from(&*value.value).map_err(|_| Error::WrongBytesLength {
-            expected: 32,
-            actual: value.value.len(),
-        })
+        let value = value.value.ok_or(Error::MissingField("certificate_id"))?;
+        Ok(CertificateId::from(<[u8; 32]>::try_from(value)?))
     }
 }
 
 impl From<CertificateId> for v1::CertificateId {
     fn from(value: CertificateId) -> Self {
         v1::CertificateId {
-            certificate_id: Some(v1::FixedBytes32 {
+            value: Some(v1::FixedBytes32 {
                 value: Bytes::copy_from_slice(&value.0),
             }),
         }

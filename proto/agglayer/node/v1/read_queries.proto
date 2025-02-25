@@ -66,14 +66,11 @@ enum LatestCertificateRequestType {
   // Default value
   LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED = 0;
 
-  // Known certificate.
-  LATEST_CERTIFICATE_REQUEST_TYPE_KNOWN = 1;
-
   // Pending certificate.
-  LATEST_CERTIFICATE_REQUEST_TYPE_PENDING = 2;
+  LATEST_CERTIFICATE_REQUEST_TYPE_PENDING = 1;
 
   // Settled certificate.
-  LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED = 3;
+  LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED = 2;
 }
 
 // Response to the latest known/pending/settled certificate header request.

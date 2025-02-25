@@ -12,6 +12,7 @@ macro_rules! required_field {
 mod address;
 mod aggchain_proof;
 mod bridge_exit;
+mod bytes;
 mod certificate;
 mod certificate_header;
 mod certificate_id;

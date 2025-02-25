@@ -49,5 +49,5 @@ message AggchainProofSP1v4 {
 // Certificate identifier.
 message CertificateId {
   // bytes representation of the certificate id.
-  FixedBytes32 certificate_id = 1;
+  FixedBytes32 value = 1;
 }
