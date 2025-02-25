@@ -88,7 +88,7 @@ jobs:
         uses: bufbuild/buf-action@v1
         id: breaking
         # Ignoring breaking as if a breaking arrives on main, it has been approved before.
-        if: github.event_name != 'push'
+        if: github.event_name != 'push' && env.PROTO_BREAKING_DETECTION == 'true'
         # Make this job continue-on-error if:
         #   - the authorized attempt is true. See authorized step
         #   - The job is in merge_queue as if a breaking is detected, an approval will be asked to admins
