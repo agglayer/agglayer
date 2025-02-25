@@ -179,8 +179,9 @@ pub enum CertificateStatusError {
 
     /// A simple error message, without type information attached.
     ///
-    /// This can be used eg. when round-tripping an error message through some text-only
-    /// system, that does not need to preserve which exact variant had been emitted.
+    /// This can be used eg. when round-tripping an error message through some
+    /// text-only system, that does not need to preserve which exact variant
+    /// had been emitted.
     #[error("{0}")]
     Message(String),
 }
