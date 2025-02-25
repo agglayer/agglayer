@@ -172,21 +172,21 @@ impl std::fmt::Display for GenerationType {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CertificateStatus {
-    /// Received certificate from the network, nothing checked yet
+    /// Received certificate from the network, nothing checked yet.
     ///
     /// Certificate will stay in this state until the L1InfoRoot is finalized.
     /// It will then be queued to be sent to agglayer-prover for PP generation.
     Pending,
 
-    /// Certificate passed PP, proof has been generated and stored in rocksdb
+    /// Pessimistic proof has been generated for the certificate and stored in the rocksdb in the agglayer node.
     Proven,
 
-    /// Certificate proof was acknowledged by L1, but the contract call did not return anything yet
+    /// Certificate proof has been acknowledged by L1, but the contract call has not returned its verification feedback yet.
     ///
     /// Waiting for L1 to execute the contract call.
     Candidate,
 
-    /// Hit some error while moving the certificate through the pipeline
+    /// Hit some error while moving the certificate through the pipeline.
     ///
     /// For example, proving failed (Pending -> InError), L1 reorg'd (Candidate -> InError)...
     /// See the documentation of `CertificateStatusError` for more details.
@@ -195,7 +195,7 @@ pub enum CertificateStatus {
     /// an error in agglayer but the certificate was valid and settled on L1.
     InError { error: CertificateStatusError },
 
-    /// Transaction to settle the certificate was completed successfully on L1
+    /// Transaction to settle the certificate was completed successfully on L1.
     Settled,
 }
 
