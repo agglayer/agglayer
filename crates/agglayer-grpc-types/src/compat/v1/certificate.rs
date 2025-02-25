@@ -24,7 +24,7 @@ impl TryFrom<v1::Certificate> for Certificate {
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()
                 .map_err(|e| Error::ParsingField("imported_bridge_exits", Box::new(e)))?,
-            aggchain_proof: required_field!(value, aggchain_proof),
+            aggchain_data: required_field!(value, aggchain_data),
             metadata: required_field!(value, metadata),
         })
     }
@@ -45,8 +45,9 @@ impl TryFrom<Certificate> for v1::Certificate {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
-            aggchain_proof: Some(value.aggchain_proof.try_into()?),
+            aggchain_data: Some(value.aggchain_data.try_into()?),
             metadata: Some(value.metadata.into()),
+            custom_chain_data: Default::default(), // TODO: should be added to Certificate
         })
     }
 }

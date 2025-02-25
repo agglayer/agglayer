@@ -1,4 +1,6 @@
-use agglayer_types::{AggchainProof, AggchainProofSP1};
+use std::collections::HashMap;
+
+use agglayer_types::aggchain_proof::{AggchainData, Proof};
 use bincode::Options as _;
 use prost::bytes::Bytes;
 
@@ -11,68 +13,52 @@ fn sp1v4_bincode_options() -> impl bincode::Options {
         .with_fixint_encoding()
 }
 
-impl TryFrom<v1::AggchainProofSp1v4> for AggchainProofSP1 {
+impl TryFrom<v1::AggchainData> for AggchainData {
     type Error = Error;
 
-    fn try_from(value: v1::AggchainProofSp1v4) -> Result<Self, Self::Error> {
-        Ok(AggchainProofSP1 {
-            aggchain_params: required_field!(value, aggchain_params),
-            stark_proof: sp1v4_bincode_options()
-                .deserialize(&value.stark_proof)
-                .map_err(Error::DeserializingSp1v4Proof)?,
-        })
-    }
-}
-
-impl TryFrom<AggchainProofSP1> for v1::AggchainProofSp1v4 {
-    type Error = Error;
-
-    fn try_from(value: AggchainProofSP1) -> Result<Self, Self::Error> {
-        Ok(v1::AggchainProofSp1v4 {
-            aggchain_params: Some(value.aggchain_params.into()),
-            stark_proof: sp1v4_bincode_options()
-                .serialize(&value.stark_proof)
-                .map_err(Error::SerializingSp1v4Proof)?
-                .into(),
-        })
-    }
-}
-
-impl TryFrom<v1::AggchainProof> for AggchainProof {
-    type Error = Error;
-
-    fn try_from(value: v1::AggchainProof) -> Result<Self, Self::Error> {
-        Ok(match value.proof {
-            Some(v1::aggchain_proof::Proof::Signature(signature)) => AggchainProof::ECDSA {
+    fn try_from(value: v1::AggchainData) -> Result<Self, Self::Error> {
+        Ok(match value.data {
+            Some(v1::aggchain_data::Data::Signature(signature)) => AggchainData::ECDSA {
                 signature: (&*signature.value)
                     .try_into()
                     .map_err(Error::ParsingSignature)?,
             },
-            Some(v1::aggchain_proof::Proof::Sp1StarkV4(sp1_stark_v4)) => AggchainProof::SP1 {
-                aggchain_proof: sp1_stark_v4
-                    .try_into()
-                    .map_err(|e| Error::ParsingField("aggchain_proof", Box::new(e)))?,
+            Some(v1::aggchain_data::Data::Sp1v4(sp1_v4)) => AggchainData::Generic {
+                aggchain_params: required_field!(sp1_v4, aggchain_params),
+                proof: Proof::SP1Stark(Box::new(
+                    sp1v4_bincode_options()
+                        .deserialize(&sp1_v4.proof)
+                        .map_err(Error::DeserializingSp1v4Proof)?,
+                )),
             },
-            None => return Err(Error::MissingField("proof")),
+            None => return Err(Error::MissingField("data")),
         })
     }
 }
 
-impl TryFrom<AggchainProof> for v1::AggchainProof {
+impl TryFrom<AggchainData> for v1::AggchainData {
     type Error = Error;
 
-    fn try_from(value: AggchainProof) -> Result<Self, Self::Error> {
-        Ok(match value {
-            AggchainProof::ECDSA { signature } => v1::AggchainProof {
-                proof: Some(v1::aggchain_proof::Proof::Signature(v1::FixedBytes65 {
-                    value: Bytes::copy_from_slice(&signature.as_bytes()),
-                })),
-            },
-            AggchainProof::SP1 { aggchain_proof } => v1::AggchainProof {
-                proof: Some(v1::aggchain_proof::Proof::Sp1StarkV4(
-                    aggchain_proof.try_into()?,
-                )),
-            },
+    fn try_from(value: AggchainData) -> Result<Self, Self::Error> {
+        Ok(v1::AggchainData {
+            context: HashMap::new(),
+            data: Some(match value {
+                AggchainData::ECDSA { signature } => {
+                    v1::aggchain_data::Data::Signature(v1::FixedBytes65 {
+                        value: Bytes::copy_from_slice(&signature.as_bytes()),
+                    })
+                }
+                AggchainData::Generic {
+                    proof,
+                    aggchain_params,
+                } => v1::aggchain_data::Data::Sp1v4(v1::AggchainProofSp1v4 {
+                    aggchain_params: Some(aggchain_params.into()),
+                    proof: sp1v4_bincode_options()
+                        .serialize(&proof)
+                        .map_err(Error::SerializingSp1v4Proof)?
+                        .into(),
+                }),
+            }),
         })
     }
 }

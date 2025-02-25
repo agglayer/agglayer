@@ -8,7 +8,6 @@ pub mod local_balance_tree;
 
 pub mod bridge_exit;
 
-pub mod aggchain_proof;
 pub mod global_index;
 pub mod imported_bridge_exit;
 pub mod local_state;
@@ -26,6 +25,7 @@ pub use pessimistic_proof_core::multi_batch_header;
 pub use pessimistic_proof_core::proof::ProofError;
 
 pub mod core {
+    pub use pessimistic_proof_core::aggchain_proof::AggchainData;
     pub use pessimistic_proof_core::generate_pessimistic_proof;
 }
 

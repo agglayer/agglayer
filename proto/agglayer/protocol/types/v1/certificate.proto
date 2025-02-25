@@ -22,28 +22,34 @@ message Certificate {
   repeated ImportedBridgeExit imported_bridge_exits = 6;
   // Fixed size field of arbitrary data for the chain needs.
   FixedBytes32 metadata = 7;
-  // Aggchain proof.
-  AggchainProof aggchain_proof = 8;
+  // Aggchain data.
+  AggchainData aggchain_data = 8;
+  // custom chain data.
+  bytes custom_chain_data = 9;
 }
 
-// Aggchain proof.
-message AggchainProof {
-  // The proof for the aggchain.
-  oneof proof {
+// Aggchaindata is the data sent by the aggchain.
+message AggchainData {
+  // Aggchain proof context to share non-sensitive data.
+  //
+  // Examples: exact SP1 version, trace id, etc. Basically used for debugging.
+  map<string, bytes> context = 1;
+
+  // The data of the aggchain.
+  oneof data {
     // Signature committed to the bridge exits and imported bridge exits.
-    FixedBytes65 signature = 1;
-    // SP1v4 stark proof.
-    AggchainProofSP1v4 sp1_stark_v4 = 2;
+    FixedBytes65 signature = 2;
+    // SP1v4 Aggchain proof.
+    AggchainProofSp1v4 sp1v4 = 3;
   }
 }
 
-// SP1v4 stark proof.
-message AggchainProofSP1v4 {
-  // Digest of the aggchain parameters.
+// SP1v4 aggchain proof.
+message AggchainProofSp1v4 {
+  // Digest of the aggchain params.
   FixedBytes32 aggchain_params = 1;
-
-  // The actual stark proof.
-  bytes stark_proof = 2;
+  // The actual proof.
+  bytes proof = 2;
 }
 
 // Certificate identifier.
