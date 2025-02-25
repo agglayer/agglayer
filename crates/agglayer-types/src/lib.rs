@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use agglayer_primitives::SignatureError;
-use pessimistic_proof::aggchain_proof::{AggchainProof, AggchainProofData, AggchainProofECDSAData};
+use pessimistic_proof::core;
 use pessimistic_proof::error::ProofVerificationError;
 use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
@@ -24,6 +24,10 @@ use pessimistic_proof::{
     ProofError,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::aggchain_proof::AggchainData;
+
+pub mod aggchain_proof;
 
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
@@ -232,9 +236,9 @@ pub struct Certificate {
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
     /// Fixed size field of arbitrary data for the chain needs.
     pub metadata: Metadata,
-    /// Aggchain proof which is either one ECDSA or one SP1 proof.
+    /// Aggchain data which is either one ECDSA or Generic proof.
     #[serde(flatten)]
-    pub aggchain_proof: AggchainProof,
+    pub aggchain_data: AggchainData,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -252,7 +256,7 @@ impl Default for Certificate {
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            aggchain_proof: AggchainProof::ECDSA { signature },
+            aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -307,7 +311,7 @@ impl Certificate {
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            aggchain_proof: AggchainProof::ECDSA { signature },
+            aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -369,8 +373,8 @@ impl Certificate {
     }
 
     pub fn signer(&self) -> Result<Option<Address>, SignatureError> {
-        match self.aggchain_proof {
-            AggchainProof::ECDSA { signature } => {
+        match self.aggchain_data {
+            AggchainData::ECDSA { signature } => {
                 // retrieve signer
                 let combined_hash = signature_commitment(
                     self.new_local_exit_root,
@@ -556,12 +560,12 @@ impl LocalNetworkStateData {
         }
 
         // TODO: Construct it properly from the Certificate
-        let aggchain_proof = match &certificate.aggchain_proof {
-            AggchainProof::ECDSA { signature } => {
+        let aggchain_proof = match &certificate.aggchain_data {
+            AggchainData::ECDSA { signature } => {
                 let signature = *signature;
-                AggchainProofData::ECDSA(AggchainProofECDSAData { signer, signature })
+                core::AggchainData::ECDSA { signer, signature }
             }
-            AggchainProof::SP1 { .. } => return Err(Error::AggchainProofSP1Unsupported),
+            AggchainData::Generic { .. } => return Err(Error::AggchainProofSP1Unsupported),
         };
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {

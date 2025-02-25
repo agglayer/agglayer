@@ -6,7 +6,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::{
-    aggchain_proof::AggchainProofData,
+    aggchain_proof::AggchainData,
     bridge_exit::{BridgeExit, NetworkId, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
@@ -53,7 +53,7 @@ where
     /// State commitment target hashes.
     pub target: StateCommitment,
     /// Aggchain proof.
-    pub aggchain_proof: AggchainProofData,
+    pub aggchain_proof: AggchainData,
 }
 
 pub fn signature_commitment(
