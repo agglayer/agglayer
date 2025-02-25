@@ -904,6 +904,7 @@ async fn process_next_certificate() {
                         .l1_info_root()
                         .expect("Failed to get L1 info root")
                         .unwrap_or_default(),
+                    None,
                 )
                 .expect("Failed to apply certificate");
 

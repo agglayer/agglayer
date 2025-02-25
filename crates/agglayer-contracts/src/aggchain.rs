@@ -10,7 +10,7 @@ pub trait AggchainContract {
         &self,
         rollup_address: Address,
         aggchain_vkey_selector: u16,
-    ) -> Result<[u8; 32], L1RpcError>;
+    ) -> Result<[u32; 8], L1RpcError>;
 }
 
 #[async_trait::async_trait]
@@ -24,18 +24,22 @@ where
         &self,
         rollup_address: Address,
         aggchain_vkey_selector: u16,
-    ) -> Result<[u8; 32], L1RpcError> {
+    ) -> Result<[u32; 8], L1RpcError> {
         let aggchain_selector = (((aggchain_vkey_selector as u32) << 16) | 1u32).to_be_bytes();
 
         let client = AggchainBase::new(rollup_address, self.rpc.clone());
 
-        client
+        let result = client
             .get_aggchain_v_key(aggchain_selector)
             .await
             .map_err(|error| {
                 error!("Error fetching aggchain vkey: {:?}", error);
 
                 L1RpcError::AggchainVkeyFetchFailed
-            })
+            })?;
+
+        Ok(sp1_zkvm::lib::utils::bytes_to_words_le(&result)
+            .try_into()
+            .map_err(|_| L1RpcError::UnableToParseAggchainVkey)?)
     }
 }

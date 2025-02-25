@@ -74,6 +74,7 @@ impl CertificateV1<'static> {
                 ),
             },
             metadata: Digest([0xa9; 32]),
+            custom_chain_data: Cow::Owned(vec![]),
         }
     }
 
@@ -105,6 +106,7 @@ impl CertificateV1<'static> {
                 aggchain_params: Digest([0x58; 32]),
             },
             metadata: Digest([0xb9; 32]),
+            custom_chain_data: Cow::Owned(vec![]),
         }
     }
 }
@@ -121,6 +123,7 @@ impl CertificateV1<'_> {
             imported_bridge_exits,
             aggchain_data,
             metadata,
+            custom_chain_data,
         } = self;
 
         CertificateV1 {
@@ -142,6 +145,7 @@ impl CertificateV1<'_> {
                 },
             },
             metadata,
+            custom_chain_data: Cow::Owned(custom_chain_data.into_owned()),
         }
     }
 }

@@ -25,6 +25,8 @@ pub trait RollupContract {
         proof_signers: HashMap<u32, Address>,
     ) -> Result<Address, L1RpcError>;
 
+    async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<Address, ()>;
+
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
 
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
@@ -170,5 +172,15 @@ where
             .await
             .map_err(|_| L1RpcError::TrustedSequencerRetrievalFailed)
         }
+    }
+
+    async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<Address, ()> {
+        let rollup_data = self
+            .inner
+            .rollup_id_to_rollup_data(rollup_id)
+            .await
+            .map_err(|_| ())?;
+
+        Ok(rollup_data.rollup_contract)
     }
 }

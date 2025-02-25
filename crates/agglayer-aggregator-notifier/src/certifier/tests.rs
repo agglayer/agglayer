@@ -207,8 +207,21 @@ mockall::mock! {
             proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
         ) -> Result<ethers::types::Address, L1RpcError>;
 
+        async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<ethers::types::Address, ()>;
+
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
+    }
+
+    #[async_trait::async_trait]
+    impl agglayer_contracts::AggchainContract for L1Rpc {
+
+        type M = NonceManagerMiddleware<Provider<MockProvider>>;
+        async fn get_aggchain_vkey(
+            &self,
+            rollup_address: ethers::types::Address,
+            aggchain_vkey_selector: u16,
+        ) -> Result<[u32; 8], L1RpcError>;
     }
 
     #[async_trait::async_trait]

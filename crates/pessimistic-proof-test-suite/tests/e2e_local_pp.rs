@@ -28,7 +28,7 @@ fn e2e_local_pp_simple_helper(
     let certificate = forest.apply_events(&imported_events, &events);
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
+        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root, None)
         .unwrap();
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
 }
@@ -88,7 +88,7 @@ fn e2e_local_pp_random() {
 
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
+        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root, None)
         .unwrap();
 
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
@@ -111,7 +111,7 @@ fn test_sp1_simple() {
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
     let mut multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
+        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root, None)
         .unwrap();
 
     // Set the aggchain proof to the sp1 variant
