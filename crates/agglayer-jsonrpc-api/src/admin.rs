@@ -10,10 +10,10 @@ use agglayer_types::{
 };
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, warn};
 
 use super::error::RpcResult;
-use crate::rpc::{error::Error, rpc_middleware, JsonRpcService};
+use crate::{error::Error, rpc_middleware, JsonRpcService};
 
 #[rpc(server, namespace = "admin")]
 pub(crate) trait AdminAgglayer {
@@ -30,6 +30,12 @@ pub(crate) trait AdminAgglayer {
         status: CertificateStatus,
     ) -> RpcResult<()>;
 
+    #[method(name = "setLatestPendingCertificate")]
+    async fn set_latest_pending_certificate(&self, certificate_id: CertificateId) -> RpcResult<()>;
+
+    #[method(name = "setLatestProvenCertificate")]
+    async fn set_latest_proven_certificate(&self, certificate_id: CertificateId) -> RpcResult<()>;
+
     #[method(name = "removePendingCertificate")]
     async fn remove_pending_certificate(
         &self,
@@ -43,7 +49,7 @@ pub(crate) trait AdminAgglayer {
 }
 
 /// The Admin RPC agglayer service implementation.
-pub(crate) struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
@@ -52,7 +58,7 @@ pub(crate) struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
 
 impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
     /// Create an instance of the admin RPC agglayer service.
-    pub(crate) fn new(
+    pub fn new(
         pending_store: Arc<PendingStore>,
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
@@ -73,7 +79,7 @@ where
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
 {
-    pub(crate) async fn start(self) -> anyhow::Result<axum::Router> {
+    pub async fn start(self) -> anyhow::Result<axum::Router> {
         // Create the RPC service
         let config = self.config.clone();
 
@@ -185,6 +191,12 @@ where
         certificate: Certificate,
         status: CertificateStatus,
     ) -> RpcResult<()> {
+        warn!(
+            hash = certificate.hash().to_string(),
+            ?certificate,
+            "(ADMIN) Forcing push of pending certificate: {}",
+            certificate.hash()
+        );
         match self.pending_store.insert_pending_certificate(
             certificate.network_id,
             certificate.height,
@@ -206,9 +218,89 @@ where
             }
         }
     }
+    #[instrument(skip(self, certificate_id), level = "debug")]
+    async fn set_latest_pending_certificate(&self, certificate_id: CertificateId) -> RpcResult<()> {
+        warn!(
+            hash = certificate_id.to_string(),
+            "(ADMIN) Setting latest pending certificate: {}", certificate_id
+        );
+        let certificate = if let Some(certificate) = self
+            .state
+            .get_certificate_header(&certificate_id)
+            .map_err(|error| {
+                error!("Failed to get certificate header: {}", error);
+                Error::internal("Unable to get certificate header")
+            })? {
+            certificate
+        } else {
+            return Err(Error::ResourceNotFound(format!(
+                "CertificateHeader({})",
+                certificate_id
+            )));
+        };
+
+        match self
+            .pending_store
+            .set_latest_pending_certificate_per_network(
+                &certificate.network_id,
+                &certificate.height,
+                &certificate.certificate_id,
+            ) {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                error!("Failed to update latest pending certificate: {}", error);
+                Err(Error::internal(
+                    "Unable to update latest pending certificate",
+                ))
+            }
+        }
+    }
+
+    #[instrument(skip(self, certificate_id), level = "debug")]
+    async fn set_latest_proven_certificate(&self, certificate_id: CertificateId) -> RpcResult<()> {
+        warn!(
+            hash = certificate_id.to_string(),
+            "(ADMIN) Setting latest proven certificate: {}", certificate_id
+        );
+        let certificate = if let Some(certificate) = self
+            .state
+            .get_certificate_header(&certificate_id)
+            .map_err(|error| {
+                error!("Failed to get certificate header: {}", error);
+                Error::internal("Unable to get certificate header")
+            })? {
+            certificate
+        } else {
+            return Err(Error::ResourceNotFound(format!(
+                "CertificateHeader({})",
+                certificate_id
+            )));
+        };
+
+        match self
+            .pending_store
+            .set_latest_proven_certificate_per_network(
+                &certificate.network_id,
+                &certificate.height,
+                &certificate.certificate_id,
+            ) {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                error!("Failed to update latest proven certificate: {}", error);
+                Err(Error::internal(
+                    "Unable to update latest proven certificate",
+                ))
+            }
+        }
+    }
 
     #[instrument(skip(self), level = "debug")]
     async fn remove_pending_proof(&self, certificate_id: CertificateId) -> RpcResult<()> {
+        warn!(
+            hash = certificate_id.to_string(),
+            "(ADMIN) Removing pending proof: {}", certificate_id
+        );
+
         self.pending_store
             .remove_generated_proof(&certificate_id)
             .map_err(|error| {
@@ -224,6 +316,10 @@ where
         height: Height,
         remove_proof: bool,
     ) -> RpcResult<()> {
+        warn!(
+            "(ADMIN) Removing pending certificate for network {} at height {}",
+            network_id, height
+        );
         let certificate_id = if let Some(certificate) = self
             .pending_store
             .get_certificate(network_id, height)

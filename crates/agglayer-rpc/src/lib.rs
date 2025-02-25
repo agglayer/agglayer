@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
+use agglayer_contracts::{L1TransactionFetcher, RollupContract};
+use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
@@ -8,52 +10,48 @@ use agglayer_storage::{
         StateWriter,
     },
 };
-use agglayer_telemetry::KeyValue;
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height,
     NetworkId,
 };
-use ethers::{providers::Middleware, types::H256};
-use futures::future::try_join;
+use error::SignatureVerificationError;
+use ethers::types::{TransactionReceipt, H160, H256};
 use tokio::sync::mpsc;
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{debug, error, info, instrument, trace, warn};
 
-pub use self::error::{
-    CertificateRetrievalError, CertificateSubmissionError, SendTxError, TxStatusError,
-};
-use crate::{kernel::Kernel, signed_tx::SignedTx};
+pub use self::error::{CertificateRetrievalError, CertificateSubmissionError};
 
 pub mod error;
 
 /// The RPC agglayer service implementation.
-pub(crate) struct AgglayerService<Rpc, PendingStore, StateStore, DebugStore> {
-    pub(crate) kernel: Kernel<Rpc>,
+pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore> {
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pub(crate) pending_store: Arc<PendingStore>,
     pub(crate) state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
     config: Arc<Config>,
+    l1_rpc_provider: Arc<L1Rpc>,
 }
 
-impl<Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerService<Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
 {
     /// Create an instance of the RPC agglayer service.
-    pub(crate) fn new(
-        kernel: Kernel<Rpc>,
+    pub fn new(
         certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
         pending_store: Arc<PendingStore>,
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
         config: Arc<Config>,
+        l1_rpc_provider: Arc<L1Rpc>,
     ) -> Self {
         Self {
-            kernel,
             certificate_sender,
             pending_store,
             state,
             debug_store,
             config,
+            l1_rpc_provider,
         }
     }
 
@@ -63,142 +61,159 @@ impl<Rpc, PendingStore, StateStore, DebugStore>
     }
 }
 
-impl<Rpc, PendingStore, StateStore, DebugStore> Drop
-    for AgglayerService<Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore> Drop
+    for AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
 {
     fn drop(&mut self) {
-        info!("Shutting down the agglayer service");
+        info!("Shutting down the agglayer RPC service");
     }
 }
 
-impl<Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerService<Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
 where
-    Rpc: Middleware + 'static,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    L1Rpc: RollupContract + L1TransactionFetcher + 'static,
 {
-    #[instrument(skip(self, tx), fields(hash, rollup_id = tx.tx.rollup_id), level = "info")]
-    pub async fn send_tx(&self, tx: SignedTx) -> Result<H256, SendTxError<Rpc>> {
-        let hash = format!("{:?}", tx.hash());
-        tracing::Span::current().record("hash", &hash);
+    #[instrument(skip(self, certificate), level = "info")]
+    async fn validate_pre_existing_certificate(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<(), CertificateSubmissionError<L1Rpc::M>> {
+        let new_certificate_id = certificate.hash();
+        // Get pre-existing certificate in pending
+        if let Some(certificate) = self
+            .pending_store
+            .get_certificate(certificate.network_id, certificate.height)?
+        {
+            let pre_existing_certificate_id = certificate.hash();
+            warn!(
+                pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
+                "Certificate already exists in pending store for network {} at height {}",
+                certificate.network_id,
+                certificate.height
+            );
+            if let Some(CertificateHeader {
+                status: CertificateStatus::InError { .. },
+                settlement_tx_hash,
+                ..
+            }) = self
+                .state
+                .get_certificate_header(&pre_existing_certificate_id)?
+            {
+                match settlement_tx_hash {
+                    None => {
+                        info!(
+                            "Replacing pending certificate {} that is in error",
+                            pre_existing_certificate_id
+                        );
+                    }
+                    Some(tx_hash) => {
+                        let l1_transaction = self
+                            .l1_rpc_provider
+                            .fetch_transaction_receipt(H256::from_slice(tx_hash.as_ref()))
+                            .await
+                            .map_err(|error| {
+                                warn!(
+                                    "Failed to fetch transaction receipt for certificate {}: {}",
+                                    pre_existing_certificate_id, error
+                                );
 
-        info!(
-            hash,
-            "Received transaction {hash} for rollup {}", tx.tx.rollup_id
-        );
-        let rollup_id_str = tx.tx.rollup_id.to_string();
-        let metrics_attrs_tx = &[
-            KeyValue::new("rollup_id", rollup_id_str),
-            KeyValue::new("type", "tx"),
-        ];
-        let metrics_attrs = &metrics_attrs_tx[..1];
+                                CertificateSubmissionError::UnableToReplacePendingCertificate {
+                                    reason: error.to_string(),
+                                    height: certificate.height,
+                                    network_id: certificate.network_id,
+                                    stored_certificate_id: pre_existing_certificate_id,
+                                    replacement_certificate_id: new_certificate_id,
+                                    source: Some(error),
+                                }
+                            })?;
 
-        agglayer_telemetry::SEND_TX.add(1, metrics_attrs);
+                        if matches!(l1_transaction, TransactionReceipt { status: Some(status), .. } if status.as_u64() == 0)
+                        {
+                            info!(
+                                %pre_existing_certificate_id,
+                                %tx_hash,
+                                ?l1_transaction,
+                                "Replacing pending certificate in error that has already been settled, but transaction receipt status is in failure"
+                            );
+                        } else {
+                            let message = "Unable to replace a pending certificate in error that \
+                                           has already been settled";
+                            warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
 
-        let rollup_id = tx.tx.rollup_id;
-        if !self.kernel.check_rollup_registered(rollup_id) {
-            // Return an invalid params error if the rollup is not registered.
-            return Err(SendTxError::RollupNotRegistered { rollup_id });
+                            return Err(
+                                CertificateSubmissionError::UnableToReplacePendingCertificate {
+                                    reason: message.to_string(),
+                                    height: certificate.height,
+                                    network_id: certificate.network_id,
+                                    stored_certificate_id: pre_existing_certificate_id,
+                                    replacement_certificate_id: new_certificate_id,
+                                    source: None,
+                                },
+                            );
+                        }
+                    }
+                }
+            } else {
+                let message = "Unable to replace a pending certificate that is not in error";
+                info!(%pre_existing_certificate_id, message);
+
+                return Err(
+                    CertificateSubmissionError::UnableToReplacePendingCertificate {
+                        reason: message.to_string(),
+                        height: certificate.height,
+                        network_id: certificate.network_id,
+                        stored_certificate_id: pre_existing_certificate_id,
+                        replacement_certificate_id: new_certificate_id,
+                        source: None,
+                    },
+                );
+            }
         }
 
-        self.kernel.verify_tx_signature(&tx).await.inspect_err(|e| {
-            error!(error = %e, hash, "Failed to verify the signature of transaction {hash}: {e}");
-        })?;
-
-        agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs_tx);
-
-        // Reserve a rate limiting slot.
-        let guard = self
-            .kernel
-            .rate_limiter()
-            .reserve_send_tx(tx.tx.rollup_id, tokio::time::Instant::now())?;
-
-        agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
-
-        // Run all the verification checks in parallel.
-        let _ = try_join(
-            async {
-                self.kernel
-                    .verify_proof_eth_call(&tx)
-                    .await
-                    .map_err(|e| {
-                        let error = SendTxError::dry_run(&e);
-                        error!(
-                            error_code = %e,
-                            error = error.to_string(),
-                            hash,
-                            "Failed to dry-run the verify_batches_trusted_aggregator for \
-                             transaction {hash}: {error}"
-                        );
-                        error
-                    })
-                    .inspect(|_| agglayer_telemetry::EXECUTE.add(1, metrics_attrs))
-            },
-            async {
-                self.kernel
-                    .verify_proof_zkevm_node(&tx)
-                    .await
-                    .map_err(|e| {
-                        error!(
-                            error = %e,
-                            hash,
-                            "Failed to verify the batch local_exit_root and state_root of \
-                             transaction {hash}: {e}"
-                        );
-                        SendTxError::RootVerification(e)
-                    })
-                    .inspect(|_| agglayer_telemetry::VERIFY_ZKP.add(1, metrics_attrs))
-            },
-        )
-        .await?;
-
-        // Settle the proof on-chain and return the transaction hash.
-        let receipt = self.kernel.settle(&tx, guard).await.inspect_err(|e| {
-            error!(
-                error = %e,
-                hash,
-                "Failed to settle transaction {hash} on L1: {e}"
-            )
-        })?;
-
-        agglayer_telemetry::SETTLE.add(1, metrics_attrs);
-
-        info!(hash, "Successfully settled transaction {hash}");
-
-        Ok(receipt.transaction_hash)
+        Ok(())
     }
+    /// Verify that the signer of the given [`Certificate`] is the trusted
+    /// sequencer for the rollup id it specified.
+    #[instrument(skip(self), level = "debug")]
+    pub(crate) async fn verify_cert_signature(
+        &self,
+        cert: &Certificate,
+    ) -> Result<(), SignatureVerificationError<L1Rpc::M>> {
+        let sequencer_address = self
+            .l1_rpc_provider
+            .get_trusted_sequencer_address(*cert.network_id, self.config.proof_signers.clone())
+            .await
+            .map_err(|_| {
+                SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(cert.network_id)
+            })?;
 
-    #[instrument(skip(self), fields(hash = hash.to_string()), level = "info")]
-    pub async fn get_tx_status(&self, hash: H256) -> Result<TxStatus, TxStatusError<Rpc>> {
-        debug!("Received request to get transaction status for hash {hash}");
+        let signer: H160 = cert
+            .signer()
+            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
+            .ok_or(SignatureVerificationError::SP1AggchainProofUnsupported)?
+            .into_array()
+            .into();
 
-        let receipt = self.kernel.check_tx_status(hash).await.map_err(|e| {
-            error!("Failed to get transaction status for hash {hash}: {e}");
-            TxStatusError::StatusCheck(e)
-        })?;
+        // ECDSA-k256 signature verification works by recovering the public key from the
+        // signature, and then checking that it is the expected one.
+        if signer != sequencer_address {
+            return Err(SignatureVerificationError::InvalidSigner {
+                signer,
+                trusted_sequencer: sequencer_address,
+            });
+        }
 
-        let current_block = self.kernel.current_l1_block_height().await.map_err(|e| {
-            error!("Failed to get current L1 block: {e}");
-            TxStatusError::L1BlockRetrieval(e)
-        })?;
-
-        let receipt = receipt.ok_or_else(|| TxStatusError::TxNotFound { hash })?;
-
-        let status = match receipt.block_number {
-            Some(block_number) if block_number < current_block => TxStatus::Done,
-            Some(_) => TxStatus::Pending,
-            None => TxStatus::NotFound,
-        };
-        Ok(status)
+        Ok(())
     }
-
     #[instrument(skip(self, certificate), fields(hash, rollup_id = *certificate.network_id), level = "info")]
     pub async fn send_certificate(
         &self,
         certificate: Certificate,
-    ) -> Result<CertificateId, CertificateSubmissionError<Rpc>> {
+    ) -> Result<CertificateId, CertificateSubmissionError<L1Rpc::M>> {
         let hash = certificate.hash();
         let hash_string = hash.to_string();
         tracing::Span::current().record("hash", &hash_string);
@@ -207,11 +222,14 @@ where
             %hash,
             "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
         );
-
-        self.kernel.verify_cert_signature(&certificate).await.map_err(|e| {
-            error!(error = %e, hash = hash_string, "Failed to verify the signature of certificate {hash}: {e}");
-            CertificateSubmissionError::SignatureError(e)
-        })?;
+        self.validate_pre_existing_certificate(&certificate).await?;
+        self.verify_cert_signature(&certificate)
+            .await
+            .map_err(|e| {
+                error!(error = %e, hash = hash_string, "Failed to verify the signature of
+        certificate {hash}: {e}");
+                CertificateSubmissionError::SignatureError(e)
+            })?;
 
         // TODO: Batch the different queries.
         // Insert the certificate into the pending store.
@@ -294,9 +312,9 @@ where
             .inspect_err(|e| error!("Failed to get latest pending certificate: {e}"))?;
 
         let certificate_id = [
-            settled_certificate_id_and_height,
-            proven_certificate_id_and_height,
             pending_certificate_id_and_height,
+            proven_certificate_id_and_height,
+            settled_certificate_id_and_height,
         ]
         .into_iter()
         .flatten()

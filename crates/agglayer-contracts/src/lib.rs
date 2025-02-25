@@ -27,6 +27,14 @@ use polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2Events;
 pub use settler::Settler;
 
 #[async_trait::async_trait]
+pub trait L1TransactionFetcher {
+    async fn fetch_transaction_receipt(
+        &self,
+        tx_hash: H256,
+    ) -> Result<TransactionReceipt, L1RpcError>;
+}
+
+#[async_trait::async_trait]
 pub trait RollupContract {
     type M: Middleware;
     async fn get_trusted_sequencer_address(
@@ -77,12 +85,30 @@ pub enum L1RpcError {
     ReorgDetected(u64),
     #[error("Cannot get the block hash for the block number {0}")]
     BlockHashNotFound(u64),
+    #[error("Unable to fetch transaction receipt for {0}")]
+    UnableToFetchTransactionReceipt(String),
+    #[error("No transaction receipt found for {0}")]
+    TransactionReceiptNotFound(String),
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
 where
     RpcProvider: Middleware + 'static,
 {
+    pub fn new(
+        rpc: Arc<RpcProvider>,
+        inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
+        l1_info_tree: polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2<RpcProvider>,
+        default_l1_info_tree_entry: (u32, [u8; 32]),
+    ) -> Self {
+        Self {
+            rpc,
+            inner,
+            l1_info_tree,
+            default_l1_info_tree_entry,
+        }
+    }
+
     pub async fn try_new(
         rpc: Arc<RpcProvider>,
         inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
@@ -133,12 +159,12 @@ where
             (l1_leaf_count, l1_info_root)
         };
 
-        Ok(Self {
+        Ok(Self::new(
             rpc,
             inner,
             l1_info_tree,
             default_l1_info_tree_entry,
-        })
+        ))
     }
 }
 
@@ -328,6 +354,23 @@ where
             new_pessimistic_root,
             proof,
         )
+    }
+}
+
+#[async_trait::async_trait]
+impl<RpcProvider> L1TransactionFetcher for L1RpcClient<RpcProvider>
+where
+    RpcProvider: Middleware + 'static,
+{
+    async fn fetch_transaction_receipt(
+        &self,
+        tx_hash: H256,
+    ) -> Result<TransactionReceipt, L1RpcError> {
+        self.rpc
+            .get_transaction_receipt(tx_hash)
+            .await
+            .map_err(|_| L1RpcError::UnableToFetchTransactionReceipt(tx_hash.to_string()))?
+            .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))
     }
 }
 

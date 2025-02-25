@@ -3,15 +3,15 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use agglayer_contracts::{L1TransactionFetcher, RollupContract};
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter,
 };
-use agglayer_types::CertificateStatus;
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId,
 };
-use ethers::types::TransactionReceipt;
+use error::{Error, RpcResult};
 use ethers::{providers::Middleware, types::H256};
 use futures::FutureExt;
 use hyper::StatusCode;
@@ -22,19 +22,24 @@ use jsonrpsee::{
 };
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
-use tracing::warn;
-use tracing::{error, info, instrument};
+use tracing::info;
 
-use self::error::{Error, RpcResult};
 use crate::{service::AgglayerService, signed_tx::SignedTx};
 
 mod error;
+pub mod kernel;
 mod rpc_middleware;
+pub mod service;
+mod signed_tx;
+mod zkevm_node_client;
 
 #[cfg(test)]
-mod tests;
+pub mod tests;
 
-pub(crate) mod admin;
+#[cfg(any(test, feature = "testutils"))]
+pub mod testutils;
+
+pub mod admin;
 
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
@@ -76,39 +81,46 @@ trait Agglayer {
 }
 
 /// The RPC agglayer service implementation.
-pub(crate) struct AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore> {
-    service: Arc<AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
+pub struct AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> {
+    service: Arc<AgglayerService<V0Rpc>>,
+    pub(crate) rpc_service:
+        Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
 }
 
-impl<Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
 {
     /// Create an instance of the RPC agglayer service.
-    pub(crate) fn new(
-        service: Arc<AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
+    pub fn new(
+        service: Arc<AgglayerService<V0Rpc>>,
+        rpc_service: Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
     ) -> Self {
-        Self { service }
+        Self {
+            service,
+            rpc_service,
+        }
     }
 }
 
-impl<Rpc, PendingStore, StateStore, DebugStore> Drop
-    for AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> Drop
+    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer JsonRPC server");
     }
 }
 
-impl<Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
 where
-    Rpc: Middleware + 'static,
+    V0Rpc: Middleware + 'static,
+    Rpc: RollupContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
 {
-    pub(crate) async fn start(self) -> anyhow::Result<axum::Router> {
-        let config = self.service.config();
+    pub async fn start(self) -> anyhow::Result<axum::Router> {
+        let config = self.rpc_service.config();
 
         // Create the RPC server.
         let mut server_builder = ServerBuilder::new()
@@ -170,94 +182,14 @@ where
             .route("/json-rpc", axum::routing::get_service(service.clone()))
             .layer(middleware))
     }
-
-    #[instrument(skip(self, certificate), level = "info")]
-    async fn validate_pre_existing_certificate(
-        &self,
-        certificate: &Certificate,
-    ) -> Result<(), Error> {
-        // Get pre-existing certificate in pending
-        if let Some(certificate) = self
-            .service
-            .pending_store
-            .get_certificate(certificate.network_id, certificate.height)
-            .map_err(|e| {
-                error!("Failed to communicate with pending store: {e}");
-                Error::internal(e.to_string())
-            })?
-        {
-            let pre_existing_certificate_id = certificate.hash();
-            warn!(
-                pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
-                "Certificate already exists in pending store for network {} at height {}",
-                certificate.network_id,
-                certificate.height
-            );
-            if let Some(CertificateHeader {
-                status: CertificateStatus::InError { .. },
-                settlement_tx_hash,
-                ..
-            }) = self
-                .service
-                .state
-                .get_certificate_header(&pre_existing_certificate_id)
-                .map_err(|e| {
-                    error!("Failed to communicate with state store: {e}");
-                    Error::internal(e.to_string())
-                })?
-            {
-                match settlement_tx_hash {
-                    None => {
-                        info!(
-                            "Replacing pending certificate {} that is in error",
-                            pre_existing_certificate_id
-                        );
-                    }
-                    Some(tx_hash) => {
-                        let l1_transaction = self
-                            .service
-                            .kernel
-                            .check_tx_status(H256::from_slice(tx_hash.as_ref()))
-                            .await
-                            .map_err(|e| {
-                                error!("Failed to check transaction status: {e}");
-                                Error::internal(e.to_string())
-                            })?;
-
-                        if matches!(l1_transaction, Some(TransactionReceipt { status: Some(status), .. }) if status.as_u64() == 0)
-                        {
-                            info!(
-                                %pre_existing_certificate_id,
-                                %tx_hash,
-                                ?l1_transaction,
-                                "Replacing pending certificate in error that has already been settled, but transaction receipt status is in failure"
-                            );
-                        } else {
-                            let message = "Unable to replace a pending certificate in error that \
-                                           has already been settled";
-                            warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
-
-                            return Err(Error::InvalidArgument(message.to_string()));
-                        }
-                    }
-                }
-            } else {
-                let message = "Unable to replace a pending certificate that is not in error";
-                info!(%pre_existing_certificate_id, message);
-
-                return Err(Error::InvalidArgument(message.to_string()));
-            }
-        }
-
-        Ok(())
-    }
 }
 
 #[async_trait]
-impl<Rpc, PendingStore, StateStore, DebugStore> AgglayerServer
-    for AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> AgglayerServer
+    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
 where
-    Rpc: Middleware + 'static,
+    V0Rpc: Middleware + 'static,
+    Rpc: RollupContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
@@ -271,19 +203,18 @@ where
     }
 
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
-        self.validate_pre_existing_certificate(&certificate).await?;
-        Ok(self.service.send_certificate(certificate).await?)
+        Ok(self.rpc_service.send_certificate(certificate).await?)
     }
 
     async fn get_certificate_header(
         &self,
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader> {
-        Ok(self.service.get_certificate_header(certificate_id)?)
+        Ok(self.rpc_service.get_certificate_header(certificate_id)?)
     }
 
     async fn get_epoch_configuration(&self) -> RpcResult<EpochConfiguration> {
-        Ok(self.service.get_epoch_configuration().ok_or_else(|| {
+        Ok(self.rpc_service.get_epoch_configuration().ok_or_else(|| {
             Error::internal(
                 "AggLayer isn't configured with a BlockClock configuration, thus no \
                  EpochConfiguration is available",
@@ -296,7 +227,7 @@ where
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>> {
         let header = self
-            .service
+            .rpc_service
             .get_latest_known_certificate_header(network_id)?;
         Ok(header)
     }
@@ -306,7 +237,7 @@ where
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>> {
         let header = self
-            .service
+            .rpc_service
             .get_latest_settled_certificate_header(network_id)?;
         Ok(header)
     }
@@ -316,7 +247,7 @@ where
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>> {
         let header = self
-            .service
+            .rpc_service
             .get_latest_pending_certificate_header(network_id)?;
         Ok(header)
     }

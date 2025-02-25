@@ -3,36 +3,17 @@
 use agglayer_contracts::{
     polygon_rollup_manager::PolygonRollupManagerErrors, polygon_zk_evm::PolygonZkEvmErrors,
 };
-pub use agglayer_storage::error::Error as StorageError;
+use agglayer_rate_limiting::RateLimited as RateLimitedError;
+use agglayer_rpc::error::SignatureVerificationError;
 pub use agglayer_types::Digest;
 use ethers::{contract::ContractError, providers::Middleware, types::H256};
 
-pub use crate::{
-    kernel::{
-        CheckTxStatusError, SettlementError, SignatureVerificationError, ZkevmNodeVerificationError,
-    },
-    rate_limiting::RateLimited as RateLimitedError,
-};
+pub use crate::kernel::{CheckTxStatusError, SettlementError, ZkevmNodeVerificationError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CertificateRetrievalError {
-    #[error(transparent)]
-    Storage(#[from] StorageError),
-
     #[error("Data for certificate {certificate_id} not found")]
     NotFound { certificate_id: Digest },
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum CertificateSubmissionError<Rpc: Middleware> {
-    #[error(transparent)]
-    Storage(#[from] StorageError),
-
-    #[error("Failed to send the certificate to the orchestrator")]
-    OrchestratorNotResponsive,
-
-    #[error("Failed to validate certificate signature: {0}")]
-    SignatureError(#[source] SignatureVerificationError<Rpc>),
 }
 
 #[derive(Debug, thiserror::Error)]

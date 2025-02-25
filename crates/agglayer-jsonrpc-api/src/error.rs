@@ -1,15 +1,12 @@
 //! Support for structured errors in RPC.
 
+use agglayer_rate_limiting::RateLimited as RateLimitedError;
+use agglayer_rpc::CertificateSubmissionError;
 use ethers::{middleware::Middleware, types::H256};
 use jsonrpsee::types::error::ErrorObjectOwned;
 use serde::Serialize;
 
-use crate::{
-    rate_limiting::RateLimited as RateLimitedError,
-    service::{
-        self, CertificateRetrievalError, CertificateSubmissionError, SendTxError, TxStatusError,
-    },
-};
+use crate::service::{self, SendTxError, TxStatusError};
 
 /// JsonRPC error codes.
 pub mod code {
@@ -232,11 +229,13 @@ impl<Rpc: Middleware> From<CertificateSubmissionError<Rpc>> for Error {
     }
 }
 
-impl From<CertificateRetrievalError> for Error {
-    fn from(err: CertificateRetrievalError) -> Self {
+impl From<agglayer_rpc::CertificateRetrievalError> for Error {
+    fn from(err: agglayer_rpc::CertificateRetrievalError) -> Self {
         match err {
-            CertificateRetrievalError::Storage(error) => Self::internal(error.to_string()),
-            CertificateRetrievalError::NotFound { certificate_id } => {
+            agglayer_rpc::CertificateRetrievalError::Storage(error) => {
+                Self::internal(error.to_string())
+            }
+            agglayer_rpc::CertificateRetrievalError::NotFound { certificate_id } => {
                 Self::ResourceNotFound(format!("Certificate({certificate_id})"))
             }
         }

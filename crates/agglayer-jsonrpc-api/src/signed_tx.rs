@@ -96,7 +96,7 @@ pub(crate) struct ProofManifest {
 /// [`SignedTx`] conforming to the type definitions specified herein.
 #[serde_as]
 #[derive(Debug, Deserialize)]
-pub(crate) struct SignedTx {
+pub struct SignedTx {
     pub(crate) tx: ProofManifest,
     #[serde_as(as = "DisplayFromStr")]
     pub(crate) signature: Signature,
