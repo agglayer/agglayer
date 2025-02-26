@@ -3,7 +3,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use agglayer_primitives::SignatureError;
 use pessimistic_proof::core;
 use pessimistic_proof::error::ProofVerificationError;
-use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
@@ -16,8 +15,7 @@ use pessimistic_proof::utils::smt::{Smt, SmtError};
 use pessimistic_proof::utils::{FromBool as _, Hashable as _};
 use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
-    bridge_exit::{BridgeExit, TokenInfo},
-    imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
+    imported_bridge_exit::commit_imported_bridge_exits,
     local_balance_tree::LocalBalancePath,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
@@ -38,7 +36,12 @@ pub type Metadata = Digest;
 pub use agglayer_primitives as primitives;
 // Re-export common primitives again as agglayer-types root types
 pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
-pub use pessimistic_proof::bridge_exit::NetworkId;
+pub use pessimistic_proof::bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo};
+pub use pessimistic_proof::global_index::GlobalIndex;
+pub use pessimistic_proof::imported_bridge_exit::{
+    Claim, ClaimFromMainnet, ClaimFromRollup, ImportedBridgeExit, L1InfoTreeLeaf,
+    L1InfoTreeLeafInner, MerkleProof,
+};
 pub use pessimistic_proof::proof::Proof;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -149,23 +152,31 @@ pub enum CertificateStatusError {
         generation_type: GenerationType,
         source: ProofError,
     },
+
     /// Failure on the proof verification.
     #[error("proof verification failed")]
     ProofVerificationFailed(#[from] ProofVerificationError),
+
     /// Failure on the pessimistic proof witness generation from the
     /// [`LocalNetworkStateData`] and the provided [`Certificate`].
     #[error(transparent)]
     TypeConversionError(#[from] Error),
+
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
+
     #[error("Internal error")]
     InternalError(String),
+
     #[error("Settlement error: {0}")]
     SettlementError(String),
+
     #[error("Pre certification error: {0}")]
     PreCertificationError(String),
+
     #[error("Certification error: {0}")]
     CertificationError(String),
+
     #[error("L1 Info root not found for l1 leaf count: {0}")]
     L1InfoRootNotFound(u32),
 }

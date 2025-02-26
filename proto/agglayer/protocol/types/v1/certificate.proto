@@ -42,13 +42,13 @@ message AggchainData {
 // Aggchain proof.
 message AggchainProof {
   // Aggchain params.
-  bytes aggchain_params = 1;
+  FixedBytes32 aggchain_params = 1;
   // Aggchain proof context to share non-sensitive data.
   map<string, bytes> context = 2;
   // The proof for the aggchain.
   oneof proof {
     // SP1 stark proof.
-    FixedBytes32 sp1_stark = 3;
+    bytes sp1_stark = 3;
   }
 }
 

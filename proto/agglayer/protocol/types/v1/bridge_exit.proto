@@ -18,7 +18,7 @@ message BridgeExit {
   // Address which will own the received token
   FixedBytes20 dest_address = 4;
 
-  // Token amount sent
+  // Token amount sent, stored big-endian
   FixedBytes32 amount = 5;
 
   // Metadata for the bridge exit
