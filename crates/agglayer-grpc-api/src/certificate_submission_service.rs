@@ -4,20 +4,15 @@ use std::sync::Arc;
 use agglayer_contracts::L1TransactionFetcher;
 use agglayer_contracts::RollupContract;
 use agglayer_grpc_server::node::v1::certificate_submission_service_server::CertificateSubmissionService;
+use agglayer_grpc_types::compat::v1::Error;
 use agglayer_grpc_types::node::v1::{
     CertificateSubmissionErrorKind, SubmitCertificateRequest, SubmitCertificateResponse,
 };
-use agglayer_grpc_types::protocol::types::v1::aggchain_data::Data;
-use agglayer_grpc_types::protocol::types::v1::aggchain_proof::Proof;
 use agglayer_rpc::AgglayerService;
-use agglayer_storage::columns::default_bincode_options;
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter,
 };
-use agglayer_types::Digest;
-use axum::body::Bytes;
-use bincode::Options;
 use tonic_types::ErrorDetails;
 use tonic_types::StatusExt as _;
 use tracing::instrument;
@@ -43,66 +38,24 @@ where
         request: tonic::Request<SubmitCertificateRequest>,
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
         let context = format!("{}.{}", SERVICE_PATH, "submit-certificate");
-        let certificate = request.into_inner().certificate.unwrap();
-        let certificate = agglayer_types::Certificate {
-            network_id: certificate.network_id.into(),
-            height: certificate.height,
-            // TODO: removed when we have compat layer
-            prev_local_exit_root: Digest::try_from(
-                &*certificate.prev_local_exit_root.unwrap().value,
-            )
-            .unwrap(),
-            new_local_exit_root: Digest::try_from(&*certificate.new_local_exit_root.unwrap().value)
-                .unwrap(),
-            bridge_exits: vec![],
-            imported_bridge_exits: vec![],
-            metadata: Digest::try_from(&*certificate.metadata.unwrap().value).unwrap(),
-            aggchain_data: certificate
-                .aggchain_data
-                .ok_or_else(|| {
-                    let mut error_details = ErrorDetails::new();
+        let certificate: agglayer_types::Certificate = match request.into_inner().certificate {
+            Some(certificate) => certificate.try_into().map_err(|error| {
+                // TODO: We can't define which field failed
+                match &error {
+                    Error::WrongBytesLength { .. } => {}
+                    Error::WrongVectorLength { .. } => {}
+                    Error::MissingField(_field) => {}
+                    Error::InvalidLeafType(_leaf_type) => {}
+                    Error::InvalidCertificateStatus(_status) => {}
+                    Error::ParsingField(_field, _source) => {}
+                    Error::ParsingSignature(_source) => {}
+                    Error::DeserializingProof(_source) => {}
+                    Error::SerializingProof(_source) => {}
+                }
 
-                    error_details.set_error_info(
-                        CertificateSubmissionErrorKind::MissingRequiredField.as_str_name(),
-                        &context,
-                        [],
-                    );
-                    error_details
-                        .add_bad_request_violation("aggchain_data", "aggchain_data is missing");
-
-                    tonic::Status::with_error_details(
-                        tonic::Code::InvalidArgument,
-                        "Missing aggchain_data field",
-                        error_details,
-                    )
-                })
-                .map(|source| match source.data {
-                    Some(witness) => match witness {
-                        Data::Signature(signature) => {
-                            let signature: agglayer_types::primitives::Signature =
-                                (*signature.value).try_into().unwrap();
-                            agglayer_types::aggchain_proof::AggchainData::ECDSA { signature }
-                        }
-                        Data::Generic(proof) => {
-                            let aggchain_params = (*proof.aggchain_params).try_into().unwrap();
-                            let proof = match proof.proof.unwrap() {
-                                Proof::Sp1Stark(fixed_bytes32) => {
-                                    agglayer_types::aggchain_proof::Proof::SP1Stark(Box::new(
-                                        default_bincode_options()
-                                            .deserialize(&fixed_bytes32.value)
-                                            .unwrap(),
-                                    ))
-                                }
-                            };
-
-                            agglayer_types::aggchain_proof::AggchainData::Generic {
-                                proof,
-                                aggchain_params,
-                            }
-                        }
-                    },
-                    None => unreachable!(),
-                })?,
+                tonic::Status::invalid_argument(format!("Invalid certificate: {}", error))
+            })?,
+            None => return Err(tonic::Status::invalid_argument("Missing certificate")),
         };
 
         let certificate_id = certificate.hash();
@@ -183,11 +136,7 @@ where
             })?;
 
         Ok(tonic::Response::new(SubmitCertificateResponse {
-            certificate_id: Some(agglayer_grpc_types::protocol::types::v1::CertificateId {
-                value: Some(agglayer_grpc_types::protocol::types::v1::FixedBytes32 {
-                    value: Bytes::copy_from_slice(certificate_id.as_ref()),
-                }),
-            }),
+            certificate_id: Some(certificate_id.into()),
         }))
     }
 }

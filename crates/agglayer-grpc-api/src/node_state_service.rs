@@ -2,20 +2,18 @@ use std::sync::Arc;
 
 use agglayer_grpc_server::node::v1::node_state_service_server::NodeStateService;
 use agglayer_grpc_types::{
+    compat::v1::Error,
     node::v1::{
         GetCertificateHeaderErrorKind, GetCertificateHeaderRequest, GetCertificateHeaderResponse,
         GetLatestCertificateHeaderRequest, GetLatestCertificateHeaderResponse,
         LatestCertificateRequestType,
     },
-    protocol::types::v1::{CertificateHeader, CertificateStatus, FixedBytes32},
 };
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::stores::{DebugReader, PendingCertificateReader, StateReader};
-use agglayer_types::Digest;
 use axum::body::Bytes;
 use tonic_types::{ErrorDetails, StatusExt as _};
 
-#[allow(unused)]
 const SERVICE_PATH: &str = "agglayer-node.grpc-api.v1.node-state-service";
 
 pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore> {
@@ -41,17 +39,14 @@ where
         let request = request.into_inner();
         let context = format!("{}.{}", SERVICE_PATH, "get-certificate-header");
 
-        let certificate_id = request
+        let certificate_id: agglayer_types::CertificateId = request
             .certificate_id
             .ok_or(GetCertificateHeaderErrorKind::MissingCertificateId)
             .and_then(|value| {
-                value
-                    .value
-                    .ok_or(GetCertificateHeaderErrorKind::MissingCertificateId)
-            })
-            .and_then(|value| {
-                Digest::try_from(&value.value[..])
-                    .map_err(|_| GetCertificateHeaderErrorKind::MalformedCertificateId)
+                value.try_into().map_err(|error| match error {
+                    Error::MissingField(_) => GetCertificateHeaderErrorKind::MissingCertificateId,
+                    _ => GetCertificateHeaderErrorKind::MalformedCertificateId,
+                })
             })
             .map_err(|error| {
                 let mut error_details = ErrorDetails::new();
@@ -105,23 +100,7 @@ where
                 }
             })
             .map(|header| GetCertificateHeaderResponse {
-                certificate_header: Some(CertificateHeader {
-                    network_id: *header.network_id,
-                    height: header.height,
-                    epoch_number: header.epoch_number,
-                    certificate_index: header.certificate_index,
-                    certificate_id: Some(agglayer_grpc_types::protocol::types::v1::CertificateId {
-                        value: Some(FixedBytes32 {
-                            value: Bytes::copy_from_slice(&*header.certificate_id),
-                        }),
-                    }),
-                    prev_local_exit_root: None,
-                    new_local_exit_root: None,
-                    metadata: None,
-                    status: CertificateStatus::Unspecified.into(),
-                    error: None,
-                    settlement_tx_hash: None,
-                }),
+                certificate_header: Some(header.into()),
             })?;
 
         Ok(tonic::Response::new(response))
@@ -208,19 +187,7 @@ where
                 }
             })
             .map(|header| GetLatestCertificateHeaderResponse {
-                certificate_header: header.map(|header| CertificateHeader {
-                    network_id: *header.network_id,
-                    height: header.height,
-                    epoch_number: header.epoch_number,
-                    certificate_index: header.certificate_index,
-                    certificate_id: None,
-                    prev_local_exit_root: None,
-                    new_local_exit_root: None,
-                    metadata: None,
-                    status: CertificateStatus::Unspecified.into(),
-                    error: None,
-                    settlement_tx_hash: None,
-                }),
+                certificate_header: header.map(Into::into),
             })?;
 
         Ok(tonic::Response::new(response))

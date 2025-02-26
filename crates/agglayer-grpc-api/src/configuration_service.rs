@@ -52,12 +52,7 @@ where
             })
             .map(|epoch_configuration| {
                 let response = GetEpochConfigurationResponse {
-                    epoch_configuration: Some(
-                        agglayer_grpc_types::protocol::types::v1::EpochConfiguration {
-                            genesis_block: epoch_configuration.genesis_block,
-                            epoch_duration: epoch_configuration.epoch_duration,
-                        },
-                    ),
+                    epoch_configuration: Some(epoch_configuration.into()),
                 };
 
                 tonic::Response::new(response)

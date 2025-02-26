@@ -2,10 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use agglayer_config::Config;
 use agglayer_grpc_server::node::v1::node_state_service_server::NodeStateServiceServer;
-use agglayer_grpc_types::{
-    node::v1::GetCertificateHeaderRequest,
-    protocol::types::v1::{CertificateId, FixedBytes32},
-};
+use agglayer_grpc_types::node::v1::GetCertificateHeaderRequest;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
     storage::backup::BackupClient,
@@ -13,7 +10,6 @@ use agglayer_storage::{
     tests::TempDBDir,
 };
 use agglayer_types::CertificateStatus;
-use axum::body::Bytes;
 use tokio::{net::TcpListener, sync::oneshot};
 use tonic::{
     transport::{server::TcpIncoming, Server},
@@ -74,11 +70,7 @@ async fn get_certificate_header() {
 
     let response = client
         .get_certificate_header(GetCertificateHeaderRequest {
-            certificate_id: Some(CertificateId {
-                value: Some(FixedBytes32 {
-                    value: Bytes::from_static(&[0; 32]),
-                }),
-            }),
+            certificate_id: Some(agglayer_types::Digest([0u8; 32]).into()),
         })
         .await;
 
@@ -89,11 +81,7 @@ async fn get_certificate_header() {
 
     let response = client
         .get_certificate_header(GetCertificateHeaderRequest {
-            certificate_id: Some(CertificateId {
-                value: Some(FixedBytes32 {
-                    value: Bytes::copy_from_slice(&*certificate_id),
-                }),
-            }),
+            certificate_id: Some(certificate_id.into()),
         })
         .await;
 
@@ -101,14 +89,7 @@ async fn get_certificate_header() {
 
     let cert = response.unwrap().into_inner();
     let cert_id = agglayer_types::CertificateId::try_from(
-        &*cert
-            .certificate_header
-            .unwrap()
-            .certificate_id
-            .unwrap()
-            .value
-            .unwrap()
-            .value,
+        cert.certificate_header.unwrap().certificate_id.unwrap(),
     )
     .unwrap();
 
