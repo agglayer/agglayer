@@ -18,7 +18,7 @@ env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
   KURTOSIS_CDK_GIT_REF: v0.2.11
-  ZKEVM_CONTRACT_GIT_REF: v9.0.0-rc.6-pp
+  ZKEVM_CONTRACT_GIT_REF: feature/ongoing-v0.3.0
 
 jobs:
   unit:

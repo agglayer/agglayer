@@ -71,13 +71,15 @@ pub enum Error {
         error: String,
     },
     #[error("Failed to communicate with L1: {0}")]
-    L1CommunicationError(String),
+    L1CommunicationError(#[source] agglayer_contracts::L1RpcError),
 }
 
 impl From<Error> for CertificateStatusError {
     fn from(value: Error) -> Self {
         match value {
-            Error::L1CommunicationError(error) => CertificateStatusError::InternalError(error),
+            Error::L1CommunicationError(error) => {
+                CertificateStatusError::InternalError(error.to_string())
+            }
             Error::Clock(error) => CertificateStatusError::InternalError(error.to_string()),
             Error::PreCertification(pre_certification_error) => {
                 CertificateStatusError::PreCertificationError(pre_certification_error.to_string())

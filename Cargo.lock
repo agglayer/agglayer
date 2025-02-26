@@ -116,6 +116,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-clock",
  "agglayer-config",
+ "agglayer-contracts",
  "agglayer-prover-types",
  "agglayer-storage",
  "agglayer-test-suite",
@@ -188,7 +189,8 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-types",
+ "anyhow",
  "async-trait",
  "ethers",
  "ethers-contract",
