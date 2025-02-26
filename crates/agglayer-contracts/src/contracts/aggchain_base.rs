@@ -1,4 +1,4 @@
-pub use polygon_zk_evm::*;
+pub use aggchain_base::*;
 /// This module was auto-generated with ethers-rs Abigen.
 /// More information at: <https://github.com/gakonst/ethers-rs>
 #[allow(
@@ -9,349 +9,24 @@ pub use polygon_zk_evm::*;
     dead_code,
     non_camel_case_types,
 )]
-pub mod polygon_zk_evm {
+pub mod aggchain_base {
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {
-            constructor: ::core::option::Option::Some(::ethers::core::abi::ethabi::Constructor {
-                inputs: ::std::vec![
-                    ::ethers::core::abi::ethabi::Param {
-                        name: ::std::borrow::ToOwned::to_owned("_globalExitRootManager"),
-                        kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                        internal_type: ::core::option::Option::Some(
-                            ::std::borrow::ToOwned::to_owned(
-                                "contract IPolygonZkEVMGlobalExitRootV2",
-                            ),
-                        ),
-                    },
-                    ::ethers::core::abi::ethabi::Param {
-                        name: ::std::borrow::ToOwned::to_owned("_pol"),
-                        kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                        internal_type: ::core::option::Option::Some(
-                            ::std::borrow::ToOwned::to_owned(
-                                "contract IERC20Upgradeable",
-                            ),
-                        ),
-                    },
-                    ::ethers::core::abi::ethabi::Param {
-                        name: ::std::borrow::ToOwned::to_owned("_bridgeAddress"),
-                        kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                        internal_type: ::core::option::Option::Some(
-                            ::std::borrow::ToOwned::to_owned(
-                                "contract IPolygonZkEVMBridgeV2",
-                            ),
-                        ),
-                    },
-                    ::ethers::core::abi::ethabi::Param {
-                        name: ::std::borrow::ToOwned::to_owned("_rollupManager"),
-                        kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                        internal_type: ::core::option::Option::Some(
-                            ::std::borrow::ToOwned::to_owned(
-                                "contract PolygonRollupManager",
-                            ),
-                        ),
-                    },
-                ],
-            }),
+            constructor: ::core::option::Option::None,
             functions: ::core::convert::From::from([
                 (
-                    ::std::borrow::ToOwned::to_owned("GLOBAL_EXIT_ROOT_MANAGER_L2"),
+                    ::std::borrow::ToOwned::to_owned("AGGCHAIN_TYPE"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "GLOBAL_EXIT_ROOT_MANAGER_L2",
-                            ),
+                            name: ::std::borrow::ToOwned::to_owned("AGGCHAIN_TYPE"),
                             inputs: ::std::vec![],
                             outputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
                                     name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned(
-                                            "contract IBasePolygonZkEVMGlobalExitRoot",
-                                        ),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned(
-                        "INITIALIZE_TX_BRIDGE_LIST_LEN_LEN",
-                    ),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "INITIALIZE_TX_BRIDGE_LIST_LEN_LEN",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint8"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("INITIALIZE_TX_BRIDGE_PARAMS"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "INITIALIZE_TX_BRIDGE_PARAMS",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned(
-                        "INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS",
-                    ),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned(
-                        "INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS_EMPTY_METADATA",
-                    ),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS_EMPTY_METADATA",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("INITIALIZE_TX_CONSTANT_BYTES"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "INITIALIZE_TX_CONSTANT_BYTES",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(16usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint16"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned(
-                        "INITIALIZE_TX_CONSTANT_BYTES_EMPTY_METADATA",
-                    ),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "INITIALIZE_TX_CONSTANT_BYTES_EMPTY_METADATA",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(16usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint16"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned(
-                        "INITIALIZE_TX_DATA_LEN_EMPTY_METADATA",
-                    ),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "INITIALIZE_TX_DATA_LEN_EMPTY_METADATA",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint8"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned(
-                        "INITIALIZE_TX_EFFECTIVE_PERCENTAGE",
-                    ),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "INITIALIZE_TX_EFFECTIVE_PERCENTAGE",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        1usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes1"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SIGNATURE_INITIALIZE_TX_R"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "SIGNATURE_INITIALIZE_TX_R",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SIGNATURE_INITIALIZE_TX_S"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "SIGNATURE_INITIALIZE_TX_S",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes32"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SIGNATURE_INITIALIZE_TX_V"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "SIGNATURE_INITIALIZE_TX_V",
-                            ),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint8"),
-                                    ),
-                                },
-                            ],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("TIMESTAMP_RANGE"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned("TIMESTAMP_RANGE"),
-                            inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(
-                                        256usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint256"),
+                                        ::std::borrow::ToOwned::to_owned("uint32"),
                                     ),
                                 },
                             ],
@@ -373,6 +48,53 @@ pub mod polygon_zk_evm {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("acceptVKeyManagerRole"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "acceptVKeyManagerRole",
+                            ),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("addOwnedAggchainVKey"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "addOwnedAggchainVKey",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("aggchainSelector"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        4usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes4"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("newAggchainVKey"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("admin"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
@@ -384,6 +106,28 @@ pub mod polygon_zk_evm {
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("address"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("aggLayerGateway"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("aggLayerGateway"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned(
+                                            "contract IAggLayerGateway",
+                                        ),
                                     ),
                                 },
                             ],
@@ -415,52 +159,27 @@ pub mod polygon_zk_evm {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("calculatePolPerForceBatch"),
+                    ::std::borrow::ToOwned::to_owned("disableUseDefaultGatewayFlag"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
                             name: ::std::borrow::ToOwned::to_owned(
-                                "calculatePolPerForceBatch",
+                                "disableUseDefaultGatewayFlag",
                             ),
                             inputs: ::std::vec![],
-                            outputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(
-                                        256usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint256"),
-                                    ),
-                                },
-                            ],
+                            outputs: ::std::vec![],
                             constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
                         },
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("forceBatch"),
+                    ::std::borrow::ToOwned::to_owned("enableUseDefaultGatewayFlag"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned("forceBatch"),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("transactions"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("polAmount"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(
-                                        256usize,
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint256"),
-                                    ),
-                                },
-                            ],
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "enableUseDefaultGatewayFlag",
+                            ),
+                            inputs: ::std::vec![],
                             outputs: ::std::vec![],
                             constant: ::core::option::Option::None,
                             state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
@@ -578,48 +297,29 @@ pub mod polygon_zk_evm {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("generateInitializeTransaction"),
+                    ::std::borrow::ToOwned::to_owned("getAggchainVKey"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "generateInitializeTransaction",
-                            ),
+                            name: ::std::borrow::ToOwned::to_owned("getAggchainVKey"),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("networkID"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint32"),
+                                    name: ::std::borrow::ToOwned::to_owned("aggchainSelector"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        4usize,
                                     ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("_gasTokenAddress"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("address"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("_gasTokenNetwork"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint32"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("_gasTokenMetadata"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes"),
+                                        ::std::borrow::ToOwned::to_owned("bytes4"),
                                     ),
                                 },
                             ],
                             outputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::string::String::new(),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
+                                    name: ::std::borrow::ToOwned::to_owned("aggchainVKey"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("bytes"),
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
                                     ),
                                 },
                             ],
@@ -659,42 +359,42 @@ pub mod polygon_zk_evm {
                             name: ::std::borrow::ToOwned::to_owned("initialize"),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("_admin"),
+                                    name: ::std::string::String::new(),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("address"),
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("sequencer"),
+                                    name: ::std::string::String::new(),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("address"),
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("networkID"),
+                                    name: ::std::string::String::new(),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("uint32"),
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("_gasTokenAddress"),
+                                    name: ::std::string::String::new(),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("address"),
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("sequencerURL"),
+                                    name: ::std::string::String::new(),
                                     kind: ::ethers::core::abi::ethabi::ParamType::String,
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("string"),
                                     ),
                                 },
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("_networkName"),
+                                    name: ::std::string::String::new(),
                                     kind: ::ethers::core::abi::ethabi::ParamType::String,
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("string"),
@@ -703,7 +403,7 @@ pub mod polygon_zk_evm {
                             ],
                             outputs: ::std::vec![],
                             constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::Pure,
                         },
                     ],
                 ),
@@ -792,20 +492,26 @@ pub mod polygon_zk_evm {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("onVerifyBatches"),
+                    ::std::borrow::ToOwned::to_owned("ownedAggchainVKeys"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned("onVerifyBatches"),
+                            name: ::std::borrow::ToOwned::to_owned("ownedAggchainVKeys"),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("lastVerifiedBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "aggchainVKeySelector",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        4usize,
+                                    ),
                                     internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
+                                        ::std::borrow::ToOwned::to_owned("bytes4"),
                                     ),
                                 },
+                            ],
+                            outputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("newStateRoot"),
+                                    name: ::std::borrow::ToOwned::to_owned("ownedAggchainVKey"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
                                         32usize,
                                     ),
@@ -813,17 +519,9 @@ pub mod polygon_zk_evm {
                                         ::std::borrow::ToOwned::to_owned("bytes32"),
                                     ),
                                 },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("aggregator"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("address"),
-                                    ),
-                                },
                             ],
-                            outputs: ::std::vec![],
                             constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
                         },
                     ],
                 ),
@@ -832,6 +530,26 @@ pub mod polygon_zk_evm {
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
                             name: ::std::borrow::ToOwned::to_owned("pendingAdmin"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("address"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("pendingVKeyManager"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("pendingVKeyManager"),
                             inputs: ::std::vec![],
                             outputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
@@ -888,147 +606,6 @@ pub mod polygon_zk_evm {
                             ],
                             constant: ::core::option::Option::None,
                             state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("sequenceBatches"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned("sequenceBatches"),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("batches"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Array(
-                                        ::std::boxed::Box::new(
-                                            ::ethers::core::abi::ethabi::ParamType::Tuple(
-                                                ::std::vec![
-                                                    ::ethers::core::abi::ethabi::ParamType::Bytes,
-                                                    ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
-                                                    ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                                    ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
-                                                ],
-                                            ),
-                                        ),
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned(
-                                            "struct PolygonRollupBaseEtrog.BatchData[]",
-                                        ),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "maxSequenceTimestamp",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "initSequencedBatch",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("l2Coinbase"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("address"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("sequenceForceBatches"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "sequenceForceBatches",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("batches"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Array(
-                                        ::std::boxed::Box::new(
-                                            ::ethers::core::abi::ethabi::ParamType::Tuple(
-                                                ::std::vec![
-                                                    ::ethers::core::abi::ethabi::ParamType::Bytes,
-                                                    ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
-                                                    ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                                    ::ethers::core::abi::ethabi::ParamType::FixedBytes(32usize),
-                                                ],
-                                            ),
-                                        ),
-                                    ),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned(
-                                            "struct PolygonRollupBaseEtrog.BatchData[]",
-                                        ),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("setForceBatchAddress"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "setForceBatchAddress",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newForceBatchAddress",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("address"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("setForceBatchTimeout"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Function {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "setForceBatchTimeout",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newforceBatchTimeout",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    internal_type: ::core::option::Option::Some(
-                                        ::std::borrow::ToOwned::to_owned("uint64"),
-                                    ),
-                                },
-                            ],
-                            outputs: ::std::vec![],
-                            constant: ::core::option::Option::None,
-                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
                         },
                     ],
                 ),
@@ -1101,6 +678,28 @@ pub mod polygon_zk_evm {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("transferVKeyManagerRole"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "transferVKeyManagerRole",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("newVKeyManager"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("address"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("trustedSequencer"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
@@ -1142,6 +741,81 @@ pub mod polygon_zk_evm {
                         },
                     ],
                 ),
+                (
+                    ::std::borrow::ToOwned::to_owned("updateOwnedAggchainVKey"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "updateOwnedAggchainVKey",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("aggchainSelector"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        4usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes4"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "updatedAggchainVKey",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("useDefaultGateway"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("useDefaultGateway"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Bool,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bool"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("vKeyManager"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("vKeyManager"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("address"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
             ]),
             events: ::core::convert::From::from([
                 (
@@ -1161,33 +835,16 @@ pub mod polygon_zk_evm {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("ForceBatch"),
+                    ::std::borrow::ToOwned::to_owned("AcceptVKeyManagerRole"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned("ForceBatch"),
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "AcceptVKeyManagerRole",
+                            ),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("forceBatchNum"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    indexed: true,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "lastGlobalExitRoot",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("sequencer"),
+                                    name: ::std::borrow::ToOwned::to_owned("newVKeyManager"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("transactions"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
                                     indexed: false,
                                 },
                             ],
@@ -1196,30 +853,23 @@ pub mod polygon_zk_evm {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("InitialSequenceBatches"),
+                    ::std::borrow::ToOwned::to_owned("AddAggchainVKey"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "InitialSequenceBatches",
-                            ),
+                            name: ::std::borrow::ToOwned::to_owned("AddAggchainVKey"),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("transactions"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
+                                    name: ::std::borrow::ToOwned::to_owned("selector"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        4usize,
+                                    ),
                                     indexed: false,
                                 },
                                 ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "lastGlobalExitRoot",
-                                    ),
+                                    name: ::std::borrow::ToOwned::to_owned("newAggchainVKey"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
                                         32usize,
                                     ),
-                                    indexed: false,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("sequencer"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     indexed: false,
                                 },
                             ],
@@ -1236,87 +886,6 @@ pub mod polygon_zk_evm {
                                 ::ethers::core::abi::ethabi::EventParam {
                                     name: ::std::borrow::ToOwned::to_owned("version"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
-                                    indexed: false,
-                                },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SequenceBatches"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned("SequenceBatches"),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("numBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    indexed: true,
-                                },
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("l1InfoRoot"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
-                                        32usize,
-                                    ),
-                                    indexed: false,
-                                },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SequenceForceBatches"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "SequenceForceBatches",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("numBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    indexed: true,
-                                },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SetForceBatchAddress"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "SetForceBatchAddress",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newForceBatchAddress",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    indexed: false,
-                                },
-                            ],
-                            anonymous: false,
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("SetForceBatchTimeout"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "SetForceBatchTimeout",
-                            ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned(
-                                        "newforceBatchTimeout",
-                                    ),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
                                     indexed: false,
                                 },
                             ],
@@ -1381,27 +950,60 @@ pub mod polygon_zk_evm {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("VerifyBatches"),
+                    ::std::borrow::ToOwned::to_owned("TransferVKeyManagerRole"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Event {
-                            name: ::std::borrow::ToOwned::to_owned("VerifyBatches"),
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "TransferVKeyManagerRole",
+                            ),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("numBatch"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(64usize),
-                                    indexed: true,
+                                    name: ::std::borrow::ToOwned::to_owned("newVKeyManager"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    indexed: false,
+                                },
+                            ],
+                            anonymous: false,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("UpdateAggchainVKey"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Event {
+                            name: ::std::borrow::ToOwned::to_owned("UpdateAggchainVKey"),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned("selector"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        4usize,
+                                    ),
+                                    indexed: false,
                                 },
                                 ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("stateRoot"),
+                                    name: ::std::borrow::ToOwned::to_owned("newAggchainVKey"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
                                         32usize,
                                     ),
                                     indexed: false,
                                 },
+                            ],
+                            anonymous: false,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("UpdateUseDefaultGatewayFlag"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Event {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "UpdateUseDefaultGatewayFlag",
+                            ),
+                            inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("aggregator"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
-                                    indexed: true,
+                                    name: ::std::borrow::ToOwned::to_owned("useDefaultGateway"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Bool,
+                                    indexed: false,
                                 },
                             ],
                             anonymous: false,
@@ -1410,6 +1012,17 @@ pub mod polygon_zk_evm {
                 ),
             ]),
             errors: ::core::convert::From::from([
+                (
+                    ::std::borrow::ToOwned::to_owned("AggchainVKeyNotFound"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "AggchainVKeyNotFound",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
                 (
                     ::std::borrow::ToOwned::to_owned("BatchAlreadyVerified"),
                     ::std::vec![
@@ -1440,6 +1053,17 @@ pub mod polygon_zk_evm {
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "ExceedMaxVerifyBatches",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("FinalAccInputHashDoesNotMatch"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "FinalAccInputHashDoesNotMatch",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -1656,12 +1280,43 @@ pub mod polygon_zk_evm {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("InvalidAggchainVKey"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "InvalidAggchainVKey",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("InvalidInitializeFunction"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "InvalidInitializeFunction",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("InvalidInitializeTransaction"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "InvalidInitializeTransaction",
                             ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("InvalidInitializer"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned("InvalidInitializer"),
                             inputs: ::std::vec![],
                         },
                     ],
@@ -1703,6 +1358,17 @@ pub mod polygon_zk_evm {
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "InvalidRangeMultiplierBatchFee",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("L1InfoTreeLeafCountInvalid"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "L1InfoTreeLeafCountInvalid",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -1828,6 +1494,17 @@ pub mod polygon_zk_evm {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("OnlyPendingVKeyManager"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "OnlyPendingVKeyManager",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("OnlyRollupManager"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
@@ -1853,6 +1530,48 @@ pub mod polygon_zk_evm {
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "OnlyTrustedSequencer",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("OnlyVKeyManager"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned("OnlyVKeyManager"),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("OwnedAggchainVKeyAlreadyAdded"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "OwnedAggchainVKeyAlreadyAdded",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("OwnedAggchainVKeyLengthMismatch"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "OwnedAggchainVKeyLengthMismatch",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("OwnedAggchainVKeyNotFound"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "OwnedAggchainVKeyNotFound",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -1989,40 +1708,51 @@ pub mod polygon_zk_evm {
                         },
                     ],
                 ),
+                (
+                    ::std::borrow::ToOwned::to_owned("UseDefaultGatewayAlreadySet"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "UseDefaultGatewayAlreadySet",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
             ]),
             receive: false,
             fallback: false,
         }
     }
     ///The parsed JSON ABI of the contract.
-    pub static POLYGONZKEVM_ABI: ::ethers::contract::Lazy<::ethers::core::abi::Abi> = ::ethers::contract::Lazy::new(
+    pub static AGGCHAINBASE_ABI: ::ethers::contract::Lazy<::ethers::core::abi::Abi> = ::ethers::contract::Lazy::new(
         __abi,
     );
-    pub struct PolygonZkEvm<M>(::ethers::contract::Contract<M>);
-    impl<M> ::core::clone::Clone for PolygonZkEvm<M> {
+    pub struct AggchainBase<M>(::ethers::contract::Contract<M>);
+    impl<M> ::core::clone::Clone for AggchainBase<M> {
         fn clone(&self) -> Self {
             Self(::core::clone::Clone::clone(&self.0))
         }
     }
-    impl<M> ::core::ops::Deref for PolygonZkEvm<M> {
+    impl<M> ::core::ops::Deref for AggchainBase<M> {
         type Target = ::ethers::contract::Contract<M>;
         fn deref(&self) -> &Self::Target {
             &self.0
         }
     }
-    impl<M> ::core::ops::DerefMut for PolygonZkEvm<M> {
+    impl<M> ::core::ops::DerefMut for AggchainBase<M> {
         fn deref_mut(&mut self) -> &mut Self::Target {
             &mut self.0
         }
     }
-    impl<M> ::core::fmt::Debug for PolygonZkEvm<M> {
+    impl<M> ::core::fmt::Debug for AggchainBase<M> {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-            f.debug_tuple(::core::stringify!(PolygonZkEvm))
+            f.debug_tuple(::core::stringify!(AggchainBase))
                 .field(&self.address())
                 .finish()
         }
     }
-    impl<M: ::ethers::providers::Middleware> PolygonZkEvm<M> {
+    impl<M: ::ethers::providers::Middleware> AggchainBase<M> {
         /// Creates a new contract instance with the specified `ethers` client at
         /// `address`. The contract derefs to a `ethers::Contract` object.
         pub fn new<T: Into<::ethers::core::types::Address>>(
@@ -2032,125 +1762,17 @@ pub mod polygon_zk_evm {
             Self(
                 ::ethers::contract::Contract::new(
                     address.into(),
-                    POLYGONZKEVM_ABI.clone(),
+                    AGGCHAINBASE_ABI.clone(),
                     client,
                 ),
             )
         }
-        ///Calls the contract's `GLOBAL_EXIT_ROOT_MANAGER_L2` (0x9e001877) function
-        pub fn global_exit_root_manager_l2(
+        ///Calls the contract's `AGGCHAIN_TYPE` (0x6e7fbce9) function
+        pub fn aggchain_type(
             &self,
-        ) -> ::ethers::contract::builders::ContractCall<
-            M,
-            ::ethers::core::types::Address,
-        > {
+        ) -> ::ethers::contract::builders::ContractCall<M, u32> {
             self.0
-                .method_hash([158, 0, 24, 119], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `INITIALIZE_TX_BRIDGE_LIST_LEN_LEN` (0x11e892d4) function
-        pub fn initialize_tx_bridge_list_len_len(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, u8> {
-            self.0
-                .method_hash([17, 232, 146, 212], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `INITIALIZE_TX_BRIDGE_PARAMS` (0x05835f37) function
-        pub fn initialize_tx_bridge_params(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<
-            M,
-            ::ethers::core::types::Bytes,
-        > {
-            self.0
-                .method_hash([5, 131, 95, 55], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS` (0x7a5460c5) function
-        pub fn initialize_tx_bridge_params_after_bridge_address(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<
-            M,
-            ::ethers::core::types::Bytes,
-        > {
-            self.0
-                .method_hash([122, 84, 96, 197], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS_EMPTY_METADATA` (0x52bdeb6d) function
-        pub fn initialize_tx_bridge_params_after_bridge_address_empty_metadata(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<
-            M,
-            ::ethers::core::types::Bytes,
-        > {
-            self.0
-                .method_hash([82, 189, 235, 109], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `INITIALIZE_TX_CONSTANT_BYTES` (0x03508963) function
-        pub fn initialize_tx_constant_bytes(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, u16> {
-            self.0
-                .method_hash([3, 80, 137, 99], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `INITIALIZE_TX_CONSTANT_BYTES_EMPTY_METADATA` (0x676870d2) function
-        pub fn initialize_tx_constant_bytes_empty_metadata(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, u16> {
-            self.0
-                .method_hash([103, 104, 112, 210], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `INITIALIZE_TX_DATA_LEN_EMPTY_METADATA` (0xc7fffd4b) function
-        pub fn initialize_tx_data_len_empty_metadata(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, u8> {
-            self.0
-                .method_hash([199, 255, 253, 75], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `INITIALIZE_TX_EFFECTIVE_PERCENTAGE` (0x40b5de6c) function
-        pub fn initialize_tx_effective_percentage(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, [u8; 1]> {
-            self.0
-                .method_hash([64, 181, 222, 108], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `SIGNATURE_INITIALIZE_TX_R` (0xb0afe154) function
-        pub fn signature_initialize_tx_r(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, [u8; 32]> {
-            self.0
-                .method_hash([176, 175, 225, 84], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `SIGNATURE_INITIALIZE_TX_S` (0xd7bc90ff) function
-        pub fn signature_initialize_tx_s(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, [u8; 32]> {
-            self.0
-                .method_hash([215, 188, 144, 255], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `SIGNATURE_INITIALIZE_TX_V` (0xf35dda47) function
-        pub fn signature_initialize_tx_v(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, u8> {
-            self.0
-                .method_hash([243, 93, 218, 71], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `TIMESTAMP_RANGE` (0x42308fab) function
-        pub fn timestamp_range(
-            &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, ::ethers::core::types::U256> {
-            self.0
-                .method_hash([66, 48, 143, 171], ())
+                .method_hash([110, 127, 188, 233], ())
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `acceptAdminRole` (0x8c3d7301) function
@@ -2159,6 +1781,24 @@ pub mod polygon_zk_evm {
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
                 .method_hash([140, 61, 115, 1], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `acceptVKeyManagerRole` (0x368c822c) function
+        pub fn accept_v_key_manager_role(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash([54, 140, 130, 44], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `addOwnedAggchainVKey` (0x19451a8f) function
+        pub fn add_owned_aggchain_v_key(
+            &self,
+            aggchain_selector: [u8; 4],
+            new_aggchain_v_key: [u8; 32],
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash([25, 69, 26, 143], (aggchain_selector, new_aggchain_v_key))
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `admin` (0xf851a440) function
@@ -2172,6 +1812,17 @@ pub mod polygon_zk_evm {
                 .method_hash([248, 81, 164, 64], ())
                 .expect("method not found (this should never happen)")
         }
+        ///Calls the contract's `aggLayerGateway` (0xab0475cf) function
+        pub fn agg_layer_gateway(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<
+            M,
+            ::ethers::core::types::Address,
+        > {
+            self.0
+                .method_hash([171, 4, 117, 207], ())
+                .expect("method not found (this should never happen)")
+        }
         ///Calls the contract's `bridgeAddress` (0xa3c573eb) function
         pub fn bridge_address(
             &self,
@@ -2183,22 +1834,20 @@ pub mod polygon_zk_evm {
                 .method_hash([163, 197, 115, 235], ())
                 .expect("method not found (this should never happen)")
         }
-        ///Calls the contract's `calculatePolPerForceBatch` (0x00d0295d) function
-        pub fn calculate_pol_per_force_batch(
+        ///Calls the contract's `disableUseDefaultGatewayFlag` (0xdc8c4249) function
+        pub fn disable_use_default_gateway_flag(
             &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, ::ethers::core::types::U256> {
-            self.0
-                .method_hash([0, 208, 41, 93], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `forceBatch` (0xeaeb077b) function
-        pub fn force_batch(
-            &self,
-            transactions: ::ethers::core::types::Bytes,
-            pol_amount: ::ethers::core::types::U256,
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
-                .method_hash([234, 235, 7, 123], (transactions, pol_amount))
+                .method_hash([220, 140, 66, 73], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `enableUseDefaultGatewayFlag` (0xe631476c) function
+        pub fn enable_use_default_gateway_flag(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash([230, 49, 71, 108], ())
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `forceBatchAddress` (0x2c111c06) function
@@ -2248,27 +1897,13 @@ pub mod polygon_zk_evm {
                 .method_hash([60, 188, 121, 91], ())
                 .expect("method not found (this should never happen)")
         }
-        ///Calls the contract's `generateInitializeTransaction` (0xa652f26c) function
-        pub fn generate_initialize_transaction(
+        ///Calls the contract's `getAggchainVKey` (0x01fcf6a0) function
+        pub fn get_aggchain_v_key(
             &self,
-            network_id: u32,
-            gas_token_address: ::ethers::core::types::Address,
-            gas_token_network: u32,
-            gas_token_metadata: ::ethers::core::types::Bytes,
-        ) -> ::ethers::contract::builders::ContractCall<
-            M,
-            ::ethers::core::types::Bytes,
-        > {
+            aggchain_selector: [u8; 4],
+        ) -> ::ethers::contract::builders::ContractCall<M, [u8; 32]> {
             self.0
-                .method_hash(
-                    [166, 82, 242, 108],
-                    (
-                        network_id,
-                        gas_token_address,
-                        gas_token_network,
-                        gas_token_metadata,
-                    ),
-                )
+                .method_hash([1, 252, 246, 160], aggchain_selector)
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `globalExitRootManager` (0xd02103ca) function
@@ -2285,25 +1920,15 @@ pub mod polygon_zk_evm {
         ///Calls the contract's `initialize` (0x71257022) function
         pub fn initialize(
             &self,
-            admin: ::ethers::core::types::Address,
-            sequencer: ::ethers::core::types::Address,
-            network_id: u32,
-            gas_token_address: ::ethers::core::types::Address,
-            sequencer_url: ::std::string::String,
-            network_name: ::std::string::String,
+            p0: ::ethers::core::types::Address,
+            p1: ::ethers::core::types::Address,
+            p2: u32,
+            p3: ::ethers::core::types::Address,
+            p4: ::std::string::String,
+            p5: ::std::string::String,
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
-                .method_hash(
-                    [113, 37, 112, 34],
-                    (
-                        admin,
-                        sequencer,
-                        network_id,
-                        gas_token_address,
-                        sequencer_url,
-                        network_name,
-                    ),
-                )
+                .method_hash([113, 37, 112, 34], (p0, p1, p2, p3, p4, p5))
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `lastAccInputHash` (0x6e05d2cd) function
@@ -2338,18 +1963,13 @@ pub mod polygon_zk_evm {
                 .method_hash([16, 123, 242, 140], ())
                 .expect("method not found (this should never happen)")
         }
-        ///Calls the contract's `onVerifyBatches` (0x32c2d153) function
-        pub fn on_verify_batches(
+        ///Calls the contract's `ownedAggchainVKeys` (0xeffb8479) function
+        pub fn owned_aggchain_v_keys(
             &self,
-            last_verified_batch: u64,
-            new_state_root: [u8; 32],
-            aggregator: ::ethers::core::types::Address,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            aggchain_v_key_selector: [u8; 4],
+        ) -> ::ethers::contract::builders::ContractCall<M, [u8; 32]> {
             self.0
-                .method_hash(
-                    [50, 194, 209, 83],
-                    (last_verified_batch, new_state_root, aggregator),
-                )
+                .method_hash([239, 251, 132, 121], aggchain_v_key_selector)
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `pendingAdmin` (0x26782247) function
@@ -2361,6 +1981,17 @@ pub mod polygon_zk_evm {
         > {
             self.0
                 .method_hash([38, 120, 34, 71], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `pendingVKeyManager` (0xbfb193b6) function
+        pub fn pending_v_key_manager(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<
+            M,
+            ::ethers::core::types::Address,
+        > {
+            self.0
+                .method_hash([191, 177, 147, 182], ())
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `pol` (0xe46761c4) function
@@ -2383,48 +2014,6 @@ pub mod polygon_zk_evm {
         > {
             self.0
                 .method_hash([73, 183, 184, 2], ())
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `sequenceBatches` (0xdef57e54) function
-        pub fn sequence_batches(
-            &self,
-            batches: ::std::vec::Vec<BatchData>,
-            max_sequence_timestamp: u64,
-            init_sequenced_batch: u64,
-            l_2_coinbase: ::ethers::core::types::Address,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash(
-                    [222, 245, 126, 84],
-                    (batches, max_sequence_timestamp, init_sequenced_batch, l_2_coinbase),
-                )
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `sequenceForceBatches` (0x9f26f840) function
-        pub fn sequence_force_batches(
-            &self,
-            batches: ::std::vec::Vec<BatchData>,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash([159, 38, 248, 64], batches)
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `setForceBatchAddress` (0x91cafe32) function
-        pub fn set_force_batch_address(
-            &self,
-            new_force_batch_address: ::ethers::core::types::Address,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash([145, 202, 254, 50], new_force_batch_address)
-                .expect("method not found (this should never happen)")
-        }
-        ///Calls the contract's `setForceBatchTimeout` (0x4e487706) function
-        pub fn set_force_batch_timeout(
-            &self,
-            newforce_batch_timeout: u64,
-        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
-            self.0
-                .method_hash([78, 72, 119, 6], newforce_batch_timeout)
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `setTrustedSequencer` (0x6ff512cc) function
@@ -2454,6 +2043,15 @@ pub mod polygon_zk_evm {
                 .method_hash([173, 168, 249, 25], new_pending_admin)
                 .expect("method not found (this should never happen)")
         }
+        ///Calls the contract's `transferVKeyManagerRole` (0x85018182) function
+        pub fn transfer_v_key_manager_role(
+            &self,
+            new_v_key_manager: ::ethers::core::types::Address,
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash([133, 1, 129, 130], new_v_key_manager)
+                .expect("method not found (this should never happen)")
+        }
         ///Calls the contract's `trustedSequencer` (0xcfa8ed47) function
         pub fn trusted_sequencer(
             &self,
@@ -2473,6 +2071,38 @@ pub mod polygon_zk_evm {
                 .method_hash([84, 32, 40, 213], ())
                 .expect("method not found (this should never happen)")
         }
+        ///Calls the contract's `updateOwnedAggchainVKey` (0x314eb17b) function
+        pub fn update_owned_aggchain_v_key(
+            &self,
+            aggchain_selector: [u8; 4],
+            updated_aggchain_v_key: [u8; 32],
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash(
+                    [49, 78, 177, 123],
+                    (aggchain_selector, updated_aggchain_v_key),
+                )
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `useDefaultGateway` (0xff904079) function
+        pub fn use_default_gateway(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<M, bool> {
+            self.0
+                .method_hash([255, 144, 64, 121], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `vKeyManager` (0xe279984e) function
+        pub fn v_key_manager(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<
+            M,
+            ::ethers::core::types::Address,
+        > {
+            self.0
+                .method_hash([226, 121, 152, 78], ())
+                .expect("method not found (this should never happen)")
+        }
         ///Gets the contract's `AcceptAdminRole` event
         pub fn accept_admin_role_filter(
             &self,
@@ -2483,23 +2113,23 @@ pub mod polygon_zk_evm {
         > {
             self.0.event()
         }
-        ///Gets the contract's `ForceBatch` event
-        pub fn force_batch_filter(
+        ///Gets the contract's `AcceptVKeyManagerRole` event
+        pub fn accept_v_key_manager_role_filter(
             &self,
         ) -> ::ethers::contract::builders::Event<
             ::std::sync::Arc<M>,
             M,
-            ForceBatchFilter,
+            AcceptVKeyManagerRoleFilter,
         > {
             self.0.event()
         }
-        ///Gets the contract's `InitialSequenceBatches` event
-        pub fn initial_sequence_batches_filter(
+        ///Gets the contract's `AddAggchainVKey` event
+        pub fn add_aggchain_v_key_filter(
             &self,
         ) -> ::ethers::contract::builders::Event<
             ::std::sync::Arc<M>,
             M,
-            InitialSequenceBatchesFilter,
+            AddAggchainVKeyFilter,
         > {
             self.0.event()
         }
@@ -2510,46 +2140,6 @@ pub mod polygon_zk_evm {
             ::std::sync::Arc<M>,
             M,
             InitializedFilter,
-        > {
-            self.0.event()
-        }
-        ///Gets the contract's `SequenceBatches` event
-        pub fn sequence_batches_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            SequenceBatchesFilter,
-        > {
-            self.0.event()
-        }
-        ///Gets the contract's `SequenceForceBatches` event
-        pub fn sequence_force_batches_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            SequenceForceBatchesFilter,
-        > {
-            self.0.event()
-        }
-        ///Gets the contract's `SetForceBatchAddress` event
-        pub fn set_force_batch_address_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            SetForceBatchAddressFilter,
-        > {
-            self.0.event()
-        }
-        ///Gets the contract's `SetForceBatchTimeout` event
-        pub fn set_force_batch_timeout_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            SetForceBatchTimeoutFilter,
         > {
             self.0.event()
         }
@@ -2583,13 +2173,33 @@ pub mod polygon_zk_evm {
         > {
             self.0.event()
         }
-        ///Gets the contract's `VerifyBatches` event
-        pub fn verify_batches_filter(
+        ///Gets the contract's `TransferVKeyManagerRole` event
+        pub fn transfer_v_key_manager_role_filter(
             &self,
         ) -> ::ethers::contract::builders::Event<
             ::std::sync::Arc<M>,
             M,
-            VerifyBatchesFilter,
+            TransferVKeyManagerRoleFilter,
+        > {
+            self.0.event()
+        }
+        ///Gets the contract's `UpdateAggchainVKey` event
+        pub fn update_aggchain_v_key_filter(
+            &self,
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            UpdateAggchainVKeyFilter,
+        > {
+            self.0.event()
+        }
+        ///Gets the contract's `UpdateUseDefaultGatewayFlag` event
+        pub fn update_use_default_gateway_flag_filter(
+            &self,
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            UpdateUseDefaultGatewayFlagFilter,
         > {
             self.0.event()
         }
@@ -2599,17 +2209,30 @@ pub mod polygon_zk_evm {
         ) -> ::ethers::contract::builders::Event<
             ::std::sync::Arc<M>,
             M,
-            PolygonZkEvmEvents,
+            AggchainBaseEvents,
         > {
             self.0.event_with_filter(::core::default::Default::default())
         }
     }
     impl<M: ::ethers::providers::Middleware> From<::ethers::contract::Contract<M>>
-    for PolygonZkEvm<M> {
+    for AggchainBase<M> {
         fn from(contract: ::ethers::contract::Contract<M>) -> Self {
             Self::new(contract.address(), contract.client())
         }
     }
+    ///Custom Error type `AggchainVKeyNotFound` with signature `AggchainVKeyNotFound()` and selector `0x925e5a3a`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "AggchainVKeyNotFound", abi = "AggchainVKeyNotFound()")]
+    pub struct AggchainVKeyNotFound;
     ///Custom Error type `BatchAlreadyVerified` with signature `BatchAlreadyVerified()` and selector `0x812a372d`
     #[derive(
         Clone,
@@ -2652,6 +2275,22 @@ pub mod polygon_zk_evm {
     )]
     #[etherror(name = "ExceedMaxVerifyBatches", abi = "ExceedMaxVerifyBatches()")]
     pub struct ExceedMaxVerifyBatches;
+    ///Custom Error type `FinalAccInputHashDoesNotMatch` with signature `FinalAccInputHashDoesNotMatch()` and selector `0xda5bceb9`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "FinalAccInputHashDoesNotMatch",
+        abi = "FinalAccInputHashDoesNotMatch()"
+    )]
+    pub struct FinalAccInputHashDoesNotMatch;
     ///Custom Error type `FinalNumBatchBelowLastVerifiedBatch` with signature `FinalNumBatchBelowLastVerifiedBatch()` and selector `0xb9b18f57`
     #[derive(
         Clone,
@@ -2919,6 +2558,32 @@ pub mod polygon_zk_evm {
         abi = "InitSequencedBatchDoesNotMatch()"
     )]
     pub struct InitSequencedBatchDoesNotMatch;
+    ///Custom Error type `InvalidAggchainVKey` with signature `InvalidAggchainVKey()` and selector `0x4aac8b88`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "InvalidAggchainVKey", abi = "InvalidAggchainVKey()")]
+    pub struct InvalidAggchainVKey;
+    ///Custom Error type `InvalidInitializeFunction` with signature `InvalidInitializeFunction()` and selector `0xf57ac683`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "InvalidInitializeFunction", abi = "InvalidInitializeFunction()")]
+    pub struct InvalidInitializeFunction;
     ///Custom Error type `InvalidInitializeTransaction` with signature `InvalidInitializeTransaction()` and selector `0xcd161966`
     #[derive(
         Clone,
@@ -2935,6 +2600,19 @@ pub mod polygon_zk_evm {
         abi = "InvalidInitializeTransaction()"
     )]
     pub struct InvalidInitializeTransaction;
+    ///Custom Error type `InvalidInitializer` with signature `InvalidInitializer()` and selector `0xadc06ae7`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "InvalidInitializer", abi = "InvalidInitializer()")]
+    pub struct InvalidInitializer;
     ///Custom Error type `InvalidProof` with signature `InvalidProof()` and selector `0x09bde339`
     #[derive(
         Clone,
@@ -2996,6 +2674,22 @@ pub mod polygon_zk_evm {
         abi = "InvalidRangeMultiplierBatchFee()"
     )]
     pub struct InvalidRangeMultiplierBatchFee;
+    ///Custom Error type `L1InfoTreeLeafCountInvalid` with signature `L1InfoTreeLeafCountInvalid()` and selector `0xa60721e1`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "L1InfoTreeLeafCountInvalid",
+        abi = "L1InfoTreeLeafCountInvalid()"
+    )]
+    pub struct L1InfoTreeLeafCountInvalid;
     ///Custom Error type `MaxTimestampSequenceInvalid` with signature `MaxTimestampSequenceInvalid()` and selector `0x0a00feb3`
     #[derive(
         Clone,
@@ -3157,6 +2851,19 @@ pub mod polygon_zk_evm {
     )]
     #[etherror(name = "OnlyPendingAdmin", abi = "OnlyPendingAdmin()")]
     pub struct OnlyPendingAdmin;
+    ///Custom Error type `OnlyPendingVKeyManager` with signature `OnlyPendingVKeyManager()` and selector `0x05882cf0`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "OnlyPendingVKeyManager", abi = "OnlyPendingVKeyManager()")]
+    pub struct OnlyPendingVKeyManager;
     ///Custom Error type `OnlyRollupManager` with signature `OnlyRollupManager()` and selector `0xb9b3a2c8`
     #[derive(
         Clone,
@@ -3196,6 +2903,64 @@ pub mod polygon_zk_evm {
     )]
     #[etherror(name = "OnlyTrustedSequencer", abi = "OnlyTrustedSequencer()")]
     pub struct OnlyTrustedSequencer;
+    ///Custom Error type `OnlyVKeyManager` with signature `OnlyVKeyManager()` and selector `0xe4d753bd`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "OnlyVKeyManager", abi = "OnlyVKeyManager()")]
+    pub struct OnlyVKeyManager;
+    ///Custom Error type `OwnedAggchainVKeyAlreadyAdded` with signature `OwnedAggchainVKeyAlreadyAdded()` and selector `0xe3cc7610`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "OwnedAggchainVKeyAlreadyAdded",
+        abi = "OwnedAggchainVKeyAlreadyAdded()"
+    )]
+    pub struct OwnedAggchainVKeyAlreadyAdded;
+    ///Custom Error type `OwnedAggchainVKeyLengthMismatch` with signature `OwnedAggchainVKeyLengthMismatch()` and selector `0x68965113`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "OwnedAggchainVKeyLengthMismatch",
+        abi = "OwnedAggchainVKeyLengthMismatch()"
+    )]
+    pub struct OwnedAggchainVKeyLengthMismatch;
+    ///Custom Error type `OwnedAggchainVKeyNotFound` with signature `OwnedAggchainVKeyNotFound()` and selector `0xf360deaf`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "OwnedAggchainVKeyNotFound", abi = "OwnedAggchainVKeyNotFound()")]
+    pub struct OwnedAggchainVKeyNotFound;
     ///Custom Error type `PendingStateDoesNotExist` with signature `PendingStateDoesNotExist()` and selector `0xbb14c205`
     #[derive(
         Clone,
@@ -3360,12 +3125,30 @@ pub mod polygon_zk_evm {
         abi = "TrustedAggregatorTimeoutNotExpired()"
     )]
     pub struct TrustedAggregatorTimeoutNotExpired;
+    ///Custom Error type `UseDefaultGatewayAlreadySet` with signature `UseDefaultGatewayAlreadySet()` and selector `0x6f318e4c`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "UseDefaultGatewayAlreadySet",
+        abi = "UseDefaultGatewayAlreadySet()"
+    )]
+    pub struct UseDefaultGatewayAlreadySet;
     ///Container type for all of the contract's custom errors
     #[derive(Clone, ::ethers::contract::EthAbiType, Debug, PartialEq, Eq, Hash)]
-    pub enum PolygonZkEvmErrors {
+    pub enum AggchainBaseErrors {
+        AggchainVKeyNotFound(AggchainVKeyNotFound),
         BatchAlreadyVerified(BatchAlreadyVerified),
         BatchNotSequencedOrNotSequenceEnd(BatchNotSequencedOrNotSequenceEnd),
         ExceedMaxVerifyBatches(ExceedMaxVerifyBatches),
+        FinalAccInputHashDoesNotMatch(FinalAccInputHashDoesNotMatch),
         FinalNumBatchBelowLastVerifiedBatch(FinalNumBatchBelowLastVerifiedBatch),
         FinalNumBatchDoesNotMatchPendingState(FinalNumBatchDoesNotMatchPendingState),
         FinalPendingStateNumInvalid(FinalPendingStateNumInvalid),
@@ -3386,11 +3169,15 @@ pub mod polygon_zk_evm {
         InitNumBatchAboveLastVerifiedBatch(InitNumBatchAboveLastVerifiedBatch),
         InitNumBatchDoesNotMatchPendingState(InitNumBatchDoesNotMatchPendingState),
         InitSequencedBatchDoesNotMatch(InitSequencedBatchDoesNotMatch),
+        InvalidAggchainVKey(InvalidAggchainVKey),
+        InvalidInitializeFunction(InvalidInitializeFunction),
         InvalidInitializeTransaction(InvalidInitializeTransaction),
+        InvalidInitializer(InvalidInitializer),
         InvalidProof(InvalidProof),
         InvalidRangeBatchTimeTarget(InvalidRangeBatchTimeTarget),
         InvalidRangeForceBatchTimeout(InvalidRangeForceBatchTimeout),
         InvalidRangeMultiplierBatchFee(InvalidRangeMultiplierBatchFee),
+        L1InfoTreeLeafCountInvalid(L1InfoTreeLeafCountInvalid),
         MaxTimestampSequenceInvalid(MaxTimestampSequenceInvalid),
         NewAccInputHashDoesNotExist(NewAccInputHashDoesNotExist),
         NewPendingStateTimeoutMustBeLower(NewPendingStateTimeoutMustBeLower),
@@ -3402,9 +3189,14 @@ pub mod polygon_zk_evm {
         OldStateRootDoesNotExist(OldStateRootDoesNotExist),
         OnlyAdmin(OnlyAdmin),
         OnlyPendingAdmin(OnlyPendingAdmin),
+        OnlyPendingVKeyManager(OnlyPendingVKeyManager),
         OnlyRollupManager(OnlyRollupManager),
         OnlyTrustedAggregator(OnlyTrustedAggregator),
         OnlyTrustedSequencer(OnlyTrustedSequencer),
+        OnlyVKeyManager(OnlyVKeyManager),
+        OwnedAggchainVKeyAlreadyAdded(OwnedAggchainVKeyAlreadyAdded),
+        OwnedAggchainVKeyLengthMismatch(OwnedAggchainVKeyLengthMismatch),
+        OwnedAggchainVKeyNotFound(OwnedAggchainVKeyNotFound),
         PendingStateDoesNotExist(PendingStateDoesNotExist),
         PendingStateInvalid(PendingStateInvalid),
         PendingStateNotConsolidable(PendingStateNotConsolidable),
@@ -3420,11 +3212,12 @@ pub mod polygon_zk_evm {
             TrustedAggregatorTimeoutExceedHaltAggregationTimeout,
         ),
         TrustedAggregatorTimeoutNotExpired(TrustedAggregatorTimeoutNotExpired),
+        UseDefaultGatewayAlreadySet(UseDefaultGatewayAlreadySet),
         /// The standard solidity revert string, with selector
         /// Error(string) -- 0x08c379a0
         RevertString(::std::string::String),
     }
-    impl ::ethers::core::abi::AbiDecode for PolygonZkEvmErrors {
+    impl ::ethers::core::abi::AbiDecode for AggchainBaseErrors {
         fn decode(
             data: impl AsRef<[u8]>,
         ) -> ::core::result::Result<Self, ::ethers::core::abi::AbiError> {
@@ -3433,6 +3226,11 @@ pub mod polygon_zk_evm {
                 data,
             ) {
                 return Ok(Self::RevertString(decoded));
+            }
+            if let Ok(decoded) = <AggchainVKeyNotFound as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::AggchainVKeyNotFound(decoded));
             }
             if let Ok(decoded) = <BatchAlreadyVerified as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3448,6 +3246,11 @@ pub mod polygon_zk_evm {
                 data,
             ) {
                 return Ok(Self::ExceedMaxVerifyBatches(decoded));
+            }
+            if let Ok(decoded) = <FinalAccInputHashDoesNotMatch as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::FinalAccInputHashDoesNotMatch(decoded));
             }
             if let Ok(decoded) = <FinalNumBatchBelowLastVerifiedBatch as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3539,10 +3342,25 @@ pub mod polygon_zk_evm {
             ) {
                 return Ok(Self::InitSequencedBatchDoesNotMatch(decoded));
             }
+            if let Ok(decoded) = <InvalidAggchainVKey as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidAggchainVKey(decoded));
+            }
+            if let Ok(decoded) = <InvalidInitializeFunction as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidInitializeFunction(decoded));
+            }
             if let Ok(decoded) = <InvalidInitializeTransaction as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::InvalidInitializeTransaction(decoded));
+            }
+            if let Ok(decoded) = <InvalidInitializer as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidInitializer(decoded));
             }
             if let Ok(decoded) = <InvalidProof as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3563,6 +3381,11 @@ pub mod polygon_zk_evm {
                 data,
             ) {
                 return Ok(Self::InvalidRangeMultiplierBatchFee(decoded));
+            }
+            if let Ok(decoded) = <L1InfoTreeLeafCountInvalid as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::L1InfoTreeLeafCountInvalid(decoded));
             }
             if let Ok(decoded) = <MaxTimestampSequenceInvalid as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3619,6 +3442,11 @@ pub mod polygon_zk_evm {
             ) {
                 return Ok(Self::OnlyPendingAdmin(decoded));
             }
+            if let Ok(decoded) = <OnlyPendingVKeyManager as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OnlyPendingVKeyManager(decoded));
+            }
             if let Ok(decoded) = <OnlyRollupManager as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -3633,6 +3461,26 @@ pub mod polygon_zk_evm {
                 data,
             ) {
                 return Ok(Self::OnlyTrustedSequencer(decoded));
+            }
+            if let Ok(decoded) = <OnlyVKeyManager as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OnlyVKeyManager(decoded));
+            }
+            if let Ok(decoded) = <OwnedAggchainVKeyAlreadyAdded as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OwnedAggchainVKeyAlreadyAdded(decoded));
+            }
+            if let Ok(decoded) = <OwnedAggchainVKeyLengthMismatch as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OwnedAggchainVKeyLengthMismatch(decoded));
+            }
+            if let Ok(decoded) = <OwnedAggchainVKeyNotFound as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OwnedAggchainVKeyNotFound(decoded));
             }
             if let Ok(decoded) = <PendingStateDoesNotExist as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3693,12 +3541,20 @@ pub mod polygon_zk_evm {
             ) {
                 return Ok(Self::TrustedAggregatorTimeoutNotExpired(decoded));
             }
+            if let Ok(decoded) = <UseDefaultGatewayAlreadySet as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::UseDefaultGatewayAlreadySet(decoded));
+            }
             Err(::ethers::core::abi::Error::InvalidData.into())
         }
     }
-    impl ::ethers::core::abi::AbiEncode for PolygonZkEvmErrors {
+    impl ::ethers::core::abi::AbiEncode for AggchainBaseErrors {
         fn encode(self) -> ::std::vec::Vec<u8> {
             match self {
+                Self::AggchainVKeyNotFound(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::BatchAlreadyVerified(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
@@ -3706,6 +3562,9 @@ pub mod polygon_zk_evm {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::ExceedMaxVerifyBatches(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::FinalAccInputHashDoesNotMatch(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::FinalNumBatchBelowLastVerifiedBatch(element) => {
@@ -3762,7 +3621,16 @@ pub mod polygon_zk_evm {
                 Self::InitSequencedBatchDoesNotMatch(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::InvalidAggchainVKey(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InvalidInitializeFunction(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::InvalidInitializeTransaction(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InvalidInitializer(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::InvalidProof(element) => {
@@ -3775,6 +3643,9 @@ pub mod polygon_zk_evm {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::InvalidRangeMultiplierBatchFee(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::L1InfoTreeLeafCountInvalid(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::MaxTimestampSequenceInvalid(element) => {
@@ -3810,6 +3681,9 @@ pub mod polygon_zk_evm {
                 Self::OnlyPendingAdmin(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::OnlyPendingVKeyManager(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::OnlyRollupManager(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
@@ -3817,6 +3691,18 @@ pub mod polygon_zk_evm {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::OnlyTrustedSequencer(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::OnlyVKeyManager(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::OwnedAggchainVKeyAlreadyAdded(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::OwnedAggchainVKeyLengthMismatch(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::OwnedAggchainVKeyNotFound(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::PendingStateDoesNotExist(element) => {
@@ -3852,14 +3738,21 @@ pub mod polygon_zk_evm {
                 Self::TrustedAggregatorTimeoutNotExpired(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::UseDefaultGatewayAlreadySet(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::RevertString(s) => ::ethers::core::abi::AbiEncode::encode(s),
             }
         }
     }
-    impl ::ethers::contract::ContractRevert for PolygonZkEvmErrors {
+    impl ::ethers::contract::ContractRevert for AggchainBaseErrors {
         fn valid_selector(selector: [u8; 4]) -> bool {
             match selector {
                 [0x08, 0xc3, 0x79, 0xa0] => true,
+                _ if selector
+                    == <AggchainVKeyNotFound as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
                 _ if selector
                     == <BatchAlreadyVerified as ::ethers::contract::EthError>::selector() => {
                     true
@@ -3870,6 +3763,10 @@ pub mod polygon_zk_evm {
                 }
                 _ if selector
                     == <ExceedMaxVerifyBatches as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <FinalAccInputHashDoesNotMatch as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -3945,7 +3842,19 @@ pub mod polygon_zk_evm {
                     true
                 }
                 _ if selector
+                    == <InvalidAggchainVKey as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InvalidInitializeFunction as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <InvalidInitializeTransaction as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InvalidInitializer as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -3960,6 +3869,10 @@ pub mod polygon_zk_evm {
                 }
                 _ if selector
                     == <InvalidRangeMultiplierBatchFee as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <L1InfoTreeLeafCountInvalid as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -4005,6 +3918,10 @@ pub mod polygon_zk_evm {
                     true
                 }
                 _ if selector
+                    == <OnlyPendingVKeyManager as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <OnlyRollupManager as ::ethers::contract::EthError>::selector() => {
                     true
                 }
@@ -4014,6 +3931,22 @@ pub mod polygon_zk_evm {
                 }
                 _ if selector
                     == <OnlyTrustedSequencer as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <OnlyVKeyManager as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <OwnedAggchainVKeyAlreadyAdded as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <OwnedAggchainVKeyLengthMismatch as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <OwnedAggchainVKeyNotFound as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -4060,13 +3993,20 @@ pub mod polygon_zk_evm {
                     == <TrustedAggregatorTimeoutNotExpired as ::ethers::contract::EthError>::selector() => {
                     true
                 }
+                _ if selector
+                    == <UseDefaultGatewayAlreadySet as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
                 _ => false,
             }
         }
     }
-    impl ::core::fmt::Display for PolygonZkEvmErrors {
+    impl ::core::fmt::Display for AggchainBaseErrors {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
             match self {
+                Self::AggchainVKeyNotFound(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::BatchAlreadyVerified(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -4074,6 +4014,9 @@ pub mod polygon_zk_evm {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::ExceedMaxVerifyBatches(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::FinalAccInputHashDoesNotMatch(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::FinalNumBatchBelowLastVerifiedBatch(element) => {
@@ -4130,7 +4073,16 @@ pub mod polygon_zk_evm {
                 Self::InitSequencedBatchDoesNotMatch(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::InvalidAggchainVKey(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::InvalidInitializeFunction(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::InvalidInitializeTransaction(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::InvalidInitializer(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::InvalidProof(element) => ::core::fmt::Display::fmt(element, f),
@@ -4141,6 +4093,9 @@ pub mod polygon_zk_evm {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::InvalidRangeMultiplierBatchFee(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::L1InfoTreeLeafCountInvalid(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::MaxTimestampSequenceInvalid(element) => {
@@ -4172,11 +4127,24 @@ pub mod polygon_zk_evm {
                 }
                 Self::OnlyAdmin(element) => ::core::fmt::Display::fmt(element, f),
                 Self::OnlyPendingAdmin(element) => ::core::fmt::Display::fmt(element, f),
+                Self::OnlyPendingVKeyManager(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::OnlyRollupManager(element) => ::core::fmt::Display::fmt(element, f),
                 Self::OnlyTrustedAggregator(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::OnlyTrustedSequencer(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::OnlyVKeyManager(element) => ::core::fmt::Display::fmt(element, f),
+                Self::OwnedAggchainVKeyAlreadyAdded(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::OwnedAggchainVKeyLengthMismatch(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::OwnedAggchainVKeyNotFound(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::PendingStateDoesNotExist(element) => {
@@ -4212,282 +4180,345 @@ pub mod polygon_zk_evm {
                 Self::TrustedAggregatorTimeoutNotExpired(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::UseDefaultGatewayAlreadySet(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::RevertString(s) => ::core::fmt::Display::fmt(s, f),
             }
         }
     }
-    impl ::core::convert::From<::std::string::String> for PolygonZkEvmErrors {
+    impl ::core::convert::From<::std::string::String> for AggchainBaseErrors {
         fn from(value: String) -> Self {
             Self::RevertString(value)
         }
     }
-    impl ::core::convert::From<BatchAlreadyVerified> for PolygonZkEvmErrors {
+    impl ::core::convert::From<AggchainVKeyNotFound> for AggchainBaseErrors {
+        fn from(value: AggchainVKeyNotFound) -> Self {
+            Self::AggchainVKeyNotFound(value)
+        }
+    }
+    impl ::core::convert::From<BatchAlreadyVerified> for AggchainBaseErrors {
         fn from(value: BatchAlreadyVerified) -> Self {
             Self::BatchAlreadyVerified(value)
         }
     }
     impl ::core::convert::From<BatchNotSequencedOrNotSequenceEnd>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: BatchNotSequencedOrNotSequenceEnd) -> Self {
             Self::BatchNotSequencedOrNotSequenceEnd(value)
         }
     }
-    impl ::core::convert::From<ExceedMaxVerifyBatches> for PolygonZkEvmErrors {
+    impl ::core::convert::From<ExceedMaxVerifyBatches> for AggchainBaseErrors {
         fn from(value: ExceedMaxVerifyBatches) -> Self {
             Self::ExceedMaxVerifyBatches(value)
         }
     }
+    impl ::core::convert::From<FinalAccInputHashDoesNotMatch> for AggchainBaseErrors {
+        fn from(value: FinalAccInputHashDoesNotMatch) -> Self {
+            Self::FinalAccInputHashDoesNotMatch(value)
+        }
+    }
     impl ::core::convert::From<FinalNumBatchBelowLastVerifiedBatch>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: FinalNumBatchBelowLastVerifiedBatch) -> Self {
             Self::FinalNumBatchBelowLastVerifiedBatch(value)
         }
     }
     impl ::core::convert::From<FinalNumBatchDoesNotMatchPendingState>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: FinalNumBatchDoesNotMatchPendingState) -> Self {
             Self::FinalNumBatchDoesNotMatchPendingState(value)
         }
     }
-    impl ::core::convert::From<FinalPendingStateNumInvalid> for PolygonZkEvmErrors {
+    impl ::core::convert::From<FinalPendingStateNumInvalid> for AggchainBaseErrors {
         fn from(value: FinalPendingStateNumInvalid) -> Self {
             Self::FinalPendingStateNumInvalid(value)
         }
     }
-    impl ::core::convert::From<ForceBatchNotAllowed> for PolygonZkEvmErrors {
+    impl ::core::convert::From<ForceBatchNotAllowed> for AggchainBaseErrors {
         fn from(value: ForceBatchNotAllowed) -> Self {
             Self::ForceBatchNotAllowed(value)
         }
     }
-    impl ::core::convert::From<ForceBatchTimeoutNotExpired> for PolygonZkEvmErrors {
+    impl ::core::convert::From<ForceBatchTimeoutNotExpired> for AggchainBaseErrors {
         fn from(value: ForceBatchTimeoutNotExpired) -> Self {
             Self::ForceBatchTimeoutNotExpired(value)
         }
     }
-    impl ::core::convert::From<ForceBatchesAlreadyActive> for PolygonZkEvmErrors {
+    impl ::core::convert::From<ForceBatchesAlreadyActive> for AggchainBaseErrors {
         fn from(value: ForceBatchesAlreadyActive) -> Self {
             Self::ForceBatchesAlreadyActive(value)
         }
     }
-    impl ::core::convert::From<ForceBatchesDecentralized> for PolygonZkEvmErrors {
+    impl ::core::convert::From<ForceBatchesDecentralized> for AggchainBaseErrors {
         fn from(value: ForceBatchesDecentralized) -> Self {
             Self::ForceBatchesDecentralized(value)
         }
     }
     impl ::core::convert::From<ForceBatchesNotAllowedOnEmergencyState>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: ForceBatchesNotAllowedOnEmergencyState) -> Self {
             Self::ForceBatchesNotAllowedOnEmergencyState(value)
         }
     }
-    impl ::core::convert::From<ForceBatchesOverflow> for PolygonZkEvmErrors {
+    impl ::core::convert::From<ForceBatchesOverflow> for AggchainBaseErrors {
         fn from(value: ForceBatchesOverflow) -> Self {
             Self::ForceBatchesOverflow(value)
         }
     }
-    impl ::core::convert::From<ForcedDataDoesNotMatch> for PolygonZkEvmErrors {
+    impl ::core::convert::From<ForcedDataDoesNotMatch> for AggchainBaseErrors {
         fn from(value: ForcedDataDoesNotMatch) -> Self {
             Self::ForcedDataDoesNotMatch(value)
         }
     }
-    impl ::core::convert::From<GasTokenNetworkMustBeZeroOnEther> for PolygonZkEvmErrors {
+    impl ::core::convert::From<GasTokenNetworkMustBeZeroOnEther> for AggchainBaseErrors {
         fn from(value: GasTokenNetworkMustBeZeroOnEther) -> Self {
             Self::GasTokenNetworkMustBeZeroOnEther(value)
         }
     }
-    impl ::core::convert::From<GlobalExitRootNotExist> for PolygonZkEvmErrors {
+    impl ::core::convert::From<GlobalExitRootNotExist> for AggchainBaseErrors {
         fn from(value: GlobalExitRootNotExist) -> Self {
             Self::GlobalExitRootNotExist(value)
         }
     }
-    impl ::core::convert::From<HaltTimeoutNotExpired> for PolygonZkEvmErrors {
+    impl ::core::convert::From<HaltTimeoutNotExpired> for AggchainBaseErrors {
         fn from(value: HaltTimeoutNotExpired) -> Self {
             Self::HaltTimeoutNotExpired(value)
         }
     }
     impl ::core::convert::From<HaltTimeoutNotExpiredAfterEmergencyState>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: HaltTimeoutNotExpiredAfterEmergencyState) -> Self {
             Self::HaltTimeoutNotExpiredAfterEmergencyState(value)
         }
     }
-    impl ::core::convert::From<HugeTokenMetadataNotSupported> for PolygonZkEvmErrors {
+    impl ::core::convert::From<HugeTokenMetadataNotSupported> for AggchainBaseErrors {
         fn from(value: HugeTokenMetadataNotSupported) -> Self {
             Self::HugeTokenMetadataNotSupported(value)
         }
     }
     impl ::core::convert::From<InitNumBatchAboveLastVerifiedBatch>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: InitNumBatchAboveLastVerifiedBatch) -> Self {
             Self::InitNumBatchAboveLastVerifiedBatch(value)
         }
     }
     impl ::core::convert::From<InitNumBatchDoesNotMatchPendingState>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: InitNumBatchDoesNotMatchPendingState) -> Self {
             Self::InitNumBatchDoesNotMatchPendingState(value)
         }
     }
-    impl ::core::convert::From<InitSequencedBatchDoesNotMatch> for PolygonZkEvmErrors {
+    impl ::core::convert::From<InitSequencedBatchDoesNotMatch> for AggchainBaseErrors {
         fn from(value: InitSequencedBatchDoesNotMatch) -> Self {
             Self::InitSequencedBatchDoesNotMatch(value)
         }
     }
-    impl ::core::convert::From<InvalidInitializeTransaction> for PolygonZkEvmErrors {
+    impl ::core::convert::From<InvalidAggchainVKey> for AggchainBaseErrors {
+        fn from(value: InvalidAggchainVKey) -> Self {
+            Self::InvalidAggchainVKey(value)
+        }
+    }
+    impl ::core::convert::From<InvalidInitializeFunction> for AggchainBaseErrors {
+        fn from(value: InvalidInitializeFunction) -> Self {
+            Self::InvalidInitializeFunction(value)
+        }
+    }
+    impl ::core::convert::From<InvalidInitializeTransaction> for AggchainBaseErrors {
         fn from(value: InvalidInitializeTransaction) -> Self {
             Self::InvalidInitializeTransaction(value)
         }
     }
-    impl ::core::convert::From<InvalidProof> for PolygonZkEvmErrors {
+    impl ::core::convert::From<InvalidInitializer> for AggchainBaseErrors {
+        fn from(value: InvalidInitializer) -> Self {
+            Self::InvalidInitializer(value)
+        }
+    }
+    impl ::core::convert::From<InvalidProof> for AggchainBaseErrors {
         fn from(value: InvalidProof) -> Self {
             Self::InvalidProof(value)
         }
     }
-    impl ::core::convert::From<InvalidRangeBatchTimeTarget> for PolygonZkEvmErrors {
+    impl ::core::convert::From<InvalidRangeBatchTimeTarget> for AggchainBaseErrors {
         fn from(value: InvalidRangeBatchTimeTarget) -> Self {
             Self::InvalidRangeBatchTimeTarget(value)
         }
     }
-    impl ::core::convert::From<InvalidRangeForceBatchTimeout> for PolygonZkEvmErrors {
+    impl ::core::convert::From<InvalidRangeForceBatchTimeout> for AggchainBaseErrors {
         fn from(value: InvalidRangeForceBatchTimeout) -> Self {
             Self::InvalidRangeForceBatchTimeout(value)
         }
     }
-    impl ::core::convert::From<InvalidRangeMultiplierBatchFee> for PolygonZkEvmErrors {
+    impl ::core::convert::From<InvalidRangeMultiplierBatchFee> for AggchainBaseErrors {
         fn from(value: InvalidRangeMultiplierBatchFee) -> Self {
             Self::InvalidRangeMultiplierBatchFee(value)
         }
     }
-    impl ::core::convert::From<MaxTimestampSequenceInvalid> for PolygonZkEvmErrors {
+    impl ::core::convert::From<L1InfoTreeLeafCountInvalid> for AggchainBaseErrors {
+        fn from(value: L1InfoTreeLeafCountInvalid) -> Self {
+            Self::L1InfoTreeLeafCountInvalid(value)
+        }
+    }
+    impl ::core::convert::From<MaxTimestampSequenceInvalid> for AggchainBaseErrors {
         fn from(value: MaxTimestampSequenceInvalid) -> Self {
             Self::MaxTimestampSequenceInvalid(value)
         }
     }
-    impl ::core::convert::From<NewAccInputHashDoesNotExist> for PolygonZkEvmErrors {
+    impl ::core::convert::From<NewAccInputHashDoesNotExist> for AggchainBaseErrors {
         fn from(value: NewAccInputHashDoesNotExist) -> Self {
             Self::NewAccInputHashDoesNotExist(value)
         }
     }
     impl ::core::convert::From<NewPendingStateTimeoutMustBeLower>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: NewPendingStateTimeoutMustBeLower) -> Self {
             Self::NewPendingStateTimeoutMustBeLower(value)
         }
     }
-    impl ::core::convert::From<NewStateRootNotInsidePrime> for PolygonZkEvmErrors {
+    impl ::core::convert::From<NewStateRootNotInsidePrime> for AggchainBaseErrors {
         fn from(value: NewStateRootNotInsidePrime) -> Self {
             Self::NewStateRootNotInsidePrime(value)
         }
     }
     impl ::core::convert::From<NewTrustedAggregatorTimeoutMustBeLower>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: NewTrustedAggregatorTimeoutMustBeLower) -> Self {
             Self::NewTrustedAggregatorTimeoutMustBeLower(value)
         }
     }
-    impl ::core::convert::From<NotEnoughMaticAmount> for PolygonZkEvmErrors {
+    impl ::core::convert::From<NotEnoughMaticAmount> for AggchainBaseErrors {
         fn from(value: NotEnoughMaticAmount) -> Self {
             Self::NotEnoughMaticAmount(value)
         }
     }
-    impl ::core::convert::From<NotEnoughPOLAmount> for PolygonZkEvmErrors {
+    impl ::core::convert::From<NotEnoughPOLAmount> for AggchainBaseErrors {
         fn from(value: NotEnoughPOLAmount) -> Self {
             Self::NotEnoughPOLAmount(value)
         }
     }
-    impl ::core::convert::From<OldAccInputHashDoesNotExist> for PolygonZkEvmErrors {
+    impl ::core::convert::From<OldAccInputHashDoesNotExist> for AggchainBaseErrors {
         fn from(value: OldAccInputHashDoesNotExist) -> Self {
             Self::OldAccInputHashDoesNotExist(value)
         }
     }
-    impl ::core::convert::From<OldStateRootDoesNotExist> for PolygonZkEvmErrors {
+    impl ::core::convert::From<OldStateRootDoesNotExist> for AggchainBaseErrors {
         fn from(value: OldStateRootDoesNotExist) -> Self {
             Self::OldStateRootDoesNotExist(value)
         }
     }
-    impl ::core::convert::From<OnlyAdmin> for PolygonZkEvmErrors {
+    impl ::core::convert::From<OnlyAdmin> for AggchainBaseErrors {
         fn from(value: OnlyAdmin) -> Self {
             Self::OnlyAdmin(value)
         }
     }
-    impl ::core::convert::From<OnlyPendingAdmin> for PolygonZkEvmErrors {
+    impl ::core::convert::From<OnlyPendingAdmin> for AggchainBaseErrors {
         fn from(value: OnlyPendingAdmin) -> Self {
             Self::OnlyPendingAdmin(value)
         }
     }
-    impl ::core::convert::From<OnlyRollupManager> for PolygonZkEvmErrors {
+    impl ::core::convert::From<OnlyPendingVKeyManager> for AggchainBaseErrors {
+        fn from(value: OnlyPendingVKeyManager) -> Self {
+            Self::OnlyPendingVKeyManager(value)
+        }
+    }
+    impl ::core::convert::From<OnlyRollupManager> for AggchainBaseErrors {
         fn from(value: OnlyRollupManager) -> Self {
             Self::OnlyRollupManager(value)
         }
     }
-    impl ::core::convert::From<OnlyTrustedAggregator> for PolygonZkEvmErrors {
+    impl ::core::convert::From<OnlyTrustedAggregator> for AggchainBaseErrors {
         fn from(value: OnlyTrustedAggregator) -> Self {
             Self::OnlyTrustedAggregator(value)
         }
     }
-    impl ::core::convert::From<OnlyTrustedSequencer> for PolygonZkEvmErrors {
+    impl ::core::convert::From<OnlyTrustedSequencer> for AggchainBaseErrors {
         fn from(value: OnlyTrustedSequencer) -> Self {
             Self::OnlyTrustedSequencer(value)
         }
     }
-    impl ::core::convert::From<PendingStateDoesNotExist> for PolygonZkEvmErrors {
+    impl ::core::convert::From<OnlyVKeyManager> for AggchainBaseErrors {
+        fn from(value: OnlyVKeyManager) -> Self {
+            Self::OnlyVKeyManager(value)
+        }
+    }
+    impl ::core::convert::From<OwnedAggchainVKeyAlreadyAdded> for AggchainBaseErrors {
+        fn from(value: OwnedAggchainVKeyAlreadyAdded) -> Self {
+            Self::OwnedAggchainVKeyAlreadyAdded(value)
+        }
+    }
+    impl ::core::convert::From<OwnedAggchainVKeyLengthMismatch> for AggchainBaseErrors {
+        fn from(value: OwnedAggchainVKeyLengthMismatch) -> Self {
+            Self::OwnedAggchainVKeyLengthMismatch(value)
+        }
+    }
+    impl ::core::convert::From<OwnedAggchainVKeyNotFound> for AggchainBaseErrors {
+        fn from(value: OwnedAggchainVKeyNotFound) -> Self {
+            Self::OwnedAggchainVKeyNotFound(value)
+        }
+    }
+    impl ::core::convert::From<PendingStateDoesNotExist> for AggchainBaseErrors {
         fn from(value: PendingStateDoesNotExist) -> Self {
             Self::PendingStateDoesNotExist(value)
         }
     }
-    impl ::core::convert::From<PendingStateInvalid> for PolygonZkEvmErrors {
+    impl ::core::convert::From<PendingStateInvalid> for AggchainBaseErrors {
         fn from(value: PendingStateInvalid) -> Self {
             Self::PendingStateInvalid(value)
         }
     }
-    impl ::core::convert::From<PendingStateNotConsolidable> for PolygonZkEvmErrors {
+    impl ::core::convert::From<PendingStateNotConsolidable> for AggchainBaseErrors {
         fn from(value: PendingStateNotConsolidable) -> Self {
             Self::PendingStateNotConsolidable(value)
         }
     }
     impl ::core::convert::From<PendingStateTimeoutExceedHaltAggregationTimeout>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: PendingStateTimeoutExceedHaltAggregationTimeout) -> Self {
             Self::PendingStateTimeoutExceedHaltAggregationTimeout(value)
         }
     }
-    impl ::core::convert::From<SequenceZeroBatches> for PolygonZkEvmErrors {
+    impl ::core::convert::From<SequenceZeroBatches> for AggchainBaseErrors {
         fn from(value: SequenceZeroBatches) -> Self {
             Self::SequenceZeroBatches(value)
         }
     }
     impl ::core::convert::From<SequencedTimestampBelowForcedTimestamp>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: SequencedTimestampBelowForcedTimestamp) -> Self {
             Self::SequencedTimestampBelowForcedTimestamp(value)
         }
     }
-    impl ::core::convert::From<SequencedTimestampInvalid> for PolygonZkEvmErrors {
+    impl ::core::convert::From<SequencedTimestampInvalid> for AggchainBaseErrors {
         fn from(value: SequencedTimestampInvalid) -> Self {
             Self::SequencedTimestampInvalid(value)
         }
     }
     impl ::core::convert::From<StoredRootMustBeDifferentThanNewRoot>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: StoredRootMustBeDifferentThanNewRoot) -> Self {
             Self::StoredRootMustBeDifferentThanNewRoot(value)
         }
     }
-    impl ::core::convert::From<TransactionsLengthAboveMax> for PolygonZkEvmErrors {
+    impl ::core::convert::From<TransactionsLengthAboveMax> for AggchainBaseErrors {
         fn from(value: TransactionsLengthAboveMax) -> Self {
             Self::TransactionsLengthAboveMax(value)
         }
     }
     impl ::core::convert::From<TrustedAggregatorTimeoutExceedHaltAggregationTimeout>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: TrustedAggregatorTimeoutExceedHaltAggregationTimeout) -> Self {
             Self::TrustedAggregatorTimeoutExceedHaltAggregationTimeout(value)
         }
     }
     impl ::core::convert::From<TrustedAggregatorTimeoutNotExpired>
-    for PolygonZkEvmErrors {
+    for AggchainBaseErrors {
         fn from(value: TrustedAggregatorTimeoutNotExpired) -> Self {
             Self::TrustedAggregatorTimeoutNotExpired(value)
+        }
+    }
+    impl ::core::convert::From<UseDefaultGatewayAlreadySet> for AggchainBaseErrors {
+        fn from(value: UseDefaultGatewayAlreadySet) -> Self {
+            Self::UseDefaultGatewayAlreadySet(value)
         }
     }
     #[derive(
@@ -4514,13 +4545,9 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    #[ethevent(name = "ForceBatch", abi = "ForceBatch(uint64,bytes32,address,bytes)")]
-    pub struct ForceBatchFilter {
-        #[ethevent(indexed)]
-        pub force_batch_num: u64,
-        pub last_global_exit_root: [u8; 32],
-        pub sequencer: ::ethers::core::types::Address,
-        pub transactions: ::ethers::core::types::Bytes,
+    #[ethevent(name = "AcceptVKeyManagerRole", abi = "AcceptVKeyManagerRole(address)")]
+    pub struct AcceptVKeyManagerRoleFilter {
+        pub new_v_key_manager: ::ethers::core::types::Address,
     }
     #[derive(
         Clone,
@@ -4532,14 +4559,10 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    #[ethevent(
-        name = "InitialSequenceBatches",
-        abi = "InitialSequenceBatches(bytes,bytes32,address)"
-    )]
-    pub struct InitialSequenceBatchesFilter {
-        pub transactions: ::ethers::core::types::Bytes,
-        pub last_global_exit_root: [u8; 32],
-        pub sequencer: ::ethers::core::types::Address,
+    #[ethevent(name = "AddAggchainVKey", abi = "AddAggchainVKey(bytes4,bytes32)")]
+    pub struct AddAggchainVKeyFilter {
+        pub selector: [u8; 4],
+        pub new_aggchain_v_key: [u8; 32],
     }
     #[derive(
         Clone,
@@ -4554,65 +4577,6 @@ pub mod polygon_zk_evm {
     #[ethevent(name = "Initialized", abi = "Initialized(uint8)")]
     pub struct InitializedFilter {
         pub version: u8,
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(name = "SequenceBatches", abi = "SequenceBatches(uint64,bytes32)")]
-    pub struct SequenceBatchesFilter {
-        #[ethevent(indexed)]
-        pub num_batch: u64,
-        pub l_1_info_root: [u8; 32],
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(name = "SequenceForceBatches", abi = "SequenceForceBatches(uint64)")]
-    pub struct SequenceForceBatchesFilter {
-        #[ethevent(indexed)]
-        pub num_batch: u64,
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(name = "SetForceBatchAddress", abi = "SetForceBatchAddress(address)")]
-    pub struct SetForceBatchAddressFilter {
-        pub new_force_batch_address: ::ethers::core::types::Address,
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(name = "SetForceBatchTimeout", abi = "SetForceBatchTimeout(uint64)")]
-    pub struct SetForceBatchTimeoutFilter {
-        pub newforce_batch_timeout: u64,
     }
     #[derive(
         Clone,
@@ -4666,96 +4630,111 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    #[ethevent(name = "VerifyBatches", abi = "VerifyBatches(uint64,bytes32,address)")]
-    pub struct VerifyBatchesFilter {
-        #[ethevent(indexed)]
-        pub num_batch: u64,
-        pub state_root: [u8; 32],
-        #[ethevent(indexed)]
-        pub aggregator: ::ethers::core::types::Address,
+    #[ethevent(
+        name = "TransferVKeyManagerRole",
+        abi = "TransferVKeyManagerRole(address)"
+    )]
+    pub struct TransferVKeyManagerRoleFilter {
+        pub new_v_key_manager: ::ethers::core::types::Address,
+    }
+    #[derive(
+        Clone,
+        ::ethers::contract::EthEvent,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethevent(name = "UpdateAggchainVKey", abi = "UpdateAggchainVKey(bytes4,bytes32)")]
+    pub struct UpdateAggchainVKeyFilter {
+        pub selector: [u8; 4],
+        pub new_aggchain_v_key: [u8; 32],
+    }
+    #[derive(
+        Clone,
+        ::ethers::contract::EthEvent,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethevent(
+        name = "UpdateUseDefaultGatewayFlag",
+        abi = "UpdateUseDefaultGatewayFlag(bool)"
+    )]
+    pub struct UpdateUseDefaultGatewayFlagFilter {
+        pub use_default_gateway: bool,
     }
     ///Container type for all of the contract's events
     #[derive(Clone, ::ethers::contract::EthAbiType, Debug, PartialEq, Eq, Hash)]
-    pub enum PolygonZkEvmEvents {
+    pub enum AggchainBaseEvents {
         AcceptAdminRoleFilter(AcceptAdminRoleFilter),
-        ForceBatchFilter(ForceBatchFilter),
-        InitialSequenceBatchesFilter(InitialSequenceBatchesFilter),
+        AcceptVKeyManagerRoleFilter(AcceptVKeyManagerRoleFilter),
+        AddAggchainVKeyFilter(AddAggchainVKeyFilter),
         InitializedFilter(InitializedFilter),
-        SequenceBatchesFilter(SequenceBatchesFilter),
-        SequenceForceBatchesFilter(SequenceForceBatchesFilter),
-        SetForceBatchAddressFilter(SetForceBatchAddressFilter),
-        SetForceBatchTimeoutFilter(SetForceBatchTimeoutFilter),
         SetTrustedSequencerFilter(SetTrustedSequencerFilter),
         SetTrustedSequencerURLFilter(SetTrustedSequencerURLFilter),
         TransferAdminRoleFilter(TransferAdminRoleFilter),
-        VerifyBatchesFilter(VerifyBatchesFilter),
+        TransferVKeyManagerRoleFilter(TransferVKeyManagerRoleFilter),
+        UpdateAggchainVKeyFilter(UpdateAggchainVKeyFilter),
+        UpdateUseDefaultGatewayFlagFilter(UpdateUseDefaultGatewayFlagFilter),
     }
-    impl ::ethers::contract::EthLogDecode for PolygonZkEvmEvents {
+    impl ::ethers::contract::EthLogDecode for AggchainBaseEvents {
         fn decode_log(
             log: &::ethers::core::abi::RawLog,
         ) -> ::core::result::Result<Self, ::ethers::core::abi::Error> {
             if let Ok(decoded) = AcceptAdminRoleFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::AcceptAdminRoleFilter(decoded));
+                return Ok(AggchainBaseEvents::AcceptAdminRoleFilter(decoded));
             }
-            if let Ok(decoded) = ForceBatchFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::ForceBatchFilter(decoded));
+            if let Ok(decoded) = AcceptVKeyManagerRoleFilter::decode_log(log) {
+                return Ok(AggchainBaseEvents::AcceptVKeyManagerRoleFilter(decoded));
             }
-            if let Ok(decoded) = InitialSequenceBatchesFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::InitialSequenceBatchesFilter(decoded));
+            if let Ok(decoded) = AddAggchainVKeyFilter::decode_log(log) {
+                return Ok(AggchainBaseEvents::AddAggchainVKeyFilter(decoded));
             }
             if let Ok(decoded) = InitializedFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::InitializedFilter(decoded));
-            }
-            if let Ok(decoded) = SequenceBatchesFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::SequenceBatchesFilter(decoded));
-            }
-            if let Ok(decoded) = SequenceForceBatchesFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::SequenceForceBatchesFilter(decoded));
-            }
-            if let Ok(decoded) = SetForceBatchAddressFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::SetForceBatchAddressFilter(decoded));
-            }
-            if let Ok(decoded) = SetForceBatchTimeoutFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::SetForceBatchTimeoutFilter(decoded));
+                return Ok(AggchainBaseEvents::InitializedFilter(decoded));
             }
             if let Ok(decoded) = SetTrustedSequencerFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::SetTrustedSequencerFilter(decoded));
+                return Ok(AggchainBaseEvents::SetTrustedSequencerFilter(decoded));
             }
             if let Ok(decoded) = SetTrustedSequencerURLFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::SetTrustedSequencerURLFilter(decoded));
+                return Ok(AggchainBaseEvents::SetTrustedSequencerURLFilter(decoded));
             }
             if let Ok(decoded) = TransferAdminRoleFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::TransferAdminRoleFilter(decoded));
+                return Ok(AggchainBaseEvents::TransferAdminRoleFilter(decoded));
             }
-            if let Ok(decoded) = VerifyBatchesFilter::decode_log(log) {
-                return Ok(PolygonZkEvmEvents::VerifyBatchesFilter(decoded));
+            if let Ok(decoded) = TransferVKeyManagerRoleFilter::decode_log(log) {
+                return Ok(AggchainBaseEvents::TransferVKeyManagerRoleFilter(decoded));
+            }
+            if let Ok(decoded) = UpdateAggchainVKeyFilter::decode_log(log) {
+                return Ok(AggchainBaseEvents::UpdateAggchainVKeyFilter(decoded));
+            }
+            if let Ok(decoded) = UpdateUseDefaultGatewayFlagFilter::decode_log(log) {
+                return Ok(
+                    AggchainBaseEvents::UpdateUseDefaultGatewayFlagFilter(decoded),
+                );
             }
             Err(::ethers::core::abi::Error::InvalidData)
         }
     }
-    impl ::core::fmt::Display for PolygonZkEvmEvents {
+    impl ::core::fmt::Display for AggchainBaseEvents {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
             match self {
                 Self::AcceptAdminRoleFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::ForceBatchFilter(element) => ::core::fmt::Display::fmt(element, f),
-                Self::InitialSequenceBatchesFilter(element) => {
+                Self::AcceptVKeyManagerRoleFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::AddAggchainVKeyFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::InitializedFilter(element) => ::core::fmt::Display::fmt(element, f),
-                Self::SequenceBatchesFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SequenceForceBatchesFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SetForceBatchAddressFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SetForceBatchTimeoutFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::SetTrustedSequencerFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -4765,73 +4744,70 @@ pub mod polygon_zk_evm {
                 Self::TransferAdminRoleFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::VerifyBatchesFilter(element) => {
+                Self::TransferVKeyManagerRoleFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::UpdateAggchainVKeyFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::UpdateUseDefaultGatewayFlagFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
             }
         }
     }
-    impl ::core::convert::From<AcceptAdminRoleFilter> for PolygonZkEvmEvents {
+    impl ::core::convert::From<AcceptAdminRoleFilter> for AggchainBaseEvents {
         fn from(value: AcceptAdminRoleFilter) -> Self {
             Self::AcceptAdminRoleFilter(value)
         }
     }
-    impl ::core::convert::From<ForceBatchFilter> for PolygonZkEvmEvents {
-        fn from(value: ForceBatchFilter) -> Self {
-            Self::ForceBatchFilter(value)
+    impl ::core::convert::From<AcceptVKeyManagerRoleFilter> for AggchainBaseEvents {
+        fn from(value: AcceptVKeyManagerRoleFilter) -> Self {
+            Self::AcceptVKeyManagerRoleFilter(value)
         }
     }
-    impl ::core::convert::From<InitialSequenceBatchesFilter> for PolygonZkEvmEvents {
-        fn from(value: InitialSequenceBatchesFilter) -> Self {
-            Self::InitialSequenceBatchesFilter(value)
+    impl ::core::convert::From<AddAggchainVKeyFilter> for AggchainBaseEvents {
+        fn from(value: AddAggchainVKeyFilter) -> Self {
+            Self::AddAggchainVKeyFilter(value)
         }
     }
-    impl ::core::convert::From<InitializedFilter> for PolygonZkEvmEvents {
+    impl ::core::convert::From<InitializedFilter> for AggchainBaseEvents {
         fn from(value: InitializedFilter) -> Self {
             Self::InitializedFilter(value)
         }
     }
-    impl ::core::convert::From<SequenceBatchesFilter> for PolygonZkEvmEvents {
-        fn from(value: SequenceBatchesFilter) -> Self {
-            Self::SequenceBatchesFilter(value)
-        }
-    }
-    impl ::core::convert::From<SequenceForceBatchesFilter> for PolygonZkEvmEvents {
-        fn from(value: SequenceForceBatchesFilter) -> Self {
-            Self::SequenceForceBatchesFilter(value)
-        }
-    }
-    impl ::core::convert::From<SetForceBatchAddressFilter> for PolygonZkEvmEvents {
-        fn from(value: SetForceBatchAddressFilter) -> Self {
-            Self::SetForceBatchAddressFilter(value)
-        }
-    }
-    impl ::core::convert::From<SetForceBatchTimeoutFilter> for PolygonZkEvmEvents {
-        fn from(value: SetForceBatchTimeoutFilter) -> Self {
-            Self::SetForceBatchTimeoutFilter(value)
-        }
-    }
-    impl ::core::convert::From<SetTrustedSequencerFilter> for PolygonZkEvmEvents {
+    impl ::core::convert::From<SetTrustedSequencerFilter> for AggchainBaseEvents {
         fn from(value: SetTrustedSequencerFilter) -> Self {
             Self::SetTrustedSequencerFilter(value)
         }
     }
-    impl ::core::convert::From<SetTrustedSequencerURLFilter> for PolygonZkEvmEvents {
+    impl ::core::convert::From<SetTrustedSequencerURLFilter> for AggchainBaseEvents {
         fn from(value: SetTrustedSequencerURLFilter) -> Self {
             Self::SetTrustedSequencerURLFilter(value)
         }
     }
-    impl ::core::convert::From<TransferAdminRoleFilter> for PolygonZkEvmEvents {
+    impl ::core::convert::From<TransferAdminRoleFilter> for AggchainBaseEvents {
         fn from(value: TransferAdminRoleFilter) -> Self {
             Self::TransferAdminRoleFilter(value)
         }
     }
-    impl ::core::convert::From<VerifyBatchesFilter> for PolygonZkEvmEvents {
-        fn from(value: VerifyBatchesFilter) -> Self {
-            Self::VerifyBatchesFilter(value)
+    impl ::core::convert::From<TransferVKeyManagerRoleFilter> for AggchainBaseEvents {
+        fn from(value: TransferVKeyManagerRoleFilter) -> Self {
+            Self::TransferVKeyManagerRoleFilter(value)
         }
     }
-    ///Container type for all input parameters for the `GLOBAL_EXIT_ROOT_MANAGER_L2` function with signature `GLOBAL_EXIT_ROOT_MANAGER_L2()` and selector `0x9e001877`
+    impl ::core::convert::From<UpdateAggchainVKeyFilter> for AggchainBaseEvents {
+        fn from(value: UpdateAggchainVKeyFilter) -> Self {
+            Self::UpdateAggchainVKeyFilter(value)
+        }
+    }
+    impl ::core::convert::From<UpdateUseDefaultGatewayFlagFilter>
+    for AggchainBaseEvents {
+        fn from(value: UpdateUseDefaultGatewayFlagFilter) -> Self {
+            Self::UpdateUseDefaultGatewayFlagFilter(value)
+        }
+    }
+    ///Container type for all input parameters for the `AGGCHAIN_TYPE` function with signature `AGGCHAIN_TYPE()` and selector `0x6e7fbce9`
     #[derive(
         Clone,
         ::ethers::contract::EthCall,
@@ -4842,191 +4818,8 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    #[ethcall(
-        name = "GLOBAL_EXIT_ROOT_MANAGER_L2",
-        abi = "GLOBAL_EXIT_ROOT_MANAGER_L2()"
-    )]
-    pub struct GlobalExitRootManagerL2Call;
-    ///Container type for all input parameters for the `INITIALIZE_TX_BRIDGE_LIST_LEN_LEN` function with signature `INITIALIZE_TX_BRIDGE_LIST_LEN_LEN()` and selector `0x11e892d4`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "INITIALIZE_TX_BRIDGE_LIST_LEN_LEN",
-        abi = "INITIALIZE_TX_BRIDGE_LIST_LEN_LEN()"
-    )]
-    pub struct InitializeTxBridgeListLenLenCall;
-    ///Container type for all input parameters for the `INITIALIZE_TX_BRIDGE_PARAMS` function with signature `INITIALIZE_TX_BRIDGE_PARAMS()` and selector `0x05835f37`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "INITIALIZE_TX_BRIDGE_PARAMS",
-        abi = "INITIALIZE_TX_BRIDGE_PARAMS()"
-    )]
-    pub struct InitializeTxBridgeParamsCall;
-    ///Container type for all input parameters for the `INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS` function with signature `INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS()` and selector `0x7a5460c5`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS",
-        abi = "INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS()"
-    )]
-    pub struct InitializeTxBridgeParamsAfterBridgeAddressCall;
-    ///Container type for all input parameters for the `INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS_EMPTY_METADATA` function with signature `INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS_EMPTY_METADATA()` and selector `0x52bdeb6d`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS_EMPTY_METADATA",
-        abi = "INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS_EMPTY_METADATA()"
-    )]
-    pub struct InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadataCall;
-    ///Container type for all input parameters for the `INITIALIZE_TX_CONSTANT_BYTES` function with signature `INITIALIZE_TX_CONSTANT_BYTES()` and selector `0x03508963`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "INITIALIZE_TX_CONSTANT_BYTES",
-        abi = "INITIALIZE_TX_CONSTANT_BYTES()"
-    )]
-    pub struct InitializeTxConstantBytesCall;
-    ///Container type for all input parameters for the `INITIALIZE_TX_CONSTANT_BYTES_EMPTY_METADATA` function with signature `INITIALIZE_TX_CONSTANT_BYTES_EMPTY_METADATA()` and selector `0x676870d2`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "INITIALIZE_TX_CONSTANT_BYTES_EMPTY_METADATA",
-        abi = "INITIALIZE_TX_CONSTANT_BYTES_EMPTY_METADATA()"
-    )]
-    pub struct InitializeTxConstantBytesEmptyMetadataCall;
-    ///Container type for all input parameters for the `INITIALIZE_TX_DATA_LEN_EMPTY_METADATA` function with signature `INITIALIZE_TX_DATA_LEN_EMPTY_METADATA()` and selector `0xc7fffd4b`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "INITIALIZE_TX_DATA_LEN_EMPTY_METADATA",
-        abi = "INITIALIZE_TX_DATA_LEN_EMPTY_METADATA()"
-    )]
-    pub struct InitializeTxDataLenEmptyMetadataCall;
-    ///Container type for all input parameters for the `INITIALIZE_TX_EFFECTIVE_PERCENTAGE` function with signature `INITIALIZE_TX_EFFECTIVE_PERCENTAGE()` and selector `0x40b5de6c`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "INITIALIZE_TX_EFFECTIVE_PERCENTAGE",
-        abi = "INITIALIZE_TX_EFFECTIVE_PERCENTAGE()"
-    )]
-    pub struct InitializeTxEffectivePercentageCall;
-    ///Container type for all input parameters for the `SIGNATURE_INITIALIZE_TX_R` function with signature `SIGNATURE_INITIALIZE_TX_R()` and selector `0xb0afe154`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "SIGNATURE_INITIALIZE_TX_R", abi = "SIGNATURE_INITIALIZE_TX_R()")]
-    pub struct SignatureInitializeTxRCall;
-    ///Container type for all input parameters for the `SIGNATURE_INITIALIZE_TX_S` function with signature `SIGNATURE_INITIALIZE_TX_S()` and selector `0xd7bc90ff`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "SIGNATURE_INITIALIZE_TX_S", abi = "SIGNATURE_INITIALIZE_TX_S()")]
-    pub struct SignatureInitializeTxSCall;
-    ///Container type for all input parameters for the `SIGNATURE_INITIALIZE_TX_V` function with signature `SIGNATURE_INITIALIZE_TX_V()` and selector `0xf35dda47`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "SIGNATURE_INITIALIZE_TX_V", abi = "SIGNATURE_INITIALIZE_TX_V()")]
-    pub struct SignatureInitializeTxVCall;
-    ///Container type for all input parameters for the `TIMESTAMP_RANGE` function with signature `TIMESTAMP_RANGE()` and selector `0x42308fab`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "TIMESTAMP_RANGE", abi = "TIMESTAMP_RANGE()")]
-    pub struct TimestampRangeCall;
+    #[ethcall(name = "AGGCHAIN_TYPE", abi = "AGGCHAIN_TYPE()")]
+    pub struct AggchainTypeCall;
     ///Container type for all input parameters for the `acceptAdminRole` function with signature `acceptAdminRole()` and selector `0x8c3d7301`
     #[derive(
         Clone,
@@ -5040,6 +4833,38 @@ pub mod polygon_zk_evm {
     )]
     #[ethcall(name = "acceptAdminRole", abi = "acceptAdminRole()")]
     pub struct AcceptAdminRoleCall;
+    ///Container type for all input parameters for the `acceptVKeyManagerRole` function with signature `acceptVKeyManagerRole()` and selector `0x368c822c`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "acceptVKeyManagerRole", abi = "acceptVKeyManagerRole()")]
+    pub struct AcceptVKeyManagerRoleCall;
+    ///Container type for all input parameters for the `addOwnedAggchainVKey` function with signature `addOwnedAggchainVKey(bytes4,bytes32)` and selector `0x19451a8f`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(
+        name = "addOwnedAggchainVKey",
+        abi = "addOwnedAggchainVKey(bytes4,bytes32)"
+    )]
+    pub struct AddOwnedAggchainVKeyCall {
+        pub aggchain_selector: [u8; 4],
+        pub new_aggchain_v_key: [u8; 32],
+    }
     ///Container type for all input parameters for the `admin` function with signature `admin()` and selector `0xf851a440`
     #[derive(
         Clone,
@@ -5053,6 +4878,19 @@ pub mod polygon_zk_evm {
     )]
     #[ethcall(name = "admin", abi = "admin()")]
     pub struct AdminCall;
+    ///Container type for all input parameters for the `aggLayerGateway` function with signature `aggLayerGateway()` and selector `0xab0475cf`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "aggLayerGateway", abi = "aggLayerGateway()")]
+    pub struct AggLayerGatewayCall;
     ///Container type for all input parameters for the `bridgeAddress` function with signature `bridgeAddress()` and selector `0xa3c573eb`
     #[derive(
         Clone,
@@ -5066,7 +4904,7 @@ pub mod polygon_zk_evm {
     )]
     #[ethcall(name = "bridgeAddress", abi = "bridgeAddress()")]
     pub struct BridgeAddressCall;
-    ///Container type for all input parameters for the `calculatePolPerForceBatch` function with signature `calculatePolPerForceBatch()` and selector `0x00d0295d`
+    ///Container type for all input parameters for the `disableUseDefaultGatewayFlag` function with signature `disableUseDefaultGatewayFlag()` and selector `0xdc8c4249`
     #[derive(
         Clone,
         ::ethers::contract::EthCall,
@@ -5077,9 +4915,12 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    #[ethcall(name = "calculatePolPerForceBatch", abi = "calculatePolPerForceBatch()")]
-    pub struct CalculatePolPerForceBatchCall;
-    ///Container type for all input parameters for the `forceBatch` function with signature `forceBatch(bytes,uint256)` and selector `0xeaeb077b`
+    #[ethcall(
+        name = "disableUseDefaultGatewayFlag",
+        abi = "disableUseDefaultGatewayFlag()"
+    )]
+    pub struct DisableUseDefaultGatewayFlagCall;
+    ///Container type for all input parameters for the `enableUseDefaultGatewayFlag` function with signature `enableUseDefaultGatewayFlag()` and selector `0xe631476c`
     #[derive(
         Clone,
         ::ethers::contract::EthCall,
@@ -5090,11 +4931,11 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    #[ethcall(name = "forceBatch", abi = "forceBatch(bytes,uint256)")]
-    pub struct ForceBatchCall {
-        pub transactions: ::ethers::core::types::Bytes,
-        pub pol_amount: ::ethers::core::types::U256,
-    }
+    #[ethcall(
+        name = "enableUseDefaultGatewayFlag",
+        abi = "enableUseDefaultGatewayFlag()"
+    )]
+    pub struct EnableUseDefaultGatewayFlagCall;
     ///Container type for all input parameters for the `forceBatchAddress` function with signature `forceBatchAddress()` and selector `0x2c111c06`
     #[derive(
         Clone,
@@ -5160,7 +5001,7 @@ pub mod polygon_zk_evm {
     )]
     #[ethcall(name = "gasTokenNetwork", abi = "gasTokenNetwork()")]
     pub struct GasTokenNetworkCall;
-    ///Container type for all input parameters for the `generateInitializeTransaction` function with signature `generateInitializeTransaction(uint32,address,uint32,bytes)` and selector `0xa652f26c`
+    ///Container type for all input parameters for the `getAggchainVKey` function with signature `getAggchainVKey(bytes4)` and selector `0x01fcf6a0`
     #[derive(
         Clone,
         ::ethers::contract::EthCall,
@@ -5171,15 +5012,9 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    #[ethcall(
-        name = "generateInitializeTransaction",
-        abi = "generateInitializeTransaction(uint32,address,uint32,bytes)"
-    )]
-    pub struct GenerateInitializeTransactionCall {
-        pub network_id: u32,
-        pub gas_token_address: ::ethers::core::types::Address,
-        pub gas_token_network: u32,
-        pub gas_token_metadata: ::ethers::core::types::Bytes,
+    #[ethcall(name = "getAggchainVKey", abi = "getAggchainVKey(bytes4)")]
+    pub struct GetAggchainVKeyCall {
+        pub aggchain_selector: [u8; 4],
     }
     ///Container type for all input parameters for the `globalExitRootManager` function with signature `globalExitRootManager()` and selector `0xd02103ca`
     #[derive(
@@ -5209,14 +5044,14 @@ pub mod polygon_zk_evm {
         name = "initialize",
         abi = "initialize(address,address,uint32,address,string,string)"
     )]
-    pub struct InitializeCall {
-        pub admin: ::ethers::core::types::Address,
-        pub sequencer: ::ethers::core::types::Address,
-        pub network_id: u32,
-        pub gas_token_address: ::ethers::core::types::Address,
-        pub sequencer_url: ::std::string::String,
-        pub network_name: ::std::string::String,
-    }
+    pub struct InitializeCall(
+        pub ::ethers::core::types::Address,
+        pub ::ethers::core::types::Address,
+        pub u32,
+        pub ::ethers::core::types::Address,
+        pub ::std::string::String,
+        pub ::std::string::String,
+    );
     ///Container type for all input parameters for the `lastAccInputHash` function with signature `lastAccInputHash()` and selector `0x6e05d2cd`
     #[derive(
         Clone,
@@ -5269,7 +5104,7 @@ pub mod polygon_zk_evm {
     )]
     #[ethcall(name = "networkName", abi = "networkName()")]
     pub struct NetworkNameCall;
-    ///Container type for all input parameters for the `onVerifyBatches` function with signature `onVerifyBatches(uint64,bytes32,address)` and selector `0x32c2d153`
+    ///Container type for all input parameters for the `ownedAggchainVKeys` function with signature `ownedAggchainVKeys(bytes4)` and selector `0xeffb8479`
     #[derive(
         Clone,
         ::ethers::contract::EthCall,
@@ -5280,11 +5115,9 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    #[ethcall(name = "onVerifyBatches", abi = "onVerifyBatches(uint64,bytes32,address)")]
-    pub struct OnVerifyBatchesCall {
-        pub last_verified_batch: u64,
-        pub new_state_root: [u8; 32],
-        pub aggregator: ::ethers::core::types::Address,
+    #[ethcall(name = "ownedAggchainVKeys", abi = "ownedAggchainVKeys(bytes4)")]
+    pub struct OwnedAggchainVKeysCall {
+        pub aggchain_v_key_selector: [u8; 4],
     }
     ///Container type for all input parameters for the `pendingAdmin` function with signature `pendingAdmin()` and selector `0x26782247`
     #[derive(
@@ -5299,6 +5132,19 @@ pub mod polygon_zk_evm {
     )]
     #[ethcall(name = "pendingAdmin", abi = "pendingAdmin()")]
     pub struct PendingAdminCall;
+    ///Container type for all input parameters for the `pendingVKeyManager` function with signature `pendingVKeyManager()` and selector `0xbfb193b6`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "pendingVKeyManager", abi = "pendingVKeyManager()")]
+    pub struct PendingVKeyManagerCall;
     ///Container type for all input parameters for the `pol` function with signature `pol()` and selector `0xe46761c4`
     #[derive(
         Clone,
@@ -5325,75 +5171,6 @@ pub mod polygon_zk_evm {
     )]
     #[ethcall(name = "rollupManager", abi = "rollupManager()")]
     pub struct RollupManagerCall;
-    ///Container type for all input parameters for the `sequenceBatches` function with signature `sequenceBatches((bytes,bytes32,uint64,bytes32)[],uint64,uint64,address)` and selector `0xdef57e54`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "sequenceBatches",
-        abi = "sequenceBatches((bytes,bytes32,uint64,bytes32)[],uint64,uint64,address)"
-    )]
-    pub struct SequenceBatchesCall {
-        pub batches: ::std::vec::Vec<BatchData>,
-        pub max_sequence_timestamp: u64,
-        pub init_sequenced_batch: u64,
-        pub l_2_coinbase: ::ethers::core::types::Address,
-    }
-    ///Container type for all input parameters for the `sequenceForceBatches` function with signature `sequenceForceBatches((bytes,bytes32,uint64,bytes32)[])` and selector `0x9f26f840`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(
-        name = "sequenceForceBatches",
-        abi = "sequenceForceBatches((bytes,bytes32,uint64,bytes32)[])"
-    )]
-    pub struct SequenceForceBatchesCall {
-        pub batches: ::std::vec::Vec<BatchData>,
-    }
-    ///Container type for all input parameters for the `setForceBatchAddress` function with signature `setForceBatchAddress(address)` and selector `0x91cafe32`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "setForceBatchAddress", abi = "setForceBatchAddress(address)")]
-    pub struct SetForceBatchAddressCall {
-        pub new_force_batch_address: ::ethers::core::types::Address,
-    }
-    ///Container type for all input parameters for the `setForceBatchTimeout` function with signature `setForceBatchTimeout(uint64)` and selector `0x4e487706`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthCall,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethcall(name = "setForceBatchTimeout", abi = "setForceBatchTimeout(uint64)")]
-    pub struct SetForceBatchTimeoutCall {
-        pub newforce_batch_timeout: u64,
-    }
     ///Container type for all input parameters for the `setTrustedSequencer` function with signature `setTrustedSequencer(address)` and selector `0x6ff512cc`
     #[derive(
         Clone,
@@ -5439,6 +5216,24 @@ pub mod polygon_zk_evm {
     pub struct TransferAdminRoleCall {
         pub new_pending_admin: ::ethers::core::types::Address,
     }
+    ///Container type for all input parameters for the `transferVKeyManagerRole` function with signature `transferVKeyManagerRole(address)` and selector `0x85018182`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(
+        name = "transferVKeyManagerRole",
+        abi = "transferVKeyManagerRole(address)"
+    )]
+    pub struct TransferVKeyManagerRoleCall {
+        pub new_v_key_manager: ::ethers::core::types::Address,
+    }
     ///Container type for all input parameters for the `trustedSequencer` function with signature `trustedSequencer()` and selector `0xcfa8ed47`
     #[derive(
         Clone,
@@ -5465,157 +5260,139 @@ pub mod polygon_zk_evm {
     )]
     #[ethcall(name = "trustedSequencerURL", abi = "trustedSequencerURL()")]
     pub struct TrustedSequencerURLCall;
+    ///Container type for all input parameters for the `updateOwnedAggchainVKey` function with signature `updateOwnedAggchainVKey(bytes4,bytes32)` and selector `0x314eb17b`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(
+        name = "updateOwnedAggchainVKey",
+        abi = "updateOwnedAggchainVKey(bytes4,bytes32)"
+    )]
+    pub struct UpdateOwnedAggchainVKeyCall {
+        pub aggchain_selector: [u8; 4],
+        pub updated_aggchain_v_key: [u8; 32],
+    }
+    ///Container type for all input parameters for the `useDefaultGateway` function with signature `useDefaultGateway()` and selector `0xff904079`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "useDefaultGateway", abi = "useDefaultGateway()")]
+    pub struct UseDefaultGatewayCall;
+    ///Container type for all input parameters for the `vKeyManager` function with signature `vKeyManager()` and selector `0xe279984e`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "vKeyManager", abi = "vKeyManager()")]
+    pub struct VkeyManagerCall;
     ///Container type for all of the contract's call
     #[derive(Clone, ::ethers::contract::EthAbiType, Debug, PartialEq, Eq, Hash)]
-    pub enum PolygonZkEvmCalls {
-        GlobalExitRootManagerL2(GlobalExitRootManagerL2Call),
-        InitializeTxBridgeListLenLen(InitializeTxBridgeListLenLenCall),
-        InitializeTxBridgeParams(InitializeTxBridgeParamsCall),
-        InitializeTxBridgeParamsAfterBridgeAddress(
-            InitializeTxBridgeParamsAfterBridgeAddressCall,
-        ),
-        InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadata(
-            InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadataCall,
-        ),
-        InitializeTxConstantBytes(InitializeTxConstantBytesCall),
-        InitializeTxConstantBytesEmptyMetadata(
-            InitializeTxConstantBytesEmptyMetadataCall,
-        ),
-        InitializeTxDataLenEmptyMetadata(InitializeTxDataLenEmptyMetadataCall),
-        InitializeTxEffectivePercentage(InitializeTxEffectivePercentageCall),
-        SignatureInitializeTxR(SignatureInitializeTxRCall),
-        SignatureInitializeTxS(SignatureInitializeTxSCall),
-        SignatureInitializeTxV(SignatureInitializeTxVCall),
-        TimestampRange(TimestampRangeCall),
+    pub enum AggchainBaseCalls {
+        AggchainType(AggchainTypeCall),
         AcceptAdminRole(AcceptAdminRoleCall),
+        AcceptVKeyManagerRole(AcceptVKeyManagerRoleCall),
+        AddOwnedAggchainVKey(AddOwnedAggchainVKeyCall),
         Admin(AdminCall),
+        AggLayerGateway(AggLayerGatewayCall),
         BridgeAddress(BridgeAddressCall),
-        CalculatePolPerForceBatch(CalculatePolPerForceBatchCall),
-        ForceBatch(ForceBatchCall),
+        DisableUseDefaultGatewayFlag(DisableUseDefaultGatewayFlagCall),
+        EnableUseDefaultGatewayFlag(EnableUseDefaultGatewayFlagCall),
         ForceBatchAddress(ForceBatchAddressCall),
         ForceBatchTimeout(ForceBatchTimeoutCall),
         ForcedBatches(ForcedBatchesCall),
         GasTokenAddress(GasTokenAddressCall),
         GasTokenNetwork(GasTokenNetworkCall),
-        GenerateInitializeTransaction(GenerateInitializeTransactionCall),
+        GetAggchainVKey(GetAggchainVKeyCall),
         GlobalExitRootManager(GlobalExitRootManagerCall),
         Initialize(InitializeCall),
         LastAccInputHash(LastAccInputHashCall),
         LastForceBatch(LastForceBatchCall),
         LastForceBatchSequenced(LastForceBatchSequencedCall),
         NetworkName(NetworkNameCall),
-        OnVerifyBatches(OnVerifyBatchesCall),
+        OwnedAggchainVKeys(OwnedAggchainVKeysCall),
         PendingAdmin(PendingAdminCall),
+        PendingVKeyManager(PendingVKeyManagerCall),
         Pol(PolCall),
         RollupManager(RollupManagerCall),
-        SequenceBatches(SequenceBatchesCall),
-        SequenceForceBatches(SequenceForceBatchesCall),
-        SetForceBatchAddress(SetForceBatchAddressCall),
-        SetForceBatchTimeout(SetForceBatchTimeoutCall),
         SetTrustedSequencer(SetTrustedSequencerCall),
         SetTrustedSequencerURL(SetTrustedSequencerURLCall),
         TransferAdminRole(TransferAdminRoleCall),
+        TransferVKeyManagerRole(TransferVKeyManagerRoleCall),
         TrustedSequencer(TrustedSequencerCall),
         TrustedSequencerURL(TrustedSequencerURLCall),
+        UpdateOwnedAggchainVKey(UpdateOwnedAggchainVKeyCall),
+        UseDefaultGateway(UseDefaultGatewayCall),
+        VkeyManager(VkeyManagerCall),
     }
-    impl ::ethers::core::abi::AbiDecode for PolygonZkEvmCalls {
+    impl ::ethers::core::abi::AbiDecode for AggchainBaseCalls {
         fn decode(
             data: impl AsRef<[u8]>,
         ) -> ::core::result::Result<Self, ::ethers::core::abi::AbiError> {
             let data = data.as_ref();
-            if let Ok(decoded) = <GlobalExitRootManagerL2Call as ::ethers::core::abi::AbiDecode>::decode(
+            if let Ok(decoded) = <AggchainTypeCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
-                return Ok(Self::GlobalExitRootManagerL2(decoded));
-            }
-            if let Ok(decoded) = <InitializeTxBridgeListLenLenCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::InitializeTxBridgeListLenLen(decoded));
-            }
-            if let Ok(decoded) = <InitializeTxBridgeParamsCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::InitializeTxBridgeParams(decoded));
-            }
-            if let Ok(decoded) = <InitializeTxBridgeParamsAfterBridgeAddressCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::InitializeTxBridgeParamsAfterBridgeAddress(decoded));
-            }
-            if let Ok(decoded) = <InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadataCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(
-                    Self::InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadata(
-                        decoded,
-                    ),
-                );
-            }
-            if let Ok(decoded) = <InitializeTxConstantBytesCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::InitializeTxConstantBytes(decoded));
-            }
-            if let Ok(decoded) = <InitializeTxConstantBytesEmptyMetadataCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::InitializeTxConstantBytesEmptyMetadata(decoded));
-            }
-            if let Ok(decoded) = <InitializeTxDataLenEmptyMetadataCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::InitializeTxDataLenEmptyMetadata(decoded));
-            }
-            if let Ok(decoded) = <InitializeTxEffectivePercentageCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::InitializeTxEffectivePercentage(decoded));
-            }
-            if let Ok(decoded) = <SignatureInitializeTxRCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SignatureInitializeTxR(decoded));
-            }
-            if let Ok(decoded) = <SignatureInitializeTxSCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SignatureInitializeTxS(decoded));
-            }
-            if let Ok(decoded) = <SignatureInitializeTxVCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SignatureInitializeTxV(decoded));
-            }
-            if let Ok(decoded) = <TimestampRangeCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::TimestampRange(decoded));
+                return Ok(Self::AggchainType(decoded));
             }
             if let Ok(decoded) = <AcceptAdminRoleCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::AcceptAdminRole(decoded));
             }
+            if let Ok(decoded) = <AcceptVKeyManagerRoleCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::AcceptVKeyManagerRole(decoded));
+            }
+            if let Ok(decoded) = <AddOwnedAggchainVKeyCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::AddOwnedAggchainVKey(decoded));
+            }
             if let Ok(decoded) = <AdminCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::Admin(decoded));
+            }
+            if let Ok(decoded) = <AggLayerGatewayCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::AggLayerGateway(decoded));
             }
             if let Ok(decoded) = <BridgeAddressCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::BridgeAddress(decoded));
             }
-            if let Ok(decoded) = <CalculatePolPerForceBatchCall as ::ethers::core::abi::AbiDecode>::decode(
+            if let Ok(decoded) = <DisableUseDefaultGatewayFlagCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
-                return Ok(Self::CalculatePolPerForceBatch(decoded));
+                return Ok(Self::DisableUseDefaultGatewayFlag(decoded));
             }
-            if let Ok(decoded) = <ForceBatchCall as ::ethers::core::abi::AbiDecode>::decode(
+            if let Ok(decoded) = <EnableUseDefaultGatewayFlagCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
-                return Ok(Self::ForceBatch(decoded));
+                return Ok(Self::EnableUseDefaultGatewayFlag(decoded));
             }
             if let Ok(decoded) = <ForceBatchAddressCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -5642,10 +5419,10 @@ pub mod polygon_zk_evm {
             ) {
                 return Ok(Self::GasTokenNetwork(decoded));
             }
-            if let Ok(decoded) = <GenerateInitializeTransactionCall as ::ethers::core::abi::AbiDecode>::decode(
+            if let Ok(decoded) = <GetAggchainVKeyCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
-                return Ok(Self::GenerateInitializeTransaction(decoded));
+                return Ok(Self::GetAggchainVKey(decoded));
             }
             if let Ok(decoded) = <GlobalExitRootManagerCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -5677,15 +5454,20 @@ pub mod polygon_zk_evm {
             ) {
                 return Ok(Self::NetworkName(decoded));
             }
-            if let Ok(decoded) = <OnVerifyBatchesCall as ::ethers::core::abi::AbiDecode>::decode(
+            if let Ok(decoded) = <OwnedAggchainVKeysCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
-                return Ok(Self::OnVerifyBatches(decoded));
+                return Ok(Self::OwnedAggchainVKeys(decoded));
             }
             if let Ok(decoded) = <PendingAdminCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::PendingAdmin(decoded));
+            }
+            if let Ok(decoded) = <PendingVKeyManagerCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::PendingVKeyManager(decoded));
             }
             if let Ok(decoded) = <PolCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -5696,26 +5478,6 @@ pub mod polygon_zk_evm {
                 data,
             ) {
                 return Ok(Self::RollupManager(decoded));
-            }
-            if let Ok(decoded) = <SequenceBatchesCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SequenceBatches(decoded));
-            }
-            if let Ok(decoded) = <SequenceForceBatchesCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SequenceForceBatches(decoded));
-            }
-            if let Ok(decoded) = <SetForceBatchAddressCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SetForceBatchAddress(decoded));
-            }
-            if let Ok(decoded) = <SetForceBatchTimeoutCall as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::SetForceBatchTimeout(decoded));
             }
             if let Ok(decoded) = <SetTrustedSequencerCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -5732,6 +5494,11 @@ pub mod polygon_zk_evm {
             ) {
                 return Ok(Self::TransferAdminRole(decoded));
             }
+            if let Ok(decoded) = <TransferVKeyManagerRoleCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::TransferVKeyManagerRole(decoded));
+            }
             if let Ok(decoded) = <TrustedSequencerCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -5742,62 +5509,50 @@ pub mod polygon_zk_evm {
             ) {
                 return Ok(Self::TrustedSequencerURL(decoded));
             }
+            if let Ok(decoded) = <UpdateOwnedAggchainVKeyCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::UpdateOwnedAggchainVKey(decoded));
+            }
+            if let Ok(decoded) = <UseDefaultGatewayCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::UseDefaultGateway(decoded));
+            }
+            if let Ok(decoded) = <VkeyManagerCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::VkeyManager(decoded));
+            }
             Err(::ethers::core::abi::Error::InvalidData.into())
         }
     }
-    impl ::ethers::core::abi::AbiEncode for PolygonZkEvmCalls {
+    impl ::ethers::core::abi::AbiEncode for AggchainBaseCalls {
         fn encode(self) -> Vec<u8> {
             match self {
-                Self::GlobalExitRootManagerL2(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::InitializeTxBridgeListLenLen(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::InitializeTxBridgeParams(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::InitializeTxBridgeParamsAfterBridgeAddress(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadata(
-                    element,
-                ) => ::ethers::core::abi::AbiEncode::encode(element),
-                Self::InitializeTxConstantBytes(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::InitializeTxConstantBytesEmptyMetadata(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::InitializeTxDataLenEmptyMetadata(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::InitializeTxEffectivePercentage(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::SignatureInitializeTxR(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::SignatureInitializeTxS(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::SignatureInitializeTxV(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::TimestampRange(element) => {
+                Self::AggchainType(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::AcceptAdminRole(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::AcceptVKeyManagerRole(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::AddOwnedAggchainVKey(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::Admin(element) => ::ethers::core::abi::AbiEncode::encode(element),
+                Self::AggLayerGateway(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::BridgeAddress(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::CalculatePolPerForceBatch(element) => {
+                Self::DisableUseDefaultGatewayFlag(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::ForceBatch(element) => {
+                Self::EnableUseDefaultGatewayFlag(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::ForceBatchAddress(element) => {
@@ -5815,7 +5570,7 @@ pub mod polygon_zk_evm {
                 Self::GasTokenNetwork(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::GenerateInitializeTransaction(element) => {
+                Self::GetAggchainVKey(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::GlobalExitRootManager(element) => {
@@ -5836,26 +5591,17 @@ pub mod polygon_zk_evm {
                 Self::NetworkName(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::OnVerifyBatches(element) => {
+                Self::OwnedAggchainVKeys(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::PendingAdmin(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::PendingVKeyManager(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::Pol(element) => ::ethers::core::abi::AbiEncode::encode(element),
                 Self::RollupManager(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::SequenceBatches(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::SequenceForceBatches(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::SetForceBatchAddress(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::SetForceBatchTimeout(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::SetTrustedSequencer(element) => {
@@ -5867,70 +5613,53 @@ pub mod polygon_zk_evm {
                 Self::TransferAdminRole(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::TransferVKeyManagerRole(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::TrustedSequencer(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::TrustedSequencerURL(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::UpdateOwnedAggchainVKey(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::UseDefaultGateway(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::VkeyManager(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
             }
         }
     }
-    impl ::core::fmt::Display for PolygonZkEvmCalls {
+    impl ::core::fmt::Display for AggchainBaseCalls {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
             match self {
-                Self::GlobalExitRootManagerL2(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::InitializeTxBridgeListLenLen(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::InitializeTxBridgeParams(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::InitializeTxBridgeParamsAfterBridgeAddress(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadata(
-                    element,
-                ) => ::core::fmt::Display::fmt(element, f),
-                Self::InitializeTxConstantBytes(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::InitializeTxConstantBytesEmptyMetadata(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::InitializeTxDataLenEmptyMetadata(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::InitializeTxEffectivePercentage(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SignatureInitializeTxR(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SignatureInitializeTxS(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SignatureInitializeTxV(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::TimestampRange(element) => ::core::fmt::Display::fmt(element, f),
+                Self::AggchainType(element) => ::core::fmt::Display::fmt(element, f),
                 Self::AcceptAdminRole(element) => ::core::fmt::Display::fmt(element, f),
-                Self::Admin(element) => ::core::fmt::Display::fmt(element, f),
-                Self::BridgeAddress(element) => ::core::fmt::Display::fmt(element, f),
-                Self::CalculatePolPerForceBatch(element) => {
+                Self::AcceptVKeyManagerRole(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::ForceBatch(element) => ::core::fmt::Display::fmt(element, f),
+                Self::AddOwnedAggchainVKey(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::Admin(element) => ::core::fmt::Display::fmt(element, f),
+                Self::AggLayerGateway(element) => ::core::fmt::Display::fmt(element, f),
+                Self::BridgeAddress(element) => ::core::fmt::Display::fmt(element, f),
+                Self::DisableUseDefaultGatewayFlag(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::EnableUseDefaultGatewayFlag(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::ForceBatchAddress(element) => ::core::fmt::Display::fmt(element, f),
                 Self::ForceBatchTimeout(element) => ::core::fmt::Display::fmt(element, f),
                 Self::ForcedBatches(element) => ::core::fmt::Display::fmt(element, f),
                 Self::GasTokenAddress(element) => ::core::fmt::Display::fmt(element, f),
                 Self::GasTokenNetwork(element) => ::core::fmt::Display::fmt(element, f),
-                Self::GenerateInitializeTransaction(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
+                Self::GetAggchainVKey(element) => ::core::fmt::Display::fmt(element, f),
                 Self::GlobalExitRootManager(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -5941,20 +5670,15 @@ pub mod polygon_zk_evm {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::NetworkName(element) => ::core::fmt::Display::fmt(element, f),
-                Self::OnVerifyBatches(element) => ::core::fmt::Display::fmt(element, f),
+                Self::OwnedAggchainVKeys(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::PendingAdmin(element) => ::core::fmt::Display::fmt(element, f),
+                Self::PendingVKeyManager(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::Pol(element) => ::core::fmt::Display::fmt(element, f),
                 Self::RollupManager(element) => ::core::fmt::Display::fmt(element, f),
-                Self::SequenceBatches(element) => ::core::fmt::Display::fmt(element, f),
-                Self::SequenceForceBatches(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SetForceBatchAddress(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::SetForceBatchTimeout(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
                 Self::SetTrustedSequencer(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -5962,237 +5686,197 @@ pub mod polygon_zk_evm {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::TransferAdminRole(element) => ::core::fmt::Display::fmt(element, f),
+                Self::TransferVKeyManagerRole(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::TrustedSequencer(element) => ::core::fmt::Display::fmt(element, f),
                 Self::TrustedSequencerURL(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::UpdateOwnedAggchainVKey(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::UseDefaultGateway(element) => ::core::fmt::Display::fmt(element, f),
+                Self::VkeyManager(element) => ::core::fmt::Display::fmt(element, f),
             }
         }
     }
-    impl ::core::convert::From<GlobalExitRootManagerL2Call> for PolygonZkEvmCalls {
-        fn from(value: GlobalExitRootManagerL2Call) -> Self {
-            Self::GlobalExitRootManagerL2(value)
+    impl ::core::convert::From<AggchainTypeCall> for AggchainBaseCalls {
+        fn from(value: AggchainTypeCall) -> Self {
+            Self::AggchainType(value)
         }
     }
-    impl ::core::convert::From<InitializeTxBridgeListLenLenCall> for PolygonZkEvmCalls {
-        fn from(value: InitializeTxBridgeListLenLenCall) -> Self {
-            Self::InitializeTxBridgeListLenLen(value)
-        }
-    }
-    impl ::core::convert::From<InitializeTxBridgeParamsCall> for PolygonZkEvmCalls {
-        fn from(value: InitializeTxBridgeParamsCall) -> Self {
-            Self::InitializeTxBridgeParams(value)
-        }
-    }
-    impl ::core::convert::From<InitializeTxBridgeParamsAfterBridgeAddressCall>
-    for PolygonZkEvmCalls {
-        fn from(value: InitializeTxBridgeParamsAfterBridgeAddressCall) -> Self {
-            Self::InitializeTxBridgeParamsAfterBridgeAddress(value)
-        }
-    }
-    impl ::core::convert::From<
-        InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadataCall,
-    > for PolygonZkEvmCalls {
-        fn from(
-            value: InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadataCall,
-        ) -> Self {
-            Self::InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadata(value)
-        }
-    }
-    impl ::core::convert::From<InitializeTxConstantBytesCall> for PolygonZkEvmCalls {
-        fn from(value: InitializeTxConstantBytesCall) -> Self {
-            Self::InitializeTxConstantBytes(value)
-        }
-    }
-    impl ::core::convert::From<InitializeTxConstantBytesEmptyMetadataCall>
-    for PolygonZkEvmCalls {
-        fn from(value: InitializeTxConstantBytesEmptyMetadataCall) -> Self {
-            Self::InitializeTxConstantBytesEmptyMetadata(value)
-        }
-    }
-    impl ::core::convert::From<InitializeTxDataLenEmptyMetadataCall>
-    for PolygonZkEvmCalls {
-        fn from(value: InitializeTxDataLenEmptyMetadataCall) -> Self {
-            Self::InitializeTxDataLenEmptyMetadata(value)
-        }
-    }
-    impl ::core::convert::From<InitializeTxEffectivePercentageCall>
-    for PolygonZkEvmCalls {
-        fn from(value: InitializeTxEffectivePercentageCall) -> Self {
-            Self::InitializeTxEffectivePercentage(value)
-        }
-    }
-    impl ::core::convert::From<SignatureInitializeTxRCall> for PolygonZkEvmCalls {
-        fn from(value: SignatureInitializeTxRCall) -> Self {
-            Self::SignatureInitializeTxR(value)
-        }
-    }
-    impl ::core::convert::From<SignatureInitializeTxSCall> for PolygonZkEvmCalls {
-        fn from(value: SignatureInitializeTxSCall) -> Self {
-            Self::SignatureInitializeTxS(value)
-        }
-    }
-    impl ::core::convert::From<SignatureInitializeTxVCall> for PolygonZkEvmCalls {
-        fn from(value: SignatureInitializeTxVCall) -> Self {
-            Self::SignatureInitializeTxV(value)
-        }
-    }
-    impl ::core::convert::From<TimestampRangeCall> for PolygonZkEvmCalls {
-        fn from(value: TimestampRangeCall) -> Self {
-            Self::TimestampRange(value)
-        }
-    }
-    impl ::core::convert::From<AcceptAdminRoleCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<AcceptAdminRoleCall> for AggchainBaseCalls {
         fn from(value: AcceptAdminRoleCall) -> Self {
             Self::AcceptAdminRole(value)
         }
     }
-    impl ::core::convert::From<AdminCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<AcceptVKeyManagerRoleCall> for AggchainBaseCalls {
+        fn from(value: AcceptVKeyManagerRoleCall) -> Self {
+            Self::AcceptVKeyManagerRole(value)
+        }
+    }
+    impl ::core::convert::From<AddOwnedAggchainVKeyCall> for AggchainBaseCalls {
+        fn from(value: AddOwnedAggchainVKeyCall) -> Self {
+            Self::AddOwnedAggchainVKey(value)
+        }
+    }
+    impl ::core::convert::From<AdminCall> for AggchainBaseCalls {
         fn from(value: AdminCall) -> Self {
             Self::Admin(value)
         }
     }
-    impl ::core::convert::From<BridgeAddressCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<AggLayerGatewayCall> for AggchainBaseCalls {
+        fn from(value: AggLayerGatewayCall) -> Self {
+            Self::AggLayerGateway(value)
+        }
+    }
+    impl ::core::convert::From<BridgeAddressCall> for AggchainBaseCalls {
         fn from(value: BridgeAddressCall) -> Self {
             Self::BridgeAddress(value)
         }
     }
-    impl ::core::convert::From<CalculatePolPerForceBatchCall> for PolygonZkEvmCalls {
-        fn from(value: CalculatePolPerForceBatchCall) -> Self {
-            Self::CalculatePolPerForceBatch(value)
+    impl ::core::convert::From<DisableUseDefaultGatewayFlagCall> for AggchainBaseCalls {
+        fn from(value: DisableUseDefaultGatewayFlagCall) -> Self {
+            Self::DisableUseDefaultGatewayFlag(value)
         }
     }
-    impl ::core::convert::From<ForceBatchCall> for PolygonZkEvmCalls {
-        fn from(value: ForceBatchCall) -> Self {
-            Self::ForceBatch(value)
+    impl ::core::convert::From<EnableUseDefaultGatewayFlagCall> for AggchainBaseCalls {
+        fn from(value: EnableUseDefaultGatewayFlagCall) -> Self {
+            Self::EnableUseDefaultGatewayFlag(value)
         }
     }
-    impl ::core::convert::From<ForceBatchAddressCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<ForceBatchAddressCall> for AggchainBaseCalls {
         fn from(value: ForceBatchAddressCall) -> Self {
             Self::ForceBatchAddress(value)
         }
     }
-    impl ::core::convert::From<ForceBatchTimeoutCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<ForceBatchTimeoutCall> for AggchainBaseCalls {
         fn from(value: ForceBatchTimeoutCall) -> Self {
             Self::ForceBatchTimeout(value)
         }
     }
-    impl ::core::convert::From<ForcedBatchesCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<ForcedBatchesCall> for AggchainBaseCalls {
         fn from(value: ForcedBatchesCall) -> Self {
             Self::ForcedBatches(value)
         }
     }
-    impl ::core::convert::From<GasTokenAddressCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<GasTokenAddressCall> for AggchainBaseCalls {
         fn from(value: GasTokenAddressCall) -> Self {
             Self::GasTokenAddress(value)
         }
     }
-    impl ::core::convert::From<GasTokenNetworkCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<GasTokenNetworkCall> for AggchainBaseCalls {
         fn from(value: GasTokenNetworkCall) -> Self {
             Self::GasTokenNetwork(value)
         }
     }
-    impl ::core::convert::From<GenerateInitializeTransactionCall> for PolygonZkEvmCalls {
-        fn from(value: GenerateInitializeTransactionCall) -> Self {
-            Self::GenerateInitializeTransaction(value)
+    impl ::core::convert::From<GetAggchainVKeyCall> for AggchainBaseCalls {
+        fn from(value: GetAggchainVKeyCall) -> Self {
+            Self::GetAggchainVKey(value)
         }
     }
-    impl ::core::convert::From<GlobalExitRootManagerCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<GlobalExitRootManagerCall> for AggchainBaseCalls {
         fn from(value: GlobalExitRootManagerCall) -> Self {
             Self::GlobalExitRootManager(value)
         }
     }
-    impl ::core::convert::From<InitializeCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<InitializeCall> for AggchainBaseCalls {
         fn from(value: InitializeCall) -> Self {
             Self::Initialize(value)
         }
     }
-    impl ::core::convert::From<LastAccInputHashCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<LastAccInputHashCall> for AggchainBaseCalls {
         fn from(value: LastAccInputHashCall) -> Self {
             Self::LastAccInputHash(value)
         }
     }
-    impl ::core::convert::From<LastForceBatchCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<LastForceBatchCall> for AggchainBaseCalls {
         fn from(value: LastForceBatchCall) -> Self {
             Self::LastForceBatch(value)
         }
     }
-    impl ::core::convert::From<LastForceBatchSequencedCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<LastForceBatchSequencedCall> for AggchainBaseCalls {
         fn from(value: LastForceBatchSequencedCall) -> Self {
             Self::LastForceBatchSequenced(value)
         }
     }
-    impl ::core::convert::From<NetworkNameCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<NetworkNameCall> for AggchainBaseCalls {
         fn from(value: NetworkNameCall) -> Self {
             Self::NetworkName(value)
         }
     }
-    impl ::core::convert::From<OnVerifyBatchesCall> for PolygonZkEvmCalls {
-        fn from(value: OnVerifyBatchesCall) -> Self {
-            Self::OnVerifyBatches(value)
+    impl ::core::convert::From<OwnedAggchainVKeysCall> for AggchainBaseCalls {
+        fn from(value: OwnedAggchainVKeysCall) -> Self {
+            Self::OwnedAggchainVKeys(value)
         }
     }
-    impl ::core::convert::From<PendingAdminCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<PendingAdminCall> for AggchainBaseCalls {
         fn from(value: PendingAdminCall) -> Self {
             Self::PendingAdmin(value)
         }
     }
-    impl ::core::convert::From<PolCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<PendingVKeyManagerCall> for AggchainBaseCalls {
+        fn from(value: PendingVKeyManagerCall) -> Self {
+            Self::PendingVKeyManager(value)
+        }
+    }
+    impl ::core::convert::From<PolCall> for AggchainBaseCalls {
         fn from(value: PolCall) -> Self {
             Self::Pol(value)
         }
     }
-    impl ::core::convert::From<RollupManagerCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<RollupManagerCall> for AggchainBaseCalls {
         fn from(value: RollupManagerCall) -> Self {
             Self::RollupManager(value)
         }
     }
-    impl ::core::convert::From<SequenceBatchesCall> for PolygonZkEvmCalls {
-        fn from(value: SequenceBatchesCall) -> Self {
-            Self::SequenceBatches(value)
-        }
-    }
-    impl ::core::convert::From<SequenceForceBatchesCall> for PolygonZkEvmCalls {
-        fn from(value: SequenceForceBatchesCall) -> Self {
-            Self::SequenceForceBatches(value)
-        }
-    }
-    impl ::core::convert::From<SetForceBatchAddressCall> for PolygonZkEvmCalls {
-        fn from(value: SetForceBatchAddressCall) -> Self {
-            Self::SetForceBatchAddress(value)
-        }
-    }
-    impl ::core::convert::From<SetForceBatchTimeoutCall> for PolygonZkEvmCalls {
-        fn from(value: SetForceBatchTimeoutCall) -> Self {
-            Self::SetForceBatchTimeout(value)
-        }
-    }
-    impl ::core::convert::From<SetTrustedSequencerCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<SetTrustedSequencerCall> for AggchainBaseCalls {
         fn from(value: SetTrustedSequencerCall) -> Self {
             Self::SetTrustedSequencer(value)
         }
     }
-    impl ::core::convert::From<SetTrustedSequencerURLCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<SetTrustedSequencerURLCall> for AggchainBaseCalls {
         fn from(value: SetTrustedSequencerURLCall) -> Self {
             Self::SetTrustedSequencerURL(value)
         }
     }
-    impl ::core::convert::From<TransferAdminRoleCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<TransferAdminRoleCall> for AggchainBaseCalls {
         fn from(value: TransferAdminRoleCall) -> Self {
             Self::TransferAdminRole(value)
         }
     }
-    impl ::core::convert::From<TrustedSequencerCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<TransferVKeyManagerRoleCall> for AggchainBaseCalls {
+        fn from(value: TransferVKeyManagerRoleCall) -> Self {
+            Self::TransferVKeyManagerRole(value)
+        }
+    }
+    impl ::core::convert::From<TrustedSequencerCall> for AggchainBaseCalls {
         fn from(value: TrustedSequencerCall) -> Self {
             Self::TrustedSequencer(value)
         }
     }
-    impl ::core::convert::From<TrustedSequencerURLCall> for PolygonZkEvmCalls {
+    impl ::core::convert::From<TrustedSequencerURLCall> for AggchainBaseCalls {
         fn from(value: TrustedSequencerURLCall) -> Self {
             Self::TrustedSequencerURL(value)
         }
     }
-    ///Container type for all return fields from the `GLOBAL_EXIT_ROOT_MANAGER_L2` function with signature `GLOBAL_EXIT_ROOT_MANAGER_L2()` and selector `0x9e001877`
+    impl ::core::convert::From<UpdateOwnedAggchainVKeyCall> for AggchainBaseCalls {
+        fn from(value: UpdateOwnedAggchainVKeyCall) -> Self {
+            Self::UpdateOwnedAggchainVKey(value)
+        }
+    }
+    impl ::core::convert::From<UseDefaultGatewayCall> for AggchainBaseCalls {
+        fn from(value: UseDefaultGatewayCall) -> Self {
+            Self::UseDefaultGateway(value)
+        }
+    }
+    impl ::core::convert::From<VkeyManagerCall> for AggchainBaseCalls {
+        fn from(value: VkeyManagerCall) -> Self {
+            Self::VkeyManager(value)
+        }
+    }
+    ///Container type for all return fields from the `AGGCHAIN_TYPE` function with signature `AGGCHAIN_TYPE()` and selector `0x6e7fbce9`
     #[derive(
         Clone,
         ::ethers::contract::EthAbiType,
@@ -6203,155 +5887,7 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    pub struct GlobalExitRootManagerL2Return(pub ::ethers::core::types::Address);
-    ///Container type for all return fields from the `INITIALIZE_TX_BRIDGE_LIST_LEN_LEN` function with signature `INITIALIZE_TX_BRIDGE_LIST_LEN_LEN()` and selector `0x11e892d4`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct InitializeTxBridgeListLenLenReturn(pub u8);
-    ///Container type for all return fields from the `INITIALIZE_TX_BRIDGE_PARAMS` function with signature `INITIALIZE_TX_BRIDGE_PARAMS()` and selector `0x05835f37`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct InitializeTxBridgeParamsReturn(pub ::ethers::core::types::Bytes);
-    ///Container type for all return fields from the `INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS` function with signature `INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS()` and selector `0x7a5460c5`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct InitializeTxBridgeParamsAfterBridgeAddressReturn(
-        pub ::ethers::core::types::Bytes,
-    );
-    ///Container type for all return fields from the `INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS_EMPTY_METADATA` function with signature `INITIALIZE_TX_BRIDGE_PARAMS_AFTER_BRIDGE_ADDRESS_EMPTY_METADATA()` and selector `0x52bdeb6d`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct InitializeTxBridgeParamsAfterBridgeAddressEmptyMetadataReturn(
-        pub ::ethers::core::types::Bytes,
-    );
-    ///Container type for all return fields from the `INITIALIZE_TX_CONSTANT_BYTES` function with signature `INITIALIZE_TX_CONSTANT_BYTES()` and selector `0x03508963`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct InitializeTxConstantBytesReturn(pub u16);
-    ///Container type for all return fields from the `INITIALIZE_TX_CONSTANT_BYTES_EMPTY_METADATA` function with signature `INITIALIZE_TX_CONSTANT_BYTES_EMPTY_METADATA()` and selector `0x676870d2`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct InitializeTxConstantBytesEmptyMetadataReturn(pub u16);
-    ///Container type for all return fields from the `INITIALIZE_TX_DATA_LEN_EMPTY_METADATA` function with signature `INITIALIZE_TX_DATA_LEN_EMPTY_METADATA()` and selector `0xc7fffd4b`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct InitializeTxDataLenEmptyMetadataReturn(pub u8);
-    ///Container type for all return fields from the `INITIALIZE_TX_EFFECTIVE_PERCENTAGE` function with signature `INITIALIZE_TX_EFFECTIVE_PERCENTAGE()` and selector `0x40b5de6c`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct InitializeTxEffectivePercentageReturn(pub [u8; 1]);
-    ///Container type for all return fields from the `SIGNATURE_INITIALIZE_TX_R` function with signature `SIGNATURE_INITIALIZE_TX_R()` and selector `0xb0afe154`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct SignatureInitializeTxRReturn(pub [u8; 32]);
-    ///Container type for all return fields from the `SIGNATURE_INITIALIZE_TX_S` function with signature `SIGNATURE_INITIALIZE_TX_S()` and selector `0xd7bc90ff`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct SignatureInitializeTxSReturn(pub [u8; 32]);
-    ///Container type for all return fields from the `SIGNATURE_INITIALIZE_TX_V` function with signature `SIGNATURE_INITIALIZE_TX_V()` and selector `0xf35dda47`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct SignatureInitializeTxVReturn(pub u8);
-    ///Container type for all return fields from the `TIMESTAMP_RANGE` function with signature `TIMESTAMP_RANGE()` and selector `0x42308fab`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct TimestampRangeReturn(pub ::ethers::core::types::U256);
+    pub struct AggchainTypeReturn(pub u32);
     ///Container type for all return fields from the `admin` function with signature `admin()` and selector `0xf851a440`
     #[derive(
         Clone,
@@ -6364,6 +5900,18 @@ pub mod polygon_zk_evm {
         Hash
     )]
     pub struct AdminReturn(pub ::ethers::core::types::Address);
+    ///Container type for all return fields from the `aggLayerGateway` function with signature `aggLayerGateway()` and selector `0xab0475cf`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct AggLayerGatewayReturn(pub ::ethers::core::types::Address);
     ///Container type for all return fields from the `bridgeAddress` function with signature `bridgeAddress()` and selector `0xa3c573eb`
     #[derive(
         Clone,
@@ -6376,18 +5924,6 @@ pub mod polygon_zk_evm {
         Hash
     )]
     pub struct BridgeAddressReturn(pub ::ethers::core::types::Address);
-    ///Container type for all return fields from the `calculatePolPerForceBatch` function with signature `calculatePolPerForceBatch()` and selector `0x00d0295d`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthAbiType,
-        ::ethers::contract::EthAbiCodec,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    pub struct CalculatePolPerForceBatchReturn(pub ::ethers::core::types::U256);
     ///Container type for all return fields from the `forceBatchAddress` function with signature `forceBatchAddress()` and selector `0x2c111c06`
     #[derive(
         Clone,
@@ -6448,7 +5984,7 @@ pub mod polygon_zk_evm {
         Hash
     )]
     pub struct GasTokenNetworkReturn(pub u32);
-    ///Container type for all return fields from the `generateInitializeTransaction` function with signature `generateInitializeTransaction(uint32,address,uint32,bytes)` and selector `0xa652f26c`
+    ///Container type for all return fields from the `getAggchainVKey` function with signature `getAggchainVKey(bytes4)` and selector `0x01fcf6a0`
     #[derive(
         Clone,
         ::ethers::contract::EthAbiType,
@@ -6459,7 +5995,9 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    pub struct GenerateInitializeTransactionReturn(pub ::ethers::core::types::Bytes);
+    pub struct GetAggchainVKeyReturn {
+        pub aggchain_v_key: [u8; 32],
+    }
     ///Container type for all return fields from the `globalExitRootManager` function with signature `globalExitRootManager()` and selector `0xd02103ca`
     #[derive(
         Clone,
@@ -6520,6 +6058,20 @@ pub mod polygon_zk_evm {
         Hash
     )]
     pub struct NetworkNameReturn(pub ::std::string::String);
+    ///Container type for all return fields from the `ownedAggchainVKeys` function with signature `ownedAggchainVKeys(bytes4)` and selector `0xeffb8479`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct OwnedAggchainVKeysReturn {
+        pub owned_aggchain_v_key: [u8; 32],
+    }
     ///Container type for all return fields from the `pendingAdmin` function with signature `pendingAdmin()` and selector `0x26782247`
     #[derive(
         Clone,
@@ -6532,6 +6084,18 @@ pub mod polygon_zk_evm {
         Hash
     )]
     pub struct PendingAdminReturn(pub ::ethers::core::types::Address);
+    ///Container type for all return fields from the `pendingVKeyManager` function with signature `pendingVKeyManager()` and selector `0xbfb193b6`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct PendingVKeyManagerReturn(pub ::ethers::core::types::Address);
     ///Container type for all return fields from the `pol` function with signature `pol()` and selector `0xe46761c4`
     #[derive(
         Clone,
@@ -6580,7 +6144,7 @@ pub mod polygon_zk_evm {
         Hash
     )]
     pub struct TrustedSequencerURLReturn(pub ::std::string::String);
-    ///`BatchData(bytes,bytes32,uint64,bytes32)`
+    ///Container type for all return fields from the `useDefaultGateway` function with signature `useDefaultGateway()` and selector `0xff904079`
     #[derive(
         Clone,
         ::ethers::contract::EthAbiType,
@@ -6591,10 +6155,17 @@ pub mod polygon_zk_evm {
         Eq,
         Hash
     )]
-    pub struct BatchData {
-        pub transactions: ::ethers::core::types::Bytes,
-        pub forced_global_exit_root: [u8; 32],
-        pub forced_timestamp: u64,
-        pub forced_block_hash_l1: [u8; 32],
-    }
+    pub struct UseDefaultGatewayReturn(pub bool);
+    ///Container type for all return fields from the `vKeyManager` function with signature `vKeyManager()` and selector `0xe279984e`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct VkeyManagerReturn(pub ::ethers::core::types::Address);
 }

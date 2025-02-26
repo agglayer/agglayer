@@ -20,6 +20,7 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 futures-util = "0.3.31"
+agglayer-contracts.workspace = true
 agglayer-clock.workspace = true
 agglayer-storage.workspace = true
 agglayer-types.workspace = true

@@ -205,16 +205,17 @@ mockall::mock! {
             &self,
             rollup_id: u32,
             proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
-        ) -> Result<ethers::types::Address, ()>;
+        ) -> Result<ethers::types::Address, L1RpcError>;
 
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
     }
+
     #[async_trait::async_trait]
     impl Settler for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
 
-        async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, String>;
+        async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, L1RpcError>;
         fn build_pending_transaction(
             &self,
             tx_hash: ethers::types::H256,
