@@ -23,7 +23,7 @@ pub trait RollupContract {
         &self,
         rollup_id: u32,
         proof_signers: HashMap<u32, Address>,
-    ) -> Result<Address, ()>;
+    ) -> Result<Address, L1RpcError>;
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
 
@@ -151,7 +151,7 @@ where
         &self,
         rollup_id: u32,
         proof_signers: HashMap<u32, Address>,
-    ) -> Result<Address, ()> {
+    ) -> Result<Address, L1RpcError> {
         if let Some(addr) = proof_signers.get(&rollup_id) {
             Ok(*addr)
         } else {
@@ -159,7 +159,7 @@ where
                 .inner
                 .rollup_id_to_rollup_data(rollup_id)
                 .await
-                .map_err(|_| ())?;
+                .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
 
             let rollup_metadata = RollupIDToRollupDataReturn { rollup_data };
             PolygonZkEvm::new(
@@ -168,7 +168,7 @@ where
             )
             .trusted_sequencer()
             .await
-            .map_err(|_| ())
+            .map_err(|_| L1RpcError::TrustedSequencerRetrievalFailed)
         }
     }
 }

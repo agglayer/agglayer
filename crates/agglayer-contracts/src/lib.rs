@@ -78,6 +78,15 @@ pub enum L1RpcError {
     TransactionReceiptNotFound(String),
     #[error("Failed to fetch aggchain vkey")]
     AggchainVkeyFetchFailed,
+    #[error("Failed to retrieve trusted sequencer")]
+    TrustedSequencerRetrievalFailed,
+    #[error("Failed to retrieve rollup data")]
+    RollupDataRetrievalFailed,
+    #[error("Unable to get transaction")]
+    UnableToGetTransaction {
+        #[source]
+        source: Box<anyhow::Error>,
+    },
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>

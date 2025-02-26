@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 agglayer-types.workspace = true
 
+anyhow.workspace = true
 async-trait.workspace = true
 ethers.workspace = true
 ethers-contract = "2.0.14"
