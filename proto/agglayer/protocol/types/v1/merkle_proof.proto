@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package agglayer.protocol.types.v1;
+
+import "agglayer/protocol/types/v1/bytes.proto";
+
+// Represents a Merkle proof.
+message MerkleProof {
+  // The root of the Merkle tree.
+  FixedBytes32 root = 1;
+  // The path from the leaf to the root.
+  repeated FixedBytes32 siblings = 2;
+}

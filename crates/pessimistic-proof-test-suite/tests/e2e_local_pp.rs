@@ -1,9 +1,8 @@
 use agglayer_types::primitives::U256;
-use pessimistic_proof::aggchain_proof::AggchainProofSP1Data;
 use pessimistic_proof::core::generate_pessimistic_proof;
 use pessimistic_proof::local_state::LocalNetworkState;
 use pessimistic_proof::NetworkState;
-use pessimistic_proof::{aggchain_proof::AggchainProofData, bridge_exit::TokenInfo};
+use pessimistic_proof::{bridge_exit::TokenInfo, core};
 use pessimistic_proof_test_suite::{
     forest::Forest,
     sample_data::{ETH, USDC},
@@ -116,10 +115,10 @@ fn test_sp1_simple() {
         .unwrap();
 
     // Set the aggchain proof to the sp1 variant
-    multi_batch_header.aggchain_proof = AggchainProofData::SP1(AggchainProofSP1Data {
+    multi_batch_header.aggchain_proof = core::AggchainData::Generic {
         aggchain_params: aggchain_params.into(),
         aggchain_vkey: aggchain_vkey.hash_u32(),
-    });
+    };
 
     let initial_state: NetworkState = LocalNetworkState::from(initial_state).into();
     let mut stdin = SP1Stdin::new();

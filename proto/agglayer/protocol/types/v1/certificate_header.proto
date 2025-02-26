@@ -25,7 +25,7 @@ message CertificateHeader {
   FixedBytes32 metadata = 8;
   // Certificate status.
   CertificateStatus status = 9;
-  // Certificate status error details.
+  // Certificate status error details. Present iff `status` is `CERTIFICATE_STATUS_IN_ERROR`.
   CertificateStatusError error = 10;
   // Settlement transaction hash.
   FixedBytes32 settlement_tx_hash = 11;

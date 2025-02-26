@@ -1,9 +1,11 @@
-use agglayer_types::{compute_signature_info, Address, Certificate, LocalNetworkStateData, U256};
+use agglayer_types::{
+    aggchain_proof::AggchainData, compute_signature_info, Address, Certificate,
+    LocalNetworkStateData, U256,
+};
 use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer};
 pub use pessimistic_proof::bridge_exit::LeafType;
 use pessimistic_proof::{
-    aggchain_proof::AggchainProof,
     bridge_exit::{BridgeExit, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit::{
@@ -191,7 +193,7 @@ impl Forest {
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            aggchain_proof: AggchainProof::ECDSA { signature },
+            aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -215,9 +217,9 @@ impl Forest {
     ) -> (Certificate, SP1VerifyingKey, [u8; 32], SP1Proof) {
         let certificate = self.apply_events(imported_bridge_events, bridge_events);
 
-        let signature = match certificate.aggchain_proof {
-            AggchainProof::ECDSA { signature } => signature,
-            AggchainProof::SP1 { .. } => unimplemented!("SP1 handling not implemented"),
+        let signature = match certificate.aggchain_data {
+            AggchainData::ECDSA { signature } => signature,
+            AggchainData::Generic { .. } => unimplemented!("SP1 handling not implemented"),
         };
 
         let (aggchain_proof, aggchain_vkey, aggchain_params) =

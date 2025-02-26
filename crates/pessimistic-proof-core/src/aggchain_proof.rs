@@ -15,54 +15,49 @@ use crate::keccak::{digest::Digest, keccak256_combine};
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub enum AggchainType {
     ECDSA = 0,
-    SP1 = 1,
+    Generic = 1,
 }
 
 pub type Vkey = [u32; 8];
 
-/// Aggchain Proof which is either one ECDSA signature, or one stark proof.
+/// Aggchain Data which is either one ECDSA signature, or one generic proof.
 /// Contains all the necessary data for verification.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum AggchainProofData {
+pub enum AggchainData {
     /// ECDSA signature.
-    ECDSA(AggchainProofECDSAData),
-    /// STARK proof generated with SP1 and its metadata.
-    SP1(AggchainProofSP1Data),
+    ECDSA {
+        /// Signer committing to the state transition.
+        signer: Address,
+        /// Signature committing to the state transition.
+        signature: Signature,
+    },
+    /// Generic proof and its metadata.
+    Generic {
+        /// Chain-specific commitment forwarded by the PP.
+        aggchain_params: Digest,
+        /// Verifying key for the aggchain proof program.
+        aggchain_vkey: Vkey,
+    },
 }
 
-impl AggchainProofData {
+impl AggchainData {
     /// Returns the aggchain hash
     pub fn aggchain_hash(&self) -> Digest {
         match &self {
-            AggchainProofData::ECDSA(aggchain_proof_ecdsa) => keccak256_combine([
+            AggchainData::ECDSA { signer, .. } => keccak256_combine([
                 &(AggchainType::ECDSA as u32).to_be_bytes(),
-                aggchain_proof_ecdsa.signer.as_slice(),
+                signer.as_slice(),
             ]),
-            AggchainProofData::SP1(aggchain_proof_sp1) => keccak256_combine([
-                &(AggchainType::SP1 as u32).to_be_bytes(),
-                words_to_bytes_le(&aggchain_proof_sp1.aggchain_vkey).as_slice(),
-                aggchain_proof_sp1.aggchain_params.as_slice(),
+            AggchainData::Generic {
+                aggchain_params,
+                aggchain_vkey,
+            } => keccak256_combine([
+                &(AggchainType::Generic as u32).to_be_bytes(),
+                words_to_bytes_le(aggchain_vkey).as_slice(),
+                aggchain_params.as_slice(),
             ]),
         }
     }
-}
-
-/// ECDSA variant of the aggchain proof.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AggchainProofECDSAData {
-    /// Signer committing to the state transition.
-    pub signer: Address,
-    /// Signature committing to the state transition.
-    pub signature: Signature,
-}
-
-/// SP1 variant of the aggchain proof.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AggchainProofSP1Data {
-    /// Chain-specific commitment forwarded by the PP.
-    pub aggchain_params: Digest,
-    /// SP1 verifying key for the SP1 aggchain proof program.
-    pub aggchain_vkey: Vkey,
 }
 
 /// Public values to verify the SP1 aggchain proof.

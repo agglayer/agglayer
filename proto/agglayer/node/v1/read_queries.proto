@@ -28,13 +28,7 @@ service NodeStateService {
   rpc GetCertificateHeader(GetCertificateHeaderRequest) returns (GetCertificateHeaderResponse);
 
   // Method used to get the latest known certificate header for a network.
-  rpc GetLatestKnownCertificateHeader(GetLatestKnownCertificateHeaderRequest) returns (GetLatestKnownCertificateHeaderResponse);
-
-  // Method used to get the latest settled certificate header for a network.
-  rpc GetLatestSettledCertificateHeader(GetLatestSettledCertificateHeaderRequest) returns (GetLatestSettledCertificateHeaderResponse);
-
-  // Method used to get the latest pending certificate header for a network.
-  rpc GetLatestPendingCertificateHeader(GetLatestPendingCertificateHeaderRequest) returns (GetLatestPendingCertificateHeaderResponse);
+  rpc GetLatestCertificateHeader(GetLatestCertificateHeaderRequest) returns (GetLatestCertificateHeaderResponse);
 }
 
 // Request to get a CertificateHeader for a particular CertificateId.
@@ -58,38 +52,29 @@ message GetEpochConfigurationResponse {
   protocol.types.v1.EpochConfiguration epoch_configuration = 1;
 }
 
-// Request to get the latest known certificate header for a network.
-message GetLatestKnownCertificateHeaderRequest {
+// Request to get the latest known/pending/settled certificate header for a network.
+message GetLatestCertificateHeaderRequest {
+  // Which type of latest certificate we want to get.
+  LatestCertificateRequestType type = 1;
+
   // The network identifier.
-  uint32 network_id = 1;
+  uint32 network_id = 2;
 }
 
-// Response to the latest known certificate header request.
-message GetLatestKnownCertificateHeaderResponse {
-  // The latest known certificate header.
-  protocol.types.v1.CertificateHeader certificate_header = 1;
+// The type of latest certificate we want to get.
+enum LatestCertificateRequestType {
+  // Default value
+  LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED = 0;
+
+  // Pending certificate.
+  LATEST_CERTIFICATE_REQUEST_TYPE_PENDING = 1;
+
+  // Settled certificate.
+  LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED = 2;
 }
 
-// Request to get the latest settled certificate header for a network.
-message GetLatestSettledCertificateHeaderRequest {
-  // The network identifier.
-  uint32 network_id = 1;
-}
-
-// Response to the latest settled certificate header request.
-message GetLatestSettledCertificateHeaderResponse {
-  // The latest settled certificate header.
-  protocol.types.v1.CertificateHeader certificate_header = 1;
-}
-
-// Request to get the latest pending certificate header for a network.
-message GetLatestPendingCertificateHeaderRequest {
-  // The network identifier.
-  uint32 network_id = 1;
-}
-
-// Response to the latest pending certificate header request.
-message GetLatestPendingCertificateHeaderResponse {
-  // The latest pending certificate header.
+// Response to the latest known/pending/settled certificate header request.
+message GetLatestCertificateHeaderResponse {
+  // The latest certificate header.
   protocol.types.v1.CertificateHeader certificate_header = 1;
 }

@@ -140,14 +140,17 @@ impl FromU256 for Digest {
     }
 }
 
-impl TryFrom<Vec<u8>> for Digest {
-    type Error = hex::FromHexError;
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        let mut bytes = [0u8; 32];
-        let len = value.len();
-        bytes[..len].copy_from_slice(&value);
+impl TryFrom<&[u8]> for Digest {
+    type Error = std::array::TryFromSliceError;
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        <[u8; 32]>::try_from(value).map(Digest)
+    }
+}
 
-        Ok(Digest(bytes))
+impl TryFrom<Vec<u8>> for Digest {
+    type Error = std::array::TryFromSliceError;
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(&*value)
     }
 }
 
