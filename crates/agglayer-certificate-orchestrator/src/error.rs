@@ -45,13 +45,22 @@ pub enum Error {
 
     #[error(transparent)]
     PreCertification(#[from] PreCertificationError),
+
     #[error(transparent)]
     Certification(#[from] CertificationError),
 
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
-    #[error("internal error: {0}")]
+
+    #[error("Internal error: {0}")]
     InternalError(String),
+
+    #[error("Joining epoch-packing task for {epoch}")]
+    JoiningEpochPackingTask {
+        epoch: u64,
+        #[source]
+        source: tokio::task::JoinError,
+    },
 
     #[error("The status of the certificate is invalid")]
     InvalidCertificateStatus,
@@ -70,6 +79,7 @@ pub enum Error {
         certificate_id: CertificateId,
         error: String,
     },
+
     #[error("Failed to communicate with L1: {0}")]
     L1CommunicationError(String),
 }
@@ -87,6 +97,9 @@ impl From<Error> for CertificateStatusError {
             }
             Error::Storage(error) => CertificateStatusError::InternalError(error.to_string()),
             Error::InternalError(error) => CertificateStatusError::InternalError(error),
+            err @ Error::JoiningEpochPackingTask { .. } => {
+                CertificateStatusError::InternalError(format!("{err:?}"))
+            }
             Error::InvalidCertificateStatus => {
                 CertificateStatusError::InternalError("InvalidCertificateStatus".to_string())
             }

@@ -393,23 +393,14 @@ where
     }
 
     async fn pack(&self, closing_epoch: Arc<Self::PerEpochStore>) -> Result<(), Error> {
-        let epoch_number = closing_epoch.get_epoch_number();
-        debug!("Start the settlement of the epoch {}", epoch_number);
+        let epoch = closing_epoch.get_epoch_number();
+        debug!("Start the settlement of the epoch {epoch}");
 
         // No aggregation for now, we settle each PP individually
-        let _result: Result<(), Error> = tokio::task::spawn_blocking(move || {
-            closing_epoch.start_packing()?;
-
-            Ok(())
-        })
-        .await
-        // TODO: Handle error in a better way
-        .map_err(|_| {
-            Error::InternalError(format!(
-                "Unable to join the packing task for {}",
-                epoch_number
-            ))
-        })?;
+        tokio::task::spawn_blocking(move || closing_epoch.start_packing())
+            .await
+            .map_err(|j| Error::JoiningEpochPackingTask { epoch, source: j })?
+            .map_err(Error::Storage)?;
 
         Ok(())
     }
