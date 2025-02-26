@@ -30,26 +30,26 @@ message Certificate {
 
 // Aggchaindata is the data sent by the aggchain.
 message AggchainData {
-  // Aggchain proof context to share non-sensitive data.
-  //
-  // Examples: exact SP1 version, trace id, etc. Basically used for debugging.
-  map<string, bytes> context = 1;
-
   // The data of the aggchain.
   oneof data {
     // Signature committed to the bridge exits and imported bridge exits.
-    FixedBytes65 signature = 2;
-    // SP1v4 Aggchain proof.
-    AggchainProofSp1v4 sp1v4 = 3;
+    FixedBytes65 signature = 1;
+    // Generic Aggchain proof.
+    AggchainProof generic = 2;
   }
 }
 
-// SP1v4 aggchain proof.
-message AggchainProofSp1v4 {
-  // Digest of the aggchain params.
+// Aggchain proof.
+message AggchainProof {
+  // Aggchain params.
   FixedBytes32 aggchain_params = 1;
-  // The actual proof.
-  bytes proof = 2;
+  // Aggchain proof context to share non-sensitive data.
+  map<string, bytes> context = 2;
+  // The proof for the aggchain.
+  oneof proof {
+    // SP1 stark proof.
+    bytes sp1_stark = 3;
+  }
 }
 
 // Certificate identifier.

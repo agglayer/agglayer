@@ -7,25 +7,17 @@ impl serde::Serialize for AggchainData {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.context.is_empty() {
-            len += 1;
-        }
         if self.data.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.AggchainData", len)?;
-        if !self.context.is_empty() {
-            let v: std::collections::HashMap<_, _> = self.context.iter()
-                .map(|(k, v)| (k, pbjson::private::base64::encode(v))).collect();
-            struct_ser.serialize_field("context", &v)?;
-        }
         if let Some(v) = self.data.as_ref() {
             match v {
                 aggchain_data::Data::Signature(v) => {
                     struct_ser.serialize_field("signature", v)?;
                 }
-                aggchain_data::Data::Sp1v4(v) => {
-                    struct_ser.serialize_field("sp1v4", v)?;
+                aggchain_data::Data::Generic(v) => {
+                    struct_ser.serialize_field("generic", v)?;
                 }
             }
         }
@@ -39,16 +31,14 @@ impl<'de> serde::Deserialize<'de> for AggchainData {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "context",
             "signature",
-            "sp1v4",
+            "generic",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
-            Context,
             Signature,
-            Sp1v4,
+            Generic,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -70,9 +60,8 @@ impl<'de> serde::Deserialize<'de> for AggchainData {
                         E: serde::de::Error,
                     {
                         match value {
-                            "context" => Ok(GeneratedField::Context),
                             "signature" => Ok(GeneratedField::Signature),
-                            "sp1v4" => Ok(GeneratedField::Sp1v4),
+                            "generic" => Ok(GeneratedField::Generic),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -92,19 +81,9 @@ impl<'de> serde::Deserialize<'de> for AggchainData {
                 where
                     V: serde::de::MapAccess<'de>,
             {
-                let mut context__ = None;
                 let mut data__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
-                        GeneratedField::Context => {
-                            if context__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("context"));
-                            }
-                            context__ = Some(
-                                map_.next_value::<std::collections::HashMap<_, ::pbjson::private::BytesDeserialize<_>>>()?
-                                    .into_iter().map(|(k,v)| (k, v.0)).collect()
-                            );
-                        }
                         GeneratedField::Signature => {
                             if data__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("signature"));
@@ -112,17 +91,16 @@ impl<'de> serde::Deserialize<'de> for AggchainData {
                             data__ = map_.next_value::<::std::option::Option<_>>()?.map(aggchain_data::Data::Signature)
 ;
                         }
-                        GeneratedField::Sp1v4 => {
+                        GeneratedField::Generic => {
                             if data__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("sp1v4"));
+                                return Err(serde::de::Error::duplicate_field("generic"));
                             }
-                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(aggchain_data::Data::Sp1v4)
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(aggchain_data::Data::Generic)
 ;
                         }
                     }
                 }
                 Ok(AggchainData {
-                    context: context__.unwrap_or_default(),
                     data: data__,
                 })
             }
@@ -130,7 +108,7 @@ impl<'de> serde::Deserialize<'de> for AggchainData {
         deserializer.deserialize_struct("agglayer.protocol.types.v1.AggchainData", FIELDS, GeneratedVisitor)
     }
 }
-impl serde::Serialize for AggchainProofSp1v4 {
+impl serde::Serialize for AggchainProof {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -141,22 +119,34 @@ impl serde::Serialize for AggchainProofSp1v4 {
         if self.aggchain_params.is_some() {
             len += 1;
         }
-        if !self.proof.is_empty() {
+        if !self.context.is_empty() {
             len += 1;
         }
-        let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.AggchainProofSp1v4", len)?;
+        if self.proof.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.AggchainProof", len)?;
         if let Some(v) = self.aggchain_params.as_ref() {
             struct_ser.serialize_field("aggchainParams", v)?;
         }
-        if !self.proof.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("proof", pbjson::private::base64::encode(&self.proof).as_str())?;
+        if !self.context.is_empty() {
+            let v: std::collections::HashMap<_, _> = self.context.iter()
+                .map(|(k, v)| (k, pbjson::private::base64::encode(v))).collect();
+            struct_ser.serialize_field("context", &v)?;
+        }
+        if let Some(v) = self.proof.as_ref() {
+            match v {
+                aggchain_proof::Proof::Sp1Stark(v) => {
+                    #[allow(clippy::needless_borrow)]
+                    #[allow(clippy::needless_borrows_for_generic_args)]
+                    struct_ser.serialize_field("sp1Stark", pbjson::private::base64::encode(&v).as_str())?;
+                }
+            }
         }
         struct_ser.end()
     }
 }
-impl<'de> serde::Deserialize<'de> for AggchainProofSp1v4 {
+impl<'de> serde::Deserialize<'de> for AggchainProof {
     #[allow(deprecated)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -165,13 +155,16 @@ impl<'de> serde::Deserialize<'de> for AggchainProofSp1v4 {
         const FIELDS: &[&str] = &[
             "aggchain_params",
             "aggchainParams",
-            "proof",
+            "context",
+            "sp1_stark",
+            "sp1Stark",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             AggchainParams,
-            Proof,
+            Context,
+            Sp1Stark,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -194,7 +187,8 @@ impl<'de> serde::Deserialize<'de> for AggchainProofSp1v4 {
                     {
                         match value {
                             "aggchainParams" | "aggchain_params" => Ok(GeneratedField::AggchainParams),
-                            "proof" => Ok(GeneratedField::Proof),
+                            "context" => Ok(GeneratedField::Context),
+                            "sp1Stark" | "sp1_stark" => Ok(GeneratedField::Sp1Stark),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -204,17 +198,18 @@ impl<'de> serde::Deserialize<'de> for AggchainProofSp1v4 {
         }
         struct GeneratedVisitor;
         impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = AggchainProofSp1v4;
+            type Value = AggchainProof;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct agglayer.protocol.types.v1.AggchainProofSp1v4")
+                formatter.write_str("struct agglayer.protocol.types.v1.AggchainProof")
             }
 
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AggchainProofSp1v4, V::Error>
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AggchainProof, V::Error>
                 where
                     V: serde::de::MapAccess<'de>,
             {
                 let mut aggchain_params__ = None;
+                let mut context__ = None;
                 let mut proof__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
@@ -224,23 +219,31 @@ impl<'de> serde::Deserialize<'de> for AggchainProofSp1v4 {
                             }
                             aggchain_params__ = map_.next_value()?;
                         }
-                        GeneratedField::Proof => {
-                            if proof__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("proof"));
+                        GeneratedField::Context => {
+                            if context__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("context"));
                             }
-                            proof__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            context__ = Some(
+                                map_.next_value::<std::collections::HashMap<_, ::pbjson::private::BytesDeserialize<_>>>()?
+                                    .into_iter().map(|(k,v)| (k, v.0)).collect()
+                            );
+                        }
+                        GeneratedField::Sp1Stark => {
+                            if proof__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("sp1Stark"));
+                            }
+                            proof__ = map_.next_value::<::std::option::Option<::pbjson::private::BytesDeserialize<_>>>()?.map(|x| aggchain_proof::Proof::Sp1Stark(x.0));
                         }
                     }
                 }
-                Ok(AggchainProofSp1v4 {
+                Ok(AggchainProof {
                     aggchain_params: aggchain_params__,
-                    proof: proof__.unwrap_or_default(),
+                    context: context__.unwrap_or_default(),
+                    proof: proof__,
                 })
             }
         }
-        deserializer.deserialize_struct("agglayer.protocol.types.v1.AggchainProofSp1v4", FIELDS, GeneratedVisitor)
+        deserializer.deserialize_struct("agglayer.protocol.types.v1.AggchainProof", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for BridgeExit {
