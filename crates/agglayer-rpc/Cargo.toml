@@ -1,0 +1,23 @@
+[package]
+name = "agglayer-rpc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agglayer-contracts.workspace = true
+agglayer-storage.workspace = true
+agglayer-config.workspace = true
+agglayer-rate-limiting.workspace = true
+agglayer-telemetry.workspace = true
+agglayer-types.workspace = true
+
+alloy.workspace = true
+ethers.workspace = true
+futures.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

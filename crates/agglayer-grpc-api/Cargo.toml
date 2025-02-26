@@ -10,10 +10,14 @@ agglayer-grpc-server.workspace = true
 agglayer-grpc-types.workspace = true
 agglayer-types.workspace = true
 
+axum = { workspace = true, features = ["tokio", "http1", "http2"] }
+anyhow = { workspace = true }
+http.workspace = true
 prost.workspace = true
 tonic.workspace = true
 tonic-types = "0.12.3"
 tonic-reflection = "0.12.3"
+tower = { workspace = true }
 tracing.workspace = true
 
 [lints]

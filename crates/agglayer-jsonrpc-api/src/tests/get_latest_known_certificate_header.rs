@@ -1,54 +1,43 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use agglayer_config::Config;
-use agglayer_storage::{
-    storage::{pending_db_cf_definitions, state_db_cf_definitions, DB},
-    stores::{pending::PendingStore, state::StateStore, PendingCertificateWriter, StateWriter},
-    tests::TempDBDir,
-};
+use agglayer_storage::stores::{PendingCertificateWriter, StateWriter};
+use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{Certificate, CertificateHeader, CertificateStatus};
 use insta::assert_snapshot;
 use jsonrpsee::{core::client::ClientT, rpc_params};
-use rstest::*;
 use serde_json::json;
 
-use super::TestContext;
-use crate::rpc::AgglayerServer as _;
+use crate::testutils::TestContext;
+use crate::AgglayerServer as _;
 
-#[rstest]
 #[test_log::test(tokio::test)]
 async fn returns_the_pending_certificate_header() {
-    let path = TempDBDir::new();
+    let tmp = TempDBDir::new();
+    let config = Config::new(&tmp.path);
+    let context = TestContext::new_with_config(config).await;
 
-    let config = Config::new(&path.path);
-    let pending_db = Arc::new(
-        DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions())
-            .expect("unable to open pending db"),
-    );
-    let state_db = Arc::new(
-        DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions())
-            .expect("unable to open state db"),
-    );
-
-    let state_db = StateStore::new(state_db);
-    let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
     let settled_certificate = Certificate::new_for_test(network_id, 0);
     let proven_certificate = Certificate::new_for_test(network_id, 1);
     let pending_certificate = Certificate::new_for_test(network_id, 2);
 
-    state_db
+    context
+        .state_store
         .insert_certificate_header(&settled_certificate, CertificateStatus::Settled)
         .expect("unable to insert settled certificate header");
-    state_db
+    context
+        .state_store
         .insert_certificate_header(&proven_certificate, CertificateStatus::Proven)
         .expect("unable to insert proven certificate header");
-    state_db
+    context
+        .state_store
         .insert_certificate_header(&pending_certificate, CertificateStatus::Pending)
         .expect("unable to insert pending certificate header");
 
-    state_db
+    context
+        .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
             &0,
@@ -58,18 +47,15 @@ async fn returns_the_pending_certificate_header() {
         )
         .expect("unable to set latest settled certificate");
 
-    pending_db
+    context
+        .pending_store
         .set_latest_proven_certificate_per_network(&network_id, &1, &proven_certificate.hash())
         .expect("unable to set latest proven certificate");
 
-    pending_db
+    context
+        .pending_store
         .insert_pending_certificate(network_id, 2, &pending_certificate)
         .expect("unable to insert pending certificate");
-
-    drop(pending_db);
-    drop(state_db);
-
-    let context = TestContext::new_with_config(config).await;
 
     let payload: CertificateHeader = context
         .client
@@ -85,10 +71,10 @@ async fn returns_the_pending_certificate_header() {
 
     drop(context);
 
-    // Have some delayu to ensure that the server has been stopped
+    // Have some delay to ensure that the server has been stopped
     tokio::time::sleep(Duration::from_millis(100)).await;
+    let config = Config::new(&tmp.path);
 
-    let config = Config::new(&path.path);
     // Restarting the server in raw mode
     let raw_rpc = TestContext::new_raw_rpc_with_config(config).await;
     let rpc = raw_rpc.rpc.into_rpc();
@@ -110,33 +96,26 @@ async fn returns_the_pending_certificate_header() {
 
 #[test_log::test(tokio::test)]
 async fn returns_the_proven_certificate_header() {
-    let path = TempDBDir::new();
+    let tmp = TempDBDir::new();
+    let config = Config::new(&tmp.path);
+    let context = TestContext::new_with_config(config).await;
 
-    let config = Config::new(&path.path);
-    let pending_db = Arc::new(
-        DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions())
-            .expect("unable to open pending db"),
-    );
-    let state_db = Arc::new(
-        DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions())
-            .expect("unable to open state db"),
-    );
-
-    let state_db = StateStore::new(state_db);
-    let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
     let settled_certificate = Certificate::new_for_test(network_id, 0);
     let proven_certificate = Certificate::new_for_test(network_id, 1);
 
-    state_db
+    context
+        .state_store
         .insert_certificate_header(&settled_certificate, CertificateStatus::Settled)
         .expect("unable to insert settled certificate header");
-    state_db
+    context
+        .state_store
         .insert_certificate_header(&proven_certificate, CertificateStatus::Proven)
         .expect("unable to insert proven certificate header");
 
-    state_db
+    context
+        .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
             &settled_certificate.height,
@@ -145,15 +124,18 @@ async fn returns_the_proven_certificate_header() {
             &0,
         )
         .expect("unable to set latest settled certificate");
-    pending_db
+    context
+        .pending_store
         .set_latest_proven_certificate_per_network(&network_id, &1, &proven_certificate.hash())
         .expect("unable to set latest proven certificate");
 
-    drop(pending_db);
-    drop(state_db);
+    drop(context);
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let config = Config::new(&tmp.path);
 
     let context = TestContext::new_with_config(config).await;
-
     let payload: CertificateHeader = context
         .client
         .request(
@@ -169,9 +151,10 @@ async fn returns_the_proven_certificate_header() {
     drop(context);
 
     // Have some delayu to ensure that the server has been stopped
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
-    let config = Config::new(&path.path);
+    let config = Config::new(&tmp.path);
+
     // Restarting the server in raw mode
     let raw_rpc = TestContext::new_raw_rpc_with_config(config).await;
     let rpc = raw_rpc.rpc.into_rpc();
@@ -193,29 +176,21 @@ async fn returns_the_proven_certificate_header() {
 
 #[test_log::test(tokio::test)]
 async fn returns_the_settled_certificate_header() {
-    let path = TempDBDir::new();
+    let tmp = TempDBDir::new();
+    let config = Config::new(&tmp.path);
+    let context = TestContext::new_with_config(config).await;
 
-    let config = Config::new(&path.path);
-    let pending_db = Arc::new(
-        DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions())
-            .expect("unable to open pending db"),
-    );
-    let state_db = Arc::new(
-        DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions())
-            .expect("unable to open state db"),
-    );
-
-    let state_db = StateStore::new(state_db);
-    let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
     let settled_certificate = Certificate::new_for_test(network_id, 0);
 
-    state_db
+    context
+        .state_store
         .insert_certificate_header(&settled_certificate, CertificateStatus::Settled)
         .expect("unable to insert settled certificate header");
 
-    state_db
+    context
+        .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
             &settled_certificate.height,
@@ -225,9 +200,10 @@ async fn returns_the_settled_certificate_header() {
         )
         .expect("unable to set latest settled certificate");
 
-    drop(pending_db);
-    drop(state_db);
+    drop(context);
 
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let config = Config::new(&tmp.path);
     let context = TestContext::new_with_config(config).await;
 
     let payload: CertificateHeader = context
@@ -247,7 +223,7 @@ async fn returns_the_settled_certificate_header() {
     // Have some delayu to ensure that the server has been stopped
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let config = Config::new(&path.path);
+    let config = Config::new(&tmp.path);
     // Restarting the server in raw mode
     let raw_rpc = TestContext::new_raw_rpc_with_config(config).await;
     let rpc = raw_rpc.rpc.into_rpc();
@@ -272,13 +248,11 @@ async fn returns_the_settled_certificate_header() {
 
 #[test_log::test(tokio::test)]
 async fn returns_no_certificate_header() {
-    let path = TempDBDir::new();
-
-    let config = Config::new(&path.path);
+    let tmp = TempDBDir::new();
+    let config = Config::new(&tmp.path);
+    let context = TestContext::new_with_config(config).await;
 
     let network_id = 1;
-
-    let context = TestContext::new_with_config(config).await;
 
     let payload: Option<CertificateHeader> = context
         .client
@@ -296,7 +270,7 @@ async fn returns_no_certificate_header() {
     // Have some delayu to ensure that the server has been stopped
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let config = Config::new(&path.path);
+    let config = Config::new(&tmp.path);
     // Restarting the server in raw mode
     let raw_rpc = TestContext::new_raw_rpc_with_config(config).await;
     let rpc = raw_rpc.rpc.into_rpc();
@@ -321,33 +295,26 @@ async fn returns_no_certificate_header() {
 
 #[test_log::test(tokio::test)]
 async fn returns_the_highest_height() {
-    let path = TempDBDir::new();
+    let tmp = TempDBDir::new();
+    let config = Config::new(&tmp.path);
+    let context = TestContext::new_with_config(config).await;
 
-    let config = Config::new(&path.path);
-    let pending_db = Arc::new(
-        DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions())
-            .expect("unable to open pending db"),
-    );
-    let state_db = Arc::new(
-        DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions())
-            .expect("unable to open state db"),
-    );
-
-    let state_db = StateStore::new(state_db);
-    let pending_db = PendingStore::new(pending_db);
     let network_id = 1.into();
 
     let settled_certificate = Certificate::new_for_test(network_id, 10);
     let pending_certificate = Certificate::new_for_test(network_id, 3);
 
-    state_db
+    context
+        .state_store
         .insert_certificate_header(&settled_certificate, CertificateStatus::Settled)
         .expect("unable to insert settled certificate header");
-    state_db
+    context
+        .state_store
         .insert_certificate_header(&pending_certificate, CertificateStatus::Pending)
         .expect("unable to insert pending certificate header");
 
-    state_db
+    context
+        .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
             &10,
@@ -357,12 +324,110 @@ async fn returns_the_highest_height() {
         )
         .expect("unable to set latest settled certificate");
 
-    pending_db
+    context
+        .pending_store
         .insert_pending_certificate(network_id, 3, &pending_certificate)
         .expect("unable to insert pending certificate");
 
-    drop(pending_db);
-    drop(state_db);
+    drop(context);
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let config = Config::new(&tmp.path);
+    let context = TestContext::new_with_config(config).await;
+
+    let payload: CertificateHeader = context
+        .client
+        .request(
+            "interop_getLatestKnownCertificateHeader",
+            rpc_params![network_id],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(payload.certificate_id, settled_certificate.hash());
+    assert_eq!(payload.status, CertificateStatus::Settled);
+    assert_eq!(payload.height, 10);
+
+    drop(context);
+
+    // Have some delayu to ensure that the server has been stopped
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let config = Config::new(&tmp.path);
+    // Restarting the server in raw mode
+    let raw_rpc = TestContext::new_raw_rpc_with_config(config).await;
+    let rpc = raw_rpc.rpc.into_rpc();
+    let payload = json!({
+        "jsonrpc": "2.0",
+        "method": "interop_getLatestKnownCertificateHeader",
+        "params": vec![network_id],
+        "id": 0
+    });
+    let (response, _) = rpc
+        .raw_json_request(&serde_json::to_string(&payload).unwrap(), 1)
+        .await
+        .unwrap();
+    let json = serde_json::from_str::<serde_json::Value>(&response).unwrap();
+    let json = serde_json::to_string_pretty(&json).unwrap();
+
+    assert_snapshot!("get_latest_known_certificate_header::highest_height", json);
+}
+
+#[test_log::test(tokio::test)]
+async fn returns_the_settled_one_at_same_height() {
+    let tmp = TempDBDir::new();
+    let config = Config::new(&tmp.path);
+    let context = TestContext::new_with_config(config).await;
+
+    let network_id = 1.into();
+
+    let settled_certificate = Certificate::new_for_test(network_id, 10);
+
+    let mut pending_certificate = Certificate::new_for_test(network_id, 5);
+    pending_certificate.height = 10;
+    let pending_certificate = pending_certificate.with_new_local_exit_root([2; 32].into());
+
+    let mut proven_certificate = Certificate::new_for_test(network_id, 3);
+    proven_certificate.height = 10;
+    let proven_certificate = proven_certificate.with_new_local_exit_root([1; 32].into());
+
+    context
+        .state_store
+        .insert_certificate_header(&settled_certificate, CertificateStatus::Settled)
+        .expect("unable to insert settled certificate header");
+    context
+        .state_store
+        .insert_certificate_header(&pending_certificate, CertificateStatus::Pending)
+        .expect("unable to insert pending certificate header");
+    context
+        .state_store
+        .insert_certificate_header(&proven_certificate, CertificateStatus::Proven)
+        .expect("unable to insert pending certificate header");
+
+    context
+        .state_store
+        .set_latest_settled_certificate_for_network(
+            &network_id,
+            &10,
+            &settled_certificate.hash(),
+            &0,
+            &0,
+        )
+        .expect("unable to set latest settled certificate");
+
+    context
+        .pending_store
+        .insert_pending_certificate(network_id, 10, &pending_certificate)
+        .expect("unable to insert pending certificate");
+
+    context
+        .pending_store
+        .set_latest_proven_certificate_per_network(&network_id, &10, &proven_certificate.hash())
+        .expect("unable to set latest proven certificate");
+
+    drop(context);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let config = Config::new(&tmp.path);
 
     let context = TestContext::new_with_config(config).await;
 
@@ -384,7 +449,7 @@ async fn returns_the_highest_height() {
     // Have some delayu to ensure that the server has been stopped
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let config = Config::new(&path.path);
+    let config = Config::new(&tmp.path);
     // Restarting the server in raw mode
     let raw_rpc = TestContext::new_raw_rpc_with_config(config).await;
     let rpc = raw_rpc.rpc.into_rpc();
