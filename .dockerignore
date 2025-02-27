@@ -8,5 +8,6 @@
 !tests
 !Cargo.*
 !.git
+!libvoidstar.so
 
 !LICENSE
