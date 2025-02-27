@@ -138,7 +138,7 @@ cargo run --package pessimistic-proof-test-suite --bin ppgen
 
 ## Development
 
-Contributions are very welcomed, the guidelines are currently not available (WIP)
+Contributions are very welcome, the guidelines are currently not available (WIP)
 
 ## Support
 
