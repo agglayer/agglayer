@@ -17,7 +17,7 @@ use agglayer_types::{
 use error::SignatureVerificationError;
 use ethers::types::{TransactionReceipt, H160, H256};
 use tokio::sync::mpsc;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 pub use self::error::{CertificateRetrievalError, CertificateSubmissionError};
 
@@ -93,14 +93,6 @@ where
     DebugStore: DebugReader + 'static,
     L1Rpc: Send + Sync + 'static,
 {
-    pub fn get_certificate_header(
-        &self,
-        certificate_id: CertificateId,
-    ) -> Result<CertificateHeader, CertificateRetrievalError> {
-        trace!("Received request to get certificate header for certificate {certificate_id}");
-        self.fetch_certificate_header(certificate_id)
-    }
-
     pub fn get_latest_known_certificate_header(
         &self,
         network_id: NetworkId,
@@ -136,9 +128,10 @@ where
         .max_by(|x, y| x.1.cmp(&y.1))
         .map(|v| v.0);
 
-        certificate_id.map_or(Ok(None), |certificate_id| {
-            self.fetch_certificate_header(certificate_id).map(Some)
-        })
+        match certificate_id {
+            None => Ok(None),
+            Some(certificate_id) => self.fetch_certificate_header(certificate_id).map(Some),
+        }
     }
 
     pub fn get_latest_settled_certificate_header(
@@ -181,7 +174,7 @@ where
     }
 
     /// Get the certificate header, raising an error if not found.
-    fn fetch_certificate_header(
+    pub fn fetch_certificate_header(
         &self,
         certificate_id: CertificateId,
     ) -> Result<CertificateHeader, CertificateRetrievalError> {

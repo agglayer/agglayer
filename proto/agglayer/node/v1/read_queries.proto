@@ -41,8 +41,20 @@ enum GetCertificateHeaderErrorKind {
   GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_CERTIFICATE_ID = 2;
   // Malformed certificate id.
   GET_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_CERTIFICATE_ID = 3;
+}
+
+// Error kind for GetLatestCertificateHeader RPC.
+enum GetLatestCertificateHeaderErrorKind {
+  // Unspecified error.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED = 0;
+  // Internal error.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INTERNAL = 1;
+  // Missing network id.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MISSING_NETWORK_ID = 2;
+  // Malformed network id.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_NETWORK_ID = 3;
   // Invalid request type.
-  GET_CERTIFICATE_HEADER_ERROR_KIND_INVALID_REQUEST_TYPE = 4;
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INVALID_REQUEST_TYPE = 4;
 }
 
 // Request to get a CertificateHeader for a particular CertificateId.

@@ -158,7 +158,6 @@ impl serde::Serialize for GetCertificateHeaderErrorKind {
             Self::Internal => "GET_CERTIFICATE_HEADER_ERROR_KIND_INTERNAL",
             Self::MissingCertificateId => "GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_CERTIFICATE_ID",
             Self::MalformedCertificateId => "GET_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_CERTIFICATE_ID",
-            Self::InvalidRequestType => "GET_CERTIFICATE_HEADER_ERROR_KIND_INVALID_REQUEST_TYPE",
         };
         serializer.serialize_str(variant)
     }
@@ -174,7 +173,6 @@ impl<'de> serde::Deserialize<'de> for GetCertificateHeaderErrorKind {
             "GET_CERTIFICATE_HEADER_ERROR_KIND_INTERNAL",
             "GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_CERTIFICATE_ID",
             "GET_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_CERTIFICATE_ID",
-            "GET_CERTIFICATE_HEADER_ERROR_KIND_INVALID_REQUEST_TYPE",
         ];
 
         struct GeneratedVisitor;
@@ -219,7 +217,6 @@ impl<'de> serde::Deserialize<'de> for GetCertificateHeaderErrorKind {
                     "GET_CERTIFICATE_HEADER_ERROR_KIND_INTERNAL" => Ok(GetCertificateHeaderErrorKind::Internal),
                     "GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_CERTIFICATE_ID" => Ok(GetCertificateHeaderErrorKind::MissingCertificateId),
                     "GET_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_CERTIFICATE_ID" => Ok(GetCertificateHeaderErrorKind::MalformedCertificateId),
-                    "GET_CERTIFICATE_HEADER_ERROR_KIND_INVALID_REQUEST_TYPE" => Ok(GetCertificateHeaderErrorKind::InvalidRequestType),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -572,6 +569,86 @@ impl<'de> serde::Deserialize<'de> for GetEpochConfigurationResponse {
             }
         }
         deserializer.deserialize_struct("agglayer.node.v1.GetEpochConfigurationResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GetLatestCertificateHeaderErrorKind {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED",
+            Self::Internal => "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INTERNAL",
+            Self::MissingNetworkId => "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MISSING_NETWORK_ID",
+            Self::MalformedNetworkId => "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_NETWORK_ID",
+            Self::InvalidRequestType => "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INVALID_REQUEST_TYPE",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderErrorKind {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED",
+            "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INTERNAL",
+            "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MISSING_NETWORK_ID",
+            "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_NETWORK_ID",
+            "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INVALID_REQUEST_TYPE",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetLatestCertificateHeaderErrorKind;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED" => Ok(GetLatestCertificateHeaderErrorKind::Unspecified),
+                    "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INTERNAL" => Ok(GetLatestCertificateHeaderErrorKind::Internal),
+                    "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MISSING_NETWORK_ID" => Ok(GetLatestCertificateHeaderErrorKind::MissingNetworkId),
+                    "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_NETWORK_ID" => Ok(GetLatestCertificateHeaderErrorKind::MalformedNetworkId),
+                    "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INVALID_REQUEST_TYPE" => Ok(GetLatestCertificateHeaderErrorKind::InvalidRequestType),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
     }
 }
 impl serde::Serialize for GetLatestCertificateHeaderRequest {
