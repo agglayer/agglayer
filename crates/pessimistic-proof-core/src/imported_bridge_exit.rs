@@ -5,7 +5,10 @@ use crate::{
     bridge_exit::BridgeExit,
     global_index::GlobalIndex,
     keccak::{digest::Digest, keccak256_combine},
-    local_exit_tree::{hasher::Keccak256Hasher, proof::LETMerkleProof},
+    local_exit_tree::{
+        hasher::{Hasher, Keccak256Hasher},
+        proof::LETMerkleProof,
+    },
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,8 +82,19 @@ pub struct MerkleProof {
 }
 
 impl MerkleProof {
+    pub fn new(root: Digest, siblings: [<Keccak256Hasher as Hasher>::Digest; 32]) -> Self {
+        Self {
+            proof: LETMerkleProof { siblings },
+            root,
+        }
+    }
+
     pub fn verify(&self, leaf: Digest, leaf_index: u32) -> bool {
         self.proof.verify(leaf, leaf_index, self.root)
+    }
+
+    pub fn siblings(&self) -> &[<Keccak256Hasher as Hasher>::Digest; 32] {
+        &self.proof.siblings
     }
 }
 

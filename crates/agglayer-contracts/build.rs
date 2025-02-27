@@ -1,24 +1,30 @@
 use std::path::Path;
 
 fn main() {
-    let contract_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let contract_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/contracts");
 
     build_contract(
-        "polygonzkevm.json",
+        "PolygonZkEVM.json",
         "polygon_zk_evm.rs",
         "PolygonZkEvm",
         &contract_dir,
     );
     build_contract(
-        "polygonrollupmanager.json",
+        "PolygonRollupManager.json",
         "polygon_rollup_manager.rs",
         "PolygonRollupManager",
         &contract_dir,
     );
     build_contract(
-        "polygonzkevmglobalexitrootv2.json",
+        "PolygonZkEVMGlobalExitRootV2.json",
         "polygon_zkevm_global_exit_root_v2.rs",
         "PolygonZkEVMGlobalExitRootV2",
+        &contract_dir,
+    );
+    build_contract(
+        "AggchainBase.json",
+        "aggchain_base.rs",
+        "AggchainBase",
         &contract_dir,
     );
 }

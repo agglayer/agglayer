@@ -7,7 +7,7 @@ license.workspace = true
 [dependencies]
 agglayer-config.workspace = true
 agglayer-grpc-server.workspace = true
-agglayer-grpc-types.workspace = true
+agglayer-grpc-types = { workspace = true, features = ["compat"] }
 agglayer-types.workspace = true
 
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }

@@ -116,7 +116,7 @@ impl serde::Serialize for AggchainProof {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.aggchain_params.is_empty() {
+        if self.aggchain_params.is_some() {
             len += 1;
         }
         if !self.context.is_empty() {
@@ -126,10 +126,8 @@ impl serde::Serialize for AggchainProof {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.AggchainProof", len)?;
-        if !self.aggchain_params.is_empty() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("aggchainParams", pbjson::private::base64::encode(&self.aggchain_params).as_str())?;
+        if let Some(v) = self.aggchain_params.as_ref() {
+            struct_ser.serialize_field("aggchainParams", v)?;
         }
         if !self.context.is_empty() {
             let v: std::collections::HashMap<_, _> = self.context.iter()
@@ -139,7 +137,9 @@ impl serde::Serialize for AggchainProof {
         if let Some(v) = self.proof.as_ref() {
             match v {
                 aggchain_proof::Proof::Sp1Stark(v) => {
-                    struct_ser.serialize_field("sp1Stark", v)?;
+                    #[allow(clippy::needless_borrow)]
+                    #[allow(clippy::needless_borrows_for_generic_args)]
+                    struct_ser.serialize_field("sp1Stark", pbjson::private::base64::encode(&v).as_str())?;
                 }
             }
         }
@@ -217,9 +217,7 @@ impl<'de> serde::Deserialize<'de> for AggchainProof {
                             if aggchain_params__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("aggchainParams"));
                             }
-                            aggchain_params__ = 
-                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
-                            ;
+                            aggchain_params__ = map_.next_value()?;
                         }
                         GeneratedField::Context => {
                             if context__.is_some() {
@@ -234,13 +232,12 @@ impl<'de> serde::Deserialize<'de> for AggchainProof {
                             if proof__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("sp1Stark"));
                             }
-                            proof__ = map_.next_value::<::std::option::Option<_>>()?.map(aggchain_proof::Proof::Sp1Stark)
-;
+                            proof__ = map_.next_value::<::std::option::Option<::pbjson::private::BytesDeserialize<_>>>()?.map(|x| aggchain_proof::Proof::Sp1Stark(x.0));
                         }
                     }
                 }
                 Ok(AggchainProof {
-                    aggchain_params: aggchain_params__.unwrap_or_default(),
+                    aggchain_params: aggchain_params__,
                     context: context__.unwrap_or_default(),
                     proof: proof__,
                 })

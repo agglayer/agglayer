@@ -3,7 +3,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use agglayer_primitives::SignatureError;
 use pessimistic_proof::core;
 use pessimistic_proof::error::ProofVerificationError;
-use pessimistic_proof::global_index::GlobalIndex;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
@@ -16,8 +15,6 @@ use pessimistic_proof::utils::smt::{Smt, SmtError};
 use pessimistic_proof::utils::{FromBool as _, Hashable as _};
 use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
-    bridge_exit::{BridgeExit, TokenInfo},
-    imported_bridge_exit::ImportedBridgeExit,
     local_balance_tree::LocalBalancePath,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
@@ -38,7 +35,12 @@ pub type Metadata = Digest;
 pub use agglayer_primitives as primitives;
 // Re-export common primitives again as agglayer-types root types
 pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
-pub use pessimistic_proof::bridge_exit::NetworkId;
+pub use pessimistic_proof::bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo};
+pub use pessimistic_proof::global_index::GlobalIndex;
+pub use pessimistic_proof::imported_bridge_exit::{
+    Claim, ClaimFromMainnet, ClaimFromRollup, ImportedBridgeExit, L1InfoTreeLeaf,
+    L1InfoTreeLeafInner, MerkleProof,
+};
 pub use pessimistic_proof::proof::Proof;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -149,23 +151,31 @@ pub enum CertificateStatusError {
         generation_type: GenerationType,
         source: ProofError,
     },
+
     /// Failure on the proof verification.
     #[error("proof verification failed")]
     ProofVerificationFailed(#[from] ProofVerificationError),
+
     /// Failure on the pessimistic proof witness generation from the
     /// [`LocalNetworkStateData`] and the provided [`Certificate`].
     #[error(transparent)]
     TypeConversionError(#[from] Error),
+
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
+
     #[error("Internal error")]
     InternalError(String),
+
     #[error("Settlement error: {0}")]
     SettlementError(String),
+
     #[error("Pre certification error: {0}")]
     PreCertificationError(String),
+
     #[error("Certification error: {0}")]
     CertificationError(String),
+
     #[error("L1 Info root not found for l1 leaf count: {0}")]
     L1InfoRootNotFound(u32),
 }
@@ -187,10 +197,39 @@ impl std::fmt::Display for GenerationType {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CertificateStatus {
+    /// Received certificate from the network, nothing checked yet.
+    ///
+    /// Certificate will stay in this state until rate-limiting is lifted or an
+    /// epoch-change event is triggered. A pending certificate can then be
+    /// processed by the agglayer to be proven, or it could end up in error.
     Pending,
+
+    /// Pessimistic proof has been generated for the certificate and stored in
+    /// the rocksdb in the agglayer node.
     Proven,
+
+    /// Settlement of the certificate's proof has already been started on L1
+    /// (and acknowledged by its RPC) by issuing a contract call to the
+    /// RollupManager, but the associated transaction has not yet seen
+    /// enough confirmations.
+    ///
+    /// The certificate can move from Candidate to Settled if the associated
+    /// transaction is accepted and the transaction receipt is a success. If the
+    /// transaction receipt fails, the certificate will end up in Error.
     Candidate,
+
+    /// Hit some error while moving the certificate through the pipeline.
+    ///
+    /// For example, proving failed (Pending -> InError), L1 reorg'd (Candidate
+    /// -> InError)... See the documentation of `CertificateStatusError` for
+    /// more details.
+    ///
+    /// Note that a certificate can be InError in agglayer but settled on L1,
+    /// eg. if there was an error in agglayer but the certificate was valid
+    /// and settled on L1.
     InError { error: CertificateStatusError },
+
+    /// Transaction to settle the certificate was completed successfully on L1.
     Settled,
 }
 
