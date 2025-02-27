@@ -51,7 +51,10 @@ COPY --link crates crates
 COPY --link Cargo.toml Cargo.toml
 COPY --link Cargo.lock Cargo.lock
 
-RUN cargo build --release --bin agglayer
+COPY --link libvoidstar.so /opt/libvoidstar.so
+RUN LD_LIBRARY_PATH="/opt/libvoidstar.so" \
+    RUSTFLAGS="-Ccodegen-units=1 -Cpasses=sancov-module -Cllvm-args=-sanitizer-coverage-level=3 -Cllvm-args=-sanitizer-coverage-trace-pc-guard -Clink-args=-Wl,--build-id -L/opt/libvoidstar.so -lvoidstar" \
+    cargo build --release --bin agglayer
 
 
 FROM --platform=${BUILDPLATFORM} debian:bullseye-slim
