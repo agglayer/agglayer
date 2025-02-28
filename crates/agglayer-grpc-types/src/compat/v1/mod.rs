@@ -3,9 +3,9 @@ macro_rules! required_field {
     ($from:expr, $field:ident) => {
         $from
             .$field
-            .ok_or(Error::MissingField(stringify!($field)))?
+            .ok_or(Error::missing_field(stringify!($field)))?
             .try_into()
-            .map_err(|e| Error::ParsingField(stringify!($field), Box::new(e)))?
+            .map_err(|e: Error| e.inside_field(stringify!($field)))?
     };
 }
 
@@ -20,6 +20,7 @@ mod claim;
 mod digest;
 mod epoch_configuration;
 mod error;
+mod error_kinds;
 mod global_index;
 mod imported_bridge_exit;
 mod l1_info_tree_leaf;

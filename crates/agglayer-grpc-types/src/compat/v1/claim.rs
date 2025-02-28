@@ -58,13 +58,13 @@ impl TryFrom<v1::imported_bridge_exit::Claim> for Claim {
                 Claim::Mainnet(Box::new(
                     claim_from_mainnet
                         .try_into()
-                        .map_err(|e| Error::ParsingField("claim_from_mainnet", Box::new(e)))?,
+                        .map_err(|e: Error| e.inside_field("claim_from_mainnet"))?,
                 ))
             }
             v1::imported_bridge_exit::Claim::Rollup(claim_from_rollup) => Claim::Rollup(Box::new(
                 claim_from_rollup
                     .try_into()
-                    .map_err(|e| Error::ParsingField("claim_from_rollup", Box::new(e)))?,
+                    .map_err(|e: Error| e.inside_field("claim_from_rollup"))?,
             )),
         })
     }
