@@ -58,7 +58,6 @@ jobs:
           npm i
       - name: Build docker
         run: |
-          #!/bin/bash
           # Set the -e option to stop the script if any command fails
           set -e
 
@@ -88,8 +87,6 @@ jobs:
           [ -f deployment/v2/genesis_sovereign.json ] && mv deployment/v2/genesis_sovereign.json docker/deploymentOutput
           DEV_PERIOD=1 docker compose -f docker/docker-compose.yml down
           docker build -t hermeznetwork/geth-zkevm-contracts -f docker/Dockerfile .
-          # Let it readable for the multiplatform build coming later!
-          sudo chmod -R go+rxw docker/gethData
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
