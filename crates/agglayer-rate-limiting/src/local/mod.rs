@@ -19,7 +19,7 @@
 
 use std::sync::Arc;
 
-use agglayer_config::rate_limiting::NetworkRateLimitingConfig;
+use agglayer_config::rate_limiting::{EpochRateLimit, NetworkRateLimitingConfig};
 use parking_lot::Mutex;
 
 mod inner;
