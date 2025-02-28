@@ -3,10 +3,7 @@ use std::time::Duration;
 use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
-use integrations::{
-    agglayer_setup::{get_signer, setup_network},
-    wait_for_settlement_or_error,
-};
+use integrations::{agglayer_setup::setup_network, wait_for_settlement_or_error};
 use jsonrpsee::core::client::ClientT as _;
 use jsonrpsee::rpc_params;
 use pessimistic_proof_test_suite::forest::Forest;
@@ -18,7 +15,8 @@ mod recovery;
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-async fn retry_on_error() {
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn retry_on_error(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
@@ -30,9 +28,6 @@ async fn retry_on_error() {
 
     // L1 is a RAII guard
     let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
@@ -70,15 +65,13 @@ async fn retry_on_error() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-async fn regression_pushing_certificate_while_settling() {
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn regression_pushing_certificate_while_settling(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
     // L1 is a RAII guard
     let (_shutdown_shutdown, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 

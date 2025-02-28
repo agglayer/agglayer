@@ -5,7 +5,7 @@ use agglayer_storage::{storage::backup::BackupEngine, tests::TempDBDir};
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
 use integrations::{
-    agglayer_setup::{get_signer, setup_network, start_agglayer},
+    agglayer_setup::{setup_network, start_agglayer},
     wait_for_settlement_or_error,
 };
 use jsonrpsee::core::client::ClientT as _;
@@ -14,10 +14,14 @@ use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 use tokio_util::sync::CancellationToken;
 
+#[path = "../common/mod.rs"]
+mod common;
+
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-async fn recover_with_backup() {
+#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+async fn recover_with_backup(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -32,9 +36,6 @@ async fn recover_with_backup() {
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
@@ -81,7 +82,8 @@ async fn recover_with_backup() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(360))]
-async fn purge_after_n_backup() {
+#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+async fn purge_after_n_backup(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -100,9 +102,6 @@ async fn purge_after_n_backup() {
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
@@ -173,7 +172,8 @@ async fn purge_after_n_backup() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(360))]
-async fn report_contains_all_backups() {
+#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+async fn report_contains_all_backups(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -188,9 +188,6 @@ async fn report_contains_all_backups() {
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
@@ -264,7 +261,8 @@ async fn report_contains_all_backups() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(360))]
-async fn restore_at_particular_level() {
+#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+async fn restore_at_particular_level(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -279,9 +277,6 @@ async fn restore_at_particular_level() {
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 

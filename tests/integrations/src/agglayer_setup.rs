@@ -112,7 +112,7 @@ pub async fn start_agglayer(
     config.log.level = LogLevel::Debug;
     config.l1.node_url = l1.rpc.parse().unwrap();
     config.l1.ws_node_url = l1.ws.parse().unwrap();
-    config.l1.rollup_manager_contract = "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0"
+    config.l1.rollup_manager_contract = "0x9A676e781A523b5d0C0e43731313A708CB607508"
         .parse()
         .unwrap();
     config.l1.polygon_zkevm_global_exit_root_v2_contract =

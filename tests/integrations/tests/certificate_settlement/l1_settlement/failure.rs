@@ -3,10 +3,7 @@ use std::time::Duration;
 use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{CertificateId, CertificateStatus};
 use fail::FailScenario;
-use integrations::{
-    agglayer_setup::{get_signer, setup_network},
-    wait_for_settlement_or_error,
-};
+use integrations::{agglayer_setup::setup_network, wait_for_settlement_or_error};
 use jsonrpsee::core::client::ClientT as _;
 use jsonrpsee::rpc_params;
 use pessimistic_proof_test_suite::forest::Forest;
@@ -15,7 +12,8 @@ use rstest::rstest;
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-async fn transaction_with_receipt_status_0() {
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn transaction_with_receipt_status_0(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
@@ -27,9 +25,6 @@ async fn transaction_with_receipt_status_0() {
 
     // L1 is a RAII guard
     let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
@@ -50,7 +45,8 @@ async fn transaction_with_receipt_status_0() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-async fn transaction_with_receipt_status_0_retry() {
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
@@ -62,9 +58,6 @@ async fn transaction_with_receipt_status_0_retry() {
 
     // L1 is a RAII guard
     let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
@@ -101,7 +94,8 @@ async fn transaction_with_receipt_status_0_retry() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-async fn transaction_without_receipt_status() {
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn transaction_without_receipt_status(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
@@ -113,9 +107,6 @@ async fn transaction_without_receipt_status() {
 
     // L1 is a RAII guard
     let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
@@ -136,7 +127,8 @@ async fn transaction_without_receipt_status() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-async fn transaction_fails_due_to_out_of_gas() {
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn transaction_fails_due_to_out_of_gas(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
@@ -148,9 +140,6 @@ async fn transaction_fails_due_to_out_of_gas() {
 
     // L1 is a RAII guard
     let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
