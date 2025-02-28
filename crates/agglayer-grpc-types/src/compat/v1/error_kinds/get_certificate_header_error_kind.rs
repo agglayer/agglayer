@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use crate::{compat::v1::Error, node::v1::GetCertificateHeaderErrorKind};
+use crate::{
+    compat::v1::{error::ErrorKind, Error},
+    node::v1::GetCertificateHeaderErrorKind,
+};
 
 impl Display for GetCertificateHeaderErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -29,14 +32,13 @@ impl From<GetCertificateHeaderErrorKind> for String {
 
 impl From<&Error> for GetCertificateHeaderErrorKind {
     fn from(value: &Error) -> Self {
-        match value {
-            Error::MissingField("certificate_id") => {
-                GetCertificateHeaderErrorKind::MissingCertificateId
+        if value.field() == ["certificate_id"] {
+            match value.kind() {
+                ErrorKind::MissingField => GetCertificateHeaderErrorKind::MissingCertificateId,
+                ErrorKind::InvalidData => GetCertificateHeaderErrorKind::MalformedCertificateId,
             }
-            Error::ParsingField("certificate_id", _error) => {
-                GetCertificateHeaderErrorKind::MalformedCertificateId
-            }
-            _ => GetCertificateHeaderErrorKind::Unspecified,
+        } else {
+            GetCertificateHeaderErrorKind::Unspecified
         }
     }
 }

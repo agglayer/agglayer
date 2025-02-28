@@ -1,55 +1,128 @@
+use std::fmt;
+
 use agglayer_types::primitives::SignatureError;
 use tonic_types::FieldViolation;
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("wrong bytes length: expected {expected}, got {actual}")]
-    WrongBytesLength { expected: usize, actual: usize },
+pub enum SourceError {
+    #[error(transparent)]
+    Bincode(#[from] bincode::Error),
 
-    #[error("wrong vector length: expected {expected}, got {actual}")]
-    WrongVectorLength { expected: usize, actual: usize },
+    #[error(transparent)]
+    Signature(#[from] SignatureError),
+}
 
-    #[error("missing required field: {0}")]
-    MissingField(&'static str),
+#[derive(Clone, Copy, Debug)]
+pub enum ErrorKind {
+    InvalidData,
+    MissingField,
+}
 
-    #[error("invalid leaf type {0}")]
-    InvalidLeafType(i32),
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ErrorKind::InvalidData => {
+                write!(f, "Invalid data")
+            }
+            ErrorKind::MissingField => {
+                write!(f, "Missing field")
+            }
+        }
+    }
+}
 
-    #[error("invalid certificate status {0}")]
-    InvalidCertificateStatus(i32),
+#[derive(Debug, thiserror::Error)]
+pub struct Error {
+    kind: ErrorKind,
+    message: String,
+    field: Vec<&'static str>,
+    #[source]
+    source: Option<SourceError>,
+}
 
-    #[error("failed parsing field {0}")]
-    ParsingField(&'static str, #[source] Box<Error>),
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if !self.field.is_empty() {
+            write!(f, "{}: ", self.field_str())?;
+        }
+        write!(f, "{}", self.message)
+    }
+}
 
-    #[error("failed parsing signature")]
-    ParsingSignature(#[source] SignatureError),
+impl Error {
+    pub fn missing_field(f: &'static str) -> Self {
+        Error {
+            kind: ErrorKind::MissingField,
+            message: "required field is missing".to_string(),
+            field: vec![f],
+            source: None,
+        }
+    }
 
-    #[error("failed deserializing SP1v4 proof")]
-    DeserializingProof(#[source] bincode::Error),
+    pub fn invalid_data(m: String) -> Self {
+        Error {
+            kind: ErrorKind::InvalidData,
+            message: m,
+            field: vec![],
+            source: None,
+        }
+    }
 
-    #[error("failed serializing SP1v4 proof")]
-    SerializingProof(#[source] bincode::Error),
+    pub fn inside_field(mut self, f: &'static str) -> Self {
+        self.field.push(f);
+        self.field.rotate_right(1);
+        self
+    }
+
+    pub fn serializing_proof(e: bincode::Error) -> Self {
+        Error {
+            kind: ErrorKind::InvalidData,
+            message: "failed to serialize proof".to_string(),
+            field: vec![],
+            source: Some(SourceError::Bincode(e)),
+        }
+    }
+
+    pub fn deserializing_proof(e: bincode::Error) -> Self {
+        Error {
+            kind: ErrorKind::InvalidData,
+            message: "failed to deserialize proof".to_string(),
+            field: vec![],
+            source: Some(SourceError::Bincode(e)),
+        }
+    }
+
+    pub fn parsing_signature(e: SignatureError) -> Self {
+        Error {
+            kind: ErrorKind::InvalidData,
+            message: "failed to parse signature".to_string(),
+            field: vec![],
+            source: Some(SourceError::Signature(e)),
+        }
+    }
+
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+
+    pub fn field(&self) -> &[&'static str] {
+        &self.field
+    }
+
+    pub fn field_str(&self) -> String {
+        if self.field.is_empty() {
+            ".".to_string()
+        } else {
+            self.field.join(".")
+        }
+    }
 }
 
 impl From<&Error> for Vec<FieldViolation> {
     fn from(value: &Error) -> Self {
-        let mut result = Vec::new();
-
-        match value {
-            Error::MissingField(field) => {
-                result.push(FieldViolation::new(
-                    field.to_string(),
-                    "required field is missing",
-                ));
-            }
-            Error::ParsingField(field, error) => {
-                result.push(FieldViolation::new(field.to_string(), error.to_string()));
-            }
-            _ => {}
-        }
-
-        result
+        vec![FieldViolation::new(
+            value.field_str(),
+            value.message.clone(),
+        )]
     }
 }
-
-mod error_kinds;
