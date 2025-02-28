@@ -53,7 +53,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Setup docker
+      - name: Install npm packages
         run: |
           npm i
       - name: Build docker
@@ -86,6 +86,7 @@ jobs:
           mv deployment/v2/genesis.json docker/deploymentOutput
           [ -f deployment/v2/genesis_sovereign.json ] && mv deployment/v2/genesis_sovereign.json docker/deploymentOutput
           DEV_PERIOD=1 docker compose -f docker/docker-compose.yml down
+          sudo chown -R $(id -u):$(id -g) docker/gethData
           docker build -t hermeznetwork/geth-zkevm-contracts -f docker/Dockerfile .
 
       - name: Extract metadata (tags, labels) for Docker
