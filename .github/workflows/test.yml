@@ -89,7 +89,7 @@ jobs:
           DEV_PERIOD=1 docker compose -f docker/docker-compose.yml down
           docker build -t hermeznetwork/geth-zkevm-contracts -f docker/Dockerfile .
           # Let it readable for the multiplatform build coming later!
-          chmod -R go+rxw docker/gethData
+          sudo chmod -R go+rxw docker/gethData
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
