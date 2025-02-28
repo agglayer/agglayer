@@ -58,9 +58,19 @@ jobs:
           npm i
       - name: Build docker
         run: |
-          # Script from contract repo
+          #!/bin/bash
+          # Set the -e option to stop the script if any command fails
           set -e
+
+          # Define cleanup function
+          cleanup() {
+              DEV_PERIOD=1 docker compose -f docker/docker-compose.yml down
+          }
+          # Configure "trap" in case there's an error
+          trap cleanup ERR
+
           rm -rf docker/gethData/geth_data
+          [ -f deployment/v2/create_rollup_output_* ] && rm ./deployment/v2/create_rollup_output_*
           DEV_PERIOD=1 docker compose -f docker/docker-compose.yml up -d geth
           sleep 5
           node docker/scripts/fund-accounts.js
@@ -69,13 +79,17 @@ jobs:
           npm run deploy:testnet:v2:localhost
           rm -rf docker/deploymentOutput
           mkdir docker/deploymentOutput
+          mv ./deployment/v2/create_rollup_output_*.json ./docker/deploymentOutput/create_rollup_output.json
+          cp ./docker/scripts/v2/create_rollup_parameters_docker-v0.2.0.json ./deployment/v2/create_rollup_parameters.json
+          npx hardhat run ./deployment/v2/4_createRollup.ts --network localhost
+          mv ./deployment/v2/create_rollup_output_*.json ./docker/deploymentOutput/
           mv deployment/v2/deploy_output.json docker/deploymentOutput
           mv deployment/v2/genesis.json docker/deploymentOutput
           [ -f deployment/v2/genesis_sovereign.json ] && mv deployment/v2/genesis_sovereign.json docker/deploymentOutput
-          mv deployment/v2/create_rollup_output.json docker/deploymentOutput
           DEV_PERIOD=1 docker compose -f docker/docker-compose.yml down
-          sudo chmod -R go+rxw docker/gethData
-          ls -lah docker
+          docker build -t hermeznetwork/geth-zkevm-contracts -f docker/Dockerfile .
+          # Let it readable for the multiplatform build coming later!
+          chmod -R go+rxw docker/gethData
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
