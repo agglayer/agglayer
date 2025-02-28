@@ -30,6 +30,8 @@ mockall::mock! {
             proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
         ) -> Result<ethers::types::Address, L1RpcError>;
 
+        async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<ethers::types::Address, ()>;
+
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
     }
@@ -73,7 +75,7 @@ async fn epoch_packer_can_settle_one_certificate() {
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let batch_header = state
         .state_b
-        .apply_certificate(&certificate, signer, l1_info_root)
+        .apply_certificate(&certificate, signer, l1_info_root, None)
         .unwrap();
     let certificate_id = certificate.hash();
 

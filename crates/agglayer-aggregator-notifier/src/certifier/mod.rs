@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
-use agglayer_contracts::RollupContract;
+use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
 use agglayer_prover_types::{
     default_bincode_options,
     v1::{
@@ -13,7 +13,8 @@ use agglayer_prover_types::{
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    primitives::Address, Certificate, Height, LocalNetworkStateData, NetworkId, Proof,
+    aggchain_proof::AggchainData, primitives::Address, Certificate, Height, LocalNetworkStateData,
+    NetworkId, Proof,
 };
 use bincode::Options;
 use pessimistic_proof::core::generate_pessimistic_proof;
@@ -107,7 +108,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
 impl<PendingStore, L1Rpc> Certifier for CertifierClient<PendingStore, L1Rpc>
 where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
-    L1Rpc: RollupContract + Send + Sync + 'static,
+    L1Rpc: RollupContract + AggchainContract + Send + Sync + 'static,
 {
     #[instrument(skip(self, state, height), fields(hash, %network_id), level = "info")]
     async fn certify(
@@ -323,11 +324,45 @@ where
             }
         };
 
+        let aggchain_vkey = match certificate.aggchain_data {
+            AggchainData::ECDSA { .. } => None,
+            AggchainData::Generic { .. } => {
+                if certificate.custom_chain_data.len() < 2 {
+                    return Err(CertificationError::Types {
+                        source: agglayer_types::Error::InvalidCustomChainDataLength {
+                            expected: 2,
+                            actual: certificate.custom_chain_data.len(),
+                        },
+                    });
+                }
+
+                let mut selector = [0u8; 2];
+                selector.copy_from_slice(&certificate.custom_chain_data[0..2]);
+
+                let aggchain_vkey_selector: u16 = u16::from_be_bytes(selector);
+
+                // Fetching rollup contract address
+                let rollup_address = self
+                    .l1_rpc
+                    .get_rollup_contract_address(*network_id)
+                    .await
+                    .map_err(|_| CertificationError::RollupContractAddressNotFound)?;
+
+                let aggchain_vkey = self
+                    .l1_rpc
+                    .get_aggchain_vkey(rollup_address, aggchain_vkey_selector)
+                    .await
+                    .map_err(|_| CertificationError::UnableToFindAggchainVkey)?;
+
+                Some(aggchain_vkey)
+            }
+        };
+
         let initial_state = LocalNetworkState::from(state.clone());
 
         let signer = Address::new(*signer.as_fixed_bytes());
         let multi_batch_header = state
-            .apply_certificate(certificate, signer, l1_info_root)
+            .apply_certificate(certificate, signer, l1_info_root, aggchain_vkey)
             .map_err(|source| CertificationError::Types { source })?;
 
         // Perform the native PP execution without the STARK verification

@@ -36,6 +36,10 @@ pub enum CertificationError {
     InternalError(String),
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
+    #[error("rollup contract address not found")]
+    RollupContractAddressNotFound,
+    #[error("Unable to find aggchain vkey")]
+    UnableToFindAggchainVkey,
 }
 
 #[derive(thiserror::Error, Debug)]

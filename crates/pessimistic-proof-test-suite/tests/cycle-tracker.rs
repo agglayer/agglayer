@@ -31,6 +31,7 @@ fn cycles_on_sample_inputs(
             &certificate,
             state.get_signer(),
             certificate.l1_info_root().unwrap().unwrap_or_default(),
+            None,
         )
         .unwrap();
 

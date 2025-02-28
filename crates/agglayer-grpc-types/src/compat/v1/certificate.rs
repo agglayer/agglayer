@@ -26,6 +26,7 @@ impl TryFrom<v1::Certificate> for Certificate {
                 .map_err(|e| Error::ParsingField("imported_bridge_exits", Box::new(e)))?,
             aggchain_data: required_field!(value, aggchain_data),
             metadata: required_field!(value, metadata),
+            custom_chain_data: value.custom_chain_data.to_vec(),
         })
     }
 }

@@ -101,6 +101,7 @@ impl From<CertificateV0> for Certificate {
             imported_bridge_exits,
             aggchain_data: AggchainData::ECDSA { signature },
             metadata,
+            custom_chain_data: vec![],
         }
     }
 }
@@ -117,6 +118,7 @@ struct CertificateV1<'a> {
     imported_bridge_exits: Cow<'a, [ImportedBridgeExit]>,
     aggchain_data: AggchainDataV1<'a>,
     metadata: Metadata,
+    custom_chain_data: Cow<'a, [u8]>,
 }
 
 impl From<CertificateV1<'_>> for Certificate {
@@ -131,6 +133,7 @@ impl From<CertificateV1<'_>> for Certificate {
             imported_bridge_exits,
             aggchain_data,
             metadata,
+            custom_chain_data,
         } = certificate;
 
         Certificate {
@@ -142,6 +145,7 @@ impl From<CertificateV1<'_>> for Certificate {
             imported_bridge_exits: imported_bridge_exits.into_owned(),
             metadata,
             aggchain_data: aggchain_data.into(),
+            custom_chain_data: custom_chain_data.into_owned(),
         }
     }
 }
@@ -157,6 +161,7 @@ impl<'a> From<&'a Certificate> for CertificateV1<'a> {
             imported_bridge_exits,
             metadata,
             aggchain_data,
+            custom_chain_data,
         } = certificate;
 
         CertificateV1 {
@@ -169,6 +174,7 @@ impl<'a> From<&'a Certificate> for CertificateV1<'a> {
             imported_bridge_exits: imported_bridge_exits.into(),
             aggchain_data: aggchain_data.into(),
             metadata: *metadata,
+            custom_chain_data: custom_chain_data.into(),
         }
     }
 }
