@@ -72,10 +72,17 @@ where
 {
     /// Creates a new empty [`LocalExitTree`].
     pub fn new() -> Self {
+        let mut empty_hash_at_height = [H::Digest::default(); TREE_DEPTH];
+        for i in 1..TREE_DEPTH {
+            empty_hash_at_height[i] =
+                H::merge(&empty_hash_at_height[i - 1], &empty_hash_at_height[i - 1]);
+        }
+
         Self {
             inner: pessimistic_proof_core::local_exit_tree::LocalExitTree {
                 leaf_count: 0,
                 frontier: [H::Digest::default(); TREE_DEPTH],
+                empty_hash_at_height,
             },
         }
     }
@@ -104,10 +111,17 @@ where
     /// Creates a new [`LocalExitTree`] from its parts: leaf count, and
     /// frontier.
     pub fn from_parts(leaf_count: u32, frontier: [H::Digest; TREE_DEPTH]) -> Self {
+        let mut empty_hash_at_height = [H::Digest::default(); TREE_DEPTH];
+        for i in 1..TREE_DEPTH {
+            empty_hash_at_height[i] =
+                H::merge(&empty_hash_at_height[i - 1], &empty_hash_at_height[i - 1]);
+        }
+
         Self {
             inner: pessimistic_proof_core::local_exit_tree::LocalExitTree {
                 leaf_count,
                 frontier,
+                empty_hash_at_height,
             },
         }
     }
