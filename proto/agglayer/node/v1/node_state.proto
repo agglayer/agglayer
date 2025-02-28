@@ -4,23 +4,6 @@ package agglayer.node.v1;
 
 import "agglayer/protocol/types/v1/certificate.proto";
 import "agglayer/protocol/types/v1/certificate_header.proto";
-import "agglayer/protocol/types/v1/epoch_configuration.proto";
-
-// Service for querying the current epoch configuration.
-service ConfigurationService {
-  // Method used to get the current epoch configuration.
-  rpc GetEpochConfiguration(GetEpochConfigurationRequest) returns (GetEpochConfigurationResponse);
-}
-
-// The kind of error that occurred and that are reported by the configuration
-// service.
-enum ConfigurationErrorKind {
-  // Unspecified error.
-  CONFIGURATION_ERROR_KIND_UNSPECIFIED = 0;
-  // The AggLayer isn't configured with a BlockClock configuration, thus no
-  // EpochConfiguration is available.
-  CONFIGURATION_ERROR_KIND_UNEXPECTED_CLOCK_CONFIGURATION = 1;
-}
 
 // Service for querying node state.
 service NodeStateService {
@@ -35,26 +18,30 @@ service NodeStateService {
 enum GetCertificateHeaderErrorKind {
   // Unspecified error.
   GET_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED = 0;
-  // Internal error.
-  GET_CERTIFICATE_HEADER_ERROR_KIND_INTERNAL = 1;
-  // Missing certificate id.
-  GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_CERTIFICATE_ID = 2;
-  // Malformed certificate id.
-  GET_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_CERTIFICATE_ID = 3;
+
+  // Missing field.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_FIELD = 1;
+
+  // Invalid data.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_INVALID_DATA = 2;
+
+  // Certificate not found.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND = 3;
 }
 
 // Error kind for GetLatestCertificateHeader RPC.
 enum GetLatestCertificateHeaderErrorKind {
   // Unspecified error.
   GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED = 0;
-  // Internal error.
-  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INTERNAL = 1;
-  // Missing network id.
-  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MISSING_NETWORK_ID = 2;
-  // Malformed network id.
-  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MALFORMED_NETWORK_ID = 3;
-  // Invalid request type.
-  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INVALID_REQUEST_TYPE = 4;
+
+  // Missing field.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MISSING_FIELD = 1;
+
+  // Invalid data.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INVALID_DATA = 2;
+
+  // Certificate not found.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND = 3;
 }
 
 // Request to get a CertificateHeader for a particular CertificateId.
@@ -67,15 +54,6 @@ message GetCertificateHeaderRequest {
 message GetCertificateHeaderResponse {
   // The certificate header.
   protocol.types.v1.CertificateHeader certificate_header = 1;
-}
-
-// Request to get the current epoch configuration.
-message GetEpochConfigurationRequest {}
-
-// Response to the current epoch configuration request.
-message GetEpochConfigurationResponse {
-  // The epoch configuration.
-  protocol.types.v1.EpochConfiguration epoch_configuration = 1;
 }
 
 // Request to get the latest known/pending/settled certificate header for a network.
