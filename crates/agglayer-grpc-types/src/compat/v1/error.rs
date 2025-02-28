@@ -1,4 +1,5 @@
 use agglayer_types::primitives::SignatureError;
+use tonic_types::FieldViolation;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -29,3 +30,26 @@ pub enum Error {
     #[error("failed serializing SP1v4 proof")]
     SerializingProof(#[source] bincode::Error),
 }
+
+impl From<&Error> for Vec<FieldViolation> {
+    fn from(value: &Error) -> Self {
+        let mut result = Vec::new();
+
+        match value {
+            Error::MissingField(field) => {
+                result.push(FieldViolation::new(
+                    field.to_string(),
+                    "required field is missing",
+                ));
+            }
+            Error::ParsingField(field, error) => {
+                result.push(FieldViolation::new(field.to_string(), error.to_string()));
+            }
+            _ => {}
+        }
+
+        result
+    }
+}
+
+mod error_kinds;

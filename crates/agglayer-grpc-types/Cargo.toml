@@ -12,10 +12,11 @@ compat = ["dep:agglayer-types", "dep:bincode", "dep:thiserror"]
 workspace = true
 
 [dependencies]
-serde.workspace = true
-prost.workspace = true
+bincode = { workspace = true, optional = true }
 pbjson = "0.7.0"
+prost.workspace = true
+serde.workspace = true
+tonic-types.workspace = true
+thiserror = { workspace = true, optional = true }
 
 agglayer-types = { workspace = true, optional = true }
-bincode = { workspace = true, optional = true }
-thiserror = { workspace = true, optional = true }

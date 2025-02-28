@@ -216,18 +216,28 @@ name = "agglayer-grpc-api"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-contracts",
+ "agglayer-grpc-client",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
+ "agglayer-rpc",
+ "agglayer-storage",
  "agglayer-types",
  "anyhow",
  "axum 0.8.1",
+ "bincode",
+ "ethers",
  "http 1.2.0",
  "prost 0.13.4",
+ "serde",
+ "serde_json",
+ "tokio",
  "tonic 0.12.3",
  "tonic-reflection",
  "tonic-types",
  "tower 0.4.13",
  "tracing",
+ "uuid 1.15.1",
 ]
 
 [[package]]
@@ -256,6 +266,7 @@ dependencies = [
  "prost 0.13.4",
  "serde",
  "thiserror 2.0.11",
+ "tonic-types",
 ]
 
 [[package]]
@@ -6285,7 +6296,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.11",
  "tracing",
- "uuid 1.13.1",
+ "uuid 1.15.1",
 ]
 
 [[package]]
@@ -9430,7 +9441,7 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
- "uuid 1.13.1",
+ "uuid 1.15.1",
 ]
 
 [[package]]
@@ -9810,9 +9821,9 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.13.1"
+version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ced87ca4be083373936a67f8de945faa23b6b42384bd5b64434850802c6dccd0"
+checksum = "e0f540e3240398cce6128b64ba83fdbdd86129c16a3aa1a3a252efd66eb3d587"
 dependencies = [
  "getrandom 0.3.1",
  "rand 0.9.0",

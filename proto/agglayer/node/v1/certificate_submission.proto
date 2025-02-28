@@ -23,9 +23,13 @@ message SubmitCertificateResponse {
 }
 
 // The kind of error that occurred and that are reported by the service.
-enum ErrorKind {
+enum CertificateSubmissionErrorKind {
   // Unspecified error.
-  ERROR_KIND_UNSPECIFIED = 0;
+  CERTIFICATE_SUBMISSION_ERROR_KIND_UNSPECIFIED = 0;
   // The signature verification failed.
-  ERROR_KIND_SIGNATURE_VERIFICATION = 1;
+  CERTIFICATE_SUBMISSION_ERROR_KIND_SIGNATURE_VERIFICATION = 1;
+  // Missing required field.
+  CERTIFICATE_SUBMISSION_ERROR_KIND_MISSING_REQUIRED_FIELD = 2;
+  // Unable to replace pending certificate.
+  CERTIFICATE_SUBMISSION_ERROR_KIND_UNABLE_TO_REPLACE_PENDING_CERTIFICATE = 3;
 }

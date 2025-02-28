@@ -86,6 +86,7 @@ tokio-stream = { version = "0.1.17", features = ["sync"] }
 tokio-util = "0.7.13"
 toml = "0.8.20"
 tonic = { version = "0.12.3", default-features = false }
+tonic-types = "0.12.3"
 tower = "0.4.13"
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
