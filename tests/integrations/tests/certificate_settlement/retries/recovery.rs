@@ -4,7 +4,7 @@ use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{CertificateId, CertificateStatus};
 use fail::FailScenario;
 use integrations::{
-    agglayer_setup::{get_signer, setup_network, start_agglayer},
+    agglayer_setup::{setup_network, start_agglayer},
     wait_for_settlement_or_error,
 };
 use jsonrpsee::core::client::ClientT as _;
@@ -15,7 +15,8 @@ use rstest::rstest;
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(90))]
-async fn sent_transaction_recover() {
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn sent_transaction_recover(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
@@ -27,9 +28,6 @@ async fn sent_transaction_recover() {
 
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) = setup_network(&tmp_dir.path, None, None).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 

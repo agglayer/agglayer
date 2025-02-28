@@ -1,5 +1,5 @@
 [env]
-CONTRACT_VERSION = "feature/ongoing-v0.3.0"
+CONTRACT_VERSION = "feature/ongoing-v0.3.0-docker"
 CONTRACT_REPO = "https://api.github.com/repos/0xPolygonHermez/zkevm-contracts"
 
 [tasks.contracts]
