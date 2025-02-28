@@ -215,8 +215,8 @@ mockall::mock! {
 
     #[async_trait::async_trait]
     impl agglayer_contracts::AggchainContract for L1Rpc {
-
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
+
         async fn get_aggchain_vkey(
             &self,
             rollup_address: ethers::types::Address,
@@ -229,6 +229,7 @@ mockall::mock! {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
 
         async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, L1RpcError>;
+
         fn build_pending_transaction(
             &self,
             tx_hash: ethers::types::H256,
@@ -245,6 +246,7 @@ mockall::mock! {
         ) -> ethers::contract::ContractCall<NonceManagerMiddleware<Provider<MockProvider> > ,()> ;
     }
 }
+
 fn next_available_addr() -> std::net::SocketAddr {
     use std::net::{TcpListener, TcpStream};
 
