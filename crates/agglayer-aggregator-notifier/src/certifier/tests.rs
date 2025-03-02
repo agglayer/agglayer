@@ -2,7 +2,7 @@ use std::{sync::Arc, thread, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
 use agglayer_config::Config;
-use agglayer_contracts::Settler;
+use agglayer_contracts::{L1RpcError, Settler};
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{LocalNetworkStateData, NetworkId};
@@ -14,9 +14,10 @@ use ethers::{
 use fail::FailScenario;
 use mockall::predicate::{always, eq};
 use pessimistic_proof_test_suite::forest::Forest;
+use prover_config::ProverType;
 use tokio_util::sync::CancellationToken;
 
-use crate::CertifierClient;
+use crate::{CertifierClient, ELF};
 
 #[rstest::rstest]
 #[test_log::test(tokio::test)]
@@ -27,10 +28,10 @@ async fn happy_path() {
 
     let mut pending_store = MockPendingStore::new();
     let mut l1_rpc = MockL1Rpc::new();
-    let prover_config = agglayer_config::prover::ProverConfig::default();
+    let prover_config = agglayer_prover_config::ProverConfig::default();
 
     // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::default();
+    let fake_prover = FakeProver::new(ELF);
     let endpoint = prover_config.grpc_endpoint;
     let cancellation = CancellationToken::new();
 
@@ -64,11 +65,6 @@ async fn happy_path() {
         .once()
         .with(eq(certificate_id), always())
         .return_once(|_, _| Ok(()));
-
-    l1_rpc
-        .expect_get_l1_info_root()
-        .once()
-        .returning(move |_| Ok(Default::default()));
 
     l1_rpc
         .expect_get_trusted_sequencer_address()
@@ -107,7 +103,7 @@ async fn happy_path() {
 
 #[rstest::rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(10))]
+#[timeout(Duration::from_secs(60))]
 async fn prover_timeout() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();
@@ -115,16 +111,20 @@ async fn prover_timeout() {
 
     let mut pending_store = MockPendingStore::new();
     let mut l1_rpc = MockL1Rpc::new();
-    let prover_config = agglayer_config::prover::ProverConfig {
+    let prover_config = agglayer_prover_config::ProverConfig {
         grpc_endpoint: next_available_addr(),
-        cpu_prover: agglayer_config::prover::CpuProverConfig {
+        primary_prover: ProverType::CpuProver(prover_config::CpuProverConfig {
             proving_timeout: Duration::from_secs(1),
             ..Default::default()
-        },
+        }),
         ..Default::default()
     };
 
-    config.prover_entrypoint = format!("http://127.0.0.1:{}", prover_config.grpc_endpoint.port());
+    config.prover_entrypoint = format!(
+        "http://{}:{}",
+        prover_config.grpc_endpoint.ip(),
+        prover_config.grpc_endpoint.port()
+    );
 
     let prover_config = Arc::new(prover_config);
 
@@ -132,7 +132,7 @@ async fn prover_timeout() {
     let prover_cancellation_token = cancellation.clone();
 
     thread::spawn(move || {
-        agglayer_prover::start_prover(prover_config, prover_cancellation_token);
+        agglayer_prover::start_prover(prover_config, prover_cancellation_token, ELF);
     });
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
@@ -165,11 +165,6 @@ async fn prover_timeout() {
         .expect_get_trusted_sequencer_address()
         .once()
         .returning(move |_, _| Ok(signer));
-
-    l1_rpc
-        .expect_get_l1_info_root()
-        .once()
-        .returning(move |_| Ok(Default::default()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -210,16 +205,17 @@ mockall::mock! {
             &self,
             rollup_id: u32,
             proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
-        ) -> Result<ethers::types::Address, ()>;
+        ) -> Result<ethers::types::Address, L1RpcError>;
 
-        async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()>;
+        async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
     }
+
     #[async_trait::async_trait]
     impl Settler for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
 
-        async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, String>;
+        async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, L1RpcError>;
         fn build_pending_transaction(
             &self,
             tx_hash: ethers::types::H256,

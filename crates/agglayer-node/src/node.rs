@@ -3,14 +3,20 @@ use std::{num::NonZeroU64, sync::Arc};
 use agglayer_aggregator_notifier::{CertifierClient, EpochPackerClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
-use agglayer_config::{Config, Epoch};
+use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
 use agglayer_contracts::{
     polygon_rollup_manager::PolygonRollupManager,
     polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
 };
+use agglayer_jsonrpc_api::admin::AdminAgglayerImpl;
+use agglayer_jsonrpc_api::service::AgglayerService;
+use agglayer_jsonrpc_api::{kernel::Kernel, AgglayerImpl};
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
-    storage::DB,
+    storage::{
+        backup::{BackupClient, BackupEngine},
+        DB,
+    },
     stores::{
         debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
         PerEpochReader as _,
@@ -25,9 +31,11 @@ use ethers::{
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
-use crate::{epoch_synchronizer::EpochSynchronizer, kernel::Kernel, rpc::AgglayerImpl};
+use crate::epoch_synchronizer::EpochSynchronizer;
+
+pub(crate) mod api;
 
 pub(crate) struct Node {
     pub(crate) rpc_handle: JoinHandle<()>,
@@ -77,6 +85,13 @@ impl Node {
         config: Arc<Config>,
         cancellation_token: CancellationToken,
     ) -> Result<Self> {
+        if config.mock_verifier {
+            warn!(
+                "Mock verifier is being used. This should only be used for testing purposes and \
+                 not in production environments."
+            );
+        }
+
         // Initializing storage
         let pending_db = Arc::new(DB::open_cf(
             &config.storage.pending_db_path,
@@ -87,7 +102,28 @@ impl Node {
             agglayer_storage::storage::state_db_cf_definitions(),
         )?);
 
-        let state_store = Arc::new(StateStore::new(state_db.clone()));
+        // Initialize backup engine
+        let backup_client = if let BackupConfig::Enabled {
+            path,
+            state_max_backup_count,
+            pending_max_backup_count,
+        } = &config.storage.backup
+        {
+            let (backup_engine, client) = BackupEngine::new(
+                path,
+                state_db.clone(),
+                pending_db.clone(),
+                *state_max_backup_count,
+                *pending_max_backup_count,
+                cancellation_token.clone(),
+            )?;
+            tokio::spawn(backup_engine.run());
+
+            client
+        } else {
+            BackupClient::noop()
+        };
+        let state_store = Arc::new(StateStore::new(state_db.clone(), backup_client.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
         let debug_store = if config.debug_mode {
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path)?)
@@ -138,6 +174,7 @@ impl Node {
             current_epoch,
             pending_store.clone(),
             state_store.clone(),
+            backup_client,
         )?);
 
         info!("Epoch synchronization started.");
@@ -218,21 +255,60 @@ impl Node {
             .await?;
 
         info!("Certificate orchestrator started.");
-        // Bind the core to the RPC server.
-        let server_handle = AgglayerImpl::new(
-            core,
+
+        // Set up the core service object.
+        let service = Arc::new(AgglayerService::new(core));
+        let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
             data_sender,
             pending_store.clone(),
             state_store.clone(),
-            debug_store,
+            debug_store.clone(),
+            config.clone(),
+            Arc::clone(&rollup_manager),
+        ));
+
+        let admin_router = AdminAgglayerImpl::new(
+            pending_store.clone(),
+            state_store.clone(),
+            debug_store.clone(),
             config.clone(),
         )
         .start()
         .await?;
 
+        // Bind the core to the RPC server.
+        let json_rpc_router = AgglayerImpl::new(service, rpc_service.clone())
+            .start()
+            .await?;
+
+        let grpc_router = agglayer_grpc_api::Server::with_config(config.clone(), rpc_service)
+            .build()
+            .map_err(|err| {
+                error!("Failed to build gRPC router: {}", err);
+                err
+            })?;
+
+        let health_router = api::rest::health_router();
+
+        let router = axum::Router::new()
+            .merge(health_router)
+            .merge(json_rpc_router)
+            .nest("/grpc", grpc_router);
+
+        let listener = tokio::net::TcpListener::bind(config.rpc_addr()).await?;
+        let admin_listener = tokio::net::TcpListener::bind(config.admin_rpc_addr()).await?;
+        info!(on = %config.rpc_addr(), "API listening");
+
+        let api_server = axum::serve(listener, router)
+            .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
+
+        let admin_server = axum::serve(admin_listener, admin_router)
+            .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
+
         let rpc_handle = tokio::spawn(async move {
             tokio::select! {
-                _ = server_handle.stopped() => {},
+                _ = api_server => {},
+                _ = admin_server => {},
                 _ = cancellation_token.cancelled() => {
                     debug!("Node RPC shutdown requested.");
                 }

@@ -103,16 +103,17 @@ mod tests {
     use agglayer_config::Config;
     use agglayer_storage::{
         columns::epochs::end_checkpoint::EndCheckpointColumn,
-        storage::epochs_db_cf_definitions,
+        storage::{backup::BackupClient, epochs_db_cf_definitions},
         stores::{
-            epochs::EpochsStore, pending::PendingStore, state::StateStore, PendingCertificateWriter,
+            epochs::EpochsStore, pending::PendingStore, state::StateStore,
+            PendingCertificateWriter, StateWriter,
         },
         tests::{
             mocks::{MockEpochsStore, MockPerEpochStore, MockStateStore},
             TempDBDir,
         },
     };
-    use agglayer_types::{Certificate, ExecutionMode, Height, NetworkId, Proof};
+    use agglayer_types::{Certificate, CertificateStatus, ExecutionMode, Height, NetworkId, Proof};
     use mockall::{predicate::eq, Sequence};
 
     use super::*;
@@ -276,8 +277,9 @@ mod tests {
     async fn lse_number_is_less_than_loe_real_db() {
         let tmp = TempDBDir::new();
         let config = Arc::new(Config::new(&tmp.path));
-        let state_store =
-            Arc::new(StateStore::new_with_path(&config.storage.state_db_path).unwrap());
+        let state_store = Arc::new(
+            StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+        );
         let pending_store =
             Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
 
@@ -287,6 +289,7 @@ mod tests {
                 15,
                 pending_store.clone(),
                 state_store.clone(),
+                BackupClient::noop(),
             )
             .unwrap(),
         );
@@ -307,19 +310,24 @@ mod tests {
         pending_store
             .insert_generated_proof(&certificate_1.hash(), &Proof::dummy())
             .unwrap();
-
+        state_store
+            .insert_certificate_header(&certificate_1, CertificateStatus::Pending)
+            .unwrap();
         pending_store
             .insert_pending_certificate(network_2, 0, &certificate_2)
             .unwrap();
         pending_store
             .insert_generated_proof(&certificate_2.hash(), &Proof::dummy())
             .unwrap();
-
-        epoch_10
-            .add_certificate(network_1, 0, ExecutionMode::Default)
+        state_store
+            .insert_certificate_header(&certificate_2, CertificateStatus::Pending)
             .unwrap();
         epoch_10
-            .add_certificate(network_2, 0, ExecutionMode::Default)
+            .add_certificate(certificate_1.hash(), ExecutionMode::Default)
+            .unwrap();
+
+        epoch_10
+            .add_certificate(certificate_2.hash(), ExecutionMode::Default)
             .unwrap();
 
         let mut expected_end_checkpoint = BTreeMap::new();
@@ -396,8 +404,9 @@ mod tests {
     async fn current_epoch_should_be_open() {
         let tmp = TempDBDir::new();
         let config = Arc::new(Config::new(&tmp.path));
-        let state_store =
-            Arc::new(StateStore::new_with_path(&config.storage.state_db_path).unwrap());
+        let state_store = Arc::new(
+            StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+        );
         let pending_store =
             Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
 
@@ -407,6 +416,7 @@ mod tests {
                 15,
                 pending_store.clone(),
                 state_store.clone(),
+                BackupClient::noop(),
             )
             .unwrap(),
         );
@@ -424,6 +434,10 @@ mod tests {
         pending_store
             .insert_pending_certificate(network_1, 0, &certificate_1)
             .unwrap();
+        state_store
+            .insert_certificate_header(&certificate_1, CertificateStatus::Pending)
+            .unwrap();
+
         pending_store
             .insert_generated_proof(&certificate_1.hash(), &Proof::dummy())
             .unwrap();
@@ -431,15 +445,19 @@ mod tests {
         pending_store
             .insert_pending_certificate(network_2, 0, &certificate_2)
             .unwrap();
+        state_store
+            .insert_certificate_header(&certificate_2, CertificateStatus::Pending)
+            .unwrap();
+
         pending_store
             .insert_generated_proof(&certificate_2.hash(), &Proof::dummy())
             .unwrap();
 
         epoch_10
-            .add_certificate(network_1, 0, ExecutionMode::Default)
+            .add_certificate(certificate_1.hash(), ExecutionMode::Default)
             .unwrap();
         epoch_10
-            .add_certificate(network_2, 0, ExecutionMode::Default)
+            .add_certificate(certificate_2.hash(), ExecutionMode::Default)
             .unwrap();
 
         let mut expected_end_checkpoint = BTreeMap::new();

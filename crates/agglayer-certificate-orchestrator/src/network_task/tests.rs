@@ -857,8 +857,8 @@ async fn process_next_certificate() {
     let mut forest = Forest::default();
 
     let certificate = forest.apply_events(
-        &[(*USDC, 10.try_into().unwrap())],
-        &[(*USDC, 1.try_into().unwrap())],
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
     );
     let certificate_id = certificate.hash();
     storage
@@ -871,7 +871,7 @@ async fn process_next_certificate() {
         .insert_certificate_header(&certificate, CertificateStatus::Pending)
         .expect("Failed to insert certificate header");
 
-    let mut certificate = forest.apply_events(&[], &[(*USDC, 1.try_into().unwrap())]);
+    let mut certificate = forest.apply_events(&[], &[(USDC, 1.try_into().unwrap())]);
     certificate.height = 1;
     let certificate_id2 = certificate.hash();
 
@@ -895,7 +895,7 @@ async fn process_next_certificate() {
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
 
-            let signer = pessimistic_proof::Address::new([0; 20]);
+            let signer = agglayer_types::Address::new([0; 20]);
             let _ = new_state
                 .apply_certificate(
                     &certificate,
@@ -961,4 +961,65 @@ async fn process_next_certificate() {
         .await
         .unwrap();
     assert_eq!(next_expected_height, 2);
+}
+
+#[rstest]
+#[test_log::test(tokio::test)]
+#[timeout(Duration::from_secs(1))]
+async fn epoch_jammed(#[values(false, true)] at_capacity: bool) {
+    let mut pending = MockPendingStore::new();
+    let mut state = MockStateStore::new();
+    let certifier = MockCertifier::new();
+    let packer = MockEpochPacker::new();
+    let clock_ref = clock();
+    let epoch_sender = clock_ref.get_sender();
+    let network_id = 1.into();
+    let (_sender, certificate_stream) = mpsc::channel(1);
+
+    state
+        .expect_read_local_network_state()
+        .returning(|_| Ok(Default::default()));
+
+    state
+        .expect_get_latest_settled_certificate_per_network()
+        .once()
+        .with(eq(network_id))
+        .returning(|_| Ok(None));
+
+    pending.expect_get_certificate().returning(|_, _| Ok(None));
+
+    let mut task = NetworkTask::new(
+        Arc::new(pending),
+        Arc::new(state),
+        Arc::new(certifier),
+        Arc::new(packer),
+        clock_ref.clone(),
+        network_id,
+        certificate_stream,
+    )
+    .expect("Failed to create a new network task");
+
+    let mut epochs = task.clock_ref.subscribe().unwrap();
+    let mut next_expected_height = 0;
+
+    // Jam the epoch channel with a bunch of epoch events.
+    for epoch_no in 1..=105 {
+        epoch_sender
+            .send(agglayer_clock::Event::EpochEnded(epoch_no))
+            .unwrap();
+    }
+
+    // Just make sure it does not panic or time out when epoch events are skipped.
+    let mut first_run = false;
+    task.at_capacity_for_epoch = at_capacity;
+    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+        .await
+        .unwrap();
+    assert_eq!(task.at_capacity_for_epoch, at_capacity);
+
+    // Taking the next item from the channel should advance the epoch.
+    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
+        .await
+        .unwrap();
+    assert!(!task.at_capacity_for_epoch);
 }

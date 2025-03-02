@@ -3,22 +3,27 @@ use std::sync::Arc;
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
 use agglayer_contracts::RollupContract;
-use agglayer_primitives::Address;
 use agglayer_prover_types::{
     default_bincode_options,
     v1::{
-        proof_generation_service_client::ProofGenerationServiceClient, ProofGenerationRequest,
-        ProofGenerationResponse,
+        generate_proof_request::Stdin,
+        pessimistic_proof_service_client::PessimisticProofServiceClient, ErrorKind,
+        GenerateProofRequest, GenerateProofResponse,
     },
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
-use agglayer_types::{Certificate, Height, LocalNetworkStateData, NetworkId, Proof};
-use bincode::Options as _;
-use pessimistic_proof::{
-    generate_pessimistic_proof, local_exit_tree::hasher::Keccak256Hasher,
-    multi_batch_header::MultiBatchHeader, LocalNetworkState,
+use agglayer_types::{
+    primitives::Address, Certificate, Height, LocalNetworkStateData, NetworkId, Proof,
 };
-use sp1_sdk::{CpuProver, Prover, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey};
+use bincode::Options;
+use pessimistic_proof::core::generate_pessimistic_proof;
+use pessimistic_proof::local_state::LocalNetworkState;
+use pessimistic_proof::{
+    local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
+};
+use sp1_sdk::{
+    CpuProver, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
+};
 use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, instrument, warn};
 
@@ -32,7 +37,7 @@ pub struct CertifierClient<PendingStore, L1Rpc> {
     /// The pending store to fetch and store certificates and proofs.
     pending_store: Arc<PendingStore>,
     /// The prover service client.
-    prover: ProofGenerationServiceClient<Channel>,
+    prover: PessimisticProofServiceClient<Channel>,
     /// The local CPU verifier to verify the generated proofs.
     verifier: Arc<CpuProver>,
     /// The verifying key of the SP1 proof system.
@@ -50,13 +55,17 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         config: Arc<Config>,
     ) -> anyhow::Result<Self> {
         debug!("Initializing the CertifierClient verifier...");
-        let verifier = CpuProver::new();
+        let verifier = if config.mock_verifier {
+            sp1_sdk::ProverClient::builder().mock().build()
+        } else {
+            sp1_sdk::ProverClient::builder().cpu().build()
+        };
         let (_, verifying_key) = verifier.setup(ELF);
         debug!("CertifierClient verifier successfully initialized!");
 
         debug!("Connecting to the prover service...");
 
-        let prover = ProofGenerationServiceClient::connect(prover)
+        let prover = PessimisticProofServiceClient::connect(prover)
             .await?
             .max_decoding_message_size(config.prover.grpc.max_decoding_message_size)
             .max_encoding_message_size(config.prover.grpc.max_encoding_message_size)
@@ -83,7 +92,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
             |_| {
-                let verifier = sp1_sdk::MockProver::new();
+                let verifier = sp1_sdk::ProverClient::builder().mock().build();
                 let (_, verifying_key) = verifier.setup(ELF);
 
                 verifier.verify(proof, &verifying_key)
@@ -126,50 +135,95 @@ where
         let mut state = state.clone();
         let (multi_batch_header, initial_state) =
             self.witness_execution(&certificate, &mut state).await?;
-
         info!(
             "Successfully executed the native PP for the Certificate {}",
             certificate_id
         );
+        let network_state = pessimistic_proof::NetworkState::from(initial_state);
+        let mut stdin = SP1Stdin::new();
+        stdin.write(&network_state);
+        stdin.write(&multi_batch_header);
 
-        let request = ProofGenerationRequest {
-            initial_state: default_bincode_options()
-                .serialize(&initial_state)
-                .map_err(|source| CertificationError::Serialize { source })?,
-            batch_header: default_bincode_options()
-                .serialize(&multi_batch_header)
-                .map_err(|source| CertificationError::Serialize { source })?,
+        // TODO: Propagate the stark proof or build the SP1Stdin directly here
+        let request = GenerateProofRequest {
+            stdin: Some(Stdin::Sp1Stdin(
+                default_bincode_options()
+                    .serialize(&stdin)
+                    .map_err(|source| CertificationError::Serialize { source })?,
+            )),
         };
 
         info!("Sending the Proof generation request to the agglayer-prover service...");
-        let prover_response: tonic::Response<ProofGenerationResponse> = prover_client
+        let prover_response: tonic::Response<GenerateProofResponse> = prover_client
             .generate_proof(request)
             .await
-            .map_err(|error| {
-                debug!("Failed to generate the p-proof: {:?}", error);
+            .map_err(|source_error| {
+                debug!("Failed to generate the p-proof: {:?}", source_error);
                 if let Ok(error) = default_bincode_options()
-                    .deserialize::<agglayer_prover_types::Error>(error.details())
-                {
-                    match error {
-                        agglayer_prover_types::Error::UnableToExecuteProver => {
+                    .deserialize::<agglayer_prover_types::v1::GenerateProofError>(
+                    source_error.details(),
+                ) {
+                    match error.error_type() {
+                        ErrorKind::UnableToExecuteProver => {
                             CertificationError::InternalError("Unable to execute prover".into())
                         }
-                        agglayer_prover_types::Error::ProverFailed(error) => {
-                            CertificationError::InternalError(error)
+                        ErrorKind::ProverFailed => {
+                            CertificationError::InternalError(source_error.message().to_string())
                         }
-                        agglayer_prover_types::Error::ProofVerificationFailed(error) => {
-                            CertificationError::ProofVerificationFailed { source: error }
+                        ErrorKind::ProofVerificationFailed => {
+                            let proof_error: Result<
+                                pessimistic_proof::error::ProofVerificationError,
+                                _,
+                            > = default_bincode_options().deserialize(&error.error);
+
+                            match proof_error {
+                                Ok(error) => {
+                                    CertificationError::ProofVerificationFailed { source: error }
+                                }
+                                Err(_source) => {
+                                    warn!(
+                                        "Failed to deserialize the error details coming from the \
+                                         prover: {source_error:?}"
+                                    );
+
+                                    CertificationError::InternalError(
+                                        source_error.message().to_string(),
+                                    )
+                                }
+                            }
                         }
-                        agglayer_prover_types::Error::ExecutorFailed(source) => {
-                            CertificationError::NativeExecutionFailed { source }
+
+                        ErrorKind::ExecutorFailed => {
+                            let proof_error: Result<pessimistic_proof::ProofError, _> =
+                                default_bincode_options().deserialize(&error.error);
+
+                            match proof_error {
+                                Ok(error) => {
+                                    CertificationError::NativeExecutionFailed { source: error }
+                                }
+                                Err(_source) => {
+                                    warn!(
+                                        "Failed to deserialize the error details coming from the \
+                                         prover: {source_error:?}"
+                                    );
+
+                                    CertificationError::InternalError(
+                                        source_error.message().to_string(),
+                                    )
+                                }
+                            }
+                        }
+                        ErrorKind::Unspecified => {
+                            CertificationError::InternalError(source_error.message().to_string())
                         }
                     }
                 } else {
                     warn!(
-                        "Failed to deserialize the error details coming from the prover: {error:?}"
+                        "Failed to deserialize the error details coming from the prover: \
+                         {source_error:?}"
                     );
 
-                    CertificationError::InternalError(error.message().to_string())
+                    CertificationError::InternalError(source_error.message().to_string())
                 }
             })?;
 
@@ -205,7 +259,7 @@ where
                 certificate,
                 height,
                 new_state: state,
-                network: multi_batch_header.origin_network,
+                network: multi_batch_header.origin_network.into(),
             })
         }
     }
@@ -224,34 +278,50 @@ where
             .await
             .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
 
-        let l1_info_leaf_count = certificate
-            .l1_info_tree_leaf_count()
-            .unwrap_or_else(|| self.l1_rpc.default_l1_info_tree_entry().0);
-
-        let l1_info_root = self
-            .l1_rpc
-            .get_l1_info_root(l1_info_leaf_count)
-            .await
-            .map_err(|_| {
-                CertificationError::L1InfoRootNotFound(certificate_id, l1_info_leaf_count)
-            })?
-            .into();
-
         let declared_l1_info_root = certificate
             .l1_info_root()
             .map_err(|source| CertificationError::Types { source })?;
 
-        if let Some(declared) = declared_l1_info_root {
-            if declared != l1_info_root {
-                return Err(CertificationError::Types {
-                    source: agglayer_types::Error::L1InfoRootIncorrect {
-                        declared,
-                        retrieved: l1_info_root,
-                        leaf_count: l1_info_leaf_count,
-                    },
-                });
+        let declared_l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
+
+        let l1_info_root = match (declared_l1_info_leaf_count, declared_l1_info_root) {
+            // Use the default corresponding to the entry set by the event `InitL1InfoRootMap`
+            (None, None) => self.l1_rpc.default_l1_info_tree_entry().1.into(),
+            // Retrieve the event corresponding to the declared entry and await for finalization
+            (Some(declared_leaf), Some(declared_root)) => {
+                // Retrieve from contract and await for finalization
+                let retrieved_root = self
+                    .l1_rpc
+                    .get_l1_info_root(declared_leaf)
+                    .await
+                    .map_err(|_| {
+                        CertificationError::L1InfoRootNotFound(certificate_id, declared_leaf)
+                    })?
+                    .into();
+
+                // Check that the retrieved l1 info root is equal to the declared one
+                if declared_root != retrieved_root {
+                    return Err(CertificationError::Types {
+                        source: agglayer_types::Error::L1InfoRootIncorrect {
+                            declared: declared_root,
+                            retrieved: retrieved_root,
+                            leaf_count: declared_leaf,
+                        },
+                    });
+                }
+
+                retrieved_root
             }
-        }
+            // Inconsistent declared L1 info tree entry
+            (l1_leaf, l1_info_root) => {
+                return Err(CertificationError::Types {
+                    source: agglayer_types::Error::InconsistentL1InfoTreeInformation {
+                        l1_leaf,
+                        l1_info_root,
+                    },
+                })
+            }
+        };
 
         let initial_state = LocalNetworkState::from(state.clone());
 
@@ -260,8 +330,10 @@ where
             .apply_certificate(certificate, signer, l1_info_root)
             .map_err(|source| CertificationError::Types { source })?;
 
-        // Perform the native PP execution
-        let _ = generate_pessimistic_proof(initial_state.clone(), &multi_batch_header)
+        // Perform the native PP execution without the STARK verification
+        // TODO: Replace this by one native execution within SP1 to have the STARK
+        // verification
+        let _ = generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
             .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
         Ok((multi_batch_header, initial_state))

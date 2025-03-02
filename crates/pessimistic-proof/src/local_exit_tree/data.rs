@@ -1,11 +1,10 @@
-#![allow(clippy::needless_range_loop)]
-use std::fmt::Debug;
-
+use pessimistic_proof_core::local_exit_tree::{
+    hasher::Hasher, proof::LETMerkleProof, LocalExitTreeError,
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::local_exit_tree::LocalExitTreeError;
-use crate::{local_exit_tree::hasher::Hasher, utils::empty_hash::empty_hash_at_height};
+use crate::utils::empty_hash::empty_hash_at_height;
 
 /// Represents a local exit tree as defined by the LxLy bridge.
 #[serde_as]
@@ -17,23 +16,21 @@ where
 {
     /// The layers of the Merkle tree from bottom to top (i.e., the leaves are
     /// in `layers[0]`)
+    ///
+    /// This tree is contiguous: due to the structure of the LET, the empty
+    /// trees must be right children only.
+    ///
+    /// So if `layers[0]` has `n` exit leaf hashes, then `layers[1] has
+    /// `round_up(n/2)` hashes, etc.
     #[serde_as(as = "[_; TREE_DEPTH]")]
     pub layers: [Vec<H::Digest>; TREE_DEPTH],
+
     /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
     /// `i`.
+    ///
+    /// This is a constant, but until const traits land we cannot make it one.
     #[serde_as(as = "[_; TREE_DEPTH]")]
     empty_hash_at_height: [H::Digest; TREE_DEPTH],
-}
-
-#[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LETMerkleProof<H, const TREE_DEPTH: usize = 32>
-where
-    H: Hasher,
-    H::Digest: Serialize + DeserializeOwned,
-{
-    #[serde_as(as = "[_; TREE_DEPTH]")]
-    pub(crate) siblings: [H::Digest; TREE_DEPTH],
 }
 
 impl<H, const TREE_DEPTH: usize> Default for LocalExitTreeData<H, TREE_DEPTH>
@@ -140,9 +137,9 @@ where
         }
         let mut siblings = [Default::default(); TREE_DEPTH];
         let mut index = leaf_index;
-        for height in 0..TREE_DEPTH {
-            let sibling = self.get(height, index ^ 1)?;
-            siblings[height] = sibling;
+
+        for (height, sibling) in siblings.iter_mut().enumerate().take(TREE_DEPTH) {
+            *sibling = self.get(height, index ^ 1)?;
             index >>= 1;
         }
 
@@ -150,37 +147,12 @@ where
     }
 }
 
-impl<H, const TREE_DEPTH: usize> LETMerkleProof<H, TREE_DEPTH>
-where
-    H: Hasher,
-    H::Digest: Eq + Copy + Default + Serialize + DeserializeOwned,
-{
-    pub fn verify(&self, leaf: H::Digest, leaf_index: u32, root: H::Digest) -> bool {
-        let mut entry = leaf;
-        let mut index = leaf_index;
-        for &sibling in &self.siblings {
-            entry = if index & 1 == 0 {
-                H::merge(&entry, &sibling)
-            } else {
-                H::merge(&sibling, &entry)
-            };
-            index >>= 1;
-        }
-        if index != 0 {
-            return false;
-        }
-
-        entry == root
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use rand::{random, thread_rng, Rng};
+    use pessimistic_proof_core::local_exit_tree::hasher::Keccak256Hasher;
+    use rand::{random, rng, Rng};
 
-    use crate::local_exit_tree::{
-        data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree, LocalExitTreeError,
-    };
+    use crate::local_exit_tree::{data::LocalExitTreeData, LocalExitTree, LocalExitTreeError};
 
     const TREE_DEPTH: usize = 32;
     type H = Keccak256Hasher;
@@ -204,13 +176,13 @@ mod tests {
 
     #[test]
     fn test_data_vs_frontier_root() {
-        let num_leaves = thread_rng().gen_range(1..100.min(1 << TREE_DEPTH));
+        let num_leaves = rng().random_range(1..100.min(1 << TREE_DEPTH));
         compare_let_data_let_frontier(num_leaves)
     }
 
     #[test]
     fn test_data_vs_frontier_add_leaf() -> Result<(), LocalExitTreeError> {
-        let num_leaves = thread_rng().gen_range(1usize..100.min(1 << TREE_DEPTH));
+        let num_leaves = rng().random_range(1usize..100.min(1 << TREE_DEPTH));
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
         let mut local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
             LocalExitTreeData::from_leaves(leaves.into_iter())?;
@@ -232,9 +204,9 @@ mod tests {
 
     #[test]
     fn test_merkle_proofs() {
-        let num_leaves = thread_rng().gen_range(1..=100.min(1 << TREE_DEPTH));
+        let num_leaves = rng().random_range(1..=100.min(1 << TREE_DEPTH));
         let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
-        let leaf_index = thread_rng().gen_range(0..num_leaves);
+        let leaf_index = rng().random_range(0..num_leaves);
         let leaf = leaves[leaf_index];
         let local_exit_tree_data: LocalExitTreeData<H, TREE_DEPTH> =
             LocalExitTreeData::from_leaves(leaves.into_iter()).unwrap();

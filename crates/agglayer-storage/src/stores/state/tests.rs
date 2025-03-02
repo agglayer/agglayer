@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use agglayer_types::{Certificate, LocalNetworkStateData, NetworkId};
-use pessimistic_proof::{generate_pessimistic_proof, keccak::digest::Digest, LocalNetworkState};
+use pessimistic_proof::utils::Hashable as _;
+use pessimistic_proof::{
+    core::generate_pessimistic_proof, keccak::digest::Digest, LocalNetworkState,
+};
 use rstest::{fixture, rstest};
 use tracing::info;
 
@@ -10,7 +13,7 @@ use crate::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     error::Error,
-    storage::{state_db_cf_definitions, DB},
+    storage::{backup::BackupClient, state_db_cf_definitions, DB},
     stores::{state::StateStore, StateReader as _, StateWriter as _},
     tests::TempDBDir,
 };
@@ -21,7 +24,7 @@ mod metadata;
 fn can_retrieve_list_of_network() {
     let tmp = TempDBDir::new();
     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
-    let store = StateStore::new(db.clone());
+    let store = StateStore::new(db.clone(), BackupClient::noop());
     assert!(store.get_active_networks().unwrap().is_empty());
 
     db.put::<LatestSettledCertificatePerNetworkColumn>(
@@ -34,7 +37,7 @@ fn can_retrieve_list_of_network() {
 
 fn equal_state(lhs: &LocalNetworkStateData, rhs: &LocalNetworkStateData) -> bool {
     // local exit tree
-    assert_eq!(lhs.exit_tree.leaf_count, rhs.exit_tree.leaf_count);
+    assert_eq!(lhs.exit_tree.leaf_count(), rhs.exit_tree.leaf_count());
     assert_eq!(lhs.exit_tree.get_root(), rhs.exit_tree.get_root());
 
     // balance tree
@@ -58,7 +61,7 @@ fn store() -> StateStore {
     let tmp = TempDBDir::new();
     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
 
-    StateStore::new(db.clone())
+    StateStore::new(db.clone(), BackupClient::noop())
 }
 
 #[rstest]
@@ -164,7 +167,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
             certificate.bridge_exits.len(),
         );
 
-        let signer = certificate.signer().unwrap();
+        let signer = certificate.signer().unwrap().unwrap();
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
         let multi_batch_header = lns
@@ -174,7 +177,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         info!("Certificate {idx}: successful witness generation");
         let initial_state = LocalNetworkState::from(lns.clone());
 
-        generate_pessimistic_proof(initial_state, &multi_batch_header).unwrap();
+        generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
         info!("Certificate {idx}: successful native execution");
 
         for b in &certificate.bridge_exits {
@@ -228,6 +231,43 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         &before_going_through_disk,
         &after_going_through_disk
     ));
+}
+
+#[test]
+fn import_native_tokens() {
+    let certificates: Vec<Certificate> = ["cert_h0.json", "cert_h1.json", "cert_h2.json"]
+        .iter()
+        .map(|p| data::load_certificate(p))
+        .collect();
+
+    let mut lns = LocalNetworkStateData::default();
+
+    for (idx, certificate) in certificates.iter().enumerate() {
+        info!(
+            "Certificate ({idx}|{}) | {}, nib:{} b:{}",
+            certificate.height,
+            certificate.hash(),
+            certificate.imported_bridge_exits.len(),
+            certificate.bridge_exits.len(),
+        );
+
+        let signer = certificate.signer().unwrap().expect("Signer");
+        let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
+
+        let multi_batch_header = lns
+            .make_multi_batch_header(certificate, signer, l1_info_root)
+            .unwrap();
+
+        info!("Certificate {idx}: successful witness generation");
+        let initial_state = LocalNetworkState::from(lns.clone());
+
+        generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
+        info!("Certificate {idx}: successful native execution");
+
+        lns.apply_certificate(certificate, signer, l1_info_root)
+            .unwrap();
+        info!("Certificate {idx}: successful state transition, waiting for the next");
+    }
 }
 
 #[rstest]

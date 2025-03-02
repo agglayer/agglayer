@@ -4,11 +4,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+  merge_group:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-  workflow_dispatch:
 
-concurrency: 
+concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
@@ -19,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
@@ -32,13 +33,6 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Install SP1UP
-        run: curl -L https://sp1.succinct.xyz | bash
-
-      - name: Install SP1 toolchain
-        run: /home/runner/.sp1/bin/sp1up
-        shell: bash
-
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
 
@@ -47,9 +41,9 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Install cargo-sonar and run Clippy
         run: |
-            cargo install cargo-sonar
-            cargo clippy --all-features --all-targets --message-format=json > clippy.json
-            cargo sonar --clippy
+          cargo install cargo-sonar
+          cargo clippy --all-features --all-targets --message-format=json > clippy.json
+          cargo sonar --clippy
 
       - name: Build with coverage
         env:
@@ -66,17 +60,6 @@ jobs:
             --ignore '../**' \
             --ignore '/*' \
             -o coverage.lcov
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.externalIssuesReportPaths=sonar-issues.json
-            -Dsonar.scm.revision=${{ github.event.pull_request.head.sha }}
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v5

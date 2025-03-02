@@ -16,6 +16,7 @@ use ethers::{
     providers::PendingTransaction,
     types::{TransactionReceipt, H256, U256, U64},
 };
+use pessimistic_proof::proof::DisplayToHex;
 use pessimistic_proof::PessimisticProofOutput;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -102,7 +103,7 @@ where
         };
 
         let dry_current_epoch = self.current_epoch.load();
-        match dry_current_epoch.add_certificate(network_id, height, ExecutionMode::DryRun) {
+        match dry_current_epoch.add_certificate(certificate_id, ExecutionMode::DryRun) {
             Err(error) => {
                 drop(dry_current_epoch);
                 error!(
@@ -162,7 +163,7 @@ where
         let contract_call = self
             .l1_rpc
             .build_verify_pessimistic_trusted_aggregator_call(
-                *output.origin_network,
+                output.origin_network,
                 l_1_info_tree_leaf_count,
                 *output.new_local_exit_root,
                 *output.new_pessimistic_root,
@@ -326,8 +327,7 @@ where
                         continue;
                     }
 
-                    match related_epoch.add_certificate(network_id, height, ExecutionMode::Default)
-                    {
+                    match related_epoch.add_certificate(certificate_id, ExecutionMode::Default) {
                         Err(error) if max_retries == 0 => {
                             let error_msg = format!(
                                 "CRITICAL: Failed to add the certificate {} to the epoch after \

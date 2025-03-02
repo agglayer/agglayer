@@ -1,5 +1,10 @@
 name: Build and host documentation on GH pages
+
 on:
+  merge_group:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -7,7 +12,7 @@ on:
 jobs:
   build:
     name: Build documentation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,6 +38,7 @@ jobs:
   deploy:
     name: Deploy documentation
     needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       pages: write
       id-token: write

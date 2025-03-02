@@ -34,7 +34,10 @@ use crate::{
         ColumnSchema,
     },
     error::Error,
-    storage::DB,
+    storage::{
+        backup::{BackupClient, BackupRequest},
+        DB,
+    },
     types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
 };
 
@@ -44,20 +47,21 @@ mod tests;
 /// A logical store for the state.
 pub struct StateStore {
     db: Arc<DB>,
+    backup_client: BackupClient,
 }
 
 impl StateStore {
-    pub fn new(db: Arc<DB>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
+        Self { db, backup_client }
     }
 
-    pub fn new_with_path(path: &Path) -> Result<Self, Error> {
+    pub fn new_with_path(path: &Path, backup_client: BackupClient) -> Result<Self, Error> {
         let db = Arc::new(DB::open_cf(
             path,
             crate::storage::state_db_cf_definitions(),
         )?);
 
-        Ok(Self { db })
+        Ok(Self { db, backup_client })
     }
 }
 
@@ -91,6 +95,13 @@ impl StateWriter for StateStore {
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+
+            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+                warn!(
+                    hash = certificate_id.to_string(),
+                    "Unable to trigger backup for the state database: {}", error
+                );
+            }
         } else {
             info!(
                 hash = %certificate_id,
@@ -220,11 +231,11 @@ impl StateWriter for StateStore {
         let mut atomic_batch = WriteBatch::default();
         // Store the LET
         {
-            let new_leaf_count = new_state.exit_tree.leaf_count;
+            let new_leaf_count = new_state.exit_tree.leaf_count();
             let start_leaf_count = new_leaf_count - new_leaves.len() as u32;
 
             if let Some(stored_exit_tree) = self.read_local_exit_tree(network_id.into())? {
-                if stored_exit_tree.leaf_count != start_leaf_count {
+                if stored_exit_tree.leaf_count() != start_leaf_count {
                     return Err(Error::InconsistentState {
                         network_id: network_id.into(),
                     });
@@ -264,7 +275,7 @@ impl StateWriter for StateStore {
                             network_id,
                             key_type: LET::KeyType::Frontier(layer),
                         },
-                        LET::Value::Frontier(*new_state.exit_tree.frontier[layer as usize]),
+                        LET::Value::Frontier(*new_state.exit_tree.frontier()[layer as usize]),
                     );
                 });
 
@@ -294,6 +305,10 @@ impl StateWriter for StateStore {
 
         // Atomic write across the 3 cfs
         self.db.write_batch(atomic_batch)?;
+
+        if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+            warn!("Unable to trigger backup for the state database: {}", error);
+        }
 
         Ok(())
     }
@@ -379,10 +394,9 @@ impl StateStore {
             frontier[i] = Digest(*l);
         }
 
-        Ok(Some(LocalExitTree::<Keccak256Hasher> {
-            frontier,
-            leaf_count,
-        }))
+        Ok(Some(LocalExitTree::<Keccak256Hasher>::from_parts(
+            leaf_count, frontier,
+        )))
     }
 
     fn read_smt<C, const DEPTH: usize>(

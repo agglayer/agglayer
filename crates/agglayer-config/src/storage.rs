@@ -2,6 +2,7 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
+use backup::BackupConfig;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -11,6 +12,8 @@ const PENDING_DB_NAME: &str = "pending";
 const STATE_DB_NAME: &str = "state";
 const EPOCHS_DB_PATH: &str = "epochs";
 const DEBUG_DB_PATH: &str = "debug";
+
+pub mod backup;
 
 /// Configuration for the storage.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -27,6 +30,8 @@ pub struct StorageConfig {
     pub epochs_db_path: PathBuf,
     /// Custom debug storage path or inferred from the db path.
     pub debug_db_path: PathBuf,
+    /// Backup config
+    pub backup: BackupConfig,
 }
 
 impl Default for StorageConfig {
@@ -37,6 +42,7 @@ impl Default for StorageConfig {
             state_db_path: Path::new("./").join(STORAGE_DIR).join(STATE_DB_NAME),
             epochs_db_path: Path::new("./").join(STORAGE_DIR).join(EPOCHS_DB_PATH),
             debug_db_path: Path::new("./").join(STORAGE_DIR).join(DEBUG_DB_PATH),
+            backup: BackupConfig::default(),
         }
     }
 }
@@ -67,6 +73,7 @@ impl StorageConfig {
             state_db_path: db_path.join(STATE_DB_NAME),
             epochs_db_path: db_path.join(EPOCHS_DB_PATH),
             debug_db_path: db_path.join(DEBUG_DB_PATH),
+            backup: BackupConfig::default(),
         }
     }
 }
@@ -87,6 +94,9 @@ struct StorageConfigHelper {
     pub epochs_db_path: Option<PathBuf>,
     /// Custom debug storage path or inferred from the db path.
     pub debug_db_path: Option<PathBuf>,
+    /// Backup config.
+    #[serde(default, skip_serializing_if = "BackupConfig::is_disabled")]
+    pub backup: BackupConfig,
 }
 
 impl From<StorageConfigHelper> for StorageConfig {
@@ -107,6 +117,7 @@ impl From<StorageConfigHelper> for StorageConfig {
             debug_db_path: value
                 .debug_db_path
                 .unwrap_or_else(|| value.db_path.join(DEBUG_DB_PATH)),
+            backup: value.backup,
         }
     }
 }
@@ -126,6 +137,7 @@ impl From<StorageConfig> for StorageConfigHelper {
             state_db_path: None,
             epochs_db_path: None,
             debug_db_path: None,
+            backup: value.backup,
         }
     }
 }

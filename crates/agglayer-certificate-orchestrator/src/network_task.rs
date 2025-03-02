@@ -10,7 +10,8 @@ use agglayer_types::{
     LocalNetworkStateData, NetworkId,
 };
 use agglayer_types::{CertificateHeader, Digest};
-use tokio::sync::mpsc;
+use pessimistic_proof::utils::Hashable as _;
+use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
@@ -163,28 +164,39 @@ where
         next_expected_height: &mut u64,
         first_run: &mut bool,
     ) -> Result<(), Error> {
-        let height = if *first_run {
+        if *first_run {
             *first_run = false;
-            *next_expected_height
         } else {
             tokio::select! {
-                Ok(agglayer_clock::Event::EpochEnded(epoch)) = stream_epoch.recv() => {
-                    info!("Received an epoch event: {}", epoch);
+                event = stream_epoch.recv() => {
+                    let network_id = self.network_id;
+                    match event {
+                        Ok(agglayer_clock::Event::EpochEnded(epoch)) => {
+                            info!("Received an epoch event: {}", epoch);
 
-                    let current_epoch = self.clock_ref.current_epoch();
-                    if epoch != 0 && epoch < (current_epoch - 1) {
-                        debug!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
+                            let current_epoch = self.clock_ref.current_epoch();
+                            if epoch != 0 && (epoch + 1) < current_epoch {
+                                warn!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
 
-                        return Ok(());
-                    }
-                    match self.latest_settled {
-                        Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
-                            info!("Network {} is at capacity for the epoch {}", self.network_id, current_epoch);
+                                return Ok(());
+                            }
+                            match self.latest_settled {
+                                Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
+                                    warn!("Network {network_id} is at capacity for the epoch {current_epoch}");
+                                    return Ok(());
+                                },
+                                _ => {
+                                    self.at_capacity_for_epoch = false;
+                                }
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(num_skipped)) => {
+                            warn!("Network {network_id} skipped {num_skipped} epoch ticks");
                             return Ok(());
-                        },
-                        _ => {
-                            self.at_capacity_for_epoch = false;
-                            *next_expected_height
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            error!("Epoch channel closed for network {network_id}");
+                            return Err(Error::InternalError("epoch channel closed".into()));
                         }
                     }
                 }
@@ -208,8 +220,6 @@ where
 
                         return Ok(());
                     }
-
-                    *next_expected_height
                 }
             }
         };
@@ -217,13 +227,13 @@ where
         // Get the certificate the pending certificate for the network at the height
         let certificate = if let Some(certificate) = self
             .pending_store
-            .get_certificate(self.network_id, height)?
+            .get_certificate(self.network_id, *next_expected_height)?
         {
             certificate
         } else {
             debug!(
                 "No certificate found for network {} at height {}",
-                self.network_id, height
+                self.network_id, *next_expected_height
             );
             // There is no certificate to certify at this height for now
             return Ok(());
@@ -289,7 +299,7 @@ where
                     "Certificate {certificate_id} is already settled while trying to certify the \
                      certificate for network {} at height {}",
                     self.network_id,
-                    height - 1
+                    *next_expected_height - 1
                 );
 
                 Ok(())

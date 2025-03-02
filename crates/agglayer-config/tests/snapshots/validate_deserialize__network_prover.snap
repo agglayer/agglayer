@@ -1,0 +1,23 @@
+---
+source: crates/agglayer-config/tests/validate_deserialize.rs
+expression: config
+---
+grpc-endpoint = "127.0.0.1:8080"
+max-concurrency-limit = 100
+max-request-duration = "5m"
+max-buffered-queries = 100
+
+[log]
+level = "info"
+outputs = []
+format = "pretty"
+
+[telemetry]
+prometheus-addr = "0.0.0.0:3000"
+
+[shutdown]
+runtime-timeout = "5s"
+
+[primary-prover.network-prover]
+proving-request-timeout = "5m"
+proving-timeout = "10m"

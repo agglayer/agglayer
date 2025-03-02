@@ -8,11 +8,13 @@ license.workspace = true
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
 agglayer-config = { path = "../agglayer-config" }
 agglayer-contracts = { path = "../agglayer-contracts" }
-agglayer-prover-types = { path = "../agglayer-prover-types" }
-agglayer-primitives.workspace = true
 agglayer-storage = { path = "../agglayer-storage" }
-agglayer-types = { path = "../agglayer-types" }
+agglayer-types.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
+
+agglayer-prover-types.workspace = true
+prover-config.workspace = true
+agglayer-prover-config.workspace = true
 
 anyhow.workspace = true
 async-trait.workspace = true
@@ -33,8 +35,9 @@ sp1-sdk.workspace = true
 sp1-prover.workspace = true
 
 [dev-dependencies]
-agglayer-prover = { path = "../agglayer-prover", features = ["testutils"] }
+agglayer-prover = { workspace = true, features = ["testutils"] }
 agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
+pessimistic-proof = { workspace = true, features = ["testutils"] }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
 async-trait.workspace = true

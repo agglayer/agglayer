@@ -1,0 +1,13 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "SignatureMismatch { detail: \"could not recover transaction signer: Signature verification failed. Expected 0x1111…1111, got 0x2222…2222\" }"
+---
+{
+  "code": -10002,
+  "data": {
+    "signature-mismatch": {
+      "detail": "could not recover transaction signer: Signature verification failed. Expected 0x1111…1111, got 0x2222…2222"
+    }
+  },
+  "message": "Rollup signature verification failed"
+}

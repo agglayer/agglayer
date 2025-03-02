@@ -1,43 +1,40 @@
 //! Sample data, either synthetic or taken from real traces.
 
-use std::path::PathBuf;
-
-use agglayer_primitives::{address, U256};
-use agglayer_types::Certificate;
-use hex_literal::hex;
-use pessimistic_proof::{
-    bridge_exit::{BridgeExit, NetworkId, TokenInfo},
-    local_balance_tree, local_exit_tree,
-    nullifier_tree::NullifierTree,
-    LocalNetworkState,
+use agglayer_types::{
+    primitives::{address, U256},
+    Certificate, NetworkId,
 };
+use hex_literal::hex;
+use pessimistic_proof::bridge_exit::BridgeExit;
+use pessimistic_proof::bridge_exit::TokenInfo;
+use pessimistic_proof::local_balance_tree::LocalBalanceTree;
+use pessimistic_proof::local_exit_tree;
+use pessimistic_proof::local_state::LocalNetworkState;
+use pessimistic_proof::nullifier_tree::NullifierTree;
 
 use crate::{
     event_data::{load_json_data_file, parse_json_file, DepositEventData},
     forest::Forest,
 };
 
-type TreeHasher = local_exit_tree::hasher::Keccak256Hasher;
+type TreeHasher = pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 type LocalExitTree = local_exit_tree::LocalExitTree<TreeHasher>;
-type LocalBalanceTree = local_balance_tree::LocalBalanceTree<TreeHasher>;
 
-lazy_static::lazy_static! {
-    pub static ref NETWORK_A: NetworkId = 0.into();
-    pub static ref NETWORK_B: NetworkId = 1.into();
-    pub static ref USDC: TokenInfo = TokenInfo {
-        origin_network: *NETWORK_A,
-        origin_token_address: address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
-    };
-    pub static ref ETH: TokenInfo = TokenInfo {
-        origin_network: *NETWORK_A,
-        origin_token_address: address!("0000000000000000000000000000000000000000"),
-    };
-}
+pub const NETWORK_A: NetworkId = NetworkId::new(0);
+pub const NETWORK_B: NetworkId = NetworkId::new(1);
+pub const USDC: TokenInfo = TokenInfo {
+    origin_network: NETWORK_A.to_u32(),
+    origin_token_address: address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+};
+pub const ETH: TokenInfo = TokenInfo {
+    origin_network: NETWORK_A.to_u32(),
+    origin_token_address: address!("0000000000000000000000000000000000000000"),
+};
 
 pub fn empty_state() -> LocalNetworkState {
     LocalNetworkState {
-        balance_tree: LocalBalanceTree::new(),
         exit_tree: LocalExitTree::new(),
+        balance_tree: LocalBalanceTree::new(),
         nullifier_tree: NullifierTree::new(),
     }
 }
@@ -85,7 +82,7 @@ fn sample_exit_tree_01() -> LocalExitTree {
 
 pub fn sample_state_01() -> Forest {
     let large_amount = U256::MAX.checked_div(U256::from(2u64)).unwrap(); // not max to allow importing bridge exits
-    let balances = [(*ETH, large_amount), (*USDC, large_amount)];
+    let balances = [(ETH, large_amount), (USDC, large_amount)];
     Forest::new_with_local_exit_tree(balances, sample_exit_tree_01())
 }
 
@@ -93,16 +90,22 @@ pub fn sample_state_00() -> Forest {
     Forest::new_with_local_exit_tree([], LocalExitTree::default())
 }
 
-pub fn sample_bridge_exits_01() -> impl Iterator<Item = BridgeExit> + Clone {
+pub fn sample_bridge_exits_01() -> impl ExactSizeIterator<Item = BridgeExit> + Clone {
     load_json_data_file::<Vec<DepositEventData>>("withdrawals.json")
         .into_iter()
-        .map(Into::into)
+        .map(|evt_data| {
+            let mut exit = BridgeExit::from(evt_data);
+            exit.dest_network = NETWORK_A;
+            exit
+        })
 }
 
-pub fn sample_bridge_exits(sample_path: PathBuf) -> impl Iterator<Item = BridgeExit> + Clone {
-    parse_json_file::<Vec<DepositEventData>>(sample_path.as_path())
+pub fn sample_bridge_exits(
+    sample_path: impl AsRef<std::path::Path>,
+) -> impl ExactSizeIterator<Item = BridgeExit> + Clone {
+    parse_json_file::<Vec<DepositEventData>>(sample_path.as_ref())
         .into_iter()
-        .map(Into::into)
+        .map(BridgeExit::from)
 }
 
 pub fn load_certificate(cert_path: &str) -> Certificate {

@@ -1,8 +1,10 @@
+use std::future::IntoFuture;
 use std::net::IpAddr;
 use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_storage::columns::latest_settled_certificate_per_network::SettledCertificate;
+use agglayer_storage::storage::backup::BackupClient;
 use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
 use agglayer_storage::stores::debug::DebugStore;
 use agglayer_storage::stores::pending::PendingStore;
@@ -14,14 +16,17 @@ use agglayer_storage::{
 };
 use agglayer_types::{Certificate, CertificateId, CertificateStatus, Digest, Height, NetworkId};
 use ethers::providers::{self, MockProvider, Provider};
+use ethers::signers::Signer;
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::server::ServerHandle;
 use rstest::*;
+use tokio_util::sync::CancellationToken;
+use tracing::debug;
 
-use crate::{kernel::Kernel, rpc::AgglayerImpl};
+use super::admin::AdminAgglayerImpl;
+use crate::{kernel::Kernel, rpc::AgglayerImpl, service::AgglayerService};
 
 mod errors;
 mod get_certificate_header;
@@ -47,18 +52,33 @@ async fn healthcheck_method_can_be_called() {
 
     let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-    let _server_handle = AgglayerImpl::new(
+    let service = AgglayerService::new(
         kernel,
         certificate_sender,
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         Arc::new(DummyStore {}),
         config.clone(),
-    )
-    .start()
-    .await
-    .unwrap();
+    );
 
+    let json_rpc_router = AgglayerImpl::new(Arc::new(service)).start().await.unwrap();
+
+    let router = axum::Router::new()
+        .route(
+            "/health",
+            axum::routing::get(crate::node::api::rest::health),
+        )
+        .merge(json_rpc_router);
+
+    let listener = tokio::net::TcpListener::bind(config.rpc_addr())
+        .await
+        .unwrap();
+    let api_server = axum::serve(listener, router);
+
+    let _rpc_handle = tokio::spawn(async move {
+        _ = api_server.await;
+        debug!("Node RPC shutdown requested.");
+    });
     let http_client = Client::builder(TokioExecutor::new()).build_http();
     let uri = format!("http://{}/health", config.rpc_addr());
 
@@ -80,14 +100,20 @@ async fn healthcheck_method_can_be_called() {
 
 pub(crate) struct RawRpcContext {
     pub(crate) rpc: AgglayerImpl<Provider<MockProvider>, PendingStore, StateStore, DebugStore>,
-    config: Arc<Config>,
+    pub(crate) admin_rpc: AdminAgglayerImpl<PendingStore, StateStore, DebugStore>,
+    pub(crate) config: Arc<Config>,
+    pub(crate) state_store: Arc<StateStore>,
+    pub(crate) pending_store: Arc<PendingStore>,
     pub(crate) certificate_receiver:
         tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
 
 pub(crate) struct TestContext {
-    pub(crate) server_handle: ServerHandle,
+    pub(crate) cancellation_token: CancellationToken,
+    pub(crate) state_store: Arc<StateStore>,
+    pub(crate) pending_store: Arc<PendingStore>,
     pub(crate) client: jsonrpsee::http_client::HttpClient,
+    pub(crate) admin_client: jsonrpsee::http_client::HttpClient,
     pub(crate) certificate_receiver:
         tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
@@ -99,22 +125,52 @@ impl TestContext {
     }
 
     async fn new_with_config(config: Config) -> Self {
+        let cancellation_token = CancellationToken::new();
         let raw_rpc = Self::new_raw_rpc_with_config(config).await;
-        let server_handle = raw_rpc.rpc.start().await.unwrap();
+        let router = raw_rpc.rpc.start().await.unwrap();
+        let admin_router = raw_rpc.admin_rpc.start().await.unwrap();
 
-        let url = format!("http://{}/", raw_rpc.config.rpc_addr());
-        let client = HttpClientBuilder::default().build(url).unwrap();
+        let api_url = format!("http://{}/", raw_rpc.config.rpc_addr());
+        let admin_url = format!("http://{}/", raw_rpc.config.admin_rpc_addr());
+        let client = HttpClientBuilder::default().build(api_url).unwrap();
+        let admin_client = HttpClientBuilder::default().build(admin_url).unwrap();
+
+        let listener_api = tokio::net::TcpListener::bind(raw_rpc.config.rpc_addr())
+            .await
+            .unwrap();
+
+        let listener_admin = tokio::net::TcpListener::bind(raw_rpc.config.admin_rpc_addr())
+            .await
+            .unwrap();
+
+        let api_server = axum::serve(listener_api, router)
+            .with_graceful_shutdown(cancellation_token.child_token().cancelled_owned());
+        let admin_server = axum::serve(listener_admin, admin_router)
+            .with_graceful_shutdown(cancellation_token.child_token().cancelled_owned());
+
+        tokio::spawn(api_server.into_future());
+        tokio::spawn(admin_server.into_future());
 
         Self {
-            server_handle,
+            cancellation_token,
+            state_store: raw_rpc.state_store,
+            pending_store: raw_rpc.pending_store,
             client,
+            admin_client,
             certificate_receiver: raw_rpc.certificate_receiver,
         }
     }
 
     pub(crate) fn get_default_config() -> Config {
         let tmp = TempDBDir::new();
-        Config::new(&tmp.path)
+        let mut cfg = Config::new(&tmp.path);
+        for network_id in 0..10 {
+            cfg.proof_signers.insert(
+                network_id,
+                Certificate::wallet_for_test(NetworkId::new(network_id)).address(),
+            );
+        }
+        cfg
     }
 
     async fn new_raw_rpc() -> RawRpcContext {
@@ -129,6 +185,9 @@ impl TestContext {
         }
         config.rpc.port = addr.port();
 
+        let admin_addr = next_available_addr();
+        config.rpc.admin_port = admin_addr.port();
+
         let config = Arc::new(config);
 
         let state_db = Arc::new(
@@ -138,7 +197,7 @@ impl TestContext {
             DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions()).unwrap(),
         );
 
-        let state_store = Arc::new(StateStore::new(state_db));
+        let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
         let pending_store = Arc::new(PendingStore::new(pending_db));
         let debug_store = if config.debug_mode {
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap())
@@ -150,18 +209,29 @@ impl TestContext {
 
         let kernel = Kernel::new(Arc::new(provider), config.clone());
 
-        let rpc = AgglayerImpl::new(
+        let service = AgglayerService::new(
             kernel,
             certificate_sender,
-            pending_store,
-            state_store,
-            debug_store,
+            pending_store.clone(),
+            state_store.clone(),
+            debug_store.clone(),
+            config.clone(),
+        );
+        let admin_rpc = AdminAgglayerImpl::new(
+            pending_store.clone(),
+            state_store.clone(),
+            debug_store.clone(),
             config.clone(),
         );
 
+        let rpc = AgglayerImpl::new(Arc::new(service));
+
         RawRpcContext {
             rpc,
+            admin_rpc,
             config,
+            state_store,
+            pending_store,
             certificate_receiver,
         }
     }
@@ -169,7 +239,7 @@ impl TestContext {
 
 impl Drop for TestContext {
     fn drop(&mut self) {
-        _ = self.server_handle.stop();
+        self.cancellation_token.cancel();
     }
 }
 

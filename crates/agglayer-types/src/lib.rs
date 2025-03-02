@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use agglayer_primitives::{address, Address, Signature, B256, U256};
-use pessimistic_proof::global_index::GlobalIndex;
+use agglayer_primitives::SignatureError;
+use pessimistic_proof::core;
+use pessimistic_proof::error::ProofVerificationError;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
@@ -9,23 +10,22 @@ use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::multi_batch_header::signature_commitment;
-use pessimistic_proof::nullifier_tree::{FromBool, NullifierTree, NULLIFIER_TREE_DEPTH};
+use pessimistic_proof::nullifier_tree::{NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::utils::smt::{Smt, SmtError};
+use pessimistic_proof::utils::{FromBool as _, Hashable as _};
 use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
-    bridge_exit::{BridgeExit, TokenInfo},
-    imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
+    imported_bridge_exit::commit_imported_bridge_exits,
     local_balance_tree::LocalBalancePath,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
     ProofError,
 };
 use serde::{Deserialize, Serialize};
-use sp1_sdk::provers::ProofOpts;
-use sp1_sdk::{
-    MockProver, Prover, SP1Context, SP1Proof, SP1ProofKind, SP1ProofWithPublicValues,
-    SP1PublicValues, SP1Stdin,
-};
+
+use crate::aggchain_proof::AggchainData;
+
+pub mod aggchain_proof;
 
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
@@ -33,12 +33,16 @@ pub type CertificateId = Digest;
 pub type Height = u64;
 pub type Metadata = Digest;
 
-pub use pessimistic_proof::bridge_exit::NetworkId;
-use sp1_sdk::SP1VerificationError;
-
-/// ELF of the pessimistic proof program
-pub(crate) const ELF: &[u8] =
-    include_bytes!("../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");
+pub use agglayer_primitives as primitives;
+// Re-export common primitives again as agglayer-types root types
+pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
+pub use pessimistic_proof::bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo};
+pub use pessimistic_proof::global_index::GlobalIndex;
+pub use pessimistic_proof::imported_bridge_exit::{
+    Claim, ClaimFromMainnet, ClaimFromRollup, ImportedBridgeExit, L1InfoTreeLeaf,
+    L1InfoTreeLeafInner, MerkleProof,
+};
+pub use pessimistic_proof::proof::Proof;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {
@@ -123,9 +127,20 @@ pub enum Error {
         declared: Digest,
         retrieved: Digest,
     },
+    #[error(
+        "Incorrect declared L1 Info Tree information: l1_leaf: {l1_leaf:?}, l1_root: \
+         {l1_info_root:?}"
+    )]
+    InconsistentL1InfoTreeInformation {
+        l1_leaf: Option<u32>,
+        l1_info_root: Option<Digest>,
+    },
     /// The operation cannot be applied on the smt.
     #[error(transparent)]
     InvalidSmtOperation(#[from] SmtError),
+    /// SP1-based Aggchain proof not yet supported.
+    #[error("SP1-based Aggchain proof not yet supported")]
+    AggchainProofSP1Unsupported,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -137,23 +152,31 @@ pub enum CertificateStatusError {
         generation_type: GenerationType,
         source: ProofError,
     },
+
     /// Failure on the proof verification.
     #[error("proof verification failed")]
     ProofVerificationFailed(#[from] ProofVerificationError),
+
     /// Failure on the pessimistic proof witness generation from the
     /// [`LocalNetworkStateData`] and the provided [`Certificate`].
     #[error(transparent)]
     TypeConversionError(#[from] Error),
+
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
+
     #[error("Internal error")]
     InternalError(String),
+
     #[error("Settlement error: {0}")]
     SettlementError(String),
+
     #[error("Pre certification error: {0}")]
     PreCertificationError(String),
+
     #[error("Certification error: {0}")]
     CertificationError(String),
+
     #[error("L1 Info root not found for l1 leaf count: {0}")]
     L1InfoRootNotFound(u32),
 }
@@ -173,49 +196,41 @@ impl std::fmt::Display for GenerationType {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
-pub enum ProofVerificationError {
-    #[error("Version mismatch: {0}")]
-    VersionMismatch(String),
-    #[error("Core machine verification error: {0}")]
-    Core(String),
-    #[error("Recursion verification error: {0}")]
-    Recursion(String),
-    #[error("Plonk verification error: {0}")]
-    Plonk(String),
-    #[error("Groth16 verification error: {0}")]
-    Groth16(String),
-    #[error("Invalid public values")]
-    InvalidPublicValues,
-}
-
-impl From<SP1VerificationError> for ProofVerificationError {
-    fn from(err: SP1VerificationError) -> Self {
-        match err {
-            SP1VerificationError::VersionMismatch(version) => {
-                ProofVerificationError::VersionMismatch(version)
-            }
-            SP1VerificationError::Core(core) => ProofVerificationError::Core(core.to_string()),
-            SP1VerificationError::Recursion(recursion) => {
-                ProofVerificationError::Recursion(recursion.to_string())
-            }
-            SP1VerificationError::Plonk(error) => ProofVerificationError::Plonk(error.to_string()),
-            SP1VerificationError::Groth16(error) => {
-                ProofVerificationError::Groth16(error.to_string())
-            }
-            SP1VerificationError::InvalidPublicValues => {
-                ProofVerificationError::InvalidPublicValues
-            }
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CertificateStatus {
+    /// Received certificate from the network, nothing checked yet.
+    ///
+    /// Certificate will stay in this state until rate-limiting is lifted or an
+    /// epoch-change event is triggered. A pending certificate can then be
+    /// processed by the agglayer to be proven, or it could end up in error.
     Pending,
+
+    /// Pessimistic proof has been generated for the certificate and stored in
+    /// the rocksdb in the agglayer node.
     Proven,
+
+    /// Settlement of the certificate's proof has already been started on L1
+    /// (and acknowledged by its RPC) by issuing a contract call to the
+    /// RollupManager, but the associated transaction has not yet seen
+    /// enough confirmations.
+    ///
+    /// The certificate can move from Candidate to Settled if the associated
+    /// transaction is accepted and the transaction receipt is a success. If the
+    /// transaction receipt fails, the certificate will end up in Error.
     Candidate,
+
+    /// Hit some error while moving the certificate through the pipeline.
+    ///
+    /// For example, proving failed (Pending -> InError), L1 reorg'd (Candidate
+    /// -> InError)... See the documentation of `CertificateStatusError` for
+    /// more details.
+    ///
+    /// Note that a certificate can be InError in agglayer but settled on L1,
+    /// eg. if there was an error in agglayer but the certificate was valid
+    /// and settled on L1.
     InError { error: CertificateStatusError },
+
+    /// Transaction to settle the certificate was completed successfully on L1.
     Settled,
 }
 
@@ -228,42 +243,6 @@ impl std::fmt::Display for CertificateStatus {
             CertificateStatus::InError { error } => write!(f, "InError: {}", error),
             CertificateStatus::Settled => write!(f, "Settled"),
         }
-    }
-}
-
-/// Proof is a wrapper around all the different types of proofs that can be
-/// generated
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Proof {
-    SP1(sp1_sdk::SP1ProofWithPublicValues),
-}
-
-impl Proof {
-    pub fn dummy() -> Self {
-        Self::SP1(SP1ProofWithPublicValues {
-            proof: SP1Proof::Core(vec![]),
-            stdin: SP1Stdin::new(),
-            public_values: SP1PublicValues::new(),
-            sp1_version: "".to_string(),
-        })
-    }
-    pub fn new_for_test(
-        state: &LocalNetworkState,
-        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
-    ) -> Self {
-        let mock = MockProver::new();
-        let (p, _v) = mock.setup(ELF);
-
-        let mut stdin = SP1Stdin::new();
-        stdin.write(state);
-        stdin.write(multi_batch_header);
-
-        let opts = ProofOpts::default();
-        let context = SP1Context::default();
-        let kind = SP1ProofKind::Plonk;
-        let proof = mock.prove(&p, stdin, opts, context, kind).unwrap();
-
-        Proof::SP1(proof)
     }
 }
 
@@ -295,10 +274,11 @@ pub struct Certificate {
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits included in this state transition.
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
-    /// Signature committed to the bridge exits and imported bridge exits.
-    pub signature: Signature,
     /// Fixed size field of arbitrary data for the chain needs.
     pub metadata: Metadata,
+    /// Aggchain data which is either one ECDSA or Generic proof.
+    #[serde(flatten)]
+    pub aggchain_data: AggchainData,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -307,7 +287,8 @@ impl Default for Certificate {
         let network_id = Default::default();
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_new_local_exit_root, signature) = compute_signature_info(exit_root, &[], &wallet);
+        let (_new_local_exit_root, signature, _signer) =
+            compute_signature_info(exit_root, &[], &wallet);
         Self {
             network_id,
             height: Default::default(),
@@ -315,7 +296,7 @@ impl Default for Certificate {
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            signature,
+            aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -326,11 +307,14 @@ pub fn compute_signature_info(
     new_local_exit_root: Digest,
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &ethers::signers::LocalWallet,
-) -> (Digest, Signature) {
+) -> (Digest, Signature, Address) {
+    use ethers::signers::Signer;
+
     let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
         new_local_exit_root,
-        imported_bridge_exits,
+        imported_bridge_exits.iter().map(|exit| exit.global_index),
     );
+
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
     let signature = Signature::new(
         U256::from_limbs(signature.r.0),
@@ -338,7 +322,7 @@ pub fn compute_signature_info(
         signature.recovery_id().unwrap().is_y_odd(),
     );
 
-    (combined_hash, signature)
+    (combined_hash, signature, wallet.address().0.into())
 }
 
 impl Certificate {
@@ -358,7 +342,7 @@ impl Certificate {
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_, signature) = compute_signature_info(exit_root, &[], &wallet);
+        let (_, signature, _signer) = compute_signature_info(exit_root, &[], &wallet);
 
         Self {
             network_id,
@@ -367,7 +351,7 @@ impl Certificate {
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            signature,
+            aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -428,14 +412,23 @@ impl Certificate {
         }
     }
 
-    pub fn signer(&self) -> Option<Address> {
-        // retrieve signer
-        let combined_hash =
-            signature_commitment(self.new_local_exit_root, &self.imported_bridge_exits);
+    pub fn signer(&self) -> Result<Option<Address>, SignatureError> {
+        match self.aggchain_data {
+            AggchainData::ECDSA { signature } => {
+                // retrieve signer
+                let combined_hash = signature_commitment(
+                    self.new_local_exit_root,
+                    self.imported_bridge_exits
+                        .iter()
+                        .map(|exit| exit.global_index),
+                );
 
-        self.signature
-            .recover_address_from_prehash(&B256::new(combined_hash.0))
-            .ok()
+                signature
+                    .recover_address_from_prehash(&B256::new(combined_hash.0))
+                    .map(Some)
+            }
+            _ => Ok(None),
+        }
     }
 }
 
@@ -458,6 +451,12 @@ impl From<LocalNetworkStateData> for LocalNetworkState {
             balance_tree: LocalBalanceTree::new_with_root(state.balance_tree.root),
             nullifier_tree: NullifierTree::new_with_root(state.nullifier_tree.root),
         }
+    }
+}
+
+impl From<LocalNetworkStateData> for pessimistic_proof::NetworkState {
+    fn from(state: LocalNetworkStateData) -> Self {
+        LocalNetworkState::from(state).into()
     }
 }
 
@@ -486,13 +485,16 @@ impl LocalNetworkStateData {
         }
 
         let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
-            // Consider all the imported bridge exits
-            let imported_bridge_exits = certificate.imported_bridge_exits.iter();
+            // Consider all the imported bridge exits except for the native token
+            let imported_bridge_exits = certificate.imported_bridge_exits.iter().filter(|b| {
+                b.bridge_exit.amount_token_info().origin_network != *certificate.network_id
+            });
+
             // Consider all the bridge exits except for the native token
             let bridge_exits = certificate
                 .bridge_exits
                 .iter()
-                .filter(|b| b.amount_token_info().origin_network != certificate.network_id);
+                .filter(|b| b.amount_token_info().origin_network != *certificate.network_id);
 
             // Set of dedup tokens mutated in the transition
             let mutated_tokens: BTreeSet<TokenInfo> = {
@@ -582,8 +584,11 @@ impl LocalNetworkStateData {
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
 
-        let imported_hash =
-            commit_imported_bridge_exits(imported_bridge_exits.iter().map(|(exit, _)| exit));
+        let imported_hash = commit_imported_bridge_exits(
+            imported_bridge_exits
+                .iter()
+                .map(|(exit, _)| exit.global_index),
+        );
 
         // Check that the certificate referred to the right target
         let computed = self.exit_tree.get_root();
@@ -594,19 +599,35 @@ impl LocalNetworkStateData {
             });
         }
 
+        // TODO: Construct it properly from the Certificate
+        let aggchain_proof = match &certificate.aggchain_data {
+            AggchainData::ECDSA { signature } => {
+                let signature = *signature;
+                core::AggchainData::ECDSA { signer, signature }
+            }
+            AggchainData::Generic { .. } => return Err(Error::AggchainProofSP1Unsupported),
+        };
+
         Ok(MultiBatchHeader::<Keccak256Hasher> {
-            origin_network: certificate.network_id,
+            origin_network: *certificate.network_id,
             prev_local_exit_root: certificate.prev_local_exit_root,
-            bridge_exits: certificate.bridge_exits.clone(),
-            imported_bridge_exits,
+            bridge_exits: certificate
+                .bridge_exits
+                .iter()
+                .cloned()
+                .map(Into::into)
+                .collect(),
+            imported_bridge_exits: imported_bridge_exits
+                .into_iter()
+                .map(|(ib, ex)| (ib.into(), ex))
+                .collect(),
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
-            signer,
-            signature: certificate.signature,
             imported_exits_root: Some(imported_hash),
-            target: self.get_roots(),
+            target: self.get_roots().into(),
             l1_info_root,
+            aggchain_proof,
         })
     }
 
@@ -625,7 +646,7 @@ impl LocalNetworkStateData {
     pub fn get_roots(&self) -> StateCommitment {
         StateCommitment {
             exit_root: self.exit_tree.get_root(),
-            ler_leaf_count: self.exit_tree.leaf_count,
+            ler_leaf_count: self.exit_tree.leaf_count(),
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }

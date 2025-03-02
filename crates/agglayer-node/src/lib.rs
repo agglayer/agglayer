@@ -5,14 +5,7 @@ use anyhow::{bail, Result};
 use node::Node;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
-
-mod kernel;
 mod logging;
-mod rate_limiting;
-mod rpc;
-mod signed_tx;
-pub mod utils;
-mod zkevm_node_client;
 
 mod epoch_synchronizer;
 mod node;
@@ -27,7 +20,11 @@ use agglayer_telemetry::ServerBuilder as MetricsBuilder;
 ///
 /// This function returns on fatal error or after graceful shutdown has
 /// completed.
-pub fn main(cfg: PathBuf) -> Result<()> {
+pub fn main(
+    cfg: PathBuf,
+    version: &str,
+    cancellation_token: Option<CancellationToken>,
+) -> Result<()> {
     let cfg = cfg.canonicalize().map_err(|_| {
         anyhow::Error::msg(format!(
             "Configuration file path must be absolute, given: {}",
@@ -45,10 +42,16 @@ pub fn main(cfg: PathBuf) -> Result<()> {
         )
     };
 
-    let global_cancellation_token = CancellationToken::new();
+    let global_cancellation_token = cancellation_token.unwrap_or_default();
+
+    if global_cancellation_token.is_cancelled() {
+        bail!("Received cancellation signal before starting the node.");
+    }
 
     // Initialize the logger
     logging::tracing(&config.log);
+
+    info!("Starting agglayer node version info: {}", version);
 
     let node_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("agglayer-node-runtime")

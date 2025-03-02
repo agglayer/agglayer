@@ -6,6 +6,8 @@ use serde_with::serde_as;
 
 /// The default port for the local RPC server.
 const DEFAULT_PORT: u16 = 9090;
+/// The default port for the local admin RPC server.
+const DEFAULT_ADMIN_PORT: u16 = 9091;
 
 /// The local RPC server configuration.
 #[serde_as]
@@ -16,6 +18,14 @@ pub struct RpcConfig {
     /// the configuration file.
     #[serde(default = "default_port", deserialize_with = "deserialize_port")]
     pub port: u16,
+
+    /// The port for `admin` RPC
+    #[serde(
+        default = "default_admin_port",
+        deserialize_with = "deserialize_admin_port"
+    )]
+    pub admin_port: u16,
+
     #[serde(default = "default_host")]
     pub host: Ipv4Addr,
 
@@ -39,7 +49,7 @@ pub struct RpcConfig {
     pub max_connections: u32,
     /// The maximum number of requests in a batch request. If `None`, the
     /// batch request limit is unlimited.
-    #[serde(skip_serializing_if = "crate::default")]
+    #[serde(skip_serializing_if = "crate::is_default")]
     pub batch_request_limit: Option<u32>,
     /// The interval at which to send ping messages
     #[serde(skip)]
@@ -55,6 +65,7 @@ impl Default for RpcConfig {
     fn default() -> Self {
         Self {
             port: default_port(),
+            admin_port: default_admin_port(),
             host: default_host(),
             max_request_body_size: default_body_size(),
             max_response_body_size: default_body_size(),
@@ -77,11 +88,18 @@ fn default_body_size() -> u32 {
 }
 
 /// The default port for the local RPC server.
-/// If the `PORT` environment variable is set, it will take precedence over
+/// If the `AGGLAYER_PORT` environment variable is set, it will take precedence
+/// over
 fn default_port() -> u16 {
-    from_env_or_default("PORT", DEFAULT_PORT)
+    from_env_or_default("AGGLAYER_PORT", DEFAULT_PORT)
 }
 
+/// The default port for the local admin RPC server.
+/// If the `AGGLAYER_ADMIN_PORT` environment variable is set, it will take
+/// precedence over
+fn default_admin_port() -> u16 {
+    from_env_or_default("AGGLAYER_ADMIN_PORT", DEFAULT_ADMIN_PORT)
+}
 /// The default host for the local RPC server.
 const fn default_host() -> Ipv4Addr {
     Ipv4Addr::new(0, 0, 0, 0)
@@ -98,7 +116,16 @@ where
 {
     let port = u16::deserialize(deserializer)?;
 
-    Ok(from_env_or_default("PORT", port))
+    Ok(from_env_or_default("AGGLAYER_PORT", port))
+}
+
+fn deserialize_admin_port<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let port = u16::deserialize(deserializer)?;
+
+    Ok(from_env_or_default("AGGLAYER_ADMIN_PORT", port))
 }
 
 /// Get an environment variable or a default value if it is not set.

@@ -1,0 +1,13 @@
+---
+source: crates/agglayer-node/src/rpc/tests/errors.rs
+expression: "SignatureMismatch { detail: \"could not recover transaction signer: Public key recovery error\" }"
+---
+{
+  "code": -10002,
+  "data": {
+    "signature-mismatch": {
+      "detail": "could not recover transaction signer: Public key recovery error"
+    }
+  },
+  "message": "Rollup signature verification failed"
+}

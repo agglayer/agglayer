@@ -1,15 +1,14 @@
-name: Test - units
+name: Test
 
 on:
   push:
     branches:
       - main
+  merge_group:
   pull_request:
     branches:
       - "**"
   workflow_dispatch:
-    branches:
-      - "**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
@@ -17,25 +16,36 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+  KURTOSIS_CDK_GIT_REF: v0.2.11
+  ZKEVM_CONTRACT_GIT_REF: feature/ongoing-v0.3.0-docker
 
 jobs:
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest-16-cores
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/unit-test
+
   build_contracts_image:
     runs-on: ubuntu-latest-16-cores
-
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
     strategy:
       matrix:
         node-version: [20.x]
 
     steps:
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: 0xPolygonHermez/zkevm-contracts
-          ref: v9.0.0-rc.3-pp
+          ref: ${{ env.ZKEVM_CONTRACT_GIT_REF }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -43,14 +53,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Setup docker
+      - name: Install npm packages
         run: |
           npm i
       - name: Build docker
         run: |
-          # Script from contract repo
+          # Set the -e option to stop the script if any command fails
           set -e
+
+          # Define cleanup function
+          cleanup() {
+              DEV_PERIOD=1 docker compose -f docker/docker-compose.yml down
+          }
+          # Configure "trap" in case there's an error
+          trap cleanup ERR
+
           rm -rf docker/gethData/geth_data
+          [ -f deployment/v2/create_rollup_output_* ] && rm ./deployment/v2/create_rollup_output_*
           DEV_PERIOD=1 docker compose -f docker/docker-compose.yml up -d geth
           sleep 5
           node docker/scripts/fund-accounts.js
@@ -59,13 +78,16 @@ jobs:
           npm run deploy:testnet:v2:localhost
           rm -rf docker/deploymentOutput
           mkdir docker/deploymentOutput
+          mv ./deployment/v2/create_rollup_output_*.json ./docker/deploymentOutput/create_rollup_output.json
+          cp ./docker/scripts/v2/create_rollup_parameters_docker-v0.2.0.json ./deployment/v2/create_rollup_parameters.json
+          npx hardhat run ./deployment/v2/4_createRollup.ts --network localhost
+          mv ./deployment/v2/create_rollup_output_*.json ./docker/deploymentOutput/
           mv deployment/v2/deploy_output.json docker/deploymentOutput
           mv deployment/v2/genesis.json docker/deploymentOutput
           [ -f deployment/v2/genesis_sovereign.json ] && mv deployment/v2/genesis_sovereign.json docker/deploymentOutput
-          mv deployment/v2/create_rollup_output.json docker/deploymentOutput
           DEV_PERIOD=1 docker compose -f docker/docker-compose.yml down
-          sudo chmod -R go+rxw docker/gethData
-          ls -lah docker
+          sudo chown -R $(id -u):$(id -g) docker/gethData
+          docker build -t hermeznetwork/geth-zkevm-contracts -f docker/Dockerfile .
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -121,13 +143,6 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Install SP1UP
-        run: curl -L https://sp1.succinct.xyz | bash
-
-      - name: Install SP1 toolchain
-        run: /home/runner/.sp1/bin/sp1up
-        shell: bash
-
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
 
@@ -137,13 +152,122 @@ jobs:
       - name: Test
         run: cargo nextest run --workspace -P integrations
 
-  unit:
-    name: Unit Tests
+  docker-build-local:
+    name: E2E Tests | Docker build
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      push: false
+      local-artifact-name: "docker-image"
+      local-artifact-dir: "/tmp"
+
+  e2e-kurtosis-cdk:
+    name: E2E Tests | Kurtosis-CDK
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 30
+    needs:
+      - docker-build-local
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: "docker-image"
+          path: "/tmp"
+
+      - name: Load image
+        run: |
+          echo ${{ needs.docker-build-local.outputs.tags }}
+          docker load --input /tmp/docker-image.tar
+          docker image ls -a
+
+      - name: Checkout kurtosis-cdk
+        uses: actions/checkout@v4
+        with:
+          repository: 0xpolygon/kurtosis-cdk
+          ref: ${{ env.KURTOSIS_CDK_GIT_REF }}
+
+      - name: Replace param with local agglayer-rs docker img
+        run: |
+          new_value="${{ needs.docker-build-local.outputs.tags }}"
+
+          # Escape special characters in the new value
+          escaped_new_value=$(sed 's/[\/&]/\\&/g' <<< "$new_value")
+
+          sed -i "s/zkevm_agglayer_image: .*/zkevm_agglayer_image: $escaped_new_value/" "params.yml"
+
+          # Debug
+          cat params.yml
+
+      - name: Install kurtosis
+        run: |
+          echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
+          sudo apt update
+          sudo apt install kurtosis-cli=1.3.1
+          kurtosis analytics disable
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Run kurtosis
+        run: kurtosis run --enclave cdk-v1 --args-file params.yml --image-download always .
+
+      - name: Expose RPC URL
+        run: echo "ETH_RPC_URL=$(kurtosis port print cdk-v1 cdk-erigon-node-001 http-rpc)" >> $GITHUB_ENV
+
+      - name: Check that batches are progressing
+        continue-on-error: true
+        env:
+          ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
+          TIMEOUT_SECONDS: 900
+        run: ./.github/scripts/monitor-verified-batches.sh --rpc-url "$ETH_RPC_URL"
+
+      - name: debug
+        run: kurtosis service logs cdk-v1 agglayer
+
+  pushing-docker-image:
+    name: Docker | Publish image to registry
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || ( github.event_name == 'workflow_dispatch' )
+    permissions:
+      packages: write
+    needs:
+      - docker-build-local
+      - e2e-kurtosis-cdk
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: "docker-image"
+          path: "/tmp"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load image
+        run: |
+          echo ${{ needs.docker-build-local.outputs.tags }}
+          docker load --input /tmp/docker-image.tar
+
+      - name: Publishing image
+        env:
+          DOCKER_IMAGE: ${{ needs.docker-build-local.outputs.tags }}
+        run: docker push ${{ env.DOCKER_IMAGE }}
+
+  check_elf:
+    runs-on: ubuntu-latest-16-cores
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
+    name: ELF Checking
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
+
+      - name: Define source checksum
+        run: |
+          echo CHECKSUM="$(sha256sum crates/pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf | awk '{ print $1 }')" >> "$GITHUB_ENV"
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -153,18 +277,31 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Install SP1UP
-        run: curl -L https://sp1.succinct.xyz | bash
-
-      - name: Install SP1 toolchain
-        run: /home/runner/.sp1/bin/sp1up
-        shell: bash
-
-      - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
 
-      - name: Install Anvil
-        uses: foundry-rs/foundry-toolchain@v1
+      - name: Define vKey
+        run: |
+          echo ORIGINAL_VKEY="$(cargo run -p agglayer -- vkey)" >> "$GITHUB_ENV"
 
-      - name: Test
-        run: cargo nextest run --workspace && cargo test --doc --workspace
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - uses: taiki-e/install-action@protoc
+
+      - name: Install cargo-make
+        run: cargo install --debug --locked cargo-make
+
+      - run: cargo make pp-elf
+
+      - name: ELF is up to date
+        run: diff <(sha256sum crates/pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf | awk '{ print $1 }') <( echo $CHECKSUM )
+
+      - name: Check vKey
+        run: |
+          CALCULATED_VKEY=$(cargo run -p agglayer -- vkey)
+          echo "Commited vKey=$ORIGINAL_VKEY"
+          echo "Calculated vKey=$CALCULATED_VKEY"
+          diff <(echo $CALCULATED_VKEY) <( echo $ORIGINAL_VKEY )

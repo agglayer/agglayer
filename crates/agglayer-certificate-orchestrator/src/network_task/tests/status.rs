@@ -31,8 +31,8 @@ async fn from_pending_to_settle() {
     let mut forest = Forest::default();
 
     let certificate = forest.apply_events(
-        &[(*USDC, 10.try_into().unwrap())],
-        &[(*USDC, 1.try_into().unwrap())],
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
     );
     let certificate_id = certificate.hash();
     storage
@@ -56,7 +56,7 @@ async fn from_pending_to_settle() {
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
 
-            let signer = pessimistic_proof::Address::new([0; 20]);
+            let signer = agglayer_types::Address::new([0; 20]);
             let _ = new_state
                 .apply_certificate(
                     &certificate,
@@ -137,8 +137,8 @@ async fn from_proven_to_settle() {
     let mut forest = Forest::default();
 
     let certificate = forest.apply_events(
-        &[(*USDC, 10.try_into().unwrap())],
-        &[(*USDC, 1.try_into().unwrap())],
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
     );
     let certificate_id = certificate.hash();
     storage
@@ -162,7 +162,7 @@ async fn from_proven_to_settle() {
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
 
-            let signer = pessimistic_proof::Address::new([0; 20]);
+            let signer = agglayer_types::Address::new([0; 20]);
             let _ = new_state
                 .apply_certificate(
                     &certificate,
@@ -244,8 +244,8 @@ async fn from_candidate_to_settle() {
     let signer = forest.get_signer();
 
     let certificate = forest.apply_events(
-        &[(*USDC, 10.try_into().unwrap())],
-        &[(*USDC, 1.try_into().unwrap())],
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
     );
     let certificate_id = certificate.hash();
     storage
@@ -341,8 +341,8 @@ async fn from_settle_to_settle() {
     let mut forest = Forest::default();
 
     let certificate = forest.apply_events(
-        &[(*USDC, 10.try_into().unwrap())],
-        &[(*USDC, 1.try_into().unwrap())],
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
     );
     let certificate_id = certificate.hash();
     storage
@@ -384,6 +384,5 @@ async fn from_settle_to_settle() {
         .unwrap()
         .unwrap();
 
-    println!("Header: {:?}", header);
     assert!(header.status == CertificateStatus::Settled);
 }

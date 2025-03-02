@@ -1,12 +1,13 @@
 use std::{path::Path, time::Duration};
 
-use agglayer_config::{log::LogLevel, TelemetryConfig};
+use agglayer_config::{log::LogLevel, Config};
 use agglayer_prover::fake::FakeProver;
 use ethers::{
     core::k256::ecdsa::SigningKey,
     signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet},
 };
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use pessimistic_proof::ELF;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
@@ -55,7 +56,12 @@ pub async fn start_l1() -> L1Docker {
     l1
 }
 
-pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver<()>, WsClient) {
+pub async fn start_agglayer(
+    config_path: &Path,
+    l1: &L1Docker,
+    config: Option<agglayer_config::Config>,
+    token: Option<CancellationToken>,
+) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
     let (shutdown, receiver) = oneshot::channel();
 
     // Make the mock prover pass
@@ -65,47 +71,48 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
     )
     .unwrap();
 
-    let mut config = agglayer_config::Config::new(tmp_dir);
-    let prover_config = agglayer_config::prover::ProverConfig {
+    let mut config = config.unwrap_or_else(|| agglayer_config::Config::new(config_path));
+    let prover_config = agglayer_prover_config::ProverConfig {
         grpc_endpoint: next_available_addr(),
-        telemetry: TelemetryConfig {
+        telemetry: agglayer_prover_config::TelemetryConfig {
             addr: next_available_addr(),
         },
         ..Default::default()
     };
 
     // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::default();
+    let fake_prover = FakeProver::new(ELF);
     let endpoint = prover_config.grpc_endpoint;
 
     config.prover_entrypoint = format!("http://{}", endpoint);
-    let cancellation = CancellationToken::new();
+    let cancellation = token.unwrap_or_default();
     FakeProver::spawn_at(fake_prover, endpoint, cancellation.clone())
         .await
         .unwrap();
 
     let wallet = get_signer(1);
 
-    let mut rng = rand::thread_rng();
     let (_key, uuid) = LocalWallet::encrypt_keystore(
-        tmp_dir,
-        &mut rng,
+        config_path,
+        &mut ethers::core::rand::thread_rng(),
         wallet.signer().to_bytes(),
         "randpsswd",
         None,
     )
     .unwrap();
 
-    let key_path = tmp_dir.join(uuid);
+    let key_path = config_path.join(uuid);
 
     let addr = next_available_addr();
+    let admin_addr = next_available_addr();
     config.rpc.port = addr.port();
+    config.rpc.admin_port = admin_addr.port();
 
     config.telemetry.addr = next_available_addr();
     config.log.level = LogLevel::Debug;
     config.l1.node_url = l1.rpc.parse().unwrap();
     config.l1.ws_node_url = l1.ws.parse().unwrap();
-    config.l1.rollup_manager_contract = "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0"
+    config.l1.rollup_manager_contract = "0x9A676e781A523b5d0C0e43731313A708CB607508"
         .parse()
         .unwrap();
     config.l1.polygon_zkevm_global_exit_root_v2_contract =
@@ -119,12 +126,16 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
         }],
     });
 
-    let config_file = tmp_dir.join("config.toml");
+    let config_file = config_path.join("config.toml");
     let toml = toml::to_string_pretty(&config).unwrap();
     std::fs::write(&config_file, toml).unwrap();
 
+    let graceful_shutdown_token = cancellation.clone();
     let handle = std::thread::spawn(move || {
-        _ = agglayer_node::main(config_file);
+        if let Err(error) = agglayer_node::main(config_file, "test", Some(graceful_shutdown_token))
+        {
+            eprintln!("Error: {}", error);
+        }
         _ = shutdown.send(());
     });
     let url = format!("ws://{}/", config.rpc_addr());
@@ -142,7 +153,7 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
 
         if handle.is_finished() {
             let _result = handle.join();
-            println!("{:?}", _result);
+            println!("Agglayer result: {:?}", _result);
             panic!("Server has finished");
         }
 
@@ -151,12 +162,16 @@ pub async fn start_agglayer(tmp_dir: &Path, l1: &L1Docker) -> (oneshot::Receiver
 
     assert!(!handle.is_finished());
 
-    (receiver, client)
+    (receiver, client, cancellation)
 }
 
-pub async fn setup_network(tmp_dir: &Path) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
+pub async fn setup_network(
+    tmp_dir: &Path,
+    config: Option<Config>,
+    token: Option<CancellationToken>,
+) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
     let l1 = start_l1().await;
-    let (receiver, client) = start_agglayer(tmp_dir, &l1).await;
+    let (receiver, client, _token) = start_agglayer(tmp_dir, &l1, config, token).await;
 
     (receiver, l1, client)
 }

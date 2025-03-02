@@ -7,11 +7,12 @@ use std::{
 };
 
 use agglayer_types::{
-    Certificate, CertificateIndex, EpochNumber, ExecutionMode, Height, NetworkId, Proof,
+    Certificate, CertificateId, CertificateIndex, EpochNumber, ExecutionMode, Height, NetworkId,
+    Proof,
 };
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::ReadOptions;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 use super::{
     interfaces::reader::PerEpochReader, MetadataWriter, PendingCertificateReader,
@@ -24,7 +25,7 @@ use crate::{
         start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
-    storage::{epochs_db_cf_definitions, DB},
+    storage::{backup::BackupClient, epochs_db_cf_definitions, DB},
     types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
 
@@ -43,6 +44,7 @@ pub struct PerEpochStore<PendingStore, StateStore> {
     start_checkpoint: BTreeMap<NetworkId, Height>,
     end_checkpoint: RwLock<BTreeMap<NetworkId, Height>>,
     packing_lock: RwLock<bool>,
+    backup_client: BackupClient,
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
@@ -52,6 +54,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         optional_start_checkpoint: Option<BTreeMap<NetworkId, Height>>,
+        backup_client: BackupClient,
     ) -> Result<Self, Error> {
         // TODO: refactor this
         let path = config
@@ -152,6 +155,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             start_checkpoint,
             end_checkpoint: RwLock::new(end_checkpoint),
             packing_lock: RwLock::new(packed),
+            backup_client,
         })
     }
 
@@ -170,8 +174,7 @@ where
 {
     fn add_certificate(
         &self,
-        network_id: NetworkId,
-        height: Height,
+        certificate_id: CertificateId,
         mode: ExecutionMode,
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
         let lock = self.lock_for_adding_certificate();
@@ -180,6 +183,34 @@ where
             return Err(Error::AlreadyPacked(*self.epoch_number))?;
         }
 
+        let certificate_header = self
+            .state_store
+            .get_certificate_header(&certificate_id)?
+            .ok_or(Error::NoCertificateHeader)?;
+
+        let network_id = certificate_header.network_id;
+        let height = certificate_header.height;
+
+        let certificate = self
+            .pending_store
+            .get_certificate(network_id, height)?
+            .ok_or(Error::NoCertificate)?;
+
+        let certificate_id = if certificate_id != certificate.hash() {
+            error!(
+                "Inconsistent certificate context for network {} and certificate {}",
+                network_id, certificate_id
+            );
+
+            return Err(Error::CertificateCandidateError(
+                CertificateCandidateError::InconsistentCertificateContext(
+                    network_id,
+                    certificate_id,
+                ),
+            ))?;
+        } else {
+            certificate_id
+        };
         // Check for network rate limiting
         let start_checkpoint = self.start_checkpoint.get(&network_id);
         let mut end_checkpoint = self.end_checkpoint.write();
@@ -272,18 +303,16 @@ where
             ));
         }
 
-        // Acquire locks
-        let certificate = self
-            .pending_store
-            .get_certificate(network_id, height)?
-            .ok_or(Error::NoCertificate)?;
-
-        let certificate_id = certificate.hash();
-
         let proof = self
             .pending_store
             .get_proof(certificate_id)?
-            .ok_or(Error::NoProof)?;
+            .ok_or(Error::NoProof)
+            .inspect_err(|_| {
+                error!(
+                    "CRITICAL: No proof found for certificate {} manual action may be needed",
+                    certificate_id
+                )
+            })?;
 
         let certificate_index = self.next_certificate_index.fetch_add(1, Ordering::SeqCst);
 
@@ -336,6 +365,15 @@ where
             &PerEpochMetadataKey::Packed,
             &PerEpochMetadataValue::Packed(true),
         )?;
+
+        if let Err(error) = self
+            .backup_client
+            .backup(crate::storage::backup::BackupRequest {
+                epoch_db: Some((self.db.clone(), *self.epoch_number)),
+            })
+        {
+            error!("Couldn't trigger the backup of the epoch DB: {}", error);
+        }
 
         *lock = true;
         match self

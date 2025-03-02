@@ -1,22 +1,23 @@
-use std::{fs::File, io::BufReader};
+use std::{fs::File, io::BufReader, path::Path};
 
-use agglayer_primitives::U256;
+use agglayer_types::primitives::U256;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use pessimistic_proof::bridge_exit::{BridgeExit, TokenInfo};
+use pessimistic_proof::bridge_exit::BridgeExit;
+use pessimistic_proof::bridge_exit::TokenInfo;
 use serde::{de::DeserializeOwned, Deserialize, Deserializer};
 use serde_json::Number;
 
 /// Load a data file from the test suite data folder. It is expected to be
 /// a json representation of an object of type `T`.
-pub fn load_json_data_file<T: DeserializeOwned>(filename: impl AsRef<str>) -> T {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+pub fn load_json_data_file<T: DeserializeOwned>(filename: impl AsRef<Path>) -> T {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("data")
         .join(filename.as_ref());
     parse_json_file(path)
 }
 
 /// Load a json file from the specified path.
-pub fn parse_json_file<T>(json_file_path: impl AsRef<std::path::Path>) -> T
+pub fn parse_json_file<T>(json_file_path: impl AsRef<Path>) -> T
 where
     T: DeserializeOwned,
 {
@@ -72,7 +73,7 @@ impl From<DepositEventData> for BridgeExit {
         Self {
             leaf_type: deposit_event_data.leaf_type.try_into().unwrap(),
             token_info: TokenInfo {
-                origin_network: deposit_event_data.origin_network.into(),
+                origin_network: deposit_event_data.origin_network,
                 origin_token_address: deposit_event_data.origin_address.parse().unwrap(),
             },
             dest_network: deposit_event_data.destination_network.into(),
