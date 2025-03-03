@@ -76,6 +76,11 @@ async fn happy_path() {
         .once()
         .returning(|| (0u32, [1u8; 32]));
 
+    l1_rpc
+        .expect_get_prev_pessimistic_root()
+        .once()
+        .returning(|_| Ok([0u8; 32]));
+
     fail::cfg(
         "notifier::certifier::certify::before_verifying_proof",
         "return()",
@@ -171,6 +176,11 @@ async fn prover_timeout() {
         .once()
         .returning(|| (0u32, [1u8; 32]));
 
+    l1_rpc
+        .expect_get_prev_pessimistic_root()
+        .once()
+        .returning(|_| Ok([0u8; 32]));
+
     fail::cfg(
         "notifier::certifier::certify::before_verifying_proof",
         "return()",
@@ -209,6 +219,7 @@ mockall::mock! {
 
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
+        async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError>;
     }
 
     #[async_trait::async_trait]
