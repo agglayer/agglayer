@@ -20,3 +20,8 @@ tonic-types.workspace = true
 thiserror = { workspace = true, optional = true }
 
 agglayer-types = { workspace = true, optional = true }
+
+[dev-dependencies]
+anyhow.workspace = true
+insta.workspace = true
+rstest.workspace = true

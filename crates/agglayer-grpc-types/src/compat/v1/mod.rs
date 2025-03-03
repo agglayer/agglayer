@@ -29,3 +29,6 @@ mod token_info;
 mod u256;
 
 pub use error::{Error, ErrorKind};
+
+#[cfg(test)]
+mod tests;

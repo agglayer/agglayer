@@ -261,9 +261,12 @@ name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
  "agglayer-types",
+ "anyhow",
  "bincode",
+ "insta",
  "pbjson",
  "prost 0.13.4",
+ "rstest",
  "serde",
  "thiserror 2.0.11",
  "tonic-types",
