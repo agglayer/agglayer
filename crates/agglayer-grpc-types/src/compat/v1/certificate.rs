@@ -17,13 +17,13 @@ impl TryFrom<v1::Certificate> for Certificate {
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()
-                .map_err(|e| Error::ParsingField("bridge_exits", Box::new(e)))?,
+                .map_err(|e: Error| e.inside_field("bridge_exits"))?,
             imported_bridge_exits: value
                 .imported_bridge_exits
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()
-                .map_err(|e| Error::ParsingField("imported_bridge_exits", Box::new(e)))?,
+                .map_err(|e: Error| e.inside_field("imported_bridge_exits"))?,
             aggchain_data: required_field!(value, aggchain_data),
             metadata: required_field!(value, metadata),
         })
