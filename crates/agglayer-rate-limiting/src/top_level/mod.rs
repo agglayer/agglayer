@@ -31,6 +31,15 @@ impl RateLimiter {
         self.reserve::<component::SendTx>(network_id, time)
     }
 
+    /// Reserve rate limiting slot for `sendCertificate`.
+    pub fn reserve_send_certificate(
+        &self,
+        network_id: NetworkId,
+        epoch: agglayer_types::EpochNumber,
+    ) -> Result<SlotGuard<component::SendCertificate>, RateLimited> {
+        self.reserve::<component::SendCertificate>(network_id, epoch)
+    }
+
     /// Reserve rate limiting slot for given component.
     pub fn reserve<C: Component>(
         &self,
