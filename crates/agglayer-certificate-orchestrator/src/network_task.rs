@@ -464,11 +464,13 @@ where
                     CertificationError::TrustedSequencerNotFound(network) => {
                         CertificateStatusError::TrustedSequencerNotFound(network)
                     }
+                    CertificationError::LastPessimisticRootNotFound(network_id) => {
+                        CertificateStatusError::LastPessimisticRootNotFound(network_id)
+                    }
                     CertificationError::ProofVerificationFailed { source } => source.into(),
                     CertificationError::L1InfoRootNotFound(_certificate_id, l1_leaf_count) => {
                         CertificateStatusError::L1InfoRootNotFound(l1_leaf_count)
                     }
-
                     CertificationError::ProverExecutionFailed { source } => {
                         CertificateStatusError::ProofGenerationError {
                             generation_type: agglayer_types::GenerationType::Prover,
@@ -481,9 +483,7 @@ where
                             source,
                         }
                     }
-
                     CertificationError::Types { source } => source.into(),
-
                     CertificationError::Storage(error) => {
                         let error = format!(
                             "Storage error happened in the certification process of \
