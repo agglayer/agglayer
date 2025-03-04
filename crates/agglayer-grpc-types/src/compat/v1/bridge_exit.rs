@@ -11,7 +11,10 @@ impl TryFrom<v1::BridgeExit> for BridgeExit {
             leaf_type: match value.leaf_type() {
                 v1::LeafType::Transfer => LeafType::Transfer,
                 v1::LeafType::Message => LeafType::Message,
-                _ => return Err(Error::InvalidLeafType(value.leaf_type)),
+                _ => {
+                    let t = value.leaf_type;
+                    return Err(Error::invalid_data(format!("invalid leaf type: {t}")));
+                }
             },
             token_info: required_field!(value, token_info),
             dest_network: NetworkId::new(value.dest_network),
@@ -21,7 +24,7 @@ impl TryFrom<v1::BridgeExit> for BridgeExit {
                 .metadata
                 .map(TryInto::try_into)
                 .transpose()
-                .map_err(|e| Error::ParsingField("metadata", Box::new(e)))?,
+                .map_err(|e: Error| e.inside_field("metadata"))?,
         })
     }
 }

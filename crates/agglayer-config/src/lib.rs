@@ -134,8 +134,7 @@ impl Config {
             .parent()
             .ok_or_else(|| ConfigurationError::UnableToReadConfigFile {
                 path: path.to_path_buf(),
-                source: std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                source: std::io::Error::other(
                     "Unable to determine the parent folder of the configuration file",
                 ),
             })?;

@@ -277,9 +277,11 @@ impl Node {
         .await?;
 
         // Bind the core to the RPC server.
-        let json_rpc_router = AgglayerImpl::new(service, rpc_service).start().await?;
+        let json_rpc_router = AgglayerImpl::new(service, rpc_service.clone())
+            .start()
+            .await?;
 
-        let grpc_router = agglayer_grpc_api::Server::with_config(config.clone())
+        let grpc_router = agglayer_grpc_api::Server::with_config(config.clone(), rpc_service)
             .build()
             .map_err(|err| {
                 error!("Failed to build gRPC router: {}", err);

@@ -21,7 +21,7 @@ impl TryFrom<v1::AggchainData> for AggchainData {
             Some(v1::aggchain_data::Data::Signature(signature)) => AggchainData::ECDSA {
                 signature: (&*signature.value)
                     .try_into()
-                    .map_err(Error::ParsingSignature)?,
+                    .map_err(Error::parsing_signature)?,
             },
             Some(v1::aggchain_data::Data::Generic(proof)) => AggchainData::Generic {
                 aggchain_params: required_field!(proof, aggchain_params),
@@ -29,12 +29,12 @@ impl TryFrom<v1::AggchainData> for AggchainData {
                     Some(v1::aggchain_proof::Proof::Sp1Stark(proof)) => Proof::SP1Stark(Box::new(
                         sp1v4_bincode_options()
                             .deserialize(&proof)
-                            .map_err(Error::DeserializingProof)?,
+                            .map_err(Error::deserializing_proof)?,
                     )),
-                    None => return Err(Error::MissingField("data.proof")),
+                    None => return Err(Error::missing_field("proof").inside_field("data")),
                 },
             },
-            None => return Err(Error::MissingField("data")),
+            None => return Err(Error::missing_field("data")),
         })
     }
 }
@@ -59,7 +59,7 @@ impl TryFrom<AggchainData> for v1::AggchainData {
                     proof: Some(v1::aggchain_proof::Proof::Sp1Stark(
                         sp1v4_bincode_options()
                             .serialize(&proof)
-                            .map_err(Error::SerializingProof)?
+                            .map_err(Error::serializing_proof)?
                             .into(),
                     )),
                 }),

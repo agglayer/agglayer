@@ -46,6 +46,7 @@ pub fn compute_aggchain_proof(
 /// Trees for the network B, as well as the LET for network A.
 #[derive(Clone, Debug)]
 pub struct Forest {
+    pub network_id: NetworkId,
     pub wallet: LocalWallet,
     pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
     pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
@@ -62,6 +63,13 @@ impl Forest {
     pub fn with_signer_seed(mut self, seed: u32) -> Self {
         let fake_priv_key = keccak256_combine([b"FAKEKEY:", seed.to_be_bytes().as_slice()]);
         self.wallet = LocalWallet::from_bytes(fake_priv_key.as_bytes()).unwrap();
+
+        self
+    }
+
+    pub fn with_network_id(mut self, network_id: NetworkId) -> Self {
+        self.network_id = network_id;
+        self.wallet = Certificate::wallet_for_test(network_id.into());
 
         self
     }
@@ -89,6 +97,7 @@ impl Forest {
         }
 
         Self {
+            network_id: *NETWORK_B,
             wallet: Certificate::wallet_for_test(NETWORK_B),
             local_exit_tree_data_a: LocalExitTreeData::new(),
             l1_info_tree: Default::default(),
@@ -187,7 +196,7 @@ impl Forest {
             compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
 
         Certificate {
-            network_id: NETWORK_B,
+            network_id: self.network_id.into(),
             height: 0,
             prev_local_exit_root,
             new_local_exit_root,
@@ -235,7 +244,7 @@ impl Forest {
                 prev_local_exit_root: *certificate.prev_local_exit_root,
                 new_local_exit_root: *certificate.new_local_exit_root,
                 l1_info_root: *certificate.l1_info_root().unwrap().unwrap(),
-                origin_network: *NETWORK_B,
+                origin_network: self.network_id,
             });
 
         (certificate, aggchain_vkey, aggchain_params, aggchain_proof)
