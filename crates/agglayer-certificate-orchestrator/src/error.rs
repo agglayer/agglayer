@@ -55,13 +55,6 @@ pub enum Error {
     #[error("Internal error: {0}")]
     InternalError(String),
 
-    #[error("Joining epoch-packing task for {epoch}")]
-    JoiningEpochPackingTask {
-        epoch: u64,
-        #[source]
-        source: tokio::task::JoinError,
-    },
-
     #[error("The status of the certificate is invalid")]
     InvalidCertificateStatus,
 
@@ -97,9 +90,6 @@ impl From<Error> for CertificateStatusError {
             }
             Error::Storage(error) => CertificateStatusError::InternalError(error.to_string()),
             Error::InternalError(error) => CertificateStatusError::InternalError(error),
-            err @ Error::JoiningEpochPackingTask { .. } => {
-                CertificateStatusError::InternalError(format!("{err:?}"))
-            }
             Error::InvalidCertificateStatus => {
                 CertificateStatusError::InternalError("InvalidCertificateStatus".to_string())
             }
