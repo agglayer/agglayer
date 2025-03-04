@@ -7,6 +7,8 @@ use tracing::warn;
 
 #[cfg(target_os = "zkvm")]
 use crate::aggchain_proof::AggchainProofPublicValues;
+#[cfg(target_os = "zkvm")]
+use crate::imported_bridge_exit::commit_imported_bridge_exits;
 use crate::{
     aggchain_proof::AggchainData,
     bridge_exit::{L1_ETH, L1_NETWORK_ID},
