@@ -8,7 +8,7 @@ impl TryFrom<v1::CertificateId> for CertificateId {
     type Error = Error;
 
     fn try_from(value: v1::CertificateId) -> Result<Self, Self::Error> {
-        let value = value.value.ok_or(Error::missing_field("certificate_id"))?;
+        let value = value.value.ok_or(Error::missing_field("value"))?;
         Ok(CertificateId::from(<[u8; 32]>::try_from(value)?))
     }
 }

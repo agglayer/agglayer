@@ -28,4 +28,4 @@ mod merkle_proof;
 mod token_info;
 mod u256;
 
-pub use error::Error;
+pub use error::{Error, ErrorKind};
