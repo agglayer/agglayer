@@ -23,5 +23,6 @@ agglayer-types = { workspace = true, optional = true }
 
 [dev-dependencies]
 anyhow.workspace = true
+bolero.workspace = true
 insta.workspace = true
 rstest.workspace = true
