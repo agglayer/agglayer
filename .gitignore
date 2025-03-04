@@ -1,3 +1,5 @@
 target
 tests/kurtosis
 tests/tmp
+__fuzz__
+fuzz.log
