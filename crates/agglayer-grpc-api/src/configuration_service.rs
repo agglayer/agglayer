@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agglayer_grpc_server::node::v1::configuration_service_server::ConfigurationService;
 use agglayer_grpc_types::node::v1::{
-    ConfigurationErrorKind, GetEpochConfigurationRequest, GetEpochConfigurationResponse,
+    GetEpochConfigurationErrorKind, GetEpochConfigurationRequest, GetEpochConfigurationResponse,
 };
 use agglayer_rpc::AgglayerService;
 use tonic_types::{ErrorDetails, StatusExt as _};
@@ -29,7 +29,7 @@ where
     ) -> Result<tonic::Response<GetEpochConfigurationResponse>, tonic::Status> {
         let epoch_configuration = self.service.get_epoch_configuration().ok_or_else(|| {
             let mut error_details = ErrorDetails::with_error_info(
-                ConfigurationErrorKind::UnexpectedClockConfiguration.as_str_name(),
+                GetEpochConfigurationErrorKind::UnexpectedClockConfiguration.as_str_name(),
                 GET_EPOCH_CONFIGURATION_METHOD_PATH,
                 [],
             );
