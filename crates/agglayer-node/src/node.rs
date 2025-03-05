@@ -293,7 +293,7 @@ impl Node {
         let router = axum::Router::new()
             .merge(health_router)
             .merge(json_rpc_router)
-            .nest("/grpc", grpc_router);
+            .merge(grpc_router);
 
         let listener = tokio::net::TcpListener::bind(config.rpc_addr()).await?;
         let admin_listener = tokio::net::TcpListener::bind(config.admin_rpc_addr()).await?;
