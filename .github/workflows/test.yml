@@ -30,7 +30,7 @@ jobs:
       - uses: ./.github/actions/unit-test
 
   isolated-feature-checks:
-    name: 'isolated feature checks'
+    name: 'Isolated feature checks'
     runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: protoc,cargo-hack
-      - run: cargo hack --each-feature --all check
+      - run: cargo hack --each-feature --all check --all-targets
 
   build_contracts_image:
     runs-on: ubuntu-latest-16-cores
