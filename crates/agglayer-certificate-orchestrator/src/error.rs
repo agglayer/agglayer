@@ -1,3 +1,4 @@
+use agglayer_contracts::L1RpcError;
 use agglayer_types::{CertificateId, CertificateStatusError, Height, NetworkId};
 use pessimistic_proof::{error::ProofVerificationError, ProofError};
 
@@ -37,9 +38,9 @@ pub enum CertificationError {
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
     #[error("rollup contract address not found")]
-    RollupContractAddressNotFound,
+    RollupContractAddressNotFound { source: L1RpcError },
     #[error("Unable to find aggchain vkey")]
-    UnableToFindAggchainVkey,
+    UnableToFindAggchainVkey { source: L1RpcError },
 }
 
 #[derive(thiserror::Error, Debug)]

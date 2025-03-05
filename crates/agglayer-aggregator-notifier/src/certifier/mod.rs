@@ -330,7 +330,7 @@ where
                 if certificate.custom_chain_data.len() < 2 {
                     return Err(CertificationError::Types {
                         source: agglayer_types::Error::InvalidCustomChainDataLength {
-                            expected: 2,
+                            expected_at_least: 2,
                             actual: certificate.custom_chain_data.len(),
                         },
                     });
@@ -346,13 +346,15 @@ where
                     .l1_rpc
                     .get_rollup_contract_address(*network_id)
                     .await
-                    .map_err(|_| CertificationError::RollupContractAddressNotFound)?;
+                    .map_err(|source| CertificationError::RollupContractAddressNotFound {
+                        source,
+                    })?;
 
                 let aggchain_vkey = self
                     .l1_rpc
                     .get_aggchain_vkey(rollup_address, aggchain_vkey_selector)
                     .await
-                    .map_err(|_| CertificationError::UnableToFindAggchainVkey)?;
+                    .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
 
                 Some(aggchain_vkey)
             }

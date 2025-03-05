@@ -139,21 +139,16 @@ pub enum Error {
     #[error(transparent)]
     InvalidSmtOperation(#[from] SmtError),
 
-    /// SP1-based Aggchain proof not yet supported.
-    #[error("SP1-based Aggchain proof not yet supported")]
-    AggchainProofSP1Unsupported,
-
     #[error("AggchainVkey missing")]
     MissingAggchainVkey,
 
-    #[error("Unable to retrieve aggchain rollup address")]
-    UnableToRetrieveAggchainRollupAddress,
-
-    #[error("Unable to retrieve aggchain vkey")]
-    UnableToRetrieveAggchainVkey,
-
-    #[error("Invalid custom chain data length expected at least {expected}, actual {actual}")]
-    InvalidCustomChainDataLength { expected: usize, actual: usize },
+    #[error(
+        "Invalid custom chain data length expected at least {expected_at_least}, actual {actual}"
+    )]
+    InvalidCustomChainDataLength {
+        expected_at_least: usize,
+        actual: usize,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]

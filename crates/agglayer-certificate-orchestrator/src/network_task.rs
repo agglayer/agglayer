@@ -514,19 +514,20 @@ where
                         CertificateStatusError::InternalError(error)
                     }
 
-                    CertificationError::RollupContractAddressNotFound => {
+                    CertificationError::RollupContractAddressNotFound { source } => {
                         let error = format!(
                             "Internal error happened in the certification process of \
-                             {certificate_id}: Aggchain Rollup contract address not found",
+                             {certificate_id}: Aggchain Rollup contract address not found: \
+                             {source:?}",
                         );
                         warn!(hash = certificate_id.to_string(), error);
 
                         CertificateStatusError::InternalError(error)
                     }
-                    CertificationError::UnableToFindAggchainVkey => {
+                    CertificationError::UnableToFindAggchainVkey { source } => {
                         let error = format!(
                             "Internal error happened in the certification process of \
-                             {certificate_id}: Aggchain vkey not found",
+                             {certificate_id}: Aggchain vkey not found: {source:?}",
                         );
                         warn!(hash = certificate_id.to_string(), error);
 
