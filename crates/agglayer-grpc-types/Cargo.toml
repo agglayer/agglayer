@@ -4,16 +4,19 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[dependencies]
-serde.workspace = true
-prost.workspace = true
-pbjson = "0.7.0"
-
-agglayer-types = { workspace = true, optional = true }
+[features]
+default = []
+compat = ["dep:agglayer-types", "dep:bincode", "dep:thiserror"]
 
 [lints]
 workspace = true
 
-[features]
-default = []
-compat = ["dep:agglayer-types"]
+[dependencies]
+bincode = { workspace = true, optional = true }
+pbjson = "0.7.0"
+prost.workspace = true
+serde.workspace = true
+tonic-types.workspace = true
+thiserror = { workspace = true, optional = true }
+
+agglayer-types = { workspace = true, optional = true }

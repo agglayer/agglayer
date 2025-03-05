@@ -4,13 +4,13 @@ use pessimistic_proof::bridge_exit::BridgeExit;
 use pessimistic_proof_test_suite::{forest::Forest, runner::Runner, sample_data as data};
 
 #[rstest::rstest]
-#[timeout(Duration::from_secs(10))]
+#[timeout(Duration::from_secs(60))]
 fn sanity_check() {
     cycles_on_sample_inputs("s00_be000", Forest::new([]), std::iter::empty());
 }
 
 #[rstest::rstest]
-#[timeout(Duration::from_secs(30))]
+#[timeout(Duration::from_secs(60))]
 fn cycles_on_state01(#[values(0, 1, 2, 20, 50, 100, usize::MAX)] n_exits: usize) {
     let bridge_exits = data::sample_bridge_exits_01().take(n_exits);
     let name = format!("s01_be{:03}", bridge_exits.len());

@@ -38,6 +38,7 @@ pub enum ConfiguredSigner {
 
 impl ConfiguredSigner {
     /// Decrypt the first local keystore specified in the configuration.
+    #[allow(clippy::result_large_err)]
     pub(crate) fn local_wallet(chain_id: u64, local: &LocalConfig) -> Result<LocalWallet, Error> {
         let pk = local.private_keys.first().ok_or(Error::NoPk)?;
         Ok(LocalWallet::decrypt_keystore(&pk.path, &pk.password)?.with_chain_id(chain_id))
@@ -111,7 +112,6 @@ impl Signer for ConfiguredSigner {
     }
 
     /// Sets the signer's chain id
-    #[must_use]
     fn with_chain_id<T: Into<u64>>(self, chain_id: T) -> Self {
         match self {
             ConfiguredSigner::Local(wallet) => {

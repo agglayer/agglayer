@@ -103,7 +103,7 @@ where
         };
 
         let dry_current_epoch = self.current_epoch.load();
-        match dry_current_epoch.add_certificate(network_id, height, ExecutionMode::DryRun) {
+        match dry_current_epoch.add_certificate(certificate_id, ExecutionMode::DryRun) {
             Err(error) => {
                 drop(dry_current_epoch);
                 error!(
@@ -327,8 +327,7 @@ where
                         continue;
                     }
 
-                    match related_epoch.add_certificate(network_id, height, ExecutionMode::Default)
-                    {
+                    match related_epoch.add_certificate(certificate_id, ExecutionMode::Default) {
                         Err(error) if max_retries == 0 => {
                             let error_msg = format!(
                                 "CRITICAL: Failed to add the certificate {} to the epoch after \
@@ -391,28 +390,6 @@ where
                 ))
             }
         }
-    }
-
-    async fn pack(&self, closing_epoch: Arc<Self::PerEpochStore>) -> Result<(), Error> {
-        let epoch_number = closing_epoch.get_epoch_number();
-        debug!("Start the settlement of the epoch {}", epoch_number);
-
-        // No aggregation for now, we settle each PP individually
-        let _result: Result<(), Error> = tokio::task::spawn_blocking(move || {
-            closing_epoch.start_packing()?;
-
-            Ok(())
-        })
-        .await
-        // TODO: Handle error in a better way
-        .map_err(|_| {
-            Error::InternalError(format!(
-                "Unable to join the packing task for {}",
-                epoch_number
-            ))
-        })?;
-
-        Ok(())
     }
 
     async fn transaction_exists(&self, tx_hash: H256) -> Result<bool, Error> {

@@ -1,4 +1,7 @@
-use agglayer_types::{compute_signature_info, Address, Certificate, LocalNetworkStateData, U256};
+use agglayer_types::{
+    aggchain_proof::AggchainData, compute_signature_info, Address, Certificate,
+    LocalNetworkStateData, U256,
+};
 use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer};
 pub use pessimistic_proof::bridge_exit::LeafType;
@@ -43,6 +46,7 @@ pub fn compute_aggchain_proof(
 /// Trees for the network B, as well as the LET for network A.
 #[derive(Clone, Debug)]
 pub struct Forest {
+    pub network_id: NetworkId,
     pub wallet: LocalWallet,
     pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
     pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
@@ -59,6 +63,13 @@ impl Forest {
     pub fn with_signer_seed(mut self, seed: u32) -> Self {
         let fake_priv_key = keccak256_combine([b"FAKEKEY:", seed.to_be_bytes().as_slice()]);
         self.wallet = LocalWallet::from_bytes(fake_priv_key.as_bytes()).unwrap();
+
+        self
+    }
+
+    pub fn with_network_id(mut self, network_id: NetworkId) -> Self {
+        self.network_id = network_id;
+        self.wallet = Certificate::wallet_for_test(network_id.into());
 
         self
     }
@@ -86,6 +97,7 @@ impl Forest {
         }
 
         Self {
+            network_id: *NETWORK_B,
             wallet: Certificate::wallet_for_test(NETWORK_B),
             local_exit_tree_data_a: LocalExitTreeData::new(),
             l1_info_tree: Default::default(),
@@ -184,13 +196,13 @@ impl Forest {
             compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
 
         Certificate {
-            network_id: NETWORK_B,
+            network_id: self.network_id.into(),
             height: 0,
             prev_local_exit_root,
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            signature,
+            aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
         }
     }
@@ -214,10 +226,15 @@ impl Forest {
     ) -> (Certificate, SP1VerifyingKey, [u8; 32], SP1Proof) {
         let certificate = self.apply_events(imported_bridge_events, bridge_events);
 
+        let signature = match certificate.aggchain_data {
+            AggchainData::ECDSA { signature } => signature,
+            AggchainData::Generic { .. } => unimplemented!("SP1 handling not implemented"),
+        };
+
         let (aggchain_proof, aggchain_vkey, aggchain_params) =
             compute_aggchain_proof(AggchainECDSA {
-                signer: certificate.signer().unwrap(),
-                signature: certificate.signature.into(),
+                signer: certificate.signer().unwrap().unwrap(),
+                signature: signature.into(),
                 commit_imported_bridge_exits: *commit_imported_bridge_exits(
                     certificate
                         .imported_bridge_exits
@@ -227,7 +244,7 @@ impl Forest {
                 prev_local_exit_root: *certificate.prev_local_exit_root,
                 new_local_exit_root: *certificate.new_local_exit_root,
                 l1_info_root: *certificate.l1_info_root().unwrap().unwrap(),
-                origin_network: *NETWORK_B,
+                origin_network: self.network_id,
             });
 
         (certificate, aggchain_vkey, aggchain_params, aggchain_proof)

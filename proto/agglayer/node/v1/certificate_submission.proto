@@ -7,8 +7,7 @@ import "agglayer/protocol/types/v1/certificate.proto";
 // Service for submitting certificate to an agglayer node.
 service CertificateSubmissionService {
   // Method used to submit a certificate.
-  rpc SubmitCertificate(SubmitCertificateRequest)
-      returns (SubmitCertificateResponse);
+  rpc SubmitCertificate(SubmitCertificateRequest) returns (SubmitCertificateResponse);
 }
 
 // Type used to submit a certificate.
@@ -24,9 +23,19 @@ message SubmitCertificateResponse {
 }
 
 // The kind of error that occurred and that are reported by the service.
-enum ErrorKind {
+enum SubmitCertificateErrorKind {
   // Unspecified error.
-  ERROR_KIND_UNSPECIFIED = 0;
+  SUBMIT_CERTIFICATE_ERROR_KIND_UNSPECIFIED = 0;
+
+  // Missing field.
+  SUBMIT_CERTIFICATE_ERROR_KIND_MISSING_FIELD = 1;
+
+  // Invalid data.
+  SUBMIT_CERTIFICATE_ERROR_KIND_INVALID_DATA = 2;
+
   // The signature verification failed.
-  ERROR_KIND_SIGNATURE_VERIFICATION = 1;
+  SUBMIT_CERTIFICATE_ERROR_KIND_SIGNATURE_VERIFICATION = 3;
+
+  // Unable to replace pending certificate.
+  SUBMIT_CERTIFICATE_ERROR_KIND_UNABLE_TO_REPLACE_PENDING_CERTIFICATE = 4;
 }

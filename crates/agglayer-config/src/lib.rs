@@ -134,8 +134,7 @@ impl Config {
             .parent()
             .ok_or_else(|| ConfigurationError::UnableToReadConfigFile {
                 path: path.to_path_buf(),
-                source: std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                source: std::io::Error::other(
                     "Unable to determine the parent folder of the configuration file",
                 ),
             })?;
@@ -178,6 +177,11 @@ impl Config {
     /// Get the target RPC socket address from the configuration.
     pub fn rpc_addr(&self) -> std::net::SocketAddr {
         std::net::SocketAddr::from((self.rpc.host, self.rpc.port))
+    }
+
+    /// Get the admin RPC socket address from the configuration.
+    pub fn admin_rpc_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_port))
     }
 
     pub fn path_contextualized(mut self, base_path: &Path) -> Self {

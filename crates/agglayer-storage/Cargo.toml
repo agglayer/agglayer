@@ -7,12 +7,15 @@ license.workspace = true
 [dependencies]
 arc-swap.workspace = true
 bincode.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 hex.workspace = true
 parking_lot.workspace = true
 rand = { version = "0.9.0", optional = true }
 rocksdb = "0.23.0"
 serde.workspace = true
 thiserror.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
@@ -22,12 +25,12 @@ pessimistic-proof = { path = "../pessimistic-proof" }
 mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio.workspace = true
 criterion = "0.5.1"
 insta.workspace = true
 rand.workspace = true
 rstest.workspace = true
 sp1-sdk.workspace = true
+tokio.workspace = true
 
 agglayer-types = { workspace = true, features = ["testutils"] }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
@@ -40,5 +43,4 @@ harness = false
 required-features = ["testutils"]
 
 [features]
-default = []
 testutils = ["rand", "mockall", "agglayer-types/testutils"]

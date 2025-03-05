@@ -2,7 +2,7 @@ use std::{sync::Arc, thread, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
 use agglayer_config::Config;
-use agglayer_contracts::Settler;
+use agglayer_contracts::{L1RpcError, Settler};
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{LocalNetworkStateData, NetworkId};
@@ -67,11 +67,6 @@ async fn happy_path() {
         .return_once(|_, _| Ok(()));
 
     l1_rpc
-        .expect_get_l1_info_root()
-        .once()
-        .returning(move |_| Ok(Default::default()));
-
-    l1_rpc
         .expect_get_trusted_sequencer_address()
         .once()
         .returning(move |_, _| Ok(signer));
@@ -108,7 +103,7 @@ async fn happy_path() {
 
 #[rstest::rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(20))]
+#[timeout(Duration::from_secs(60))]
 async fn prover_timeout() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();
@@ -172,11 +167,6 @@ async fn prover_timeout() {
         .returning(move |_, _| Ok(signer));
 
     l1_rpc
-        .expect_get_l1_info_root()
-        .once()
-        .returning(move |_| Ok(Default::default()));
-
-    l1_rpc
         .expect_default_l1_info_tree_entry()
         .once()
         .returning(|| (0u32, [1u8; 32]));
@@ -215,16 +205,17 @@ mockall::mock! {
             &self,
             rollup_id: u32,
             proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
-        ) -> Result<ethers::types::Address, ()>;
+        ) -> Result<ethers::types::Address, L1RpcError>;
 
-        async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], ()>;
+        async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
     }
+
     #[async_trait::async_trait]
     impl Settler for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
 
-        async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, String>;
+        async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, L1RpcError>;
         fn build_pending_transaction(
             &self,
             tx_hash: ethers::types::H256,

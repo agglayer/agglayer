@@ -246,7 +246,7 @@ pub mod configuration_service_client {
     }
 }
 /// Generated client implementations.
-pub mod network_state_service_client {
+pub mod node_state_service_client {
     #![allow(
         unused_variables,
         dead_code,
@@ -257,10 +257,10 @@ pub mod network_state_service_client {
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
     #[derive(Debug, Clone)]
-    pub struct NetworkStateServiceClient<T> {
+    pub struct NodeStateServiceClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl NetworkStateServiceClient<tonic::transport::Channel> {
+    impl NodeStateServiceClient<tonic::transport::Channel> {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -271,7 +271,7 @@ pub mod network_state_service_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> NetworkStateServiceClient<T>
+    impl<T> NodeStateServiceClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
@@ -289,7 +289,7 @@ pub mod network_state_service_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> NetworkStateServiceClient<InterceptedService<T, F>>
+        ) -> NodeStateServiceClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
@@ -303,7 +303,7 @@ pub mod network_state_service_client {
                 http::Request<tonic::body::BoxBody>,
             >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
-            NetworkStateServiceClient::new(InterceptedService::new(inner, interceptor))
+            NodeStateServiceClient::new(InterceptedService::new(inner, interceptor))
         }
         /// Compress requests with the given encoding.
         ///
@@ -336,13 +336,11 @@ pub mod network_state_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        pub async fn get_latest_known_certificate_header(
+        pub async fn get_certificate_header(
             &mut self,
-            request: impl tonic::IntoRequest<
-                super::GetLatestKnownCertificateHeaderRequest,
-            >,
+            request: impl tonic::IntoRequest<super::GetCertificateHeaderRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetLatestKnownCertificateHeaderResponse>,
+            tonic::Response<super::GetCertificateHeaderResponse>,
             tonic::Status,
         > {
             self.inner
@@ -355,25 +353,23 @@ pub mod network_state_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/agglayer.node.v1.NetworkStateService/GetLatestKnownCertificateHeader",
+                "/agglayer.node.v1.NodeStateService/GetCertificateHeader",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "agglayer.node.v1.NetworkStateService",
-                        "GetLatestKnownCertificateHeader",
+                        "agglayer.node.v1.NodeStateService",
+                        "GetCertificateHeader",
                     ),
                 );
             self.inner.unary(req, path, codec).await
         }
-        pub async fn get_latest_settled_certificate_header(
+        pub async fn get_latest_certificate_header(
             &mut self,
-            request: impl tonic::IntoRequest<
-                super::GetLatestSettledCertificateHeaderRequest,
-            >,
+            request: impl tonic::IntoRequest<super::GetLatestCertificateHeaderRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetLatestSettledCertificateHeaderResponse>,
+            tonic::Response<super::GetLatestCertificateHeaderResponse>,
             tonic::Status,
         > {
             self.inner
@@ -386,45 +382,14 @@ pub mod network_state_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/agglayer.node.v1.NetworkStateService/GetLatestSettledCertificateHeader",
+                "/agglayer.node.v1.NodeStateService/GetLatestCertificateHeader",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "agglayer.node.v1.NetworkStateService",
-                        "GetLatestSettledCertificateHeader",
-                    ),
-                );
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn get_latest_pending_certificate_header(
-            &mut self,
-            request: impl tonic::IntoRequest<
-                super::GetLatestPendingCertificateHeaderRequest,
-            >,
-        ) -> std::result::Result<
-            tonic::Response<super::GetLatestPendingCertificateHeaderResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/agglayer.node.v1.NetworkStateService/GetLatestPendingCertificateHeader",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "agglayer.node.v1.NetworkStateService",
-                        "GetLatestPendingCertificateHeader",
+                        "agglayer.node.v1.NodeStateService",
+                        "GetLatestCertificateHeader",
                     ),
                 );
             self.inner.unary(req, path, codec).await

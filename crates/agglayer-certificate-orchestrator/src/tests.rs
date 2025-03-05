@@ -14,6 +14,7 @@ use agglayer_storage::{
         latest_proven_certificate_per_network::ProvenCertificate,
         latest_settled_certificate_per_network::SettledCertificate,
     },
+    storage::backup::BackupClient,
     stores::{
         epochs::EpochsStore, pending::PendingStore, per_epoch::PerEpochStore, state::StateStore,
         EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
@@ -102,8 +103,7 @@ impl PerEpochReader for DummyPendingStore {
 impl PerEpochWriter for DummyPendingStore {
     fn add_certificate(
         &self,
-        _network_id: NetworkId,
-        _height: Height,
+        _certificate_id: CertificateId,
         _mode: ExecutionMode,
     ) -> Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
         Ok((0, 0))
@@ -437,7 +437,8 @@ async fn test_certificate_orchestrator_can_stop() {
             .expect("Unable to create store"),
     );
     let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -445,6 +446,7 @@ async fn test_certificate_orchestrator_can_stop() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -500,7 +502,8 @@ async fn test_collect_certificates() {
             .expect("Unable to create store"),
     );
     let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
     );
 
     let epochs_store = Arc::new(
@@ -509,6 +512,7 @@ async fn test_collect_certificates() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -530,7 +534,6 @@ async fn test_collect_certificates() {
         .pending_store(pending_store.clone())
         .state_store(state_store.clone())
         .executed(check_sender)
-        .expected_epoch(1)
         .build();
 
     let mut orchestrator = CertificateOrchestrator::try_new(
@@ -566,7 +569,8 @@ async fn test_collect_certificates_after_epoch() {
             .expect("Unable to create store"),
     );
     let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -574,6 +578,7 @@ async fn test_collect_certificates_after_epoch() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -596,7 +601,6 @@ async fn test_collect_certificates_after_epoch() {
         .pending_store(pending_store.clone())
         .state_store(state_store.clone())
         .executed(check_sender)
-        .expected_epoch(1)
         .build();
 
     let mut orchestrator = CertificateOrchestrator::try_new(
@@ -633,7 +637,8 @@ async fn test_collect_certificates_when_empty() {
             .expect("Unable to create store"),
     );
     let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -641,6 +646,7 @@ async fn test_collect_certificates_when_empty() {
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -664,7 +670,6 @@ async fn test_collect_certificates_when_empty() {
         .pending_store(pending_store.clone())
         .state_store(state_store.clone())
         .executed(check_sender)
-        .expected_epoch(1)
         .build();
 
     let mut orchestrator = CertificateOrchestrator::try_new(
@@ -711,7 +716,8 @@ fn check() -> (
             .expect("Unable to create store"),
     );
     let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path).expect("Unable to create store"),
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -719,6 +725,7 @@ fn check() -> (
             0,
             pending_store.clone(),
             state_store.clone(),
+            BackupClient::noop(),
         )
         .expect("Unable to create store"),
     );
@@ -731,7 +738,6 @@ fn check() -> (
         .pending_store(pending_store.clone())
         .state_store(state_store.clone())
         .executed(check_sender)
-        .expected_epoch(1)
         .build();
 
     ((pending_store, state_store), check_receiver, check)
@@ -788,7 +794,6 @@ pub(crate) fn create_orchestrator_mock(
                 let mut epoch_packer = MockEpochPacker::default();
 
                 epoch_packer.expect_settle_certificate().never();
-                epoch_packer.expect_pack().never();
 
                 epoch_packer
             }),
@@ -817,7 +822,6 @@ pub(crate) struct Check {
     #[allow(unused)]
     expected_proof: Option<Proof>,
     executed: mpsc::Sender<CertifierOutput>,
-    expected_epoch: Option<u64>,
 }
 
 #[buildstructor::buildstructor]
@@ -827,7 +831,6 @@ impl Check {
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         executed: mpsc::Sender<CertifierOutput>,
-        expected_epoch: Option<u64>,
     ) -> Self {
         Self {
             state_store,
@@ -835,7 +838,6 @@ impl Check {
             executed,
             expected_certificate: None,
             expected_proof: None,
-            expected_epoch,
         }
     }
 
@@ -886,28 +888,6 @@ impl EpochPacker for Check {
         height: Height,
     ) -> Result<(NetworkId, SettledCertificate), Error> {
         Ok((network_id, SettledCertificate(certificate_id, height, 0, 0)))
-    }
-
-    async fn pack(&self, epoch: Arc<Self::PerEpochStore>) -> Result<(), Error> {
-        let epoch = epoch.get_epoch_number();
-        if let Some(expected_epoch) = self.expected_epoch {
-            assert_eq!(epoch, expected_epoch);
-        }
-        // if let Some(expected_certificates_len) = self.expected_certificates_len {
-        //     assert!(to_pack.into_iter().count() == expected_certificates_len);
-        // }
-
-        _ = self.executed.try_send(CertifierOutput {
-            certificate: self
-                .expected_certificate
-                .clone()
-                .unwrap_or_else(|| Certificate::new_for_test(1.into(), 0)),
-            height: 0,
-            new_state: LocalNetworkStateData::default(),
-            network: 1.into(),
-        });
-
-        Ok(())
     }
 }
 
