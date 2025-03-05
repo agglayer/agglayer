@@ -6,7 +6,7 @@ license.workspace = true
 
 [dependencies]
 agglayer-grpc-types.workspace = true
-tonic.workspace = true
+tonic = { workspace = true, features = ["codegen", "prost"] }
 
 [lints]
 workspace = true
