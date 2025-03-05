@@ -74,7 +74,7 @@ pub fn main() {
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
     let multi_batch_header = old_state
-        .make_multi_batch_header(&certificate, state.get_signer(), l1_info_root)
+        .make_multi_batch_header(&certificate, state.get_signer(), l1_info_root, None)
         .unwrap();
 
     info!(
