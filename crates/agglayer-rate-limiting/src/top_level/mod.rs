@@ -3,9 +3,8 @@
 use std::sync::Arc;
 
 use parking_lot::{Mutex, MutexGuard};
-use tokio::time::Instant;
 
-use super::{component, Component, NetworkId, RateLimited, RateLimitingConfig, SlotGuard};
+use super::{NetworkId, RateLimitingConfig};
 
 /// A global rate-limiter.
 ///
@@ -22,32 +21,9 @@ impl RateLimiter {
         Self(Arc::new(Mutex::new(inner::RateLimiter::new(config))))
     }
 
-    /// Reserve rate limiting slot for `sendTx`.
-    pub fn reserve_send_tx(
-        &self,
-        network_id: NetworkId,
-        time: Instant,
-    ) -> Result<SlotGuard<component::SendTx>, RateLimited> {
-        self.reserve::<component::SendTx>(network_id, time)
-    }
-
-    /// Reserve rate limiting slot for `sendCertificate`.
-    pub fn reserve_send_certificate(
-        &self,
-        network_id: NetworkId,
-        epoch: agglayer_types::EpochNumber,
-    ) -> Result<SlotGuard<component::SendCertificate>, RateLimited> {
-        self.reserve::<component::SendCertificate>(network_id, epoch)
-    }
-
-    /// Reserve rate limiting slot for given component.
-    pub fn reserve<C: Component>(
-        &self,
-        network_id: NetworkId,
-        time: C::Instant,
-    ) -> Result<SlotGuard<C>, RateLimited> {
-        let limiter = self.lock().limiter_for(network_id);
-        limiter.reserve::<C>(time)
+    /// Get rate limiter for given network
+    pub fn limiter_for(&self, network_id: NetworkId) -> crate::local::LocalRateLimiter {
+        self.lock().limiter_for(network_id)
     }
 
     fn lock(&self) -> MutexGuard<inner::RateLimiter> {

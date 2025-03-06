@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use super::{super::LocalRateLimiter, NetworkId, RateLimitingConfig};
+use crate::{LocalRateLimiter, NetworkId, RateLimitingConfig};
 
 /// A global rate-limiter implementation.
 ///
