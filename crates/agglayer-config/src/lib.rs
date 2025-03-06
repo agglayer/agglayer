@@ -62,21 +62,27 @@ pub struct Config {
     #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     #[serde(default)]
     pub proof_signers: HashMap<u32, Address>,
+
     /// The log configuration.
     #[serde(default)]
     pub log: Log,
+
     /// The local RPC server configuration.
     #[serde(default)]
     pub rpc: RpcConfig,
+
     /// Rate limiting configuration.
     #[serde(default)]
     pub rate_limiting: RateLimitingConfig,
+
     /// The configuration for every outbound network component.
     #[serde(default)]
     pub outbound: OutboundConfig,
+
     /// The L1 configuration.
     #[serde(default)]
     pub l1: L1,
+
     /// The authentication configuration.
     #[serde(default)]
     pub auth: AuthConfig,
@@ -134,8 +140,7 @@ impl Config {
             .parent()
             .ok_or_else(|| ConfigurationError::UnableToReadConfigFile {
                 path: path.to_path_buf(),
-                source: std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                source: std::io::Error::other(
                     "Unable to determine the parent folder of the configuration file",
                 ),
             })?;
@@ -175,9 +180,14 @@ impl Config {
         }
     }
 
-    /// Get the target RPC socket address from the configuration.
-    pub fn rpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.port))
+    /// Get the target ReadRPC socket address from the configuration.
+    pub fn readrpc_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.readrpc_port))
+    }
+
+    /// Get the target gRPC socket address from the configuration.
+    pub fn grpc_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.grpc_port))
     }
 
     /// Get the admin RPC socket address from the configuration.

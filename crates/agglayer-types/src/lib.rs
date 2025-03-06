@@ -15,7 +15,6 @@ use pessimistic_proof::utils::smt::{Smt, SmtError};
 use pessimistic_proof::utils::{FromBool as _, Hashable as _};
 use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
-    imported_bridge_exit::commit_imported_bridge_exits,
     local_balance_tree::LocalBalancePath,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath},
@@ -584,12 +583,6 @@ impl LocalNetworkStateData {
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
 
-        let imported_hash = commit_imported_bridge_exits(
-            imported_bridge_exits
-                .iter()
-                .map(|(exit, _)| exit.global_index),
-        );
-
         // Check that the certificate referred to the right target
         let computed = self.exit_tree.get_root();
         if computed != certificate.new_local_exit_root {
@@ -624,7 +617,6 @@ impl LocalNetworkStateData {
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
-            imported_exits_root: Some(imported_hash),
             target: self.get_roots().into(),
             l1_info_root,
             aggchain_proof,

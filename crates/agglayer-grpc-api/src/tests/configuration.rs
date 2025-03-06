@@ -47,7 +47,7 @@ async fn timeclock_configuration() {
     let error_info = err_details.error_info().unwrap();
     assert_eq!(
         error_info.reason,
-        agglayer_grpc_types::node::v1::ConfigurationErrorKind::UnexpectedClockConfiguration
+        agglayer_grpc_types::node::v1::GetEpochConfigurationErrorKind::UnexpectedClockConfiguration
             .as_str_name()
     );
     assert_eq!(
