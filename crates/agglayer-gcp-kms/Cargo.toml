@@ -9,8 +9,4 @@ ethers.workspace = true
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 
-agglayer-config = { path = "../agglayer-config" }
-
-[features]
-default = []
-testutils = []
+agglayer-config.workspace = true

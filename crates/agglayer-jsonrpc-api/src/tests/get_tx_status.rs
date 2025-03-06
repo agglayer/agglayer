@@ -50,7 +50,7 @@ async fn check_tx_status() {
     if let std::net::IpAddr::V4(ip) = addr.ip() {
         config.rpc.host = ip;
     }
-    config.rpc.port = addr.port();
+    config.rpc.readrpc_port = addr.port();
 
     let config = Arc::new(config);
 
@@ -83,7 +83,7 @@ async fn check_tx_status() {
         .await
         .unwrap();
 
-    let listener = tokio::net::TcpListener::bind(config.rpc_addr())
+    let listener = tokio::net::TcpListener::bind(config.readrpc_addr())
         .await
         .unwrap();
     let api_server = axum::serve(listener, router);
@@ -93,7 +93,7 @@ async fn check_tx_status() {
         debug!("Node RPC shutdown requested.");
     });
 
-    let url = format!("http://{}/", config.rpc_addr());
+    let url = format!("http://{}/", config.readrpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
 
     let res: TxStatus = client
@@ -162,7 +162,7 @@ async fn check_tx_status_fail() {
         .await
         .unwrap();
 
-    let listener = tokio::net::TcpListener::bind(config.rpc_addr())
+    let listener = tokio::net::TcpListener::bind(config.readrpc_addr())
         .await
         .unwrap();
     let api_server = axum::serve(listener, router);
@@ -171,7 +171,7 @@ async fn check_tx_status_fail() {
         _ = api_server.await;
         debug!("Node RPC shutdown requested.");
     });
-    let url = format!("http://{}/", config.rpc_addr());
+    let url = format!("http://{}/", config.readrpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
 
     // Try to get status using a non-existent address

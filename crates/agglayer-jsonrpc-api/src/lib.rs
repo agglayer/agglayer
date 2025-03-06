@@ -210,7 +210,7 @@ where
         &self,
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader> {
-        Ok(self.rpc_service.get_certificate_header(certificate_id)?)
+        Ok(self.rpc_service.fetch_certificate_header(certificate_id)?)
     }
 
     async fn get_epoch_configuration(&self) -> RpcResult<EpochConfiguration> {

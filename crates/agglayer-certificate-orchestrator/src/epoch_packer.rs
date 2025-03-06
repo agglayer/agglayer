@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 #[cfg(any(test, feature = "testutils"))]
 use agglayer_storage::tests::mocks::MockPerEpochStore;
 use agglayer_storage::{
@@ -27,9 +25,6 @@ use crate::Error;
 pub trait EpochPacker: Unpin + Send + Sync + 'static {
     type PerEpochStore: PerEpochWriter + PerEpochReader;
     type Provider: JsonRpcClient;
-
-    /// Pack an epoch for settlement on the L1
-    async fn pack(&self, closing_epoch: Arc<Self::PerEpochStore>) -> Result<(), Error>;
 
     async fn transaction_exists(&self, tx_hash: H256) -> Result<bool, Error>;
 

@@ -63,10 +63,6 @@ pub enum ProofError {
          {computed}"
     )]
     InvalidImportedExitsRoot { declared: Digest, computed: Digest },
-    /// The commitment to the list of imported bridge exits should be `Some`
-    /// if and only if this list is non-empty, should be `None` otherwise.
-    #[error("Mismatch between the imported bridge exits list and its commitment.")]
-    MismatchImportedExitsRoot,
     /// The provided nullifier path is invalid.
     #[error("Invalid nullifier path.")]
     InvalidNullifierPath,

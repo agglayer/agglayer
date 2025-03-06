@@ -534,7 +534,6 @@ async fn test_collect_certificates() {
         .pending_store(pending_store.clone())
         .state_store(state_store.clone())
         .executed(check_sender)
-        .expected_epoch(1)
         .build();
 
     let mut orchestrator = CertificateOrchestrator::try_new(
@@ -602,7 +601,6 @@ async fn test_collect_certificates_after_epoch() {
         .pending_store(pending_store.clone())
         .state_store(state_store.clone())
         .executed(check_sender)
-        .expected_epoch(1)
         .build();
 
     let mut orchestrator = CertificateOrchestrator::try_new(
@@ -672,7 +670,6 @@ async fn test_collect_certificates_when_empty() {
         .pending_store(pending_store.clone())
         .state_store(state_store.clone())
         .executed(check_sender)
-        .expected_epoch(1)
         .build();
 
     let mut orchestrator = CertificateOrchestrator::try_new(
@@ -741,7 +738,6 @@ fn check() -> (
         .pending_store(pending_store.clone())
         .state_store(state_store.clone())
         .executed(check_sender)
-        .expected_epoch(1)
         .build();
 
     ((pending_store, state_store), check_receiver, check)
@@ -798,7 +794,6 @@ pub(crate) fn create_orchestrator_mock(
                 let mut epoch_packer = MockEpochPacker::default();
 
                 epoch_packer.expect_settle_certificate().never();
-                epoch_packer.expect_pack().never();
 
                 epoch_packer
             }),
@@ -827,7 +822,6 @@ pub(crate) struct Check {
     #[allow(unused)]
     expected_proof: Option<Proof>,
     executed: mpsc::Sender<CertifierOutput>,
-    expected_epoch: Option<u64>,
 }
 
 #[buildstructor::buildstructor]
@@ -837,7 +831,6 @@ impl Check {
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         executed: mpsc::Sender<CertifierOutput>,
-        expected_epoch: Option<u64>,
     ) -> Self {
         Self {
             state_store,
@@ -845,7 +838,6 @@ impl Check {
             executed,
             expected_certificate: None,
             expected_proof: None,
-            expected_epoch,
         }
     }
 
@@ -896,28 +888,6 @@ impl EpochPacker for Check {
         height: Height,
     ) -> Result<(NetworkId, SettledCertificate), Error> {
         Ok((network_id, SettledCertificate(certificate_id, height, 0, 0)))
-    }
-
-    async fn pack(&self, epoch: Arc<Self::PerEpochStore>) -> Result<(), Error> {
-        let epoch = epoch.get_epoch_number();
-        if let Some(expected_epoch) = self.expected_epoch {
-            assert_eq!(epoch, expected_epoch);
-        }
-        // if let Some(expected_certificates_len) = self.expected_certificates_len {
-        //     assert!(to_pack.into_iter().count() == expected_certificates_len);
-        // }
-
-        _ = self.executed.try_send(CertifierOutput {
-            certificate: self
-                .expected_certificate
-                .clone()
-                .unwrap_or_else(|| Certificate::new_for_test(1.into(), 0)),
-            height: 0,
-            new_state: LocalNetworkStateData::default(),
-            network: 1.into(),
-        });
-
-        Ok(())
     }
 }
 

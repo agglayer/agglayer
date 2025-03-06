@@ -392,28 +392,6 @@ where
         }
     }
 
-    async fn pack(&self, closing_epoch: Arc<Self::PerEpochStore>) -> Result<(), Error> {
-        let epoch_number = closing_epoch.get_epoch_number();
-        debug!("Start the settlement of the epoch {}", epoch_number);
-
-        // No aggregation for now, we settle each PP individually
-        let _result: Result<(), Error> = tokio::task::spawn_blocking(move || {
-            closing_epoch.start_packing()?;
-
-            Ok(())
-        })
-        .await
-        // TODO: Handle error in a better way
-        .map_err(|_| {
-            Error::InternalError(format!(
-                "Unable to join the packing task for {}",
-                epoch_number
-            ))
-        })?;
-
-        Ok(())
-    }
-
     async fn transaction_exists(&self, tx_hash: H256) -> Result<bool, Error> {
         self.l1_rpc
             .transaction_exists(tx_hash)
