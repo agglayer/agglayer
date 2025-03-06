@@ -48,7 +48,7 @@ impl TryFrom<Certificate> for v1::Certificate {
                 .collect(),
             aggchain_data: Some(value.aggchain_data.try_into()?),
             metadata: Some(value.metadata.into()),
-            custom_chain_data: Default::default(), // TODO: should be added to Certificate
+            custom_chain_data: value.custom_chain_data.into(),
         })
     }
 }

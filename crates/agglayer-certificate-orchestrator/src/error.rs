@@ -23,8 +23,7 @@ pub enum CertificationError {
     L1InfoRootNotFound(CertificateId, u32),
     #[error("proof verification failed")]
     ProofVerificationFailed { source: ProofVerificationError },
-    #[error("prover execution failed: {source}")]
-    ProverExecutionFailed { source: ProofError },
+
     #[error("native execution failed: {source:?}")]
     NativeExecutionFailed { source: ProofError },
     #[error("Type error: {source}")]
@@ -35,12 +34,27 @@ pub enum CertificationError {
     Deserialize { source: bincode::Error },
     #[error("internal error: {0}")]
     InternalError(String),
+    #[error("prover failed")]
+    ProverFailed(String),
+    #[error("prover returned unspecified error")]
+    ProverReturnedUnspecifiedError,
+    #[error("prover execution failed: {source}")]
+    ProverExecutionFailed {
+        #[source]
+        source: ProofError,
+    },
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
     #[error("rollup contract address not found")]
-    RollupContractAddressNotFound { source: L1RpcError },
+    RollupContractAddressNotFound {
+        #[source]
+        source: L1RpcError,
+    },
     #[error("Unable to find aggchain vkey")]
-    UnableToFindAggchainVkey { source: L1RpcError },
+    UnableToFindAggchainVkey {
+        #[source]
+        source: L1RpcError,
+    },
 }
 
 #[derive(thiserror::Error, Debug)]

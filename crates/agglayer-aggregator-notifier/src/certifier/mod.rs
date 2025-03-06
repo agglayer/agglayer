@@ -169,7 +169,7 @@ where
                             CertificationError::InternalError("Unable to execute prover".into())
                         }
                         ErrorKind::ProverFailed => {
-                            CertificationError::InternalError(source_error.message().to_string())
+                            CertificationError::ProverFailed(source_error.message().to_string())
                         }
                         ErrorKind::ProofVerificationFailed => {
                             let proof_error: Result<
@@ -200,7 +200,7 @@ where
 
                             match proof_error {
                                 Ok(error) => {
-                                    CertificationError::NativeExecutionFailed { source: error }
+                                    CertificationError::ProverExecutionFailed { source: error }
                                 }
                                 Err(_source) => {
                                     warn!(

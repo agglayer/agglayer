@@ -458,8 +458,10 @@ where
                     "Error during certification process of {certificate_id}: {}", error
                 );
                 let error: CertificateStatusError = match error {
-                    CertificationError::CertificateNotFound(_network, _height) => {
-                        CertificateStatusError::InternalError(error.to_string())
+                    CertificationError::CertificateNotFound(network, height) => {
+                        CertificateStatusError::InternalError(format!(
+                            "Certificate not found for network {network} at height {height}"
+                        ))
                     }
                     CertificationError::TrustedSequencerNotFound(network) => {
                         CertificateStatusError::TrustedSequencerNotFound(network)
@@ -484,64 +486,46 @@ where
 
                     CertificationError::Types { source } => source.into(),
 
-                    CertificationError::Storage(error) => {
-                        let error = format!(
+                    CertificationError::Storage(source) => {
+                        let error_msg = format!(
                             "Storage error happened in the certification process of \
-                             {certificate_id}: {:?}",
-                            error
+                             {certificate_id}",
                         );
-                        warn!(hash = certificate_id.to_string(), error);
+                        warn!(hash = certificate_id.to_string(), error = ?source, error_msg);
+                        let error = anyhow::Error::from(source).context(error_msg);
 
-                        CertificateStatusError::InternalError(error)
+                        CertificateStatusError::InternalError(format!("{error:#}"))
                     }
                     CertificationError::Serialize { source } => {
-                        let error = format!(
+                        let error_msg = format!(
                             "Serialization error happened in the certification process of \
-                             {certificate_id}: {:?}",
-                            source
+                             {certificate_id}",
                         );
-                        warn!(hash = certificate_id.to_string(), error);
+                        warn!(hash = certificate_id.to_string(), error = ?source, error_msg);
+                        let error = anyhow::Error::from(source).context(error_msg);
 
-                        CertificateStatusError::InternalError(error)
+                        CertificateStatusError::InternalError(format!("{error:#}"))
                     }
                     CertificationError::Deserialize { source } => {
-                        let error = format!(
+                        let error_msg = format!(
                             "Deserialization error happened in the certification process of \
-                             {certificate_id}: {:?}",
-                            source
+                             {certificate_id}",
                         );
-                        warn!(hash = certificate_id.to_string(), error);
-                        CertificateStatusError::InternalError(error)
+                        warn!(hash = certificate_id.to_string(), error = ?source, error_msg);
+                        let error = anyhow::Error::from(source).context(error_msg);
+
+                        CertificateStatusError::InternalError(format!("{error:#}"))
                     }
 
-                    CertificationError::RollupContractAddressNotFound { source } => {
-                        let error = format!(
+                    error => {
+                        let error_msg = format!(
                             "Internal error happened in the certification process of \
-                             {certificate_id}: Aggchain Rollup contract address not found: \
-                             {source:?}",
+                             {certificate_id}"
                         );
-                        warn!(hash = certificate_id.to_string(), error);
+                        warn!(hash = certificate_id.to_string(), ?error, error_msg);
+                        let error = anyhow::Error::from(error).context(error_msg);
 
-                        CertificateStatusError::InternalError(error)
-                    }
-                    CertificationError::UnableToFindAggchainVkey { source } => {
-                        let error = format!(
-                            "Internal error happened in the certification process of \
-                             {certificate_id}: Aggchain vkey not found: {source:?}",
-                        );
-                        warn!(hash = certificate_id.to_string(), error);
-
-                        CertificateStatusError::InternalError(error)
-                    }
-                    CertificationError::InternalError(error) => {
-                        let error = format!(
-                            "Internal error happened in the certification process of \
-                             {certificate_id}: {}",
-                            error
-                        );
-                        warn!(hash = certificate_id.to_string(), error);
-
-                        CertificateStatusError::InternalError(error)
+                        CertificateStatusError::InternalError(format!("{error:#}"))
                     }
                 };
 
