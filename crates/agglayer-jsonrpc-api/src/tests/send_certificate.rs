@@ -17,7 +17,7 @@ async fn send_certificate_method_can_be_called_and_succeed() {
 
     let mut context = TestContext::new_with_config(config).await;
 
-    let url = format!("http://{}/", context.config.rpc_addr());
+    let url = format!("http://{}/", context.config.readrpc_addr());
     let client = HttpClientBuilder::default().build(url).unwrap();
     let _: CertificateId = client
         .request(

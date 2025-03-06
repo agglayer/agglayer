@@ -103,9 +103,11 @@ pub async fn start_agglayer(
 
     let key_path = config_path.join(uuid);
 
-    let addr = next_available_addr();
+    let grpc_addr = next_available_addr();
+    let readrpc_addr = next_available_addr();
     let admin_addr = next_available_addr();
-    config.rpc.port = addr.port();
+    config.rpc.grpc_port = grpc_addr.port();
+    config.rpc.readrpc_port = readrpc_addr.port();
     config.rpc.admin_port = admin_addr.port();
 
     config.telemetry.addr = next_available_addr();
@@ -138,7 +140,7 @@ pub async fn start_agglayer(
         }
         _ = shutdown.send(());
     });
-    let url = format!("ws://{}/", config.rpc_addr());
+    let url = format!("ws://{}/", config.readrpc_addr());
 
     let mut interval = tokio::time::interval(Duration::from_secs(10));
     let mut max_attempts = 20;
