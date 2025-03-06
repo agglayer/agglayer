@@ -7,10 +7,12 @@ use tracing::warn;
 
 #[cfg(target_os = "zkvm")]
 use crate::aggchain_proof::AggchainProofPublicValues;
+#[cfg(target_os = "zkvm")]
+use crate::imported_bridge_exit::commit_imported_bridge_exits;
 use crate::{
     aggchain_proof::AggchainData,
     bridge_exit::{L1_ETH, L1_NETWORK_ID},
-    imported_bridge_exit::{commit_imported_bridge_exits, Error},
+    imported_bridge_exit::Error,
     keccak::digest::Digest,
     local_balance_tree::LocalBalanceTree,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
@@ -101,25 +103,6 @@ impl NetworkState {
             if new_balances.insert(*k, U512::from(v.0)).is_some() {
                 return Err(ProofError::DuplicateTokenBalanceProof(*k));
             }
-        }
-
-        // Check batch_header.imported_exits_root
-        let imported_exits_root = commit_imported_bridge_exits(
-            multi_batch_header
-                .imported_bridge_exits
-                .iter()
-                .map(|(exit, _)| exit.global_index),
-        );
-
-        if let Some(batch_imported_exits_root) = multi_batch_header.imported_exits_root {
-            if imported_exits_root != batch_imported_exits_root {
-                return Err(ProofError::InvalidImportedExitsRoot {
-                    declared: batch_imported_exits_root,
-                    computed: imported_exits_root,
-                });
-            }
-        } else if !multi_batch_header.imported_bridge_exits.is_empty() {
-            return Err(ProofError::MismatchImportedExitsRoot);
         }
 
         // Apply the imported bridge exits
