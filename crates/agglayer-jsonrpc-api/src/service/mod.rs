@@ -64,7 +64,8 @@ where
         let guard = self
             .kernel
             .rate_limiter()
-            .reserve_send_tx(tx.tx.rollup_id, tokio::time::Instant::now())?;
+            .limiter_for(tx.tx.rollup_id)
+            .reserve_send_tx(tokio::time::Instant::now())?;
 
         agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
 
