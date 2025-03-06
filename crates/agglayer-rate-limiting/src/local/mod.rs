@@ -19,7 +19,8 @@
 
 use std::sync::Arc;
 
-use agglayer_config::rate_limiting::{EpochRateLimit, NetworkRateLimitingConfig};
+use agglayer_config::rate_limiting::NetworkRateLimitingConfig;
+use agglayer_types::EpochNumber;
 use parking_lot::Mutex;
 
 mod inner;
@@ -29,6 +30,7 @@ mod state;
 
 pub use inner::{component, Component, RateLimited};
 pub use slot_guard::SlotGuard;
+use tokio::time::Instant;
 
 /// Rate limiter state for single network / rollup.
 pub struct LocalRateLimiter(Arc<Mutex<inner::LocalRateLimiter>>);
@@ -50,5 +52,21 @@ impl LocalRateLimiter {
         let mut this = self.0.lock();
         let slot = this.reserve::<C>(time)?;
         Ok(SlotGuard::new(self, slot))
+    }
+
+    /// Reserve rate limiting slot for `sendTx`.
+    pub fn reserve_send_tx(
+        &self,
+        time: Instant,
+    ) -> Result<SlotGuard<component::SendTx>, RateLimited> {
+        self.reserve::<component::SendTx>(time)
+    }
+
+    /// Reserve a slot for `sendCertificate`.
+    pub fn reserve_send_certificate(
+        &self,
+        epoch: EpochNumber,
+    ) -> Result<SlotGuard<component::SendCertificate>, RateLimited> {
+        self.reserve::<component::SendCertificate>(epoch)
     }
 }

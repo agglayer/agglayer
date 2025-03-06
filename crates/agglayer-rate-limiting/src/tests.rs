@@ -11,7 +11,8 @@ use super::{RateLimited, RateLimiter, RateLimitingConfig};
 
 impl RateLimiter {
     fn limit_send_tx(&self, network_id: NetworkId, time: Instant) -> Result<(), RateLimited> {
-        self.reserve_send_tx(network_id, time)
+        self.limiter_for(network_id)
+            .reserve_send_tx(time)
             .map(|guard| guard.record(time))
     }
 }
