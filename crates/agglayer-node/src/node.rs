@@ -290,16 +290,21 @@ impl Node {
 
         let health_router = api::rest::health_router();
 
-        let router = axum::Router::new()
+        let readrpc_router = axum::Router::new()
             .merge(health_router)
-            .merge(json_rpc_router)
-            .merge(grpc_router);
+            .merge(json_rpc_router);
 
-        let listener = tokio::net::TcpListener::bind(config.rpc_addr()).await?;
+        let readrpc_listener = tokio::net::TcpListener::bind(config.readrpc_addr()).await?;
+        let grpc_listener = tokio::net::TcpListener::bind(config.grpc_addr()).await?;
         let admin_listener = tokio::net::TcpListener::bind(config.admin_rpc_addr()).await?;
-        info!(on = %config.rpc_addr(), "API listening");
+        info!(on = %config.readrpc_addr(), "ReadRPC listening");
+        info!(on = %config.grpc_addr(), "gRPC listening");
+        info!(on = %config.admin_rpc_addr(), "AdminRPC listening");
 
-        let api_server = axum::serve(listener, router)
+        let readrpc_server = axum::serve(readrpc_listener, readrpc_router)
+            .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
+
+        let grpc_server = axum::serve(grpc_listener, grpc_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
         let admin_server = axum::serve(admin_listener, admin_router)
@@ -307,7 +312,8 @@ impl Node {
 
         let rpc_handle = tokio::spawn(async move {
             tokio::select! {
-                _ = api_server => {},
+                _ = readrpc_server => {},
+                _ = grpc_server => {},
                 _ = admin_server => {},
                 _ = cancellation_token.cancelled() => {
                     debug!("Node RPC shutdown requested.");
