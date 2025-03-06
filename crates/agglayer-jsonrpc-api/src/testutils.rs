@@ -65,12 +65,12 @@ impl TestContext {
 
         let admin_router = raw_rpc.admin_rpc.start().await.unwrap();
 
-        let api_url = format!("http://{}/", raw_rpc.config.rpc_addr());
+        let api_url = format!("http://{}/", raw_rpc.config.readrpc_addr());
         let admin_url = format!("http://{}/", raw_rpc.config.admin_rpc_addr());
         let client = HttpClientBuilder::default().build(api_url).unwrap();
         let admin_client = HttpClientBuilder::default().build(admin_url).unwrap();
 
-        let listener_api = tokio::net::TcpListener::bind(raw_rpc.config.rpc_addr())
+        let listener_api = tokio::net::TcpListener::bind(raw_rpc.config.readrpc_addr())
             .await
             .unwrap();
 
@@ -120,7 +120,7 @@ impl TestContext {
         if let IpAddr::V4(ip) = addr.ip() {
             config.rpc.host = ip;
         }
-        config.rpc.port = addr.port();
+        config.rpc.readrpc_port = addr.port();
         config.rpc.admin_port = admin_addr.port();
 
         let config = Arc::new(config);
