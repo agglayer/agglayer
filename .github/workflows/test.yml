@@ -29,6 +29,20 @@ jobs:
         uses: actions/checkout@v4
       - uses: ./.github/actions/unit-test
 
+  isolated-feature-checks:
+    name: 'Isolated feature checks'
+    runs-on: ubuntu-latest-16-cores
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: protoc,cargo-hack
+      - run: cargo hack --each-feature --all check --all-targets
+
   build_contracts_image:
     runs-on: ubuntu-latest-16-cores
     if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
@@ -143,8 +157,9 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - uses: taiki-e/install-action@nextest
-      - uses: taiki-e/install-action@protoc
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest,protoc,cargo-hack
 
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1

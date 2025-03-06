@@ -21,15 +21,17 @@ http.workspace = true
 prost.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tonic.workspace = true
+tonic = { workspace = true, features = ["zstd"] }
 tonic-types.workspace = true
 tonic-reflection = "0.12.3"
 tower = { workspace = true }
 tracing.workspace = true
-uuid = "1.15"
+uuid = { version = "1.15", features = ["v4"] }
 
 [dev-dependencies]
 agglayer-grpc-client.workspace = true
+agglayer-storage = { workspace = true, features = ["testutils"] }
+
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "sync"] }
 
 [lints]

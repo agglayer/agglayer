@@ -13,7 +13,6 @@ pub use error::Error;
 pub use signer::KmsSigner;
 
 #[derive(Deserialize, Debug)]
-#[cfg_attr(any(test, feature = "testutils"), derive(Default))]
 pub struct KMS {
     /// The L1 chain id.
     chain_id: u64,
