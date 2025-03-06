@@ -164,6 +164,9 @@ pub enum CertificateStatusError {
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
 
+    #[error("Last pessimistic root not found for network: {0}")]
+    LastPessimisticRootNotFound(NetworkId),
+
     #[error("Internal error")]
     InternalError(String),
 
@@ -620,6 +623,8 @@ impl LocalNetworkStateData {
             target: self.get_roots().into(),
             l1_info_root,
             aggchain_proof,
+            height: certificate.height,
+            prev_pessimistic_root: Default::default(),
         })
     }
 

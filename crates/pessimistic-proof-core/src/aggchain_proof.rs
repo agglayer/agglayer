@@ -13,7 +13,7 @@ use sp1_zkvm::lib::utils::words_to_bytes_le;
 use crate::keccak::{digest::Digest, keccak256_combine};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]
-pub enum AggchainType {
+pub enum ConsensusType {
     ECDSA = 0,
     Generic = 1,
 }
@@ -45,14 +45,14 @@ impl AggchainData {
     pub fn aggchain_hash(&self) -> Digest {
         match &self {
             AggchainData::ECDSA { signer, .. } => keccak256_combine([
-                &(AggchainType::ECDSA as u32).to_be_bytes(),
+                &(ConsensusType::ECDSA as u32).to_be_bytes(),
                 signer.as_slice(),
             ]),
             AggchainData::Generic {
                 aggchain_params,
                 aggchain_vkey,
             } => keccak256_combine([
-                &(AggchainType::Generic as u32).to_be_bytes(),
+                &(ConsensusType::Generic as u32).to_be_bytes(),
                 words_to_bytes_le(aggchain_vkey).as_slice(),
                 aggchain_params.as_slice(),
             ]),
