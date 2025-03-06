@@ -65,6 +65,7 @@ async fn from_pending_to_settle() {
                         .l1_info_root()
                         .expect("Failed to get L1 info root")
                         .unwrap_or_default(),
+                    None,
                 )
                 .expect("Failed to apply certificate");
 
@@ -171,6 +172,7 @@ async fn from_proven_to_settle() {
                         .l1_info_root()
                         .expect("Failed to get L1 info root")
                         .unwrap_or_default(),
+                    None,
                 )
                 .expect("Failed to apply certificate");
 
@@ -272,7 +274,9 @@ async fn from_candidate_to_settle() {
             let initial = LocalNetworkState::from(state.clone());
             let l1_info_root = cert.l1_info_root().unwrap().unwrap_or_default();
 
-            let batch = state.apply_certificate(cert, signer, l1_info_root).unwrap();
+            let batch = state
+                .apply_certificate(cert, signer, l1_info_root, None)
+                .unwrap();
 
             Ok((batch, initial))
         });
