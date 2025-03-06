@@ -19,7 +19,8 @@ const DEFAULT_ADMIN_PORT: u16 = 9091;
 #[serde(rename_all = "kebab-case")]
 pub struct RpcConfig {
     /// The default port for the local gRPC server.
-    /// Overridden by `AGGLAYER_GRPC_PORT` environment variable, defaults to 9089.
+    /// Overridden by `AGGLAYER_GRPC_PORT` environment variable, defaults to
+    /// 9089.
     #[serde(
         default = "default_grpc_port",
         deserialize_with = "deserialize_grpc_port"
@@ -27,7 +28,8 @@ pub struct RpcConfig {
     pub grpc_port: u16,
 
     /// The default port for the local ReadRPC server.
-    /// Overridden by `AGGLAYER_READRPC_PORT` environment variable, defaults to 9090.
+    /// Overridden by `AGGLAYER_READRPC_PORT` environment variable, defaults to
+    /// 9090.
     #[serde(
         default = "default_readrpc_port",
         deserialize_with = "deserialize_readrpc_port"
@@ -35,7 +37,8 @@ pub struct RpcConfig {
     pub readrpc_port: u16,
 
     /// The default port for the local AdminRPC server.
-    /// Overridden by `AGGLAYER_ADMIN_PORT` environment variable, defaults to 9091.
+    /// Overridden by `AGGLAYER_ADMIN_PORT` environment variable, defaults to
+    /// 9091.
     #[serde(
         default = "default_admin_port",
         deserialize_with = "deserialize_admin_port"
