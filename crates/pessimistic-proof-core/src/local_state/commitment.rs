@@ -80,9 +80,9 @@ pub enum PPRootVersion {
 
 /// The parameters which composes the signature.
 pub struct SignatureCommitment {
-    pub(crate) new_local_exit_root: Digest,
-    pub(crate) commit_imported_bridge_exits: Digest,
-    pub(crate) height: u64,
+    pub new_local_exit_root: Digest,
+    pub commit_imported_bridge_exits: Digest,
+    pub height: u64,
 }
 
 impl SignatureCommitment {
