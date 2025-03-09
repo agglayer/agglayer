@@ -3,13 +3,11 @@ pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
 #[cfg(not(target_os = "zkvm"))]
 use tracing::warn;
 
 #[cfg(target_os = "zkvm")]
 use crate::aggchain_proof::AggchainProofPublicValues;
-
 use crate::{
     aggchain_proof::AggchainData,
     bridge_exit::{NetworkId, TokenInfo},
@@ -56,7 +54,8 @@ pub enum ProofError {
         computed_v2: Digest,
         computed_v3: Digest,
     },
-    /// The initial pessimistic root values are non-zero even though an empty pp_root was provided.
+    /// The initial pessimistic root values are non-zero even though an empty
+    /// pp_root was provided.
     #[error("Empty pp_root provided but internal fields are non-zero: {0}")]
     InvalidInitialPessimisticRootValues(String),
     /// The new local exit root declared by the chain does not match the

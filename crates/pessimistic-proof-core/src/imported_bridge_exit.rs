@@ -21,7 +21,7 @@ pub struct L1InfoTreeLeafInner {
 
 impl L1InfoTreeLeafInner {
     pub fn hash(&self) -> Digest {
-        keccak256_combine(&[
+        keccak256_combine([
             keccak256_combine([self.mer, self.rer]).as_slice(),
             self.block_hash.as_slice(),
             &self.timestamp.to_be_bytes(),

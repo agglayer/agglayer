@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bridge_exit::NetworkId,
     keccak::{digest::Digest, keccak256_combine},
-    ProofError,
     proof::EMPTY_LER,
+    ProofError,
 };
 
 /// The state commitment of one [`super::NetworkState`].
@@ -38,13 +38,12 @@ impl PessimisticRoot {
             if self.balance_root != EMPTY_LER
                 || self.nullifier_root != EMPTY_LER
                 || self.ler_leaf_count != 0
-                || self.height != 0 {
+                || self.height != 0
+            {
                 return Err(ProofError::InvalidInitialPessimisticRootValues(
                     "Empty pp_root provided but internal fields are non-zero".to_string(),
                 ));
             }
-            // Expected empty root constant:
-            // pub const EMPTY_LER: Digest = Digest(hex!("27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"))
             return Ok(PPRootVersion::V2);
         }
 
