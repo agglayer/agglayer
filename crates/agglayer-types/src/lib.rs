@@ -606,7 +606,6 @@ impl LocalNetworkStateData {
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
             origin_network: *certificate.network_id,
-            prev_local_exit_root: certificate.prev_local_exit_root,
             bridge_exits: certificate
                 .bridge_exits
                 .iter()
@@ -618,9 +617,6 @@ impl LocalNetworkStateData {
                 .map(|(ib, ex)| (ib.into(), ex))
                 .collect(),
             balances_proofs,
-            prev_balance_root,
-            prev_nullifier_root,
-            target: self.get_roots().into(),
             l1_info_root,
             aggchain_proof,
             height: certificate.height,

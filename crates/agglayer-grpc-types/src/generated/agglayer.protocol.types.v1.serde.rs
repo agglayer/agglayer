@@ -2057,9 +2057,14 @@ impl serde::Serialize for L1InfoTreeLeaf {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if self.global_exit_root.is_some() {
+
+        if self.rer.is_some() {
             len += 1;
         }
+        if self.mer.is_some() {
+            len += 1;
+        }
+       
         if self.block_hash.is_some() {
             len += 1;
         }
@@ -2067,9 +2072,13 @@ impl serde::Serialize for L1InfoTreeLeaf {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.protocol.types.v1.L1InfoTreeLeaf", len)?;
-        if let Some(v) = self.global_exit_root.as_ref() {
-            struct_ser.serialize_field("globalExitRoot", v)?;
+        if let Some(v) = self.rer.as_ref() {
+            struct_ser.serialize_field("rer", v)?;
         }
+        if let Some(v) = self.mer.as_ref() {
+            struct_ser.serialize_field("mer", v)?;
+        }
+
         if let Some(v) = self.block_hash.as_ref() {
             struct_ser.serialize_field("blockHash", v)?;
         }
@@ -2088,8 +2097,8 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeaf {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "global_exit_root",
-            "globalExitRoot",
+            "rer",
+            "mer",
             "block_hash",
             "blockHash",
             "timestamp",
@@ -2097,7 +2106,8 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeaf {
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
-            GlobalExitRoot,
+            Rer,
+            Mer,
             BlockHash,
             Timestamp,
         }
@@ -2121,7 +2131,8 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeaf {
                         E: serde::de::Error,
                     {
                         match value {
-                            "globalExitRoot" | "global_exit_root" => Ok(GeneratedField::GlobalExitRoot),
+                            "rer" => Ok(GeneratedField::Rer),
+                            "mer" => Ok(GeneratedField::Mer),
                             "blockHash" | "block_hash" => Ok(GeneratedField::BlockHash),
                             "timestamp" => Ok(GeneratedField::Timestamp),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
@@ -2143,17 +2154,25 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeaf {
                 where
                     V: serde::de::MapAccess<'de>,
             {
-                let mut global_exit_root__ = None;
+                let mut rer__ = None;
+                let mut mer__ = None;
                 let mut block_hash__ = None;
                 let mut timestamp__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
-                        GeneratedField::GlobalExitRoot => {
-                            if global_exit_root__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("globalExitRoot"));
+                        GeneratedField::Rer => {
+                            if rer__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rer"));
                             }
-                            global_exit_root__ = map_.next_value()?;
+                            rer__ = map_.next_value()?;
                         }
+                        GeneratedField::Mer => {
+                            if mer__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("mer"));
+                            }
+                            mer__ = map_.next_value()?;
+                        }
+
                         GeneratedField::BlockHash => {
                             if block_hash__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("blockHash"));
@@ -2171,7 +2190,8 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeaf {
                     }
                 }
                 Ok(L1InfoTreeLeaf {
-                    global_exit_root: global_exit_root__,
+                    rer: rer__,
+                    mer: mer__,
                     block_hash: block_hash__,
                     timestamp: timestamp__.unwrap_or_default(),
                 })
@@ -2191,12 +2211,7 @@ impl serde::Serialize for L1InfoTreeLeafWithContext {
         if self.l1_info_tree_index != 0 {
             len += 1;
         }
-        if self.rer.is_some() {
-            len += 1;
-        }
-        if self.mer.is_some() {
-            len += 1;
-        }
+    
         if self.inner.is_some() {
             len += 1;
         }
@@ -2204,12 +2219,7 @@ impl serde::Serialize for L1InfoTreeLeafWithContext {
         if self.l1_info_tree_index != 0 {
             struct_ser.serialize_field("l1InfoTreeIndex", &self.l1_info_tree_index)?;
         }
-        if let Some(v) = self.rer.as_ref() {
-            struct_ser.serialize_field("rer", v)?;
-        }
-        if let Some(v) = self.mer.as_ref() {
-            struct_ser.serialize_field("mer", v)?;
-        }
+     
         if let Some(v) = self.inner.as_ref() {
             struct_ser.serialize_field("inner", v)?;
         }
@@ -2225,16 +2235,12 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeafWithContext {
         const FIELDS: &[&str] = &[
             "l1_info_tree_index",
             "l1InfoTreeIndex",
-            "rer",
-            "mer",
             "inner",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             L1InfoTreeIndex,
-            Rer,
-            Mer,
             Inner,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -2258,8 +2264,6 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeafWithContext {
                     {
                         match value {
                             "l1InfoTreeIndex" | "l1_info_tree_index" => Ok(GeneratedField::L1InfoTreeIndex),
-                            "rer" => Ok(GeneratedField::Rer),
-                            "mer" => Ok(GeneratedField::Mer),
                             "inner" => Ok(GeneratedField::Inner),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
@@ -2281,8 +2285,6 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeafWithContext {
                     V: serde::de::MapAccess<'de>,
             {
                 let mut l1_info_tree_index__ = None;
-                let mut rer__ = None;
-                let mut mer__ = None;
                 let mut inner__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
@@ -2294,18 +2296,6 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeafWithContext {
                                 Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
                             ;
                         }
-                        GeneratedField::Rer => {
-                            if rer__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("rer"));
-                            }
-                            rer__ = map_.next_value()?;
-                        }
-                        GeneratedField::Mer => {
-                            if mer__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("mer"));
-                            }
-                            mer__ = map_.next_value()?;
-                        }
                         GeneratedField::Inner => {
                             if inner__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("inner"));
@@ -2316,8 +2306,6 @@ impl<'de> serde::Deserialize<'de> for L1InfoTreeLeafWithContext {
                 }
                 Ok(L1InfoTreeLeafWithContext {
                     l1_info_tree_index: l1_info_tree_index__.unwrap_or_default(),
-                    rer: rer__,
-                    mer: mer__,
                     inner: inner__,
                 })
             }
