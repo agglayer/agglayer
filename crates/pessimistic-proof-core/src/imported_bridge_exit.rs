@@ -13,15 +13,16 @@ use crate::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L1InfoTreeLeafInner {
-    pub global_exit_root: Digest,
+    pub rer: Digest,
+    pub mer: Digest,
     pub block_hash: Digest,
     pub timestamp: u64,
 }
 
 impl L1InfoTreeLeafInner {
     pub fn hash(&self) -> Digest {
-        keccak256_combine([
-            self.global_exit_root.as_slice(),
+        keccak256_combine(&[
+            keccak256_combine([self.mer, self.rer]).as_slice(),
             self.block_hash.as_slice(),
             &self.timestamp.to_be_bytes(),
         ])
@@ -31,8 +32,6 @@ impl L1InfoTreeLeafInner {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L1InfoTreeLeaf {
     pub l1_info_tree_index: u32,
-    pub rer: Digest,
-    pub mer: Digest,
     pub inner: L1InfoTreeLeafInner,
 }
 
@@ -127,7 +126,7 @@ impl ClaimFromMainnet {
         }
 
         // Check the consistency on the declared MER
-        if self.proof_leaf_mer.root != self.l1_leaf.mer {
+        if self.proof_leaf_mer.root != self.l1_leaf.inner.mer {
             return Err(Error::MismatchMER);
         }
 
@@ -173,7 +172,7 @@ impl ClaimFromRollup {
         }
 
         // Check the consistency on the declared RER
-        if self.proof_ler_rer.root != self.l1_leaf.rer {
+        if self.proof_ler_rer.root != self.l1_leaf.inner.rer {
             return Err(Error::MismatchRER);
         }
 
