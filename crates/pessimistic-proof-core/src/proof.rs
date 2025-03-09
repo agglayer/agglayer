@@ -45,6 +45,9 @@ pub enum ProofError {
         computed_v2: Digest,
         computed_v3: Digest,
     },
+    /// The initial pessimistic root values are non-zero even though an empty pp_root was provided.
+    #[error("Empty pp_root provided but internal fields are non-zero: {0}")]
+    InvalidInitialPessimisticRootValues(String),
     /// The new local exit root declared by the chain does not match the
     /// one computed by the prover.
     #[error("Invalid new local exit root. declared: {declared}, computed: {computed}")]
@@ -160,54 +163,38 @@ pub fn generate_pessimistic_proof(
     initial_network_state: NetworkState,
     batch_header: &MultiBatchHeader<Keccak256Hasher>,
 ) -> Result<PessimisticProofOutput, ProofError> {
-    let target_pp_root_version = initial_network_state.verify_consensus(batch_header)?;
+    // get the initial state commitment
+    let initial_state_commitment = initial_network_state.get_state_commitment();
 
-    let new_pessimistic_root = {
-        let mut network_state = initial_network_state;
-        let computed_target = network_state.apply_batch_header(batch_header)?;
+    // apply state changes
+    let mut network_state = initial_network_state;
+    let final_state_commitment = network_state.apply_batch_header(batch_header)?;
 
-        if computed_target.exit_root != batch_header.target.exit_root {
-            return Err(ProofError::InvalidNewLocalExitRoot {
-                declared: batch_header.target.exit_root,
-                computed: computed_target.exit_root,
-            });
-        }
+    // verify the consensus
+    let target_pp_root_version =
+        network_state.verify_consensus(batch_header, &initial_state_commitment)?;
 
-        if computed_target.balance_root != batch_header.target.balance_root {
-            return Err(ProofError::InvalidNewBalanceRoot {
-                declared: batch_header.target.balance_root,
-                computed: computed_target.balance_root,
-            });
-        }
-
-        if computed_target.nullifier_root != batch_header.target.nullifier_root {
-            return Err(ProofError::InvalidNewNullifierRoot {
-                declared: batch_header.target.nullifier_root,
-                computed: computed_target.nullifier_root,
-            });
-        }
-
-        let Some(height) = batch_header.height.checked_add(1) else {
-            return Err(ProofError::HeightOverflow);
-        };
-
-        PessimisticRoot {
-            balance_root: network_state.balance_tree.root,
-            nullifier_root: network_state.nullifier_tree.root,
-            ler_leaf_count: network_state.exit_tree.leaf_count,
-            height,
-            origin_network: batch_header.origin_network,
-        }
-        .compute_pp_root(target_pp_root_version)
+    let Some(height) = batch_header.height.checked_add(1) else {
+        return Err(ProofError::HeightOverflow);
     };
+
+    // Compute the new pessimistic root
+    let new_pessimistic_root = PessimisticRoot {
+        balance_root: final_state_commitment.balance_root,
+        nullifier_root: final_state_commitment.nullifier_root,
+        ler_leaf_count: final_state_commitment.ler_leaf_count,
+        height,
+        origin_network: batch_header.origin_network,
+    }
+    .compute_pp_root(target_pp_root_version);
 
     // NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
     // empty roots of the different trees involved. Therefore, we do
     // one mapping of empty tree hash <> 0x00..0 on the public inputs.
-    let prev_local_exit_root = if batch_header.prev_local_exit_root == EMPTY_LER {
+    let prev_local_exit_root = if initial_state_commitment.exit_root == EMPTY_LER {
         [0; 32].into()
     } else {
-        batch_header.prev_local_exit_root
+        initial_state_commitment.exit_root
     };
 
     Ok(PessimisticProofOutput {
@@ -216,7 +203,7 @@ pub fn generate_pessimistic_proof(
         l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
         aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),
-        new_local_exit_root: batch_header.target.exit_root,
+        new_local_exit_root: final_state_commitment.exit_root,
         new_pessimistic_root,
     })
 }

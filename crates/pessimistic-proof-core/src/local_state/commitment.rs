@@ -8,12 +8,14 @@ use crate::{
     bridge_exit::NetworkId,
     keccak::{digest::Digest, keccak256_combine},
     ProofError,
+    proof::EMPTY_LER,
 };
 
 /// The state commitment of one [`super::NetworkState`].
 #[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StateCommitment {
     pub exit_root: Digest,
+    pub ler_leaf_count: u32,
     pub balance_root: Digest,
     pub nullifier_root: Digest,
 }
@@ -33,6 +35,16 @@ impl PessimisticRoot {
     pub fn infer_pp_root_version(&self, pp_root: Digest) -> Result<PPRootVersion, ProofError> {
         // NOTE: Return v2 to trigger the migration
         if pp_root.0 == [0u8; 32] {
+            if self.balance_root != EMPTY_LER
+                || self.nullifier_root != EMPTY_LER
+                || self.ler_leaf_count != 0
+                || self.height != 0 {
+                return Err(ProofError::InvalidInitialPessimisticRootValues(
+                    "Empty pp_root provided but internal fields are non-zero".to_string(),
+                ));
+            }
+            // Expected empty root constant:
+            // pub const EMPTY_LER: Digest = Digest(hex!("27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"))
             return Ok(PPRootVersion::V2);
         }
 

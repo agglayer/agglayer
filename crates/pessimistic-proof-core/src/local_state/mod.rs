@@ -38,9 +38,10 @@ pub struct NetworkState {
 
 impl NetworkState {
     /// Returns the roots.
-    pub fn roots(&self) -> StateCommitment {
+    pub fn get_state_commitment(&self) -> StateCommitment {
         StateCommitment {
             exit_root: self.exit_tree.get_root(),
+            ler_leaf_count: self.exit_tree.leaf_count,
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }
@@ -67,28 +68,6 @@ impl NetworkState {
         &mut self,
         multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
     ) -> Result<StateCommitment, ProofError> {
-        // Check the initial state
-        let computed_root = self.exit_tree.get_root();
-        if computed_root != multi_batch_header.prev_local_exit_root {
-            return Err(ProofError::InvalidPreviousLocalExitRoot {
-                computed: computed_root,
-                declared: multi_batch_header.prev_local_exit_root,
-            });
-        }
-        if self.balance_tree.root != multi_batch_header.prev_balance_root {
-            return Err(ProofError::InvalidPreviousBalanceRoot {
-                computed: self.balance_tree.root,
-                declared: multi_batch_header.prev_balance_root,
-            });
-        }
-
-        if self.nullifier_tree.root != multi_batch_header.prev_nullifier_root {
-            return Err(ProofError::InvalidPreviousNullifierRoot {
-                computed: self.nullifier_tree.root,
-                declared: multi_batch_header.prev_nullifier_root,
-            });
-        }
-
         // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
         let mut new_balances = BTreeMap::new();
         for (k, v) in &multi_batch_header.balances_proofs {
@@ -203,7 +182,7 @@ impl NetworkState {
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
         }
 
-        Ok(self.roots())
+        Ok(self.get_state_commitment())
     }
 
     /// Verify the signature or aggchain proof
@@ -211,16 +190,19 @@ impl NetworkState {
     pub fn verify_consensus(
         &self,
         multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+        initial_state_commitment: &StateCommitment,
     ) -> Result<PPRootVersion, ProofError> {
+        // Verify initial state commitment and PP root matches
         let base_pp_root_version = PessimisticRoot {
-            balance_root: self.balance_tree.root,
-            nullifier_root: self.nullifier_tree.root,
-            ler_leaf_count: self.exit_tree.leaf_count,
+            balance_root: initial_state_commitment.balance_root,
+            nullifier_root: initial_state_commitment.balance_root,
+            ler_leaf_count: initial_state_commitment.ler_leaf_count,
             height: multi_batch_header.height,
             origin_network: multi_batch_header.origin_network,
         }
         .infer_pp_root_version(multi_batch_header.prev_pessimistic_root)?;
-
+        
+        // Compute the hash of the imported bridge exits
         let imported_hash = commit_imported_bridge_exits(
             multi_batch_header
                 .imported_bridge_exits
@@ -239,7 +221,7 @@ impl NetworkState {
                 };
 
                 let signature_commitment = SignatureCommitment {
-                    new_local_exit_root: multi_batch_header.target.exit_root,
+                    new_local_exit_root: self.exit_tree.get_root(),
                     commit_imported_bridge_exits: imported_hash,
                     height: multi_batch_header.height,
                 };
@@ -290,8 +272,8 @@ impl NetworkState {
                 aggchain_params,
             } => {
                 let aggchain_proof_public_values = AggchainProofPublicValues {
-                    prev_local_exit_root: multi_batch_header.prev_local_exit_root,
-                    new_local_exit_root: multi_batch_header.target.exit_root,
+                    prev_local_exit_root: initial_state_commitment.exit_root,
+                    new_local_exit_root: self.exit_tree.get_root(),
                     l1_info_root: multi_batch_header.l1_info_root,
                     origin_network: multi_batch_header.origin_network,
                     aggchain_params: *aggchain_params,
