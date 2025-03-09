@@ -115,28 +115,25 @@ pub struct ClaimFromMainnet {
 pub struct L1InfoTreeLeafWithContext {
     /// l1 info tree leaf index
     #[prost(uint32, tag="1")]
-    pub l1_info_tree_index: u32,
-    /// Rollup exit root
-    #[prost(message, optional, tag="2")]
-    pub rer: ::core::option::Option<FixedBytes32>,
-    /// Mainnet exit root
-    #[prost(message, optional, tag="3")]
-    pub mer: ::core::option::Option<FixedBytes32>,
+    pub l1_info_tree_index: u32,   
     /// Inner leaf
-    #[prost(message, optional, tag="4")]
+    #[prost(message, optional, tag="2")]
     pub inner: ::core::option::Option<L1InfoTreeLeaf>,
 }
 /// Represents the leaf in the L1InfoTree.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct L1InfoTreeLeaf {
-    /// The global exit root.
-    #[prost(message, optional, tag="1")]
-    pub global_exit_root: ::core::option::Option<FixedBytes32>,
+     /// Rollup exit root
+     #[prost(message, optional, tag="1")]
+     pub rer: ::core::option::Option<FixedBytes32>,
+     /// Mainnet exit root
+     #[prost(message, optional, tag="2")]
+     pub mer: ::core::option::Option<FixedBytes32>,
     /// Block hash.
-    #[prost(message, optional, tag="2")]
+    #[prost(message, optional, tag="3")]
     pub block_hash: ::core::option::Option<FixedBytes32>,
     /// Timestamp.
-    #[prost(uint64, tag="3")]
+    #[prost(uint64, tag="4")]
     pub timestamp: u64,
 }
 /// Represents a claim from the rollup.
