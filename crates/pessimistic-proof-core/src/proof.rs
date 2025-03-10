@@ -100,7 +100,7 @@ pub enum ProofError {
     /// The signature on the state transition is invalid.
     #[error("Invalid signature.")]
     InvalidSignature,
-    /// The signature is on a payload which is with an inconsistent version.
+    /// The signature is on a payload that is with an inconsistent version.
     #[error("Inconsistent signed payload version.")]
     InconsistentSignedPayload,
     /// The signer recovered from the signature differs from the one declared as
@@ -209,7 +209,7 @@ pub fn generate_pessimistic_proof(
     // empty roots of the different trees involved. Therefore, we do
     // one mapping of empty tree hash <> 0x00..0 on the public inputs.
     let prev_local_exit_root = if batch_header.prev_local_exit_root == EMPTY_LER {
-        [0; 32].into()
+        Digest::default()
     } else {
         batch_header.prev_local_exit_root
     };
