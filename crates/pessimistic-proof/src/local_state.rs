@@ -47,11 +47,10 @@ impl StateCommitment {
     }
 }
 
-impl From<StateCommitment> for pessimistic_proof_core::local_state::StateCommitment {
+impl From<StateCommitment> for pessimistic_proof_core::local_state::commitment::StateCommitment {
     fn from(commitment: StateCommitment) -> Self {
         Self {
             exit_root: commitment.exit_root,
-            ler_leaf_count: commitment.ler_leaf_count,
             balance_root: commitment.balance_root,
             nullifier_root: commitment.nullifier_root,
         }

@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use agglayer_primitives::SignatureError;
 use pessimistic_proof::core;
+use pessimistic_proof::core::commitment::{PPRootVersion, PessimisticRoot};
 use pessimistic_proof::error::ProofVerificationError;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -163,6 +164,9 @@ pub enum CertificateStatusError {
 
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
+
+    #[error("Last pessimistic root not found for network: {0}")]
+    LastPessimisticRootNotFound(NetworkId),
 
     #[error("Internal error")]
     InternalError(String),
@@ -459,6 +463,15 @@ impl From<LocalNetworkStateData> for pessimistic_proof::NetworkState {
     }
 }
 
+/// The last pessimistic root can be either fetched from L1 or recomputed for a
+/// given version.
+pub enum PessimisticRootInput {
+    /// Computed from the given version.
+    Computed(PPRootVersion),
+    /// Fetched from the L1.
+    Fetched(Digest),
+}
+
 impl LocalNetworkStateData {
     /// Prune the SMTs
     pub fn prune_stale_nodes(&mut self) -> Result<(), Error> {
@@ -475,9 +488,23 @@ impl LocalNetworkStateData {
         certificate: &Certificate,
         signer: Address,
         l1_info_root: Digest,
+        prev_pp_root: PessimisticRootInput,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
+
+        // Retrieve the pp root
+        let prev_pessimistic_root = match prev_pp_root {
+            PessimisticRootInput::Fetched(settled_from_l1) => settled_from_l1,
+            PessimisticRootInput::Computed(version) => PessimisticRoot {
+                balance_root: self.balance_tree.root,
+                nullifier_root: self.nullifier_tree.root,
+                ler_leaf_count: self.exit_tree.leaf_count(),
+                height: certificate.height,
+                origin_network: *certificate.network_id,
+            }
+            .compute_pp_root(version),
+        };
 
         for e in certificate.bridge_exits.iter() {
             self.exit_tree.add_leaf(e.hash())?;
@@ -620,6 +647,8 @@ impl LocalNetworkStateData {
             target: self.get_roots().into(),
             l1_info_root,
             aggchain_proof,
+            height: certificate.height,
+            prev_pessimistic_root,
         })
     }
 
@@ -630,9 +659,10 @@ impl LocalNetworkStateData {
         certificate: &Certificate,
         signer: Address,
         l1_info_root: Digest,
+        prev_pp_root: PessimisticRootInput,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         self.clone()
-            .apply_certificate(certificate, signer, l1_info_root)
+            .apply_certificate(certificate, signer, l1_info_root, prev_pp_root)
     }
 
     pub fn get_roots(&self) -> StateCommitment {

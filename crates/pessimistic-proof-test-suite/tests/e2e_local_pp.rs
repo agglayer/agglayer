@@ -1,18 +1,122 @@
 use agglayer_types::primitives::U256;
-use pessimistic_proof::core::generate_pessimistic_proof;
+use agglayer_types::{Digest, PessimisticRootInput};
+use pessimistic_proof::core::commitment::{PPRootVersion, PessimisticRoot, SignatureCommitment};
+use pessimistic_proof::core::{generate_pessimistic_proof, AggchainData};
+use pessimistic_proof::imported_bridge_exit::commit_imported_bridge_exits;
 use pessimistic_proof::local_state::LocalNetworkState;
-use pessimistic_proof::NetworkState;
 use pessimistic_proof::{bridge_exit::TokenInfo, core};
+use pessimistic_proof::{NetworkState, PessimisticProofOutput, ProofError};
 use pessimistic_proof_test_suite::{
     forest::Forest,
     sample_data::{ETH, USDC},
     PESSIMISTIC_PROOF_ELF,
 };
 use rand::random;
+use rstest::rstest;
 use sp1_sdk::{utils, HashableKey, ProverClient, SP1Stdin};
 
 fn u(x: u64) -> U256 {
     x.try_into().unwrap()
+}
+
+fn pp_root_migration_helper(
+    previous_version: PPRootVersion,
+    new_version: PPRootVersion,
+) -> (Result<PessimisticProofOutput, ProofError>, Digest, Digest) {
+    let mut forest = Forest::new(vec![(USDC, u(100)), (ETH, u(200))]);
+    let imported_bridge_events = vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))];
+    let bridge_events = vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))];
+
+    let initial_state = forest.state_b.clone();
+    let certificate = forest.apply_events(&imported_bridge_events, &bridge_events);
+    let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
+    let mut multi_batch_header = initial_state
+        .make_multi_batch_header(
+            &certificate,
+            forest.get_signer(),
+            l1_info_root,
+            PessimisticRootInput::Computed(PPRootVersion::V2),
+        )
+        .unwrap();
+
+    let new_state = {
+        let mut state = initial_state.clone();
+        state
+            .apply_certificate(
+                &certificate,
+                forest.get_signer(),
+                l1_info_root,
+                PessimisticRootInput::Computed(PPRootVersion::V2),
+            )
+            .unwrap();
+        state
+    };
+
+    // Previous state settled in L1
+    let prev_pp_root = PessimisticRoot {
+        balance_root: initial_state.balance_tree.root,
+        nullifier_root: initial_state.nullifier_tree.root,
+        ler_leaf_count: initial_state.exit_tree.leaf_count(),
+        height: certificate.height,
+        origin_network: *certificate.network_id,
+    };
+
+    // Signed transition
+    let signature_data = SignatureCommitment {
+        new_local_exit_root: multi_batch_header.target.exit_root,
+        commit_imported_bridge_exits: commit_imported_bridge_exits(
+            multi_batch_header
+                .imported_bridge_exits
+                .iter()
+                .map(|ib| ib.0.global_index),
+        ),
+        height: certificate.height,
+    };
+
+    // New state about to be settled in L1
+    let new_pp_root = PessimisticRoot {
+        balance_root: new_state.balance_tree.root,
+        nullifier_root: new_state.nullifier_tree.root,
+        ler_leaf_count: new_state.exit_tree.leaf_count(),
+        height: certificate.height + 1,
+        origin_network: *certificate.network_id,
+    };
+
+    multi_batch_header.prev_pessimistic_root = prev_pp_root.compute_pp_root(previous_version);
+    let (signature, signer) = forest.sign(signature_data.commitment(new_version)).unwrap();
+    multi_batch_header.aggchain_proof = AggchainData::ECDSA { signer, signature };
+
+    (
+        generate_pessimistic_proof(initial_state.into(), &multi_batch_header),
+        prev_pp_root.compute_pp_root(previous_version),
+        new_pp_root.compute_pp_root(new_version),
+    )
+}
+
+#[rstest]
+#[case(PPRootVersion::V2, PPRootVersion::V2)] // pre-migration
+#[case(PPRootVersion::V2, PPRootVersion::V3)] // migration
+#[case(PPRootVersion::V3, PPRootVersion::V3)] // post-migration
+fn pp_root_migration(#[case] prev_version: PPRootVersion, #[case] new_version: PPRootVersion) {
+    let (result, expected_prev_pp_root, expected_new_pp_root) =
+        pp_root_migration_helper(prev_version, new_version);
+
+    let PessimisticProofOutput {
+        prev_pessimistic_root,
+        new_pessimistic_root,
+        ..
+    } = result.unwrap();
+
+    assert_eq!(expected_prev_pp_root, prev_pessimistic_root);
+    assert_eq!(expected_new_pp_root, new_pessimistic_root);
+}
+
+#[test]
+fn forbidden_pp_root_transition() {
+    assert!(matches!(
+        pp_root_migration_helper(PPRootVersion::V3, PPRootVersion::V2).0,
+        Err(ProofError::InconsistentSignedPayload)
+    ));
 }
 
 fn e2e_local_pp_simple_helper(
@@ -28,7 +132,12 @@ fn e2e_local_pp_simple_helper(
     let certificate = forest.apply_events(&imported_events, &events);
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
+        .make_multi_batch_header(
+            &certificate,
+            forest.get_signer(),
+            l1_info_root,
+            PessimisticRootInput::Computed(PPRootVersion::V2),
+        )
         .unwrap();
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
 }
@@ -88,7 +197,12 @@ fn e2e_local_pp_random() {
 
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
+        .make_multi_batch_header(
+            &certificate,
+            forest.get_signer(),
+            l1_info_root,
+            PessimisticRootInput::Computed(PPRootVersion::V2),
+        )
         .unwrap();
 
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
@@ -111,7 +225,12 @@ fn test_sp1_simple() {
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
     let mut multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
+        .make_multi_batch_header(
+            &certificate,
+            forest.get_signer(),
+            l1_info_root,
+            PessimisticRootInput::Computed(PPRootVersion::V2),
+        )
         .unwrap();
 
     // Set the aggchain proof to the sp1 variant
