@@ -282,7 +282,7 @@ impl NetworkState {
                 // NOTE: No stark verification in the native rust code due to
                 // the sp1_zkvm::lib::verify::verify_sp1_proof syscall
                 warn!("verify_sp1_proof is not callable outside of SP1");
-                PPRootVersion::V2
+                PPRootVersion::V3
             }
             #[cfg(target_os = "zkvm")]
             AggchainData::Generic {
@@ -303,7 +303,7 @@ impl NetworkState {
                     &aggchain_proof_public_values.hash().into(),
                 );
 
-                PPRootVersion::V2
+                PPRootVersion::V3
             }
         };
 
