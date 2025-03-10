@@ -39,22 +39,13 @@ pub enum CertificationError {
     #[error("prover returned unspecified error")]
     ProverReturnedUnspecifiedError,
     #[error("prover execution failed: {source}")]
-    ProverExecutionFailed {
-        #[source]
-        source: ProofError,
-    },
+    ProverExecutionFailed { source: ProofError },
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
     #[error("rollup contract address not found")]
-    RollupContractAddressNotFound {
-        #[source]
-        source: L1RpcError,
-    },
+    RollupContractAddressNotFound { source: L1RpcError },
     #[error("Unable to find aggchain vkey")]
-    UnableToFindAggchainVkey {
-        #[source]
-        source: L1RpcError,
-    },
+    UnableToFindAggchainVkey { source: L1RpcError },
 }
 
 #[derive(thiserror::Error, Debug)]
