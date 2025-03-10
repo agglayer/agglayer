@@ -1,6 +1,7 @@
 ---
 source: crates/agglayer-config/tests/backup.rs
 expression: config
+snapshot_kind: text
 ---
 prover-entrypoint = "http://127.0.0.1:8080"
 
@@ -17,7 +18,8 @@ outputs = []
 format = "pretty"
 
 [rpc]
-port = 9090
+grpc-port = 9089
+readrpc-port = 9090
 admin-port = 9091
 host = "0.0.0.0"
 request-timeout = "3m"
