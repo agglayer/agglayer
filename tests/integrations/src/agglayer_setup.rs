@@ -39,7 +39,7 @@ macro_rules! wait_for_settlement_or_error {
                         break;
                     }
                     _ => {
-                        tokio::time::sleep(Duration::from_millis(1000)).await;
+                        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
                     }
                 }
             }
