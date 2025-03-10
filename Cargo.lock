@@ -264,6 +264,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "bolero",
+ "hex",
  "insta",
  "pbjson",
  "prost 0.13.4",
@@ -399,6 +400,7 @@ name = "agglayer-primitives"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives",
+ "arbitrary",
  "k256",
  "serde",
 ]
@@ -594,6 +596,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
  "agglayer-types",
+ "arbitrary",
  "bincode",
  "ethers",
  "hex",
@@ -919,9 +922,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc1360603efdfba91151e623f13a4f4d3dc4af4adc1cbd90bf37c81e84db4c77"
 dependencies = [
  "alloy-rlp",
+ "arbitrary",
  "bytes",
  "cfg-if",
  "const-hex",
+ "derive_arbitrary",
  "derive_more",
  "foldhash",
  "hashbrown 0.15.2",
@@ -931,6 +936,7 @@ dependencies = [
  "keccak-asm",
  "paste",
  "proptest",
+ "proptest-derive",
  "rand 0.8.5",
  "ruint",
  "rustc-hash 2.1.0",
@@ -1409,6 +1415,15 @@ name = "anyhow"
 version = "1.0.95"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
+
+[[package]]
+name = "arbitrary"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dde20b3d026af13f561bdd0f15edf01fc734f0dafcedbaf42bba506a9517f223"
+dependencies = [
+ "derive_arbitrary",
+]
 
 [[package]]
 name = "arc-swap"
@@ -2093,6 +2108,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf0c03d2ed0e165ddc962990fb54461ef0cdba5eff2f6d4220a897c40b8a6d68"
 dependencies = [
+ "arbitrary",
  "bolero-generator-derive",
  "either",
  "getrandom 0.3.1",
@@ -2912,6 +2928,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_arbitrary"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30542c1ad912e0e3d22a1935c290e12e8a29d704a420177a31faad4a601a0800"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -4717,6 +4744,7 @@ version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c9c992b02b5b4c94ea26e32fe5bccb7aa7d9f390ab5c1221ff895bc7ea8b652"
 dependencies = [
+ "arbitrary",
  "equivalent",
  "hashbrown 0.15.2",
  "serde",
@@ -6332,6 +6360,7 @@ name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "arbitrary",
  "bincode",
  "hex",
  "hex-literal",
@@ -6353,6 +6382,8 @@ name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "alloy-primitives",
+ "arbitrary",
  "bincode",
  "hex",
  "hex-literal",
@@ -6814,6 +6845,17 @@ dependencies = [
  "rusty-fork",
  "tempfile",
  "unarray",
+]
+
+[[package]]
+name = "proptest-derive"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ee1c9ac207483d5e7db4940700de86a9aae46ef90c48b57f99fe7edb8345e49"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -7500,6 +7542,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5ef8fb1dd8de3870cb8400d51b4c2023854bbafd5431a3ac7e7317243e22d2f"
 dependencies = [
  "alloy-rlp",
+ "arbitrary",
  "ark-ff 0.3.0",
  "ark-ff 0.4.2",
  "bytes",

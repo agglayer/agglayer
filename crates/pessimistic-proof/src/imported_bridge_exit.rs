@@ -55,7 +55,8 @@ impl Hashable for ClaimFromRollup {
 
 /// Represents a token bridge exit originating on another network but claimed on
 /// the current network.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 pub struct ImportedBridgeExit {
     /// The bridge exit initiated on another network, called the "sending"
     /// network. Need to verify that the destination network matches the

@@ -60,6 +60,7 @@ impl ExecutionMode {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 pub struct EpochConfiguration {
     /// The genesis block where the AggLayer starts.
     pub genesis_block: u64,

@@ -4,8 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+testutils = ["dep:arbitrary"]
+
 [dependencies]
-alloy-primitives = { version = "0.8.20", features = ["serde", "k256"] }
+alloy-primitives.workspace = true
+arbitrary = { workspace = true, optional = true }
 k256 = "0.13.4"
 serde = { version = "1.0.217", features = ["derive"] }
 

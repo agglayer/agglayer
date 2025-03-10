@@ -15,6 +15,7 @@ pub const L1_ETH: TokenInfo = TokenInfo {
 /// Encapsulates the information to uniquely identify a token on the origin
 /// network.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Copy)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 pub struct TokenInfo {
     /// Network which the token originates from
     pub origin_network: NetworkId,
@@ -23,6 +24,7 @@ pub struct TokenInfo {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 pub enum LeafType {
     Transfer = 0,
     Message = 1,
@@ -46,7 +48,8 @@ impl TryFrom<u8> for LeafType {
 
 /// Represents a token bridge exit from the network.
 // TODO: Change it to an enum depending on `leaf_type`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 pub struct BridgeExit {
     pub leaf_type: LeafType,
 

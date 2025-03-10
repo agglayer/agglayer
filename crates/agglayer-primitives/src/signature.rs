@@ -5,6 +5,7 @@ use super::{Address, SignatureError, B256, U256};
 
 /// A wrapper over [PrimitiveSignature] with custom serialization.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 #[serde(from = "compat::Signature", into = "compat::Signature")]
 pub struct Signature(PrimitiveSignature);
 

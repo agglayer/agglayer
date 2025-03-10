@@ -21,7 +21,8 @@ impl Hashable for TokenInfo {
 
 /// Represents a token bridge exit from the network.
 // TODO: Change it to an enum depending on `leaf_type`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 pub struct BridgeExit {
     pub leaf_type: LeafType,
 
@@ -113,6 +114,7 @@ impl BridgeExit {
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash,
 )]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 pub struct NetworkId(u32);
 
 impl Display for NetworkId {
