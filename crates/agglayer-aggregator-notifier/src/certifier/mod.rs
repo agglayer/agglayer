@@ -13,7 +13,8 @@ use agglayer_prover_types::{
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    primitives::Address, Certificate, Height, LocalNetworkStateData, NetworkId, Proof,
+    primitives::Address, Certificate, Height, LocalNetworkStateData, NetworkId,
+    PessimisticRootInput, Proof,
 };
 use bincode::Options;
 use pessimistic_proof::core::generate_pessimistic_proof;
@@ -331,11 +332,14 @@ where
         let initial_state = LocalNetworkState::from(state.clone());
 
         let signer = Address::new(*signer.as_fixed_bytes());
-        let mut multi_batch_header = state
-            .apply_certificate(certificate, signer, l1_info_root)
+        let multi_batch_header = state
+            .apply_certificate(
+                certificate,
+                signer,
+                l1_info_root,
+                PessimisticRootInput::Fetched(prev_pessimistic_root.into()),
+            )
             .map_err(|source| CertificationError::Types { source })?;
-
-        multi_batch_header.prev_pessimistic_root = prev_pessimistic_root.into();
 
         // Perform the native PP execution without the STARK verification
         // TODO: Replace this by one native execution within SP1 to have the STARK

@@ -5,7 +5,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bridge_exit::NetworkId, keccak::{digest::Digest, keccak256_combine}, proof::EMPTY_PP_ROOT_V2, ProofError
+    bridge_exit::NetworkId,
+    keccak::{digest::Digest, keccak256_combine},
+    proof::EMPTY_PP_ROOT_V2,
+    ProofError,
 };
 
 /// The state commitment of one [`super::NetworkState`].
@@ -27,25 +30,30 @@ pub struct PessimisticRoot {
 }
 
 impl PessimisticRoot {
-    /// Infer the version of the provided pessimistic root.
-    pub fn infer_pp_root_version(&self, pp_root: Digest) -> Result<PPRootVersion, ProofError> {
+    /// Infer the version of the provided settled pessimistic root.
+    pub fn infer_settled_pp_root_version(
+        &self,
+        settled_pp_root: Digest,
+    ) -> Result<PPRootVersion, ProofError> {
         let computed_v3 = self.compute_pp_root(PPRootVersion::V3);
-        if computed_v3 == pp_root {
+        if computed_v3 == settled_pp_root {
             return Ok(PPRootVersion::V3);
         }
 
         let computed_v2 = self.compute_pp_root(PPRootVersion::V2);
-        if computed_v2 == pp_root {
+        if computed_v2 == settled_pp_root {
             return Ok(PPRootVersion::V2);
         }
 
         // NOTE: Return v2 to trigger the migration
-        if pp_root.0 == [0u8; 32] && computed_v2 == EMPTY_PP_ROOT_V2 {
+        let is_initial_state = computed_v2 == EMPTY_PP_ROOT_V2 && self.height == 0;
+
+        if settled_pp_root.0 == [0u8; 32] && is_initial_state {
             return Ok(PPRootVersion::V2);
         }
 
         Err(ProofError::InvalidPreviousPessimisticRoot {
-            declared: pp_root,
+            declared: settled_pp_root,
             computed_v2,
             computed_v3,
         })
