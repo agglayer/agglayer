@@ -5,9 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bridge_exit::NetworkId,
-    keccak::{digest::Digest, keccak256_combine},
-    ProofError,
+    bridge_exit::NetworkId, keccak::{digest::Digest, keccak256_combine}, proof::EMPTY_PP_ROOT_V2, ProofError
 };
 
 /// The state commitment of one [`super::NetworkState`].
@@ -31,11 +29,6 @@ pub struct PessimisticRoot {
 impl PessimisticRoot {
     /// Infer the version of the provided pessimistic root.
     pub fn infer_pp_root_version(&self, pp_root: Digest) -> Result<PPRootVersion, ProofError> {
-        // NOTE: Return v2 to trigger the migration
-        if pp_root.0 == [0u8; 32] {
-            return Ok(PPRootVersion::V2);
-        }
-
         let computed_v3 = self.compute_pp_root(PPRootVersion::V3);
         if computed_v3 == pp_root {
             return Ok(PPRootVersion::V3);
@@ -43,6 +36,11 @@ impl PessimisticRoot {
 
         let computed_v2 = self.compute_pp_root(PPRootVersion::V2);
         if computed_v2 == pp_root {
+            return Ok(PPRootVersion::V2);
+        }
+
+        // NOTE: Return v2 to trigger the migration
+        if pp_root.0 == [0u8; 32] && computed_v2 == EMPTY_PP_ROOT_V2 {
             return Ok(PPRootVersion::V2);
         }
 

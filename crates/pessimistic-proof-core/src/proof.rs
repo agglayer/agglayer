@@ -154,6 +154,10 @@ pub const EMPTY_LER: Digest = Digest(hex!(
     "27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"
 ));
 
+pub const EMPTY_PP_ROOT_V2: Digest = Digest(hex!(
+    "c89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184"
+));
+
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
 /// [`NetworkState`].
 pub fn generate_pessimistic_proof(
