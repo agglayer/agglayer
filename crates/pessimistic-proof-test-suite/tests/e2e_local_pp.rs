@@ -83,7 +83,7 @@ fn pp_root_migration_helper(
     };
 
     multi_batch_header.prev_pessimistic_root = prev_pp_root.compute_pp_root(previous_version);
-    let (signature, signer) = forest.sign(signature_data.commitment(new_version));
+    let (signature, signer) = forest.sign(signature_data.commitment(new_version)).unwrap();
     multi_batch_header.aggchain_proof = AggchainData::ECDSA { signer, signature };
 
     (
