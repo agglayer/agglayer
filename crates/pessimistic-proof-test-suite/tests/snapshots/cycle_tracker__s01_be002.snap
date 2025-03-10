@@ -2,10 +2,10 @@
 source: crates/pessimistic-proof-test-suite/tests/cycle-tracker.rs
 expression: stats
 ---
-opcode counts (1383788 total instructions):
+opcode counts (1383792 total instructions):
     341291 add
-    228870 sw
-    208183 lw
+    228872 sw
+    208185 lw
     110311 lbu
      82751 sb
      54717 xor
