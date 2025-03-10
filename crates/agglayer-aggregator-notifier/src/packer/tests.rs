@@ -4,7 +4,7 @@ use agglayer_certificate_orchestrator::EpochPacker;
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{L1RpcError, Settler};
 use agglayer_storage::tests::mocks::{MockPendingStore, MockPerEpochStore, MockStateStore};
-use agglayer_types::{CertificateHeader, Proof};
+use agglayer_types::{CertificateHeader, PessimisticRootInput, Proof};
 use arc_swap::ArcSwap;
 use ethers::{
     contract::{ContractCall, ContractError},
@@ -13,6 +13,7 @@ use ethers::{
     types::H160,
 };
 use mockall::predicate::eq;
+use pessimistic_proof::core::commitment::PPRootVersion;
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 
@@ -74,7 +75,12 @@ async fn epoch_packer_can_settle_one_certificate() {
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let batch_header = state
         .state_b
-        .apply_certificate(&certificate, signer, l1_info_root)
+        .apply_certificate(
+            &certificate,
+            signer,
+            l1_info_root,
+            PessimisticRootInput::Computed(PPRootVersion::V2),
+        )
         .unwrap();
     let certificate_id = certificate.hash();
 

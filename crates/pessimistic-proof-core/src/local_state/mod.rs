@@ -219,7 +219,7 @@ impl NetworkState {
             height: multi_batch_header.height,
             origin_network: multi_batch_header.origin_network,
         }
-        .infer_pp_root_version(multi_batch_header.prev_pessimistic_root)?;
+        .infer_settled_pp_root_version(multi_batch_header.prev_pessimistic_root)?;
 
         let imported_hash = commit_imported_bridge_exits(
             multi_batch_header
