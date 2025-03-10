@@ -26,8 +26,8 @@ pub use pessimistic_proof_core::proof::ProofError;
 
 pub mod core {
     pub use pessimistic_proof_core::aggchain_proof::AggchainData;
-    pub use pessimistic_proof_core::local_state::commitment;
     pub use pessimistic_proof_core::generate_pessimistic_proof;
+    pub use pessimistic_proof_core::local_state::commitment;
 }
 
 pub mod error;

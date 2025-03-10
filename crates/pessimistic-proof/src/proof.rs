@@ -68,7 +68,10 @@ impl Proof {
 
 #[cfg(test)]
 mod tests {
-    use pessimistic_proof_core::proof::EMPTY_LER;
+    use pessimistic_proof_core::{
+        keccak::keccak256_combine,
+        proof::{EMPTY_LER, EMPTY_PP_ROOT_V2},
+    };
 
     use crate::local_state::LocalNetworkState;
 
@@ -77,7 +80,13 @@ mod tests {
         let empty_state = LocalNetworkState::default();
 
         let ler = empty_state.exit_tree.get_root();
+        let ppr = keccak256_combine([
+            empty_state.balance_tree.root.as_slice(),
+            empty_state.nullifier_tree.root.as_slice(),
+            empty_state.exit_tree.leaf_count().to_le_bytes().as_slice(),
+        ]);
 
         assert_eq!(EMPTY_LER, ler);
+        assert_eq!(EMPTY_PP_ROOT_V2, ppr);
     }
 }
