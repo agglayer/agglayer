@@ -2,10 +2,8 @@
 
 [advisories]
 ignore = [
-    # This is a vulnerability in the server component of `tonic <= 0.12.2`.
-    # An older version from the `0.9.*` branch is pulled in as a transitive
-    # dependency of `ethers-gcp-kms-signer` and `gcloud-sdk`. An examination
-    # of these packages suggests they do not use the server component of the
-    # `tonic` package. Direct dependencies have been updated to use `0.12.3`.
-    "RUSTSEC-2024-0376",
+    # https://rustsec.org/advisories/RUSTSEC-2024-0437.html
+    "RUSTSEC-2024-0437",
+    # https://rustsec.org/advisories/RUSTSEC-2025-0009.html
+    "RUSTSEC-2025-0009"
 ]
