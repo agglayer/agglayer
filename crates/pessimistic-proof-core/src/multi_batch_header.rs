@@ -27,7 +27,7 @@ where
 {
     /// Network that emitted this [`MultiBatchHeader`].
     pub origin_network: NetworkId,
-    /// Current height of the L2 chain.
+    /// Current certificate height of the L2 chain.
     pub height: u64,
     /// Previous pessimistic root.
     #[serde_as(as = "_")]
