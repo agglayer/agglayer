@@ -38,7 +38,7 @@ pub enum CertificationError {
     ProverFailed(String),
     #[error("prover returned unspecified error")]
     ProverReturnedUnspecifiedError,
-    #[error("prover execution failed: {source}")]
+    #[error("prover execution failed")]
     ProverExecutionFailed { source: ProofError },
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),

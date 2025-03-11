@@ -336,10 +336,12 @@ where
                     });
                 }
 
-                let mut selector = [0u8; 2];
-                selector.copy_from_slice(&certificate.custom_chain_data[0..2]);
+                let aggchain_vkey_selector: u16 = {
+                    let mut selector = [0u8; 2];
+                    selector.copy_from_slice(&certificate.custom_chain_data[0..2]);
 
-                let aggchain_vkey_selector: u16 = u16::from_be_bytes(selector);
+                    u16::from_be_bytes(selector)
+                };
 
                 // Fetching rollup contract address
                 let rollup_address = self
