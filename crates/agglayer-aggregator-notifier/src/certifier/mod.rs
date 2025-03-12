@@ -374,13 +374,13 @@ where
 
                 let aggchain_vkey = self
                     .l1_rpc
-                    .get_aggchain_vkey(rollup_address, aggchain_vkey_selector)
+                    .get_aggchain_vkey_hash(rollup_address, aggchain_vkey_selector)
                     .await
                     .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
 
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(sp1_reduce_proof) = proof;
 
-                let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkey::from_hash_u32(
+                let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::from_u32_array(
                     sp1_reduce_proof.vk.hash_u32(),
                 );
 
@@ -391,7 +391,7 @@ where
                     });
                 }
 
-                Some(aggchain_vkey.hash_u32())
+                Some(aggchain_vkey.as_u32_array())
             }
         };
 

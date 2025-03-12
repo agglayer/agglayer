@@ -632,7 +632,6 @@ impl LocalNetworkStateData {
             });
         }
 
-        // TODO: Construct it properly from the Certificate
         let aggchain_proof = match &certificate.aggchain_data {
             AggchainData::ECDSA { signature } => {
                 let signature = *signature;
