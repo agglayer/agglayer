@@ -347,21 +347,21 @@ where
         let aggchain_vkey = match certificate.aggchain_data {
             AggchainData::ECDSA { .. } => None,
             AggchainData::Generic { ref proof, .. } => {
-                if certificate.custom_chain_data.len() < 2 {
-                    return Err(CertificationError::Types {
+                let aggchain_vkey_selector = certificate
+                    .custom_chain_data
+                    .get(0..2)
+                    .ok_or(CertificationError::Types {
                         source: agglayer_types::Error::InvalidCustomChainDataLength {
                             expected_at_least: 2,
                             actual: certificate.custom_chain_data.len(),
                         },
-                    });
-                }
+                    })
+                    .map(|bytes| {
+                        let mut selector = [0u8; 2];
+                        selector.copy_from_slice(bytes);
 
-                let aggchain_vkey_selector: u16 = {
-                    let mut selector = [0u8; 2];
-                    selector.copy_from_slice(&certificate.custom_chain_data[0..2]);
-
-                    u16::from_be_bytes(selector)
-                };
+                        u16::from_be_bytes(selector)
+                    })?;
 
                 // Fetching rollup contract address
                 let rollup_address = self
