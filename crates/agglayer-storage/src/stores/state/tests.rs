@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use agglayer_types::{Certificate, LocalNetworkStateData, NetworkId};
+use agglayer_types::{Certificate, LocalNetworkStateData, NetworkId, PessimisticRootInput};
+use pessimistic_proof::core::commitment::PPRootVersion;
 use pessimistic_proof::utils::Hashable as _;
 use pessimistic_proof::{
     core::generate_pessimistic_proof, keccak::digest::Digest, LocalNetworkState,
@@ -171,7 +172,13 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
         let multi_batch_header = lns
-            .make_multi_batch_header(certificate, signer, l1_info_root, None)
+            .make_multi_batch_header(
+                certificate,
+                signer,
+                l1_info_root,
+                PessimisticRootInput::Computed(PPRootVersion::V2),
+                None,
+            )
             .unwrap();
 
         info!("Certificate {idx}: successful witness generation");
@@ -183,8 +190,14 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         for b in &certificate.bridge_exits {
             leaves.push(b.hash());
         }
-        lns.apply_certificate(certificate, signer, l1_info_root, None)
-            .unwrap();
+        lns.apply_certificate(
+            certificate,
+            signer,
+            l1_info_root,
+            PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
+        )
+        .unwrap();
         info!("Certificate {idx}: successful state transition, waiting for the next");
     }
 
@@ -255,7 +268,13 @@ fn import_native_tokens() {
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
         let multi_batch_header = lns
-            .make_multi_batch_header(certificate, signer, l1_info_root, None)
+            .make_multi_batch_header(
+                certificate,
+                signer,
+                l1_info_root,
+                PessimisticRootInput::Computed(PPRootVersion::V2),
+                None,
+            )
             .unwrap();
 
         info!("Certificate {idx}: successful witness generation");
@@ -264,8 +283,14 @@ fn import_native_tokens() {
         generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
         info!("Certificate {idx}: successful native execution");
 
-        lns.apply_certificate(certificate, signer, l1_info_root, None)
-            .unwrap();
+        lns.apply_certificate(
+            certificate,
+            signer,
+            l1_info_root,
+            PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
+        )
+        .unwrap();
         info!("Certificate {idx}: successful state transition, waiting for the next");
     }
 }

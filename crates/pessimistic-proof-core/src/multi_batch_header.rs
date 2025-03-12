@@ -13,7 +13,7 @@ use crate::{
     keccak::{digest::Digest, keccak256_combine},
     local_balance_tree::LocalBalancePath,
     local_exit_tree::hasher::Hasher,
-    local_state::StateCommitment,
+    local_state::commitment::StateCommitment,
     nullifier_tree::NullifierPath,
 };
 
@@ -27,6 +27,11 @@ where
 {
     /// Network that emitted this [`MultiBatchHeader`].
     pub origin_network: NetworkId,
+    /// Current certificate height of the L2 chain.
+    pub height: u64,
+    /// Previous pessimistic root.
+    #[serde_as(as = "_")]
+    pub prev_pessimistic_root: H::Digest,
     /// Previous local exit root.
     #[serde_as(as = "_")]
     pub prev_local_exit_root: H::Digest,

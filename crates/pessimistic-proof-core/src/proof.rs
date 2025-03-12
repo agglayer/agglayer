@@ -8,9 +8,9 @@ use crate::{
     bridge_exit::{NetworkId, TokenInfo},
     global_index::GlobalIndex,
     imported_bridge_exit,
-    keccak::{digest::Digest, keccak256_combine},
+    keccak::digest::Digest,
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTreeError},
-    local_state::{NetworkState, StateCommitment},
+    local_state::{commitment::PessimisticRoot, NetworkState},
     multi_batch_header::MultiBatchHeader,
 };
 
@@ -35,14 +35,20 @@ pub enum ProofError {
     /// one computed by the prover.
     #[error("Invalid previous nullifier root. declared: {declared}, computed: {computed}")]
     InvalidPreviousNullifierRoot { declared: Digest, computed: Digest },
+    /// The previous pessimistic root is not re-computable.
+    #[error(
+        "Invalid previous pessimistic root. declared: {declared}, ppr_v2: {computed_v2}, ppr_v3: \
+         {computed_v3}"
+    )]
+    InvalidPreviousPessimisticRoot {
+        declared: Digest,
+        computed_v2: Digest,
+        computed_v3: Digest,
+    },
     /// The new local exit root declared by the chain does not match the
     /// one computed by the prover.
     #[error("Invalid new local exit root. declared: {declared}, computed: {computed}")]
     InvalidNewLocalExitRoot { declared: Digest, computed: Digest },
-    /// The new leaf count of the local exit root declared by the chain does not
-    /// match the one computed by the prover.
-    #[error("Invalid new local exit root leaf count. declared: {declared}, computed: {computed}")]
-    InvalidNewLocalExitRootLeafCount { declared: u32, computed: u32 },
     /// The new balance root declared by the agglayer does not match the
     /// one computed by the prover.
     #[error("Invalid new balance root. declared: {declared}, computed: {computed}")]
@@ -94,6 +100,9 @@ pub enum ProofError {
     /// The signature on the state transition is invalid.
     #[error("Invalid signature.")]
     InvalidSignature,
+    /// The signature is on a payload that is with an inconsistent version.
+    #[error("Inconsistent signed payload version.")]
+    InconsistentSignedPayload,
     /// The signer recovered from the signature differs from the one declared as
     /// witness.
     #[error("Invalid signer. declared: {declared}, recovered: {recovered}")]
@@ -107,6 +116,9 @@ pub enum ProofError {
     /// Unknown error.
     #[error("Unknown error: {0}")]
     Unknown(String),
+    /// Height overflow.
+    #[error("Height overflow")]
+    HeightOverflow,
 }
 
 /// Outputs of the pessimistic proof.
@@ -142,87 +154,69 @@ pub const EMPTY_LER: Digest = Digest(hex!(
     "27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"
 ));
 
-pub const EMPTY_PP_ROOT: Digest = Digest(hex!(
+pub const EMPTY_PP_ROOT_V2: Digest = Digest(hex!(
     "c89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184"
 ));
 
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
-/// [`LocalNetworkState`].
+/// [`NetworkState`].
 pub fn generate_pessimistic_proof(
     initial_network_state: NetworkState,
     batch_header: &MultiBatchHeader<Keccak256Hasher>,
 ) -> Result<PessimisticProofOutput, ProofError> {
-    let StateCommitment {
-        exit_root: prev_ler,
-        ler_leaf_count: prev_ler_leaf_count,
-        balance_root: prev_lbr,
-        nullifier_root: prev_nr,
-    } = initial_network_state.roots();
-    let prev_pessimistic_root = keccak256_combine([
-        prev_lbr.as_slice(),
-        prev_nr.as_slice(),
-        prev_ler_leaf_count.to_le_bytes().as_slice(),
-    ]);
+    let target_pp_root_version = initial_network_state.verify_consensus(batch_header)?;
 
-    let new_pessimistic_root = keccak256_combine([
-        batch_header.target.balance_root.as_slice(),
-        batch_header.target.nullifier_root.as_slice(),
-        batch_header.target.ler_leaf_count.to_le_bytes().as_slice(),
-    ]);
+    let new_pessimistic_root = {
+        let mut network_state = initial_network_state;
+        let computed_target = network_state.apply_batch_header(batch_header)?;
 
-    let mut network_state = initial_network_state;
-    let computed_target = network_state.apply_batch_header(batch_header)?;
+        if computed_target.exit_root != batch_header.target.exit_root {
+            return Err(ProofError::InvalidNewLocalExitRoot {
+                declared: batch_header.target.exit_root,
+                computed: computed_target.exit_root,
+            });
+        }
 
-    if computed_target.exit_root != batch_header.target.exit_root {
-        return Err(ProofError::InvalidNewLocalExitRoot {
-            declared: batch_header.target.exit_root,
-            computed: computed_target.exit_root,
-        });
-    }
+        if computed_target.balance_root != batch_header.target.balance_root {
+            return Err(ProofError::InvalidNewBalanceRoot {
+                declared: batch_header.target.balance_root,
+                computed: computed_target.balance_root,
+            });
+        }
 
-    if computed_target.balance_root != batch_header.target.balance_root {
-        return Err(ProofError::InvalidNewBalanceRoot {
-            declared: batch_header.target.balance_root,
-            computed: computed_target.balance_root,
-        });
-    }
+        if computed_target.nullifier_root != batch_header.target.nullifier_root {
+            return Err(ProofError::InvalidNewNullifierRoot {
+                declared: batch_header.target.nullifier_root,
+                computed: computed_target.nullifier_root,
+            });
+        }
 
-    if computed_target.nullifier_root != batch_header.target.nullifier_root {
-        return Err(ProofError::InvalidNewNullifierRoot {
-            declared: batch_header.target.nullifier_root,
-            computed: computed_target.nullifier_root,
-        });
-    }
+        let Some(height) = batch_header.height.checked_add(1) else {
+            return Err(ProofError::HeightOverflow);
+        };
 
-    if computed_target.ler_leaf_count != batch_header.target.ler_leaf_count {
-        return Err(ProofError::InvalidNewLocalExitRootLeafCount {
-            declared: batch_header.target.ler_leaf_count,
-            computed: computed_target.ler_leaf_count,
-        });
-    }
+        PessimisticRoot {
+            balance_root: network_state.balance_tree.root,
+            nullifier_root: network_state.nullifier_tree.root,
+            ler_leaf_count: network_state.exit_tree.leaf_count,
+            height,
+            origin_network: batch_header.origin_network,
+        }
+        .compute_pp_root(target_pp_root_version)
+    };
 
     // NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
     // empty roots of the different trees involved. Therefore, we do
     // one mapping of empty tree hash <> 0x00..0 on the public inputs.
-    let (prev_local_exit_root, prev_pessimistic_root) = {
-        let prev_ler = if prev_ler == EMPTY_LER {
-            [0; 32].into()
-        } else {
-            prev_ler
-        };
-
-        let prev_pp_root = if prev_pessimistic_root == EMPTY_PP_ROOT {
-            [0; 32].into()
-        } else {
-            prev_pessimistic_root
-        };
-
-        (prev_ler, prev_pp_root)
+    let prev_local_exit_root = if batch_header.prev_local_exit_root == EMPTY_LER {
+        Digest::default()
+    } else {
+        batch_header.prev_local_exit_root
     };
 
     Ok(PessimisticProofOutput {
         prev_local_exit_root,
-        prev_pessimistic_root,
+        prev_pessimistic_root: batch_header.prev_pessimistic_root,
         l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
         aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),

@@ -14,7 +14,7 @@ use agglayer_prover_types::{
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
     aggchain_proof::AggchainData, primitives::Address, Certificate, Height, LocalNetworkStateData,
-    NetworkId, Proof,
+    NetworkId, PessimisticRootInput, Proof,
 };
 use bincode::Options;
 use pessimistic_proof::core::generate_pessimistic_proof;
@@ -293,6 +293,12 @@ where
             .await
             .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
 
+        let prev_pessimistic_root = self
+            .l1_rpc
+            .get_prev_pessimistic_root(*network_id)
+            .await
+            .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
+
         let declared_l1_info_root = certificate
             .l1_info_root()
             .map_err(|source| CertificationError::Types { source })?;
@@ -393,7 +399,13 @@ where
 
         let signer = Address::new(*signer.as_fixed_bytes());
         let multi_batch_header = state
-            .apply_certificate(certificate, signer, l1_info_root, aggchain_vkey)
+            .apply_certificate(
+                certificate,
+                signer,
+                l1_info_root,
+                PessimisticRootInput::Fetched(prev_pessimistic_root.into()),
+                aggchain_vkey,
+            )
             .map_err(|source| CertificationError::Types { source })?;
 
         // Perform the native PP execution without the STARK verification
