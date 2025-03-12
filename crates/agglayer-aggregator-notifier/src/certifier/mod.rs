@@ -23,7 +23,8 @@ use pessimistic_proof::{
     local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
 };
 use sp1_sdk::{
-    CpuProver, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
+    CpuProver, HashableKey, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError,
+    SP1VerifyingKey,
 };
 use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, instrument, warn};
@@ -145,7 +146,20 @@ where
         stdin.write(&network_state);
         stdin.write(&multi_batch_header);
 
-        // TODO: Propagate the stark proof or build the SP1Stdin directly here
+        // Writing the proof to the stdin if needed
+        // At this point, we have the proof and the verifying key coming from the chain
+        // The witness execution already checked that the vk in the proof is valid and
+        // the multibatch header is configured to use the hash from L1
+        match certificate.aggchain_data {
+            AggchainData::ECDSA { .. } => {}
+            AggchainData::Generic { ref proof, .. } => {
+                let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
+                let vk = stark_proof.vk.clone();
+
+                stdin.write_proof(*stark_proof.clone(), vk);
+            }
+        };
+
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
                 default_bincode_options()
@@ -249,7 +263,7 @@ where
             info!("Successfully generated and verified the p-proof!");
 
             // TODO: Check if the key already exists
-            pending_store.insert_generated_proof(&certificate.hash(), &proof)?;
+            pending_store.insert_generated_proof(&certificate_id, &proof)?;
 
             // Prune the SMTs of the state
             state
@@ -326,7 +340,7 @@ where
 
         let aggchain_vkey = match certificate.aggchain_data {
             AggchainData::ECDSA { .. } => None,
-            AggchainData::Generic { .. } => {
+            AggchainData::Generic { ref proof, .. } => {
                 if certificate.custom_chain_data.len() < 2 {
                     return Err(CertificationError::Types {
                         source: agglayer_types::Error::InvalidCustomChainDataLength {
@@ -358,7 +372,20 @@ where
                     .await
                     .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
 
-                Some(aggchain_vkey)
+                let agglayer_types::aggchain_proof::Proof::SP1Stark(sp1_reduce_proof) = proof;
+
+                let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkey::from_hash_u32(
+                    sp1_reduce_proof.vk.hash_u32(),
+                );
+
+                if aggchain_vkey != proof_vk_hash {
+                    return Err(CertificationError::AggchainProofVkeyMismatch {
+                        expected: aggchain_vkey.to_hex(),
+                        actual: proof_vk_hash.to_hex(),
+                    });
+                }
+
+                Some(aggchain_vkey.hash_u32())
             }
         };
 

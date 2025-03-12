@@ -2,7 +2,7 @@ use std::{sync::Arc, thread, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
 use agglayer_config::Config;
-use agglayer_contracts::{L1RpcError, Settler};
+use agglayer_contracts::{aggchain::AggchainVkey, L1RpcError, Settler};
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{LocalNetworkStateData, NetworkId};
@@ -221,7 +221,7 @@ mockall::mock! {
             &self,
             rollup_address: ethers::types::Address,
             aggchain_vkey_selector: u16,
-        ) -> Result<[u32; 8], L1RpcError>;
+        ) -> Result<AggchainVkey, L1RpcError>;
     }
 
     #[async_trait::async_trait]

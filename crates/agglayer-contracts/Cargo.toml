@@ -11,7 +11,9 @@ anyhow.workspace = true
 async-trait.workspace = true
 ethers-contract = "2.0.14"
 ethers.workspace = true
+hex.workspace = true
 sp1-zkvm.workspace = true
+sp1-primitives.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true

@@ -1,7 +1,29 @@
 use ethers::{providers::Middleware, types::Address};
+use sp1_primitives::consts::{bytes_to_words_le, words_to_bytes_le};
 use tracing::error;
 
 use crate::{aggchain_base::AggchainBase, L1RpcClient, L1RpcError};
+
+#[derive(PartialEq, Eq)]
+pub struct AggchainVkey([u8; 32]);
+
+impl AggchainVkey {
+    pub fn new(vkey: [u8; 32]) -> Self {
+        Self(vkey)
+    }
+
+    pub fn from_hash_u32(hash: [u32; 8]) -> Self {
+        Self(words_to_bytes_le(&hash))
+    }
+
+    pub fn hash_u32(&self) -> [u32; 8] {
+        bytes_to_words_le(&self.0)
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.0)
+    }
+}
 
 #[async_trait::async_trait]
 pub trait AggchainContract {
@@ -10,7 +32,7 @@ pub trait AggchainContract {
         &self,
         rollup_address: Address,
         aggchain_vkey_selector: u16,
-    ) -> Result<[u32; 8], L1RpcError>;
+    ) -> Result<AggchainVkey, L1RpcError>;
 }
 
 #[async_trait::async_trait]
@@ -24,22 +46,19 @@ where
         &self,
         rollup_address: Address,
         aggchain_vkey_selector: u16,
-    ) -> Result<[u32; 8], L1RpcError> {
+    ) -> Result<AggchainVkey, L1RpcError> {
         let aggchain_selector = (((aggchain_vkey_selector as u32) << 16) | 1u32).to_be_bytes();
 
         let client = AggchainBase::new(rollup_address, self.rpc.clone());
 
-        let result = client
+        client
             .get_aggchain_v_key(aggchain_selector)
             .await
+            .map(AggchainVkey)
             .map_err(|error| {
                 error!("Error fetching aggchain vkey: {:?}", error);
 
                 L1RpcError::AggchainVkeyFetchFailed
-            })?;
-
-        Ok(sp1_zkvm::lib::utils::bytes_to_words_le(&result)
-            .try_into()
-            .map_err(|_| L1RpcError::UnableToParseAggchainVkey)?)
+            })
     }
 }

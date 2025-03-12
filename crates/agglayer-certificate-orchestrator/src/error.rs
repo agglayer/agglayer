@@ -46,6 +46,8 @@ pub enum CertificationError {
     RollupContractAddressNotFound { source: L1RpcError },
     #[error("Unable to find aggchain vkey")]
     UnableToFindAggchainVkey { source: L1RpcError },
+    #[error("Aggchain proof vkey mismatch: expected {expected}, actual {actual}")]
+    AggchainProofVkeyMismatch { expected: String, actual: String },
 }
 
 #[derive(thiserror::Error, Debug)]
