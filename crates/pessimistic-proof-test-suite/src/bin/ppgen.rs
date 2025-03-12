@@ -1,8 +1,9 @@
 use std::{path::PathBuf, time::Instant};
 
-use agglayer_types::{Address, Certificate, U256};
+use agglayer_types::{Address, Certificate, PessimisticRootInput, U256};
 use clap::Parser;
 use pessimistic_proof::bridge_exit::{NetworkId, TokenInfo};
+use pessimistic_proof::core::commitment::PPRootVersion;
 use pessimistic_proof::PessimisticProofOutput;
 use pessimistic_proof_test_suite::{
     runner::Runner,
@@ -74,7 +75,12 @@ pub fn main() {
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
     let multi_batch_header = old_state
-        .make_multi_batch_header(&certificate, state.get_signer(), l1_info_root)
+        .make_multi_batch_header(
+            &certificate,
+            state.get_signer(),
+            l1_info_root,
+            PessimisticRootInput::Computed(PPRootVersion::V2),
+        )
         .unwrap();
 
     info!(

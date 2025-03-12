@@ -13,7 +13,8 @@ use agglayer_prover_types::{
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    primitives::Address, Certificate, Height, LocalNetworkStateData, NetworkId, Proof,
+    primitives::Address, Certificate, Height, LocalNetworkStateData, NetworkId,
+    PessimisticRootInput, Proof,
 };
 use bincode::Options;
 use pessimistic_proof::core::generate_pessimistic_proof;
@@ -144,7 +145,6 @@ where
         stdin.write(&network_state);
         stdin.write(&multi_batch_header);
 
-        // TODO: Propagate the stark proof or build the SP1Stdin directly here
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
                 default_bincode_options()
@@ -278,6 +278,12 @@ where
             .await
             .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
 
+        let prev_pessimistic_root = self
+            .l1_rpc
+            .get_prev_pessimistic_root(*network_id)
+            .await
+            .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
+
         let declared_l1_info_root = certificate
             .l1_info_root()
             .map_err(|source| CertificationError::Types { source })?;
@@ -327,7 +333,12 @@ where
 
         let signer = Address::new(*signer.as_fixed_bytes());
         let multi_batch_header = state
-            .apply_certificate(certificate, signer, l1_info_root)
+            .apply_certificate(
+                certificate,
+                signer,
+                l1_info_root,
+                PessimisticRootInput::Fetched(prev_pessimistic_root.into()),
+            )
             .map_err(|source| CertificationError::Types { source })?;
 
         // Perform the native PP execution without the STARK verification
