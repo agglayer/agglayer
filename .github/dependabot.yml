@@ -4,14 +4,31 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
     groups:
-      all:
+      provers:
         applies-to: version-updates
         patterns:
-        - "*"
+          - "aggchain-proof-*"
+          - "aggkig-prover"
+          - "aggkit-prover-*"
+          - "agglayer-prover"
+          - "agglayer-prover-*"
+          - "proposer-*"
+          - "prover-*"
+
+      sp1:
+        applies-to: version-updates
+        patterns:
+          - "sp1-*"
+
+      external:
+        applies-to: version-updates
+        patterns:
+          - "*"
         update-types:
-        - "minor"
-        - "patch"
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
