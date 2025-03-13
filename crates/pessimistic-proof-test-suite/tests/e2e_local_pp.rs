@@ -36,6 +36,7 @@ fn pp_root_migration_helper(
             forest.get_signer(),
             l1_info_root,
             PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
         )
         .unwrap();
 
@@ -47,6 +48,7 @@ fn pp_root_migration_helper(
                 forest.get_signer(),
                 l1_info_root,
                 PessimisticRootInput::Computed(PPRootVersion::V2),
+                None,
             )
             .unwrap();
         state
@@ -137,6 +139,7 @@ fn e2e_local_pp_simple_helper(
             forest.get_signer(),
             l1_info_root,
             PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
         )
         .unwrap();
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
@@ -202,6 +205,7 @@ fn e2e_local_pp_random() {
             forest.get_signer(),
             l1_info_root,
             PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
         )
         .unwrap();
 
@@ -230,6 +234,7 @@ fn test_sp1_simple() {
             forest.get_signer(),
             l1_info_root,
             PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
         )
         .unwrap();
 

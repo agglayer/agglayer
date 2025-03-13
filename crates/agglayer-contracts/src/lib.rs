@@ -31,6 +31,7 @@ pub mod aggchain;
 pub mod rollup;
 pub mod settler;
 
+pub use aggchain::AggchainContract;
 pub use rollup::RollupContract;
 pub use settler::Settler;
 
@@ -87,6 +88,8 @@ pub enum L1RpcError {
         #[source]
         source: Box<anyhow::Error>,
     },
+    #[error("Unable to parse aggchain vkey")]
+    UnableToParseAggchainVkey,
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>

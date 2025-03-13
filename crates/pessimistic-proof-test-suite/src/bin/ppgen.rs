@@ -80,6 +80,7 @@ pub fn main() {
             state.get_signer(),
             l1_info_root,
             PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
         )
         .unwrap();
 

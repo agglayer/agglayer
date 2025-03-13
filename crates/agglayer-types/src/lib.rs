@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use agglayer_primitives::SignatureError;
-use pessimistic_proof::core;
 use pessimistic_proof::core::commitment::{PPRootVersion, PessimisticRoot};
+use pessimistic_proof::core::{self, Vkey};
 use pessimistic_proof::error::ProofVerificationError;
 pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
@@ -138,9 +138,17 @@ pub enum Error {
     /// The operation cannot be applied on the smt.
     #[error(transparent)]
     InvalidSmtOperation(#[from] SmtError),
-    /// SP1-based Aggchain proof not yet supported.
-    #[error("SP1-based Aggchain proof not yet supported")]
-    AggchainProofSP1Unsupported,
+
+    #[error("AggchainVkey missing")]
+    MissingAggchainVkey,
+
+    #[error(
+        "Invalid custom chain data length expected at least {expected_at_least}, actual {actual}"
+    )]
+    InvalidCustomChainDataLength {
+        expected_at_least: usize,
+        actual: usize,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -282,6 +290,8 @@ pub struct Certificate {
     /// Aggchain data which is either one ECDSA or Generic proof.
     #[serde(flatten)]
     pub aggchain_data: AggchainData,
+    #[serde(default)]
+    pub custom_chain_data: Vec<u8>,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -301,6 +311,7 @@ impl Default for Certificate {
             imported_bridge_exits: Default::default(),
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
+            custom_chain_data: vec![],
         }
     }
 }
@@ -356,6 +367,7 @@ impl Certificate {
             imported_bridge_exits: Default::default(),
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
+            custom_chain_data: vec![],
         }
     }
 
@@ -489,6 +501,7 @@ impl LocalNetworkStateData {
         signer: Address,
         l1_info_root: Digest,
         prev_pp_root: PessimisticRootInput,
+        aggchain_vkey: Option<Vkey>,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
@@ -619,13 +632,17 @@ impl LocalNetworkStateData {
             });
         }
 
-        // TODO: Construct it properly from the Certificate
         let aggchain_proof = match &certificate.aggchain_data {
             AggchainData::ECDSA { signature } => {
                 let signature = *signature;
                 core::AggchainData::ECDSA { signer, signature }
             }
-            AggchainData::Generic { .. } => return Err(Error::AggchainProofSP1Unsupported),
+            AggchainData::Generic {
+                aggchain_params, ..
+            } => core::AggchainData::Generic {
+                aggchain_params: *aggchain_params,
+                aggchain_vkey: aggchain_vkey.ok_or(Error::MissingAggchainVkey)?,
+            },
         };
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
@@ -660,9 +677,15 @@ impl LocalNetworkStateData {
         signer: Address,
         l1_info_root: Digest,
         prev_pp_root: PessimisticRootInput,
+        aggchain_vkey: Option<Vkey>,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
-        self.clone()
-            .apply_certificate(certificate, signer, l1_info_root, prev_pp_root)
+        self.clone().apply_certificate(
+            certificate,
+            signer,
+            l1_info_root,
+            prev_pp_root,
+            aggchain_vkey,
+        )
     }
 
     pub fn get_roots(&self) -> StateCommitment {

@@ -33,6 +33,7 @@ fn cycles_on_sample_inputs(
             state.get_signer(),
             certificate.l1_info_root().unwrap().unwrap_or_default(),
             PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
         )
         .unwrap();
 

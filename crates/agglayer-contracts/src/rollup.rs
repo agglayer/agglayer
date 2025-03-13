@@ -25,6 +25,7 @@ pub trait RollupContract {
         proof_signers: HashMap<u32, Address>,
     ) -> Result<Address, L1RpcError>;
 
+    async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<Address, L1RpcError>;
     async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError>;
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
@@ -174,6 +175,15 @@ where
         }
     }
 
+    async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<Address, L1RpcError> {
+        let rollup_data = self
+            .inner
+            .rollup_id_to_rollup_data(rollup_id)
+            .await
+            .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
+
+        Ok(rollup_data.rollup_contract)
+    }
     async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError> {
         let rollup_data: RollupDataReturnV2 = self
             .inner

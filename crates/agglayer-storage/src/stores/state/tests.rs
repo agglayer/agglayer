@@ -177,6 +177,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
                 signer,
                 l1_info_root,
                 PessimisticRootInput::Computed(PPRootVersion::V2),
+                None,
             )
             .unwrap();
 
@@ -194,6 +195,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
             signer,
             l1_info_root,
             PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
         )
         .unwrap();
         info!("Certificate {idx}: successful state transition, waiting for the next");
@@ -271,6 +273,7 @@ fn import_native_tokens() {
                 signer,
                 l1_info_root,
                 PessimisticRootInput::Computed(PPRootVersion::V2),
+                None,
             )
             .unwrap();
 
@@ -285,6 +288,7 @@ fn import_native_tokens() {
             signer,
             l1_info_root,
             PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
         )
         .unwrap();
         info!("Certificate {idx}: successful state transition, waiting for the next");

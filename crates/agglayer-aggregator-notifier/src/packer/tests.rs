@@ -31,6 +31,8 @@ mockall::mock! {
             proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
         ) -> Result<ethers::types::Address, L1RpcError>;
 
+        async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<ethers::types::Address, L1RpcError>;
+
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
         async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError>;
@@ -80,6 +82,7 @@ async fn epoch_packer_can_settle_one_certificate() {
             signer,
             l1_info_root,
             PessimisticRootInput::Computed(PPRootVersion::V2),
+            None,
         )
         .unwrap();
     let certificate_id = certificate.hash();

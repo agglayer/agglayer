@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
-use agglayer_contracts::RollupContract;
+use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
 use agglayer_prover_types::{
     default_bincode_options,
     v1::{
@@ -13,8 +13,8 @@ use agglayer_prover_types::{
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    primitives::Address, Certificate, Height, LocalNetworkStateData, NetworkId,
-    PessimisticRootInput, Proof,
+    aggchain_proof::AggchainData, primitives::Address, Certificate, Height, LocalNetworkStateData,
+    NetworkId, PessimisticRootInput, Proof,
 };
 use bincode::Options;
 use pessimistic_proof::core::generate_pessimistic_proof;
@@ -23,7 +23,8 @@ use pessimistic_proof::{
     local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
 };
 use sp1_sdk::{
-    CpuProver, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
+    CpuProver, HashableKey, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError,
+    SP1VerifyingKey,
 };
 use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, instrument, warn};
@@ -108,7 +109,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
 impl<PendingStore, L1Rpc> Certifier for CertifierClient<PendingStore, L1Rpc>
 where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
-    L1Rpc: RollupContract + Send + Sync + 'static,
+    L1Rpc: RollupContract + AggchainContract + Send + Sync + 'static,
 {
     #[instrument(skip(self, state, height), fields(hash, %network_id), level = "info")]
     async fn certify(
@@ -145,6 +146,20 @@ where
         stdin.write(&network_state);
         stdin.write(&multi_batch_header);
 
+        // Writing the proof to the stdin if needed
+        // At this point, we have the proof and the verifying key coming from the chain
+        // The witness execution already checked that the vk in the proof is valid and
+        // the multibatch header is configured to use the hash from L1
+        match certificate.aggchain_data {
+            AggchainData::ECDSA { .. } => {}
+            AggchainData::Generic { ref proof, .. } => {
+                let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
+                let vk = stark_proof.vk.clone();
+
+                stdin.write_proof(*stark_proof.clone(), vk);
+            }
+        };
+
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
                 default_bincode_options()
@@ -168,7 +183,7 @@ where
                             CertificationError::InternalError("Unable to execute prover".into())
                         }
                         ErrorKind::ProverFailed => {
-                            CertificationError::InternalError(source_error.message().to_string())
+                            CertificationError::ProverFailed(source_error.message().to_string())
                         }
                         ErrorKind::ProofVerificationFailed => {
                             let proof_error: Result<
@@ -199,7 +214,7 @@ where
 
                             match proof_error {
                                 Ok(error) => {
-                                    CertificationError::NativeExecutionFailed { source: error }
+                                    CertificationError::ProverExecutionFailed { source: error }
                                 }
                                 Err(_source) => {
                                     warn!(
@@ -248,7 +263,7 @@ where
             info!("Successfully generated and verified the p-proof!");
 
             // TODO: Check if the key already exists
-            pending_store.insert_generated_proof(&certificate.hash(), &proof)?;
+            pending_store.insert_generated_proof(&certificate_id, &proof)?;
 
             // Prune the SMTs of the state
             state
@@ -329,6 +344,52 @@ where
             }
         };
 
+        let aggchain_vkey = match certificate.aggchain_data {
+            AggchainData::ECDSA { .. } => None,
+            AggchainData::Generic { ref proof, .. } => {
+                let aggchain_vkey_selector = certificate
+                    .custom_chain_data
+                    .first_chunk::<2>()
+                    .ok_or(CertificationError::Types {
+                        source: agglayer_types::Error::InvalidCustomChainDataLength {
+                            expected_at_least: 2,
+                            actual: certificate.custom_chain_data.len(),
+                        },
+                    })
+                    .map(|bytes| u16::from_be_bytes(*bytes))?;
+
+                // Fetching rollup contract address
+                let rollup_address = self
+                    .l1_rpc
+                    .get_rollup_contract_address(*network_id)
+                    .await
+                    .map_err(|source| CertificationError::RollupContractAddressNotFound {
+                        source,
+                    })?;
+
+                let aggchain_vkey = self
+                    .l1_rpc
+                    .get_aggchain_vkey_hash(rollup_address, aggchain_vkey_selector)
+                    .await
+                    .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
+
+                let agglayer_types::aggchain_proof::Proof::SP1Stark(sp1_reduce_proof) = proof;
+
+                let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::from_u32_array(
+                    sp1_reduce_proof.vk.hash_u32(),
+                );
+
+                if aggchain_vkey != proof_vk_hash {
+                    return Err(CertificationError::AggchainProofVkeyMismatch {
+                        expected: aggchain_vkey.to_hex(),
+                        actual: proof_vk_hash.to_hex(),
+                    });
+                }
+
+                Some(aggchain_vkey.as_u32_array())
+            }
+        };
+
         let initial_state = LocalNetworkState::from(state.clone());
 
         let signer = Address::new(*signer.as_fixed_bytes());
@@ -338,6 +399,7 @@ where
                 signer,
                 l1_info_root,
                 PessimisticRootInput::Fetched(prev_pessimistic_root.into()),
+                aggchain_vkey,
             )
             .map_err(|source| CertificationError::Types { source })?;
 

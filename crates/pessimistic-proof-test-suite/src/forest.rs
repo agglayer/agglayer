@@ -216,6 +216,7 @@ impl Forest {
             imported_bridge_exits,
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
+            custom_chain_data: vec![],
         }
     }
 
