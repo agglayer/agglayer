@@ -402,7 +402,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#6c438c6da03b13f435573f813307af2d4a440622"
+source = "git+https://github.com/agglayer/provers.git#472bd87cc4125d647c50bd151e7cdc251c1f2c37"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
@@ -426,7 +426,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#6c438c6da03b13f435573f813307af2d4a440622"
+source = "git+https://github.com/agglayer/provers.git#472bd87cc4125d647c50bd151e7cdc251c1f2c37"
 dependencies = [
  "prover-config",
  "prover-logger",
@@ -439,7 +439,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#6c438c6da03b13f435573f813307af2d4a440622"
+source = "git+https://github.com/agglayer/provers.git#472bd87cc4125d647c50bd151e7cdc251c1f2c37"
 dependencies = [
  "bincode",
  "prost 0.13.4",
@@ -2105,7 +2105,7 @@ dependencies = [
  "bitflags 2.8.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.11.0",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2125,7 +2125,7 @@ dependencies = [
  "bitflags 2.8.0",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -6942,7 +6942,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0f3e5beed80eb580c68e2c600937ac2c4eedabdfd5ef1e5b7ea4f3fba84497b"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
@@ -6975,7 +6975,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "157c5a9d7ea5c2ed2d9fb8f495b64759f7816c7eaea54ba3978f0d63000162e3"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.96",
@@ -7008,7 +7008,7 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#6c438c6da03b13f435573f813307af2d4a440622"
+source = "git+https://github.com/agglayer/provers.git#472bd87cc4125d647c50bd151e7cdc251c1f2c37"
 dependencies = [
  "prover-utils",
  "serde",
@@ -7018,7 +7018,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#6c438c6da03b13f435573f813307af2d4a440622"
+source = "git+https://github.com/agglayer/provers.git#472bd87cc4125d647c50bd151e7cdc251c1f2c37"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -7037,7 +7037,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#6c438c6da03b13f435573f813307af2d4a440622"
+source = "git+https://github.com/agglayer/provers.git#472bd87cc4125d647c50bd151e7cdc251c1f2c37"
 dependencies = [
  "anyhow",
  "bincode",
@@ -7064,7 +7064,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#6c438c6da03b13f435573f813307af2d4a440622"
+source = "git+https://github.com/agglayer/provers.git#472bd87cc4125d647c50bd151e7cdc251c1f2c37"
 dependencies = [
  "serde",
  "tracing",
@@ -7075,7 +7075,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#6c438c6da03b13f435573f813307af2d4a440622"
+source = "git+https://github.com/agglayer/provers.git#472bd87cc4125d647c50bd151e7cdc251c1f2c37"
 dependencies = [
  "humantime-serde",
  "serde",
