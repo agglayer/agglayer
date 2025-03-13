@@ -88,7 +88,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "async-trait",
- "bincode",
+ "bincode 2.0.1",
  "ethers",
  "fail",
  "futures",
@@ -124,7 +124,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "async-trait",
- "bincode",
+ "bincode 2.0.1",
  "buildstructor",
  "ethers",
  "futures-util",
@@ -225,7 +225,7 @@ dependencies = [
  "agglayer-types",
  "anyhow",
  "axum 0.8.1",
- "bincode",
+ "bincode 2.0.1",
  "ethers",
  "http 1.2.0",
  "prost 0.13.4",
@@ -261,7 +261,7 @@ name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
  "agglayer-types",
- "bincode",
+ "bincode 2.0.1",
  "pbjson",
  "prost 0.13.4",
  "serde",
@@ -408,7 +408,7 @@ dependencies = [
  "agglayer-prover-types",
  "agglayer-telemetry 0.2.1",
  "anyhow",
- "bincode",
+ "bincode 1.3.3",
  "buildstructor",
  "prover-engine",
  "prover-executor",
@@ -441,7 +441,7 @@ name = "agglayer-prover-types"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git#472bd87cc4125d647c50bd151e7cdc251c1f2c37"
 dependencies = [
- "bincode",
+ "bincode 1.3.3",
  "prost 0.13.4",
  "prover-executor",
  "serde",
@@ -503,7 +503,7 @@ dependencies = [
  "agglayer-storage",
  "agglayer-types",
  "arc-swap",
- "bincode",
+ "bincode 2.0.1",
  "chrono",
  "criterion",
  "hex",
@@ -577,7 +577,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
  "agglayer-types",
- "bincode",
+ "bincode 2.0.1",
  "ethers",
  "hex",
  "pessimistic-proof",
@@ -2097,6 +2097,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36eaf5d7b090263e8150820482d5d93cd964a81e4019913c972f4edcc6edb740"
+dependencies = [
+ "bincode_derive",
+ "serde",
+ "unty",
+]
+
+[[package]]
+name = "bincode_derive"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf95709a440f45e986983918d0e8a1f30a9b1df04918fc828670606804ac3c09"
+dependencies = [
+ "virtue",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.69.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2105,7 +2125,7 @@ dependencies = [
  "bitflags 2.8.0",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2125,7 +2145,7 @@ dependencies = [
  "bitflags 2.8.0",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -6446,7 +6466,7 @@ name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
- "bincode",
+ "bincode 2.0.1",
  "hex",
  "hex-literal",
  "pessimistic-proof-core",
@@ -6467,7 +6487,7 @@ name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
- "bincode",
+ "bincode 2.0.1",
  "hex",
  "hex-literal",
  "rand 0.9.0",
@@ -6490,7 +6510,7 @@ dependencies = [
  "agglayer-types",
  "anyhow",
  "base64 0.22.1",
- "bincode",
+ "bincode 2.0.1",
  "clap",
  "ecdsa-proof-lib",
  "ethers-signers",
@@ -6942,7 +6962,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0f3e5beed80eb580c68e2c600937ac2c4eedabdfd5ef1e5b7ea4f3fba84497b"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "log",
  "multimap",
  "once_cell",
@@ -6975,7 +6995,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "157c5a9d7ea5c2ed2d9fb8f495b64759f7816c7eaea54ba3978f0d63000162e3"
 dependencies = [
  "anyhow",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.96",
@@ -7040,7 +7060,7 @@ version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git#472bd87cc4125d647c50bd151e7cdc251c1f2c37"
 dependencies = [
  "anyhow",
- "bincode",
+ "bincode 1.3.3",
  "buildstructor",
  "futures",
  "prover-config",
@@ -8365,7 +8385,7 @@ version = "4.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e33061e8c159b21ef067da7b70ff3e26e157900f13f7a80a56b4e1254bf3299d"
 dependencies = [
- "bincode",
+ "bincode 1.3.3",
  "bytemuck",
  "clap",
  "elf",
@@ -8404,7 +8424,7 @@ version = "4.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88405dfb3571455f4ab224c237e99b21ffe686be4f533e44d823a3061d040f4b"
 dependencies = [
- "bincode",
+ "bincode 1.3.3",
  "cbindgen",
  "cc",
  "cfg-if",
@@ -8461,7 +8481,7 @@ version = "4.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed8c477921afb864a7a41b214f087d8104ac92378aff58fa70b07d56bb43e1db"
 dependencies = [
- "bincode",
+ "bincode 1.3.3",
  "ctrlc",
  "prost 0.13.4",
  "serde",
@@ -8510,7 +8530,7 @@ version = "4.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "82bf9bf66dc9244c51585c72e3b82b48b7829ee909a8cc93d2101612c28f5030"
 dependencies = [
- "bincode",
+ "bincode 1.3.3",
  "elliptic-curve",
  "serde",
  "sp1-primitives",
@@ -8522,7 +8542,7 @@ version = "4.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2df15132358d645a2842fa127ea37954d28fd70127c0c6fcc254219c10824427"
 dependencies = [
- "bincode",
+ "bincode 1.3.3",
  "hex",
  "lazy_static",
  "num-bigint 0.4.6",
@@ -8541,7 +8561,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c67a6c180128b85950182921668759169c6f495bcdba1eb8b5ee26cad9ae6fe0"
 dependencies = [
  "anyhow",
- "bincode",
+ "bincode 1.3.3",
  "clap",
  "dirs",
  "downloader",
@@ -8694,7 +8714,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3210843309c0512eaade95fc523c88ce9cfaf27894ecdfbaf299cf79682be676"
 dependencies = [
  "anyhow",
- "bincode",
+ "bincode 1.3.3",
  "bindgen 0.70.1",
  "cc",
  "cfg-if",
@@ -8726,7 +8746,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backoff",
- "bincode",
+ "bincode 1.3.3",
  "cfg-if",
  "dirs",
  "futures",
@@ -9984,6 +10004,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
+name = "unty"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
+
+[[package]]
 name = "url"
 version = "2.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10104,6 +10130,12 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "virtue"
+version = "0.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
 
 [[package]]
 name = "wait-timeout"
