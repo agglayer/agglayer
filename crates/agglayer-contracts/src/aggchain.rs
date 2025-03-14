@@ -1,5 +1,4 @@
 use ethers::{providers::Middleware, types::Address};
-use sp1_primitives::consts::{bytes_to_words_le, words_to_bytes_le};
 use tracing::error;
 
 use crate::{aggchain_base::AggchainBase, L1RpcClient, L1RpcError};
@@ -10,14 +9,6 @@ pub struct AggchainVkeyHash([u8; 32]);
 impl AggchainVkeyHash {
     pub fn new(vkey: [u8; 32]) -> Self {
         Self(vkey)
-    }
-
-    pub fn from_u32_array(hash: [u32; 8]) -> Self {
-        Self(words_to_bytes_le(&hash))
-    }
-
-    pub fn as_u32_array(&self) -> [u32; 8] {
-        bytes_to_words_le(&self.0)
     }
 
     pub fn to_hex(&self) -> String {

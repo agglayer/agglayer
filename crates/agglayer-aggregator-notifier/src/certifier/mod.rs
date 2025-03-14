@@ -375,8 +375,8 @@ where
 
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(sp1_reduce_proof) = proof;
 
-                let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::from_u32_array(
-                    sp1_reduce_proof.vk.hash_u32(),
+                let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::new(
+                    sp1_reduce_proof.vk.hash_bytes(),
                 );
 
                 if aggchain_vkey != proof_vk_hash {
@@ -386,7 +386,7 @@ where
                     });
                 }
 
-                Some(aggchain_vkey.as_u32_array())
+                Some(sp1_reduce_proof.vk.hash_u32())
             }
         };
 
