@@ -17,7 +17,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
-  KURTOSIS_CDK_GIT_REF: v0.2.11
   ZKEVM_CONTRACT_GIT_REF: feature/ongoing-v0.3.0-docker
 
 jobs:
@@ -177,67 +176,34 @@ jobs:
       local-artifact-name: "docker-image"
       local-artifact-dir: "/tmp"
 
-  e2e-kurtosis-cdk:
+  call-cdk-e2e-workflow:
     name: E2E Tests | Kurtosis-CDK
-    runs-on: ubuntu-latest-16-cores
     needs:
       - docker-build-local
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: "docker-image"
-          path: "/tmp"
-
-      - name: Load image
-        run: |
-          echo ${{ needs.docker-build-local.outputs.tags }}
-          docker load --input /tmp/docker-image.tar
-          docker image ls -a
-
-      - name: Checkout kurtosis-cdk
-        uses: actions/checkout@v4
-        with:
-          repository: 0xpolygon/kurtosis-cdk
-          ref: ${{ env.KURTOSIS_CDK_GIT_REF }}
-
-      - name: Replace param with local agglayer-rs docker img
-        run: |
-          new_value="${{ needs.docker-build-local.outputs.tags }}"
-
-          # Escape special characters in the new value
-          escaped_new_value=$(sed 's/[\/&]/\\&/g' <<< "$new_value")
-
-          sed -i "s/zkevm_agglayer_image: .*/zkevm_agglayer_image: $escaped_new_value/" "params.yml"
-
-          # Debug
-          cat params.yml
-
-      - name: Install kurtosis
-        run: |
-          echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
-          sudo apt update
-          sudo apt install kurtosis-cli=1.3.1
-          kurtosis analytics disable
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Run kurtosis
-        run: kurtosis run --enclave cdk-v1 --args-file params.yml --image-download always .
-
-      - name: Expose RPC URL
-        run: echo "ETH_RPC_URL=$(kurtosis port print cdk-v1 cdk-erigon-node-001 http-rpc)" >> $GITHUB_ENV
-
-      - name: Check that batches are progressing
-        continue-on-error: true
-        env:
-          ETH_RPC_URL: ${{ env.ETH_RPC_URL }}
-          TIMEOUT_SECONDS: 900
-        run: ./.github/scripts/monitor-verified-batches.sh --rpc-url "$ETH_RPC_URL"
-
-      - name: debug
-        run: kurtosis service logs cdk-v1 agglayer
+    uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@4ddee2c4bde34fd581fff96c3f822dd0eab9e1e6
+    secrets: inherit
+    with:
+      docker-image-override: agglayer_image
+      docker-tag: ${{ needs.docker-build-local.outputs.tags }}
+      kurtosis-cdk-ref: main
+      docker-artifact-name: docker-image
+      agglayer-e2e-ref: 4ddee2c4bde34fd581fff96c3f822dd0eab9e1e6
+      kurtosis-cdk-args: |
+        {
+          "deployment_stages": {
+          "deploy_l2_contracts": true,
+          "deploy_cdk_bridge_ui": false
+        },
+          "args": {
+            "consensus_contract_type": "pessimistic",
+            "erigon_strict_mode": false,
+            "enable_normalcy": true,
+            "agglayer_prover_sp1_key": "",
+            "agglayer_prover_primary_prover": "mock-prover",
+            "sequencer_type": "erigon",
+            "zkevm_contracts_image": "leovct/zkevm-contracts:v10.0.0-rc.3-fork.12"
+          }
+        }
 
   pushing-docker-image:
     name: Docker | Publish image to registry
@@ -247,7 +213,7 @@ jobs:
       packages: write
     needs:
       - docker-build-local
-      - e2e-kurtosis-cdk
+      - call-cdk-e2e-workflow
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
