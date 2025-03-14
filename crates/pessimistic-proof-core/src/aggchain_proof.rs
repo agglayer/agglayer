@@ -5,7 +5,10 @@
 //!
 //! For now, this is constraint to be either one ECDSA signature, or one SP1
 //! stark proof proving a specified statement which can be abstracted here.
-use agglayer_primitives::{words_to_bytes_be, Address, Signature};
+use agglayer_primitives::{
+    bytes::{BigEndian, ByteOrder as _},
+    Address, Signature,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as Sha256Digest, Sha256};
 
@@ -50,11 +53,16 @@ impl AggchainData {
             AggchainData::Generic {
                 aggchain_params,
                 aggchain_vkey,
-            } => keccak256_combine([
-                &(ConsensusType::Generic as u32).to_be_bytes(),
-                words_to_bytes_be(aggchain_vkey).as_slice(),
-                aggchain_params.as_slice(),
-            ]),
+            } => {
+                let mut aggchain_vkey_hash = [0u8; 32];
+                BigEndian::write_u32_into(aggchain_vkey, &mut aggchain_vkey_hash);
+
+                keccak256_combine([
+                    &(ConsensusType::Generic as u32).to_be_bytes(),
+                    aggchain_vkey_hash.as_slice(),
+                    aggchain_params.as_slice(),
+                ])
+            }
         }
     }
 }
