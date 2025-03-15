@@ -29,7 +29,7 @@ jobs:
       - uses: ./.github/actions/unit-test
 
   isolated-feature-checks:
-    name: 'Isolated feature checks'
+    name: "Isolated feature checks"
     runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v4
@@ -204,6 +204,20 @@ jobs:
             "zkevm_contracts_image": "leovct/zkevm-contracts:v10.0.0-rc.3-fork.12"
           }
         }
+
+  # We use this job to check the result of the E2E tests
+  # As the E2E are running from a reusable workflow,
+  # github doesn't handle the job name when dealing with required jobs.'
+  # see: https://github.com/actions/runner/issues/1917
+  check-e2e-result:
+    name: E2E Tests | Passed
+    needs:
+      - call-cdk-e2e-workflow
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 1
+        if: ${{ contains(fromJSON('["failure", "cancelled"]'), needs.call-cdk-e2e-workflow.result) }}
 
   pushing-docker-image:
     name: Docker | Publish image to registry
