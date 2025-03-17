@@ -201,7 +201,8 @@ jobs:
             "agglayer_prover_sp1_key": "",
             "agglayer_prover_primary_prover": "mock-prover",
             "sequencer_type": "erigon",
-            "zkevm_contracts_image": "leovct/zkevm-contracts:v10.0.0-rc.3-fork.12"
+            "zkevm_contracts_image": "leovct/zkevm-contracts:v10.0.0-rc.3-fork.12",
+            "cdk_node_image": "goranethernal/aggkit:v0.0.2-beta1"
           }
         }
 
