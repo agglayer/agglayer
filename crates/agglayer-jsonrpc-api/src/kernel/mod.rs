@@ -6,7 +6,7 @@ use agglayer_contracts::{
     polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
     polygon_zk_evm::PolygonZkEvm,
 };
-use agglayer_rate_limiting::RateLimiter;
+use agglayer_rate_limiting::SendTxRateLimiter as RateLimiter;
 use agglayer_rpc::error::SignatureVerificationError;
 use agglayer_types::Certificate;
 use ethers::{
@@ -169,7 +169,7 @@ where
     #[error("contract error: {0}")]
     ContractError(ContractError<RpcProvider>),
     #[error(transparent)]
-    RateLimited(#[from] agglayer_rate_limiting::RateLimited),
+    RateLimited(#[from] agglayer_rate_limiting::resource::SendTxRateLimited),
     #[error("Settlement timed out after {}s", .0.as_secs())]
     Timeout(std::time::Duration),
 }
