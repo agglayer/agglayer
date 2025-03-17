@@ -202,7 +202,8 @@ jobs:
             "agglayer_prover_primary_prover": "mock-prover",
             "sequencer_type": "erigon",
             "zkevm_contracts_image": "leovct/zkevm-contracts:v10.0.0-rc.3-fork.12",
-            "cdk_node_image": "goranethernal/aggkit:v0.0.2-beta1"
+            "cdk_node_image": "goranethernal/aggkit:v0.0.2-beta1",
+            "cdk_erigon_node_image": "hermeznetwork/cdk-erigon:v2.61.16-hotfix2"
           }
         }
 
