@@ -65,7 +65,7 @@ where
             .kernel
             .rate_limiter()
             .limiter_for(tx.tx.rollup_id)
-            .reserve_send_tx(tokio::time::Instant::now())?;
+            .reserve(tokio::time::Instant::now())?;
 
         agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
 

@@ -3,7 +3,7 @@
 use agglayer_contracts::{
     polygon_rollup_manager::PolygonRollupManagerErrors, polygon_zk_evm::PolygonZkEvmErrors,
 };
-use agglayer_rate_limiting::RateLimited as RateLimitedError;
+use agglayer_rate_limiting::resource::SendTxRateLimited as SendTxRateLimited;
 use agglayer_rpc::error::SignatureVerificationError;
 pub use agglayer_types::Digest;
 use ethers::{contract::ContractError, providers::Middleware, types::H256};
@@ -30,8 +30,8 @@ pub enum TxStatusError<Rpc: 'static + Middleware> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SendTxError<Rpc: 'static + Middleware> {
-    #[error("Rate limited: {0}")]
-    RateLimited(#[from] RateLimitedError),
+    #[error(transparent)]
+    RateLimited(#[from] SendTxRateLimited),
 
     #[error(transparent)]
     SignatureError(#[from] SignatureVerificationError<Rpc>),

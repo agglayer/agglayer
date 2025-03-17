@@ -6,8 +6,6 @@ pub use agglayer_types::primitives::digest::Digest;
 use agglayer_types::NetworkId;
 use ethers::{contract::ContractError, providers::Middleware, types::Address};
 
-pub use crate::rate_limiting::RateLimited as RateLimitedError;
-
 #[derive(Debug, thiserror::Error)]
 pub enum CertificateRetrievalError {
     #[error(transparent)]

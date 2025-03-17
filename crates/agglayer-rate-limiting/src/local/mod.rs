@@ -8,11 +8,9 @@
 //! The layers correspond to modules as follows:
 //!
 //! * [state] defines the internal state of a limiter component.
-//! * [limiter] implements rate limiting for single limiter component. It adds
-//!   the ability to reserve a slot which can be committed later,chandling of
-//!   trivial cases (e.g. no limit), and concurrency control.
-//! * [inner] is effectively a collection of limiter components for one network.
-//!   It defines what a [Component] is and bundles them into a struct.
+//! * [limiter] implements rate limiting for single limiter resource for single
+//!   network. It adds the ability to reserve a slot which can be committed later,
+//!   and takes care of  the handling of trivial cases (e.g. no limit).
 //! * [self] (this module) defines the top-level [LocalRateLimiter]. It takes
 //!   care of cross-thread synchronization and provides a safe interface to rate
 //!   limiter using a [SlotGuard].
@@ -20,53 +18,44 @@
 use std::sync::Arc;
 
 use agglayer_config::rate_limiting::NetworkRateLimitingConfig;
-use agglayer_types::EpochNumber;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 
-mod inner;
 mod limiter;
+pub mod resource;
 mod slot_guard;
 mod state;
 
-pub use inner::{component, Component, RateLimited};
+pub use resource::{Resource, ConfigurableResource};
 pub use slot_guard::SlotGuard;
-use tokio::time::Instant;
 
 /// Rate limiter state for single network / rollup.
-pub struct LocalRateLimiter(Arc<Mutex<inner::LocalRateLimiter>>);
+pub struct LocalRateLimiter<R: Resource>(Arc<Mutex<limiter::RateLimiter<R::State>>>);
 
-impl LocalRateLimiter {
+impl<R: ConfigurableResource> LocalRateLimiter<R> {
     /// Create a rate limiter form configuration.
     pub fn from_config(config: &NetworkRateLimitingConfig) -> Self {
+        todo!()
+        /*
         let inner = inner::LocalRateLimiter::from_config(config);
         Self(Arc::new(Mutex::new(inner)))
+        */
     }
+}
+
+impl<R: Resource> LocalRateLimiter<R> {
 
     /// Duplicate a handle to the rate limiter.
     pub fn shallow_clone(&self) -> Self {
         Self(Arc::clone(&self.0))
     }
 
-    /// Reserve a rate limiting slot.
-    pub fn reserve<C: Component>(&self, time: C::Instant) -> Result<SlotGuard<C>, RateLimited> {
-        let mut this = self.0.lock();
-        let slot = this.reserve::<C>(time)?;
+    /// Reserve a slot in this rate limiter.
+    pub fn reserve(&self, time: R::Instant) -> Result<SlotGuard<R>, R::LimitedInfo> {
+        let slot = self.lock().reserve(time)?;
         Ok(SlotGuard::new(self, slot))
     }
 
-    /// Reserve rate limiting slot for `sendTx`.
-    pub fn reserve_send_tx(
-        &self,
-        time: Instant,
-    ) -> Result<SlotGuard<component::SendTx>, RateLimited> {
-        self.reserve::<component::SendTx>(time)
-    }
-
-    /// Reserve a slot for `sendCertificate`.
-    pub fn reserve_send_certificate(
-        &self,
-        epoch: EpochNumber,
-    ) -> Result<SlotGuard<component::SendCertificate>, RateLimited> {
-        self.reserve::<component::SendCertificate>(epoch)
+    fn lock(&self) -> MutexGuard<limiter::RateLimiter<R::State>> {
+        self.0.lock()
     }
 }

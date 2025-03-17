@@ -7,8 +7,8 @@ mod top_level;
 pub mod tests;
 
 pub use agglayer_config::rate_limiting::{NetworkId, RateLimitingConfig};
-use local::LocalRateLimiter;
-pub use local::{component, Component, RateLimited, SlotGuard};
+pub use local::{resource, Resource, SlotGuard, LocalRateLimiter, ConfigurableResource};
 pub use top_level::RateLimiter;
 
-pub type SendTxSlotGuard = SlotGuard<component::SendTx>;
+pub type SendTxSlotGuard = SlotGuard<resource::SendTxSettlement>;
+pub type SendTxRateLimiter = RateLimiter<resource::SendTxSettlement>;

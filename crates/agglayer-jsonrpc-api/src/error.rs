@@ -1,6 +1,6 @@
 //! Support for structured errors in RPC.
 
-use agglayer_rate_limiting::RateLimited as RateLimitedError;
+use agglayer_rate_limiting::resource::SendTxRateLimited as SendTxRateLimitedError;
 use agglayer_rpc::CertificateSubmissionError;
 use ethers::{middleware::Middleware, types::H256};
 use jsonrpsee::types::error::ErrorObjectOwned;
@@ -139,7 +139,7 @@ pub enum Error {
     #[serde(rename_all = "kebab-case")]
     RateLimited {
         detail: String,
-        error: RateLimitedError,
+        error: SendTxRateLimitedError,
     },
 
     #[error("Resource not found: {0}")]
@@ -193,8 +193,8 @@ impl<Rpc: 'static + Middleware> From<SendTxError<Rpc>> for Error {
     }
 }
 
-impl From<RateLimitedError> for Error {
-    fn from(error: RateLimitedError) -> Self {
+impl From<SendTxRateLimitedError> for Error {
+    fn from(error: SendTxRateLimitedError) -> Self {
         let detail = error.to_string();
         Self::RateLimited { detail, error }
     }
