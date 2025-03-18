@@ -1,7 +1,7 @@
 use super::{
     limiter,
     state::{WallClockLimitedInfo, WallClockState},
-    Resource,
+    ConfigurableResource, Resource,
 };
 
 pub enum SendTxSettlement {}
@@ -33,3 +33,4 @@ impl From<limiter::RateLimited<WallClockLimitedInfo>> for SendTxRateLimited {
     }
 }
 
+impl ConfigurableResource for SendTxSettlement {}
