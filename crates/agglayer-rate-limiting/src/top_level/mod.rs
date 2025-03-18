@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, MutexGuard};
 
-use crate::{NetworkId, Resource, RateLimitingConfig};
+use crate::{ConfigurableResource, NetworkId, RateLimitingConfig, Resource};
 
 /// A global rate-limiter.
 ///
@@ -20,7 +20,7 @@ impl<R: Resource> Clone for RateLimiter<R> {
 
 mod inner;
 
-impl<R: Resource> RateLimiter<R> {
+impl<R: ConfigurableResource> RateLimiter<R> {
     /// Create a new rate limiter
     pub fn new(config: RateLimitingConfig) -> Self {
         Self(Arc::new(Mutex::new(inner::RateLimiter::new(config))))

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{LocalRateLimiter, NetworkId, RateLimitingConfig, Resource};
+use crate::{LocalRateLimiter, NetworkId, RateLimitingConfig, Resource, ConfigurableResource};
 
 /// A global rate-limiter implementation.
 ///
@@ -20,7 +20,9 @@ impl<R: Resource> RateLimiter<R> {
             config,
         }
     }
+}
 
+impl<R: ConfigurableResource> RateLimiter<R> {
     pub fn limiter_for(&mut self, network_id: NetworkId) -> LocalRateLimiter<R> {
         let mk_limiter = || LocalRateLimiter::from_config(&self.config.config_for(network_id));
         self.per_network
