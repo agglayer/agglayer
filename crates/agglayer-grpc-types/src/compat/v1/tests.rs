@@ -5,13 +5,13 @@ use agglayer_types::{
 };
 use prost::Message;
 
-use crate::protocol::types::v1;
-
 use super::Error;
+use crate::protocol::types::v1;
 
 #[cfg(fuzzing)]
 pub mod fuzzing_workarounds {
-    // TODO: these all should be in sp1 upstream, but they're not marked as #[used] and so disappear with optimizations
+    // TODO: these all should be in sp1 upstream, but they're not marked as #[used]
+    // and so disappear with optimizations
     #[no_mangle]
     pub extern "C" fn read_vec_raw() {
         unimplemented!("SP1 workaround, should never be called")
@@ -118,7 +118,8 @@ fn fuzz_round_trip_aggchain_data() {
         .for_each(|input| {
             let proto: v1::AggchainData = input.clone().try_into().unwrap();
             let _output = AggchainData::try_from(proto).unwrap();
-            // There's no good way to check equality of two stark proofs: assert_eq!(input, &output);
+            // There's no good way to check equality of two stark proofs:
+            // assert_eq!(input, &output);
         })
 }
 make_round_trip_fuzzers!(fuzz_round_trip_bridge_exit, v1::BridgeExit, BridgeExit);
