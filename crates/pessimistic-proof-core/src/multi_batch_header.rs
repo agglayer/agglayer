@@ -59,7 +59,7 @@ where
 
 pub fn signature_commitment(
     new_local_exit_root: Digest,
-    imported_bridge_exits: impl Iterator<Item = GlobalIndex>,
+    imported_bridge_exits: impl Iterator<Item = (GlobalIndex, Digest)>,
 ) -> Digest {
     let imported_hash = commit_imported_bridge_exits(imported_bridge_exits);
     keccak256_combine([new_local_exit_root.as_slice(), imported_hash.as_slice()])

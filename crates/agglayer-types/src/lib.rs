@@ -326,7 +326,7 @@ pub fn compute_signature_info(
 
     let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
         new_local_exit_root,
-        imported_bridge_exits.iter().map(|exit| exit.global_index),
+        imported_bridge_exits.iter().map(|exit| (exit.global_index, exit.bridge_exit.hash())),
     );
 
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
@@ -435,7 +435,7 @@ impl Certificate {
                     self.new_local_exit_root,
                     self.imported_bridge_exits
                         .iter()
-                        .map(|exit| exit.global_index),
+                        .map(|exit| (exit.global_index, exit.bridge_exit.hash())),
                 );
 
                 signature

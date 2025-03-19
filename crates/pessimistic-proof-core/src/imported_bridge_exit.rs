@@ -238,6 +238,8 @@ impl ImportedBridgeExit {
     }
 }
 
-pub fn commit_imported_bridge_exits(iter: impl Iterator<Item = GlobalIndex>) -> Digest {
-    keccak256_combine(iter.map(|global_index| global_index.hash()))
+pub fn commit_imported_bridge_exits(iter: impl Iterator<Item = (GlobalIndex, Digest)>) -> Digest {
+    keccak256_combine(iter.map(|(global_index, bridge_exit_hash)| {
+        keccak256_combine([global_index.hash(), bridge_exit_hash])
+    }))
 }

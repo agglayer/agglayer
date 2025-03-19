@@ -225,7 +225,7 @@ impl NetworkState {
             multi_batch_header
                 .imported_bridge_exits
                 .iter()
-                .map(|(exit, _)| exit.global_index),
+                .map(|(exit, _)| (exit.global_index, exit.bridge_exit.hash())),
         );
 
         // Verify the aggchain proof which can be either one signature or one sp1 proof.
