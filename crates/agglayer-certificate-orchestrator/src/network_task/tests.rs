@@ -8,7 +8,9 @@ use agglayer_storage::{
     },
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
+use agglayer_types::PessimisticRootInput;
 use mockall::predicate::{always, eq, in_iter};
+use pessimistic_proof::core::commitment::PPRootVersion;
 use rstest::rstest;
 
 use super::*;
@@ -787,7 +789,7 @@ async fn timeout_certifier() {
         });
 
     let expected_error = format!(
-        "Internal error happened in the certification process of {}: TimedOut",
+        "Internal error happened in the certification process of {}: internal error: TimedOut",
         certificate_id
     );
 
@@ -904,6 +906,8 @@ async fn process_next_certificate() {
                         .l1_info_root()
                         .expect("Failed to get L1 info root")
                         .unwrap_or_default(),
+                    PessimisticRootInput::Computed(PPRootVersion::V2),
+                    None,
                 )
                 .expect("Failed to apply certificate");
 

@@ -1,6 +1,5 @@
 ---
 source: crates/agglayer-storage/src/stores/state/tests.rs
 expression: hash
-snapshot_kind: text
 ---
-a9562fad98babe6f3067a41af8361da8d0edda6433a5af4216356fadedcd3205
+6c1ac61832db746ecfc4346aca5261e804e54789bbf19381111b5e94966879f1

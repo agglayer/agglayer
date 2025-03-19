@@ -1,3 +1,4 @@
+use agglayer_contracts::L1RpcError;
 use agglayer_types::{CertificateId, CertificateStatusError, Height, NetworkId};
 use pessimistic_proof::{error::ProofVerificationError, ProofError};
 
@@ -18,12 +19,13 @@ pub enum CertificationError {
         "Failed to retrieve the trusted sequencer address for network {0} during proving phase"
     )]
     TrustedSequencerNotFound(NetworkId),
+    #[error("Failed to retrieve the last pessimistic root for network {0}")]
+    LastPessimisticRootNotFound(NetworkId),
     #[error("Failed to retrieve the l1 info root for the l1 leaf count: {1} for certificate {0}")]
     L1InfoRootNotFound(CertificateId, u32),
     #[error("proof verification failed")]
     ProofVerificationFailed { source: ProofVerificationError },
-    #[error("prover execution failed: {source}")]
-    ProverExecutionFailed { source: ProofError },
+
     #[error("native execution failed: {source:?}")]
     NativeExecutionFailed { source: ProofError },
     #[error("Type error: {source}")]
@@ -34,8 +36,20 @@ pub enum CertificationError {
     Deserialize { source: bincode::Error },
     #[error("internal error: {0}")]
     InternalError(String),
+    #[error("prover failed")]
+    ProverFailed(String),
+    #[error("prover returned unspecified error")]
+    ProverReturnedUnspecifiedError,
+    #[error("prover execution failed")]
+    ProverExecutionFailed { source: ProofError },
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
+    #[error("rollup contract address not found")]
+    RollupContractAddressNotFound { source: L1RpcError },
+    #[error("Unable to find aggchain vkey")]
+    UnableToFindAggchainVkey { source: L1RpcError },
+    #[error("Aggchain proof vkey mismatch: expected {expected}, actual {actual}")]
+    AggchainProofVkeyMismatch { expected: String, actual: String },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -45,12 +59,14 @@ pub enum Error {
 
     #[error(transparent)]
     PreCertification(#[from] PreCertificationError),
+
     #[error(transparent)]
     Certification(#[from] CertificationError),
 
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
-    #[error("internal error: {0}")]
+
+    #[error("Internal error: {0}")]
     InternalError(String),
 
     #[error("The status of the certificate is invalid")]
@@ -70,6 +86,7 @@ pub enum Error {
         certificate_id: CertificateId,
         error: String,
     },
+
     #[error("Failed to communicate with L1: {0}")]
     L1CommunicationError(#[source] agglayer_contracts::L1RpcError),
 }

@@ -70,7 +70,7 @@ impl Proof {
 mod tests {
     use pessimistic_proof_core::{
         keccak::keccak256_combine,
-        proof::{EMPTY_LER, EMPTY_PP_ROOT},
+        proof::{EMPTY_LER, EMPTY_PP_ROOT_V2},
     };
 
     use crate::local_state::LocalNetworkState;
@@ -87,6 +87,6 @@ mod tests {
         ]);
 
         assert_eq!(EMPTY_LER, ler);
-        assert_eq!(EMPTY_PP_ROOT, ppr);
+        assert_eq!(EMPTY_PP_ROOT_V2, ppr);
     }
 }

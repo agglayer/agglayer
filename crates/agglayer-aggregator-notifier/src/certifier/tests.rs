@@ -2,7 +2,7 @@ use std::{sync::Arc, thread, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
 use agglayer_config::Config;
-use agglayer_contracts::{L1RpcError, Settler};
+use agglayer_contracts::{aggchain::AggchainVkeyHash, L1RpcError, Settler};
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{LocalNetworkStateData, NetworkId};
@@ -75,6 +75,11 @@ async fn happy_path() {
         .expect_default_l1_info_tree_entry()
         .once()
         .returning(|| (0u32, [1u8; 32]));
+
+    l1_rpc
+        .expect_get_prev_pessimistic_root()
+        .once()
+        .returning(|_| Ok([0u8; 32]));
 
     fail::cfg(
         "notifier::certifier::certify::before_verifying_proof",
@@ -171,6 +176,11 @@ async fn prover_timeout() {
         .once()
         .returning(|| (0u32, [1u8; 32]));
 
+    l1_rpc
+        .expect_get_prev_pessimistic_root()
+        .once()
+        .returning(|_| Ok([0u8; 32]));
+
     fail::cfg(
         "notifier::certifier::certify::before_verifying_proof",
         "return()",
@@ -207,8 +217,22 @@ mockall::mock! {
             proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
         ) -> Result<ethers::types::Address, L1RpcError>;
 
+        async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<ethers::types::Address, L1RpcError>;
+
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
+        async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError>;
+    }
+
+    #[async_trait::async_trait]
+    impl agglayer_contracts::AggchainContract for L1Rpc {
+        type M = NonceManagerMiddleware<Provider<MockProvider>>;
+
+        async fn get_aggchain_vkey_hash(
+            &self,
+            rollup_address: ethers::types::Address,
+            aggchain_vkey_selector: u16,
+        ) -> Result<AggchainVkeyHash, L1RpcError>;
     }
 
     #[async_trait::async_trait]
@@ -216,6 +240,7 @@ mockall::mock! {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
 
         async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, L1RpcError>;
+
         fn build_pending_transaction(
             &self,
             tx_hash: ethers::types::H256,
@@ -232,6 +257,7 @@ mockall::mock! {
         ) -> ethers::contract::ContractCall<NonceManagerMiddleware<Provider<MockProvider> > ,()> ;
     }
 }
+
 fn next_available_addr() -> std::net::SocketAddr {
     use std::net::{TcpListener, TcpStream};
 

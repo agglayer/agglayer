@@ -1,9 +1,9 @@
 use agglayer_types::{
     aggchain_proof::AggchainData, compute_signature_info, Address, Certificate,
-    LocalNetworkStateData, U256,
+    LocalNetworkStateData, Signature, U256,
 };
 use ecdsa_proof_lib::AggchainECDSA;
-use ethers_signers::{LocalWallet, Signer};
+use ethers_signers::{LocalWallet, Signer, WalletError};
 pub use pessimistic_proof::bridge_exit::LeafType;
 use pessimistic_proof::{
     bridge_exit::{BridgeExit, TokenInfo},
@@ -174,6 +174,18 @@ impl Forest {
         LocalNetworkState::from(self.state_b.clone())
     }
 
+    pub fn sign(&self, commitment: Digest) -> Result<(Signature, Address), WalletError> {
+        let signature = self.wallet.sign_hash(commitment.0.into())?;
+        Ok((
+            Signature::new(
+                U256::from_limbs(signature.r.0),
+                U256::from_limbs(signature.s.0),
+                signature.recovery_id().unwrap().is_y_odd(),
+            ),
+            self.wallet.address().0.into(),
+        ))
+    }
+
     /// Apply a sequence of events and return the corresponding [`Certificate`].
     pub fn apply_bridge_exits(
         &mut self,
@@ -204,6 +216,7 @@ impl Forest {
             imported_bridge_exits,
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
+            custom_chain_data: vec![],
         }
     }
 

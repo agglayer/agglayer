@@ -26,7 +26,6 @@ dependencies = [
 
 [tasks.ci-clippy-workspace]
 category = "CI - CHECK"
-toolchain = "nightly"
 command = "cargo"
 args = ["clippy", "--workspace", "--tests", "--", "-D", "warnings"]
 
