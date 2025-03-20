@@ -32,7 +32,7 @@ tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch
 ] }
 rand = { version = "0.9.0", optional = true }
 sp1-primitives = "=4.1.2"
-sp1-verifier = { version = "=4.1.2" }
+sp1-verifier = { version = "=4.1.3" }
 sp1-zkvm = { version = "=4.1.2", features = ["verify"] }
 
 [dev-dependencies]
