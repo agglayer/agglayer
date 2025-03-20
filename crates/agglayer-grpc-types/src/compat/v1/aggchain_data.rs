@@ -27,8 +27,12 @@ impl TryFrom<v1::AggchainData> for AggchainData {
                 aggchain_params: required_field!(proof, aggchain_params),
                 proof: match proof.proof {
                     Some(v1::aggchain_proof::Proof::Sp1Stark(proof)) => Proof::SP1Stark(Box::new(
-                        sp1v4_bincode_options()
-                            .deserialize(&proof)
+                        std::panic::catch_unwind(|| sp1v4_bincode_options().deserialize(&proof))
+                            .map_err(|_| {
+                                Error::deserializing_proof(Box::new(bincode::ErrorKind::Custom(
+                                    String::from("panic"),
+                                )))
+                            })?
                             .map_err(Error::deserializing_proof)?,
                     )),
                     None => return Err(Error::missing_field("proof").inside_field("data")),
@@ -51,7 +55,7 @@ impl TryFrom<AggchainData> for v1::AggchainData {
                     })
                 }
                 AggchainData::Generic {
-                    proof,
+                    proof: Proof::SP1Stark(proof),
                     aggchain_params,
                 } => v1::aggchain_data::Data::Generic(v1::AggchainProof {
                     context: HashMap::new(),

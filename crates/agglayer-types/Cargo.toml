@@ -4,10 +4,15 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+testutils = ["dep:arbitrary", "dep:ethers", "pessimistic-proof/testutils"]
+
 [dependencies]
 agglayer-primitives.workspace = true
-pessimistic-proof = { path = "../pessimistic-proof" }
+pessimistic-proof.workspace = true
 
+arbitrary = { workspace = true, optional = true }
 ethers = { workspace = true, optional = true }
 hex.workspace = true
 serde.workspace = true
@@ -21,7 +26,3 @@ rand.workspace = true
 
 [dev-dependencies]
 agglayer-types = { path = ".", features = ["testutils"] }
-
-[features]
-default = []
-testutils = ["dep:ethers"]

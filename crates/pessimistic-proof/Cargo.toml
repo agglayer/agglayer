@@ -4,8 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+testutils = ["dep:arbitrary", "pessimistic-proof-core/testutils"]
+
 [dependencies]
 agglayer-primitives.workspace = true
+arbitrary = { workspace = true, optional = true }
 bincode.workspace = true
 hex-literal = "0.4"
 hex.workspace = true
@@ -26,6 +30,3 @@ rs_merkle = { version = "1.4", default-features = false }
 
 [lints]
 workspace = true
-
-[features]
-testutils = []

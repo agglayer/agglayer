@@ -4,9 +4,20 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+testutils = [
+    "agglayer-primitives/testutils",
+    "alloy-primitives/arbitrary",
+    "dep:arbitrary",
+    "dep:rand",
+]
+
 [dependencies]
 agglayer-primitives.workspace = true
 
+alloy-primitives.workspace = true
+arbitrary = { workspace = true, optional = true }
 bincode = "1.3.3"
 hex = "0.4.3"
 hex-literal = "0.4"
@@ -27,7 +38,3 @@ sp1-zkvm = { version = "=4.1.2", features = ["verify"] }
 [dev-dependencies]
 rs_merkle = { version = "1.4", default-features = false }
 rand = "0.9.0"
-
-[features]
-default = []
-testutils = ["rand"]

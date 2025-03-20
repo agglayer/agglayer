@@ -243,9 +243,10 @@ where
             })?;
 
         let proof = prover_response.into_inner().proof;
-        let proof: Proof = default_bincode_options()
-            .deserialize(&proof)
-            .map_err(|source| CertificationError::Deserialize { source })?;
+        let proof: Proof =
+            std::panic::catch_unwind(|| default_bincode_options().deserialize(&proof))
+                .map_err(|_| CertificationError::InternalError(String::from("panic")))?
+                .map_err(|source| CertificationError::Deserialize { source })?;
 
         debug!("Proof successfully generated!");
 

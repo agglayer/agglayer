@@ -7,7 +7,7 @@ use serde_with::serde_as;
 use crate::local_exit_tree::hasher::Hasher;
 
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LETMerkleProof<H, const TREE_DEPTH: usize = 32>
 where
     H: Hasher,
@@ -15,6 +15,18 @@ where
 {
     #[serde_as(as = "[_; TREE_DEPTH]")]
     pub siblings: [H::Digest; TREE_DEPTH],
+}
+
+#[cfg(feature = "testutils")]
+impl<'a, H, const TREE_DEPTH: usize> arbitrary::Arbitrary<'a> for LETMerkleProof<H, TREE_DEPTH>
+where
+    H: Hasher,
+    H::Digest: Serialize + DeserializeOwned + arbitrary::Arbitrary<'a>,
+{
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let siblings = <[H::Digest; TREE_DEPTH]>::arbitrary(u)?;
+        Ok(Self { siblings })
+    }
 }
 
 impl<H, const TREE_DEPTH: usize> LETMerkleProof<H, TREE_DEPTH>

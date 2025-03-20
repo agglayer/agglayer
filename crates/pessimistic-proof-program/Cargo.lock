@@ -33,6 +33,7 @@ name = "agglayer-primitives"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives",
+ "byteorder",
  "k256",
  "serde",
 ]
@@ -3402,6 +3403,7 @@ name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "alloy-primitives",
  "bincode",
  "hex",
  "hex-literal",
@@ -3409,6 +3411,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sha2 0.10.8 (git+https://github.com/sp1-patches/RustCrypto-hashes.git?tag=patch-sha2-0.10.8-sp1-4.0.0)",
+ "sp1-primitives",
  "sp1-verifier",
  "sp1-zkvm",
  "thiserror 2.0.12",
