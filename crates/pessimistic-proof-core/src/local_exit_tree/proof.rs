@@ -24,11 +24,7 @@ where
     H::Digest: Serialize + DeserializeOwned + arbitrary::Arbitrary<'a>,
 {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let siblings = (0..TREE_DEPTH)
-            .map(|_| H::Digest::arbitrary(u))
-            .collect::<Result<Vec<_>, _>>()?
-            .try_into()
-            .unwrap_or_else(|_| panic!("iterator has the wrong length"));
+        let siblings = <[H::Digest; TREE_DEPTH]>::arbitrary(u)?;
         Ok(Self { siblings })
     }
 }
