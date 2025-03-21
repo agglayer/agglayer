@@ -160,6 +160,10 @@ where
                 return Err(Error::InternalError("Unable to find the proof".to_string()));
             };
 
+        let mut proof_with_selector =
+            pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR.to_vec();
+        proof_with_selector.extend(&proof);
+
         let contract_call = self
             .l1_rpc
             .build_verify_pessimistic_trusted_aggregator_call(
@@ -167,7 +171,7 @@ where
                 l_1_info_tree_leaf_count,
                 *output.new_local_exit_root,
                 *output.new_pessimistic_root,
-                proof.into(),
+                proof_with_selector.into(),
             );
 
         tracing::Span::current().record(

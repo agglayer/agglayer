@@ -17,7 +17,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
-  ZKEVM_CONTRACT_GIT_REF: feature/ongoing-v0.3.0-docker
+  ZKEVM_CONTRACT_GIT_REF: feature/ongoing-v0.3.0
 
 jobs:
   unit:
@@ -57,7 +57,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          repository: 0xPolygonHermez/zkevm-contracts
+          repository: agglayer/agg-contracts-internal
+          token: ${{ secrets.GH_PAT }}
           ref: ${{ env.ZKEVM_CONTRACT_GIT_REF }}
 
       - name: Set up QEMU
@@ -71,36 +72,7 @@ jobs:
           npm i
       - name: Build docker
         run: |
-          # Set the -e option to stop the script if any command fails
-          set -e
-
-          # Define cleanup function
-          cleanup() {
-              DEV_PERIOD=1 docker compose -f docker/docker-compose.yml down
-          }
-          # Configure "trap" in case there's an error
-          trap cleanup ERR
-
-          rm -rf docker/gethData/geth_data
-          [ -f deployment/v2/create_rollup_output_* ] && rm ./deployment/v2/create_rollup_output_*
-          DEV_PERIOD=1 docker compose -f docker/docker-compose.yml up -d geth
-          sleep 5
-          node docker/scripts/fund-accounts.js
-          cp docker/scripts/v2/deploy_parameters_docker.json deployment/v2/deploy_parameters.json
-          cp docker/scripts/v2/create_rollup_parameters_docker.json deployment/v2/create_rollup_parameters.json
-          npm run deploy:testnet:v2:localhost
-          rm -rf docker/deploymentOutput
-          mkdir docker/deploymentOutput
-          mv ./deployment/v2/create_rollup_output_*.json ./docker/deploymentOutput/create_rollup_output.json
-          cp ./docker/scripts/v2/create_rollup_parameters_docker-v0.2.0.json ./deployment/v2/create_rollup_parameters.json
-          npx hardhat run ./deployment/v2/4_createRollup.ts --network localhost
-          mv ./deployment/v2/create_rollup_output_*.json ./docker/deploymentOutput/
-          mv deployment/v2/deploy_output.json docker/deploymentOutput
-          mv deployment/v2/genesis.json docker/deploymentOutput
-          [ -f deployment/v2/genesis_sovereign.json ] && mv deployment/v2/genesis_sovereign.json docker/deploymentOutput
-          DEV_PERIOD=1 docker compose -f docker/docker-compose.yml down
-          sudo chown -R $(id -u):$(id -g) docker/gethData
-          docker build -t hermeznetwork/geth-zkevm-contracts -f docker/Dockerfile .
+          npm run dockerv2:contracts:all
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
