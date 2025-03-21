@@ -63,6 +63,7 @@ dependencies = [
  "clap",
  "dirs",
  "dotenvy",
+ "hex",
  "insta",
  "pessimistic-proof",
  "serde_json",

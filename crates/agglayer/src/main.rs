@@ -43,6 +43,13 @@ fn main() -> anyhow::Result<()> {
             println!("{}", vkey);
         }
 
+        cli::Commands::VkeySelector => {
+            let vkey_selector = hex::encode(
+                pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_VERSION.to_be_bytes(),
+            );
+            println!("{vkey_selector}");
+        }
+
         cli::Commands::Backup(cli::Backup::List { config_path: cfg }) => {
             let cfg = agglayer_config::Config::try_load(&cfg)?;
 

@@ -17,3 +17,5 @@ pub mod nullifier_tree;
 pub mod utils;
 
 pub use local_state::NetworkState;
+
+include!(concat!(env!("OUT_DIR"), "/version.rs"));
