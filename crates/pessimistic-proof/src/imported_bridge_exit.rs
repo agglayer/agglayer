@@ -165,7 +165,7 @@ mod tests {
                 .into(),
                 timestamp: 1697231573,
             }
-            .hash()
+            .hash(hex!("16994edfddddb9480667b64174fc00d3b6da7290d37b8db3a16571b4ddf0789f").into())
             .0,
         );
 
@@ -182,7 +182,7 @@ mod tests {
                 .into(),
                 timestamp: 658736476,
             }
-            .hash()
+            .hash(hex!("356682567c5d485bbabe89590d3d72b08671a0a07899dcbaddccbe0599491669").into())
             .0,
         );
     }
