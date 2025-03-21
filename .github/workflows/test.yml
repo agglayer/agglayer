@@ -168,7 +168,7 @@ jobs:
 
   docker-build-local:
     name: E2E Tests | Docker build
-    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
+    # TODO: reenable before landing: if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
     uses: ./.github/workflows/docker-build.yml
     secrets: inherit
     with:
@@ -185,7 +185,7 @@ jobs:
     with:
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
-      kurtosis-cdk-ref: main
+      kurtosis-cdk-ref: 82c918fb4f6854c41d4dd15cc7e403bdc49b0a37
       docker-artifact-name: docker-image
       agglayer-e2e-ref: 4ddee2c4bde34fd581fff96c3f822dd0eab9e1e6
       kurtosis-cdk-args: |
@@ -202,6 +202,7 @@ jobs:
             "agglayer_prover_primary_prover": "mock-prover",
             "sequencer_type": "erigon",
             "zkevm_contracts_image": "leovct/zkevm-contracts:v10.0.0-rc.3-fork.12",
+            "cdk_node_type": "aggkit",
             "cdk_node_image": "goranethernal/aggkit:v0.0.2-beta1",
             "cdk_erigon_node_image": "hermeznetwork/cdk-erigon:v2.61.16-hotfix2"
           }
