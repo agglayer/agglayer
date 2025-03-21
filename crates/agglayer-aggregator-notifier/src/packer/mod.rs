@@ -160,9 +160,8 @@ where
                 return Err(Error::InternalError("Unable to find the proof".to_string()));
             };
 
-        let mut proof_with_selector = pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_VERSION
-            .to_be_bytes()
-            .to_vec();
+        let mut proof_with_selector =
+            pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR.to_vec();
         proof_with_selector.extend(&proof);
 
         let contract_call = self

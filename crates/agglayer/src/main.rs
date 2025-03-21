@@ -44,9 +44,8 @@ fn main() -> anyhow::Result<()> {
         }
 
         cli::Commands::VkeySelector => {
-            let vkey_selector = hex::encode(
-                pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_VERSION.to_be_bytes(),
-            );
+            let vkey_selector =
+                hex::encode(pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR);
             println!("{vkey_selector}");
         }
 
