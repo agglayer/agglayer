@@ -1,3 +1,4 @@
+use agglayer_primitives::U256;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -236,10 +237,21 @@ impl ImportedBridgeExit {
             }
         }
     }
+
+    /// Computes the hash used to commit the imported bridge exits
+    pub fn compute_bridge_exit_commitment(&self) -> Digest {
+        let global_index_u256: U256 = self.global_index.into();
+        keccak256_combine([
+            global_index_u256.to_le_bytes(),
+            self.bridge_exit.hash().0,
+        ])
+    }
 }
 
-pub fn commit_imported_bridge_exits(iter: impl Iterator<Item = (GlobalIndex, Digest)>) -> Digest {
-    keccak256_combine(iter.map(|(global_index, bridge_exit_hash)| {
-        keccak256_combine([global_index.hash(), bridge_exit_hash])
-    }))
+pub fn commit_imported_bridge_exits(imported_bridge_exits: Vec<ImportedBridgeExit>) -> Digest {
+    keccak256_combine(
+        imported_bridge_exits
+            .into_iter() // iter()
+            .map(|exit| exit.compute_bridge_exit_commitment()),
+    )
 }

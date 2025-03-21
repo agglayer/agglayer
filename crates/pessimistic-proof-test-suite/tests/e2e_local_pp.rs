@@ -70,7 +70,7 @@ fn pp_root_migration_helper(
             multi_batch_header
                 .imported_bridge_exits
                 .iter()
-                .map(|ib| (ib.global_index, ib.bridge_exit.hash())),
+                .map(|ib| (ib.0.global_index, ib.0.bridge_exit.hash())),
         ),
         height: certificate.height,
     };

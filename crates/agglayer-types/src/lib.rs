@@ -43,6 +43,7 @@ pub use pessimistic_proof::imported_bridge_exit::{
     L1InfoTreeLeafInner, MerkleProof,
 };
 pub use pessimistic_proof::proof::Proof;
+pub use pessimistic_poof_core::imported_bridge_exit::commit_imported_bridge_exits;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {
@@ -326,7 +327,7 @@ pub fn compute_signature_info(
 
     let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
         new_local_exit_root,
-        imported_bridge_exits.iter().map(|exit| (exit.global_index, exit.bridge_exit.hash())),
+        commit_imported_bridge_exits(imported_bridge_exits)
     );
 
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
