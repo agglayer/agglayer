@@ -106,14 +106,20 @@ impl Forest {
             self.local_exit_tree_data_a.add_leaf(exit.hash()).unwrap();
         }
 
+        let (rer, mer, ger) = {
+            let rer = Digest::default();
+            let mer = self.local_exit_tree_data_a.get_root();
+            (rer, mer, keccak256_combine([mer, rer]))
+        };
+
         let l1_leaf = L1InfoTreeLeaf {
             l1_info_tree_index: 0,
-            rer: Digest::default(),
-            mer: self.local_exit_tree_data_a.get_root(),
+            rer,
+            mer,
             inner: L1InfoTreeLeafInner {
                 block_hash: Digest::default(),
                 timestamp: 0,
-                global_exit_root: Digest::default(),
+                global_exit_root: ger,
             },
         };
 
