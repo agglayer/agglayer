@@ -41,4 +41,6 @@ rand = "0.9.0"
 
 [build-dependencies]
 semver = "1.0"
-toml = "0.8.20"
+toml.workspace = true
+# semver = "1.0"
+# toml = "0.8.20"
