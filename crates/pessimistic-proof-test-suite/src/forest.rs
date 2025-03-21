@@ -252,7 +252,7 @@ impl Forest {
                     certificate
                         .imported_bridge_exits
                         .iter()
-                        .map(|i| i.global_index),
+                        .map(|i| (i.global_index, i.bridge_exit.hash())),
                 ),
                 prev_local_exit_root: *certificate.prev_local_exit_root,
                 new_local_exit_root: *certificate.new_local_exit_root,
