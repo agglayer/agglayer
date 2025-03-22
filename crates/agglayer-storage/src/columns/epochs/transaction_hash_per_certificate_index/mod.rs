@@ -1,5 +1,4 @@
-use agglayer_types::CertificateIndex;
-use agglayer_types::Digest;
+use agglayer_types::{primitives::digest::Digest, CertificateIndex};
 
 use crate::columns::PER_EPOCH_TRANSACTION_HASH_PER_CERTIFICATE_INDEX;
 

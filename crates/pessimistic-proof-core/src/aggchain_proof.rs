@@ -7,12 +7,13 @@
 //! stark proof proving a specified statement which can be abstracted here.
 use agglayer_primitives::{
     bytes::{BigEndian, ByteOrder as _},
+    digest::Digest,
     Address, Signature,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as Sha256Digest, Sha256};
 
-use crate::keccak::{digest::Digest, keccak256_combine};
+use crate::keccak::keccak256_combine;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub enum ConsensusType {

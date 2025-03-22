@@ -35,7 +35,6 @@ agglayer-clock = { path = "crates/agglayer-clock" }
 agglayer-config = { path = "crates/agglayer-config" }
 agglayer-contracts = { path = "crates/agglayer-contracts" }
 agglayer-node = { path = "crates/agglayer-node" }
-agglayer-primitives = { path = "crates/agglayer-primitives" }
 agglayer-signer = { path = "crates/agglayer-signer" }
 agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
@@ -115,3 +114,9 @@ sp1-sdk = "=4.1.2"
 sp1-primitives = "=4.1.2"
 sp1-prover = "=4.1.2"
 sp1-zkvm = { version = "=4.1.2", default-features = false }
+
+agglayer-primitives = { path = "../interop/crates/agglayer-primitives" }
+agglayer-tries = { path = "../interop/crates/agglayer-tries" }
+agglayer-interop = { path = "../interop/crates/agglayer-interop" }
+unified-bridge = { path = "../interop/crates/unified-bridge" }
+agglayer-interop-types = { path = "../interop/crates/agglayer-interop-types" }

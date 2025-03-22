@@ -11,22 +11,12 @@ macro_rules! required_field {
 
 mod address;
 mod aggchain_data;
-mod bridge_exit;
-mod bytes;
 mod certificate;
 mod certificate_header;
 mod certificate_id;
-mod claim;
-mod digest;
 mod epoch_configuration;
 mod error;
 mod error_kinds;
-mod global_index;
-mod imported_bridge_exit;
-mod l1_info_tree_leaf;
-mod merkle_proof;
-mod token_info;
-mod u256;
 
 pub use error::{Error, ErrorKind};
 

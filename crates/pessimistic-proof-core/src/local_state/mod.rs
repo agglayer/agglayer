@@ -1,21 +1,23 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
+use agglayer_primitives::digest::Digest;
+use agglayer_primitives::keccak::Keccak256Hasher;
+use agglayer_primitives::utils::Hashable;
 use agglayer_primitives::{ruint::UintTryFrom, Signature, B256, U256, U512};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_os = "zkvm"))]
 use tracing::warn;
+use unified_bridge::imported_bridge_exit::{commit_imported_bridge_exits, Error};
+use unified_bridge::local_exit_tree::LocalExitTree;
+use unified_bridge::token_info::{L1_ETH, L1_NETWORK_ID};
 
 use self::commitment::{PPRootVersion, PessimisticRoot, SignatureCommitment};
 #[cfg(target_os = "zkvm")]
 use crate::aggchain_proof::AggchainProofPublicValues;
 use crate::{
     aggchain_proof::AggchainData,
-    bridge_exit::{L1_ETH, L1_NETWORK_ID},
-    imported_bridge_exit::{commit_imported_bridge_exits, Error},
-    keccak::digest::Digest,
     local_balance_tree::LocalBalanceTree,
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierTree},
     ProofError,

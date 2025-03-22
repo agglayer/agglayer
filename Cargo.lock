@@ -263,6 +263,7 @@ dependencies = [
 name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
+ "agglayer-interop",
  "agglayer-types",
  "anyhow",
  "bincode",
@@ -275,6 +276,48 @@ dependencies = [
  "serde",
  "thiserror 2.0.12",
  "tonic-types",
+]
+
+[[package]]
+name = "agglayer-interop"
+version = "0.1.0"
+dependencies = [
+ "agglayer-interop-grpc-types",
+ "agglayer-interop-types",
+]
+
+[[package]]
+name = "agglayer-interop-grpc-types"
+version = "0.1.0"
+dependencies = [
+ "agglayer-interop-types",
+ "bincode",
+ "hex",
+ "pbjson",
+ "prost 0.13.5",
+ "serde",
+ "thiserror 2.0.12",
+ "tonic-types",
+]
+
+[[package]]
+name = "agglayer-interop-types"
+version = "0.1.0"
+dependencies = [
+ "agglayer-primitives",
+ "agglayer-tries",
+ "arbitrary",
+ "bincode",
+ "ethers",
+ "hex",
+ "rand 0.9.0",
+ "serde",
+ "serde_with",
+ "sp1-core-machine",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror 2.0.12",
+ "unified-bridge",
 ]
 
 [[package]]
@@ -405,8 +448,11 @@ dependencies = [
  "alloy-primitives",
  "arbitrary",
  "byteorder",
+ "hex",
  "k256",
+ "rand 0.9.0",
  "serde",
+ "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
 ]
 
 [[package]]
@@ -511,6 +557,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
+ "agglayer-tries",
  "agglayer-types",
  "arc-swap",
  "bincode",
@@ -582,10 +629,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "agglayer-types"
+name = "agglayer-tries"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "agglayer-types"
+version = "0.1.0"
+dependencies = [
+ "agglayer-interop-types",
+ "agglayer-primitives",
+ "agglayer-tries",
  "agglayer-types",
  "arbitrary",
  "bincode",
@@ -599,6 +658,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
+ "unified-bridge",
 ]
 
 [[package]]
@@ -2128,7 +2188,7 @@ dependencies = [
  "bitflags 2.9.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.11.0",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2148,7 +2208,7 @@ dependencies = [
  "bitflags 2.9.0",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -6025,7 +6085,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 3.2.0",
+ "proc-macro-crate 2.0.0",
  "proc-macro2",
  "quote",
  "syn 2.0.99",
@@ -6648,6 +6708,7 @@ name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "agglayer-tries",
  "arbitrary",
  "bincode",
  "hex",
@@ -6663,6 +6724,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unified-bridge",
 ]
 
 [[package]]
@@ -6670,6 +6732,7 @@ name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "agglayer-tries",
  "alloy-primitives",
  "arbitrary",
  "bincode",
@@ -6687,6 +6750,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
  "tracing",
+ "unified-bridge",
 ]
 
 [[package]]
@@ -7175,7 +7239,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
@@ -7208,7 +7272,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.99",
@@ -10236,6 +10300,26 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
+
+[[package]]
+name = "unified-bridge"
+version = "0.1.0"
+dependencies = [
+ "agglayer-primitives",
+ "agglayer-tries",
+ "arbitrary",
+ "bincode",
+ "hex",
+ "hex-literal",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sp1-core-machine",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror 2.0.12",
+ "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "untrusted"

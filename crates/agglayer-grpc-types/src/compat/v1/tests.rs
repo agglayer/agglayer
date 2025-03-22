@@ -1,8 +1,9 @@
-use agglayer_types::{
+use agglayer_interop::types::{
     aggchain_proof::AggchainData, primitives::SignatureError, Address, BridgeExit, CertificateId,
-    ClaimFromMainnet, ClaimFromRollup, Digest, EpochConfiguration, GlobalIndex, ImportedBridgeExit,
-    L1InfoTreeLeaf, L1InfoTreeLeafInner, MerkleProof, TokenInfo, U256,
+    ClaimFromMainnet, ClaimFromRollup, Digest, GlobalIndex, ImportedBridgeExit, L1InfoTreeLeaf,
+    L1InfoTreeLeafInner, MerkleProof, TokenInfo, U256,
 };
+use agglayer_types::EpochConfiguration;
 use prost::Message;
 
 use super::Error;

@@ -1,19 +1,21 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+pub use agglayer_interop_types::aggchain_proof;
+use agglayer_interop_types::aggchain_proof::AggchainData;
+use agglayer_interop_types::{BridgeExit, Digest, GlobalIndex, ImportedBridgeExit, TokenInfo};
+use agglayer_primitives::keccak::Keccak256Hasher;
+use agglayer_primitives::utils::{FromBool, Hashable};
 use agglayer_primitives::SignatureError;
+use agglayer_tries::error::SmtError;
+use agglayer_tries::smt::Smt;
 use pessimistic_proof::core::commitment::{PPRootVersion, PessimisticRoot};
 use pessimistic_proof::core::{self, Vkey};
 use pessimistic_proof::error::ProofVerificationError;
-pub use pessimistic_proof::keccak::digest::Digest;
 use pessimistic_proof::keccak::keccak256_combine;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
-use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
-use pessimistic_proof::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 use pessimistic_proof::local_state::StateCommitment;
 use pessimistic_proof::multi_batch_header::signature_commitment;
 use pessimistic_proof::nullifier_tree::{NullifierTree, NULLIFIER_TREE_DEPTH};
-use pessimistic_proof::utils::smt::{Smt, SmtError};
-use pessimistic_proof::utils::{FromBool as _, Hashable as _};
 use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
     local_balance_tree::LocalBalancePath,
@@ -23,26 +25,17 @@ use pessimistic_proof::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::aggchain_proof::AggchainData;
-
-pub mod aggchain_proof;
-
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Digest;
 pub type Height = u64;
 pub type Metadata = Digest;
-
+pub use agglayer_interop_types::NetworkId;
 pub use agglayer_primitives as primitives;
 // Re-export common primitives again as agglayer-types root types
 pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
-pub use pessimistic_proof::bridge_exit::{BridgeExit, LeafType, NetworkId, TokenInfo};
-pub use pessimistic_proof::global_index::GlobalIndex;
-pub use pessimistic_proof::imported_bridge_exit::{
-    Claim, ClaimFromMainnet, ClaimFromRollup, ImportedBridgeExit, L1InfoTreeLeaf,
-    L1InfoTreeLeafInner, MerkleProof,
-};
 pub use pessimistic_proof::proof::Proof;
+use unified_bridge::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {
@@ -102,17 +95,14 @@ pub enum Error {
     BalanceUnderflow(TokenInfo),
     /// The balance proof for the given token cannot be generated.
     #[error("Unable to generate the balance proof. token: {token:?}, error: {source}")]
-    BalanceProofGenerationFailed {
-        source: pessimistic_proof::utils::smt::SmtError,
-        token: TokenInfo,
-    },
+    BalanceProofGenerationFailed { source: SmtError, token: TokenInfo },
     /// The nullifier path for the given imported bridge exit cannot be
     /// generated.
     #[error(
         "Unable to generate the nullifier path. global_index: {global_index:?}, error: {source}"
     )]
     NullifierPathGenerationFailed {
-        source: pessimistic_proof::utils::smt::SmtError,
+        source: SmtError,
         global_index: GlobalIndex,
     },
     /// The operation cannot be applied on the local exit tree.
@@ -515,7 +505,7 @@ impl LocalNetworkStateData {
                 nullifier_root: self.nullifier_tree.root,
                 ler_leaf_count: self.exit_tree.leaf_count(),
                 height: certificate.height,
-                origin_network: *certificate.network_id,
+                origin_network: certificate.network_id,
             }
             .compute_pp_root(version),
         };
@@ -527,14 +517,14 @@ impl LocalNetworkStateData {
         let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
             // Consider all the imported bridge exits except for the native token
             let imported_bridge_exits = certificate.imported_bridge_exits.iter().filter(|b| {
-                b.bridge_exit.amount_token_info().origin_network != *certificate.network_id
+                b.bridge_exit.amount_token_info().origin_network != certificate.network_id
             });
 
             // Consider all the bridge exits except for the native token
             let bridge_exits = certificate
                 .bridge_exits
                 .iter()
-                .filter(|b| b.amount_token_info().origin_network != *certificate.network_id);
+                .filter(|b| b.amount_token_info().origin_network != certificate.network_id);
 
             // Set of dedup tokens mutated in the transition
             let mutated_tokens: BTreeSet<TokenInfo> = {
@@ -647,18 +637,10 @@ impl LocalNetworkStateData {
         };
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
-            origin_network: *certificate.network_id,
+            origin_network: certificate.network_id,
             prev_local_exit_root: certificate.prev_local_exit_root,
-            bridge_exits: certificate
-                .bridge_exits
-                .iter()
-                .cloned()
-                .map(Into::into)
-                .collect(),
-            imported_bridge_exits: imported_bridge_exits
-                .into_iter()
-                .map(|(ib, ex)| (ib.into(), ex))
-                .collect(),
+            bridge_exits: certificate.bridge_exits.clone(),
+            imported_bridge_exits,
             balances_proofs,
             prev_balance_root,
             prev_nullifier_root,
