@@ -1,28 +1,28 @@
 use agglayer_types::{CertificateHeader, CertificateStatus, CertificateStatusError};
 
-use crate::protocol::types::v1;
+use crate::node::v1;
 
-impl From<CertificateStatusError> for v1::CertificateStatusError {
+impl From<CertificateStatusError> for v1::types::CertificateStatusError {
     fn from(value: CertificateStatusError) -> Self {
-        v1::CertificateStatusError {
+        v1::types::CertificateStatusError {
             // Display value with the whole stack trace
             message: format!("{value:?}").into_bytes().into(),
         }
     }
 }
 
-impl From<CertificateHeader> for v1::CertificateHeader {
+impl From<CertificateHeader> for v1::types::CertificateHeader {
     fn from(value: CertificateHeader) -> Self {
         let (status, error) = match value.status {
-            CertificateStatus::Pending => (v1::CertificateStatus::Pending, None),
-            CertificateStatus::Proven => (v1::CertificateStatus::Proven, None),
-            CertificateStatus::Candidate => (v1::CertificateStatus::Candidate, None),
+            CertificateStatus::Pending => (v1::types::CertificateStatus::Pending, None),
+            CertificateStatus::Proven => (v1::types::CertificateStatus::Proven, None),
+            CertificateStatus::Candidate => (v1::types::CertificateStatus::Candidate, None),
             CertificateStatus::InError { error } => {
-                (v1::CertificateStatus::InError, Some(error.into()))
+                (v1::types::CertificateStatus::InError, Some(error.into()))
             }
-            CertificateStatus::Settled => (v1::CertificateStatus::Settled, None),
+            CertificateStatus::Settled => (v1::types::CertificateStatus::Settled, None),
         };
-        v1::CertificateHeader {
+        v1::types::CertificateHeader {
             network_id: value.network_id.into(),
             height: value.height,
             epoch_number: value.epoch_number,

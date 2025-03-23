@@ -2,8 +2,9 @@ syntax = "proto3";
 
 package agglayer.node.v1;
 
-import "agglayer/protocol/types/v1/certificate.proto";
-import "agglayer/protocol/types/v1/certificate_header.proto";
+import "agglayer/node/v1/types/certificate.proto";
+import "agglayer/node/v1/types/certificate_header.proto";
+import "agglayer/node/v1/types/certificate_id.proto";
 
 // Service for querying node state.
 service NodeStateService {
@@ -47,13 +48,13 @@ enum GetLatestCertificateHeaderErrorKind {
 // Request to get a CertificateHeader for a particular CertificateId.
 message GetCertificateHeaderRequest {
   // The certificate identifier.
-  protocol.types.v1.CertificateId certificate_id = 1;
+  types.CertificateId certificate_id = 1;
 }
 
 // Response to the CertificateHeader request.
 message GetCertificateHeaderResponse {
   // The certificate header.
-  protocol.types.v1.CertificateHeader certificate_header = 1;
+  types.CertificateHeader certificate_header = 1;
 }
 
 // Request to get the latest known/pending/settled certificate header for a network.
@@ -80,5 +81,5 @@ enum LatestCertificateRequestType {
 // Response to the latest known/pending/settled certificate header request.
 message GetLatestCertificateHeaderResponse {
   // The latest certificate header.
-  protocol.types.v1.CertificateHeader certificate_header = 1;
+  types.CertificateHeader certificate_header = 1;
 }

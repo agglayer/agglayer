@@ -1,12 +1,12 @@
 use agglayer_types::{Certificate, NetworkId};
 
 use super::Error;
-use crate::protocol::types::v1;
+use crate::node::v1;
 
-impl TryFrom<v1::Certificate> for Certificate {
+impl TryFrom<v1::types::Certificate> for Certificate {
     type Error = Error;
 
-    fn try_from(value: v1::Certificate) -> Result<Self, Self::Error> {
+    fn try_from(value: v1::types::Certificate) -> Result<Self, Self::Error> {
         Ok(Certificate {
             network_id: NetworkId::new(value.network_id),
             height: value.height,
@@ -31,11 +31,11 @@ impl TryFrom<v1::Certificate> for Certificate {
     }
 }
 
-impl TryFrom<Certificate> for v1::Certificate {
+impl TryFrom<Certificate> for v1::types::Certificate {
     type Error = Error;
 
     fn try_from(value: Certificate) -> Result<Self, Self::Error> {
-        Ok(v1::Certificate {
+        Ok(v1::types::Certificate {
             network_id: value.network_id.into(),
             height: value.height,
             prev_local_exit_root: Some(value.prev_local_exit_root.into()),

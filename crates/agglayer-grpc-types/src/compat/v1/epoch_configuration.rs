@@ -1,9 +1,9 @@
 use agglayer_types::EpochConfiguration;
 
-use crate::protocol::types::v1;
+use crate::node::v1;
 
-impl From<v1::EpochConfiguration> for EpochConfiguration {
-    fn from(value: v1::EpochConfiguration) -> Self {
+impl From<v1::types::EpochConfiguration> for EpochConfiguration {
+    fn from(value: v1::types::EpochConfiguration) -> Self {
         EpochConfiguration {
             genesis_block: value.genesis_block,
             epoch_duration: value.epoch_duration,
@@ -11,9 +11,9 @@ impl From<v1::EpochConfiguration> for EpochConfiguration {
     }
 }
 
-impl From<EpochConfiguration> for v1::EpochConfiguration {
+impl From<EpochConfiguration> for v1::types::EpochConfiguration {
     fn from(value: EpochConfiguration) -> Self {
-        v1::EpochConfiguration {
+        v1::types::EpochConfiguration {
             genesis_block: value.genesis_block,
             epoch_duration: value.epoch_duration,
         }

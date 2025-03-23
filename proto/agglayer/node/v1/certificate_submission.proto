@@ -2,7 +2,8 @@ syntax = "proto3";
 
 package agglayer.node.v1;
 
-import "agglayer/protocol/types/v1/certificate.proto";
+import "agglayer/node/v1/types/certificate.proto";
+import "agglayer/node/v1/types/certificate_id.proto";
 
 // Service for submitting certificate to an agglayer node.
 service CertificateSubmissionService {
@@ -13,13 +14,13 @@ service CertificateSubmissionService {
 // Type used to submit a certificate.
 message SubmitCertificateRequest {
   // The certificate to submit.
-  protocol.types.v1.Certificate certificate = 1;
+  types.Certificate certificate = 1;
 }
 
 // Type used as response to a certificate submission.
 message SubmitCertificateResponse {
   // The certificate id of the submitted certificate.
-  protocol.types.v1.CertificateId certificate_id = 1;
+  types.CertificateId certificate_id = 1;
 }
 
 // The kind of error that occurred and that are reported by the service.

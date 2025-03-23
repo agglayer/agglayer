@@ -9,16 +9,15 @@ macro_rules! required_field {
     };
 }
 
-mod address;
-mod aggchain_data;
 mod certificate;
 mod certificate_header;
 mod certificate_id;
 mod epoch_configuration;
-mod error;
+// mod error;
 mod error_kinds;
 
-pub use error::{Error, ErrorKind};
+pub use agglayer_interop::grpc::compat::v1::Error;
+pub use agglayer_interop::grpc::compat::v1::ErrorKind;
 
 #[cfg(test)]
 pub mod tests;
