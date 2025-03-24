@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package agglayer.node.v1.types;
+package agglayer.node.types.v1;
 
 import "agglayer/interop/types/v1/bytes.proto";
-import "agglayer/node/v1/types/certificate_id.proto";
+import "agglayer/node/types/v1/certificate_id.proto";
 
 // Certificate header type.
 message CertificateHeader {

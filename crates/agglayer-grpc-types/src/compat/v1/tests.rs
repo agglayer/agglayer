@@ -12,7 +12,7 @@ use agglayer_types::{
 use prost::Message;
 
 use super::Error;
-use crate::node::v1;
+use crate::node::types::v1;
 
 #[cfg(fuzzing)]
 pub mod fuzzing_workarounds {
@@ -68,11 +68,7 @@ make_parser_fuzzers!(
     AggchainData
 );
 make_parser_fuzzers!(fuzz_parser_bridge_exit, interop_v1::BridgeExit, BridgeExit);
-make_parser_fuzzers!(
-    fuzz_parser_certificate_id,
-    v1::types::CertificateId,
-    CertificateId
-);
+make_parser_fuzzers!(fuzz_parser_certificate_id, v1::CertificateId, CertificateId);
 make_parser_fuzzers!(
     fuzz_parser_claim_from_mainnet,
     interop_v1::ClaimFromMainnet,
@@ -86,7 +82,7 @@ make_parser_fuzzers!(
 make_parser_fuzzers!(fuzz_parser_digest, interop_v1::FixedBytes32, Digest);
 make_parser_fuzzers!(
     fuzz_parser_epoch_configuration,
-    v1::types::EpochConfiguration,
+    v1::EpochConfiguration,
     EpochConfiguration
 );
 make_parser_fuzzers!(
@@ -151,7 +147,7 @@ make_round_trip_fuzzers!(
 );
 make_round_trip_fuzzers!(
     fuzz_round_trip_certificate_id,
-    v1::types::CertificateId,
+    v1::CertificateId,
     CertificateId
 );
 make_round_trip_fuzzers!(
@@ -167,7 +163,7 @@ make_round_trip_fuzzers!(
 make_round_trip_fuzzers!(fuzz_round_trip_digest, interop_v1::FixedBytes32, Digest);
 make_round_trip_fuzzers!(
     fuzz_round_trip_epoch_configuration,
-    v1::types::EpochConfiguration,
+    v1::EpochConfiguration,
     EpochConfiguration
 );
 make_round_trip_fuzzers!(

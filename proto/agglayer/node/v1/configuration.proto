@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package agglayer.node.v1;
 
-import "agglayer/node/v1/types/epoch_configuration.proto";
+import "agglayer/node/types/v1/epoch_configuration.proto";
 
 // Service for querying the current epoch configuration.
 service ConfigurationService {
@@ -27,5 +27,5 @@ message GetEpochConfigurationRequest {}
 // Response to the current epoch configuration request.
 message GetEpochConfigurationResponse {
   // The epoch configuration.
-  types.EpochConfiguration epoch_configuration = 1;
+  types.v1.EpochConfiguration epoch_configuration = 1;
 }

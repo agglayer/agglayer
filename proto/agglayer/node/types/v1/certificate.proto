@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package agglayer.node.v1.types;
+package agglayer.node.types.v1;
 
 import "agglayer/interop/types/v1/aggchain.proto";
 import "agglayer/interop/types/v1/bridge_exit.proto";
