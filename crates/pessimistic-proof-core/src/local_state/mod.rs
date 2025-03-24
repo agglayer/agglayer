@@ -295,7 +295,7 @@ impl NetworkState {
                     prev_local_exit_root: multi_batch_header.prev_local_exit_root,
                     new_local_exit_root: multi_batch_header.target.exit_root,
                     l1_info_root: multi_batch_header.l1_info_root,
-                    origin_network: multi_batch_header.origin_network,
+                    origin_network: *multi_batch_header.origin_network,
                     aggchain_params: *aggchain_params,
                     commit_imported_bridge_exits: imported_hash,
                 };
