@@ -168,7 +168,7 @@ jobs:
 
   docker-build-local:
     name: E2E Tests | Docker build
-    # TODO: reenable before landing: if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
     uses: ./.github/workflows/docker-build.yml
     secrets: inherit
     with:
