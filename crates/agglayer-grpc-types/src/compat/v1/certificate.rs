@@ -40,8 +40,12 @@ impl TryFrom<Certificate> for v1::types::Certificate {
             height: value.height,
             prev_local_exit_root: Some(value.prev_local_exit_root.into()),
             new_local_exit_root: Some(value.new_local_exit_root.into()),
-            bridge_exits: value.bridge_exits,
-            imported_bridge_exits: value.imported_bridge_exits,
+            bridge_exits: value.bridge_exits.into_iter().map(Into::into).collect(),
+            imported_bridge_exits: value
+                .imported_bridge_exits
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             aggchain_data: Some(value.aggchain_data.try_into()?),
             metadata: Some(value.metadata.into()),
             custom_chain_data: value.custom_chain_data.into(),

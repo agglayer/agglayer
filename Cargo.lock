@@ -223,6 +223,7 @@ dependencies = [
  "agglayer-grpc-client",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
+ "agglayer-interop",
  "agglayer-rpc",
  "agglayer-storage",
  "agglayer-types",
@@ -281,6 +282,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#2643b6a21056cb453004d85b420b52c01e3797ba"
 dependencies = [
  "agglayer-interop-grpc-types",
  "agglayer-interop-types",
@@ -289,6 +291,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#2643b6a21056cb453004d85b420b52c01e3797ba"
 dependencies = [
  "agglayer-interop-types",
  "bincode",
@@ -303,6 +306,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#2643b6a21056cb453004d85b420b52c01e3797ba"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",
@@ -444,6 +448,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#2643b6a21056cb453004d85b420b52c01e3797ba"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -631,6 +636,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#2643b6a21056cb453004d85b420b52c01e3797ba"
 dependencies = [
  "agglayer-primitives",
  "serde",
@@ -6757,6 +6763,7 @@ dependencies = [
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
+ "agglayer-tries",
  "agglayer-types",
  "anyhow",
  "base64 0.22.1",
@@ -10304,6 +10311,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#2643b6a21056cb453004d85b420b52c01e3797ba"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",

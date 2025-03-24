@@ -26,7 +26,7 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 use arc_swap::ArcSwap;
@@ -37,7 +37,8 @@ use ethers::{
 use futures_util::poll;
 use mocks::MockCertifier;
 use pessimistic_proof::{
-    local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
+    keccak::{Digest, Keccak256Hasher},
+    multi_batch_header::MultiBatchHeader,
     LocalNetworkState,
 };
 use rstest::fixture;

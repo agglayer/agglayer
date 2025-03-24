@@ -115,8 +115,8 @@ sp1-primitives = "=4.1.2"
 sp1-prover = "=4.1.2"
 sp1-zkvm = { version = "=4.1.2", default-features = false }
 
-agglayer-primitives = { path = "../interop/crates/agglayer-primitives" }
-agglayer-tries = { path = "../interop/crates/agglayer-tries" }
-agglayer-interop = { path = "../interop/crates/agglayer-interop" }
-unified-bridge = { path = "../interop/crates/unified-bridge" }
-agglayer-interop-types = { path = "../interop/crates/agglayer-interop-types" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git" }

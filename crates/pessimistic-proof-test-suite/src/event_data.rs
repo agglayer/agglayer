@@ -2,8 +2,7 @@ use std::{fs::File, io::BufReader, path::Path};
 
 use agglayer_types::primitives::U256;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use pessimistic_proof::unified_bridge::bridge_exit::BridgeExit;
-use pessimistic_proof::unified_bridge::bridge_exit::TokenInfo;
+use pessimistic_proof::unified_bridge::{bridge_exit::BridgeExit, token_info::TokenInfo};
 use serde::{de::DeserializeOwned, Deserialize, Deserializer};
 use serde_json::Number;
 
@@ -73,7 +72,7 @@ impl From<DepositEventData> for BridgeExit {
         Self {
             leaf_type: deposit_event_data.leaf_type.try_into().unwrap(),
             token_info: TokenInfo {
-                origin_network: deposit_event_data.origin_network,
+                origin_network: deposit_event_data.origin_network.into(),
                 origin_token_address: deposit_event_data.origin_address.parse().unwrap(),
             },
             dest_network: deposit_event_data.destination_network.into(),

@@ -3,6 +3,7 @@ pub use proof::PessimisticProofOutput;
 pub use proof::Proof;
 
 pub mod local_balance_tree;
+pub mod local_exit_tree;
 
 pub mod local_state;
 pub mod nullifier_tree;

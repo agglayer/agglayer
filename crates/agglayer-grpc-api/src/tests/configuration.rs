@@ -6,7 +6,8 @@ use agglayer_config::{
 };
 use agglayer_grpc_client::node::v1::configuration_service_client::ConfigurationServiceClient;
 use agglayer_grpc_server::node::v1::configuration_service_server::ConfigurationServiceServer;
-use agglayer_grpc_types::{node::v1::GetEpochConfigurationRequest, protocol::types::v1};
+use agglayer_grpc_types::node::v1;
+use agglayer_grpc_types::node::v1::GetEpochConfigurationRequest;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
     storage::backup::BackupClient,
@@ -78,7 +79,7 @@ async fn blockclock_configuration() {
     let response = response.into_inner();
     assert!(matches!(
         response.epoch_configuration,
-        Some(v1::EpochConfiguration {
+        Some(v1::types::EpochConfiguration {
             genesis_block: 0,
             epoch_duration: 5
         })
