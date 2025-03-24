@@ -31,11 +31,25 @@ checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 [[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#2643b6a21056cb453004d85b420b52c01e3797ba"
 dependencies = [
  "alloy-primitives",
  "byteorder",
+ "hex",
  "k256",
  "serde",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "agglayer-tries"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#2643b6a21056cb453004d85b420b52c01e3797ba"
+dependencies = [
+ "agglayer-primitives",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -3403,6 +3417,7 @@ name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "agglayer-tries",
  "alloy-primitives",
  "bincode",
  "hex",
@@ -3417,6 +3432,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tiny-keccak",
  "tracing",
+ "unified-bridge",
 ]
 
 [[package]]
@@ -5718,6 +5734,26 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
+
+[[package]]
+name = "unified-bridge"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#2643b6a21056cb453004d85b420b52c01e3797ba"
+dependencies = [
+ "agglayer-primitives",
+ "agglayer-tries",
+ "bincode",
+ "hex",
+ "hex-literal",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sp1-core-machine",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror 2.0.12",
+ "tiny-keccak",
+]
 
 [[package]]
 name = "untrusted"
