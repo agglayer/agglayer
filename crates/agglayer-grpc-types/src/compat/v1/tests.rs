@@ -1,12 +1,12 @@
 use agglayer_interop::{
     grpc::v1 as interop_v1,
     types::{
-        BridgeExit, ClaimFromMainnet, ClaimFromRollup, Digest, GlobalIndex, ImportedBridgeExit,
+        BridgeExit, ClaimFromMainnet, ClaimFromRollup, GlobalIndex, ImportedBridgeExit,
         L1InfoTreeLeaf, L1InfoTreeLeafInner, MerkleProof, TokenInfo,
     },
 };
 use agglayer_types::{
-    aggchain_proof::AggchainData, primitives::SignatureError, Address, CertificateId,
+    aggchain_proof::AggchainData, primitives::SignatureError, Address, CertificateId, Digest,
     EpochConfiguration, U256,
 };
 use prost::Message;
