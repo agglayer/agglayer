@@ -187,7 +187,7 @@ jobs:
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
       kurtosis-cdk-ref: 2527f38a96cedba1bff6cc94848ae77de8d44a37
       docker-artifact-name: docker-image
-      agglayer-e2e-ref: 4ddee2c4bde34fd581fff96c3f822dd0eab9e1e6
+      agglayer-e2e-ref: 8518659c9848160debc83d8de7366145d659d7b2
       kurtosis-cdk-args: |
         {
           "deployment_stages": {
