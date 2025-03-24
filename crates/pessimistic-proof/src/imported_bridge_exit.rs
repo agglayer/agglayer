@@ -115,6 +115,21 @@ impl ImportedBridgeExit {
     }
 }
 
+impl ImportedBridgeExit {
+    pub fn valid_claim(&self) -> bool {
+        match &self.claim_data {
+            Claim::Mainnet(claim) => {
+                claim.l1_leaf.inner.global_exit_root
+                    == keccak256_combine([claim.l1_leaf.mer, claim.l1_leaf.rer])
+            }
+            Claim::Rollup(claim) => {
+                claim.l1_leaf.inner.global_exit_root
+                    == keccak256_combine([claim.l1_leaf.mer, claim.l1_leaf.rer])
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use hex_literal::hex;
@@ -150,7 +165,7 @@ mod tests {
                 .into(),
                 timestamp: 1697231573,
             }
-            .hash()
+            .hash(hex!("16994edfddddb9480667b64174fc00d3b6da7290d37b8db3a16571b4ddf0789f").into())
             .0,
         );
 
@@ -167,7 +182,7 @@ mod tests {
                 .into(),
                 timestamp: 658736476,
             }
-            .hash()
+            .hash(hex!("356682567c5d485bbabe89590d3d72b08671a0a07899dcbaddccbe0599491669").into())
             .0,
         );
     }

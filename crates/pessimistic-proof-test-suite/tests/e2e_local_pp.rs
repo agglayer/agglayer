@@ -1,5 +1,5 @@
 use agglayer_types::primitives::U256;
-use agglayer_types::{Digest, PessimisticRootInput};
+use agglayer_types::{Claim, Digest, Error, PessimisticRootInput};
 use pessimistic_proof::core::commitment::{PPRootVersion, PessimisticRoot, SignatureCommitment};
 use pessimistic_proof::core::{generate_pessimistic_proof, AggchainData};
 use pessimistic_proof::imported_bridge_exit::commit_imported_bridge_exits;
@@ -210,6 +210,37 @@ fn e2e_local_pp_random() {
         .unwrap();
 
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
+}
+
+#[test]
+fn inconsistent_ger() {
+    let mut forest = Forest::new(vec![(USDC, u(100)), (ETH, u(200))]);
+    let imported_bridge_events = vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))];
+    let bridge_events = vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))];
+
+    let initial_state = forest.state_b.clone();
+    let mut certificate = forest.apply_events(&imported_bridge_events, &bridge_events);
+
+    // Change the global exit root
+    {
+        let Claim::Mainnet(ref mut claim_0) = certificate.imported_bridge_exits[0].claim_data
+        else {
+            unreachable!("expect from mainnet");
+        };
+
+        claim_0.l1_leaf.inner.global_exit_root = Digest::default();
+    }
+
+    let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
+    let res = initial_state.make_multi_batch_header(
+        &certificate,
+        forest.get_signer(),
+        l1_info_root,
+        PessimisticRootInput::Computed(PPRootVersion::V2),
+        None,
+    );
+
+    assert!(matches!(res, Err(Error::InconsistentGlobalExitRoot)))
 }
 
 // Same as `e2e_local_pp_simple` with an SP1 proof on top
