@@ -14,7 +14,7 @@ unified-bridge.workspace = true
 
 arbitrary = { workspace = true, optional = true }
 bincode.workspace = true
-hex-literal = "0.4"
+hex-literal = "1.0"
 hex.workspace = true
 pessimistic-proof-core.workspace = true
 serde = { version = "1", features = ["derive"] }
