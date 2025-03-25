@@ -13,7 +13,6 @@ mod certificate;
 mod certificate_header;
 mod certificate_id;
 mod epoch_configuration;
-// mod error;
 mod error_kinds;
 
 pub use agglayer_interop::grpc::compat::v1::Error;
