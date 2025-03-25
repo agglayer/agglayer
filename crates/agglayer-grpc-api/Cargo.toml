@@ -27,7 +27,7 @@ tonic-types.workspace = true
 tonic-reflection = "0.12.3"
 tower = { workspace = true }
 tracing.workspace = true
-uuid = { version = "1.15", features = ["v4"] }
+uuid = { version = "1.16", features = ["v4"] }
 
 [dev-dependencies]
 agglayer-grpc-client.workspace = true
