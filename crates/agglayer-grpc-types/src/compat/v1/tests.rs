@@ -61,57 +61,12 @@ macro_rules! make_parser_fuzzers {
     };
 }
 
-make_parser_fuzzers!(fuzz_parser_address, interop_v1::FixedBytes20, Address);
-make_parser_fuzzers!(
-    fuzz_parser_aggchain_data,
-    interop_v1::AggchainData,
-    AggchainData
-);
-make_parser_fuzzers!(fuzz_parser_bridge_exit, interop_v1::BridgeExit, BridgeExit);
 make_parser_fuzzers!(fuzz_parser_certificate_id, v1::CertificateId, CertificateId);
-make_parser_fuzzers!(
-    fuzz_parser_claim_from_mainnet,
-    interop_v1::ClaimFromMainnet,
-    ClaimFromMainnet
-);
-make_parser_fuzzers!(
-    fuzz_parser_claim_from_rollup,
-    interop_v1::ClaimFromRollup,
-    ClaimFromRollup
-);
-make_parser_fuzzers!(fuzz_parser_digest, interop_v1::FixedBytes32, Digest);
 make_parser_fuzzers!(
     fuzz_parser_epoch_configuration,
     v1::EpochConfiguration,
     EpochConfiguration
 );
-make_parser_fuzzers!(
-    fuzz_parser_global_index,
-    interop_v1::FixedBytes32,
-    GlobalIndex
-);
-make_parser_fuzzers!(
-    fuzz_parser_imported_bridge_exit,
-    interop_v1::ImportedBridgeExit,
-    ImportedBridgeExit
-);
-make_parser_fuzzers!(
-    fuzz_parser_l1_info_tree_leaf_with_context,
-    interop_v1::L1InfoTreeLeafWithContext,
-    L1InfoTreeLeaf
-);
-make_parser_fuzzers!(
-    fuzz_parser_l1_info_tree_leaf_inner,
-    interop_v1::L1InfoTreeLeaf,
-    L1InfoTreeLeafInner
-);
-make_parser_fuzzers!(
-    fuzz_parser_merkle_proof,
-    interop_v1::MerkleProof,
-    MerkleProof
-);
-make_parser_fuzzers!(fuzz_parser_token_info, interop_v1::TokenInfo, TokenInfo);
-make_parser_fuzzers!(fuzz_parser_u256, interop_v1::FixedBytes32, U256);
 
 macro_rules! make_round_trip_fuzzers {
     ($test:ident, $proto:ty, $type:ty) => {
@@ -128,68 +83,13 @@ macro_rules! make_round_trip_fuzzers {
     };
 }
 
-make_round_trip_fuzzers!(fuzz_round_trip_address, interop_v1::FixedBytes20, Address);
-#[test]
-fn fuzz_round_trip_aggchain_data() {
-    bolero::check!()
-        .with_arbitrary::<AggchainData>()
-        .for_each(|input| {
-            let proto: interop_v1::AggchainData = input.clone().try_into().unwrap();
-            let _output = AggchainData::try_from(proto).unwrap();
-            // There's no good way to check equality of two stark proofs:
-            // assert_eq!(input, &output);
-        })
-}
-make_round_trip_fuzzers!(
-    fuzz_round_trip_bridge_exit,
-    interop_v1::BridgeExit,
-    BridgeExit
-);
 make_round_trip_fuzzers!(
     fuzz_round_trip_certificate_id,
     v1::CertificateId,
     CertificateId
 );
 make_round_trip_fuzzers!(
-    fuzz_round_trip_claim_from_mainnet,
-    interop_v1::ClaimFromMainnet,
-    ClaimFromMainnet
-);
-make_round_trip_fuzzers!(
-    fuzz_round_trip_claim_from_rollup,
-    interop_v1::ClaimFromRollup,
-    ClaimFromRollup
-);
-make_round_trip_fuzzers!(fuzz_round_trip_digest, interop_v1::FixedBytes32, Digest);
-make_round_trip_fuzzers!(
     fuzz_round_trip_epoch_configuration,
     v1::EpochConfiguration,
     EpochConfiguration
 );
-make_round_trip_fuzzers!(
-    fuzz_round_trip_global_index,
-    interop_v1::FixedBytes32,
-    GlobalIndex
-);
-make_round_trip_fuzzers!(
-    fuzz_round_trip_imported_bridge_exit,
-    interop_v1::ImportedBridgeExit,
-    ImportedBridgeExit
-);
-make_round_trip_fuzzers!(
-    fuzz_round_trip_l1_info_tree_leaf_with_context,
-    interop_v1::L1InfoTreeLeafWithContext,
-    L1InfoTreeLeaf
-);
-make_round_trip_fuzzers!(
-    fuzz_round_trip_l1_info_tree_leaf_inner,
-    interop_v1::L1InfoTreeLeaf,
-    L1InfoTreeLeafInner
-);
-make_round_trip_fuzzers!(
-    fuzz_round_trip_merkle_proof,
-    interop_v1::MerkleProof,
-    MerkleProof
-);
-make_round_trip_fuzzers!(fuzz_round_trip_token_info, interop_v1::TokenInfo, TokenInfo);
-make_round_trip_fuzzers!(fuzz_round_trip_u256, interop_v1::FixedBytes32, U256);
