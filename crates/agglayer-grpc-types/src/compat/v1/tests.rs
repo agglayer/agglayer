@@ -1,34 +1,8 @@
-use agglayer_interop::{
-    grpc::v1 as interop_v1,
-    types::{
-        BridgeExit, ClaimFromMainnet, ClaimFromRollup, GlobalIndex, ImportedBridgeExit,
-        L1InfoTreeLeaf, L1InfoTreeLeafInner, MerkleProof, TokenInfo,
-    },
-};
-use agglayer_types::{
-    aggchain_proof::AggchainData, primitives::SignatureError, Address, CertificateId, Digest,
-    EpochConfiguration, U256,
-};
+use agglayer_types::{primitives::SignatureError, CertificateId, EpochConfiguration};
 use prost::Message;
 
 use super::Error;
 use crate::node::types::v1;
-
-#[cfg(fuzzing)]
-pub mod fuzzing_workarounds {
-    // TODO: these all should be in sp1 upstream, but they're not marked as #[used]
-    // and so disappear with optimizations
-    #[no_mangle]
-    pub extern "C" fn read_vec_raw() {
-        unimplemented!("SP1 workaround, should never be called")
-    }
-    #[no_mangle]
-    pub extern "C" fn _end() {
-        unimplemented!("SP1 workaround, should never be called")
-    }
-    #[used]
-    static _USED: [extern "C" fn(); 2] = [read_vec_raw, _end];
-}
 
 #[rstest::rstest]
 #[case::error("no_proof", Error::missing_field("proof"))]
