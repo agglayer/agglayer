@@ -1,6 +1,5 @@
 use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
 use mockall::mock;
-use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 use pessimistic_proof::multi_batch_header::MultiBatchHeader;
 use pessimistic_proof::LocalNetworkState;
 
@@ -22,7 +21,7 @@ mock! {
             &self,
             certificate: &agglayer_types::Certificate,
             state: &mut LocalNetworkStateData
-        ) -> Result<(MultiBatchHeader<Keccak256Hasher>, LocalNetworkState), CertificationError>;
+        ) -> Result<(MultiBatchHeader<pessimistic_proof::keccak::Keccak256Hasher>, LocalNetworkState), CertificationError>;
     }
 }
 

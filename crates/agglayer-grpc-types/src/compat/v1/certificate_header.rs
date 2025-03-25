@@ -1,6 +1,6 @@
 use agglayer_types::{CertificateHeader, CertificateStatus, CertificateStatusError};
 
-use crate::protocol::types::v1;
+use crate::node::types::v1;
 
 impl From<CertificateStatusError> for v1::CertificateStatusError {
     fn from(value: CertificateStatusError) -> Self {

@@ -2,7 +2,7 @@
 
 use agglayer_contracts::L1RpcError;
 pub use agglayer_storage::error::Error as StorageError;
-pub use agglayer_types::Digest;
+pub use agglayer_types::primitives::digest::Digest;
 use agglayer_types::NetworkId;
 use ethers::{contract::ContractError, providers::Middleware, types::Address};
 

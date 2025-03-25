@@ -8,6 +8,7 @@ license.workspace = true
 default = []
 testutils = [
     "agglayer-primitives/testutils",
+    "unified-bridge/testutils",
     "alloy-primitives/arbitrary",
     "dep:arbitrary",
     "dep:rand",
@@ -15,6 +16,8 @@ testutils = [
 
 [dependencies]
 agglayer-primitives.workspace = true
+agglayer-tries.workspace = true
+unified-bridge.workspace = true
 
 alloy-primitives.workspace = true
 arbitrary = { workspace = true, optional = true }
@@ -36,5 +39,6 @@ sp1-verifier = { version = "=4.1.2" }
 sp1-zkvm = { version = "=4.1.2", features = ["verify"] }
 
 [dev-dependencies]
+unified-bridge = { workspace = true, features = ["testutils"] }
 rs_merkle = { version = "1.4", default-features = false }
 rand = "0.9.0"

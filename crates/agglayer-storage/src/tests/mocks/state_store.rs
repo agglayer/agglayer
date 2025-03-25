@@ -1,6 +1,6 @@
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Digest, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId,
+    primitives::digest::Digest, Certificate, CertificateHeader, CertificateId, CertificateStatus,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId,
 };
 use mockall::mock;
 

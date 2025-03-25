@@ -1,15 +1,11 @@
+use agglayer_primitives::{keccak::Hasher, utils::FromBool};
+use agglayer_tries::proof::{SmtNonInclusionProof, ToBits};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use unified_bridge::bridge_exit::NetworkId;
+use unified_bridge::global_index::GlobalIndex;
 
-use crate::{
-    bridge_exit::NetworkId,
-    local_exit_tree::hasher::Hasher,
-    utils::{
-        smt::{SmtNonInclusionProof, ToBits},
-        FromBool,
-    },
-    ProofError,
-};
+use crate::ProofError;
 
 // 32 bits for the network id and 32 bits for the LET index
 // TODO: consider using less than 32 bits for the network id - unlikely that
@@ -44,11 +40,20 @@ pub struct NullifierKey {
     pub let_index: u32,
 }
 
+impl From<GlobalIndex> for NullifierKey {
+    fn from(value: GlobalIndex) -> Self {
+        Self {
+            network_id: value.network_id(),
+            let_index: value.leaf_index,
+        }
+    }
+}
+
 impl ToBits<64> for NullifierKey {
     fn to_bits(&self) -> [bool; 64] {
         std::array::from_fn(|i| {
             if i < 32 {
-                (self.network_id >> i) & 1 == 1
+                (*self.network_id >> i) & 1 == 1
             } else {
                 (self.let_index >> (i - 32)) & 1 == 1
             }

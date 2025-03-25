@@ -1,6 +1,6 @@
 use agglayer_types::EpochConfiguration;
 
-use crate::protocol::types::v1;
+use crate::node::types::v1;
 
 impl From<v1::EpochConfiguration> for EpochConfiguration {
     fn from(value: v1::EpochConfiguration) -> Self {

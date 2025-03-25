@@ -9,6 +9,7 @@ agglayer-config.workspace = true
 agglayer-contracts.workspace = true
 agglayer-grpc-server.workspace = true
 agglayer-grpc-types = { workspace = true, features = ["compat"] }
+agglayer-interop = { workspace = true, features = ["grpc"] }
 agglayer-rpc.workspace = true
 agglayer-storage.workspace = true
 agglayer-types.workspace = true
