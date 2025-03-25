@@ -28,7 +28,7 @@ fn main() {
     fs::write(
         &dest_path,
         format!(
-            "pub const PESSIMISTIC_PROOF_PROGRAM_VERSION: u16 = {};\n",
+            "pub const PESSIMISTIC_PROOF_PROGRAM_VERSION: u32 = {};\n",
             major_version
         ),
     )

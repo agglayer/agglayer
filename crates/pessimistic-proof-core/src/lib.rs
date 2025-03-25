@@ -19,5 +19,5 @@ pub mod utils;
 pub use local_state::NetworkState;
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
-pub const PESSIMISTIC_PROOF_PROGRAM_SELECTOR: [u8; 2] =
+pub const PESSIMISTIC_PROOF_PROGRAM_SELECTOR: [u8; 4] =
     PESSIMISTIC_PROOF_PROGRAM_VERSION.to_be_bytes();
