@@ -216,12 +216,14 @@ jobs:
   pushing-docker-image:
     name: Docker | Publish image to registry
     runs-on: ubuntu-latest
-    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     permissions:
       packages: write
     needs:
       - docker-build-local
       - call-cdk-e2e-workflow
+      - unit
+      - integrations
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
