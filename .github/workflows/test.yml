@@ -222,6 +222,7 @@ jobs:
     needs:
       - docker-build-local
       - check-e2e-result
+      - check_elf
       - unit
       - integrations
     steps:
