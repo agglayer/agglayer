@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use agglayer_certificate_orchestrator::{EpochPacker, Error};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
-use agglayer_contracts::{RollupContract, Settler};
+use agglayer_contracts::{rollup::VerifierType, RollupContract, Settler};
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter},
@@ -160,9 +160,31 @@ where
                 return Err(Error::InternalError("Unable to find the proof".to_string()));
             };
 
-        let mut proof_with_selector =
-            pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR.to_vec();
-        proof_with_selector.extend(&proof);
+        let verifier_type = self
+            .l1_rpc
+            .get_verifier_type(*network_id)
+            .await
+            .map_err(|_| Error::UnableToGetVerifierType {
+                certificate_id,
+                network_id,
+            })?;
+
+        debug!("Network {} has {:?}", network_id, verifier_type);
+
+        let proof_with_selector: Vec<u8> = match verifier_type {
+            VerifierType::StateTransition => {
+                return Err(Error::InternalError(
+                    "Unsupported verifier type".to_string(),
+                ));
+            }
+            VerifierType::Pessimistic => proof,
+            VerifierType::ALGateway => {
+                let mut proof_with_selector =
+                    pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR.to_vec();
+                proof_with_selector.extend(&proof);
+                proof_with_selector
+            }
+        };
 
         let contract_call = self
             .l1_rpc

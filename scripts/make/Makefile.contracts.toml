@@ -12,7 +12,12 @@ dependencies = [
     { name = "contracts-download-PolygonZkEVM" },
     { name = "contracts-download-PolygonZkEVMGlobalExitRootV2" },
     { name = "contracts-download-AggchainBase" },
+    { name = "contracts-download-AggLayerGateway" },
 ]
+
+[tasks.contracts-download-AggLayerGateway]
+env = { "CONTRACT" = "AggLayerGateway.json" }
+run_task = "contracts-download"
 
 [tasks.contracts-download-AggchainBase]
 env = { "CONTRACT" = "AggchainBase.json" }
