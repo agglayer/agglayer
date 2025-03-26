@@ -172,7 +172,7 @@ jobs:
     uses: ./.github/workflows/docker-build.yml
     secrets: inherit
     with:
-      push: false
+      push: true
       local-artifact-name: "docker-image"
       local-artifact-dir: "/tmp"
 
