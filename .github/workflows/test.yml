@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - "ci/docker-push-main"
   merge_group:
   pull_request:
     branches:
@@ -168,7 +169,7 @@ jobs:
 
   docker-build-local:
     name: E2E Tests | Docker build
-    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
+    if: ${{ contains('["merge_group", "workflow_dispatch", "push"]', github.event_name) }} # skip-merge queue
     uses: ./.github/workflows/docker-build.yml
     secrets: inherit
     with:
@@ -216,7 +217,7 @@ jobs:
   pushing-docker-image:
     name: Docker | Publish image to registry
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || ( github.event_name == 'workflow_dispatch' )
+    if: github.ref == 'refs/heads/main' || ( github.event_name == 'workflow_dispatch' ) || github.ref == 'refs/heads/ci/docker-push-main'
     permissions:
       packages: write
     needs:
