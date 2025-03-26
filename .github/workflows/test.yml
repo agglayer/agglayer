@@ -274,6 +274,7 @@ jobs:
       - check_elf
       - unit
       - integrations
+      - isolated-feature-checks
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
