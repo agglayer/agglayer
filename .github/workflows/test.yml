@@ -221,7 +221,7 @@ jobs:
       packages: write
     needs:
       - docker-build-local
-      - call-cdk-e2e-workflow
+      - check-e2e-result
       - unit
       - integrations
     steps:
