@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
-    ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof,
+    primitives::digest::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
+    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 
 use crate::{error::Error, stores::PerEpochReader};

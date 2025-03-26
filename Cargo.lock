@@ -226,6 +226,7 @@ dependencies = [
  "agglayer-grpc-client",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
+ "agglayer-interop",
  "agglayer-rpc",
  "agglayer-storage",
  "agglayer-types",
@@ -266,6 +267,7 @@ dependencies = [
 name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
+ "agglayer-interop",
  "agglayer-types",
  "anyhow",
  "bincode",
@@ -278,6 +280,51 @@ dependencies = [
  "serde",
  "thiserror 2.0.12",
  "tonic-types",
+]
+
+[[package]]
+name = "agglayer-interop"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#e38287a0d48f1515385055e0aaf76e2213a66517"
+dependencies = [
+ "agglayer-interop-grpc-types",
+ "agglayer-interop-types",
+]
+
+[[package]]
+name = "agglayer-interop-grpc-types"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#e38287a0d48f1515385055e0aaf76e2213a66517"
+dependencies = [
+ "agglayer-interop-types",
+ "bincode",
+ "hex",
+ "pbjson",
+ "prost 0.13.5",
+ "serde",
+ "thiserror 2.0.12",
+ "tonic-types",
+]
+
+[[package]]
+name = "agglayer-interop-types"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#e38287a0d48f1515385055e0aaf76e2213a66517"
+dependencies = [
+ "agglayer-primitives",
+ "agglayer-tries",
+ "arbitrary",
+ "bincode",
+ "ethers",
+ "hex",
+ "rand 0.9.0",
+ "serde",
+ "serde_with",
+ "sp1-core-machine",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror 2.0.12",
+ "unified-bridge",
 ]
 
 [[package]]
@@ -404,12 +451,16 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#e38287a0d48f1515385055e0aaf76e2213a66517"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
  "byteorder",
+ "hex",
  "k256",
+ "rand 0.9.0",
  "serde",
+ "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
 ]
 
 [[package]]
@@ -514,6 +565,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
+ "agglayer-tries",
  "agglayer-types",
  "arc-swap",
  "bincode",
@@ -585,10 +637,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-tries"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#e38287a0d48f1515385055e0aaf76e2213a66517"
+dependencies = [
+ "agglayer-primitives",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
+ "agglayer-interop-types",
  "agglayer-primitives",
+ "agglayer-tries",
  "agglayer-types",
  "arbitrary",
  "bincode",
@@ -602,6 +667,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
+ "unified-bridge",
 ]
 
 [[package]]
@@ -6662,6 +6728,7 @@ name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "agglayer-tries",
  "arbitrary",
  "bincode",
  "hex",
@@ -6677,6 +6744,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unified-bridge",
 ]
 
 [[package]]
@@ -6684,6 +6752,7 @@ name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "agglayer-tries",
  "alloy-primitives",
  "arbitrary",
  "bincode",
@@ -6703,12 +6772,14 @@ dependencies = [
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
  "toml",
  "tracing",
+ "unified-bridge",
 ]
 
 [[package]]
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
+ "agglayer-tries",
  "agglayer-types",
  "anyhow",
  "base64 0.22.1",
@@ -10252,6 +10323,20 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
+
+[[package]]
+name = "unified-bridge"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#e38287a0d48f1515385055e0aaf76e2213a66517"
+dependencies = [
+ "agglayer-primitives",
+ "agglayer-tries",
+ "arbitrary",
+ "hex-literal",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.12",
+]
 
 [[package]]
 name = "untrusted"

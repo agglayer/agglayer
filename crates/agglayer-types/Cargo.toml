@@ -10,7 +10,10 @@ testutils = ["dep:arbitrary", "dep:ethers", "pessimistic-proof/testutils"]
 
 [dependencies]
 agglayer-primitives.workspace = true
+agglayer-tries.workspace = true
+agglayer-interop-types.workspace = true
 pessimistic-proof.workspace = true
+unified-bridge.workspace = true
 
 arbitrary = { workspace = true, optional = true }
 ethers = { workspace = true, optional = true }

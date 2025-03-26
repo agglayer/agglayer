@@ -21,10 +21,13 @@ use std::borrow::Cow;
 
 use agglayer_types::{
     aggchain_proof::{AggchainData, Proof},
-    Certificate, Digest, Height, Metadata, NetworkId, Signature,
+    primitives::digest::Digest,
+    Certificate, Height, Metadata, NetworkId, Signature,
 };
 use bincode::Options;
-use pessimistic_proof::{bridge_exit::BridgeExit, imported_bridge_exit::ImportedBridgeExit};
+use pessimistic_proof::unified_bridge::{
+    bridge_exit::BridgeExit, imported_bridge_exit::ImportedBridgeExit,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::columns::{default_bincode_options, CodecError};
