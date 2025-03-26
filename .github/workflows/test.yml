@@ -217,7 +217,7 @@ jobs:
   pushing-docker-image:
     name: Docker | Publish image to registry
     runs-on: ubuntu-latest
-    if: ( github.event_name == 'workflow_dispatch' ) || github.ref == 'refs/heads/ci/docker-push-main'
+    if: ${{ contains('["merge_group", "workflow_dispatch", "push"]', github.event_name) }} # skip-merge queue
     permissions:
       packages: write
     needs:
