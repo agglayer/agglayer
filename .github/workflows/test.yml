@@ -44,7 +44,7 @@ jobs:
 
   build_contracts_image:
     runs-on: ubuntu-latest-16-cores
-    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
+    if: ${{ contains('["merge_group", "workflow_dispatch", "push"]', github.event_name) }} # skip-merge queue
     strategy:
       matrix:
         node-version: [20.x]
@@ -172,7 +172,7 @@ jobs:
     uses: ./.github/workflows/docker-build.yml
     secrets: inherit
     with:
-      push: false
+      push: true
       local-artifact-name: "docker-image"
       local-artifact-dir: "/tmp"
 
