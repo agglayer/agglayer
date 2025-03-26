@@ -173,7 +173,7 @@ jobs:
     uses: ./.github/workflows/docker-build.yml
     secrets: inherit
     with:
-      push: true
+      push: false
       local-artifact-name: "docker-image"
       local-artifact-dir: "/tmp"
 
@@ -217,7 +217,7 @@ jobs:
   pushing-docker-image:
     name: Docker | Publish image to registry
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || ( github.event_name == 'workflow_dispatch' ) || github.ref == 'refs/heads/ci/docker-push-main'
+    if: ( github.event_name == 'workflow_dispatch' ) || github.ref == 'refs/heads/ci/docker-push-main'
     permissions:
       packages: write
     needs:
