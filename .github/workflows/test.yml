@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - ci/docker-push-main
   merge_group:
   pull_request:
     branches:
