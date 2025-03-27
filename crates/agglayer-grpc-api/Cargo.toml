@@ -24,10 +24,10 @@ serde.workspace = true
 serde_json.workspace = true
 tonic = { workspace = true, features = ["zstd"] }
 tonic-types.workspace = true
-tonic-reflection = "0.12.3"
+tonic-reflection = "0.13.0"
 tower = { workspace = true }
 tracing.workspace = true
-uuid = { version = "1.15", features = ["v4"] }
+uuid = { version = "1.16", features = ["v4"] }
 
 [dev-dependencies]
 agglayer-grpc-client.workspace = true
