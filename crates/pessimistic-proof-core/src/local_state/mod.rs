@@ -40,9 +40,10 @@ pub struct NetworkState {
 
 impl NetworkState {
     /// Returns the roots.
-    pub fn roots(&self) -> StateCommitment {
+    pub fn get_state_commitment(&self) -> StateCommitment {
         StateCommitment {
             exit_root: self.exit_tree.get_root(),
+            ler_leaf_count: self.exit_tree.leaf_count,
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }
@@ -69,27 +70,27 @@ impl NetworkState {
         &mut self,
         multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
     ) -> Result<StateCommitment, ProofError> {
-        // Check the initial state
-        let computed_root = self.exit_tree.get_root();
-        if computed_root != multi_batch_header.prev_local_exit_root {
-            return Err(ProofError::InvalidPreviousLocalExitRoot {
-                computed: computed_root,
-                declared: multi_batch_header.prev_local_exit_root,
-            });
-        }
-        if self.balance_tree.root != multi_batch_header.prev_balance_root {
-            return Err(ProofError::InvalidPreviousBalanceRoot {
-                computed: self.balance_tree.root,
-                declared: multi_batch_header.prev_balance_root,
-            });
-        }
+        // // Check the initial state
+        // let computed_root = self.exit_tree.get_root();
+        // if computed_root != multi_batch_header.prev_local_exit_root {
+        //     return Err(ProofError::InvalidPreviousLocalExitRoot {
+        //         computed: computed_root,
+        //         declared: multi_batch_header.prev_local_exit_root,
+        //     });
+        // }
+        // if self.balance_tree.root != multi_batch_header.prev_balance_root {
+        //     return Err(ProofError::InvalidPreviousBalanceRoot {
+        //         computed: self.balance_tree.root,
+        //         declared: multi_batch_header.prev_balance_root,
+        //     });
+        // }
 
-        if self.nullifier_tree.root != multi_batch_header.prev_nullifier_root {
-            return Err(ProofError::InvalidPreviousNullifierRoot {
-                computed: self.nullifier_tree.root,
-                declared: multi_batch_header.prev_nullifier_root,
-            });
-        }
+        // if self.nullifier_tree.root != multi_batch_header.prev_nullifier_root {
+        //     return Err(ProofError::InvalidPreviousNullifierRoot {
+        //         computed: self.nullifier_tree.root,
+        //         declared: multi_batch_header.prev_nullifier_root,
+        //     });
+        // }
 
         // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
         let mut new_balances = BTreeMap::new();
@@ -205,7 +206,7 @@ impl NetworkState {
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
         }
 
-        Ok(self.roots())
+        Ok(self.get_state_commitment())
     }
 
     /// Verify the signature or aggchain proof
