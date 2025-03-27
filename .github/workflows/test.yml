@@ -162,7 +162,7 @@ jobs:
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
       kurtosis-cdk-ref: 2527f38a96cedba1bff6cc94848ae77de8d44a37 # jihwan/integrations
-      docker-artifact-name: ${{ github.event_name == 'workflow_dispatch' && 'docker-image' || '' }}
+      docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
       agglayer-e2e-ref: 8518659c9848160debc83d8de7366145d659d7b2 # jhilliard/gas-token-test
       kurtosis-cdk-args: |
         {
