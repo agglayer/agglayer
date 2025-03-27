@@ -14,6 +14,12 @@ pub mod aggchain_base;
 
 #[rustfmt::skip]
 #[allow(warnings)]
+#[path = "contracts/agglayer_gateway.rs"]
+pub mod agglayer_gateway;
+
+
+#[rustfmt::skip]
+#[allow(warnings)]
 #[path = "contracts/polygon_rollup_manager.rs"]
 pub mod polygon_rollup_manager;
 
@@ -90,6 +96,8 @@ pub enum L1RpcError {
     },
     #[error("Unable to parse aggchain vkey")]
     UnableToParseAggchainVkey,
+    #[error("Unable to retrieve verifier type")]
+    VerifierTypeRetrievalFailed,
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>

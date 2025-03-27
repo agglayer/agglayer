@@ -1,6 +1,6 @@
 [env]
-CONTRACT_VERSION = "feature/ongoing-v0.3.0-docker"
-CONTRACT_REPO = "https://api.github.com/repos/0xPolygonHermez/zkevm-contracts"
+CONTRACT_VERSION = "feature/ongoing-v0.3.0"
+CONTRACT_REPO = "https://api.github.com/repos/agglayer/agg-contracts-internal"
 
 [tasks.contracts]
 description = "Download and update the contracts of agglayer-contracts"
@@ -12,7 +12,12 @@ dependencies = [
     { name = "contracts-download-PolygonZkEVM" },
     { name = "contracts-download-PolygonZkEVMGlobalExitRootV2" },
     { name = "contracts-download-AggchainBase" },
+    { name = "contracts-download-AggLayerGateway" },
 ]
+
+[tasks.contracts-download-AggLayerGateway]
+env = { "CONTRACT" = "AggLayerGateway.json" }
+run_task = "contracts-download"
 
 [tasks.contracts-download-AggchainBase]
 env = { "CONTRACT" = "AggchainBase.json" }
@@ -39,7 +44,8 @@ args = [
     "-HAuthorization: token ${GITHUB_TOKEN}",
     "-HAccept: application/vnd.github.v4.raw",
     "-Ls",
-    "--output", "./src/contracts/${CONTRACT}",
+    "--output",
+    "./src/contracts/${CONTRACT}",
     "--proto",
     "=https",
     "${CONTRACT_REPO}/contents/compiled-contracts/${CONTRACT}?ref=${CONTRACT_VERSION}",

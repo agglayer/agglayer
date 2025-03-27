@@ -24,6 +24,8 @@ pub mod core {
     pub use pessimistic_proof_core::aggchain_proof::Vkey;
     pub use pessimistic_proof_core::generate_pessimistic_proof;
     pub use pessimistic_proof_core::local_state::commitment;
+    pub use pessimistic_proof_core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR;
+    pub use pessimistic_proof_core::PESSIMISTIC_PROOF_PROGRAM_VERSION;
 }
 
 pub mod error;

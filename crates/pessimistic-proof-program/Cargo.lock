@@ -3436,6 +3436,7 @@ dependencies = [
  "bincode",
  "hex",
  "hex-literal",
+ "semver 1.0.26",
  "serde",
  "serde_json",
  "serde_with",
@@ -3445,13 +3446,14 @@ dependencies = [
  "sp1-zkvm",
  "thiserror 2.0.12",
  "tiny-keccak",
+ "toml",
  "tracing",
  "unified-bridge",
 ]
 
 [[package]]
 name = "pessimistic-proof-program"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "bincode",
  "pessimistic-proof-core",

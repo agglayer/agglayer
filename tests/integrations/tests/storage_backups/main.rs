@@ -49,6 +49,10 @@ async fn recover_with_backup(#[case] state: Forest) {
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
 
     assert_eq!(result.status, CertificateStatus::Settled);
+
+    // Awaiting for the backup to be created in the background
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
     handle.cancel();
     _ = agglayer_shutdowned.await;
 
@@ -126,6 +130,9 @@ async fn purge_after_n_backup(#[case] state: Forest) {
     let result = wait_for_settlement_or_error!(client, certificate_id2).await;
 
     assert_eq!(result.status, CertificateStatus::Settled);
+
+    // Awaiting for the backup to be created in the background
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -212,6 +219,9 @@ async fn report_contains_all_backups(#[case] state: Forest) {
     let result = wait_for_settlement_or_error!(client, certificate_id2).await;
 
     assert_eq!(result.status, CertificateStatus::Settled);
+
+    // Awaiting for the backup to be created in the background
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -301,6 +311,9 @@ async fn restore_at_particular_level(#[case] state: Forest) {
     let result = wait_for_settlement_or_error!(client, certificate_id2).await;
 
     assert_eq!(result.status, CertificateStatus::Settled);
+
+    // Awaiting for the backup to be created in the background
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
