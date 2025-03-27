@@ -63,6 +63,7 @@ dependencies = [
  "clap",
  "dirs",
  "dotenvy",
+ "hex",
  "insta",
  "pessimistic-proof",
  "serde_json",
@@ -196,6 +197,8 @@ dependencies = [
  "ethers-contract",
  "hex",
  "mockall",
+ "num-derive",
+ "num-traits",
  "sp1-primitives",
  "sp1-zkvm",
  "thiserror 2.0.12",
@@ -5990,6 +5993,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
 
 [[package]]
+name = "num-derive"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.99",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6746,6 +6760,7 @@ dependencies = [
  "hex-literal",
  "rand 0.9.0",
  "rs_merkle",
+ "semver 1.0.26",
  "serde",
  "serde_json",
  "serde_with",
@@ -6755,6 +6770,7 @@ dependencies = [
  "sp1-zkvm",
  "thiserror 2.0.12",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
+ "toml",
  "tracing",
  "unified-bridge",
 ]

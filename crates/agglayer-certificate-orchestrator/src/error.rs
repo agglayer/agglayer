@@ -75,6 +75,12 @@ pub enum Error {
     #[error("The certificate header is not found")]
     NotFoundCertificateHeader,
 
+    #[error("Unable to get verifier type for network")]
+    UnableToGetVerifierType {
+        certificate_id: CertificateId,
+        network_id: NetworkId,
+    },
+
     #[error("Failed to settle the certificate {certificate_id}: {error}")]
     SettlementError {
         certificate_id: CertificateId,
@@ -106,6 +112,12 @@ impl From<Error> for CertificateStatusError {
             }
             Error::Storage(error) => CertificateStatusError::InternalError(error.to_string()),
             Error::InternalError(error) => CertificateStatusError::InternalError(error),
+            Error::UnableToGetVerifierType { network_id, .. } => {
+                CertificateStatusError::InternalError(format!(
+                    "Unable to get verifier type for NetworkId {}",
+                    network_id
+                ))
+            }
             Error::InvalidCertificateStatus => {
                 CertificateStatusError::InternalError("InvalidCertificateStatus".to_string())
             }

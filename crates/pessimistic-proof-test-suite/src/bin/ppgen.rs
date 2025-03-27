@@ -65,6 +65,22 @@ pub fn main() {
 
     let certificate = state.apply_events(&imported_bridge_exits, &bridge_exits);
 
+    if let Some(proof_dir) = &args.proof_dir {
+        let cert_path = proof_dir.join(format!(
+            "{}-certificate-{}.json",
+            args.n_exits,
+            Uuid::new_v4()
+        ));
+        if let Err(e) = std::fs::create_dir_all(proof_dir) {
+            warn!("Failed to create directory: {e}");
+        }
+        info!("Writing the certificate to {:?}", cert_path);
+        std::fs::write(
+            cert_path,
+            serde_json::to_string_pretty(&certificate).unwrap(),
+        )
+        .expect("failed to write certificate");
+    }
     info!(
         "Certificate {}: [{}]",
         certificate.hash(),
