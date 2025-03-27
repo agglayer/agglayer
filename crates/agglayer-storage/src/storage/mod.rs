@@ -202,6 +202,8 @@ impl DB {
             .ok_or(DBError::ColumnFamilyNotFound)?;
         let key = key.encode()?;
 
-        Ok(self.rocksdb.delete_cf(&cf, key)?)
+        Ok(self
+            .rocksdb
+            .delete_cf_opt(&cf, key, &self.default_write_options)?)
     }
 }
