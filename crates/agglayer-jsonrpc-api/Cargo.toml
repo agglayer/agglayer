@@ -31,7 +31,7 @@ buildstructor.workspace = true
 hyper.workspace = true
 http.workspace = true
 pin-project.workspace = true
-reqwest = "0.12.12"
+reqwest = "0.12.15"
 tokio-util.workspace = true
 tokio-stream.workspace = true
 toml.workspace = true
@@ -55,7 +55,7 @@ rstest = { workspace = true, optional = true }
 [dev-dependencies]
 alloy = { workspace = true, features = ["full", "node-bindings"] }
 ethers.workspace = true
-http-body-util = "0.1.2"
+http-body-util = "0.1.3"
 hyper-util = { version = "0.1.10", features = ["client"] }
 insta.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
