@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - ci/docker-push-main
   merge_group:
   pull_request:
     branches:
@@ -146,7 +147,7 @@ jobs:
     permissions:
       packages: write
     with:
-      push: true
+      push: ${{ contains('["workflow_dispatch", "push"]', github.event_name) }}
       local-artifact-name: "docker-image"
       local-artifact-dir: "/tmp"
 
