@@ -12,6 +12,11 @@ sp1-zkvm = { version = "=4.1.2", features = ["verify"] }
 [build-dependencies]
 sp1-cli = "=4.1.2"
 
+[profile.release]
+panic = "abort"
+lto = "fat"
+codegen-units = 1
+
 # Inject sp1-friendly versions of the relevant crypto packages.
 
 [patch.crates-io.ecdsa-core]
