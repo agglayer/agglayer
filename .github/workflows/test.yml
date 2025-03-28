@@ -44,7 +44,7 @@ jobs:
 
   build_contracts_image:
     runs-on: ubuntu-latest-16-cores
-    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     strategy:
       matrix:
         node-version: [20.x]
@@ -140,16 +140,19 @@ jobs:
 
   docker-build-local:
     name: E2E Tests | Docker build
-    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }} # skip-merge queue
+    if: ${{ contains('["merge_group", "workflow_dispatch", "push"]', github.event_name) }}
     uses: ./.github/workflows/docker-build.yml
     secrets: inherit
+    permissions:
+      packages: write
     with:
-      push: false
+      push: ${{ contains('["workflow_dispatch", "push"]', github.event_name) }}
       local-artifact-name: "docker-image"
       local-artifact-dir: "/tmp"
 
   call-cdk-e2e-workflow:
     name: E2E Tests | Kurtosis-CDK
+    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     needs:
       - docker-build-local
     uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@8518659c9848160debc83d8de7366145d659d7b2 # jhilliard/gas-token-test
@@ -158,7 +161,7 @@ jobs:
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
       kurtosis-cdk-ref: 2527f38a96cedba1bff6cc94848ae77de8d44a37 # jihwan/integrations
-      docker-artifact-name: docker-image
+      docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
       agglayer-e2e-ref: 8518659c9848160debc83d8de7366145d659d7b2 # jhilliard/gas-token-test
       kurtosis-cdk-args: |
         {
@@ -233,40 +236,3 @@ jobs:
           echo "Commited vKey=$ORIGINAL_VKEY"
           echo "Calculated vKey=$CALCULATED_VKEY"
           diff <(echo $CALCULATED_VKEY) <( echo $ORIGINAL_VKEY )
-
-  pushing-docker-image:
-    name: Docker | Publish image to registry
-    runs-on: ubuntu-latest
-    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
-    permissions:
-      packages: write
-    needs:
-      - docker-build-local
-      - check-e2e-result
-      - check_elf
-      - unit
-      - integrations
-      - isolated-feature-checks
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: "docker-image"
-          path: "/tmp"
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Load image
-        run: |
-          echo ${{ needs.docker-build-local.outputs.tags }}
-          docker load --input /tmp/docker-image.tar
-
-      - name: Publishing image
-        env:
-          DOCKER_IMAGE: ${{ needs.docker-build-local.outputs.tags }}
-        run: docker push ${{ env.DOCKER_IMAGE }}
