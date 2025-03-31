@@ -23,7 +23,7 @@ alloy-primitives.workspace = true
 arbitrary = { workspace = true, optional = true }
 bincode = "1.3.3"
 hex = "0.4.3"
-hex-literal = "0.4"
+hex-literal = "1.0"
 tracing = "0.1.41"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
