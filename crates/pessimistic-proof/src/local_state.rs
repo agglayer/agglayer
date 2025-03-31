@@ -1,10 +1,8 @@
-use pessimistic_proof_core::{keccak::digest::Digest, local_exit_tree::hasher::Keccak256Hasher};
+use agglayer_primitives::{digest::Digest, keccak::Keccak256Hasher};
 use serde::{Deserialize, Serialize};
+use unified_bridge::local_exit_tree::LocalExitTree;
 
-use crate::{
-    local_balance_tree::LocalBalanceTree, local_exit_tree::LocalExitTree,
-    nullifier_tree::NullifierTree,
-};
+use crate::{local_balance_tree::LocalBalanceTree, nullifier_tree::NullifierTree};
 
 /// State representation of one network without the leaves, taken as input by
 /// the prover.
@@ -22,7 +20,7 @@ pub struct LocalNetworkState {
 impl From<LocalNetworkState> for pessimistic_proof_core::NetworkState {
     fn from(state: LocalNetworkState) -> Self {
         pessimistic_proof_core::NetworkState {
-            exit_tree: state.exit_tree.into(),
+            exit_tree: state.exit_tree,
             balance_tree: state.balance_tree.into(),
             nullifier_tree: state.nullifier_tree.into(),
         }

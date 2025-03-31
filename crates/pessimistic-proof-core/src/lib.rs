@@ -1,19 +1,19 @@
-pub mod keccak;
-pub mod local_exit_tree;
+pub use agglayer_primitives::keccak;
 
 pub mod proof;
 pub use proof::{generate_pessimistic_proof, PessimisticProofOutput, ProofError};
 
 pub mod local_balance_tree;
 
-pub mod bridge_exit;
+pub use unified_bridge::bridge_exit;
 
 pub mod aggchain_proof;
-pub mod global_index;
-pub mod imported_bridge_exit;
 pub mod local_state;
 pub mod multi_batch_header;
 pub mod nullifier_tree;
-pub mod utils;
 
 pub use local_state::NetworkState;
+
+include!(concat!(env!("OUT_DIR"), "/version.rs"));
+pub const PESSIMISTIC_PROOF_PROGRAM_SELECTOR: [u8; 4] =
+    PESSIMISTIC_PROOF_PROGRAM_VERSION.to_be_bytes();

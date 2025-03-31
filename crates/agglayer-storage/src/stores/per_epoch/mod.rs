@@ -330,6 +330,10 @@ where
 
         self.pending_store
             .remove_pending_certificate(network_id, height)?;
+        debug!(
+            %certificate_id,
+            "Certificate and proof removed from pending store"
+        );
 
         self.state_store.assign_certificate_to_epoch(
             &certificate_id,
@@ -337,6 +341,11 @@ where
             &certificate_index,
         )?;
 
+        debug!(
+            %certificate_id,
+            epoch_number = %self.epoch_number,
+            "Certificate assigned to epoch"
+        );
         if let Some(height) = end_checkpoint_entry_assigment {
             let entry = end_checkpoint_entry.or_default();
             *entry = height;

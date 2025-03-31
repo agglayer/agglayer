@@ -13,16 +13,11 @@ args = [
     "a7eb96cc75cffecbf42a362e956d1529fbe65af0",
 ]
 
-[tasks.install-nightly-toolchain]
-description = "Install nightly rust toolchain"
-command = "rustup"
-args = ["toolchain", "install", "nightly"]
-
 [tasks.install-newer-clang]
 description = "Install newer clang on macos"
 
 [tasks.fuzz-all]
 description = "Run all fuzzers for ${FUZZ_TIME} each"
-dependencies = ["install-bolero", "install-nightly-toolchain"]
+dependencies = ["install-bolero"]
 command = "./scripts/fuzz.sh"
 args = ["${FUZZ_TIME}"]

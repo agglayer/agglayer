@@ -4,16 +4,15 @@ use std::{
     sync::Arc,
 };
 
+use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId,
+    primitives::digest::Digest, primitives::keccak::Keccak256Hasher, Certificate,
+    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
+    LocalNetworkStateData, NetworkId,
 };
 use pessimistic_proof::{
-    keccak::digest::Digest,
-    local_balance_tree::LOCAL_BALANCE_TREE_DEPTH,
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    nullifier_tree::NULLIFIER_TREE_DEPTH,
-    utils::smt::{Node, Smt},
+    local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
+    unified_bridge::local_exit_tree::LocalExitTree,
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
 use tracing::{info, warn};

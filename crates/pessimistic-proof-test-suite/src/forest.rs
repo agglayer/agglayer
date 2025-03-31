@@ -1,21 +1,26 @@
+use agglayer_tries::smt::Smt;
 use agglayer_types::{
-    aggchain_proof::AggchainData, compute_signature_info, Address, Certificate,
-    LocalNetworkStateData, Signature, U256,
+    aggchain_proof::AggchainData,
+    compute_signature_info,
+    primitives::{keccak::keccak256, utils::Hashable},
+    Address, Certificate, LocalNetworkStateData, Signature, U256,
 };
 use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer, WalletError};
-pub use pessimistic_proof::bridge_exit::LeafType;
+use pessimistic_proof::keccak::Digest;
+use pessimistic_proof::unified_bridge::global_index::GlobalIndex;
+use pessimistic_proof::unified_bridge::imported_bridge_exit::{
+    commit_imported_bridge_exits, Claim, ClaimFromMainnet, L1InfoTreeLeaf, L1InfoTreeLeafInner,
+    MerkleProof,
+};
+use pessimistic_proof::unified_bridge::token_info::LeafType;
 use pessimistic_proof::{
-    bridge_exit::{BridgeExit, TokenInfo},
-    global_index::GlobalIndex,
-    imported_bridge_exit::{
-        commit_imported_bridge_exits, Claim, ClaimFromMainnet, ImportedBridgeExit, L1InfoTreeLeaf,
-        L1InfoTreeLeafInner, MerkleProof,
-    },
-    keccak::{digest::Digest, keccak256, keccak256_combine},
-    local_exit_tree::{data::LocalExitTreeData, hasher::Keccak256Hasher, LocalExitTree},
+    keccak::{keccak256_combine, Keccak256Hasher},
+    local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
     local_state::LocalNetworkState,
-    utils::{smt::Smt, Hashable as _},
+    unified_bridge::{
+        bridge_exit::BridgeExit, imported_bridge_exit::ImportedBridgeExit, token_info::TokenInfo,
+    },
     PessimisticProofOutput,
 };
 use rand::random;

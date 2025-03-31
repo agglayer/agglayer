@@ -51,7 +51,7 @@ Agglayer is the Rust-based service designed to:
 2. Verify their validity 
 3. Send them to the L1 for final settlement. 
 
-To find out more about Agglayer, please visit [the more detailed documentation.](https://docs.polygon.technology/agglayer/overview/)
+To find out more about Agglayer, please visit [the more detailed documentation.](https://docs.agglayer.dev/)
 
 > [!WARNING]
 >    - Some of the content in this section discusses technology in development and not ready for release. As such, all APIs and configuration are subject to change. The code is still being audited, so please contact the Polygon team if you would like to use it in production.

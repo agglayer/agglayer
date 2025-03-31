@@ -27,6 +27,12 @@ fn main() {
         "AggchainBase",
         &contract_dir,
     );
+    build_contract(
+        "AggLayerGateway.json",
+        "agglayer_gateway.rs",
+        "AggLayerGateway",
+        &contract_dir,
+    );
 }
 
 fn build_contract(source: &str, destination: &str, struct_name: &str, contract_dir: &Path) {

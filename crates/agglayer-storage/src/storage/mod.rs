@@ -3,6 +3,7 @@ use std::path::Path;
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
     ColumnFamilyDescriptor, DBPinnableSlice, Direction, Options, ReadOptions, WriteBatch,
+    WriteOptions,
 };
 
 use crate::columns::{Codec, ColumnSchema};
@@ -42,9 +43,9 @@ pub enum BackupError {
 }
 
 /// A physical storage storage component with an active RocksDB.
-#[derive(Debug)]
 pub struct DB {
     rocksdb: rocksdb::DB,
+    default_write_options: WriteOptions,
 }
 
 impl DB {
@@ -54,8 +55,12 @@ impl DB {
         options.create_if_missing(true);
         options.create_missing_column_families(true);
 
+        let mut writeopts = WriteOptions::default();
+        writeopts.set_sync(true);
+
         Ok(DB {
             rocksdb: rocksdb::DB::open_cf_descriptors(&options, path, cfs)?,
+            default_write_options: writeopts,
         })
     }
 
@@ -111,7 +116,8 @@ impl DB {
             .cf_handle(C::COLUMN_FAMILY_NAME)
             .ok_or(DBError::ColumnFamilyNotFound)?;
 
-        self.rocksdb.put_cf(&cf, key, value)?;
+        self.rocksdb
+            .put_cf_opt(&cf, key, value, &self.default_write_options)?;
 
         Ok(())
     }
@@ -196,6 +202,8 @@ impl DB {
             .ok_or(DBError::ColumnFamilyNotFound)?;
         let key = key.encode()?;
 
-        Ok(self.rocksdb.delete_cf(&cf, key)?)
+        Ok(self
+            .rocksdb
+            .delete_cf_opt(&cf, key, &self.default_write_options)?)
     }
 }

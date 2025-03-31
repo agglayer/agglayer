@@ -13,6 +13,7 @@ workspace = true
 
 [dependencies]
 agglayer-types = { workspace = true, optional = true }
+agglayer-interop = { workspace = true, features = ["grpc-compat"] }
 
 bincode = { workspace = true, optional = true }
 hex.workspace = true
@@ -24,6 +25,7 @@ thiserror = { workspace = true, optional = true }
 
 [dev-dependencies]
 agglayer-types = { workspace = true, features = ["testutils"] }
+agglayer-interop = { workspace = true, features = ["testutils"] }
 
 anyhow.workspace = true
 bolero.workspace = true

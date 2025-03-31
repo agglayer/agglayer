@@ -1,10 +1,8 @@
-use pessimistic_proof_core::local_exit_tree::{
-    hasher::Hasher, proof::LETMerkleProof, LocalExitTreeError,
-};
+use agglayer_primitives::keccak::Hasher;
+use agglayer_tries::utils::empty_hash_at_height;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
-
-use crate::utils::empty_hash::empty_hash_at_height;
+use unified_bridge::local_exit_tree::{proof::LETMerkleProof, LocalExitTreeError};
 
 /// Represents a local exit tree as defined by the LxLy bridge.
 #[serde_as]
@@ -149,7 +147,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use pessimistic_proof_core::local_exit_tree::hasher::Keccak256Hasher;
+    use agglayer_primitives::keccak::Keccak256Hasher;
     use rand::{random, rng, Rng};
 
     use crate::local_exit_tree::{data::LocalExitTreeData, LocalExitTree, LocalExitTreeError};

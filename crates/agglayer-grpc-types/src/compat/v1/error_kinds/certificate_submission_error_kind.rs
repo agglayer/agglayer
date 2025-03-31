@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
-use crate::{compat::v1::error::ErrorKind, node::v1::SubmitCertificateErrorKind};
+use agglayer_interop::grpc::compat::v1::ErrorKind;
+
+use crate::node::v1::SubmitCertificateErrorKind;
 
 impl Display for SubmitCertificateErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

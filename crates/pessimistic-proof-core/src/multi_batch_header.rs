@@ -1,20 +1,19 @@
 #![allow(clippy::too_many_arguments)]
 use std::{collections::BTreeMap, hash::Hash};
 
+use agglayer_primitives::keccak::keccak256_combine;
 use agglayer_primitives::U256;
+use agglayer_primitives::{digest::Digest, keccak::Hasher};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
+use unified_bridge::bridge_exit::{BridgeExit, NetworkId};
+use unified_bridge::global_index::GlobalIndex;
+use unified_bridge::imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit};
+use unified_bridge::token_info::TokenInfo;
 
 use crate::{
-    aggchain_proof::AggchainData,
-    bridge_exit::{BridgeExit, NetworkId, TokenInfo},
-    global_index::GlobalIndex,
-    imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit},
-    keccak::{digest::Digest, keccak256_combine},
-    local_balance_tree::LocalBalancePath,
-    local_exit_tree::hasher::Hasher,
-    local_state::commitment::StateCommitment,
-    nullifier_tree::NullifierPath,
+    aggchain_proof::AggchainData, local_balance_tree::LocalBalancePath,
+    local_state::commitment::StateCommitment, nullifier_tree::NullifierPath,
 };
 
 /// Represents the chain state transition for the pessimistic proof.

@@ -1,10 +1,10 @@
 use agglayer_types::primitives::U256;
-use agglayer_types::{Claim, Digest, Error, PessimisticRootInput};
+use agglayer_types::{Digest, Error, PessimisticRootInput};
 use pessimistic_proof::core::commitment::{PPRootVersion, PessimisticRoot, SignatureCommitment};
 use pessimistic_proof::core::{generate_pessimistic_proof, AggchainData};
-use pessimistic_proof::imported_bridge_exit::commit_imported_bridge_exits;
 use pessimistic_proof::local_state::LocalNetworkState;
-use pessimistic_proof::{bridge_exit::TokenInfo, core};
+use pessimistic_proof::unified_bridge::imported_bridge_exit::commit_imported_bridge_exits;
+use pessimistic_proof::unified_bridge::token_info::TokenInfo;
 use pessimistic_proof::{NetworkState, PessimisticProofOutput, ProofError};
 use pessimistic_proof_test_suite::{
     forest::Forest,
@@ -14,6 +14,7 @@ use pessimistic_proof_test_suite::{
 use rand::random;
 use rstest::rstest;
 use sp1_sdk::{utils, HashableKey, ProverClient, SP1Stdin};
+use unified_bridge::imported_bridge_exit::Claim;
 
 fn u(x: u64) -> U256 {
     x.try_into().unwrap()
@@ -60,7 +61,7 @@ fn pp_root_migration_helper(
         nullifier_root: initial_state.nullifier_tree.root,
         ler_leaf_count: initial_state.exit_tree.leaf_count(),
         height: certificate.height,
-        origin_network: *certificate.network_id,
+        origin_network: certificate.network_id,
     };
 
     // Signed transition
@@ -81,7 +82,7 @@ fn pp_root_migration_helper(
         nullifier_root: new_state.nullifier_tree.root,
         ler_leaf_count: new_state.exit_tree.leaf_count(),
         height: certificate.height + 1,
-        origin_network: *certificate.network_id,
+        origin_network: certificate.network_id,
     };
 
     multi_batch_header.prev_pessimistic_root = prev_pp_root.compute_pp_root(previous_version);
@@ -270,7 +271,7 @@ fn test_sp1_simple() {
         .unwrap();
 
     // Set the aggchain proof to the sp1 variant
-    multi_batch_header.aggchain_proof = core::AggchainData::Generic {
+    multi_batch_header.aggchain_proof = AggchainData::Generic {
         aggchain_params: aggchain_params.into(),
         aggchain_vkey: aggchain_vkey.hash_u32(),
     };

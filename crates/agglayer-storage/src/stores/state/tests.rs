@@ -1,11 +1,9 @@
 use std::sync::Arc;
 
-use agglayer_types::{Certificate, LocalNetworkStateData, NetworkId, PessimisticRootInput};
+use agglayer_types::primitives::utils::Hashable as _;
+use agglayer_types::{Certificate, Digest, LocalNetworkStateData, NetworkId, PessimisticRootInput};
 use pessimistic_proof::core::commitment::PPRootVersion;
-use pessimistic_proof::utils::Hashable as _;
-use pessimistic_proof::{
-    core::generate_pessimistic_proof, keccak::digest::Digest, LocalNetworkState,
-};
+use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
 use rstest::{fixture, rstest};
 use tracing::info;
 

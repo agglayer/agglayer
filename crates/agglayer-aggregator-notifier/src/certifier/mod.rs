@@ -12,6 +12,7 @@ use agglayer_prover_types::{
     },
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
+use agglayer_types::primitives::keccak::Keccak256Hasher;
 use agglayer_types::{
     aggchain_proof::AggchainData, primitives::Address, Certificate, Height, LocalNetworkStateData,
     NetworkId, PessimisticRootInput, Proof,
@@ -19,9 +20,7 @@ use agglayer_types::{
 use bincode::Options;
 use pessimistic_proof::core::generate_pessimistic_proof;
 use pessimistic_proof::local_state::LocalNetworkState;
-use pessimistic_proof::{
-    local_exit_tree::hasher::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
-};
+use pessimistic_proof::multi_batch_header::MultiBatchHeader;
 use sp1_sdk::{
     CpuProver, HashableKey, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError,
     SP1VerifyingKey,
@@ -164,7 +163,8 @@ where
             stdin: Some(Stdin::Sp1Stdin(
                 default_bincode_options()
                     .serialize(&stdin)
-                    .map_err(|source| CertificationError::Serialize { source })?,
+                    .map_err(|source| CertificationError::Serialize { source })?
+                    .into(),
             )),
         };
 
@@ -275,7 +275,7 @@ where
                 certificate,
                 height,
                 new_state: state,
-                network: multi_batch_header.origin_network.into(),
+                network: multi_batch_header.origin_network,
             })
         }
     }

@@ -128,7 +128,7 @@ impl Server {
             .add_rpc_service(configuration_service)
             .add_rpc_service(network_state_service)
             .add_reflection_service(agglayer_grpc_types::node::v1::FILE_DESCRIPTOR_SET)
-            .add_reflection_service(agglayer_grpc_types::protocol::types::v1::FILE_DESCRIPTOR_SET)
+            .add_reflection_service(agglayer_interop::grpc::v1::FILE_DESCRIPTOR_SET)
     }
 }
 

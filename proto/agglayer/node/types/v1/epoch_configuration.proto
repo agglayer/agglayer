@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package agglayer.protocol.types.v1;
+package agglayer.node.types.v1;
 
 // Epoch configuration type.
 message EpochConfiguration {
