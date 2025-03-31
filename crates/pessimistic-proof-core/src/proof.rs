@@ -200,19 +200,21 @@ pub fn generate_pessimistic_proof(
     // NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
     // empty roots of the different trees involved. Therefore, we do
     // one mapping of empty tree hash <> 0x00..0 on the public inputs.
-    let prev_local_exit_root = if initial_state_commitment.exit_root == EMPTY_LER {
-        Digest::default()
-    } else {
-        initial_state_commitment.exit_root
-    };
+    fn zero_if_empty_exit_root(root: Digest) -> Digest {
+        if root == EMPTY_LER {
+            Digest::default()
+        } else {
+            root
+        }
+    }
 
     Ok(PessimisticProofOutput {
-        prev_local_exit_root,
+        prev_local_exit_root: zero_if_empty_exit_root(initial_state_commitment.exit_root),
         prev_pessimistic_root: batch_header.prev_pessimistic_root,
         l1_info_root: batch_header.l1_info_root,
         origin_network: batch_header.origin_network,
         aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),
-        new_local_exit_root: final_state_commitment.exit_root,
+        new_local_exit_root: zero_if_empty_exit_root(final_state_commitment.exit_root),
         new_pessimistic_root,
     })
 }
