@@ -13,7 +13,7 @@ use unified_bridge::token_info::TokenInfo;
 
 use crate::{
     aggchain_proof::AggchainData, local_balance_tree::LocalBalancePath,
-    local_state::commitment::StateCommitment, nullifier_tree::NullifierPath,
+    nullifier_tree::NullifierPath,
 };
 
 /// Represents the chain state transition for the pessimistic proof.

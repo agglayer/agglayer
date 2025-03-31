@@ -1,17 +1,24 @@
 use agglayer_primitives::keccak::Keccak256Hasher;
-use agglayer_primitives::{digest::Digest, Address};
+use agglayer_primitives::{digest::Digest, Address, Signature, B256};
 pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::warn;
 use unified_bridge::global_index::GlobalIndex;
-use unified_bridge::imported_bridge_exit;
+use unified_bridge::imported_bridge_exit::{commit_imported_bridge_exits, Error};
 use unified_bridge::{
     bridge_exit::NetworkId, local_exit_tree::LocalExitTreeError, token_info::TokenInfo,
 };
 
+#[cfg(target_os = "zkvm")]
+use crate::aggchain_proof::AggchainProofPublicValues;
 use crate::{
-    local_state::{commitment::PessimisticRoot, NetworkState},
+    aggchain_proof::AggchainData,
+    local_state::{
+        commitment::PPRootVersion, commitment::PessimisticRoot, commitment::SignatureCommitment,
+        commitment::StateCommitment, NetworkState,
+    },
     multi_batch_header::MultiBatchHeader,
 };
 
@@ -61,7 +68,7 @@ pub enum ProofError {
     /// The provided imported bridge exit is invalid.
     #[error("Invalid imported bridge exit. global index: {global_index:?}, error: {source}")]
     InvalidImportedBridgeExit {
-        source: imported_bridge_exit::Error,
+        source: Error,
         global_index: GlobalIndex,
     },
     /// The commitment to the list of imported bridge exits is invalid.
@@ -170,40 +177,12 @@ pub fn generate_pessimistic_proof(
     let mut network_state: NetworkState = initial_network_state;
     let final_state_commitment = network_state.apply_batch_header(batch_header)?;
 
-    // TODO CHECK verify consensus, this funciton //prv, vs new 
     // verify the consensus
     let target_pp_root_version = verify_consensus(
         batch_header,
         &initial_state_commitment,
         &final_state_commitment,
     )?;
-
-    // let target_pp_root_version = initial_network_state.verify_consensus(batch_header)?;
-
-    // let new_pessimistic_root = {
-    //     let mut network_state = initial_network_state;
-    //     let computed_target = network_state.apply_batch_header(batch_header)?;
-
-    //     if computed_target.exit_root != batch_header.target.exit_root {
-    //         return Err(ProofError::InvalidNewLocalExitRoot {
-    //             declared: batch_header.target.exit_root,
-    //             computed: computed_target.exit_root,
-    //         });
-    //     }
-
-    //     if computed_target.balance_root != batch_header.target.balance_root {
-    //         return Err(ProofError::InvalidNewBalanceRoot {
-    //             declared: batch_header.target.balance_root,
-    //             computed: computed_target.balance_root,
-    //         });
-    //     }
-
-    //     if computed_target.nullifier_root != batch_header.target.nullifier_root {
-    //         return Err(ProofError::InvalidNewNullifierRoot {
-    //             declared: batch_header.target.nullifier_root,
-    //             computed: computed_target.nullifier_root,
-    //         });
-    //     }
 
     let Some(height) = batch_header.height.checked_add(1) else {
         return Err(ProofError::HeightOverflow);
@@ -217,7 +196,6 @@ pub fn generate_pessimistic_proof(
         origin_network: batch_header.origin_network,
     }
     .compute_pp_root(target_pp_root_version);
-    //};
 
     // NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
     // empty roots of the different trees involved. Therefore, we do
@@ -254,7 +232,7 @@ pub fn verify_consensus(
         height: multi_batch_header.height,
         origin_network: multi_batch_header.origin_network,
     }
-    .infer_pp_root_version(multi_batch_header.prev_pessimistic_root)?;
+    .infer_settled_pp_root_version(multi_batch_header.prev_pessimistic_root)?;
 
     // Compute the hash of the imported bridge exits
     let imported_hash = commit_imported_bridge_exits(
@@ -318,7 +296,7 @@ pub fn verify_consensus(
             // NOTE: No stark verification in the native rust code due to
             // the sp1_zkvm::lib::verify::verify_sp1_proof syscall
             warn!("verify_sp1_proof is not callable outside of SP1");
-            PPRootVersion::V2
+            PPRootVersion::V3
         }
         #[cfg(target_os = "zkvm")]
         AggchainData::Generic {
@@ -329,7 +307,7 @@ pub fn verify_consensus(
                 prev_local_exit_root: initial_state_commitment.exit_root,
                 new_local_exit_root: final_state_commitment.exit_root,
                 l1_info_root: multi_batch_header.l1_info_root,
-                origin_network: multi_batch_header.origin_network,
+                origin_network: *multi_batch_header.origin_network,
                 aggchain_params: *aggchain_params,
                 commit_imported_bridge_exits: imported_hash,
             };
@@ -339,7 +317,7 @@ pub fn verify_consensus(
                 &aggchain_proof_public_values.hash().into(),
             );
 
-            PPRootVersion::V2
+            PPRootVersion::V3
         }
     };
 
