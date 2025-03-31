@@ -6,16 +6,15 @@ updates:
       interval: "weekly"
 
     groups:
-      provers:
+      agglayer:
         applies-to: version-updates
         patterns:
-          - "aggchain-proof-*"
-          - "aggkig-prover"
-          - "aggkit-prover-*"
-          - "agglayer-prover"
-          - "agglayer-prover-*"
+          - "aggchain-*"
+          - "aggkit-*"
+          - "agglayer-*"
           - "proposer-*"
           - "prover-*"
+          - "unified-bridge"
 
       sp1:
         applies-to: version-updates
