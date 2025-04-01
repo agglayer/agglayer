@@ -13,6 +13,7 @@ path = "src/bin/convertor.rs"
 
 [dependencies]
 agglayer-types = { workspace = true, features = ["testutils"] }
+unified-bridge.workspace = true
 agglayer-tries.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 ecdsa-proof-lib = { path = "./aggchain-proof-ecdsa-example/lib/" }
