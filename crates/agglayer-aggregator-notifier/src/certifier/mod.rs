@@ -163,7 +163,8 @@ where
             stdin: Some(Stdin::Sp1Stdin(
                 default_bincode_options()
                     .serialize(&stdin)
-                    .map_err(|source| CertificationError::Serialize { source })?,
+                    .map_err(|source| CertificationError::Serialize { source })?
+                    .into(),
             )),
         };
 

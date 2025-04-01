@@ -2,6 +2,7 @@
 source: crates/pessimistic-proof-test-suite/tests/cycle-tracker.rs
 expression: stats
 ---
+gas: 4137739
 opcode counts (1266438 total instructions):
     314488 add
     195637 sw
