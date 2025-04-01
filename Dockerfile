@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM} rust:slim-bullseye AS chef
+FROM --platform=${BUILDPLATFORM} rust:slim-bookworm AS chef
 
 ARG CIRCUIT_ARTIFACTS_URL_BASE=https://sp1-circuits.s3-us-east-2.amazonaws.com
 ARG CIRCUIT_TYPE=plonk
@@ -54,7 +54,7 @@ COPY --link Cargo.lock Cargo.lock
 RUN cargo build --release --bin agglayer
 
 
-FROM --platform=${BUILDPLATFORM} debian:bullseye-slim
+FROM --platform=${BUILDPLATFORM} debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y ca-certificates
 COPY --from=builder /app/target/release/agglayer /usr/local/bin/
