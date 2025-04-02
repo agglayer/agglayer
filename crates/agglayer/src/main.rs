@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         cli::Commands::Vkey => {
-            let vkey = agglayer_prover::get_vkey(ELF);
+            let vkey = agglayer_prover::compute_program_vkey(ELF);
             println!("{}", vkey);
         }
 
