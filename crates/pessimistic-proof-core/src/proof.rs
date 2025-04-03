@@ -229,7 +229,7 @@ pub fn verify_consensus(
     // Verify initial state commitment and PP root matches
     let base_pp_root_version = PessimisticRoot {
         balance_root: initial_state_commitment.balance_root,
-        nullifier_root: initial_state_commitment.balance_root,
+        nullifier_root: initial_state_commitment.nullifier_root,
         ler_leaf_count: initial_state_commitment.ler_leaf_count,
         height: multi_batch_header.height,
         origin_network: multi_batch_header.origin_network,
