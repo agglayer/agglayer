@@ -1,4 +1,6 @@
 use agglayer_primitives::keccak::Keccak256Hasher;
+#[cfg(any(test, feature = "testutils"))]
+pub use pessimistic_proof_core::proof::zero_if_empty_exit_root;
 pub use pessimistic_proof_core::PessimisticProofOutput;
 #[cfg(any(test, feature = "testutils"))]
 use pessimistic_proof_core::{multi_batch_header::MultiBatchHeader, NetworkState};
