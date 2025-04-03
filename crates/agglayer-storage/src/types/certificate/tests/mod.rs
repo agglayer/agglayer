@@ -1,4 +1,7 @@
-use agglayer_types::{aggchain_proof::Proof, U256};
+use agglayer_types::{
+    aggchain_proof::{Proof, SP1StarkWithContext},
+    U256,
+};
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
 
@@ -79,19 +82,24 @@ impl CertificateV1<'static> {
     }
 
     fn test1() -> Self {
-        let proof = {
+        let (proof, vkey) = {
             let client = sp1_sdk::ProverClient::builder().mock().build();
-            let (proving_key, _verif_key) = client.setup(pessimistic_proof::ELF);
+            let (proving_key, verif_key) = client.setup(pessimistic_proof::ELF);
             let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
                 &proving_key,
                 sp1_sdk::SP1PublicValues::new(),
                 sp1_sdk::SP1ProofMode::Compressed,
                 sp1_sdk::SP1_CIRCUIT_VERSION,
             );
-            dummy_proof.proof.try_as_compressed().unwrap()
+            let proof = dummy_proof.proof.try_as_compressed().unwrap();
+            (proof, verif_key)
         };
 
-        let proof = Proof::SP1Stark(proof);
+        let proof = Proof::SP1Stark(SP1StarkWithContext {
+            proof,
+            vkey,
+            version: String::from("1.2.3"),
+        });
 
         Self {
             version: VersionTag,
