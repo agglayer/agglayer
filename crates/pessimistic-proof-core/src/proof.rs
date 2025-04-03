@@ -4,6 +4,7 @@ pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+#[cfg(not(target_os = "zkvm"))]
 use tracing::warn;
 use unified_bridge::global_index::GlobalIndex;
 use unified_bridge::imported_bridge_exit::{commit_imported_bridge_exits, Error};

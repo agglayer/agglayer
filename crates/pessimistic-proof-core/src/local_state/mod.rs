@@ -5,7 +5,6 @@ use agglayer_primitives::utils::Hashable;
 use agglayer_primitives::{ruint::UintTryFrom, U256, U512};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
-#[cfg(not(target_os = "zkvm"))]
 use unified_bridge::imported_bridge_exit::Error;
 use unified_bridge::local_exit_tree::LocalExitTree;
 use unified_bridge::token_info::{L1_ETH, L1_NETWORK_ID};
