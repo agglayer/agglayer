@@ -14,4 +14,4 @@ breaking:
     - FILE
 
 deps:
-  - buf.build/agglayer/interop
+  - buf.build/agglayer/interop:v0.2.0

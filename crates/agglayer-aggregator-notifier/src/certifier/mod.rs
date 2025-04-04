@@ -153,9 +153,8 @@ where
             AggchainData::ECDSA { .. } => {}
             AggchainData::Generic { ref proof, .. } => {
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
-                let vk = stark_proof.vk.clone();
 
-                stdin.write_proof(*stark_proof.clone(), vk);
+                stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone());
             }
         };
 
@@ -377,7 +376,7 @@ where
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(sp1_reduce_proof) = proof;
 
                 let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::new(
-                    sp1_reduce_proof.vk.hash_bytes(),
+                    sp1_reduce_proof.vkey.vk.hash_bytes(),
                 );
 
                 if aggchain_vkey != proof_vk_hash {
@@ -387,7 +386,7 @@ where
                     });
                 }
 
-                Some(sp1_reduce_proof.vk.hash_u32())
+                Some(sp1_reduce_proof.vkey.vk.hash_u32())
             }
         };
 
