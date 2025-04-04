@@ -409,6 +409,8 @@ where
         let _ = generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
             .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
+        // TODO: Cross check the roots between witness generation and native execution
+
         Ok((multi_batch_header, initial_state))
     }
 }
