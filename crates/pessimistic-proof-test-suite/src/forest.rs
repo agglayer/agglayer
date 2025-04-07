@@ -7,12 +7,13 @@ use agglayer_types::{
 };
 use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer, WalletError};
-use pessimistic_proof::unified_bridge::global_index::GlobalIndex;
 use pessimistic_proof::unified_bridge::imported_bridge_exit::{
-    commit_imported_bridge_exits, Claim, ClaimFromMainnet, L1InfoTreeLeaf, L1InfoTreeLeafInner,
-    MerkleProof,
+    Claim, ClaimFromMainnet, CommitmentVersion, L1InfoTreeLeaf, L1InfoTreeLeafInner, MerkleProof,
 };
 use pessimistic_proof::unified_bridge::token_info::LeafType;
+use pessimistic_proof::{
+    core::commitment::SignatureCommitmentValues, unified_bridge::global_index::GlobalIndex,
+};
 use pessimistic_proof::{keccak::Digest, proof::zero_if_empty_exit_root};
 use pessimistic_proof::{
     keccak::{keccak256_combine, Keccak256Hasher},
@@ -209,12 +210,17 @@ impl Forest {
 
         let new_local_exit_root = self.state_b.exit_tree.get_root();
 
-        let (_combined_hash, signature, _signer) =
-            compute_signature_info(new_local_exit_root, &imported_bridge_exits, &self.wallet);
+        let height = 0;
+        let (_combined_hash, signature, _signer) = compute_signature_info(
+            new_local_exit_root,
+            &imported_bridge_exits,
+            &self.wallet,
+            height,
+        );
 
         Certificate {
             network_id: self.network_id.into(),
-            height: 0,
+            height,
             prev_local_exit_root,
             new_local_exit_root,
             bridge_exits,
@@ -253,12 +259,9 @@ impl Forest {
             compute_aggchain_proof(AggchainECDSA {
                 signer: certificate.signer().unwrap().unwrap(),
                 signature: signature.into(),
-                commit_imported_bridge_exits: *commit_imported_bridge_exits(
-                    certificate
-                        .imported_bridge_exits
-                        .iter()
-                        .map(|i| i.global_index),
-                ),
+                commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
+                    .commitment(CommitmentVersion::V2)
+                    .0,
                 prev_local_exit_root: *certificate.prev_local_exit_root,
                 new_local_exit_root: *certificate.new_local_exit_root,
                 l1_info_root: *certificate.l1_info_root().unwrap().unwrap(),

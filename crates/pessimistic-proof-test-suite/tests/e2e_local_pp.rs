@@ -1,10 +1,10 @@
 use agglayer_types::primitives::U256;
 use agglayer_types::{Digest, PessimisticRootInput};
 use pessimistic_proof::core;
-use pessimistic_proof::core::commitment::{PPRootVersion, PessimisticRoot, SignatureCommitment};
+use pessimistic_proof::core::commitment::{PessimisticRoot, SignatureCommitmentValues};
 use pessimistic_proof::core::{generate_pessimistic_proof, AggchainData};
 use pessimistic_proof::local_state::LocalNetworkState;
-use pessimistic_proof::unified_bridge::imported_bridge_exit::commit_imported_bridge_exits;
+use pessimistic_proof::unified_bridge::imported_bridge_exit::CommitmentVersion;
 use pessimistic_proof::unified_bridge::token_info::TokenInfo;
 use pessimistic_proof::{NetworkState, PessimisticProofOutput, ProofError};
 use pessimistic_proof_test_suite::{
@@ -21,8 +21,8 @@ fn u(x: u64) -> U256 {
 }
 
 fn pp_root_migration_helper(
-    previous_version: PPRootVersion,
-    new_version: PPRootVersion,
+    previous_version: CommitmentVersion,
+    new_version: CommitmentVersion,
 ) -> (Result<PessimisticProofOutput, ProofError>, Digest, Digest) {
     let mut forest = Forest::new(vec![(USDC, u(100)), (ETH, u(200))]);
     let imported_bridge_events = vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))];
@@ -36,7 +36,7 @@ fn pp_root_migration_helper(
             &certificate,
             forest.get_signer(),
             l1_info_root,
-            PessimisticRootInput::Computed(PPRootVersion::V2),
+            PessimisticRootInput::Computed(CommitmentVersion::V2),
             None,
         )
         .unwrap();
@@ -48,7 +48,7 @@ fn pp_root_migration_helper(
                 &certificate,
                 forest.get_signer(),
                 l1_info_root,
-                PessimisticRootInput::Computed(PPRootVersion::V2),
+                PessimisticRootInput::Computed(CommitmentVersion::V2),
                 None,
             )
             .unwrap();
@@ -65,16 +65,7 @@ fn pp_root_migration_helper(
     };
 
     // Signed transition
-    let signature_data = SignatureCommitment {
-        new_local_exit_root: certificate.new_local_exit_root,
-        commit_imported_bridge_exits: commit_imported_bridge_exits(
-            multi_batch_header
-                .imported_bridge_exits
-                .iter()
-                .map(|ib| ib.0.global_index),
-        ),
-        height: certificate.height,
-    };
+    let signature_data = SignatureCommitmentValues::from(&certificate);
 
     // New state about to be settled in L1
     let new_pp_root = PessimisticRoot {
@@ -97,10 +88,13 @@ fn pp_root_migration_helper(
 }
 
 #[rstest]
-#[case(PPRootVersion::V2, PPRootVersion::V2)] // pre-migration
-#[case(PPRootVersion::V2, PPRootVersion::V3)] // migration
-#[case(PPRootVersion::V3, PPRootVersion::V3)] // post-migration
-fn pp_root_migration(#[case] prev_version: PPRootVersion, #[case] new_version: PPRootVersion) {
+#[case(CommitmentVersion::V2, CommitmentVersion::V2)] // pre-migration
+#[case(CommitmentVersion::V2, CommitmentVersion::V3)] // migration
+#[case(CommitmentVersion::V3, CommitmentVersion::V3)] // post-migration
+fn pp_root_migration(
+    #[case] prev_version: CommitmentVersion,
+    #[case] new_version: CommitmentVersion,
+) {
     let (result, expected_prev_pp_root, expected_new_pp_root) =
         pp_root_migration_helper(prev_version, new_version);
 
@@ -117,7 +111,7 @@ fn pp_root_migration(#[case] prev_version: PPRootVersion, #[case] new_version: P
 #[test]
 fn forbidden_pp_root_transition() {
     assert!(matches!(
-        pp_root_migration_helper(PPRootVersion::V3, PPRootVersion::V2).0,
+        pp_root_migration_helper(CommitmentVersion::V3, CommitmentVersion::V2).0,
         Err(ProofError::InconsistentSignedPayload)
     ));
 }
@@ -139,7 +133,7 @@ fn e2e_local_pp_simple_helper(
             &certificate,
             forest.get_signer(),
             l1_info_root,
-            PessimisticRootInput::Computed(PPRootVersion::V2),
+            PessimisticRootInput::Computed(CommitmentVersion::V2),
             None,
         )
         .unwrap();
@@ -205,7 +199,7 @@ fn e2e_local_pp_random() {
             &certificate,
             forest.get_signer(),
             l1_info_root,
-            PessimisticRootInput::Computed(PPRootVersion::V2),
+            PessimisticRootInput::Computed(CommitmentVersion::V2),
             None,
         )
         .unwrap();
@@ -234,7 +228,7 @@ fn test_sp1_simple() {
             &certificate,
             forest.get_signer(),
             l1_info_root,
-            PessimisticRootInput::Computed(PPRootVersion::V2),
+            PessimisticRootInput::Computed(CommitmentVersion::V2),
             None,
         )
         .unwrap();

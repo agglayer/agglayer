@@ -7,7 +7,8 @@ use thiserror::Error;
 #[cfg(not(target_os = "zkvm"))]
 use tracing::warn;
 use unified_bridge::global_index::GlobalIndex;
-use unified_bridge::imported_bridge_exit::{commit_imported_bridge_exits, Error};
+use unified_bridge::imported_bridge_exit::{CommitmentVersion, Error};
+use unified_bridge::imported_bridge_exit::ImportedBridgeExitCommitmentValues;
 use unified_bridge::{
     bridge_exit::NetworkId, local_exit_tree::LocalExitTreeError, token_info::TokenInfo,
 };
@@ -17,7 +18,7 @@ use crate::aggchain_proof::AggchainProofPublicValues;
 use crate::{
     aggchain_proof::AggchainData,
     local_state::{
-        commitment::PPRootVersion, commitment::PessimisticRoot, commitment::SignatureCommitment,
+        commitment::PessimisticRoot, commitment::SignatureCommitmentValues,
         commitment::StateCommitment, NetworkState,
     },
     multi_batch_header::MultiBatchHeader,
@@ -146,8 +147,7 @@ pub struct PessimisticProofOutput {
     pub aggchain_hash: Digest,
     /// The new local exit root.
     pub new_local_exit_root: Digest,
-    /// The new pessimistic root which commits to the balance and nullifier
-    /// tree.
+    /// The new pessimistic root.
     pub new_pessimistic_root: Digest,
 }
 
@@ -226,7 +226,7 @@ pub fn verify_consensus(
     multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
     initial_state_commitment: &StateCommitment,
     final_state_commitment: &StateCommitment,
-) -> Result<PPRootVersion, ProofError> {
+) -> Result<CommitmentVersion, ProofError> {
     // Verify initial state commitment and PP root matches
     let base_pp_root_version = PessimisticRoot {
         balance_root: initial_state_commitment.balance_root,
@@ -236,14 +236,6 @@ pub fn verify_consensus(
         origin_network: multi_batch_header.origin_network,
     }
     .infer_settled_pp_root_version(multi_batch_header.prev_pessimistic_root)?;
-
-    // Compute the hash of the imported bridge exits
-    let imported_hash = commit_imported_bridge_exits(
-        multi_batch_header
-            .imported_bridge_exits
-            .iter()
-            .map(|(exit, _)| exit.global_index),
-    );
 
     // Verify the aggchain proof which can be either one signature or one sp1 proof.
     // NOTE: The STARK is verified exclusively within the SP1 VM.
@@ -255,27 +247,33 @@ pub fn verify_consensus(
                     .map_err(|_| ProofError::InvalidSignature)
             };
 
-            let signature_commitment = SignatureCommitment {
+            let signature_commitment = SignatureCommitmentValues {
                 new_local_exit_root: final_state_commitment.exit_root,
-                commit_imported_bridge_exits: imported_hash,
+                commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
+                    claims: multi_batch_header
+                        .imported_bridge_exits
+                        .iter()
+                        .map(|(exit, _)| exit.into())
+                        .collect(),
+                },
                 height: multi_batch_header.height,
             };
 
             let target_pp_root_version = {
                 if *signer
                     == verify_signature(
-                        signature_commitment.commitment(PPRootVersion::V3),
+                        signature_commitment.commitment(CommitmentVersion::V3),
                         signature,
                     )?
                 {
-                    PPRootVersion::V3
+                    CommitmentVersion::V3
                 } else if *signer
                     == verify_signature(
-                        signature_commitment.commitment(PPRootVersion::V2),
+                        signature_commitment.commitment(CommitmentVersion::V2),
                         signature,
                     )?
                 {
-                    PPRootVersion::V2
+                    CommitmentVersion::V2
                 } else {
                     return Err(ProofError::InvalidSignature);
                 }
@@ -283,11 +281,11 @@ pub fn verify_consensus(
 
             match (base_pp_root_version, target_pp_root_version) {
                 // From V2 to V2: OK
-                (PPRootVersion::V2, PPRootVersion::V2) => {}
+                (CommitmentVersion::V2, CommitmentVersion::V2) => {}
                 // From V3 to V3: OK
-                (PPRootVersion::V3, PPRootVersion::V3) => {}
+                (CommitmentVersion::V3, CommitmentVersion::V3) => {}
                 // From V2 to V3: OK (migration)
-                (PPRootVersion::V2, PPRootVersion::V3) => {}
+                (CommitmentVersion::V2, CommitmentVersion::V3) => {}
                 // Inconsistent signed payload.
                 _ => return Err(ProofError::InconsistentSignedPayload),
             }
@@ -299,7 +297,7 @@ pub fn verify_consensus(
             // NOTE: No stark verification in the native rust code due to
             // the sp1_zkvm::lib::verify::verify_sp1_proof syscall
             warn!("verify_sp1_proof is not callable outside of SP1");
-            PPRootVersion::V3
+            CommitmentVersion::V3
         }
         #[cfg(target_os = "zkvm")]
         AggchainData::Generic {
@@ -320,7 +318,7 @@ pub fn verify_consensus(
                 &aggchain_proof_public_values.hash().into(),
             );
 
-            PPRootVersion::V3
+            CommitmentVersion::V3
         }
     };
 

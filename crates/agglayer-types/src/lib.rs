@@ -3,19 +3,19 @@ use std::collections::{BTreeMap, BTreeSet};
 pub use agglayer_interop_types::aggchain_proof;
 use agglayer_interop_types::aggchain_proof::AggchainData;
 use agglayer_interop_types::{BridgeExit, GlobalIndex, ImportedBridgeExit, TokenInfo};
+use agglayer_interop_types::{CommitmentVersion, ImportedBridgeExitCommitmentValues};
 pub use agglayer_primitives::digest::Digest;
 use agglayer_primitives::keccak::Keccak256Hasher;
 use agglayer_primitives::utils::{FromBool, Hashable};
 use agglayer_primitives::SignatureError;
 use agglayer_tries::error::SmtError;
 use agglayer_tries::smt::Smt;
-use pessimistic_proof::core::commitment::{PPRootVersion, PessimisticRoot};
+use pessimistic_proof::core::commitment::{PessimisticRoot, SignatureCommitmentValues};
 use pessimistic_proof::core::{self, Vkey};
 use pessimistic_proof::error::ProofVerificationError;
 use pessimistic_proof::keccak::keccak256_combine;
 use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
 use pessimistic_proof::local_state::StateCommitment;
-use pessimistic_proof::multi_batch_header::signature_commitment;
 use pessimistic_proof::nullifier_tree::{NullifierTree, NULLIFIER_TREE_DEPTH};
 use pessimistic_proof::LocalNetworkState;
 use pessimistic_proof::{
@@ -291,11 +291,12 @@ impl Default for Certificate {
         let network_id = Default::default();
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
+        let height = Default::default();
         let (_new_local_exit_root, signature, _signer) =
-            compute_signature_info(exit_root, &[], &wallet);
+            compute_signature_info(exit_root, &[], &wallet, height);
         Self {
             network_id,
-            height: Default::default(),
+            height,
             prev_local_exit_root: exit_root,
             new_local_exit_root: exit_root,
             bridge_exits: Default::default(),
@@ -312,13 +313,19 @@ pub fn compute_signature_info(
     new_local_exit_root: Digest,
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &ethers::signers::LocalWallet,
+    height: Height,
 ) -> (Digest, Signature, Address) {
     use ethers::signers::Signer;
 
-    let combined_hash = pessimistic_proof::multi_batch_header::signature_commitment(
+    let version = CommitmentVersion::V2;
+    let combined_hash = SignatureCommitmentValues {
         new_local_exit_root,
-        imported_bridge_exits.iter().map(|exit| exit.global_index),
-    );
+        commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
+            claims: imported_bridge_exits.iter().map(Into::into).collect(),
+        },
+        height,
+    }
+    .commitment(version);
 
     let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
     let signature = Signature::new(
@@ -347,7 +354,7 @@ impl Certificate {
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_, signature, _signer) = compute_signature_info(exit_root, &[], &wallet);
+        let (_, signature, _signer) = compute_signature_info(exit_root, &[], &wallet, height);
 
         Self {
             network_id,
@@ -422,18 +429,30 @@ impl Certificate {
         match self.aggchain_data {
             AggchainData::ECDSA { signature } => {
                 // retrieve signer
-                let combined_hash = signature_commitment(
-                    self.new_local_exit_root,
-                    self.imported_bridge_exits
-                        .iter()
-                        .map(|exit| exit.global_index),
-                );
+                let version = CommitmentVersion::V2;
+                let combined_hash = SignatureCommitmentValues::from(self).commitment(version);
 
                 signature
                     .recover_address_from_prehash(&B256::new(combined_hash.0))
                     .map(Some)
             }
             _ => Ok(None),
+        }
+    }
+}
+
+impl From<&Certificate> for SignatureCommitmentValues {
+    fn from(certificate: &Certificate) -> Self {
+        Self {
+            new_local_exit_root: certificate.new_local_exit_root,
+            commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
+                claims: certificate
+                    .imported_bridge_exits
+                    .iter()
+                    .map(Into::into)
+                    .collect(),
+            },
+            height: certificate.height,
         }
     }
 }
@@ -470,7 +489,7 @@ impl From<LocalNetworkStateData> for pessimistic_proof::NetworkState {
 /// given version.
 pub enum PessimisticRootInput {
     /// Computed from the given version.
-    Computed(PPRootVersion),
+    Computed(CommitmentVersion),
     /// Fetched from the L1.
     Fetched(Digest),
 }

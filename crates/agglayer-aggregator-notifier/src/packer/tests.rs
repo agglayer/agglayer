@@ -13,7 +13,7 @@ use ethers::{
     types::H160,
 };
 use mockall::predicate::eq;
-use pessimistic_proof::core::commitment::PPRootVersion;
+use pessimistic_proof::unified_bridge::imported_bridge_exit::CommitmentVersion;
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 
@@ -83,7 +83,7 @@ async fn epoch_packer_can_settle_one_certificate() {
             &certificate,
             signer,
             l1_info_root,
-            PessimisticRootInput::Computed(PPRootVersion::V2),
+            PessimisticRootInput::Computed(CommitmentVersion::V2),
             None,
         )
         .unwrap();

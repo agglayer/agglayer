@@ -5,7 +5,8 @@
 use agglayer_primitives::digest::Digest;
 use agglayer_primitives::keccak::keccak256_combine;
 use serde::{Deserialize, Serialize};
-use unified_bridge::bridge_exit::NetworkId;
+use unified_bridge::imported_bridge_exit::ImportedBridgeExitCommitmentValues;
+use unified_bridge::{bridge_exit::NetworkId, imported_bridge_exit::CommitmentVersion};
 
 use crate::{proof::EMPTY_PP_ROOT_V2, ProofError};
 
@@ -33,22 +34,22 @@ impl PessimisticRoot {
     pub fn infer_settled_pp_root_version(
         &self,
         settled_pp_root: Digest,
-    ) -> Result<PPRootVersion, ProofError> {
-        let computed_v3 = self.compute_pp_root(PPRootVersion::V3);
+    ) -> Result<CommitmentVersion, ProofError> {
+        let computed_v3 = self.compute_pp_root(CommitmentVersion::V3);
         if computed_v3 == settled_pp_root {
-            return Ok(PPRootVersion::V3);
+            return Ok(CommitmentVersion::V3);
         }
 
-        let computed_v2 = self.compute_pp_root(PPRootVersion::V2);
+        let computed_v2 = self.compute_pp_root(CommitmentVersion::V2);
         if computed_v2 == settled_pp_root {
-            return Ok(PPRootVersion::V2);
+            return Ok(CommitmentVersion::V2);
         }
 
         // NOTE: Return v2 to trigger the migration
         let is_initial_state = computed_v2 == EMPTY_PP_ROOT_V2 && self.height == 0;
 
         if settled_pp_root.0 == [0u8; 32] && is_initial_state {
-            return Ok(PPRootVersion::V2);
+            return Ok(CommitmentVersion::V2);
         }
 
         Err(ProofError::InvalidPreviousPessimisticRoot {
@@ -59,14 +60,14 @@ impl PessimisticRoot {
     }
 
     /// Compute the pessimistic root for the provided version.
-    pub fn compute_pp_root(&self, version: PPRootVersion) -> Digest {
+    pub fn compute_pp_root(&self, version: CommitmentVersion) -> Digest {
         match version {
-            PPRootVersion::V2 => keccak256_combine([
+            CommitmentVersion::V2 => keccak256_combine([
                 self.balance_root.as_slice(),
                 self.nullifier_root.as_slice(),
                 self.ler_leaf_count.to_le_bytes().as_slice(),
             ]),
-            PPRootVersion::V3 => keccak256_combine([
+            CommitmentVersion::V3 => keccak256_combine([
                 self.balance_root.as_slice(),
                 self.nullifier_root.as_slice(),
                 self.ler_leaf_count.to_le_bytes().as_slice(),
@@ -77,30 +78,26 @@ impl PessimisticRoot {
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
-pub enum PPRootVersion {
-    V2,
-    V3,
-}
-
-/// The parameters which composes the signature.
-pub struct SignatureCommitment {
+/// The values which compose the signature.
+pub struct SignatureCommitmentValues {
     pub new_local_exit_root: Digest,
-    pub commit_imported_bridge_exits: Digest,
+    pub commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues,
     pub height: u64,
 }
 
-impl SignatureCommitment {
+impl SignatureCommitmentValues {
     /// Returns the expected signed commitment for the provided version.
-    pub fn commitment(&self, version: PPRootVersion) -> Digest {
+    #[inline]
+    pub fn commitment(&self, version: CommitmentVersion) -> Digest {
+        let imported_bridge_exit_commitment = self.commit_imported_bridge_exits.commitment(version);
         match version {
-            PPRootVersion::V2 => keccak256_combine([
+            CommitmentVersion::V2 => keccak256_combine([
                 self.new_local_exit_root.as_slice(),
-                self.commit_imported_bridge_exits.as_slice(),
+                imported_bridge_exit_commitment.as_slice(),
             ]),
-            PPRootVersion::V3 => keccak256_combine([
+            CommitmentVersion::V3 => keccak256_combine([
                 self.new_local_exit_root.as_slice(),
-                self.commit_imported_bridge_exits.as_slice(),
+                imported_bridge_exit_commitment.as_slice(),
                 self.height.to_le_bytes().as_slice(),
             ]),
         }
