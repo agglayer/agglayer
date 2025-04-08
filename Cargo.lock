@@ -9269,9 +9269,9 @@ dependencies = [
 
 [[package]]
 name = "sp1-verifier"
-version = "4.1.4"
+version = "4.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea1873c9ae708fa3dc6e3d6efcf3955c84197d7cf1cd42f035199875549907fd"
+checksum = "b4d4609dbb9662e4619e35666ea5fd89ee3dee59c2822b9c9c09dc25f585e3be"
 dependencies = [
  "cfg-if",
  "hex",
