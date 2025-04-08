@@ -13,7 +13,7 @@ use unified_bridge::token_info::TokenInfo;
 
 use crate::{
     aggchain_proof::AggchainData, local_balance_tree::LocalBalancePath,
-    local_state::commitment::StateCommitment, nullifier_tree::NullifierPath,
+    nullifier_tree::NullifierPath,
 };
 
 /// Represents the chain state transition for the pessimistic proof.
@@ -31,15 +31,6 @@ where
     /// Previous pessimistic root.
     #[serde_as(as = "_")]
     pub prev_pessimistic_root: H::Digest,
-    /// Previous local exit root.
-    #[serde_as(as = "_")]
-    pub prev_local_exit_root: H::Digest,
-    /// Previous local balance root.
-    #[serde_as(as = "_")]
-    pub prev_balance_root: H::Digest,
-    /// Previous nullifier tree root.
-    #[serde_as(as = "_")]
-    pub prev_nullifier_root: H::Digest,
     /// List of bridge exits created in this batch.
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits claimed in this batch.
@@ -50,8 +41,6 @@ where
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
     pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
-    /// State commitment target hashes.
-    pub target: StateCommitment,
     /// Aggchain proof.
     pub aggchain_proof: AggchainData,
 }
