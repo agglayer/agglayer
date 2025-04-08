@@ -31,7 +31,7 @@ checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 [[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger#ad13fa475f6cc96c50975c268fb0ca7f6742148d"
+source = "git+https://github.com/agglayer/interop.git#25aa9d60f077043f192e2c42e902a994672bc2a4"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -44,7 +44,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger#ad13fa475f6cc96c50975c268fb0ca7f6742148d"
+source = "git+https://github.com/agglayer/interop.git#25aa9d60f077043f192e2c42e902a994672bc2a4"
 dependencies = [
  "agglayer-primitives",
  "serde",
@@ -5811,7 +5811,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger#ad13fa475f6cc96c50975c268fb0ca7f6742148d"
+source = "git+https://github.com/agglayer/interop.git#25aa9d60f077043f192e2c42e902a994672bc2a4"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",

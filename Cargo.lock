@@ -226,7 +226,7 @@ dependencies = [
  "agglayer-grpc-client",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
- "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-rpc",
  "agglayer-storage",
  "agglayer-types",
@@ -267,7 +267,7 @@ dependencies = [
 name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-types",
  "anyhow",
  "bincode",
@@ -285,16 +285,16 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger#ad13fa475f6cc96c50975c268fb0ca7f6742148d"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
 dependencies = [
- "agglayer-interop-grpc-types 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "agglayer-interop-grpc-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
+ "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
 ]
 
 [[package]]
 name = "agglayer-interop"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git#b470e17d8f62b786cad4a1d60e41346e9a94f89e"
+source = "git+https://github.com/agglayer/interop.git#25aa9d60f077043f192e2c42e902a994672bc2a4"
 dependencies = [
  "agglayer-interop-grpc-types 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git)",
@@ -303,9 +303,9 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger#ad13fa475f6cc96c50975c268fb0ca7f6742148d"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
 dependencies = [
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
  "bincode",
  "hex",
  "pbjson",
@@ -318,7 +318,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git#b470e17d8f62b786cad4a1d60e41346e9a94f89e"
+source = "git+https://github.com/agglayer/interop.git#25aa9d60f077043f192e2c42e902a994672bc2a4"
 dependencies = [
  "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "bincode",
@@ -333,13 +333,12 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger#ad13fa475f6cc96c50975c268fb0ca7f6742148d"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
- "arbitrary",
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
+ "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
  "bincode",
- "ethers",
+ "educe",
  "hex",
  "rand 0.9.0",
  "serde",
@@ -348,17 +347,20 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
 ]
 
 [[package]]
 name = "agglayer-interop-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git#b470e17d8f62b786cad4a1d60e41346e9a94f89e"
+source = "git+https://github.com/agglayer/interop.git#25aa9d60f077043f192e2c42e902a994672bc2a4"
 dependencies = [
  "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git)",
+ "arbitrary",
  "bincode",
+ "educe",
+ "ethers",
  "hex",
  "rand 0.9.0",
  "serde",
@@ -494,7 +496,20 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger#ad13fa475f6cc96c50975c268fb0ca7f6742148d"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
+dependencies = [
+ "alloy-primitives",
+ "byteorder",
+ "hex",
+ "k256",
+ "serde",
+ "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
+]
+
+[[package]]
+name = "agglayer-primitives"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git#25aa9d60f077043f192e2c42e902a994672bc2a4"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -507,22 +522,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "agglayer-primitives"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git#b470e17d8f62b786cad4a1d60e41346e9a94f89e"
-dependencies = [
- "alloy-primitives",
- "byteorder",
- "hex",
- "k256",
- "serde",
- "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
-]
-
-[[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e825157561dab4663b55b72f8d9654823f9eeb28"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
@@ -547,7 +549,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e825157561dab4663b55b72f8d9654823f9eeb28"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
 dependencies = [
  "prover-config",
  "prover-logger",
@@ -560,9 +562,9 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e825157561dab4663b55b72f8d9654823f9eeb28"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
 dependencies = [
- "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git)",
+ "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
  "bincode",
  "pbjson",
  "prost 0.13.5",
@@ -624,7 +626,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-types",
  "arc-swap",
  "bincode",
@@ -698,9 +700,9 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger#ad13fa475f6cc96c50975c268fb0ca7f6742148d"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -709,7 +711,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git#b470e17d8f62b786cad4a1d60e41346e9a94f89e"
+source = "git+https://github.com/agglayer/interop.git#25aa9d60f077043f192e2c42e902a994672bc2a4"
 dependencies = [
  "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "serde",
@@ -721,9 +723,9 @@ dependencies = [
 name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git)",
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git)",
+ "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-types",
  "arbitrary",
  "bincode",
@@ -737,7 +739,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git)",
 ]
 
 [[package]]
@@ -3574,6 +3576,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "educe"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d7bc049e1bd8cdeb31b68bbd586a9464ecf9f3944af3958a7a9d0f8b9799417"
+dependencies = [
+ "enum-ordinalize",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3662,6 +3676,26 @@ name = "enum-map-derive"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f282cfdfe92516eb26c2af8589c274c7c17681f5ecc03c18255fe741c6aa64eb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
+name = "enum-ordinalize"
+version = "4.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea0dcfa4e54eeb516fe454635a95753ddd39acda650ce703031c6973e315dd5"
+dependencies = [
+ "enum-ordinalize-derive",
+]
+
+[[package]]
+name = "enum-ordinalize-derive"
+version = "4.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d28318a75d4aead5c4db25382e8ef717932d0346600cacae6357eb5941bc5ff"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6205,7 +6239,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 3.3.0",
+ "proc-macro-crate 2.0.0",
  "proc-macro2",
  "quote",
  "syn 2.0.100",
@@ -6827,8 +6861,8 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git)",
+ "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "arbitrary",
  "bincode",
  "hex",
@@ -6844,15 +6878,15 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git)",
 ]
 
 [[package]]
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git)",
+ "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "alloy-primitives",
  "arbitrary",
  "bincode",
@@ -6872,14 +6906,14 @@ dependencies = [
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
  "toml",
  "tracing",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git)",
 ]
 
 [[package]]
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-types",
  "anyhow",
  "base64 0.22.1",
@@ -6901,7 +6935,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "tracing",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
+ "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "uuid 1.16.0",
 ]
 
@@ -7429,17 +7463,18 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e825157561dab4663b55b72f8d9654823f9eeb28"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
 dependencies = [
  "prover-utils",
  "serde",
  "serde_with",
+ "url",
 ]
 
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e825157561dab4663b55b72f8d9654823f9eeb28"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -7458,7 +7493,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e825157561dab4663b55b72f8d9654823f9eeb28"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
 dependencies = [
  "anyhow",
  "bincode",
@@ -7485,7 +7520,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e825157561dab4663b55b72f8d9654823f9eeb28"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
 dependencies = [
  "serde",
  "tracing",
@@ -7496,7 +7531,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git#e825157561dab4663b55b72f8d9654823f9eeb28"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
 dependencies = [
  "humantime-serde",
  "serde",
@@ -10444,11 +10479,10 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger#ad13fa475f6cc96c50975c268fb0ca7f6742148d"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=fix%2Fadd-check-on-ger)",
- "arbitrary",
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
+ "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
  "hex-literal",
  "serde",
  "serde_with",
@@ -10458,10 +10492,11 @@ dependencies = [
 [[package]]
 name = "unified-bridge"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git#b470e17d8f62b786cad4a1d60e41346e9a94f89e"
+source = "git+https://github.com/agglayer/interop.git#25aa9d60f077043f192e2c42e902a994672bc2a4"
 dependencies = [
  "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git)",
+ "arbitrary",
  "hex-literal",
  "serde",
  "serde_with",
