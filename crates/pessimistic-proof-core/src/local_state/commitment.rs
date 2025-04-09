@@ -6,7 +6,7 @@ use agglayer_primitives::digest::Digest;
 use agglayer_primitives::keccak::keccak256_combine;
 use serde::{Deserialize, Serialize};
 use unified_bridge::imported_bridge_exit::ImportedBridgeExitCommitmentValues;
-use unified_bridge::{bridge_exit::NetworkId, imported_bridge_exit::CommitmentVersion};
+use unified_bridge::{bridge_exit::NetworkId, CommitmentVersion};
 
 use crate::{proof::EMPTY_PP_ROOT_V2, ProofError};
 

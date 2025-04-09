@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub use agglayer_interop_types::aggchain_proof;
 use agglayer_interop_types::aggchain_proof::AggchainData;
+use agglayer_interop_types::ImportedBridgeExitCommitmentValues;
 use agglayer_interop_types::{BridgeExit, GlobalIndex, ImportedBridgeExit, TokenInfo};
-use agglayer_interop_types::{CommitmentVersion, ImportedBridgeExitCommitmentValues};
 pub use agglayer_primitives::digest::Digest;
 use agglayer_primitives::keccak::Keccak256Hasher;
 use agglayer_primitives::utils::{FromBool, Hashable};
@@ -25,6 +25,7 @@ use pessimistic_proof::{
     ProofError,
 };
 use serde::{Deserialize, Serialize};
+use unified_bridge::CommitmentVersion;
 pub type EpochNumber = u64;
 pub type CertificateIndex = u64;
 pub type CertificateId = Digest;

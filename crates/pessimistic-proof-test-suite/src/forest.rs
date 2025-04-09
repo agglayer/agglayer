@@ -7,10 +7,13 @@ use agglayer_types::{
 };
 use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer, WalletError};
-use pessimistic_proof::unified_bridge::imported_bridge_exit::{
-    Claim, ClaimFromMainnet, CommitmentVersion, L1InfoTreeLeaf, L1InfoTreeLeafInner, MerkleProof,
-};
 use pessimistic_proof::unified_bridge::token_info::LeafType;
+use pessimistic_proof::unified_bridge::{
+    imported_bridge_exit::{
+        Claim, ClaimFromMainnet, L1InfoTreeLeaf, L1InfoTreeLeafInner, MerkleProof,
+    },
+    CommitmentVersion,
+};
 use pessimistic_proof::{
     core::commitment::SignatureCommitmentValues, unified_bridge::global_index::GlobalIndex,
 };

@@ -1,5 +1,5 @@
 use alloy_primitives::{Address, PrimitiveSignature};
-use pessimistic_proof_core::aggchain_proof::AggchainProofPublicValues;
+use unified_bridge::aggchain_proof::AggchainProofPublicValues;
 use serde::{Deserialize, Serialize};
 
 pub type Digest = [u8; 32];

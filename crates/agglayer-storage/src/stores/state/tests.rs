@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agglayer_types::primitives::utils::Hashable as _;
 use agglayer_types::{Certificate, Digest, LocalNetworkStateData, NetworkId, PessimisticRootInput};
-use pessimistic_proof::unified_bridge::imported_bridge_exit::CommitmentVersion;
+use pessimistic_proof::unified_bridge::CommitmentVersion;
 use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
 use rstest::{fixture, rstest};
 use tracing::info;

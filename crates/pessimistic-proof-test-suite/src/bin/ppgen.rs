@@ -2,9 +2,7 @@ use std::{path::PathBuf, time::Instant};
 
 use agglayer_types::{Address, Certificate, NetworkId, PessimisticRootInput, U256};
 use clap::Parser;
-use pessimistic_proof::unified_bridge::{
-    imported_bridge_exit::CommitmentVersion, token_info::TokenInfo,
-};
+use pessimistic_proof::unified_bridge::{token_info::TokenInfo, CommitmentVersion};
 use pessimistic_proof::PessimisticProofOutput;
 use pessimistic_proof_test_suite::{
     runner::Runner,

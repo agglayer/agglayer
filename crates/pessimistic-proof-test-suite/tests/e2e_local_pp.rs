@@ -4,8 +4,8 @@ use pessimistic_proof::core;
 use pessimistic_proof::core::commitment::{PessimisticRoot, SignatureCommitmentValues};
 use pessimistic_proof::core::{generate_pessimistic_proof, AggchainData};
 use pessimistic_proof::local_state::LocalNetworkState;
-use pessimistic_proof::unified_bridge::imported_bridge_exit::CommitmentVersion;
 use pessimistic_proof::unified_bridge::token_info::TokenInfo;
+use pessimistic_proof::unified_bridge::CommitmentVersion;
 use pessimistic_proof::{NetworkState, PessimisticProofOutput, ProofError};
 use pessimistic_proof_test_suite::{
     forest::Forest,

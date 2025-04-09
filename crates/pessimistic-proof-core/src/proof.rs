@@ -6,15 +6,16 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 #[cfg(not(target_os = "zkvm"))]
 use tracing::warn;
+#[cfg(target_os = "zkvm")]
+use unified_bridge::aggchain_proof::AggchainProofPublicValues;
 use unified_bridge::global_index::GlobalIndex;
-use unified_bridge::imported_bridge_exit::{CommitmentVersion, Error};
+use unified_bridge::imported_bridge_exit::Error;
 use unified_bridge::imported_bridge_exit::ImportedBridgeExitCommitmentValues;
+use unified_bridge::CommitmentVersion;
 use unified_bridge::{
     bridge_exit::NetworkId, local_exit_tree::LocalExitTreeError, token_info::TokenInfo,
 };
 
-#[cfg(target_os = "zkvm")]
-use crate::aggchain_proof::AggchainProofPublicValues;
 use crate::{
     aggchain_proof::AggchainData,
     local_state::{
@@ -23,6 +24,10 @@ use crate::{
     },
     multi_batch_header::MultiBatchHeader,
 };
+
+/// Version of the commitment on the imported bridge exits to verify the
+/// aggchain proof.
+pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: CommitmentVersion = CommitmentVersion::V2;
 
 /// Represents all errors that can occur while generating the proof.
 ///
@@ -237,6 +242,14 @@ pub fn verify_consensus(
     }
     .infer_settled_pp_root_version(multi_batch_header.prev_pessimistic_root)?;
 
+    let commit_imported_bridge_exits = ImportedBridgeExitCommitmentValues {
+        claims: multi_batch_header
+            .imported_bridge_exits
+            .iter()
+            .map(|(exit, _)| exit.into())
+            .collect(),
+    };
+
     // Verify the aggchain proof which can be either one signature or one sp1 proof.
     // NOTE: The STARK is verified exclusively within the SP1 VM.
     let target_pp_root_version = match &multi_batch_header.aggchain_proof {
@@ -249,13 +262,7 @@ pub fn verify_consensus(
 
             let signature_commitment = SignatureCommitmentValues {
                 new_local_exit_root: final_state_commitment.exit_root,
-                commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
-                    claims: multi_batch_header
-                        .imported_bridge_exits
-                        .iter()
-                        .map(|(exit, _)| exit.into())
-                        .collect(),
-                },
+                commit_imported_bridge_exits,
                 height: multi_batch_header.height,
             };
 
@@ -310,7 +317,8 @@ pub fn verify_consensus(
                 l1_info_root: multi_batch_header.l1_info_root,
                 origin_network: *multi_batch_header.origin_network,
                 aggchain_params: *aggchain_params,
-                commit_imported_bridge_exits: imported_hash,
+                commit_imported_bridge_exits: commit_imported_bridge_exits
+                    .commitment(IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION),
             };
 
             sp1_zkvm::lib::verify::verify_sp1_proof(
