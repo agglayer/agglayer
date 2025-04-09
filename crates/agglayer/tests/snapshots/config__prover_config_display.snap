@@ -20,3 +20,4 @@ runtime-timeout = "5s"
 
 [primary-prover.network-prover]
 proving-timeout = "5m"
+sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
