@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "testutils"))]
 use agglayer_primitives::keccak::Keccak256Hasher;
 #[cfg(any(test, feature = "testutils"))]
 pub use pessimistic_proof_core::proof::zero_if_empty_exit_root;

@@ -27,7 +27,7 @@ use crate::{
 
 /// Version of the commitment on the imported bridge exits to verify the
 /// aggchain proof.
-pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: CommitmentVersion = CommitmentVersion::V2;
+pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: CommitmentVersion = CommitmentVersion::V3;
 
 /// Represents all errors that can occur while generating the proof.
 ///
