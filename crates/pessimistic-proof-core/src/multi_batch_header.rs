@@ -1,14 +1,12 @@
 #![allow(clippy::too_many_arguments)]
 use std::{collections::BTreeMap, hash::Hash};
 
-use agglayer_primitives::keccak::keccak256_combine;
+use agglayer_primitives::keccak::Hasher;
 use agglayer_primitives::U256;
-use agglayer_primitives::{digest::Digest, keccak::Hasher};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
 use unified_bridge::bridge_exit::{BridgeExit, NetworkId};
-use unified_bridge::global_index::GlobalIndex;
-use unified_bridge::imported_bridge_exit::{commit_imported_bridge_exits, ImportedBridgeExit};
+use unified_bridge::imported_bridge_exit::ImportedBridgeExit;
 use unified_bridge::token_info::TokenInfo;
 
 use crate::{
@@ -43,12 +41,4 @@ where
     pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
     /// Aggchain proof.
     pub aggchain_proof: AggchainData,
-}
-
-pub fn signature_commitment(
-    new_local_exit_root: Digest,
-    imported_bridge_exits: impl Iterator<Item = GlobalIndex>,
-) -> Digest {
-    let imported_hash = commit_imported_bridge_exits(imported_bridge_exits);
-    keccak256_combine([new_local_exit_root.as_slice(), imported_hash.as_slice()])
 }

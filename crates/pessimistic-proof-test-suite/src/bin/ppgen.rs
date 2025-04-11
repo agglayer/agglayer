@@ -2,8 +2,8 @@ use std::{path::PathBuf, time::Instant};
 
 use agglayer_types::{Address, Certificate, NetworkId, PessimisticRootInput, U256};
 use clap::Parser;
+use pessimistic_proof::unified_bridge::{token_info::TokenInfo, CommitmentVersion};
 use pessimistic_proof::PessimisticProofOutput;
-use pessimistic_proof::{core::commitment::PPRootVersion, unified_bridge::token_info::TokenInfo};
 use pessimistic_proof_test_suite::{
     runner::Runner,
     sample_data::{self as data},
@@ -94,7 +94,7 @@ pub fn main() {
             &certificate,
             state.get_signer(),
             l1_info_root,
-            PessimisticRootInput::Computed(PPRootVersion::V2),
+            PessimisticRootInput::Computed(CommitmentVersion::V2),
             None,
         )
         .unwrap();
