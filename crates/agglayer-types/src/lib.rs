@@ -322,7 +322,10 @@ pub fn compute_signature_info(
     let combined_hash = SignatureCommitmentValues {
         new_local_exit_root,
         commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
-            claims: imported_bridge_exits.iter().map(Into::into).collect(),
+            claims: imported_bridge_exits
+                .iter()
+                .map(|exit| exit.to_indexed_exit_hash())
+                .collect(),
         },
         height,
     }
@@ -450,7 +453,7 @@ impl From<&Certificate> for SignatureCommitmentValues {
                 claims: certificate
                     .imported_bridge_exits
                     .iter()
-                    .map(Into::into)
+                    .map(|exit| exit.to_indexed_exit_hash())
                     .collect(),
             },
             height: certificate.height,

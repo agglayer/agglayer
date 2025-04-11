@@ -248,7 +248,7 @@ pub fn verify_consensus(
         claims: multi_batch_header
             .imported_bridge_exits
             .iter()
-            .map(|(exit, _)| exit.into())
+            .map(|(exit, _)| exit.to_indexed_exit_hash())
             .collect(),
     };
 
