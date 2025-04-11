@@ -292,7 +292,7 @@ impl Default for Certificate {
         let network_id = Default::default();
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let height = Default::default();
+        let height: Height = 0u64;
         let (_new_local_exit_root, signature, _signer) =
             compute_signature_info(exit_root, &[], &wallet, height);
         Self {

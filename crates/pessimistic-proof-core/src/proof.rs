@@ -25,7 +25,9 @@ use crate::{
     multi_batch_header::MultiBatchHeader,
 };
 
-/// Version of the commitment on the imported bridge exits to verify the
+/// Refers to the commitment on the imported bridge exits involved in the
+/// aggchain proof public values (`commit_imported_bridge_exits` field).
+/// This constant defines which commitment version is expected to verify the
 /// aggchain proof.
 pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: CommitmentVersion = CommitmentVersion::V3;
 
