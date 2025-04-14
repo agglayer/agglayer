@@ -15,7 +15,7 @@ use agglayer_types::{
     NetworkId,
 };
 use error::SignatureVerificationError;
-use ethers::types::{TransactionReceipt, H160, H256};
+use ethers::types::{TransactionReceipt, H256};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -307,20 +307,19 @@ where
                 SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(cert.network_id)
             })?;
 
-        let signer: H160 = cert
+        if let Some(signer) = cert
             .signer()
             .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
-            .ok_or(SignatureVerificationError::SP1AggchainProofUnsupported)?
-            .into_array()
-            .into();
-
-        // ECDSA-k256 signature verification works by recovering the public key from the
-        // signature, and then checking that it is the expected one.
-        if signer != sequencer_address {
-            return Err(SignatureVerificationError::InvalidSigner {
-                signer,
-                trusted_sequencer: sequencer_address,
-            });
+            .map(|signature| signature.into_array().into())
+        {
+            // ECDSA-k256 signature verification works by recovering the public key from the
+            // signature, and then checking that it is the expected one.
+            if signer != sequencer_address {
+                return Err(SignatureVerificationError::InvalidSigner {
+                    signer,
+                    trusted_sequencer: sequencer_address,
+                });
+            }
         }
 
         Ok(())
