@@ -11,4 +11,4 @@ tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch
     "keccak",
 ] }
 
-unified-bridge = { git = "https://github.com/agglayer/interop.git", branch = "feat/commit-imported" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git" }

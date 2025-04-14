@@ -115,8 +115,8 @@ sp1-primitives = "=4.1.4"
 sp1-prover = "=4.1.4"
 sp1-zkvm = { version = "=4.1.4", default-features = false }
 
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", branch = "feat/commit-imported" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", branch = "feat/commit-imported" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", branch = "feat/commit-imported" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", branch = "feat/commit-imported" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", branch = "feat/commit-imported" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git" }
