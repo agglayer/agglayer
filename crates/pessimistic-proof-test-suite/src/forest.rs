@@ -7,13 +7,13 @@ use agglayer_types::{
 };
 use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer, WalletError};
-use pessimistic_proof::keccak::Digest;
 use pessimistic_proof::unified_bridge::global_index::GlobalIndex;
 use pessimistic_proof::unified_bridge::imported_bridge_exit::{
     commit_imported_bridge_exits, Claim, ClaimFromMainnet, L1InfoTreeLeaf, L1InfoTreeLeafInner,
     MerkleProof,
 };
 use pessimistic_proof::unified_bridge::token_info::LeafType;
+use pessimistic_proof::{keccak::Digest, proof::zero_if_empty_exit_root};
 use pessimistic_proof::{
     keccak::{keccak256_combine, Keccak256Hasher},
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
@@ -282,7 +282,7 @@ impl Forest {
     pub fn assert_output_matches(&self, output: &PessimisticProofOutput) {
         assert_eq!(
             output.new_local_exit_root,
-            self.state_b.exit_tree.get_root()
+            zero_if_empty_exit_root(self.state_b.exit_tree.get_root())
         );
         assert_eq!(
             output.new_pessimistic_root,

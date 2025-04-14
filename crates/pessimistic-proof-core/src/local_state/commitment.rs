@@ -13,6 +13,7 @@ use crate::{proof::EMPTY_PP_ROOT_V2, ProofError};
 #[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StateCommitment {
     pub exit_root: Digest,
+    pub ler_leaf_count: u32,
     pub balance_root: Digest,
     pub nullifier_root: Digest,
 }

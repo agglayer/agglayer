@@ -498,9 +498,6 @@ impl LocalNetworkStateData {
         prev_pp_root: PessimisticRootInput,
         aggchain_vkey: Option<Vkey>,
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
-        let prev_balance_root = self.balance_tree.root;
-        let prev_nullifier_root = self.nullifier_tree.root;
-
         let gers_are_consistent = certificate
             .imported_bridge_exits
             .iter()
@@ -651,13 +648,9 @@ impl LocalNetworkStateData {
 
         Ok(MultiBatchHeader::<Keccak256Hasher> {
             origin_network: certificate.network_id,
-            prev_local_exit_root: certificate.prev_local_exit_root,
             bridge_exits: certificate.bridge_exits.clone(),
             imported_bridge_exits,
             balances_proofs,
-            prev_balance_root,
-            prev_nullifier_root,
-            target: self.get_roots().into(),
             l1_info_root,
             aggchain_proof,
             height: certificate.height,

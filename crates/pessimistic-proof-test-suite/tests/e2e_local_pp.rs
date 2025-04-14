@@ -66,7 +66,7 @@ fn pp_root_migration_helper(
 
     // Signed transition
     let signature_data = SignatureCommitment {
-        new_local_exit_root: multi_batch_header.target.exit_root,
+        new_local_exit_root: certificate.new_local_exit_root,
         commit_imported_bridge_exits: commit_imported_bridge_exits(
             multi_batch_header
                 .imported_bridge_exits
