@@ -130,6 +130,10 @@ pub enum Error {
     #[error(transparent)]
     InvalidSmtOperation(#[from] SmtError),
 
+    /// Inconsistent GERs
+    #[error("Inconsistent GER")]
+    InconsistentGlobalExitRoot,
+
     #[error("AggchainVkey missing")]
     MissingAggchainVkey,
 
@@ -496,6 +500,15 @@ impl LocalNetworkStateData {
     ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
         let prev_balance_root = self.balance_tree.root;
         let prev_nullifier_root = self.nullifier_tree.root;
+
+        let gers_are_consistent = certificate
+            .imported_bridge_exits
+            .iter()
+            .all(|ib| ib.valid_claim());
+
+        if !gers_are_consistent {
+            return Err(Error::InconsistentGlobalExitRoot);
+        }
 
         // Retrieve the pp root
         let prev_pessimistic_root = match prev_pp_root {
