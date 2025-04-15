@@ -65,7 +65,7 @@ async fn from_pending_to_settle() {
                         .l1_info_root()
                         .expect("Failed to get L1 info root")
                         .unwrap_or_default(),
-                    PessimisticRootInput::Computed(PPRootVersion::V2),
+                    PessimisticRootInput::Computed(CommitmentVersion::V2),
                     None,
                 )
                 .expect("Failed to apply certificate");
@@ -173,7 +173,7 @@ async fn from_proven_to_settle() {
                         .l1_info_root()
                         .expect("Failed to get L1 info root")
                         .unwrap_or_default(),
-                    PessimisticRootInput::Computed(PPRootVersion::V2),
+                    PessimisticRootInput::Computed(CommitmentVersion::V2),
                     None,
                 )
                 .expect("Failed to apply certificate");
@@ -281,7 +281,7 @@ async fn from_candidate_to_settle() {
                     cert,
                     signer,
                     l1_info_root,
-                    PessimisticRootInput::Computed(PPRootVersion::V2),
+                    PessimisticRootInput::Computed(CommitmentVersion::V2),
                     None,
                 )
                 .unwrap();

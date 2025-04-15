@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use agglayer_types::PessimisticRootInput;
-use pessimistic_proof::{core::commitment::PPRootVersion, unified_bridge::bridge_exit::BridgeExit};
+use pessimistic_proof::unified_bridge::{bridge_exit::BridgeExit, CommitmentVersion};
 use pessimistic_proof_test_suite::{forest::Forest, runner::Runner, sample_data as data};
 
 #[rstest::rstest]
@@ -32,7 +32,7 @@ fn cycles_on_sample_inputs(
             &certificate,
             state.get_signer(),
             certificate.l1_info_root().unwrap().unwrap_or_default(),
-            PessimisticRootInput::Computed(PPRootVersion::V2),
+            PessimisticRootInput::Computed(CommitmentVersion::V2),
             None,
         )
         .unwrap();
