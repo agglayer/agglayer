@@ -423,7 +423,8 @@ impl Certificate {
             .first()
             .map(|imported_bridge_exit| imported_bridge_exit.l1_info_root())
         else {
-            return Ok(None);
+            // In case of no imported bridge exists, return the provided l1_info_root
+            return Ok(self.l1_info_root);
         };
 
         if self
