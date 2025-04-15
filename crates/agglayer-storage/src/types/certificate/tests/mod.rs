@@ -78,6 +78,7 @@ impl CertificateV1<'static> {
             },
             metadata: Digest([0xa9; 32]),
             custom_chain_data: Cow::Owned(vec![]),
+            l1_info_root: None,
         }
     }
 
@@ -115,6 +116,7 @@ impl CertificateV1<'static> {
             },
             metadata: Digest([0xb9; 32]),
             custom_chain_data: Cow::Owned(vec![]),
+            l1_info_root: None,
         }
     }
 }
@@ -132,6 +134,7 @@ impl CertificateV1<'_> {
             aggchain_data,
             metadata,
             custom_chain_data,
+            l1_info_root,
         } = self;
 
         CertificateV1 {
@@ -154,6 +157,7 @@ impl CertificateV1<'_> {
             },
             metadata,
             custom_chain_data: Cow::Owned(custom_chain_data.into_owned()),
+            l1_info_root,
         }
     }
 }

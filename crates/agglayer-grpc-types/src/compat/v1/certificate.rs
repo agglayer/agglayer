@@ -27,6 +27,7 @@ impl TryFrom<v1::Certificate> for Certificate {
             aggchain_data: required_field!(value, aggchain_data),
             metadata: required_field!(value, metadata),
             custom_chain_data: value.custom_chain_data.to_vec(),
+            l1_info_root: value.l1_info_root.map(TryInto::try_into).transpose()?,
         })
     }
 }
@@ -49,6 +50,7 @@ impl TryFrom<Certificate> for v1::Certificate {
             aggchain_data: Some(value.aggchain_data.try_into()?),
             metadata: Some(value.metadata.into()),
             custom_chain_data: value.custom_chain_data.into(),
+            l1_info_root: value.l1_info_root.map(Into::into),
         })
     }
 }

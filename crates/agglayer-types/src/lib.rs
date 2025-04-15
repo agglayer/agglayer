@@ -288,6 +288,8 @@ pub struct Certificate {
     pub aggchain_data: AggchainData,
     #[serde(default)]
     pub custom_chain_data: Vec<u8>,
+    #[serde(default)]
+    pub l1_info_root: Option<Digest>,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -309,6 +311,7 @@ impl Default for Certificate {
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
             custom_chain_data: vec![],
+            l1_info_root: None,
         }
     }
 }
@@ -374,6 +377,7 @@ impl Certificate {
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
             custom_chain_data: vec![],
+            l1_info_root: None,
         }
     }
 
