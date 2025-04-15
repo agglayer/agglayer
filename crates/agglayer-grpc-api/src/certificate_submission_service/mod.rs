@@ -33,7 +33,7 @@ where
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
 {
-    #[instrument(skip(self), level = "debug", fields(certificate_id = tracing::field::Empty))]
+    #[instrument(skip(self, request), level = "debug", fields(certificate_id = tracing::field::Empty))]
     async fn submit_certificate(
         &self,
         request: tonic::Request<SubmitCertificateRequest>,
