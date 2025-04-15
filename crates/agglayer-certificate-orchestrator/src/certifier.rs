@@ -2,7 +2,7 @@ use agglayer_types::primitives::keccak::Keccak256Hasher;
 use agglayer_types::LocalNetworkStateData;
 use agglayer_types::{Certificate, Height, NetworkId};
 use pessimistic_proof::multi_batch_header::MultiBatchHeader;
-use pessimistic_proof::LocalNetworkState;
+use pessimistic_proof::{LocalNetworkState, PessimisticProofOutput};
 
 use crate::error::CertificationError;
 
@@ -36,9 +36,16 @@ pub trait Certifier: Unpin + Send + Sync + 'static {
         height: Height,
     ) -> CertifierResult;
 
-    async fn witness_execution(
+    async fn witness_generation(
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
-    ) -> Result<(MultiBatchHeader<Keccak256Hasher>, LocalNetworkState), CertificationError>;
+    ) -> Result<
+        (
+            MultiBatchHeader<Keccak256Hasher>,
+            LocalNetworkState,
+            PessimisticProofOutput,
+        ),
+        CertificationError,
+    >;
 }

@@ -17,11 +17,11 @@ mock! {
             height: Height,
         ) -> Result<CertifierOutput, CertificationError>;
 
-        async fn witness_execution(
+        async fn witness_generation(
             &self,
             certificate: &agglayer_types::Certificate,
-            state: &mut LocalNetworkStateData
-        ) -> Result<(MultiBatchHeader<pessimistic_proof::keccak::Keccak256Hasher>, LocalNetworkState), CertificationError>;
+            state: &mut LocalNetworkStateData,
+        ) -> Result<(MultiBatchHeader<pessimistic_proof::keccak::Keccak256Hasher>, LocalNetworkState, pessimistic_proof::PessimisticProofOutput), CertificationError>;
     }
 }
 

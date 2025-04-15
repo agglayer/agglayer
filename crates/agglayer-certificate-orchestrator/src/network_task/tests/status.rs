@@ -7,7 +7,7 @@ use agglayer_storage::{
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use ethers::types::H256;
 use mockall::predicate::{always, eq};
-use pessimistic_proof::LocalNetworkState;
+use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
 use rstest::rstest;
 
 use super::*;
@@ -269,7 +269,7 @@ async fn from_candidate_to_settle() {
 
     certifier.expect_certify().never();
     certifier
-        .expect_witness_execution()
+        .expect_witness_generation()
         .withf(move |c, _| c.hash() == certificate_id)
         .once()
         .returning(move |cert, state| {
@@ -286,7 +286,8 @@ async fn from_candidate_to_settle() {
                 )
                 .unwrap();
 
-            Ok((batch, initial))
+            let (pv, _) = generate_pessimistic_proof(initial.clone().into(), &batch).unwrap();
+            Ok((batch, initial, pv))
         });
 
     let state_store = storage.state.clone();
@@ -363,7 +364,7 @@ async fn from_settle_to_settle() {
         .expect("Failed to insert certificate header");
 
     certifier.expect_certify().never();
-    certifier.expect_witness_execution().never();
+    certifier.expect_witness_generation().never();
 
     let mut packer = MockEpochPacker::new();
     packer.expect_settle_certificate().never();

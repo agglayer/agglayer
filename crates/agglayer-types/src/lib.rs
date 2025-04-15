@@ -81,6 +81,13 @@ pub enum Error {
     /// The imported bridge exits should refer to one and the same L1 info root.
     #[error("Imported bridge exits refer to multiple L1 info root")]
     MultipleL1InfoRoot,
+    /// The certificate refers to a prev local exit root which differ from the
+    /// one computed by the agglayer.
+    #[error(
+        "Mismatch on the certificate prev local exit root. declared: {declared:?}, computed: \
+         {computed:?}"
+    )]
+    MismatchPrevLocalExitRoot { computed: Digest, declared: Digest },
     /// The certificate refers to a new local exit root which differ from the
     /// one computed by the agglayer.
     #[error(
@@ -548,6 +555,14 @@ impl LocalNetworkStateData {
             }
             .compute_pp_root(version),
         };
+
+        let prev_local_exit_root = self.exit_tree.get_root();
+        if certificate.prev_local_exit_root != prev_local_exit_root {
+            return Err(Error::MismatchPrevLocalExitRoot {
+                computed: prev_local_exit_root,
+                declared: certificate.prev_local_exit_root,
+            });
+        }
 
         for e in certificate.bridge_exits.iter() {
             self.exit_tree.add_leaf(e.hash())?;

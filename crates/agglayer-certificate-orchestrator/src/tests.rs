@@ -39,7 +39,7 @@ use mocks::MockCertifier;
 use pessimistic_proof::{
     keccak::{Digest, Keccak256Hasher},
     multi_batch_header::MultiBatchHeader,
-    LocalNetworkState,
+    LocalNetworkState, PessimisticProofOutput,
 };
 use rstest::fixture;
 use tokio::sync::{broadcast, mpsc};
@@ -932,11 +932,18 @@ impl Certifier for Check {
         Ok(result)
     }
 
-    async fn witness_execution(
+    async fn witness_generation(
         &self,
         _certificate: &agglayer_types::Certificate,
         _state: &mut LocalNetworkStateData,
-    ) -> Result<(MultiBatchHeader<Keccak256Hasher>, LocalNetworkState), CertificationError> {
+    ) -> Result<
+        (
+            MultiBatchHeader<Keccak256Hasher>,
+            LocalNetworkState,
+            PessimisticProofOutput,
+        ),
+        CertificationError,
+    > {
         Err(CertificationError::InternalError(
             "unimplemented".to_string(),
         ))

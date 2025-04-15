@@ -1,6 +1,9 @@
 use agglayer_contracts::L1RpcError;
 use agglayer_types::{CertificateId, CertificateStatusError, Height, NetworkId};
-use pessimistic_proof::{error::ProofVerificationError, ProofError};
+use pessimistic_proof::{
+    core::commitment::StateCommitment, error::ProofVerificationError, PessimisticProofOutput,
+    ProofError,
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PreCertificationError {
@@ -26,8 +29,38 @@ pub enum CertificationError {
     #[error("proof verification failed")]
     ProofVerificationFailed { source: ProofVerificationError },
 
-    #[error("native execution failed: {source:?}")]
+    /// Rust native execution without aggchain proof stark verification failed
+    /// on the given error.
+    #[error("rust-native execution failed: {source:?}")]
     NativeExecutionFailed { source: ProofError },
+
+    /// SP1 native execute call which includes the aggchain proof stark
+    /// verification failed.
+    #[error("sp1-native execution failed.")]
+    Sp1ExecuteFailed(#[source] anyhow::Error),
+
+    /// The new state commitments differ between the ones computed during the
+    /// witness generation, and the ones computed by the rust native execution.
+    #[error(
+        "Mismatch on the target state commitment. witness generation: {witness_generation:?}. \
+         native execution: {native_execution:?}"
+    )]
+    MismatchNewStateCommitment {
+        witness_generation: StateCommitment,
+        native_execution: StateCommitment,
+    },
+
+    /// The PP public values differ between the ones computed during the
+    /// rust native execution, and the ones computed by the sp1 zkvm execution.
+    #[error(
+        "Mismatch on the PP public values between rust native execution and sp1 zkvm execution. \
+         {native_execution:?}. sp1 zkvm execution: {sp1_zkvm_execution:?}"
+    )]
+    MismatchPessimisticProofPublicValues {
+        native_execution: PessimisticProofOutput,
+        sp1_zkvm_execution: PessimisticProofOutput,
+    },
+
     #[error("Type error: {source}")]
     Types { source: agglayer_types::Error },
     #[error("Serialize error")]
