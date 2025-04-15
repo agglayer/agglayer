@@ -326,7 +326,7 @@ pub fn verify_consensus(
             eprintln!(
                 "AP public values: prev_local_exit_root: {:?}, new_local_exit_root: {:?}, \
                  l1_info_root: {:?}, origin_network: {:?}, aggchain_params: {:?}, \
-                 commit_imported_bridge_exits: {:}",
+                 commit_imported_bridge_exits: {:?}",
                 aggchain_proof_public_values.prev_local_exit_root,
                 aggchain_proof_public_values.new_local_exit_root,
                 aggchain_proof_public_values.l1_info_root,
