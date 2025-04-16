@@ -308,6 +308,9 @@ where
         let l1_info_root = match (declared_l1_info_leaf_count, declared_l1_info_root) {
             // Use the default corresponding to the entry set by the event `InitL1InfoRootMap`
             (None, None) => self.l1_rpc.default_l1_info_tree_entry().1.into(),
+            // In this situation, it means that we have a l1_info_root defined without imported
+            // bridge exits.
+            (None, Some(l1_info_root)) => l1_info_root,
             // Retrieve the event corresponding to the declared entry and await for finalization
             (Some(declared_leaf), Some(declared_root)) => {
                 // Retrieve from contract and await for finalization
