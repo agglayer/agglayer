@@ -289,7 +289,7 @@ pub struct Certificate {
     #[serde(default)]
     pub custom_chain_data: Vec<u8>,
     #[serde(default)]
-    pub l1_info_root: Option<Digest>,
+    pub l1_info_tree_leaf_count: Option<u32>,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -311,7 +311,7 @@ impl Default for Certificate {
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
             custom_chain_data: vec![],
-            l1_info_root: None,
+            l1_info_tree_leaf_count: None,
         }
     }
 }
@@ -377,7 +377,7 @@ impl Certificate {
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
             custom_chain_data: vec![],
-            l1_info_root: None,
+            l1_info_tree_leaf_count: None,
         }
     }
 
@@ -412,6 +412,7 @@ impl Certificate {
             .iter()
             .map(|i| i.l1_leaf_index() + 1)
             .max()
+            .or(self.l1_info_tree_leaf_count)
     }
 
     /// Returns the L1 Info Root considered for this [`Certificate`].
@@ -423,8 +424,7 @@ impl Certificate {
             .first()
             .map(|imported_bridge_exit| imported_bridge_exit.l1_info_root())
         else {
-            // In case of no imported bridge exists, return the provided l1_info_root
-            return Ok(self.l1_info_root);
+            return Ok(None);
         };
 
         if self
