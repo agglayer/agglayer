@@ -255,6 +255,7 @@ mockall::mock! {
             new_local_exit_root: [u8; 32],
             new_pessimistic_root: [u8; 32],
             proof: ::ethers::core::types::Bytes,
+            custom_chain_data: ::ethers::core::types::Bytes,
         ) -> ethers::contract::ContractCall<NonceManagerMiddleware<Provider<MockProvider> > ,()> ;
     }
 }

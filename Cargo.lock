@@ -285,10 +285,10 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.1#857a8514ca5d55ee5eae6163826088b9a5b13697"
 dependencies = [
- "agglayer-interop-grpc-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
+ "agglayer-interop-grpc-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.1)",
+ "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.1)",
 ]
 
 [[package]]
@@ -303,9 +303,9 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.1#857a8514ca5d55ee5eae6163826088b9a5b13697"
 dependencies = [
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
+ "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.1)",
  "bincode",
  "hex",
  "pbjson",
@@ -333,10 +333,10 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.1#857a8514ca5d55ee5eae6163826088b9a5b13697"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.1)",
+ "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.1)",
  "bincode",
  "educe",
  "hex",
@@ -347,7 +347,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
+ "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.1)",
 ]
 
 [[package]]
@@ -496,7 +496,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.1#857a8514ca5d55ee5eae6163826088b9a5b13697"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -524,7 +524,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.17#3370a59b4a537f7d42d18502c7e39a7b9b742e01"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
@@ -549,7 +549,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.17#3370a59b4a537f7d42d18502c7e39a7b9b742e01"
 dependencies = [
  "prover-config",
  "prover-logger",
@@ -562,9 +562,9 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.17#3370a59b4a537f7d42d18502c7e39a7b9b742e01"
 dependencies = [
- "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
+ "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.1)",
  "bincode",
  "pbjson",
  "prost 0.13.5",
@@ -700,9 +700,9 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.1#857a8514ca5d55ee5eae6163826088b9a5b13697"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.1)",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -7464,7 +7464,7 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.17#3370a59b4a537f7d42d18502c7e39a7b9b742e01"
 dependencies = [
  "prover-utils",
  "serde",
@@ -7475,7 +7475,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.17#3370a59b4a537f7d42d18502c7e39a7b9b742e01"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -7494,7 +7494,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.17#3370a59b4a537f7d42d18502c7e39a7b9b742e01"
 dependencies = [
  "anyhow",
  "bincode",
@@ -7521,7 +7521,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.17#3370a59b4a537f7d42d18502c7e39a7b9b742e01"
 dependencies = [
  "serde",
  "tracing",
@@ -7532,7 +7532,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.7#aafc64018a71aef8c790aa06b3ed5c945b1a3f6d"
+source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.17#3370a59b4a537f7d42d18502c7e39a7b9b742e01"
 dependencies = [
  "humantime-serde",
  "serde",
@@ -10480,13 +10480,14 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.2.0#6250c7079441af5975215846aecd744203056624"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.2.1#857a8514ca5d55ee5eae6163826088b9a5b13697"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.0)",
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.1)",
+ "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.2.1)",
  "hex-literal",
  "serde",
  "serde_with",
+ "sha2 0.10.8 (git+https://github.com/sp1-patches/RustCrypto-hashes.git?tag=patch-sha2-0.10.8-sp1-4.0.0)",
  "thiserror 2.0.12",
 ]
 

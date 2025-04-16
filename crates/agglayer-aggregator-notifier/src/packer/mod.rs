@@ -194,6 +194,7 @@ where
                 *output.new_local_exit_root,
                 *output.new_pessimistic_root,
                 proof_with_selector.into(),
+                certificate.custom_chain_data.into(),
             );
 
         tracing::Span::current().record(

@@ -1,6 +1,6 @@
 use ethers::{
     providers::{Middleware, PendingTransaction},
-    types::{Bytes, H256},
+    types::H256,
 };
 use ethers_contract::{ContractCall, ContractError};
 
@@ -22,6 +22,7 @@ pub trait Settler {
         new_local_exit_root: [u8; 32],
         new_pessimistic_root: [u8; 32],
         proof: ::ethers::core::types::Bytes,
+        custom_chain_data: ::ethers::core::types::Bytes,
     ) -> ContractCall<Self::M, ()>;
 }
 
@@ -62,6 +63,7 @@ where
         new_local_exit_root: [u8; 32],
         new_pessimistic_root: [u8; 32],
         proof: ::ethers::core::types::Bytes,
+        custom_chain_data: ::ethers::core::types::Bytes,
     ) -> ContractCall<Self::M, ()> {
         self.inner.verify_pessimistic_trusted_aggregator(
             rollup_id,
@@ -69,7 +71,7 @@ where
             new_local_exit_root,
             new_pessimistic_root,
             proof,
-            Bytes::new(),
+            custom_chain_data,
         )
     }
 }
