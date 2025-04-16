@@ -307,12 +307,12 @@ where
 
         let l1_info_root = match (declared_l1_info_leaf_count, declared_l1_info_root) {
             // Use the default corresponding to the entry set by the event `InitL1InfoRootMap`
+            (None, _) if matches!(certificate.aggchain_data, AggchainData::Generic { .. }) => {
+                return Err(CertificationError::MissingL1InfoTreeLeafCountForGenericAggchainData);
+            }
             (None, None) => self.l1_rpc.default_l1_info_tree_entry().1.into(),
-            // In this situation, it means that we have a l1_info_root defined without imported
-            // bridge exits.
-            (None, Some(l1_info_root)) => l1_info_root,
             // Retrieve the event corresponding to the declared entry and await for finalization
-            (Some(declared_leaf), Some(declared_root)) => {
+            (Some(declared_leaf), declared_root) => {
                 // Retrieve from contract and await for finalization
                 let retrieved_root = self
                     .l1_rpc
@@ -323,15 +323,17 @@ where
                     })?
                     .into();
 
-                // Check that the retrieved l1 info root is equal to the declared one
-                if declared_root != retrieved_root {
-                    return Err(CertificationError::Types {
-                        source: agglayer_types::Error::L1InfoRootIncorrect {
-                            declared: declared_root,
-                            retrieved: retrieved_root,
-                            leaf_count: declared_leaf,
-                        },
-                    });
+                if let Some(declared_root) = declared_root {
+                    // Check that the retrieved l1 info root is equal to the declared one
+                    if declared_root != retrieved_root {
+                        return Err(CertificationError::Types {
+                            source: agglayer_types::Error::L1InfoRootIncorrect {
+                                declared: declared_root,
+                                retrieved: retrieved_root,
+                                leaf_count: declared_leaf,
+                            },
+                        });
+                    }
                 }
 
                 retrieved_root

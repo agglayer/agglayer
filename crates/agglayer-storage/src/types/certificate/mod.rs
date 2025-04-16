@@ -105,7 +105,7 @@ impl From<CertificateV0> for Certificate {
             aggchain_data: AggchainData::ECDSA { signature },
             metadata,
             custom_chain_data: vec![],
-            l1_info_root: None,
+            l1_info_tree_leaf_count: None,
         }
     }
 }
@@ -123,7 +123,7 @@ struct CertificateV1<'a> {
     aggchain_data: AggchainDataV1<'a>,
     metadata: Metadata,
     custom_chain_data: Cow<'a, [u8]>,
-    l1_info_root: Option<Digest>,
+    l1_info_tree_leaf_count: Option<u32>,
 }
 
 impl From<CertificateV1<'_>> for Certificate {
@@ -139,7 +139,7 @@ impl From<CertificateV1<'_>> for Certificate {
             aggchain_data,
             metadata,
             custom_chain_data,
-            l1_info_root,
+            l1_info_tree_leaf_count,
         } = certificate;
 
         Certificate {
@@ -152,7 +152,7 @@ impl From<CertificateV1<'_>> for Certificate {
             metadata,
             aggchain_data: aggchain_data.into(),
             custom_chain_data: custom_chain_data.into_owned(),
-            l1_info_root,
+            l1_info_tree_leaf_count,
         }
     }
 }
@@ -169,7 +169,7 @@ impl<'a> From<&'a Certificate> for CertificateV1<'a> {
             metadata,
             aggchain_data,
             custom_chain_data,
-            l1_info_root,
+            l1_info_tree_leaf_count,
         } = certificate;
 
         CertificateV1 {
@@ -183,7 +183,7 @@ impl<'a> From<&'a Certificate> for CertificateV1<'a> {
             aggchain_data: aggchain_data.into(),
             metadata: *metadata,
             custom_chain_data: custom_chain_data.into(),
-            l1_info_root: *l1_info_root,
+            l1_info_tree_leaf_count: *l1_info_tree_leaf_count,
         }
     }
 }

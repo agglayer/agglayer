@@ -34,7 +34,7 @@ impl serde::Serialize for Certificate {
         if !self.custom_chain_data.is_empty() {
             len += 1;
         }
-        if self.l1_info_root.is_some() {
+        if self.l1_info_tree_leaf_count.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.types.v1.Certificate", len)?;
@@ -69,8 +69,8 @@ impl serde::Serialize for Certificate {
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("customChainData", pbjson::private::base64::encode(&self.custom_chain_data).as_str())?;
         }
-        if let Some(v) = self.l1_info_root.as_ref() {
-            struct_ser.serialize_field("l1InfoRoot", v)?;
+        if let Some(v) = self.l1_info_tree_leaf_count.as_ref() {
+            struct_ser.serialize_field("l1InfoTreeLeafCount", v)?;
         }
         struct_ser.end()
     }
@@ -98,8 +98,8 @@ impl<'de> serde::Deserialize<'de> for Certificate {
             "aggchainData",
             "custom_chain_data",
             "customChainData",
-            "l1_info_root",
-            "l1InfoRoot",
+            "l1_info_tree_leaf_count",
+            "l1InfoTreeLeafCount",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -113,7 +113,7 @@ impl<'de> serde::Deserialize<'de> for Certificate {
             Metadata,
             AggchainData,
             CustomChainData,
-            L1InfoRoot,
+            L1InfoTreeLeafCount,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -144,7 +144,7 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                             "metadata" => Ok(GeneratedField::Metadata),
                             "aggchainData" | "aggchain_data" => Ok(GeneratedField::AggchainData),
                             "customChainData" | "custom_chain_data" => Ok(GeneratedField::CustomChainData),
-                            "l1InfoRoot" | "l1_info_root" => Ok(GeneratedField::L1InfoRoot),
+                            "l1InfoTreeLeafCount" | "l1_info_tree_leaf_count" => Ok(GeneratedField::L1InfoTreeLeafCount),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -173,7 +173,7 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                 let mut metadata__ = None;
                 let mut aggchain_data__ = None;
                 let mut custom_chain_data__ = None;
-                let mut l1_info_root__ = None;
+                let mut l1_info_tree_leaf_count__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::NetworkId => {
@@ -236,11 +236,13 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                                 Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
                             ;
                         }
-                        GeneratedField::L1InfoRoot => {
-                            if l1_info_root__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("l1InfoRoot"));
+                        GeneratedField::L1InfoTreeLeafCount => {
+                            if l1_info_tree_leaf_count__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("l1InfoTreeLeafCount"));
                             }
-                            l1_info_root__ = map_.next_value()?;
+                            l1_info_tree_leaf_count__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
                         }
                     }
                 }
@@ -254,7 +256,7 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                     metadata: metadata__,
                     aggchain_data: aggchain_data__,
                     custom_chain_data: custom_chain_data__.unwrap_or_default(),
-                    l1_info_root: l1_info_root__,
+                    l1_info_tree_leaf_count: l1_info_tree_leaf_count__,
                 })
             }
         }

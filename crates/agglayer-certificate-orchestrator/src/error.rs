@@ -50,6 +50,8 @@ pub enum CertificationError {
     UnableToFindAggchainVkey { source: L1RpcError },
     #[error("Aggchain proof vkey mismatch: expected {expected}, actual {actual}")]
     AggchainProofVkeyMismatch { expected: String, actual: String },
+    #[error("Missing L1 info tree leaf count for generic aggchain data")]
+    MissingL1InfoTreeLeafCountForGenericAggchainData,
 }
 
 #[derive(thiserror::Error, Debug)]
