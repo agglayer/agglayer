@@ -105,11 +105,7 @@ impl From<CertificateV0> for Certificate {
             aggchain_data: AggchainData::ECDSA { signature },
             metadata,
             custom_chain_data: vec![],
-            l1_info_tree_leaf_count: imported_bridge_exits
-                .iter()
-                .map(|i| i.l1_leaf_index() + 1)
-                .max()
-                .unwrap_or(0u32),
+            l1_info_tree_leaf_count: 0u32,
         }
     }
 }

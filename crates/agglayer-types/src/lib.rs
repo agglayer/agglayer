@@ -282,6 +282,7 @@ pub struct Certificate {
     #[serde(default)]
     pub custom_chain_data: Vec<u8>,
     /// L1 info tree leaf count for the considered L1 info root.
+    #[serde(default)]
     pub l1_info_tree_leaf_count: u32,
 }
 
