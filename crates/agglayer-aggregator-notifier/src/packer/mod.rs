@@ -137,12 +137,6 @@ where
         let network_id = certificate.network_id;
         tracing::Span::current().record("network_id", *network_id);
 
-        let height = certificate.height;
-
-        let l_1_info_tree_leaf_count = certificate
-            .l1_info_tree_leaf_count()
-            .unwrap_or_else(|| self.l1_rpc.default_l1_info_tree_entry().0);
-
         // Prepare the proof
         let (output, proof) =
             if let Some(Proof::SP1(proof)) = self.pending_store.get_proof(certificate_id)? {
@@ -190,7 +184,7 @@ where
             .l1_rpc
             .build_verify_pessimistic_trusted_aggregator_call(
                 *output.origin_network,
-                l_1_info_tree_leaf_count,
+                certificate.l1_info_tree_leaf_count,
                 *output.new_local_exit_root,
                 *output.new_pessimistic_root,
                 proof_with_selector.into(),
@@ -276,7 +270,7 @@ where
 
         fail::fail_point!("notifier::packer::settle_certificate::transaction_sent::kill_node");
 
-        self.watch_and_update(pending_tx, certificate_id, network_id, height)
+        self.watch_and_update(pending_tx, certificate_id, network_id, certificate.height)
             .await
     }
 

@@ -152,7 +152,6 @@ impl TestContext {
                 config.l1.polygon_zkevm_global_exit_root_v2_contract,
                 rpc.clone(),
             ),
-            (1, [1; 32]),
         ));
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
             certificate_sender,

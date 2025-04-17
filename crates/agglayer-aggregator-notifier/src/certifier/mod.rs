@@ -303,50 +303,38 @@ where
             .l1_info_root()
             .map_err(|source| CertificationError::Types { source })?;
 
-        let declared_l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
+        let declared_l1_info_leaf_count = certificate.l1_info_tree_leaf_count;
 
-        let l1_info_root = match (declared_l1_info_leaf_count, declared_l1_info_root) {
-            // Use the default corresponding to the entry set by the event `InitL1InfoRootMap`
-            (None, _) if matches!(certificate.aggchain_data, AggchainData::Generic { .. }) => {
-                return Err(CertificationError::MissingL1InfoTreeLeafCountForGenericAggchainData);
-            }
-            (None, None) => self.l1_rpc.default_l1_info_tree_entry().1.into(),
-            // Retrieve the event corresponding to the declared entry and await for finalization
-            (Some(declared_leaf), declared_root) => {
-                // Retrieve from contract and await for finalization
-                let retrieved_root = self
-                    .l1_rpc
-                    .get_l1_info_root(declared_leaf)
-                    .await
-                    .map_err(|_| {
-                        CertificationError::L1InfoRootNotFound(certificate_id, declared_leaf)
-                    })?
-                    .into();
+        let l1_info_root = {
+            // Retrieve the L1 info root for the declared l1 info leaf count and await for
+            // finalization
+            let retrieved_root = self
+                .l1_rpc
+                .get_l1_info_root(declared_l1_info_leaf_count)
+                .await
+                .map_err(|_| {
+                    CertificationError::L1InfoRootNotFound(
+                        certificate_id,
+                        declared_l1_info_leaf_count,
+                    )
+                })?
+                .into();
 
-                if let Some(declared_root) = declared_root {
-                    // Check that the retrieved l1 info root is equal to the declared one
-                    if declared_root != retrieved_root {
-                        return Err(CertificationError::Types {
-                            source: agglayer_types::Error::L1InfoRootIncorrect {
-                                declared: declared_root,
-                                retrieved: retrieved_root,
-                                leaf_count: declared_leaf,
-                            },
-                        });
-                    }
+            if let Some(declared_l1_info_root) = declared_l1_info_root {
+                // Check that the L1 info root considered by the imported bridge exits matches
+                // the l1 info tree leaf count declared in the certificate.
+                if declared_l1_info_root != retrieved_root {
+                    return Err(CertificationError::Types {
+                        source: agglayer_types::Error::L1InfoRootIncorrect {
+                            declared: declared_l1_info_root,
+                            retrieved: retrieved_root,
+                            leaf_count: declared_l1_info_leaf_count,
+                        },
+                    });
                 }
+            }
 
-                retrieved_root
-            }
-            // Inconsistent declared L1 info tree entry
-            (l1_leaf, l1_info_root) => {
-                return Err(CertificationError::Types {
-                    source: agglayer_types::Error::InconsistentL1InfoTreeInformation {
-                        l1_leaf,
-                        l1_info_root,
-                    },
-                })
-            }
+            retrieved_root
         };
 
         let aggchain_vkey = match certificate.aggchain_data {

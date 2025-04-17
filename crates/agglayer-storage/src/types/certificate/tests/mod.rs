@@ -78,7 +78,7 @@ impl CertificateV1<'static> {
             },
             metadata: Digest([0xa9; 32]),
             custom_chain_data: Cow::Owned(vec![]),
-            l1_info_tree_leaf_count: None,
+            l1_info_tree_leaf_count: 0u32,
         }
     }
 
@@ -116,7 +116,7 @@ impl CertificateV1<'static> {
             },
             metadata: Digest([0xb9; 32]),
             custom_chain_data: Cow::Owned(vec![]),
-            l1_info_tree_leaf_count: None,
+            l1_info_tree_leaf_count: 0u32,
         }
     }
 }

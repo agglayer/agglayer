@@ -38,8 +38,6 @@ pub trait RollupContract {
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
     async fn get_verifier_type(&self, rollup_id: u32) -> Result<VerifierType, L1RpcError>;
-
-    fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
 }
 
 #[async_trait::async_trait]
@@ -48,11 +46,6 @@ where
     RpcProvider: Middleware + 'static,
 {
     type M = RpcProvider;
-
-    /// Returns the first entry of the l1 info tree map in the L1.
-    fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]) {
-        self.default_l1_info_tree_entry
-    }
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError> {
         // Get `UpdateL1InfoTreeV2` event for the given leaf count from the latest block

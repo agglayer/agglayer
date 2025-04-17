@@ -233,11 +233,15 @@ impl Forest {
             prev_local_exit_root,
             new_local_exit_root,
             bridge_exits,
-            imported_bridge_exits,
+            imported_bridge_exits: imported_bridge_exits.clone(),
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
             custom_chain_data: vec![],
-            l1_info_tree_leaf_count: None,
+            l1_info_tree_leaf_count: imported_bridge_exits
+                .iter()
+                .map(|i| i.l1_leaf_index() + 1)
+                .max()
+                .unwrap_or(0u32),
         }
     }
 

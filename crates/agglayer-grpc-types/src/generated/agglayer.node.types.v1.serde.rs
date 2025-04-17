@@ -34,7 +34,7 @@ impl serde::Serialize for Certificate {
         if !self.custom_chain_data.is_empty() {
             len += 1;
         }
-        if self.l1_info_tree_leaf_count.is_some() {
+        if self.l1_info_tree_leaf_count != 0 {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.types.v1.Certificate", len)?;
@@ -69,8 +69,8 @@ impl serde::Serialize for Certificate {
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("customChainData", pbjson::private::base64::encode(&self.custom_chain_data).as_str())?;
         }
-        if let Some(v) = self.l1_info_tree_leaf_count.as_ref() {
-            struct_ser.serialize_field("l1InfoTreeLeafCount", v)?;
+        if self.l1_info_tree_leaf_count != 0 {
+            struct_ser.serialize_field("l1InfoTreeLeafCount", &self.l1_info_tree_leaf_count)?;
         }
         struct_ser.end()
     }
@@ -241,7 +241,7 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                                 return Err(serde::de::Error::duplicate_field("l1InfoTreeLeafCount"));
                             }
                             l1_info_tree_leaf_count__ = 
-                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
                             ;
                         }
                     }
@@ -256,7 +256,7 @@ impl<'de> serde::Deserialize<'de> for Certificate {
                     metadata: metadata__,
                     aggchain_data: aggchain_data__,
                     custom_chain_data: custom_chain_data__.unwrap_or_default(),
-                    l1_info_tree_leaf_count: l1_info_tree_leaf_count__,
+                    l1_info_tree_leaf_count: l1_info_tree_leaf_count__.unwrap_or_default(),
                 })
             }
         }

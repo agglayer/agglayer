@@ -29,5 +29,5 @@ message Certificate {
   bytes custom_chain_data = 9;
   // Defines which L1 info tree leaf count is used for this certificate.
   // The L1 info tree leaf count is the L1 info tree leaf index + 1.
-  optional uint32 l1_info_tree_leaf_count = 10;
+  uint32 l1_info_tree_leaf_count = 10;
 }

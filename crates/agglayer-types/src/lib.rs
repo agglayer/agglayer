@@ -109,23 +109,16 @@ pub enum Error {
     /// The operation cannot be applied on the local exit tree.
     #[error(transparent)]
     InvalidLocalExitTreeOperation(#[from] LocalExitTreeError),
+    /// Invalid or unsettled L1 Info Root considered by the imported bridge
+    /// exits.
     #[error(
-        "Incorrect L1 Info Root for the leaf count {leaf_count}. declared: {declared}, retrieved \
-         from L1: {retrieved}"
+        "Incorrect L1 Info Root for the declared leaf count {leaf_count}. declared L1 info root: \
+         {declared}, retrieved L1 info root from L1: {retrieved}"
     )]
-    /// Invalid or unsettled L1 Info Root
     L1InfoRootIncorrect {
         leaf_count: u32,
         declared: Digest,
         retrieved: Digest,
-    },
-    #[error(
-        "Incorrect declared L1 Info Tree information: l1_leaf: {l1_leaf:?}, l1_root: \
-         {l1_info_root:?}"
-    )]
-    InconsistentL1InfoTreeInformation {
-        l1_leaf: Option<u32>,
-        l1_info_root: Option<Digest>,
     },
     /// The operation cannot be applied on the smt.
     #[error(transparent)]
@@ -288,8 +281,8 @@ pub struct Certificate {
     pub aggchain_data: AggchainData,
     #[serde(default)]
     pub custom_chain_data: Vec<u8>,
-    #[serde(default)]
-    pub l1_info_tree_leaf_count: Option<u32>,
+    /// L1 info tree leaf count for the considered L1 info root.
+    pub l1_info_tree_leaf_count: u32,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -311,7 +304,7 @@ impl Default for Certificate {
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
             custom_chain_data: vec![],
-            l1_info_tree_leaf_count: None,
+            l1_info_tree_leaf_count: 0u32,
         }
     }
 }
@@ -377,7 +370,7 @@ impl Certificate {
             aggchain_data: AggchainData::ECDSA { signature },
             metadata: Default::default(),
             custom_chain_data: vec![],
-            l1_info_tree_leaf_count: None,
+            l1_info_tree_leaf_count: 0u32,
         }
     }
 
@@ -402,17 +395,6 @@ impl Certificate {
             commit_imported_bridge_exits.as_slice(),
             self.metadata.as_slice(),
         ])
-    }
-
-    /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].
-    /// Corresponds to the highest L1 Info Tree leaf index considered by the
-    /// imported bridge exits.
-    pub fn l1_info_tree_leaf_count(&self) -> Option<u32> {
-        self.imported_bridge_exits
-            .iter()
-            .map(|i| i.l1_leaf_index() + 1)
-            .max()
-            .or(self.l1_info_tree_leaf_count)
     }
 
     /// Returns the L1 Info Root considered for this [`Certificate`].

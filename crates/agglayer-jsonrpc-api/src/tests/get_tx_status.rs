@@ -66,7 +66,6 @@ async fn check_tx_status() {
             config.l1.polygon_zkevm_global_exit_root_v2_contract,
             rpc.clone(),
         ),
-        (1, [1; 32]),
     ));
     let storage = agglayer_test_suite::StorageContext::new_with_config(config.clone());
     let rpc_service = agglayer_rpc::AgglayerService::new(
@@ -146,7 +145,6 @@ async fn check_tx_status_fail() {
             config.l1.polygon_zkevm_global_exit_root_v2_contract,
             rpc.clone(),
         ),
-        (1, [1; 32]),
     ));
     let rpc_service = agglayer_rpc::AgglayerService::new(
         certificate_sender,

@@ -101,11 +101,15 @@ impl From<CertificateV0> for Certificate {
             prev_local_exit_root,
             new_local_exit_root,
             bridge_exits,
-            imported_bridge_exits,
+            imported_bridge_exits: imported_bridge_exits.clone(),
             aggchain_data: AggchainData::ECDSA { signature },
             metadata,
             custom_chain_data: vec![],
-            l1_info_tree_leaf_count: None,
+            l1_info_tree_leaf_count: imported_bridge_exits
+                .iter()
+                .map(|i| i.l1_leaf_index() + 1)
+                .max()
+                .unwrap_or(0u32),
         }
     }
 }
@@ -123,7 +127,7 @@ struct CertificateV1<'a> {
     aggchain_data: AggchainDataV1<'a>,
     metadata: Metadata,
     custom_chain_data: Cow<'a, [u8]>,
-    l1_info_tree_leaf_count: Option<u32>,
+    l1_info_tree_leaf_count: u32,
 }
 
 impl From<CertificateV1<'_>> for Certificate {

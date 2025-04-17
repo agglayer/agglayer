@@ -72,9 +72,9 @@ async fn happy_path() {
         .returning(move |_, _| Ok(signer));
 
     l1_rpc
-        .expect_default_l1_info_tree_entry()
+        .expect_get_l1_info_root()
         .once()
-        .returning(|| (0u32, [1u8; 32]));
+        .returning(|_| Ok([1u8; 32]));
 
     l1_rpc
         .expect_get_prev_pessimistic_root()
@@ -172,9 +172,9 @@ async fn prover_timeout() {
         .returning(move |_, _| Ok(signer));
 
     l1_rpc
-        .expect_default_l1_info_tree_entry()
+        .expect_get_l1_info_root()
         .once()
-        .returning(|| (0u32, [1u8; 32]));
+        .returning(|_| Ok([1u8; 32]));
 
     l1_rpc
         .expect_get_prev_pessimistic_root()
@@ -220,7 +220,6 @@ mockall::mock! {
         async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<ethers::types::Address, L1RpcError>;
 
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
-        fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
         async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError>;
         async fn get_verifier_type(&self, rollup_id: u32) -> Result<agglayer_contracts::rollup::VerifierType, L1RpcError>;
     }
