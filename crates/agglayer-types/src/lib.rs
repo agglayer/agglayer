@@ -38,6 +38,8 @@ pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
 pub use pessimistic_proof::proof::Proof;
 use unified_bridge::local_exit_tree::{LocalExitTree, LocalExitTreeError};
 
+mod compat;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {
     Default,
@@ -261,6 +263,7 @@ impl std::fmt::Display for CertificateStatus {
 /// Note: be mindful to update the [`Self::hash`] method accordingly
 /// upon modifying the fields of this structure.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(from = "compat::Certificate")]
 pub struct Certificate {
     /// NetworkID of the origin network.
     pub network_id: NetworkId,

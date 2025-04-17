@@ -95,17 +95,23 @@ impl From<CertificateV0> for Certificate {
             metadata,
         } = certificate;
 
+        let l1_info_tree_leaf_count = imported_bridge_exits
+            .iter()
+            .map(|ibe| ibe.l1_leaf_index() + 1)
+            .max()
+            .unwrap_or(0);
+
         Certificate {
             network_id: network_id.into(),
             height,
             prev_local_exit_root,
             new_local_exit_root,
             bridge_exits,
-            imported_bridge_exits: imported_bridge_exits.clone(),
+            imported_bridge_exits,
             aggchain_data: AggchainData::ECDSA { signature },
             metadata,
             custom_chain_data: vec![],
-            l1_info_tree_leaf_count: 0u32,
+            l1_info_tree_leaf_count,
         }
     }
 }
