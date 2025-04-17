@@ -408,11 +408,12 @@ impl Certificate {
     /// Corresponds to the highest L1 Info Tree leaf index considered by the
     /// imported bridge exits.
     pub fn l1_info_tree_leaf_count(&self) -> Option<u32> {
-        self.imported_bridge_exits
-            .iter()
-            .map(|i| i.l1_leaf_index() + 1)
-            .max()
-            .or(self.l1_info_tree_leaf_count)
+        self.l1_info_tree_leaf_count.or_else(|| {
+            self.imported_bridge_exits
+                .iter()
+                .map(|i| i.l1_leaf_index() + 1)
+                .max()
+        })
     }
 
     /// Returns the L1 Info Root considered for this [`Certificate`].
