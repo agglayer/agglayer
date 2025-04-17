@@ -57,3 +57,28 @@ impl From<Certificate> for super::Certificate {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use pessimistic_proof_test_suite::event_data::load_json_data_file;
+
+    #[test]
+    fn explicit_and_implicit_leaf_count_agree() {
+        let explicit = load_json_data_file::<crate::Certificate>("cert_h0_leafcount.json");
+        let implicit = load_json_data_file::<crate::Certificate>("cert_h0.json");
+
+        assert_eq!(
+            explicit.l1_info_tree_leaf_count,
+            implicit.l1_info_tree_leaf_count,
+        );
+
+        // Note using debug output since we have no `Eq` on certificate
+        assert_eq!(format!("{explicit:?}"), format!("{implicit:?}"));
+    }
+
+    #[test]
+    fn explicit_leaf_count() {
+        let cert = load_json_data_file::<crate::Certificate>("cert_h0_leafcount99k.json");
+        assert_eq!(cert.l1_info_tree_leaf_count, 99_000);
+    }
+}

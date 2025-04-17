@@ -732,6 +732,7 @@ dependencies = [
  "ethers",
  "hex",
  "pessimistic-proof",
+ "pessimistic-proof-test-suite",
  "rand 0.9.0",
  "serde",
  "serde_with",
