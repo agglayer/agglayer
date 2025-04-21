@@ -5598,8 +5598,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-test-utils"
-version = "0.24.7"
-source = "git+https://github.com/paritytech/jsonrpsee.git?tag=v0.24.7#9fa3f01ebc9fae58f238c8828be4b8ffd5f2d668"
+version = "0.24.9"
+source = "git+https://github.com/paritytech/jsonrpsee.git?tag=v0.24.9#274a8f025daadb6a6b592ade55ea990bda2f440b"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -5781,7 +5781,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
