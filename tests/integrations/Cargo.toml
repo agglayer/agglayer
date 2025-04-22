@@ -21,7 +21,7 @@ hyper-util = { version = "0.1.10", features = ["client"] }
 hyper.workspace = true
 insta.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.7" }
+jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.9" }
 lazy_static.workspace = true
 mockall.workspace = true
 parking_lot.workspace = true

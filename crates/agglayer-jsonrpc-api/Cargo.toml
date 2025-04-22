@@ -59,7 +59,7 @@ http-body-util = "0.1.2"
 hyper-util = { version = "0.1.10", features = ["client"] }
 insta.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.7" }
+jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.9" }
 lazy_static.workspace = true
 mockall.workspace = true
 rand.workspace = true
