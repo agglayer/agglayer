@@ -2,9 +2,10 @@ use std::path::Path;
 
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
-    ColumnFamilyDescriptor, DBPinnableSlice, Direction, Options, ReadOptions, WriteBatch,
-    WriteOptions,
+    ColumnFamilyDescriptor, DBCommon, DBPinnableSlice, DBRawIteratorWithThreadMode, SingleThreaded,
+    WriteBatch, WriteOptions,
 };
+pub use rocksdb::{Direction, Options, ReadOptions};
 
 use crate::columns::{Codec, ColumnSchema};
 
@@ -175,7 +176,26 @@ impl DB {
         Ok(KeysIterator::new(iterator, Direction::Forward))
     }
 
-    pub(crate) fn iter_with_direction<C: ColumnSchema>(
+    pub fn raw_iter_with_direction<C: ColumnSchema>(
+        &self,
+        opts: ReadOptions,
+        direction: Direction,
+    ) -> Result<DBRawIteratorWithThreadMode<'_, rocksdb::DB>, DBError> {
+        let cf = self
+            .rocksdb
+            .cf_handle(C::COLUMN_FAMILY_NAME)
+            .ok_or(DBError::ColumnFamilyNotFound)?;
+
+        let mut iterator = self.rocksdb.raw_iterator_cf_opt(&cf, opts);
+
+        match direction {
+            Direction::Forward => iterator.seek_to_first(),
+            Direction::Reverse => iterator.seek_to_last(),
+        }
+
+        Ok(iterator)
+    }
+    pub fn iter_with_direction<C: ColumnSchema>(
         &self,
         opts: ReadOptions,
         direction: Direction,

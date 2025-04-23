@@ -21,6 +21,12 @@ pub struct Key {
     pub(crate) height: u64,
 }
 
+impl Key {
+    pub fn new(network_id: u32, height: u64) -> Self {
+        Self { network_id, height }
+    }
+}
+
 impl Codec for Key {}
 
 impl ColumnSchema for CertificatePerNetworkColumn {

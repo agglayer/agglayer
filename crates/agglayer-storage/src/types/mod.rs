@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::columns::Codec;
 
 mod certificate;
+mod certificate_header;
 
 macro_rules! default_codec_impl {
     ($($ident: ident),+) => {
@@ -42,6 +43,14 @@ pub struct SmtKey {
     pub(crate) network_id: u32,
     pub(crate) key_type: SmtKeyType,
 }
+impl SmtKey {
+    pub fn new(network_id: u32, key_type: SmtKeyType) -> Self {
+        Self {
+            network_id,
+            key_type,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SmtKeyType {
@@ -62,7 +71,6 @@ default_codec_impl!(
     u64,
     u32,
     CertificateId,
-    CertificateHeader,
     MetadataKey,
     MetadataValue,
     NetworkId,
