@@ -6,7 +6,11 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive", "env", "string"] }
+
+rand = "0.8.5"
+
 dirs.workspace = true
+
 dotenvy.workspace = true
 hex.workspace = true
 serde_json.workspace = true
@@ -15,11 +19,15 @@ tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 
+ratatui = "0.29"
+color-eyre = "0.6.2"
+
 agglayer-config = { path = "../agglayer-config" }
 agglayer-node = { path = "../agglayer-node" }
 agglayer-prover-config = { workspace = true }
 agglayer-prover.workspace = true
 agglayer-storage = { path = "../agglayer-storage" }
+agglayer-types.workspace = true
 pessimistic-proof.workspace = true
 
 [dev-dependencies]

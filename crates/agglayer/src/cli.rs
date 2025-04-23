@@ -2,8 +2,11 @@
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand, ValueHint};
+use storage::Storage;
 
 use crate::version;
+
+mod storage;
 
 /// Agglayer command line interface.
 #[derive(Parser)]
@@ -56,6 +59,9 @@ pub(crate) enum Commands {
 
     #[clap(subcommand)]
     Backup(Backup),
+
+    #[clap(subcommand)]
+    Storage(Storage),
 }
 
 #[derive(Subcommand)]

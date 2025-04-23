@@ -19,6 +19,15 @@ pub struct Key {
     pub(crate) key_type: KeyType,
 }
 
+impl Key {
+    pub fn new(network_id: u32, key_type: KeyType) -> Self {
+        Self {
+            network_id,
+            key_type,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum KeyType {
     LeafCount,

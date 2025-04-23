@@ -33,7 +33,7 @@ use crate::columns::{default_bincode_options, CodecError};
 /// A unit type serializing to a constant byte representing the storage version.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 #[serde(try_from = "u8", into = "u8")]
-struct VersionTag<const VERSION: u8>;
+pub(crate) struct VersionTag<const VERSION: u8>;
 
 impl<const VERSION: u8> TryFrom<u8> for VersionTag<VERSION> {
     type Error = CodecError;
@@ -56,7 +56,7 @@ impl<const VERSION: u8> From<VersionTag<VERSION>> for u8 {
 /// format version.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
-struct NetworkIdV0([u8; 3]);
+pub(crate) struct NetworkIdV0([u8; 3]);
 
 impl From<NetworkIdV0> for NetworkId {
     fn from(NetworkIdV0([b2, b1, b0]): NetworkIdV0) -> NetworkId {

@@ -81,6 +81,7 @@ fn main() -> anyhow::Result<()> {
                 exit(1);
             }
         }
+        cli::Commands::Storage(storage) => storage.run()?,
     }
 
     Ok(())

@@ -72,31 +72,31 @@ pub trait ColumnSchema {
 }
 
 // State
-pub(crate) mod balance_tree_per_network;
-pub(crate) mod certificate_per_network;
-pub(crate) mod local_exit_tree_per_network;
-pub(crate) mod nullifier_tree_per_network;
+pub mod balance_tree_per_network;
+pub mod certificate_per_network;
+pub mod local_exit_tree_per_network;
+pub mod nullifier_tree_per_network;
 
 // Pending
 pub(crate) mod pending_queue;
 pub(crate) mod proof_per_certificate;
 
 // Metadata
-pub(crate) mod certificate_header;
+pub mod certificate_header;
 pub mod latest_pending_certificate_per_network;
 pub mod latest_proven_certificate_per_network;
 pub mod latest_settled_certificate_per_network;
-pub(crate) mod metadata;
+pub mod metadata;
 
 // Debug
 pub(crate) mod debug_certificates;
 
 // PerEpoch
 pub mod epochs {
-    pub(crate) mod certificates;
+    pub mod certificates;
     pub mod end_checkpoint;
-    pub(crate) mod metadata;
-    pub(crate) mod proofs;
-    pub(crate) mod start_checkpoint;
+    pub mod metadata;
+    pub mod proofs;
+    pub mod start_checkpoint;
     mod transaction_hash_per_certificate_index;
 }
