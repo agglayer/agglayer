@@ -46,7 +46,7 @@ fn main() -> anyhow::Result<()> {
         cli::Commands::VkeySelector => {
             let vkey_selector_hex =
                 hex::encode(pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR);
-            println!("0x{}", vkey_selector_hex);
+            println!("0x{}", vkey_selector_hex.trim_start_matches("0x"));
         }
 
         cli::Commands::Backup(cli::Backup::List { config_path: cfg }) => {
