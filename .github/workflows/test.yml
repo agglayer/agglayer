@@ -225,6 +225,12 @@ jobs:
       - name: Install cargo-make
         run: cargo install --debug --locked cargo-make
 
+      - name: Install sp1 toolchain
+        run: |
+          curl -L https://sp1up.succinct.xyz | bash
+          /home/runner/.sp1/bin/sp1up
+          cargo prove --version
+
       - run: cargo make pp-elf
 
       - name: ELF is up to date
