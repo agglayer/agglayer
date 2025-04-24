@@ -229,9 +229,10 @@ jobs:
         run: |
           curl -L https://sp1up.succinct.xyz | bash
           /home/runner/.sp1/bin/sp1up
-          cargo prove --version
+          PATH="/home/runner/.sp1/bin:$PATH" cargo prove --version
 
-      - run: cargo make pp-elf
+      - name: Build the PP elf
+        run: PATH="/home/runner/.sp1/bin:$PATH" cargo make pp-elf
 
       - name: ELF is up to date
         run: diff <(sha256sum crates/pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf | awk '{ print $1 }') <( echo $CHECKSUM )
