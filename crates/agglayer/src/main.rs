@@ -40,13 +40,13 @@ fn main() -> anyhow::Result<()> {
         }
         cli::Commands::Vkey => {
             let vkey = agglayer_prover::compute_program_vkey(ELF);
-            println!("{}", vkey);
+            println!("0x{}", vkey.trim_start_matches("0x"));
         }
 
         cli::Commands::VkeySelector => {
-            let vkey_selector =
+            let vkey_selector_hex =
                 hex::encode(pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR);
-            println!("{vkey_selector}");
+            println!("0x{}", vkey_selector_hex.trim_start_matches("0x"));
         }
 
         cli::Commands::Backup(cli::Backup::List { config_path: cfg }) => {
