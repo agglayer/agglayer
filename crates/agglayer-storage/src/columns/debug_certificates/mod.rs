@@ -9,7 +9,7 @@ use super::{ColumnSchema, DEBUG_CERTIFICATES_CF};
 /// | key             | value           |
 /// | --              | --              |
 /// | `CertificateId` | `Certificate`   |
-pub(crate) struct DebugCertificatesColumn;
+pub struct DebugCertificatesColumn;
 
 impl ColumnSchema for DebugCertificatesColumn {
     type Key = CertificateId;

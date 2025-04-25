@@ -117,7 +117,10 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             )?
             .next()
         {
+<<<<<<< HEAD
             // We're starting from the next index after the last one found in the database.
+=======
+>>>>>>> 8f97748b (chore: update script)
             AtomicU64::new(index + 1)
         } else {
             AtomicU64::new(0)

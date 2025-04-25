@@ -1,10 +1,11 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use agglayer_storage::{
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
+        debug_certificates::DebugCertificatesColumn,
         epochs::{
             certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
             start_checkpoint::StartCheckpointColumn,
@@ -15,16 +16,19 @@ use agglayer_storage::{
         local_exit_tree_per_network::LocalExitTreePerNetworkColumn,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+        pending_queue::{PendingQueueColumn, PendingQueueKey},
         Codec, ColumnSchema,
     },
     storage::{
-        backup::BackupClient, epochs_db_cf_definitions, state_db_cf_definitions, Direction,
-        ReadOptions, DB,
+        backup::BackupClient, debug_db_cf_definitions, epochs_db_cf_definitions,
+        pending_db_cf_definitions, state_db_cf_definitions, Direction, ReadOptions, DB,
     },
     stores::{state::StateStore, StateReader},
     types::{MetadataKey, MetadataValue},
 };
-use agglayer_types::{Address, Digest, LocalNetworkStateData, NetworkId, PessimisticRootInput};
+use agglayer_types::{
+    Address, Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput,
+};
 use clap::Subcommand;
 
 #[derive(Subcommand)]
@@ -128,7 +132,6 @@ impl Storage {
 
                         lns.get_roots()
                     };
-                    println!("Target roots: {:?}", from_db);
 
                     let value = SettledCertificate::decode(networks.value().unwrap()).unwrap();
                     let max_settled_height = value.1 + 1;
@@ -161,10 +164,51 @@ impl Storage {
                             epochs_db_cf_definitions(),
                         )?;
 
-                        let certificate = epoch
+                        let mut certificate = epoch
                             .get::<CertificatePerIndexColumn>(&cert_index)
                             .unwrap()
                             .unwrap();
+                        if certificate.network_id != network_id {
+                            let x = epoch
+                                .iter_with_direction::<CertificatePerIndexColumn>(
+                                    ReadOptions::default(),
+                                    Direction::Reverse,
+                                )?
+                                .next();
+
+                            let debug = agglayer_storage::storage::DB::open_cf(
+                                &from_path.join("debug"),
+                                debug_db_cf_definitions(),
+                            )?;
+
+                            let debug_certificate = debug
+                                .get::<DebugCertificatesColumn>(&certificate_id)?
+                                .unwrap();
+
+                            let end_checkpoint = epoch
+                                .iter_with_direction::<EndCheckpointColumn>(
+                                    ReadOptions::default(),
+                                    Direction::Forward,
+                                )?
+                                .filter_map(|v| v.ok())
+                                .collect::<BTreeMap<NetworkId, Height>>();
+
+                            let end_height = end_checkpoint.get(&network_id).unwrap();
+                            if *end_height == current_height {
+                                println!(
+                                    "Certificate mismatch in epoch {} at index {}, we can correct \
+                                     the certificate {} in the epoch",
+                                    epoch_number, cert_index, certificate_id
+                                );
+                                certificate = debug_certificate;
+                            } else {
+                                panic!(
+                                    "Certificate mismatch in epoch {} at index {}, we cannot \
+                                     correct the certificate {} in the epoch",
+                                    epoch_number, cert_index, certificate_id
+                                );
+                            }
+                        }
                         assert_eq!(
                             certificate.network_id, network_id,
                             "wrong network lookup for ({network_id}|{current_height}), \
@@ -179,7 +223,8 @@ impl Storage {
                         );
 
                         print!(
-                            "Applying certificate ({}|{}). epoch: {}, idx: {} (#be:{}, #ibe:{})...",
+                            "Applying certificate (network:height => {}:{}). epoch: {}, idx in \
+                             epoch: {} (#be:{}, #ibe:{})...",
                             certificate.network_id,
                             certificate.height,
                             epoch_number,
@@ -216,7 +261,7 @@ impl Storage {
                         from_db, roots
                     );
 
-                    println!("Network {} is connected ✅", network_id);
+                    println!("Network {} is in sync ✅", network_id);
 
                     networks.next();
                 }

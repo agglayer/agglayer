@@ -3,7 +3,7 @@ use agglayer_types::{
     Height, Metadata, NetworkId,
 };
 use bincode::Options as _;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::columns::{default_bincode_options, CodecError};
 
@@ -61,7 +61,7 @@ fn decode<T: for<'de> Deserialize<'de> + Into<CertificateHeader>>(
 
 impl crate::columns::Codec for CertificateHeader {
     fn encode(&self) -> Result<Vec<u8>, CodecError> {
-        todo!()
+        Ok(default_bincode_options().serialize(&self)?)
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {

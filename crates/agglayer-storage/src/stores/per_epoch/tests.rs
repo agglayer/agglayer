@@ -4,7 +4,7 @@ use std::{
 };
 
 use agglayer_config::Config;
-use agglayer_types::{Certificate, CertificateStatus};
+use agglayer_types::{Certificate, CertificateIndex, CertificateStatus};
 use agglayer_types::{Height, NetworkId, Proof};
 use parking_lot::RwLock;
 use rstest::{fixture, rstest};

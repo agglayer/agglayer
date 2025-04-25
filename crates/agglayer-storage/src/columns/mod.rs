@@ -78,7 +78,7 @@ pub mod local_exit_tree_per_network;
 pub mod nullifier_tree_per_network;
 
 // Pending
-pub(crate) mod pending_queue;
+pub mod pending_queue;
 pub(crate) mod proof_per_certificate;
 
 // Metadata
@@ -89,7 +89,7 @@ pub mod latest_settled_certificate_per_network;
 pub mod metadata;
 
 // Debug
-pub(crate) mod debug_certificates;
+pub mod debug_certificates;
 
 // PerEpoch
 pub mod epochs {
