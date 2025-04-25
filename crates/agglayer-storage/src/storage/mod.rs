@@ -2,7 +2,7 @@ use std::path::Path;
 
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
-    ColumnFamilyDescriptor, DBCommon, DBPinnableSlice, DBRawIteratorWithThreadMode, SingleThreaded,
+    ColumnFamilyDescriptor, DBPinnableSlice, DBRawIteratorWithThreadMode,
     WriteBatch, WriteOptions,
 };
 pub use rocksdb::{Direction, Options, ReadOptions};

@@ -1,5 +1,5 @@
 use agglayer_types::{
-    primitives::digest::Digest, CertificateHeader, CertificateId, NetworkId, Proof,
+    primitives::digest::Digest, CertificateId, NetworkId, Proof,
 };
 use serde::{Deserialize, Serialize};
 
