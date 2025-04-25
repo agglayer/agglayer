@@ -3,13 +3,13 @@ use agglayer_types::{
     Height, Metadata, NetworkId,
 };
 use bincode::Options as _;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::columns::{default_bincode_options, CodecError};
 
 /// The pre-0.3 certificate format (`v0`).
 #[derive(Debug, Clone, Deserialize)]
-#[cfg_attr(test, derive(Serialize))]
+#[cfg_attr(test, derive(serde::Serialize))]
 struct CertificateHeaderV0 {
     network_id: NetworkId,
     height: Height,

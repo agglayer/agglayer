@@ -1,12 +1,12 @@
 use agglayer_types::{
-    primitives::digest::Digest, CertificateId, NetworkId, Proof,
+    primitives::digest::Digest, CertificateHeader, CertificateId, NetworkId, Proof,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::columns::Codec;
 
 mod certificate;
-mod certificate_header;
+// mod certificate_header;
 
 macro_rules! default_codec_impl {
     ($($ident: ident),+) => {
@@ -71,6 +71,7 @@ default_codec_impl!(
     u64,
     u32,
     CertificateId,
+    CertificateHeader,
     MetadataKey,
     MetadataValue,
     NetworkId,
