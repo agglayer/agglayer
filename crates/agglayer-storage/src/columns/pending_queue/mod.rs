@@ -10,10 +10,16 @@ use super::{Codec, ColumnSchema, PENDING_QUEUE_CF};
 /// | key                     | value           |
 /// | --                      | --              |
 /// | (`NetworkId`, `Height`) | `Certificate`   |
-pub(crate) struct PendingQueueColumn;
+pub struct PendingQueueColumn;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PendingQueueKey(pub(crate) NetworkId, pub(crate) Height);
+
+impl PendingQueueKey {
+    pub fn new(network_id: NetworkId, height: Height) -> Self {
+        Self(network_id, height)
+    }
+}
 
 impl Codec for PendingQueueKey {}
 
