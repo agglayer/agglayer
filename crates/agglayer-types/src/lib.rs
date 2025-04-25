@@ -126,6 +126,11 @@ pub enum Error {
         declared: Digest,
         retrieved: Digest,
     },
+
+    /// The operation cannot be applied on the smt.
+    #[error(transparent)]
+    InvalidSmtOperation(#[from] SmtError),
+
     #[error(
         "Incorrect declared L1 Info Tree information: l1_leaf: {l1_leaf:?}, l1_root: \
          {l1_info_root:?}"
@@ -134,9 +139,6 @@ pub enum Error {
         l1_leaf: Option<u32>,
         l1_info_root: Option<Digest>,
     },
-    /// The operation cannot be applied on the smt.
-    #[error(transparent)]
-    InvalidSmtOperation(#[from] SmtError),
 
     /// Inconsistent GERs
     #[error("Inconsistent GER")]

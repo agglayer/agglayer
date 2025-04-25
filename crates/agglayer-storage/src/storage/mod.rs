@@ -2,8 +2,7 @@ use std::path::Path;
 
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
-    ColumnFamilyDescriptor, DBPinnableSlice, DBRawIteratorWithThreadMode,
-    WriteBatch, WriteOptions,
+    ColumnFamilyDescriptor, DBPinnableSlice, DBRawIteratorWithThreadMode, WriteBatch, WriteOptions,
 };
 pub use rocksdb::{Direction, Options, ReadOptions};
 
@@ -50,6 +49,17 @@ pub struct DB {
 }
 
 impl DB {
+    pub fn open_cf_read_only(path: &Path, cfs: Vec<ColumnFamilyDescriptor>) -> Result<DB, DBError> {
+        let mut options = Options::default();
+        options.create_if_missing(true);
+        options.create_missing_column_families(true);
+
+        Ok(DB {
+            rocksdb: rocksdb::DB::open_cf_descriptors_read_only(&options, path, cfs, false)?,
+            default_write_options: WriteOptions::default(),
+        })
+    }
+
     /// Open a new RocksDB instance at the given path with some column families.
     pub fn open_cf(path: &Path, cfs: Vec<ColumnFamilyDescriptor>) -> Result<DB, DBError> {
         let mut options = Options::default();

@@ -16,12 +16,11 @@ use agglayer_storage::{
         local_exit_tree_per_network::LocalExitTreePerNetworkColumn,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
-        pending_queue::{PendingQueueColumn, PendingQueueKey},
         Codec, ColumnSchema,
     },
     storage::{
         backup::BackupClient, debug_db_cf_definitions, epochs_db_cf_definitions,
-        pending_db_cf_definitions, state_db_cf_definitions, Direction, ReadOptions, DB,
+        state_db_cf_definitions, Direction, ReadOptions, DB,
     },
     stores::{state::StateStore, StateReader},
     types::{MetadataKey, MetadataValue},
@@ -41,7 +40,7 @@ impl Storage {
         match self {
             Storage::Rebuild { from_path } => {
                 print!("Opening state database...");
-                let db = Arc::new(agglayer_storage::storage::DB::open_cf(
+                let db = Arc::new(agglayer_storage::storage::DB::open_cf_read_only(
                     &from_path.join("state"),
                     state_db_cf_definitions(),
                 )?);
@@ -88,7 +87,7 @@ impl Storage {
 
                 for i in 0..latest_settled_epoch + 1 {
                     print!("Opening epoch {}...", i);
-                    let db = Arc::new(agglayer_storage::storage::DB::open_cf(
+                    let db = Arc::new(agglayer_storage::storage::DB::open_cf_read_only(
                         &from_path.join("epochs").join(format!("{}", i)),
                         epochs_db_cf_definitions(),
                     )?);
@@ -159,7 +158,7 @@ impl Storage {
                             header.epoch_number.unwrap(),
                         );
 
-                        let epoch = agglayer_storage::storage::DB::open_cf(
+                        let epoch = agglayer_storage::storage::DB::open_cf_read_only(
                             &from_path.join("epochs").join(format!("{}", epoch_number)),
                             epochs_db_cf_definitions(),
                         )?;
@@ -168,15 +167,9 @@ impl Storage {
                             .get::<CertificatePerIndexColumn>(&cert_index)
                             .unwrap()
                             .unwrap();
-                        if certificate.network_id != network_id {
-                            let x = epoch
-                                .iter_with_direction::<CertificatePerIndexColumn>(
-                                    ReadOptions::default(),
-                                    Direction::Reverse,
-                                )?
-                                .next();
 
-                            let debug = agglayer_storage::storage::DB::open_cf(
+                        if certificate.network_id != network_id {
+                            let debug = agglayer_storage::storage::DB::open_cf_read_only(
                                 &from_path.join("debug"),
                                 debug_db_cf_definitions(),
                             )?;
