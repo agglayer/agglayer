@@ -5,7 +5,6 @@ use agglayer_types::{
 use bincode::Options as _;
 use serde::Deserialize;
 
-use super::certificate::{NetworkIdV0, VersionTag};
 use crate::columns::{default_bincode_options, CodecError};
 
 /// The pre-0.3 certificate format (`v0`).
