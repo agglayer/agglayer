@@ -109,6 +109,8 @@ rstest = "0.22.0"
 test-log = "0.2.16"
 
 # SP1 dependencies
+# Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
+#       It is specified at the top of scripts/make/Makefile.elf.toml.
 sp1-core-machine = "=4.1.4"
 sp1-sdk = "=4.1.4"
 sp1-primitives = "=4.1.4"
