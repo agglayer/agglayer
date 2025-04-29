@@ -18,9 +18,9 @@ use agglayer_types::{
     NetworkId, PessimisticRootInput, Proof,
 };
 use bincode::Options;
-use pessimistic_proof::core::generate_pessimistic_proof;
-use pessimistic_proof::local_state::LocalNetworkState;
-use pessimistic_proof::multi_batch_header::MultiBatchHeader;
+use pessimistic_proof::{core::commitment::StateCommitment, local_state::LocalNetworkState};
+use pessimistic_proof::{core::generate_pessimistic_proof, NetworkState};
+use pessimistic_proof::{multi_batch_header::MultiBatchHeader, PessimisticProofOutput};
 use sp1_sdk::{
     CpuProver, HashableKey, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError,
     SP1VerifyingKey,
@@ -134,12 +134,14 @@ where
         let verifying_key = self.verifying_key.clone();
 
         let mut state = state.clone();
-        let (multi_batch_header, initial_state) =
-            self.witness_execution(&certificate, &mut state).await?;
+        let (multi_batch_header, initial_state, pv_native) =
+            self.witness_generation(&certificate, &mut state).await?;
+
         info!(
-            "Successfully executed the native PP for the Certificate {}",
+            "Successfully generated the witness for the PP for the Certificate {}",
             certificate_id
         );
+
         let network_state = pessimistic_proof::NetworkState::from(initial_state);
         let mut stdin = SP1Stdin::new();
         stdin.write(&network_state);
@@ -157,6 +159,34 @@ where
                 stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone());
             }
         };
+
+        // SP1 native execution which includes the aggchain proof stark verification
+        let (pv_sp1_execute, report) = {
+            let (pv, report) = self
+                .verifier
+                .execute(ELF, &stdin.clone())
+                .run()
+                .map_err(CertificationError::Sp1ExecuteFailed)?;
+
+            let pv_sp1_execute: PessimisticProofOutput = PessimisticProofOutput::bincode_options()
+                .deserialize(pv.as_slice())
+                .map_err(|source| CertificationError::Deserialize { source })?;
+
+            (pv_sp1_execute, report)
+        };
+
+        if pv_sp1_execute != pv_native {
+            return Err(CertificationError::MismatchPessimisticProofPublicValues {
+                native_execution: Box::new(pv_native),
+                sp1_zkvm_execution: Box::new(pv_sp1_execute),
+            });
+        }
+
+        info!(
+            "Successfully executed the PP in SP1 for the Certificate {}: {} sp1-cycles ",
+            report.cycle_tracker.values().sum::<u64>(),
+            certificate_id
+        );
 
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
@@ -279,11 +309,18 @@ where
         }
     }
 
-    async fn witness_execution(
+    async fn witness_generation(
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
-    ) -> Result<(MultiBatchHeader<Keccak256Hasher>, LocalNetworkState), CertificationError> {
+    ) -> Result<
+        (
+            MultiBatchHeader<Keccak256Hasher>,
+            LocalNetworkState,
+            PessimisticProofOutput,
+        ),
+        CertificationError,
+    > {
         let network_id = certificate.network_id;
         let certificate_id = certificate.hash();
 
@@ -408,14 +445,22 @@ where
             )
             .map_err(|source| CertificationError::Types { source })?;
 
-        // Perform the native PP execution without the STARK verification
-        // TODO: Replace this by one native execution within SP1 to have the STARK
-        // verification
-        let _ = generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
-            .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
+        let targets_witness_generation: StateCommitment = {
+            let ns: LocalNetworkState = state.clone().into();
+            NetworkState::from(ns).get_state_commitment()
+        };
 
-        // TODO: Cross check the roots between witness generation and native execution
+        // Perform the native PP execution without the STARK verification in order to
+        // cross check the target roots.
+        let (pv, targets_native_execution) =
+            generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
+                .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
-        Ok((multi_batch_header, initial_state))
+        debug!(
+            "Witness generation target roots: {:?}. Native execution target roots: {:?}",
+            targets_witness_generation, targets_native_execution
+        );
+
+        Ok((multi_batch_header, initial_state, pv))
     }
 }

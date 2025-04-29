@@ -1,6 +1,8 @@
 use agglayer_types::primitives::U256;
 use agglayer_types::{Digest, Error, PessimisticRootInput};
-use pessimistic_proof::core::commitment::{PessimisticRoot, SignatureCommitmentValues};
+use pessimistic_proof::core::commitment::{
+    PessimisticRoot, SignatureCommitmentValues, StateCommitment,
+};
 use pessimistic_proof::core::{generate_pessimistic_proof, AggchainData};
 use pessimistic_proof::local_state::LocalNetworkState;
 use pessimistic_proof::unified_bridge::token_info::TokenInfo;
@@ -23,7 +25,11 @@ fn u(x: u64) -> U256 {
 fn pp_root_migration_helper(
     previous_version: CommitmentVersion,
     new_version: CommitmentVersion,
-) -> (Result<PessimisticProofOutput, ProofError>, Digest, Digest) {
+) -> (
+    Result<(PessimisticProofOutput, StateCommitment), ProofError>,
+    Digest,
+    Digest,
+) {
     let mut forest = Forest::new(vec![(USDC, u(100)), (ETH, u(200))]);
     let imported_bridge_events = vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))];
     let bridge_events = vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))];
@@ -102,7 +108,7 @@ fn pp_root_migration(
         prev_pessimistic_root,
         new_pessimistic_root,
         ..
-    } = result.unwrap();
+    } = result.unwrap().0;
 
     assert_eq!(expected_prev_pp_root, prev_pessimistic_root);
     assert_eq!(expected_new_pp_root, new_pessimistic_root);
