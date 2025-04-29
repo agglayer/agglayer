@@ -177,8 +177,8 @@ where
 
         if pv_sp1_execute != pv_native {
             return Err(CertificationError::MismatchPessimisticProofPublicValues {
-                native_execution: pv_native,
-                sp1_zkvm_execution: pv_sp1_execute,
+                native_execution: Box::new(pv_native),
+                sp1_zkvm_execution: Box::new(pv_sp1_execute),
             });
         }
 

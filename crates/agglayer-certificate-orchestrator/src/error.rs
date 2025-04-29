@@ -43,8 +43,8 @@ pub enum CertificationError {
          {native_execution:?}. sp1 zkvm execution: {sp1_zkvm_execution:?}"
     )]
     MismatchPessimisticProofPublicValues {
-        native_execution: PessimisticProofOutput,
-        sp1_zkvm_execution: PessimisticProofOutput,
+        native_execution: Box<PessimisticProofOutput>,
+        sp1_zkvm_execution: Box<PessimisticProofOutput>,
     },
 
     #[error("Type error: {source}")]
