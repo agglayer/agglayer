@@ -456,12 +456,10 @@ where
             generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
                 .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
-        if targets_witness_generation != targets_native_execution {
-            return Err(CertificationError::MismatchNewStateCommitment {
-                witness_generation: targets_witness_generation,
-                native_execution: targets_native_execution,
-            });
-        }
+        debug!(
+            "Witness generation target roots: {:?}. Native execution target roots: {:?}",
+            targets_witness_generation, targets_native_execution
+        );
 
         Ok((multi_batch_header, initial_state, pv))
     }

@@ -1,9 +1,6 @@
 use agglayer_contracts::L1RpcError;
 use agglayer_types::{CertificateId, CertificateStatusError, Height, NetworkId};
-use pessimistic_proof::{
-    core::commitment::StateCommitment, error::ProofVerificationError, PessimisticProofOutput,
-    ProofError,
-};
+use pessimistic_proof::{error::ProofVerificationError, PessimisticProofOutput, ProofError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PreCertificationError {
@@ -38,17 +35,6 @@ pub enum CertificationError {
     /// verification failed.
     #[error("sp1-native execution failed.")]
     Sp1ExecuteFailed(#[source] anyhow::Error),
-
-    /// The new state commitments differ between the ones computed during the
-    /// witness generation, and the ones computed by the rust native execution.
-    #[error(
-        "Mismatch on the target state commitment. witness generation: {witness_generation:?}. \
-         native execution: {native_execution:?}"
-    )]
-    MismatchNewStateCommitment {
-        witness_generation: StateCommitment,
-        native_execution: StateCommitment,
-    },
 
     /// The PP public values differ between the ones computed during the
     /// rust native execution, and the ones computed by the sp1 zkvm execution.
