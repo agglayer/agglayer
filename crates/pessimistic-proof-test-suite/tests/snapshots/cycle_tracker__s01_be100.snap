@@ -1,38 +1,39 @@
 ---
 source: crates/pessimistic-proof-test-suite/tests/cycle-tracker.rs
 expression: stats
+snapshot_kind: text
 ---
-gas: 5458529
-opcode counts (2551288 total instructions):
-    645364 add
-    399463 sw
-    340886 lw
-    258150 lbu
-    177857 sb
-    109720 bne
-     98055 xor
-     91040 beq
-     72477 bltu
-     53062 jalr
-     47237 and
-     41104 or
-     37406 sltu
-     36320 sll
-     32309 sub
-     27201 auipc
-     26410 srl
+gas: 5099511
+opcode counts (2514512 total instructions):
+    642590 add
+    383398 sw
+    325074 lw
+    258152 lbu
+    176897 sb
+    110511 bne
+     98035 xor
+     90130 beq
+     71901 bltu
+     52840 jalr
+     47940 and
+     41567 or
+     38096 sltu
+     37497 sll
+     32265 sub
+     26476 auipc
+     26390 srl
      18449 lb
-      8358 jal
       7532 sra
-      5759 mul
-      4620 bgeu
+      5647 mul
+      5234 jal
+      5002 bgeu
       4202 mulhu
-      3362 sh
+      3842 sh
       2675 ecall
       1524 lh
        533 lhu
-       204 bge
-         9 blt
+       112 blt
+         1 bge
 syscall counts (2675 total syscall instructions):
     1108 keccak_permute
     1024 secp256k1_double
