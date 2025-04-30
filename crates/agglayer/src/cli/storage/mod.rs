@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use agglayer_storage::{
     columns::{
@@ -30,14 +34,84 @@ use agglayer_types::{
 };
 use clap::Subcommand;
 
+mod ui;
+
 #[derive(Subcommand)]
 pub enum Storage {
+    Ui { storage_path: PathBuf },
     Rebuild { from_path: PathBuf },
 }
 
 impl Storage {
+    pub fn ui(storage_path: &Path) -> anyhow::Result<()> {
+        use std::io;
+        use std::time::{Duration, Instant};
+
+        use crossterm::event::{
+            self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
+        };
+        use crossterm::execute;
+        use crossterm::terminal::{
+            disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+        };
+        use ratatui::backend::CrosstermBackend;
+        use ratatui::Terminal;
+
+        // setup terminal
+        enable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
+
+        let mut ui = ui::StorageUI::new(storage_path);
+        let mut last_tick = Instant::now();
+        let tick_rate = Duration::from_millis(100);
+        loop {
+            terminal.draw(|frame| ui.draw(frame))?;
+
+            let timeout = tick_rate.saturating_sub(last_tick.elapsed());
+            if event::poll(timeout)? {
+                if let Event::Key(key) = event::read()? {
+                    if key.kind == KeyEventKind::Press {
+                        match key.code {
+                            KeyCode::Left | KeyCode::Char('h') => ui.on_left(),
+                            KeyCode::Up | KeyCode::Char('k') => ui.on_up(),
+                            KeyCode::Right | KeyCode::Char('l') => ui.on_right(),
+                            KeyCode::Down | KeyCode::Char('j') => ui.on_down(),
+                            KeyCode::Char('q') => break,
+                            KeyCode::Char(key) => ui.on_key(key),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            if last_tick.elapsed() >= tick_rate {
+                // app.on_tick();
+                last_tick = Instant::now();
+            }
+            // if app.should_quit {
+            // return Ok(());
+            // }
+        }
+
+        // restore terminal
+        disable_raw_mode()?;
+        execute!(
+            terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        )?;
+        terminal.show_cursor()?;
+
+        Ok(())
+    }
+
     pub fn run(&self) -> anyhow::Result<()> {
         match self {
+            Storage::Ui { storage_path } => {
+                _ = Self::ui(storage_path);
+            }
             Storage::Rebuild { from_path } => {
                 print!("Opening state database...");
                 let db = Arc::new(agglayer_storage::storage::DB::open_cf_read_only(
@@ -265,7 +339,7 @@ impl Storage {
     }
 }
 
-fn read_column<T>(db: Arc<DB>) -> anyhow::Result<()>
+pub fn read_column<T>(db: Arc<DB>) -> anyhow::Result<()>
 where
     T: ColumnSchema,
     T::Key: std::fmt::Debug,
@@ -275,7 +349,7 @@ where
 
     while iterator.valid() {
         if let Some((bytes_key, bytes_value)) = iterator.item() {
-            let key = T::Key::decode(&bytes_key)?;
+            let key = T::Key::decode(bytes_key)?;
             let value = T::Value::decode(bytes_value);
 
             if let Err(err) = value {
