@@ -166,12 +166,12 @@ pub enum CertificateStatusError {
 
     /// Failure on the proof verification.
     #[error("proof verification failed")]
-    ProofVerificationFailed(#[from] ProofVerificationError),
+    ProofVerificationFailed(#[source] ProofVerificationError),
 
     /// Failure on the pessimistic proof witness generation from the
     /// [`LocalNetworkStateData`] and the provided [`Certificate`].
     #[error(transparent)]
-    TypeConversionError(#[from] Error),
+    TypeConversionError(Error),
 
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),

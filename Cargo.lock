@@ -628,6 +628,7 @@ dependencies = [
  "agglayer-storage",
  "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-types",
+ "alloy-primitives",
  "arc-swap",
  "bincode",
  "chrono",
