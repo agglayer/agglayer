@@ -515,6 +515,46 @@ pub enum PessimisticRootInput {
     Fetched(Digest),
 }
 
+#[derive(Serialize)]
+pub struct BalanceTreeLeaf {
+    pub key: TokenInfo,
+    pub value: Digest,
+    #[serde(serialize_with = "serialize_bool_vec_as_bitstring")]
+    pub path: Vec<bool>,
+}
+
+use serde::ser::Serializer;
+
+pub fn serialize_bool_vec_as_bitstring<S>(vec: &Vec<bool>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let bit_string: String = vec.iter().map(|&b| if b { '1' } else { '0' }).collect();
+    serializer.serialize_str(&bit_string)
+}
+
+#[derive(Serialize)]
+pub struct NullifierTreeLeaf {
+    pub key: NullifierKey,
+    pub value: Digest,
+    #[serde(serialize_with = "serialize_bool_vec_as_bitstring")]
+    pub path: Vec<bool>,
+}
+
+#[derive(Serialize)]
+pub struct BalanceTreeTransition {
+    pub prev_root: Digest,
+    pub new_root: Digest,
+    pub updated_leaf: BalanceTreeLeaf,
+}
+
+#[derive(Serialize)]
+pub struct NullifierTreeTransition {
+    pub prev_root: Digest,
+    pub new_root: Digest,
+    pub updated_leaf: NullifierTreeLeaf,
+}
+
 impl LocalNetworkStateData {
     /// Prune the SMTs
     pub fn prune_stale_nodes(&mut self) -> Result<(), Error> {

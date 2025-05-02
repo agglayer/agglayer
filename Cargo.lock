@@ -625,6 +625,7 @@ name = "agglayer-storage"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-storage",
  "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git)",
  "agglayer-types",
@@ -642,6 +643,7 @@ dependencies = [
  "rocksdb",
  "rstest",
  "serde",
+ "serde_json",
  "sp1-sdk",
  "thiserror 2.0.12",
  "tokio",

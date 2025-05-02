@@ -1,10 +1,17 @@
+use std::path::Path;
 use std::sync::Arc;
 
-use agglayer_types::primitives::utils::Hashable as _;
-use agglayer_types::{Certificate, Digest, LocalNetworkStateData, NetworkId, PessimisticRootInput};
+use agglayer_types::primitives::address;
+use agglayer_types::{
+    BalanceTreeLeaf, BalanceTreeTransition, Certificate, Digest, LocalNetworkStateData, NetworkId,
+    NullifierTreeLeaf, NullifierTreeTransition, PessimisticRootInput, U256,
+};
+use pessimistic_proof::nullifier_tree::NullifierKey;
+use pessimistic_proof::unified_bridge::token_info::TokenInfo;
 use pessimistic_proof::unified_bridge::CommitmentVersion;
 use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
 use rstest::{fixture, rstest};
+use serde::Serialize;
 use tracing::info;
 
 use crate::{
@@ -242,6 +249,156 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         &before_going_through_disk,
         &after_going_through_disk
     ));
+}
+
+#[derive(Serialize, Default)]
+pub struct BalanceTreeTestVector {
+    transitions: Vec<BalanceTreeTransition>,
+}
+
+#[derive(Serialize, Default)]
+pub struct NullifierTreeTestVector {
+    transitions: Vec<NullifierTreeTransition>,
+}
+use agglayer_tries::proof::ToBits;
+
+pub struct BalanceLeaf {
+    pub amount: U256,
+    pub token_info: TokenInfo,
+}
+
+#[test]
+fn balance_tree_test_vector() {
+    let mut lns = LocalNetworkStateData::default();
+    let mut test_vector_data = BalanceTreeTestVector::default();
+
+    let mut leaves: Vec<BalanceLeaf> = (1u32..=10u32)
+        .map(|i| BalanceLeaf {
+            amount: U256::from(i),
+            token_info: TokenInfo {
+                origin_network: i.into(),
+                origin_token_address: address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+            },
+        })
+        .collect();
+
+    // nullify the amount of the 5th token
+    leaves.push(BalanceLeaf {
+        amount: U256::from(0),
+        token_info: leaves[5].token_info,
+    });
+
+    // put 15 on token 5
+    leaves.push(BalanceLeaf {
+        amount: U256::from(17),
+        token_info: leaves[5].token_info,
+    });
+
+    // nullify the amount of the 7th token
+    leaves.push(BalanceLeaf {
+        amount: U256::from(0),
+        token_info: leaves[7].token_info,
+    });
+
+    // add new token
+    leaves.push(BalanceLeaf {
+        amount: U256::from(289),
+        token_info: TokenInfo {
+            origin_network: 19.into(),
+            origin_token_address: address!("0000000000000000000000000000000000000000"),
+        },
+    });
+
+    for leaf in leaves {
+        let prev_commitment = lns.get_roots();
+
+        let balance_tree_leaf = BalanceTreeLeaf {
+            key: leaf.token_info,
+            path: leaf.token_info.to_bits().to_vec(),
+            value: leaf.amount.to_be_bytes().into(),
+        };
+
+        // update state
+        lns.balance_tree
+            .update(balance_tree_leaf.key, balance_tree_leaf.value)
+            .unwrap();
+
+        let new_commitment = lns.get_roots();
+
+        test_vector_data.transitions.push(BalanceTreeTransition {
+            prev_root: prev_commitment.balance_root,
+            new_root: new_commitment.balance_root,
+            updated_leaf: balance_tree_leaf,
+        })
+    }
+
+    println!(
+        "balance tree test vector: {}",
+        serde_json::to_string_pretty(&test_vector_data).unwrap()
+    );
+
+    std::fs::write(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("test_vectors")
+            .join("balance_tree_test_vector.json"),
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&test_vector_data).unwrap()
+        ),
+    )
+    .expect("failed to write fixture");
+}
+
+use agglayer_primitives::utils::{FromBool, Hashable};
+
+#[test]
+fn nullifier_tree_test_vector() {
+    let mut lns = LocalNetworkStateData::default();
+    let mut test_vector_data = NullifierTreeTestVector::default();
+
+    for i in 1u32..=10u32 {
+        let prev_commitment = lns.get_roots();
+        let nullifier_key = NullifierKey {
+            network_id: i.into(),
+            let_index: i + 7,
+        };
+
+        let nullifier_key_path_bytes = nullifier_key.to_bits();
+        let nullifier_tree_leaf = NullifierTreeLeaf {
+            key: nullifier_key,
+            path: nullifier_key_path_bytes.to_vec(),
+            value: Digest::from_bool(true),
+        };
+
+        // update state
+        lns.nullifier_tree
+            .update(nullifier_tree_leaf.key, nullifier_tree_leaf.value)
+            .unwrap();
+
+        let new_commitment = lns.get_roots();
+
+        test_vector_data.transitions.push(NullifierTreeTransition {
+            prev_root: prev_commitment.nullifier_root,
+            new_root: new_commitment.nullifier_root,
+            updated_leaf: nullifier_tree_leaf,
+        })
+    }
+
+    println!(
+        "nullifier tree test vector: {}",
+        serde_json::to_string_pretty(&test_vector_data).unwrap()
+    );
+
+    std::fs::write(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("test_vectors")
+            .join("nullifier_tree_test_vector.json"),
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&test_vector_data).unwrap()
+        ),
+    )
+    .expect("failed to write fixture");
 }
 
 #[test]
