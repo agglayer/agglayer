@@ -34,6 +34,7 @@ use agglayer_types::{
 };
 use clap::Subcommand;
 
+mod app;
 mod ui;
 
 #[derive(Subcommand)]
@@ -79,6 +80,11 @@ impl Storage {
                             KeyCode::Up | KeyCode::Char('k') => ui.on_up(),
                             KeyCode::Right | KeyCode::Char('l') => ui.on_right(),
                             KeyCode::Down | KeyCode::Char('j') => ui.on_down(),
+                            KeyCode::Tab => ui.on_tab(),
+                            KeyCode::BackTab => ui.on_back_tab(),
+                            KeyCode::Enter => ui.on_enter(),
+                            KeyCode::Esc => ui.on_esc(),
+                            KeyCode::Char('?') => ui.on_help(),
                             KeyCode::Char('q') => break,
                             KeyCode::Char(key) => ui.on_key(key),
                             _ => {}

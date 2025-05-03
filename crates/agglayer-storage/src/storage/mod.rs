@@ -44,7 +44,7 @@ pub enum BackupError {
 
 /// A physical storage storage component with an active RocksDB.
 pub struct DB {
-    rocksdb: rocksdb::DB,
+    pub rocksdb: rocksdb::DB,
     default_write_options: WriteOptions,
 }
 

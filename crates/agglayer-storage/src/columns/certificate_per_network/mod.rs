@@ -21,6 +21,12 @@ pub struct Key {
     pub(crate) height: u64,
 }
 
+impl std::fmt::Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.network_id, self.height)
+    }
+}
+
 impl Key {
     pub fn new(network_id: u32, height: u64) -> Self {
         Self { network_id, height }

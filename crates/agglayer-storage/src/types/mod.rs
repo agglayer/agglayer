@@ -20,6 +20,15 @@ pub enum MetadataKey {
     EpochSynchronization,
 }
 
+impl std::fmt::Display for MetadataKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MetadataKey::LatestSettledEpoch => write!(f, "LatestSettledEpoch"),
+            MetadataKey::EpochSynchronization => write!(f, "EpochSynchronization"),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataValue {
     LatestSettledEpoch(u64),

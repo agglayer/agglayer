@@ -10,8 +10,8 @@ use queries_tab::QueriesTab;
 use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Style},
-    text::{self, Span},
-    widgets::{Block, Tabs},
+    text::{self, Line, Span},
+    widgets::{Block, Paragraph, Tabs},
     Frame,
 };
 
@@ -39,6 +39,7 @@ pub(crate) struct StorageUI {
     current_tab: Tab,
     pub(crate) checking_tab: CheckingTab,
     pub(crate) queries_tab: QueriesTab,
+    show_help: bool,
 }
 
 impl StorageUI {
@@ -48,13 +49,22 @@ impl StorageUI {
         Self {
             checking_tab: CheckingTab::new(storage_path.clone()),
             queries_tab: QueriesTab::new(storage_path.clone()),
+            show_help: true,
             ..Default::default()
         }
     }
 
     pub(crate) fn draw(&mut self, frame: &mut Frame) {
-        let chunks =
-            Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(frame.area());
+        let chunks = if self.show_help {
+            Layout::vertical([
+                Constraint::Length(3),
+                Constraint::Min(0),
+                Constraint::Min(2),
+            ])
+            .split(frame.area())
+        } else {
+            Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(frame.area())
+        };
         let tabs = [Tab::Checking, Tab::Queries]
             .iter()
             .map(|t| {
@@ -69,12 +79,27 @@ impl StorageUI {
             .select(self.current_tab as usize);
 
         frame.render_widget(tabs, chunks[0]);
+        if self.show_help {
+            let block = Block::bordered().title("Help");
+
+            let mut text = vec![
+                Line::from("Press `TAB` to move between tabs"),
+                Line::from("Press `?` to show/hide help"),
+                Line::from("Press `q` to quit"),
+            ];
+            if let Tab::Queries = self.current_tab {
+                text.push(Line::from(""));
+                text.push(Line::from("Press  `j`, `k` to move in lists"));
+                text.push(Line::from("Press `Esc` close latest horizontal block"));
+            }
+            let paragraph = Paragraph::new(text).block(block);
+
+            frame.render_widget(paragraph, chunks[2]);
+        }
 
         match self.current_tab {
             Tab::Checking => self.draw_checking(frame, chunks[1]),
-            // 1 => draw_second_tab(frame, app, chunks[1]),
-            // 2 => draw_third_tab(frame, app, chunks[1]),
-            _ => {}
+            Tab::Queries => self.draw_queries(frame, chunks[1]),
         };
     }
 
@@ -83,25 +108,65 @@ impl StorageUI {
         self.checking_tab.draw(frame, area)
     }
 
-    pub(crate) fn on_left(&mut self) {
-        self.current_tab -= 1;
+    fn draw_queries(&mut self, frame: &mut Frame<'_>, area: ratatui::prelude::Rect) {
+        self.queries_tab.draw(frame, area)
     }
 
+    pub(crate) fn on_left(&mut self) {
+        match self.current_tab {
+            Tab::Checking => {}
+            Tab::Queries => self.queries_tab.on_left(),
+        }
+    }
     pub(crate) fn on_right(&mut self) {
-        self.current_tab += 1;
+        match self.current_tab {
+            Tab::Checking => {}
+            Tab::Queries => self.queries_tab.on_right(),
+        }
     }
     pub(crate) fn on_down(&mut self) {
-        todo!()
+        match self.current_tab {
+            Tab::Checking => {}
+            Tab::Queries => self.queries_tab.on_down(),
+        }
     }
     pub(crate) fn on_up(&mut self) {
-        todo!()
+        match self.current_tab {
+            Tab::Checking => {}
+            Tab::Queries => self.queries_tab.on_up(),
+        }
     }
 
     pub(crate) fn on_key(&mut self, key: char) {
         match self.current_tab {
             Tab::Checking => self.checking_tab.on_key(key),
-            Tab::Queries => todo!(),
+            Tab::Queries => self.queries_tab.on_key(key),
         }
+    }
+
+    pub(crate) fn on_tab(&mut self) {
+        self.current_tab += 1;
+    }
+    pub(crate) fn on_back_tab(&mut self) {
+        self.current_tab -= 1;
+    }
+
+    pub(crate) fn on_enter(&mut self) {
+        match self.current_tab {
+            Tab::Checking => self.checking_tab.on_enter(),
+            Tab::Queries => self.queries_tab.on_enter(),
+        }
+    }
+
+    pub(crate) fn on_esc(&mut self) {
+        match self.current_tab {
+            Tab::Checking => self.checking_tab.on_esc(),
+            Tab::Queries => self.queries_tab.on_esc(),
+        }
+    }
+
+    pub(crate) fn on_help(&mut self) {
+        self.show_help = !self.show_help;
     }
 }
 

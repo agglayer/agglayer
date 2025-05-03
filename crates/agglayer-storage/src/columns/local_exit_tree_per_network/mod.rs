@@ -1,3 +1,4 @@
+use agglayer_types::Digest;
 use serde::{Deserialize, Serialize};
 
 use super::{Codec, ColumnSchema, LOCAL_EXIT_TREE_PER_NETWORK_CF};
@@ -19,6 +20,12 @@ pub struct Key {
     pub(crate) key_type: KeyType,
 }
 
+impl std::fmt::Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.network_id, self.key_type)
+    }
+}
+
 impl Key {
     pub fn new(network_id: u32, key_type: KeyType) -> Self {
         Self {
@@ -35,11 +42,31 @@ pub enum KeyType {
     Frontier(u32),
 }
 
+impl std::fmt::Display for KeyType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KeyType::LeafCount => write!(f, "LeafCount"),
+            KeyType::Leaf(index) => write!(f, "Leaf({})", index),
+            KeyType::Frontier(layer) => write!(f, "Frontier({})", layer),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Value {
     LeafCount(u32),
     Leaf([u8; 32]),
     Frontier([u8; 32]),
+}
+
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::LeafCount(count) => write!(f, "LeafCount({})", count),
+            Value::Leaf(hash) => write!(f, "Leaf({})", Digest(*hash)),
+            Value::Frontier(hash) => write!(f, "Frontier({})", Digest(*hash)),
+        }
+    }
 }
 
 impl Codec for Key {}

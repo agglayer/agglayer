@@ -101,12 +101,13 @@ pin-project = "1.1"
 prost = "0.13.4"
 rand = "0.9.0"
 rstest = "0.22.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_with = "3.12"
 test-log = "0.2.16"
 thiserror = "2.0"
-tokio = { version = "1.43", features = ["full"] }
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.138"
+serde_with = "3.12.0"
+rocksdb = "0.23.0"
+tokio = { version = "1.43.0", features = ["full"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 tokio-util = "0.7.13"
 toml = "0.8.20"

@@ -71,6 +71,7 @@ dependencies = [
  "pessimistic-proof",
  "rand 0.8.5",
  "ratatui",
+ "rocksdb",
  "serde_json",
  "tokio",
  "tokio-util",

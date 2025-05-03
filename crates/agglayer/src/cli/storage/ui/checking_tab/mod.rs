@@ -245,6 +245,10 @@ impl CheckingTab {
             }
         }
     }
+
+    pub(crate) fn on_enter(&mut self) {}
+
+    pub(crate) fn on_esc(&mut self) {}
 }
 
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
