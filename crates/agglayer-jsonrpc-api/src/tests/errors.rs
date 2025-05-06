@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use agglayer_contracts::polygon_rollup_manager::PolygonRollupManagerErrors;
-use agglayer_rate_limiting::{self, component, Component};
+use agglayer_rate_limiting::resource::SendTxRateLimited;
 use agglayer_rpc::error::SignatureVerificationError;
 use agglayer_types::Digest;
 use alloy::{primitives::SignatureError as AlloySignatureError, signers::k256};
@@ -25,7 +25,7 @@ type SendTxError = service::SendTxError<RpcProvider>;
 type SettlementError = kernel::SettlementError<RpcProvider>;
 type SignatureError = SignatureVerificationError<RpcProvider>;
 type TxStatusError = service::TxStatusError<RpcProvider>;
-type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
+type WallClockLimitedInfo = agglayer_rate_limiting::resource::SendTxSettlementRawLimitedInfo;
 
 #[rstest::rstest]
 #[case("rollup_not_reg", SendTxError::RollupNotRegistered { rollup_id: 1337 })]
@@ -102,11 +102,11 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 )]
 #[case(
     "rate_disallowed",
-    SendTxError::RateLimited(agglayer_rate_limiting::RateLimited::SendTxDiabled {})
+    SendTxError::RateLimited(SendTxRateLimited::SendTxDiabled {})
 )]
 #[case(
     "rate_sendtx",
-    SendTxError::RateLimited(agglayer_rate_limiting::RateLimited::SendTxRateLimited(WallClockLimitedInfo {
+    SendTxError::RateLimited(SendTxRateLimited::SendTxRateLimited(WallClockLimitedInfo {
         max_per_interval: 3,
         time_interval: Duration::from_secs(30 * 60),
         until_next: Some(Duration::from_secs(123)),
@@ -114,7 +114,7 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 )]
 #[case(
     "rate_sendtx_nonext",
-    SendTxError::RateLimited(agglayer_rate_limiting::RateLimited::SendTxRateLimited(WallClockLimitedInfo {
+    SendTxError::RateLimited(SendTxRateLimited::SendTxRateLimited(WallClockLimitedInfo {
         max_per_interval: 4,
         time_interval: Duration::from_secs(40 * 60),
         until_next: None,

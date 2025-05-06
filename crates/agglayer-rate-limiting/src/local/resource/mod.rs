@@ -1,8 +1,10 @@
-use super::{limiter, state};
+use super::{limiter, state, NetworkRateLimitingConfig};
 
 mod send_tx_settlement;
 
-pub use send_tx_settlement::{SendTxRateLimited, SendTxSettlement};
+pub use send_tx_settlement::{
+    RawLimitedInfo as SendTxSettlementRawLimitedInfo, SendTxRateLimited, SendTxSettlement,
+};
 
 pub type RawLimitedInfoFor<R> =
     limiter::RateLimited<<<R as Resource>::State as state::RawState>::LimitedInfo>;
@@ -20,4 +22,6 @@ pub trait Resource {
 }
 
 /// A resource rate limiter that can be initialized based on config.
-pub trait ConfigurableResource: Resource {}
+pub trait ConfigurableResource: Resource + Sized {
+    fn from_config(config: &NetworkRateLimitingConfig) -> limiter::RateLimiter<Self::State>;
+}

@@ -25,7 +25,7 @@ pub mod resource;
 mod slot_guard;
 mod state;
 
-pub use resource::{Resource, ConfigurableResource};
+pub use resource::{ConfigurableResource, Resource};
 pub use slot_guard::SlotGuard;
 
 /// Rate limiter state for single network / rollup.
@@ -34,16 +34,11 @@ pub struct LocalRateLimiter<R: Resource>(Arc<Mutex<limiter::RateLimiter<R::State
 impl<R: ConfigurableResource> LocalRateLimiter<R> {
     /// Create a rate limiter form configuration.
     pub fn from_config(config: &NetworkRateLimitingConfig) -> Self {
-        todo!()
-        /*
-        let inner = inner::LocalRateLimiter::from_config(config);
-        Self(Arc::new(Mutex::new(inner)))
-        */
+        Self(Arc::new(Mutex::new(R::from_config(config))))
     }
 }
 
 impl<R: Resource> LocalRateLimiter<R> {
-
     /// Duplicate a handle to the rate limiter.
     pub fn shallow_clone(&self) -> Self {
         Self(Arc::clone(&self.0))

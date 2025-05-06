@@ -7,12 +7,12 @@ use std::{
 use agglayer_config::rate_limiting::{EpochRateLimit, NetworkId, TimeRateLimit};
 use tokio::time::Instant;
 
-use super::{RateLimited, RateLimiter, RateLimitingConfig};
+use crate::{RateLimiter, RateLimitingConfig, SendTxRateLimiter, resource::SendTxRateLimited};
 
-impl RateLimiter {
-    fn limit_send_tx(&self, network_id: NetworkId, time: Instant) -> Result<(), RateLimited> {
+impl SendTxRateLimiter {
+    fn limit_send_tx(&self, network_id: NetworkId, time: Instant) -> Result<(), SendTxRateLimited> {
         self.limiter_for(network_id)
-            .reserve_send_tx(time)
+            .reserve(time)
             .map(|guard| guard.record(time))
     }
 }
@@ -122,7 +122,7 @@ fn network_disabled() {
     assert_eq!(limiter.limit_send_tx(12, now), Ok(()));
     assert_eq!(
         limiter.limit_send_tx(55, now),
-        Err(RateLimited::SendTxDiabled {})
+        Err(SendTxRateLimited::SendTxDiabled {})
     );
     assert_eq!(limiter.limit_send_tx(19, now), Ok(()));
 }
