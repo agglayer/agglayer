@@ -1,8 +1,7 @@
 # Polygon Technology Security Information
 
-## Link to vulnerability disclosure details (Bug Bounty).
-- Websites and Applications: https://hackerone.com/polygon-technology
-- Smart Contracts & Blockchain: https://immunefi.com/bounty/polygon
+If you have found a security vulnerability in this product, please report it
+via email to security@polygon.technology
 
 ## Languages that our team speaks and understands.
 Preferred-Languages: en
