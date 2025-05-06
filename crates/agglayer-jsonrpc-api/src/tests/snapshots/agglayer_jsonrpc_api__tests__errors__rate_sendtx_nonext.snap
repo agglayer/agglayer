@@ -1,12 +1,13 @@
 ---
-source: crates/agglayer-node/src/rpc/tests/errors.rs
-expression: "RateLimited { detail: \"The `sendTx` settlement has been limited: Limit reached\", error: SendTxRateLimited(RateLimited { max_per_interval: 4, time_interval: 2400s, until_next: None }) }"
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "RateLimited { detail: \"The `sendTx` settlement has been limited\", error: SendTxRateLimited(RateLimited { max_per_interval: 4, time_interval: 2400s, until_next: None }) }"
+snapshot_kind: text
 ---
 {
   "code": -10007,
   "data": {
     "rate-limited": {
-      "detail": "The `sendTx` settlement has been limited: Limit reached",
+      "detail": "The `sendTx` settlement has been limited",
       "error": {
         "send-tx-rate-limited": {
           "max-per-interval": 4,
