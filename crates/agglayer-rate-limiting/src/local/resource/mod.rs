@@ -1,7 +1,12 @@
 use super::{limiter, state, NetworkRateLimitingConfig};
 
+mod certificate_settlement;
 mod send_tx_settlement;
 
+pub use certificate_settlement::{
+    CertificateSettlement, RawLimitedInfo as CertificateSettlementRawLimitedInfo,
+    SendCertificateRateLimited,
+};
 pub use send_tx_settlement::{
     RawLimitedInfo as SendTxSettlementRawLimitedInfo, SendTxRateLimited, SendTxSettlement,
 };
