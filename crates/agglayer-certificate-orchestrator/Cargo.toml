@@ -25,6 +25,7 @@ agglayer-clock.workspace = true
 agglayer-storage.workspace = true
 agglayer-types.workspace = true
 agglayer-prover-types.workspace = true
+agglayer-rate-limiting.workspace = true
 pessimistic-proof.workspace = true
 
 # Optional dependencies

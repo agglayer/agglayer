@@ -20,6 +20,10 @@ use crate::{CertificationError, Certifier, CertifierOutput, EpochPacker, Error};
 #[cfg(test)]
 mod tests;
 
+type SettlementRateLimiter = agglayer_rate_limiting::LocalRateLimiter<
+    agglayer_rate_limiting::resource::CertificateSettlement,
+>;
+
 /// Message to notify the network task that a new certificate has been received.
 #[derive(Debug)]
 pub(crate) struct NewCertificate {
@@ -50,8 +54,8 @@ pub(crate) struct NetworkTask<CertifierClient, SettlementClient, PendingStore, S
     pending_state: Option<LocalNetworkStateData>,
     /// The stream of new certificates to certify.
     certificate_stream: mpsc::Receiver<NewCertificate>,
-    /// Flag to indicate if the network is at capacity for the current epoch.
-    at_capacity_for_epoch: bool,
+    /// Certificate settlement rate limiter for this network.
+    settlement_rate_limiter: SettlementRateLimiter,
     /// latest certificate settled
     latest_settled: Option<SettledCertificate>,
 }
@@ -73,6 +77,7 @@ where
         clock_ref: ClockRef,
         network_id: NetworkId,
         certificate_stream: mpsc::Receiver<NewCertificate>,
+        rate_limiter_config: &agglayer_rate_limiting::NetworkRateLimitingConfig,
     ) -> Result<Self, Error> {
         info!("Creating a new network task for network {}", network_id);
 
@@ -90,6 +95,8 @@ where
             local_state.get_roots().display_to_hex()
         );
 
+        let settlement_rate_limiter = SettlementRateLimiter::from_config(rate_limiter_config);
+
         Ok(Self {
             network_id,
             pending_store,
@@ -99,7 +106,7 @@ where
             clock_ref,
             pending_state: None,
             certificate_stream,
-            at_capacity_for_epoch: false,
+            settlement_rate_limiter,
             latest_settled,
             settlement_client,
         })

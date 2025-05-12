@@ -119,6 +119,7 @@ dependencies = [
  "agglayer-config",
  "agglayer-contracts",
  "agglayer-prover-types",
+ "agglayer-rate-limiting",
  "agglayer-storage",
  "agglayer-test-suite",
  "agglayer-types",

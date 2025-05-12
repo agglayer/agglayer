@@ -267,6 +267,7 @@ where
             self.clock_ref.clone(),
             network_id,
             receiver,
+            todo!("pass config"),
         )?;
 
         self.network_tasks
