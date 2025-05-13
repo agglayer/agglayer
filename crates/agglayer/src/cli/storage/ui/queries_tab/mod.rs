@@ -8,6 +8,7 @@ pub(crate) use backend::{BackendAction, BackendTask, DBBackend};
 use columns_widget::ColumnsWidget;
 use details_widget::DetailsWidget;
 use entries_widget::EntriesWidget;
+use epochs_widget::EpochsWidget;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Style, Stylize as _},
@@ -19,6 +20,7 @@ use ratatui::{
 mod columns_widget;
 mod details_widget;
 mod entries_widget;
+mod epochs_widget;
 
 mod backend;
 
@@ -29,6 +31,7 @@ pub(crate) struct QueriesTab {
     columns: ColumnsWidget,
     details: DetailsWidget,
     entries: EntriesWidget,
+    epochs: EpochsWidget,
     current_focus: CurrentFocus,
 }
 
@@ -36,6 +39,7 @@ pub(crate) struct QueriesTab {
 enum CurrentFocus {
     #[default]
     Database,
+    Epochs,
     Columns,
     Entries,
 }
@@ -55,15 +59,31 @@ impl QueriesTab {
             columns: ColumnsWidget::new(backend.clone()),
             entries: EntriesWidget::new(backend.clone()),
             details: DetailsWidget::new(backend.clone()),
+            epochs: EpochsWidget::new(backend.clone()),
             ..Default::default()
         }
     }
 
     pub(crate) fn draw(&self, frame: &mut Frame<'_>, area: Rect) {
-        let vertical = Layout::vertical([Constraint::Length(3), Constraint::Fill(1)]);
-        let [database_selector_area, body_area] = vertical.areas(area);
+        let [database_selector_area, epochs_area, body_area] =
+            if let CurrentFocus::Epochs = self.current_focus {
+                let vertical = Layout::vertical([
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                    Constraint::Fill(1),
+                ]);
+                vertical.areas(area)
+            } else {
+                let vertical = Layout::vertical([
+                    Constraint::Length(3),
+                    Constraint::Length(0),
+                    Constraint::Fill(1),
+                ]);
+                vertical.areas(area)
+            };
+
         let [columns_area, entries_area, details_area] = match self.current_focus {
-            CurrentFocus::Database => Layout::horizontal([
+            CurrentFocus::Database | CurrentFocus::Epochs => Layout::horizontal([
                 Constraint::Percentage(0),
                 Constraint::Percentage(0),
                 Constraint::Percentage(0),
@@ -93,6 +113,7 @@ impl QueriesTab {
 
         // Draw database selector
         frame.render_widget(&self.database_selector, database_selector_area);
+        frame.render_widget(&self.epochs, epochs_area);
         frame.render_widget(&self.columns, columns_area);
         frame.render_widget(&self.entries, entries_area);
         frame.render_widget(&self.details, details_area);
@@ -126,11 +147,18 @@ impl QueriesTab {
         if let CurrentFocus::Database = self.current_focus {
             self.database_selector.on_left();
         }
+        if let CurrentFocus::Epochs = self.current_focus {
+            self.epochs.on_left();
+        }
     }
 
     pub(crate) fn on_right(&mut self) {
         if let CurrentFocus::Database = self.current_focus {
             self.database_selector.on_right();
+        }
+
+        if let CurrentFocus::Epochs = self.current_focus {
+            self.epochs.on_right();
         }
     }
 
@@ -140,11 +168,20 @@ impl QueriesTab {
         match self.current_focus {
             CurrentFocus::Database => {
                 if let Some(database) = self.database_selector.on_enter() {
-                    match database {
-                        Database::Unknown => {}
-                        Database::State => {}
-                        Database::Pending => {}
-                        Database::Epoch(_) => {}
+                    if let Database::Epoch(_) = database {
+                        self.current_focus = CurrentFocus::Epochs;
+
+                        let mut backend = self.columns.backend.write().unwrap();
+                        backend
+                            .action
+                            .push_back(BackendAction::Open(self.storage_path.clone(), database));
+
+                        self.database_selector.is_focused = false;
+                        self.epochs.is_focused = true;
+                        self.entries.is_focused = false;
+                        self.columns.is_focused = false;
+
+                        return;
                     }
 
                     self.current_focus = CurrentFocus::Columns;
@@ -157,6 +194,7 @@ impl QueriesTab {
                     self.columns.is_focused = true;
                 }
             }
+            CurrentFocus::Epochs => {}
             CurrentFocus::Columns => {
                 let mut backend = self.columns.backend.write().unwrap();
 
@@ -191,8 +229,22 @@ impl QueriesTab {
                 self.entries.is_focused = false;
                 self.details.is_focused = false;
             }
-            CurrentFocus::Columns => {
+            CurrentFocus::Epochs => {
                 self.database_selector.is_focused = true;
+                self.epochs.is_focused = false;
+                self.columns.is_focused = false;
+                self.entries.is_focused = false;
+                self.details.is_focused = false;
+                self.current_focus = CurrentFocus::Database;
+            }
+            CurrentFocus::Columns => {
+                if let Some(Database::Epoch(_)) = self.database_selector.on_enter() {
+                    self.database_selector.is_focused = false;
+                    self.epochs.is_focused = true;
+                } else {
+                    self.epochs.is_focused = false;
+                    self.database_selector.is_focused = true;
+                }
                 self.columns.is_focused = false;
                 self.entries.is_focused = false;
                 self.details.is_focused = false;

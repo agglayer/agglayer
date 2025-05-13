@@ -79,7 +79,7 @@ pub mod nullifier_tree_per_network;
 
 // Pending
 pub mod pending_queue;
-pub(crate) mod proof_per_certificate;
+pub mod proof_per_certificate;
 
 // Metadata
 pub mod certificate_header;

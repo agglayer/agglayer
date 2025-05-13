@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     path::PathBuf,
     sync::{Arc, RwLock},
 };
@@ -8,16 +8,27 @@ use agglayer_storage::{
     columns::{
         certificate_header::CertificateHeaderColumn,
         certificate_per_network::CertificatePerNetworkColumn,
+        latest_pending_certificate_per_network::{
+            LatestPendingCertificatePerNetworkColumn, PendingCertificate,
+        },
+        latest_proven_certificate_per_network::{
+            LatestProvenCertificatePerNetworkColumn, ProvenCertificate,
+        },
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
         local_exit_tree_per_network::LocalExitTreePerNetworkColumn,
         metadata::MetadataColumn,
+        pending_queue::{PendingQueueColumn, PendingQueueKey},
+        proof_per_certificate::ProofPerCertificateColumn,
         Codec, ColumnSchema, CERTIFICATE_HEADER_CF, CERTIFICATE_PER_NETWORK_CF,
+        LATEST_PENDING_CERTIFICATE_PER_NETWORK_CF, LATEST_PROVEN_CERTIFICATE_PER_NETWORK_CF,
         LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF, LOCAL_EXIT_TREE_PER_NETWORK_CF, METADATA_CF,
+        PENDING_QUEUE_CF, PROOF_PER_CERTIFICATE_CF,
     },
-    storage::state_db_cf_definitions,
+    storage::{epochs_db_cf_definitions, pending_db_cf_definitions, state_db_cf_definitions},
 };
+use agglayer_types::Proof;
 use ratatui::widgets::TableState;
 use rocksdb::Options;
 use serde_json::json;
@@ -37,6 +48,8 @@ pub(crate) struct DBBackend {
     pub(crate) columns_table_state: TableState,
     pub(crate) entries: BTreeMap<String, String>,
     pub(crate) entries_table_state: TableState,
+    pub(crate) epochs: BTreeMap<usize, u64>,
+    pub(crate) open_epoch: Option<usize>,
 }
 
 #[derive(Default)]
@@ -132,6 +145,58 @@ impl BackendTask {
                         )
                         .unwrap(),
                     ),
+                    LATEST_PROVEN_CERTIFICATE_PER_NETWORK_CF => {
+                        let value: ProvenCertificate = <LatestProvenCertificatePerNetworkColumn as ColumnSchema>::Value::decode(
+                            bytes_value,
+                        )
+                        .unwrap();
+                        let value = json!({
+                            "certificateId": value.0,
+                            "height": value.1,
+                        });
+                        (
+                            <LatestProvenCertificatePerNetworkColumn as ColumnSchema>::Key::decode(
+                                bytes_key,
+                            )
+                            .unwrap()
+                            .to_string(),
+                            serde_json::to_string_pretty(&value).unwrap(),
+                        )
+                    }
+                    LATEST_PENDING_CERTIFICATE_PER_NETWORK_CF => {
+                        let value: PendingCertificate = <LatestPendingCertificatePerNetworkColumn as ColumnSchema>::Value::decode(
+                            bytes_value,
+                        )
+                        .unwrap();
+                        let value = json!({
+                            "certificateId": value.0,
+                            "height": value.1,
+                        });
+                        (
+                            <LatestPendingCertificatePerNetworkColumn as ColumnSchema>::Key::decode(bytes_key)
+                                .unwrap()
+                                .to_string(),
+                            serde_json::to_string_pretty(
+                                &value,
+                            )
+                            .unwrap())
+                    }
+                    PENDING_QUEUE_CF => (
+                        <PendingQueueColumn as ColumnSchema>::Key::decode(bytes_key)
+                            .unwrap()
+                            .to_string(),
+                        serde_json::to_string_pretty(
+                            &<PendingQueueColumn as ColumnSchema>::Value::decode(bytes_value)
+                                .unwrap(),
+                        )
+                        .unwrap(),
+                    ),
+                    PROOF_PER_CERTIFICATE_CF => (
+                        <ProofPerCertificateColumn as ColumnSchema>::Key::decode(bytes_key)
+                            .unwrap()
+                            .to_string(),
+                        hex::encode(bytes_value),
+                    ),
                     _ => (String::new(), String::new()),
                 };
                 entries.insert(key, value);
@@ -173,8 +238,48 @@ impl BackendTask {
                                 .collect::<Vec<_>>();
                             drop(backend);
                         }
-                        Database::Pending => todo!(),
-                        Database::Epoch(_) => todo!(),
+                        Database::Pending => {
+                            let mut options = Options::default();
+                            options.create_if_missing(true);
+                            options.create_missing_column_families(true);
+
+                            self.db = Some(
+                                rocksdb::DB::open_cf_descriptors_read_only(
+                                    &options,
+                                    path.join("pending"),
+                                    pending_db_cf_definitions(),
+                                    false,
+                                )
+                                .unwrap(),
+                            );
+                            let mut backend = self.backend.write().unwrap();
+                            backend.columns = pending_db_cf_definitions()
+                                .iter()
+                                .map(|cf| cf.name().to_string())
+                                .collect::<Vec<_>>();
+                            drop(backend);
+                        }
+                        Database::Epoch(n) => {
+                            let mut options = Options::default();
+                            options.create_if_missing(true);
+                            options.create_missing_column_families(true);
+
+                            self.db = Some(
+                                rocksdb::DB::open_cf_descriptors_read_only(
+                                    &options,
+                                    path.join(format!("epochs/{}", n)),
+                                    epochs_db_cf_definitions(),
+                                    false,
+                                )
+                                .unwrap(),
+                            );
+                            let mut backend = self.backend.write().unwrap();
+                            backend.columns = epochs_db_cf_definitions()
+                                .iter()
+                                .map(|cf| cf.name().to_string())
+                                .collect::<Vec<_>>();
+                            drop(backend);
+                        }
                     };
                 }
 

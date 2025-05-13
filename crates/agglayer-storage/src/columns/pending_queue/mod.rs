@@ -21,6 +21,11 @@ impl PendingQueueKey {
     }
 }
 
+impl std::fmt::Display for PendingQueueKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.0, self.1)
+    }
+}
 impl Codec for PendingQueueKey {}
 
 impl ColumnSchema for PendingQueueColumn {
