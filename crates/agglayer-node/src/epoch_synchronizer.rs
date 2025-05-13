@@ -92,9 +92,20 @@ impl EpochSynchronizer {
         debug!("synchronizer: Current epoch: {}", current_epoch_number);
         let opened_epoch = match lse_number {
             // No LSE, we start from epoch 0
-            None => epochs_store.open(0)?,
+            None => {
+                debug!("synchronizer: No LSE, starting from epoch 0");
+                epochs_store.open(0)?
+            }
 
             Some(lse_number) => {
+                debug!("synchronizer: Latest settled epoch: {}", lse_number);
+                if current_epoch_number < lse_number {
+                    anyhow::bail!(
+                        "Unable to synchronize: Current epoch is less than the latest settled \
+                         epoch"
+                    );
+                }
+
                 let lse = epochs_store.open(lse_number)?;
                 epochs_store.open_with_start_checkpoint(
                     lse.get_epoch_number() + 1,
