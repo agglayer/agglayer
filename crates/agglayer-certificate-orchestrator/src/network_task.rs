@@ -133,7 +133,14 @@ where
                 debug!("Current network height is {}", current_height);
                 if epoch == current_epoch {
                     debug!("Already settled for the epoch {current_epoch}");
-                    self.at_capacity_for_epoch = true;
+                    self.settlement_rate_limiter
+                        .reserve(epoch)
+                        .map_err(|e| {
+                            Error::InternalError(format!(
+                                "Rate limited during network task initialization: {e}"
+                            ))
+                        })?
+                        .record(epoch);
                 }
 
                 current_height + 1
@@ -165,6 +172,8 @@ where
         }
     }
 
+    async fn next_certificate(&mut self) -> Result<Certificate> {}
+
     async fn make_progress(
         &mut self,
         stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
@@ -192,9 +201,7 @@ where
                                     warn!("Network {network_id} is at capacity for the epoch {current_epoch}");
                                     return Ok(());
                                 },
-                                _ => {
-                                    self.at_capacity_for_epoch = false;
-                                }
+                                _ => (),
                             }
                         }
                         Err(broadcast::error::RecvError::Lagged(num_skipped)) => {
@@ -207,7 +214,7 @@ where
                         }
                     }
                 }
-                Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
+                Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv() => {
                     info!(
                         hash = certificate_id.to_string(),
                         "Received a certificate event for {certificate_id} at height {height}"
