@@ -8,6 +8,10 @@ use sp1_sdk::Prover;
 use super::*;
 use crate::columns::Codec;
 
+mod header;
+mod status;
+mod structure;
+
 #[rstest::rstest]
 #[case(0.into(), [0, 0, 0, 0])]
 #[case(100.into(), [0, 0, 0, 100])]
@@ -246,6 +250,3 @@ fn bad_format() {
         }
     }
 }
-
-mod header;
-mod status;
