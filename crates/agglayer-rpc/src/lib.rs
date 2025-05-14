@@ -313,7 +313,7 @@ where
         if let Some(signer) = cert
             .signer()
             .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
-            .map(|signature| signature.into_array().into())
+            .map(|signer| signer.into_array().into())
         {
             // ECDSA-k256 signature verification works by recovering the public key from the
             // signature, and then checking that it is the expected one.

@@ -51,7 +51,7 @@ async fn happy_path() {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
 
-    let signer: H160 = H160(**state.get_signer());
+    let signer: H160 = H160(state.get_signer().into());
     let certificate_id = certificate.hash();
 
     pending_store
@@ -151,7 +151,7 @@ async fn prover_timeout() {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
 
-    let signer: H160 = H160(**state.get_signer());
+    let signer: H160 = H160(state.get_signer().into());
     let certificate_id = certificate.hash();
 
     pending_store
