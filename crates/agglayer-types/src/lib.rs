@@ -165,13 +165,13 @@ pub enum CertificateStatusError {
     },
 
     /// Failure on the proof verification.
-    #[error("proof verification failed")]
+    #[error("Proof verification failed")]
     ProofVerificationFailed(#[source] ProofVerificationError),
 
     /// Failure on the pessimistic proof witness generation from the
     /// [`LocalNetworkStateData`] and the provided [`Certificate`].
-    #[error(transparent)]
-    TypeConversionError(Error),
+    #[error("Cannot produce local network state from certificate")]
+    TypeConversionError(#[source] Error),
 
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
