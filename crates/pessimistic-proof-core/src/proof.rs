@@ -168,9 +168,10 @@ pub fn generate_pessimistic_proof(
         &final_state_commitment,
     )?;
 
-    let Some(height) = batch_header.height.checked_add(1) else {
-        return Err(ProofError::HeightOverflow);
-    };
+    let height = batch_header
+        .height
+        .checked_add(1)
+        .ok_or(ProofError::HeightOverflow)?;
 
     let new_pessimistic_root = PessimisticRoot {
         balance_root: final_state_commitment.balance_root,
