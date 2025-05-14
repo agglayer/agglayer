@@ -48,10 +48,10 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 ## Prover related
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.17" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.17" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.17" }
-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.17" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.23" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.23" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.23" }
+prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.23" }
 
 # Core dependencies
 alloy = { version = "0.8.1", features = ["full"] }
