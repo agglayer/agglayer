@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use agglayer_primitives::keccak::Hasher;
 use agglayer_primitives::keccak::Keccak256Hasher;
-use agglayer_primitives::utils::FromU256;
+use agglayer_primitives::FromU256;
 pub use pessimistic_proof_core::local_balance_tree::{LocalBalancePath, LOCAL_BALANCE_TREE_DEPTH};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;

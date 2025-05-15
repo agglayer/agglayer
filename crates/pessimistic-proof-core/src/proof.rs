@@ -1,5 +1,5 @@
 use agglayer_primitives::keccak::Keccak256Hasher;
-use agglayer_primitives::{digest::Digest, Address, Signature, B256};
+use agglayer_primitives::{Address, Digest, Signature, B256};
 pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};

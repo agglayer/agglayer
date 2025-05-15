@@ -6,9 +6,9 @@ use std::{
 
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
-    primitives::digest::Digest, primitives::keccak::Keccak256Hasher, Certificate,
-    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId,
+    primitives::keccak::Keccak256Hasher, primitives::Digest, Certificate, CertificateHeader,
+    CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height, LocalNetworkStateData,
+    NetworkId,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,

@@ -1,4 +1,4 @@
-use agglayer_primitives::keccak::{Digest, Keccak256Hasher};
+use agglayer_primitives::{keccak::Keccak256Hasher, Digest};
 use rs_merkle::{Hasher as MerkleHasher, MerkleTree};
 use tiny_keccak::{Hasher as _, Keccak};
 
