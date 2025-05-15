@@ -16,9 +16,9 @@ sp1-cli = "=4.1.4"
 panic = "abort"
 lto = "fat"
 codegen-units = 1
+overflow-checks = true
 
 # Inject sp1-friendly versions of the relevant crypto packages.
-
 [patch.crates-io.ecdsa-core]
 git = "https://github.com/sp1-patches/signatures"
 package = "ecdsa"
