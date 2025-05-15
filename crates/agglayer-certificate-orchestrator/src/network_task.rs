@@ -469,7 +469,9 @@ where
                     CertificationError::LastPessimisticRootNotFound(network_id) => {
                         CertificateStatusError::LastPessimisticRootNotFound(network_id)
                     }
-                    CertificationError::ProofVerificationFailed { source } => source.into(),
+                    CertificationError::ProofVerificationFailed { source } => {
+                        CertificateStatusError::ProofVerificationFailed(source)
+                    }
                     CertificationError::L1InfoRootNotFound(_certificate_id, l1_leaf_count) => {
                         CertificateStatusError::L1InfoRootNotFound(l1_leaf_count)
                     }
@@ -485,7 +487,9 @@ where
                             source,
                         }
                     }
-                    CertificationError::Types { source } => source.into(),
+                    CertificationError::Types { source } => {
+                        CertificateStatusError::TypeConversionError(source)
+                    }
 
                     CertificationError::Storage(source) => {
                         let error_msg = format!(

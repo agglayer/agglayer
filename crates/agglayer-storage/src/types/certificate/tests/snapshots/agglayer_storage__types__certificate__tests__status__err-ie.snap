@@ -1,0 +1,6 @@
+---
+source: crates/agglayer-storage/src/types/certificate/tests/status.rs
+expression: bytes
+snapshot_kind: text
+---
+0x00000003000000050000000000000008696e7465726e616c
