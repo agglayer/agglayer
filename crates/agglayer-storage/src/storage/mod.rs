@@ -42,7 +42,7 @@ pub enum BackupError {
     IO(#[from] std::io::Error),
 }
 
-/// A physical storage storage component with an active RocksDB.
+/// A physical storage component with an active RocksDB.
 pub struct DB {
     rocksdb: rocksdb::DB,
     default_write_options: WriteOptions,
