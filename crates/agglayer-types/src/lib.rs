@@ -4,10 +4,10 @@ pub use agglayer_interop_types::aggchain_proof;
 use agglayer_interop_types::aggchain_proof::AggchainData;
 use agglayer_interop_types::ImportedBridgeExitCommitmentValues;
 use agglayer_interop_types::{BridgeExit, GlobalIndex, ImportedBridgeExit, TokenInfo};
-pub use agglayer_primitives::digest::Digest;
 use agglayer_primitives::keccak::Keccak256Hasher;
-use agglayer_primitives::utils::{FromBool, Hashable};
+pub use agglayer_primitives::Digest;
 use agglayer_primitives::SignatureError;
+use agglayer_primitives::{FromBool, Hashable};
 use agglayer_tries::error::SmtError;
 use agglayer_tries::smt::Smt;
 use pessimistic_proof::core::commitment::{PessimisticRoot, SignatureCommitmentValues};
@@ -457,7 +457,18 @@ impl Certificate {
                     .recover_address_from_prehash(&B256::new(combined_hash.0))
                     .map(Some)
             }
-            _ => Ok(None),
+            AggchainData::Generic {
+                ref signature,
+                aggchain_params,
+                ..
+            } => {
+                let commitment = SignatureCommitmentValues::from(self)
+                    .aggchain_proof_commitment(&aggchain_params);
+
+                signature
+                    .recover_address_from_prehash(&B256::new(commitment.0))
+                    .map(Some)
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-use agglayer_primitives::{keccak::Hasher, utils::FromBool};
+use agglayer_primitives::{keccak::Hasher, FromBool};
 use agglayer_tries::proof::{SmtNonInclusionProof, ToBits};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

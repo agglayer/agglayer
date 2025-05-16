@@ -1,4 +1,4 @@
-use agglayer_types::primitives::utils::Hashable;
+use agglayer_types::primitives::Hashable;
 use pessimistic_proof::{
     keccak::Keccak256Hasher, local_exit_tree::LocalExitTree,
     unified_bridge::bridge_exit::BridgeExit,

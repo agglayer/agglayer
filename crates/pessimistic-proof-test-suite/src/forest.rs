@@ -2,11 +2,12 @@ use agglayer_tries::smt::Smt;
 use agglayer_types::{
     aggchain_proof::AggchainData,
     compute_signature_info,
-    primitives::{keccak::keccak256, utils::Hashable},
-    Address, Certificate, LocalNetworkStateData, Signature, U256,
+    primitives::{keccak::keccak256, Hashable},
+    Address, Certificate, Digest, LocalNetworkStateData, Signature, U256,
 };
 use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer, WalletError};
+use pessimistic_proof::proof::zero_if_empty_exit_root;
 use pessimistic_proof::unified_bridge::token_info::LeafType;
 use pessimistic_proof::unified_bridge::{
     imported_bridge_exit::{
@@ -17,7 +18,6 @@ use pessimistic_proof::unified_bridge::{
 use pessimistic_proof::{
     core::commitment::SignatureCommitmentValues, unified_bridge::global_index::GlobalIndex,
 };
-use pessimistic_proof::{keccak::Digest, proof::zero_if_empty_exit_root};
 use pessimistic_proof::{
     keccak::{keccak256_combine, Keccak256Hasher},
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},

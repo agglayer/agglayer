@@ -7,8 +7,7 @@
 //! stark proof proving a specified statement which can be abstracted here.
 use agglayer_primitives::{
     bytes::{BigEndian, ByteOrder as _},
-    digest::Digest,
-    Address, Signature,
+    Address, Digest, Signature,
 };
 use serde::{Deserialize, Serialize};
 
