@@ -23,8 +23,8 @@ agglayer-storage = { path = "../agglayer-storage" }
 pessimistic-proof.workspace = true
 
 [dev-dependencies]
-assert_cmd = "2.0.14"
+assert_cmd = "2.0.17"
 insta.workspace = true
 
 [build-dependencies]
-vergen-git2 = { version = "1.0.0", features = ["build"] }
+vergen-git2 = { version = "1.0.7", features = ["build"] }
