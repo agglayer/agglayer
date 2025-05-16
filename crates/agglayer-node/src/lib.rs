@@ -9,6 +9,7 @@ mod logging;
 
 mod epoch_synchronizer;
 mod node;
+mod utils;
 
 use agglayer_telemetry::ServerBuilder as MetricsBuilder;
 

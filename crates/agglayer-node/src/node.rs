@@ -34,8 +34,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::epoch_synchronizer::EpochSynchronizer;
-
 pub(crate) mod api;
+
+use crate::utils::sanitize_ws_url;
 
 pub(crate) struct Node {
     pub(crate) rpc_handle: JoinHandle<()>,
@@ -138,7 +139,7 @@ impl Node {
             Epoch::BlockClock(cfg) => {
                 info!(
                     "Starting BlockClock with provider: {}",
-                    config.l1.ws_node_url
+                    sanitize_ws_url(config.l1.ws_node_url.as_str())
                 );
 
                 let clock = BlockClock::new_with_ws(
