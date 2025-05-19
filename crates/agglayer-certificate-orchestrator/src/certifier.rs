@@ -1,8 +1,9 @@
-use agglayer_types::primitives::keccak::Keccak256Hasher;
-use agglayer_types::LocalNetworkStateData;
-use agglayer_types::{Certificate, Height, NetworkId};
-use pessimistic_proof::multi_batch_header::MultiBatchHeader;
-use pessimistic_proof::{LocalNetworkState, PessimisticProofOutput};
+use agglayer_types::{
+    primitives::keccak::Keccak256Hasher, Certificate, Height, LocalNetworkStateData, NetworkId,
+};
+use pessimistic_proof::{
+    multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
+};
 
 use crate::error::CertificationError;
 

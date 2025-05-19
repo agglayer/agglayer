@@ -5,8 +5,6 @@ pub use proof::{generate_pessimistic_proof, PessimisticProofOutput, ProofError};
 
 pub mod local_balance_tree;
 
-pub use unified_bridge::bridge_exit;
-
 pub mod aggchain_proof;
 pub mod local_state;
 pub mod multi_batch_header;

@@ -21,12 +21,12 @@ use std::borrow::Cow;
 
 use agglayer_types::{
     aggchain_proof::{AggchainData, Proof},
-    primitives::digest::Digest,
+    primitives::Digest,
     Certificate, Height, Metadata, NetworkId, Signature,
 };
 use bincode::Options;
 use pessimistic_proof::unified_bridge::{
-    bridge_exit::BridgeExit, imported_bridge_exit::ImportedBridgeExit,
+    BridgeExit, ImportedBridgeExit,
 };
 use serde::{Deserialize, Serialize};
 
@@ -211,6 +211,7 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
             AggchainData::Generic {
                 proof,
                 aggchain_params,
+                signature: _, // TODO: SIGNATURES ARE NOT IMPLEMENTED YET
             } => Self::Generic {
                 proof: Cow::Borrowed(proof),
                 aggchain_params: *aggchain_params,
@@ -229,6 +230,7 @@ impl From<AggchainDataV1<'_>> for AggchainData {
             } => Self::Generic {
                 proof: proof.into_owned(),
                 aggchain_params,
+                signature: Box::new(Signature::new(Default::default(), Default::default(), Default::default())), // TODO: SIGNATURES ARE NOT IMPLEMENTED YET
             },
         }
     }

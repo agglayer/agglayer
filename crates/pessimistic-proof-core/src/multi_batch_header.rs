@@ -1,13 +1,10 @@
 #![allow(clippy::too_many_arguments)]
 use std::{collections::BTreeMap, hash::Hash};
 
-use agglayer_primitives::keccak::Hasher;
-use agglayer_primitives::U256;
+use agglayer_primitives::{keccak::Hasher, U256};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
-use unified_bridge::bridge_exit::{BridgeExit, NetworkId};
-use unified_bridge::imported_bridge_exit::ImportedBridgeExit;
-use unified_bridge::token_info::TokenInfo;
+use unified_bridge::{BridgeExit, ImportedBridgeExit, NetworkId, TokenInfo};
 
 use crate::{
     aggchain_proof::AggchainData, local_balance_tree::LocalBalancePath,

@@ -2,8 +2,7 @@
 
 use std::sync::Arc;
 
-use ethers::prelude::*;
-use ethers::providers::Middleware;
+use ethers::{prelude::*, providers::Middleware};
 use polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2Events;
 use tracing::{debug, error};
 

@@ -1,23 +1,21 @@
 use std::sync::Arc;
 
-use agglayer_config::Config;
-use agglayer_config::L1;
-use agglayer_contracts::polygon_rollup_manager::FinalNumBatchBelowLastVerifiedBatch;
-use agglayer_contracts::polygon_rollup_manager::PolygonRollupManagerErrors;
-use agglayer_contracts::polygon_rollup_manager::RollupDataReturn;
-use agglayer_contracts::polygon_rollup_manager::{
-    RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
+use agglayer_config::{Config, L1};
+use agglayer_contracts::{
+    polygon_rollup_manager::{
+        FinalNumBatchBelowLastVerifiedBatch, PolygonRollupManagerErrors, RollupDataReturn,
+        RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
+    },
+    polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn},
 };
-use agglayer_contracts::polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn};
 use agglayer_types::Certificate;
-use ethers::core::utils;
-use ethers::prelude::*;
-use ethers::signers::LocalWallet;
-use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::{
     abi::AbiEncode,
+    core::utils,
+    prelude::*,
     providers,
-    types::{Signature, H256, U256},
+    signers::LocalWallet,
+    types::{transaction::eip2718::TypedTransaction, Signature, H256, U256},
 };
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
 use serde_json::json;

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    primitives::digest::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
+    primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 

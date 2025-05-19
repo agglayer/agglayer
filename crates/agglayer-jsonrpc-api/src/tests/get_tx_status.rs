@@ -1,28 +1,31 @@
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use agglayer_config::Config;
-use agglayer_contracts::polygon_rollup_manager::PolygonRollupManager;
-use agglayer_contracts::polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2;
-use agglayer_contracts::L1RpcClient;
-use agglayer_storage::storage::backup::BackupClient;
-use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
-use agglayer_storage::stores::debug::DebugStore;
-use agglayer_storage::stores::pending::PendingStore;
-use agglayer_storage::stores::state::StateStore;
-use agglayer_storage::tests::TempDBDir;
-use ethers::providers::{Http, Middleware, Provider, ProviderExt as _};
-use ethers::types::{TransactionRequest, H256};
-use ethers::utils::Anvil;
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::ClientError;
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::rpc_params;
+use agglayer_contracts::{
+    polygon_rollup_manager::PolygonRollupManager,
+    polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
+};
+use agglayer_storage::{
+    storage::{backup::BackupClient, pending_db_cf_definitions, state_db_cf_definitions, DB},
+    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
+    tests::TempDBDir,
+};
+use ethers::{
+    providers::{Http, Middleware, Provider, ProviderExt as _},
+    types::{TransactionRequest, H256},
+    utils::Anvil,
+};
+use jsonrpsee::{
+    core::{client::ClientT, ClientError},
+    http_client::HttpClientBuilder,
+    rpc_params,
+};
 use tracing::debug;
 
-use crate::testutils::next_available_addr;
-use crate::TxStatus;
-use crate::{kernel::Kernel, service::AgglayerService, AgglayerImpl};
+use crate::{
+    kernel::Kernel, service::AgglayerService, testutils::next_available_addr, AgglayerImpl,
+    TxStatus,
+};
 
 #[test_log::test(tokio::test)]
 async fn check_tx_status() {

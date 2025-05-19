@@ -4,9 +4,8 @@ use pessimistic_proof::{
     keccak::{Hasher, Keccak256Hasher},
     NetworkState,
 };
-use sp1_sdk::SP1PublicValues;
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
-use sp1_sdk::{SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
+use sp1_sdk::{SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin, SP1VerifyingKey};
 
 use crate::PESSIMISTIC_PROOF_ELF;
 

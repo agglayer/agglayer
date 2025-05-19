@@ -12,15 +12,18 @@ use agglayer_prover_types::{
     },
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
-use agglayer_types::primitives::keccak::Keccak256Hasher;
 use agglayer_types::{
-    aggchain_proof::AggchainData, primitives::Address, Certificate, Height, LocalNetworkStateData,
-    NetworkId, PessimisticRootInput, Proof,
+    aggchain_proof::AggchainData,
+    primitives::{keccak::Keccak256Hasher, Address},
+    Certificate, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
 };
 use bincode::Options;
-use pessimistic_proof::{core::commitment::StateCommitment, local_state::LocalNetworkState};
-use pessimistic_proof::{core::generate_pessimistic_proof, NetworkState};
-use pessimistic_proof::{multi_batch_header::MultiBatchHeader, PessimisticProofOutput};
+use pessimistic_proof::{
+    core::{commitment::StateCommitment, generate_pessimistic_proof},
+    local_state::LocalNetworkState,
+    multi_batch_header::MultiBatchHeader,
+    NetworkState, PessimisticProofOutput,
+};
 use sp1_sdk::{
     CpuProver, HashableKey, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError,
     SP1VerifyingKey,
@@ -326,13 +329,13 @@ where
 
         let signer = self
             .l1_rpc
-            .get_trusted_sequencer_address(*network_id, self.config.proof_signers.clone())
+            .get_trusted_sequencer_address(network_id.to_u32(), self.config.proof_signers.clone())
             .await
             .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
 
         let prev_pessimistic_root = self
             .l1_rpc
-            .get_prev_pessimistic_root(*network_id)
+            .get_prev_pessimistic_root(network_id.to_u32())
             .await
             .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
 
@@ -403,7 +406,7 @@ where
                 // Fetching rollup contract address
                 let rollup_address = self
                     .l1_rpc
-                    .get_rollup_contract_address(*network_id)
+                    .get_rollup_contract_address(network_id.to_u32())
                     .await
                     .map_err(|source| CertificationError::RollupContractAddressNotFound {
                         source,

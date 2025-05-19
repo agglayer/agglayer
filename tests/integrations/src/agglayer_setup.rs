@@ -11,8 +11,7 @@ use pessimistic_proof::ELF;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
-use crate::l1_setup::L1Docker;
-use crate::l1_setup::{self, next_available_addr};
+use crate::l1_setup::{self, next_available_addr, L1Docker};
 
 const PHRASE: &str = "test test test test test test test test test test test junk";
 

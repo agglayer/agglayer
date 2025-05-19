@@ -1,5 +1,4 @@
-use agglayer_primitives::keccak::Keccak256Hasher;
-use agglayer_primitives::{digest::Digest, Address, Signature, B256};
+use agglayer_primitives::{keccak::Keccak256Hasher, Address, Digest, Signature, B256};
 pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
@@ -7,20 +6,17 @@ use thiserror::Error;
 #[cfg(not(target_os = "zkvm"))]
 use tracing::warn;
 #[cfg(target_os = "zkvm")]
-use unified_bridge::aggchain_proof::AggchainProofPublicValues;
-use unified_bridge::global_index::GlobalIndex;
-use unified_bridge::imported_bridge_exit::Error;
-use unified_bridge::imported_bridge_exit::ImportedBridgeExitCommitmentValues;
-use unified_bridge::CommitmentVersion;
+use unified_bridge::AggchainProofPublicValues;
 use unified_bridge::{
-    bridge_exit::NetworkId, local_exit_tree::LocalExitTreeError, token_info::TokenInfo,
+    CommitmentVersion, Error, GlobalIndex, ImportedBridgeExitCommitmentValues, LocalExitTreeError,
+    NetworkId, TokenInfo,
 };
 
 use crate::{
     aggchain_proof::AggchainData,
     local_state::{
-        commitment::PessimisticRoot, commitment::SignatureCommitmentValues,
-        commitment::StateCommitment, NetworkState,
+        commitment::{PessimisticRoot, SignatureCommitmentValues, StateCommitment},
+        NetworkState,
     },
     multi_batch_header::MultiBatchHeader,
 };
@@ -297,7 +293,7 @@ pub fn verify_consensus(
                 prev_local_exit_root: initial_state_commitment.exit_root,
                 new_local_exit_root: final_state_commitment.exit_root,
                 l1_info_root: multi_batch_header.l1_info_root,
-                origin_network: *multi_batch_header.origin_network,
+                origin_network: multi_batch_header.origin_network,
                 aggchain_params: *aggchain_params,
                 commit_imported_bridge_exits: commit_imported_bridge_exits
                     .commitment(IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION),

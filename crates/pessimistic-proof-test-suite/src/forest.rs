@@ -2,28 +2,20 @@ use agglayer_tries::smt::Smt;
 use agglayer_types::{
     aggchain_proof::AggchainData,
     compute_signature_info,
-    primitives::{keccak::keccak256, utils::Hashable},
-    Address, Certificate, LocalNetworkStateData, Signature, U256,
+    primitives::{keccak::keccak256, Hashable},
+    Address, Certificate, Digest, LocalNetworkStateData, Signature, U256,
 };
 use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer, WalletError};
-use pessimistic_proof::unified_bridge::token_info::LeafType;
-use pessimistic_proof::unified_bridge::{
-    imported_bridge_exit::{
-        Claim, ClaimFromMainnet, L1InfoTreeLeaf, L1InfoTreeLeafInner, MerkleProof,
-    },
-    CommitmentVersion,
-};
 use pessimistic_proof::{
-    core::commitment::SignatureCommitmentValues, unified_bridge::global_index::GlobalIndex,
-};
-use pessimistic_proof::{keccak::Digest, proof::zero_if_empty_exit_root};
-use pessimistic_proof::{
+    core::commitment::SignatureCommitmentValues,
     keccak::{keccak256_combine, Keccak256Hasher},
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
     local_state::LocalNetworkState,
+    proof::zero_if_empty_exit_root,
     unified_bridge::{
-        bridge_exit::BridgeExit, imported_bridge_exit::ImportedBridgeExit, token_info::TokenInfo,
+        BridgeExit, Claim, ClaimFromMainnet, CommitmentVersion, GlobalIndex, ImportedBridgeExit,
+        L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
     },
     PessimisticProofOutput,
 };
@@ -106,7 +98,7 @@ impl Forest {
         }
 
         Self {
-            network_id: *NETWORK_B,
+            network_id: NETWORK_B.to_u32(),
             wallet: Certificate::wallet_for_test(NETWORK_B),
             local_exit_tree_data_a: LocalExitTreeData::new(),
             l1_info_tree: Default::default(),
@@ -164,11 +156,7 @@ impl Forest {
             let index = idx as u32;
             let imported_exit = ImportedBridgeExit {
                 bridge_exit: exit,
-                global_index: GlobalIndex {
-                    mainnet_flag: true,
-                    rollup_index: *NETWORK_A,
-                    leaf_index: index,
-                },
+                global_index: GlobalIndex::new(NETWORK_A, index),
                 claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
                     proof_leaf_mer: MerkleProof {
                         proof: self.local_exit_tree_data_a.get_proof(index).unwrap(),
@@ -314,9 +302,9 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
 }
 
 fn exit_to_a(token_info: TokenInfo, amount: U256) -> BridgeExit {
-    exit(token_info, *NETWORK_A, amount)
+    exit(token_info, NETWORK_A.to_u32(), amount)
 }
 
 fn exit_to_b(token_info: TokenInfo, amount: U256) -> BridgeExit {
-    exit(token_info, *NETWORK_B, amount)
+    exit(token_info, NETWORK_B.to_u32(), amount)
 }
