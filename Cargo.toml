@@ -122,3 +122,4 @@ agglayer-tries = { git = "https://github.com/agglayer/interop.git" }
 agglayer-interop = { git = "https://github.com/agglayer/interop.git" }
 unified-bridge = { git = "https://github.com/agglayer/interop.git" }
 agglayer-interop-types = { git = "https://github.com/agglayer/interop.git" }
+
