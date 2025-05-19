@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
         }
         cli::Commands::Vkey => {
             let vkey_hex = agglayer_prover::compute_program_vkey(ELF);
-            println!("0x{vkey_hex}");
+            println!("{vkey_hex}");
         }
 
         cli::Commands::VkeySelector => {
