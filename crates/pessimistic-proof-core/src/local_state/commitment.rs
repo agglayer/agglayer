@@ -35,6 +35,7 @@ impl PessimisticRoot {
         &self,
         settled_pp_root: Digest,
     ) -> Result<CommitmentVersion, ProofError> {
+        info!("Inferring PP root with: {:?}", self);
         let computed_v3 = self.compute_pp_root(CommitmentVersion::V3);
         if computed_v3 == settled_pp_root {
             return Ok(CommitmentVersion::V3);
