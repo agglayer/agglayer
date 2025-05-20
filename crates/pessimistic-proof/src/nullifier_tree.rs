@@ -1,6 +1,6 @@
 use agglayer_primitives::keccak::Hasher;
 use agglayer_primitives::keccak::Keccak256Hasher;
-use agglayer_primitives::utils::FromBool;
+use agglayer_primitives::FromBool;
 pub use pessimistic_proof_core::nullifier_tree::NullifierKey;
 pub use pessimistic_proof_core::nullifier_tree::NullifierPath;
 pub use pessimistic_proof_core::nullifier_tree::NULLIFIER_TREE_DEPTH;

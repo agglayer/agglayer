@@ -48,10 +48,10 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 ## Prover related
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.17" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.17" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.17" }
-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.17" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.24" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.24" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.24" }
+prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.24" }
 
 # Core dependencies
 alloy = { version = "0.8.1", features = ["full"] }
@@ -117,8 +117,8 @@ sp1-primitives = "=4.1.4"
 sp1-prover = "=4.1.4"
 sp1-zkvm = { version = "=4.1.4", default-features = false }
 
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "v0.4.0" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "v0.4.0" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git", rev = "v0.4.0" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "v0.4.0" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", rev = "v0.4.0" }

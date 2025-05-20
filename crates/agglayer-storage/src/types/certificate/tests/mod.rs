@@ -113,6 +113,11 @@ impl CertificateV1<'static> {
             aggchain_data: AggchainDataV1::Generic {
                 proof: Cow::Owned(proof),
                 aggchain_params: Digest([0x58; 32]),
+                signature: Cow::Owned(Box::new(Signature::new(
+                    U256::from_be_bytes([0x78; 32]),
+                    U256::from_be_bytes([0x9a; 32]),
+                    false,
+                ))),
             },
             metadata: Digest([0xb9; 32]),
             custom_chain_data: Cow::Owned(vec![]),
@@ -150,9 +155,11 @@ impl CertificateV1<'_> {
                 AggchainDataV1::Generic {
                     proof,
                     aggchain_params,
+                    signature,
                 } => AggchainDataV1::Generic {
                     proof: Cow::Owned(proof.into_owned()),
                     aggchain_params,
+                    signature: Cow::Owned(signature.into_owned()),
                 },
             },
             metadata,

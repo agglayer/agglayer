@@ -1,7 +1,7 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use agglayer_primitives::keccak::Keccak256Hasher;
-use agglayer_primitives::utils::Hashable;
+use agglayer_primitives::Hashable;
 use agglayer_primitives::{ruint::UintTryFrom, U256, U512};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
