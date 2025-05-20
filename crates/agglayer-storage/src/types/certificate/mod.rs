@@ -25,9 +25,7 @@ use agglayer_types::{
     Certificate, Height, Metadata, NetworkId, Signature,
 };
 use bincode::Options;
-use pessimistic_proof::unified_bridge::{
-    BridgeExit, ImportedBridgeExit,
-};
+use pessimistic_proof::unified_bridge::{BridgeExit, ImportedBridgeExit};
 use serde::{Deserialize, Serialize};
 
 use crate::columns::{default_bincode_options, CodecError};
@@ -199,7 +197,7 @@ pub enum AggchainDataV1<'a> {
     Generic {
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
-        signature: Cow<'a, Box<Signature>>,
+        signature: Cow<'a, Option<Box<Signature>>>,
     },
 }
 

@@ -456,7 +456,7 @@ impl Certificate {
                     .map(Some)
             }
             AggchainData::Generic {
-                ref signature,
+                signature: Some(ref signature),
                 aggchain_params,
                 ..
             } => {
@@ -467,6 +467,7 @@ impl Certificate {
                     .recover_address_from_prehash(&B256::new(commitment.0))
                     .map(Some)
             }
+            _ => Ok(None),
         }
     }
 }
