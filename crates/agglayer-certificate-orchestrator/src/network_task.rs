@@ -5,10 +5,9 @@ use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
-use agglayer_types::primitives::Hashable as _;
-use agglayer_types::CertificateHeader;
 use agglayer_types::{
-    primitives::Digest, Certificate, CertificateId, CertificateStatus, CertificateStatusError,
+    primitives::{Digest, Hashable as _},
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
     Height, LocalNetworkStateData, NetworkId,
 };
 use tokio::sync::{broadcast, mpsc};

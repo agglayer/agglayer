@@ -1,11 +1,11 @@
 use agglayer_primitives::keccak::Hasher;
 use serde::{de::DeserializeOwned, Serialize};
-use unified_bridge::local_exit_tree::LocalExitTreeError;
+use unified_bridge::LocalExitTreeError;
 
 use crate::local_exit_tree::data::LocalExitTreeData;
 pub mod data;
 
-pub use unified_bridge::local_exit_tree::LocalExitTree;
+pub use unified_bridge::LocalExitTree;
 
 #[cfg(test)]
 mod tests;

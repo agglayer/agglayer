@@ -2,11 +2,9 @@
 //!
 //! The pessimistic proof has the "pessimistic root" as part of its public
 //! inputs. Some logic in this file handles the migration on its computation.
-use agglayer_primitives::keccak::keccak256_combine;
-use agglayer_primitives::Digest;
+use agglayer_primitives::{keccak::keccak256_combine, Digest};
 use serde::{Deserialize, Serialize};
-use unified_bridge::imported_bridge_exit::ImportedBridgeExitCommitmentValues;
-use unified_bridge::{bridge_exit::NetworkId, CommitmentVersion};
+use unified_bridge::{CommitmentVersion, ImportedBridgeExitCommitmentValues, NetworkId};
 
 use crate::{proof::EMPTY_PP_ROOT_V2, ProofError};
 
@@ -20,7 +18,7 @@ pub struct StateCommitment {
 }
 
 /// The parameters which compose the pessimistic root.
-#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PessimisticRoot {
     pub balance_root: Digest,
     pub nullifier_root: Digest,

@@ -1,13 +1,9 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use agglayer_primitives::keccak::Keccak256Hasher;
-use agglayer_primitives::Hashable;
-use agglayer_primitives::{ruint::UintTryFrom, U256, U512};
+use agglayer_primitives::{keccak::Keccak256Hasher, ruint::UintTryFrom, Hashable, U256, U512};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
-use unified_bridge::imported_bridge_exit::Error;
-use unified_bridge::local_exit_tree::LocalExitTree;
-use unified_bridge::token_info::{L1_ETH, L1_NETWORK_ID};
+use unified_bridge::{Error, LocalExitTree, NetworkId, L1_ETH};
 
 use crate::{
     local_balance_tree::LocalBalanceTree,
@@ -139,7 +135,7 @@ impl NetworkState {
 
             // For ETH transfers, we need to check that the origin network is the L1 network
             if bridge_exit.token_info.origin_token_address == L1_ETH.origin_token_address
-                && bridge_exit.token_info.origin_network != L1_NETWORK_ID
+                && bridge_exit.token_info.origin_network != NetworkId::ETH_L1
             {
                 return Err(ProofError::InvalidL1TokenInfo(bridge_exit.token_info));
             }

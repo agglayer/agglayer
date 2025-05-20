@@ -1,7 +1,9 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use agglayer_contracts::{L1TransactionFetcher, RollupContract};
 use agglayer_storage::stores::{
@@ -20,8 +22,7 @@ use jsonrpsee::{
     proc_macros::rpc,
     server::{HttpBody, PingConfig, ServerBuilder},
 };
-use tower_http::compression::CompressionLayer;
-use tower_http::cors::CorsLayer;
+use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::info;
 
 use crate::{service::AgglayerService, signed_tx::SignedTx};

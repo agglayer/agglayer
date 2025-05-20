@@ -8,9 +8,9 @@ use agglayer_contracts::{
     polygon_rollup_manager::PolygonRollupManager,
     polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
 };
-use agglayer_jsonrpc_api::admin::AdminAgglayerImpl;
-use agglayer_jsonrpc_api::service::AgglayerService;
-use agglayer_jsonrpc_api::{kernel::Kernel, AgglayerImpl};
+use agglayer_jsonrpc_api::{
+    admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
+};
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     storage::{

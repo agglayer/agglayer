@@ -1,26 +1,29 @@
-use std::future::IntoFuture;
-use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
+use std::{
+    future::IntoFuture,
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 
 use agglayer_config::Config;
-use agglayer_contracts::polygon_rollup_manager::PolygonRollupManager;
-use agglayer_contracts::polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2;
-use agglayer_contracts::L1RpcClient;
-use agglayer_storage::storage::backup::BackupClient;
-use agglayer_storage::storage::{pending_db_cf_definitions, state_db_cf_definitions, DB};
-use agglayer_storage::stores::debug::DebugStore;
-use agglayer_storage::stores::pending::PendingStore;
-use agglayer_storage::stores::state::StateStore;
-use agglayer_storage::tests::TempDBDir;
+use agglayer_contracts::{
+    polygon_rollup_manager::PolygonRollupManager,
+    polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
+};
+use agglayer_storage::{
+    storage::{backup::BackupClient, pending_db_cf_definitions, state_db_cf_definitions, DB},
+    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
+    tests::TempDBDir,
+};
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId};
-use ethers::providers::{self, MockProvider, Provider};
-use ethers::signers::Signer;
+use ethers::{
+    providers::{self, MockProvider, Provider},
+    signers::Signer,
+};
 use jsonrpsee::http_client::HttpClientBuilder;
 use rstest::*;
 use tokio_util::sync::CancellationToken;
 
-use crate::admin::AdminAgglayerImpl;
-use crate::{kernel::Kernel, service::AgglayerService, AgglayerImpl};
+use crate::{admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl};
 
 pub(crate) struct RawRpcContext {
     pub(crate) rpc: AgglayerImpl<

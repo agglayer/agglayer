@@ -1,7 +1,6 @@
 use agglayer_types::primitives::Hashable;
 use pessimistic_proof::{
-    keccak::Keccak256Hasher, local_exit_tree::LocalExitTree,
-    unified_bridge::bridge_exit::BridgeExit,
+    keccak::Keccak256Hasher, local_exit_tree::LocalExitTree, unified_bridge::BridgeExit,
 };
 use pessimistic_proof_test_suite::event_data::{load_json_data_file, BridgeEvent, EventData};
 

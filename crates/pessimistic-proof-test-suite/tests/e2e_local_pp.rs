@@ -1,13 +1,13 @@
-use agglayer_types::primitives::U256;
-use agglayer_types::{Digest, Error, PessimisticRootInput};
-use pessimistic_proof::core::commitment::{
-    PessimisticRoot, SignatureCommitmentValues, StateCommitment,
+use agglayer_types::{primitives::U256, Digest, Error, PessimisticRootInput};
+use pessimistic_proof::{
+    core::{
+        commitment::{PessimisticRoot, SignatureCommitmentValues, StateCommitment},
+        generate_pessimistic_proof, AggchainData,
+    },
+    local_state::LocalNetworkState,
+    unified_bridge::{CommitmentVersion, TokenInfo},
+    NetworkState, PessimisticProofOutput, ProofError,
 };
-use pessimistic_proof::core::{generate_pessimistic_proof, AggchainData};
-use pessimistic_proof::local_state::LocalNetworkState;
-use pessimistic_proof::unified_bridge::token_info::TokenInfo;
-use pessimistic_proof::unified_bridge::CommitmentVersion;
-use pessimistic_proof::{NetworkState, PessimisticProofOutput, ProofError};
 use pessimistic_proof_test_suite::{
     forest::Forest,
     sample_data::{ETH, USDC},
@@ -16,7 +16,7 @@ use pessimistic_proof_test_suite::{
 use rand::random;
 use rstest::rstest;
 use sp1_sdk::{utils, HashableKey, ProverClient, SP1Stdin};
-use unified_bridge::imported_bridge_exit::Claim;
+use unified_bridge::Claim;
 
 fn u(x: u64) -> U256 {
     x.try_into().unwrap()

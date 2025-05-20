@@ -1,6 +1,8 @@
 use agglayer_config::Config;
-use agglayer_storage::stores::{PendingCertificateWriter as _, StateReader as _, StateWriter as _};
-use agglayer_storage::tests::TempDBDir;
+use agglayer_storage::{
+    stores::{PendingCertificateWriter as _, StateReader as _, StateWriter as _},
+    tests::TempDBDir,
+};
 use agglayer_types::{Certificate, CertificateHeader, CertificateId, CertificateStatus, NetworkId};
 use ethers::signers::Signer as _;
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder, rpc_params};

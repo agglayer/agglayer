@@ -10,10 +10,10 @@ use jsonrpsee::{
 use rstest::*;
 use serde_json::json;
 
-use crate::testutils::context;
-use crate::testutils::raw_rpc;
-use crate::testutils::TestContext;
-use crate::{testutils::RawRpcContext, AgglayerServer};
+use crate::{
+    testutils::{context, raw_rpc, RawRpcContext, TestContext},
+    AgglayerServer,
+};
 
 #[test_log::test(tokio::test)]
 async fn fetch_timeclock_config() {

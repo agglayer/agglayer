@@ -1,5 +1,4 @@
-use std::path::Path;
-use std::{env, fs};
+use std::{env, fs, path::Path};
 
 use semver::Version;
 use toml::Value;

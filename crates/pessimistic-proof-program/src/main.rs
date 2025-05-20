@@ -1,9 +1,10 @@
 #![no_main]
 
 use bincode::Options;
-use pessimistic_proof_core::keccak::Keccak256Hasher;
-use pessimistic_proof_core::multi_batch_header::MultiBatchHeader;
-use pessimistic_proof_core::{generate_pessimistic_proof, NetworkState, PessimisticProofOutput};
+use pessimistic_proof_core::{
+    generate_pessimistic_proof, keccak::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
+    NetworkState, PessimisticProofOutput,
+};
 
 sp1_zkvm::entrypoint!(main);
 pub fn main() {

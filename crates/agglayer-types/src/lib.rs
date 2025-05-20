@@ -1,28 +1,26 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use agglayer_interop_types::aggchain_proof;
-use agglayer_interop_types::aggchain_proof::AggchainData;
-use agglayer_interop_types::ImportedBridgeExitCommitmentValues;
-use agglayer_interop_types::{BridgeExit, GlobalIndex, ImportedBridgeExit, TokenInfo};
-use agglayer_primitives::keccak::Keccak256Hasher;
+use agglayer_interop_types::{
+    aggchain_proof::AggchainData, BridgeExit, GlobalIndex, ImportedBridgeExit,
+    ImportedBridgeExitCommitmentValues, TokenInfo,
+};
 pub use agglayer_primitives::Digest;
-use agglayer_primitives::SignatureError;
-use agglayer_primitives::{FromBool, Hashable};
-use agglayer_tries::error::SmtError;
-use agglayer_tries::smt::Smt;
-use pessimistic_proof::core::commitment::{PessimisticRoot, SignatureCommitmentValues};
-use pessimistic_proof::core::{self, Vkey};
-use pessimistic_proof::error::ProofVerificationError;
-use pessimistic_proof::keccak::keccak256_combine;
-use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
-use pessimistic_proof::local_state::StateCommitment;
-use pessimistic_proof::nullifier_tree::{NullifierTree, NULLIFIER_TREE_DEPTH};
-use pessimistic_proof::LocalNetworkState;
+use agglayer_primitives::{keccak::Keccak256Hasher, FromBool, Hashable, SignatureError};
+use agglayer_tries::{error::SmtError, smt::Smt};
 use pessimistic_proof::{
-    local_balance_tree::LocalBalancePath,
+    core::{
+        self,
+        commitment::{PessimisticRoot, SignatureCommitmentValues},
+        Vkey,
+    },
+    error::ProofVerificationError,
+    keccak::keccak256_combine,
+    local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
+    local_state::StateCommitment,
     multi_batch_header::MultiBatchHeader,
-    nullifier_tree::{NullifierKey, NullifierPath},
-    ProofError,
+    nullifier_tree::{NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
+    LocalNetworkState, ProofError,
 };
 use serde::{Deserialize, Serialize};
 use unified_bridge::CommitmentVersion;
@@ -36,7 +34,7 @@ pub use agglayer_primitives as primitives;
 // Re-export common primitives again as agglayer-types root types
 pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
 pub use pessimistic_proof::proof::Proof;
-use unified_bridge::local_exit_tree::{LocalExitTree, LocalExitTreeError};
+use unified_bridge::{LocalExitTree, LocalExitTreeError};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {
@@ -302,7 +300,7 @@ pub struct Certificate {
 #[cfg(any(test, feature = "testutils"))]
 impl Default for Certificate {
     fn default() -> Self {
-        let network_id = Default::default();
+        let network_id = NetworkId::ETH_L1;
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
         let height: Height = 0u64;

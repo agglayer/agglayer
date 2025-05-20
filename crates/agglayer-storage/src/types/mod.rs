@@ -1,4 +1,6 @@
-use agglayer_types::{primitives::Digest, CertificateHeader, CertificateId, NetworkId, Proof};
+use agglayer_types::{
+    primitives::Digest, CertificateHeader, CertificateId, NetworkId, Proof,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::columns::Codec;

@@ -2,7 +2,7 @@ use std::{fs::File, io::BufReader, path::Path};
 
 use agglayer_types::primitives::U256;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use pessimistic_proof::unified_bridge::{bridge_exit::BridgeExit, token_info::TokenInfo};
+use pessimistic_proof::unified_bridge::{BridgeExit, TokenInfo};
 use serde::{de::DeserializeOwned, Deserialize, Deserializer};
 use serde_json::Number;
 

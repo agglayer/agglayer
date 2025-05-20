@@ -1,11 +1,10 @@
 use std::hash::Hash;
 
-use agglayer_primitives::U256;
-use agglayer_primitives::{keccak::Hasher, FromU256};
+use agglayer_primitives::{keccak::Hasher, FromU256, U256};
 use agglayer_tries::proof::SmtMerkleProof;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
-use unified_bridge::token_info::TokenInfo;
+use unified_bridge::TokenInfo;
 
 use crate::ProofError;
 

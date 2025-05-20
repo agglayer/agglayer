@@ -19,72 +19,94 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 ] }
 
 [workspace.dependencies]
-# Project dependencies
-## APIs
-agglayer-grpc-api = { path = "crates/agglayer-grpc-api" }
-agglayer-grpc-client = { path = "crates/agglayer-grpc-client" }
-agglayer-grpc-server = { path = "crates/agglayer-grpc-server" }
-agglayer-grpc-types = { path = "crates/agglayer-grpc-types" }
-agglayer-jsonrpc-api = { path = "crates/agglayer-jsonrpc-api" }
-agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
-agglayer-rpc = { path = "crates/agglayer-rpc" }
-
+# Intra-repo dependencies
 agglayer-aggregator-notifier = { path = "crates/agglayer-aggregator-notifier" }
 agglayer-certificate-orchestrator = { path = "crates/agglayer-certificate-orchestrator" }
 agglayer-clock = { path = "crates/agglayer-clock" }
 agglayer-config = { path = "crates/agglayer-config" }
 agglayer-contracts = { path = "crates/agglayer-contracts" }
+agglayer-grpc-api = { path = "crates/agglayer-grpc-api" }
+agglayer-grpc-client = { path = "crates/agglayer-grpc-client" }
+agglayer-grpc-server = { path = "crates/agglayer-grpc-server" }
+agglayer-grpc-types = { path = "crates/agglayer-grpc-types" }
+agglayer-jsonrpc-api = { path = "crates/agglayer-jsonrpc-api" }
 agglayer-node = { path = "crates/agglayer-node" }
+agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
+agglayer-rpc = { path = "crates/agglayer-rpc" }
 agglayer-signer = { path = "crates/agglayer-signer" }
 agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
 agglayer-types = { path = "crates/agglayer-types" }
 agglayer-utils = { path = "crates/agglayer-utils" }
 agglayer-test-suite = { path = "crates/agglayer-test-suite" }
-
-## Pessimistic proof related
 pessimistic-proof = { path = "crates/pessimistic-proof" }
 pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
-## Prover related
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.24" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.24" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.24" }
-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.24" }
+# Interop
+agglayer-interop = { git = "https://github.com/agglayer/interop.git", tag = "v0.5.0" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", tag = "v0.5.0" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", tag = "v0.5.0" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", tag = "v0.5.0" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.5.0" }
+
+# Provers
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
+prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
+
+# SP1 dependencies
+# Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
+#       It is specified at the top of scripts/make/Makefile.elf.toml.
+sp1-core-machine = "=4.2.1"
+sp1-sdk = "=4.2.1"
+sp1-primitives = "=4.2.1"
+sp1-prover = "=4.2.1"
+sp1-zkvm = { version = "=4.2.1", default-features = false }
 
 # Core dependencies
-alloy = { version = "0.8.1", features = ["full"] }
-alloy-primitives = { version = "0.8.20", features = ["serde", "k256"] }
-anyhow = "1.0.95"
-arbitrary = { version = "1.4.1", features = ["derive"] }
-arc-swap = "1.7.1"
+alloy = { version = "0.14.0", features = ["full"] }
+alloy-primitives = { version = "1.1", features = ["serde", "k256"] }
+anyhow = "1.0"
+arbitrary = { version = "1.4", features = ["derive"] }
+arc-swap = "1.7"
 async-trait = "0.1.86"
 axum = "0.8.1"
 base64 = "0.22.0"
-bincode = "1.3.3"
+bincode = "1.3"
 bolero = { version = "0.13.0", features = ["arbitrary"] }
 buildstructor = "0.5.4"
-clap = { version = "4.5.28", features = ["derive", "env"] }
-dirs = "5.0.1"
+clap = { version = "4.5", features = ["derive", "env"] }
+dirs = "5.0"
 dotenvy = "0.15.7"
-ethers = "2.0.14"
+ethers = "2.0"
 ethers-gcp-kms-signer = "0.1.5"
-ethers-signers = "2.0.14"
+ethers-signers = "2.0"
+fail = { version = "0.5.1", default-features = false }
 futures = "0.3.31"
 hex = "0.4.3"
-http = "1.2.0"
-hyper = "1.6.0"
+http = "1.2"
+hyper = "1.6"
+insta = { git = "https://github.com/freyskeyd/insta", branch = "chore/updating-deps-to-avoid-serialize-error", features = [
+    "toml",
+    "yaml",
+    "json",
+] }
 jsonrpsee = { version = "0.24.7", features = ["full"] }
-lazy_static = "1.5.0"
+lazy_static = "1.5"
+mockall = "0.13.1"
 parking_lot = "0.12.3"
-pin-project = "1.1.9"
+pin-project = "1.1"
 prost = "0.13.4"
-serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.138"
-serde_with = "3.12.0"
-thiserror = "2.0.11"
-tokio = { version = "1.43.0", features = ["full"] }
+rand = "0.9.0"
+rstest = "0.22.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_with = "3.12"
+test-log = "0.2.16"
+thiserror = "2.0"
+tokio = { version = "1.43", features = ["full"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 tokio-util = "0.7.13"
 toml = "0.8.20"
@@ -94,31 +116,4 @@ tower = "0.4.13"
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-url = { version = "2.5.4", features = ["serde"] }
-
-# Test dependencies
-fail = { version = "0.5.1", default-features = false }
-insta = { git = "https://github.com/freyskeyd/insta", branch = "chore/updating-deps-to-avoid-serialize-error", features = [
-    "toml",
-    "yaml",
-    "json",
-] }
-mockall = "0.13.1"
-rand = "0.9.0"
-rstest = "0.22.0"
-test-log = "0.2.16"
-
-# SP1 dependencies
-# Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
-#       It is specified at the top of scripts/make/Makefile.elf.toml.
-sp1-core-machine = "=4.1.4"
-sp1-sdk = "=4.1.4"
-sp1-primitives = "=4.1.4"
-sp1-prover = "=4.1.4"
-sp1-zkvm = { version = "=4.1.4", default-features = false }
-
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "v0.4.0" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "v0.4.0" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", rev = "v0.4.0" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "v0.4.0" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", rev = "v0.4.0" }
+url = { version = "2.5", features = ["serde"] }

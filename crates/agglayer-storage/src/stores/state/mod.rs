@@ -6,13 +6,13 @@ use std::{
 
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
-    primitives::keccak::Keccak256Hasher, primitives::Digest, Certificate, CertificateHeader,
-    CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height, LocalNetworkStateData,
-    NetworkId,
+    primitives::Digest, primitives::keccak::Keccak256Hasher, Certificate,
+    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
+    LocalNetworkStateData, NetworkId,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
-    unified_bridge::local_exit_tree::LocalExitTree,
+    unified_bridge::LocalExitTree,
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
 use tracing::{info, warn};
@@ -168,7 +168,7 @@ impl StateWriter for StateStore {
             // TODO: Check certificate conflict during insert (if conflict it's too late)
             self.db.put::<CertificatePerNetworkColumn>(
                 &certificate_per_network::Key {
-                    network_id: *certificate.network_id,
+                    network_id: certificate.network_id.to_u32(),
                     height: certificate.height,
                 },
                 &certificate.hash(),
@@ -194,7 +194,7 @@ impl StateWriter for StateStore {
             if let CertificateStatus::Settled = status {
                 self.db.put::<CertificatePerNetworkColumn>(
                     &certificate_per_network::Key {
-                        network_id: *certificate_header.network_id,
+                        network_id: certificate_header.network_id.to_u32(),
                         height: certificate_header.height,
                     },
                     &certificate_header.certificate_id,
@@ -494,7 +494,7 @@ impl StateReader for StateStore {
     ) -> Result<Option<CertificateHeader>, Error> {
         self.db
             .get::<CertificatePerNetworkColumn>(&certificate_per_network::Key {
-                network_id: *network_id,
+                network_id: network_id.to_u32(),
                 height,
             })?
             .map_or(Ok(None), |certificate_id| {

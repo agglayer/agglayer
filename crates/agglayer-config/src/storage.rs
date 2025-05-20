@@ -1,10 +1,7 @@
-use std::path::Component;
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use backup::BackupConfig;
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub(crate) const STORAGE_DIR: &str = "storage";
 const METADATA_DB_NAME: &str = "metadata";

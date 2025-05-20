@@ -1,15 +1,16 @@
 use std::time::Duration;
 
 use agglayer_config::Config;
-use agglayer_storage::stores::{PendingCertificateWriter, StateWriter};
-use agglayer_storage::tests::TempDBDir;
+use agglayer_storage::{
+    stores::{PendingCertificateWriter, StateWriter},
+    tests::TempDBDir,
+};
 use agglayer_types::{Certificate, CertificateHeader, CertificateStatus};
 use insta::assert_snapshot;
 use jsonrpsee::{core::client::ClientT, rpc_params};
 use serde_json::json;
 
-use crate::testutils::TestContext;
-use crate::AgglayerServer as _;
+use crate::{testutils::TestContext, AgglayerServer as _};
 
 #[test_log::test(tokio::test)]
 async fn returns_the_pending_certificate_header() {

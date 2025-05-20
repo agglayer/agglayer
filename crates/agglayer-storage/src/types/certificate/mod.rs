@@ -26,7 +26,7 @@ use agglayer_types::{
 };
 use bincode::Options;
 use pessimistic_proof::unified_bridge::{
-    bridge_exit::BridgeExit, imported_bridge_exit::ImportedBridgeExit,
+    BridgeExit, ImportedBridgeExit,
 };
 use serde::{Deserialize, Serialize};
 

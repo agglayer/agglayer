@@ -1,7 +1,6 @@
 use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
 use mockall::mock;
-use pessimistic_proof::multi_batch_header::MultiBatchHeader;
-use pessimistic_proof::LocalNetworkState;
+use pessimistic_proof::{multi_batch_header::MultiBatchHeader, LocalNetworkState};
 
 use crate::{error::CertificationError, Certifier, CertifierOutput};
 

@@ -5,12 +5,14 @@ use agglayer_types::{
     Certificate, NetworkId,
 };
 use hex_literal::hex;
-use pessimistic_proof::local_exit_tree;
-use pessimistic_proof::local_state::LocalNetworkState;
-use pessimistic_proof::nullifier_tree::NullifierTree;
-use pessimistic_proof::unified_bridge::bridge_exit::BridgeExit;
-use pessimistic_proof::unified_bridge::bridge_exit::TokenInfo;
-use pessimistic_proof::{keccak::Keccak256Hasher, local_balance_tree::LocalBalanceTree};
+use pessimistic_proof::{
+    keccak::Keccak256Hasher,
+    local_balance_tree::LocalBalanceTree,
+    local_exit_tree,
+    local_state::LocalNetworkState,
+    nullifier_tree::NullifierTree,
+    unified_bridge::{BridgeExit, TokenInfo},
+};
 
 use crate::{
     event_data::{load_json_data_file, parse_json_file, DepositEventData},

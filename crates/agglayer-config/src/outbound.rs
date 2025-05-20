@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 /// Outbound configuration.

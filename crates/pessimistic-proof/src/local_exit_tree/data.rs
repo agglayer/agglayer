@@ -2,7 +2,7 @@ use agglayer_primitives::keccak::Hasher;
 use agglayer_tries::utils::empty_hash_at_height;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
-use unified_bridge::local_exit_tree::{proof::LETMerkleProof, LocalExitTreeError};
+use unified_bridge::{LETMerkleProof, LocalExitTreeError};
 
 /// Represents a local exit tree as defined by the LxLy bridge.
 #[serde_as]
