@@ -84,6 +84,17 @@ pub struct SignatureCommitmentValues {
 }
 
 impl SignatureCommitmentValues {
+    pub fn aggchain_proof_commitment(&self, aggchain_params: &Digest) -> Digest {
+        keccak256_combine([
+            self.new_local_exit_root.as_slice(),
+            self.commit_imported_bridge_exits
+                .commitment(CommitmentVersion::V3)
+                .as_slice(),
+            self.height.to_le_bytes().as_slice(),
+            aggchain_params.as_slice(),
+        ])
+    }
+
     /// Returns the expected signed commitment for the provided version.
     #[inline]
     pub fn commitment(&self, version: CommitmentVersion) -> Digest {

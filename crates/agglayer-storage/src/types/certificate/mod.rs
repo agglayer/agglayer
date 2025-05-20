@@ -199,6 +199,7 @@ pub enum AggchainDataV1<'a> {
     Generic {
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
+        signature: Cow<'a, Box<Signature>>,
     },
 }
 
@@ -211,10 +212,11 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
             AggchainData::Generic {
                 proof,
                 aggchain_params,
-                signature: _, // TODO: SIGNATURES ARE NOT IMPLEMENTED YET
+                signature,
             } => Self::Generic {
                 proof: Cow::Borrowed(proof),
                 aggchain_params: *aggchain_params,
+                signature: Cow::Borrowed(signature),
             },
         }
     }
@@ -227,10 +229,11 @@ impl From<AggchainDataV1<'_>> for AggchainData {
             AggchainDataV1::Generic {
                 proof,
                 aggchain_params,
+                signature,
             } => Self::Generic {
                 proof: proof.into_owned(),
                 aggchain_params,
-                signature: Box::new(Signature::new(Default::default(), Default::default(), Default::default())), // TODO: SIGNATURES ARE NOT IMPLEMENTED YET
+                signature: signature.into_owned(),
             },
         }
     }

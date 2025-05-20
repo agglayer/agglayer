@@ -455,7 +455,18 @@ impl Certificate {
                     .recover_address_from_prehash(&B256::new(combined_hash.0))
                     .map(Some)
             }
-            _ => Ok(None),
+            AggchainData::Generic {
+                ref signature,
+                aggchain_params,
+                ..
+            } => {
+                let commitment = SignatureCommitmentValues::from(self)
+                    .aggchain_proof_commitment(&aggchain_params);
+
+                signature
+                    .recover_address_from_prehash(&B256::new(commitment.0))
+                    .map(Some)
+            }
         }
     }
 }
