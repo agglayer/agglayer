@@ -31,7 +31,7 @@ checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 [[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.5.0#6e51ba8ede65c8ffb8d341628cb94766fc5af298"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -44,7 +44,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.5.0#6e51ba8ede65c8ffb8d341628cb94766fc5af298"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
 dependencies = [
  "agglayer-primitives",
  "serde",
@@ -3529,7 +3529,7 @@ dependencies = [
 
 [[package]]
 name = "pessimistic-proof-program"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "bincode",
  "pessimistic-proof-core",
@@ -5891,7 +5891,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.5.0#6e51ba8ede65c8ffb8d341628cb94766fc5af298"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",
