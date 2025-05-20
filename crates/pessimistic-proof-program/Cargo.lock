@@ -3460,7 +3460,7 @@ dependencies = [
 
 [[package]]
 name = "pessimistic-proof-program"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "bincode",
  "pessimistic-proof-core",
