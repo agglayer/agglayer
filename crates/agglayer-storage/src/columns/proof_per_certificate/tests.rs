@@ -59,6 +59,7 @@ impl From<SP1ProofWithPublicValuesV3> for SP1ProofWithPublicValues {
             proof: v3.proof,
             public_values: v3.public_values,
             sp1_version: v3.sp1_version,
+            tee_proof: None, // We do not care about TEE in tests
         }
     }
 }

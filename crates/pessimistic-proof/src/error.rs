@@ -5,16 +5,24 @@ use sp1_sdk::SP1VerificationError;
 pub enum ProofVerificationError {
     #[error("Version mismatch: {0}")]
     VersionMismatch(String),
+
     #[error("Core machine verification error: {0}")]
     Core(String),
+
     #[error("Recursion verification error: {0}")]
     Recursion(String),
+
     #[error("Plonk verification error: {0}")]
     Plonk(String),
+
     #[error("Groth16 verification error: {0}")]
     Groth16(String),
+
     #[error("Invalid public values")]
     InvalidPublicValues,
+
+    #[error("Other error: {0}")]
+    Other(String),
 }
 
 impl From<SP1VerificationError> for ProofVerificationError {
@@ -34,6 +42,7 @@ impl From<SP1VerificationError> for ProofVerificationError {
             SP1VerificationError::InvalidPublicValues => {
                 ProofVerificationError::InvalidPublicValues
             }
+            SP1VerificationError::Other(error) => ProofVerificationError::Other(error.to_string()),
         }
     }
 }

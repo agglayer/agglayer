@@ -13,7 +13,7 @@ use alloy::{
         fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
         Identity, Provider, ProviderBuilder, RootProvider, WsConnect,
     },
-    pubsub::{ConnectionHandle, PubSubConnect, PubSubFrontend},
+    pubsub::{ConnectionHandle, PubSubConnect},
     rpc::client::ClientBuilder,
     transports::{impl_future, TransportErrorKind, TransportResult},
 };
@@ -32,8 +32,7 @@ type BlockProvider = FillProvider<
         Identity,
         JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
     >,
-    RootProvider<PubSubFrontend>,
-    PubSubFrontend,
+    RootProvider,
     Ethereum,
 >;
 
@@ -57,7 +56,7 @@ pub struct BlockClock<P> {
 #[async_trait::async_trait]
 impl<P> Clock for BlockClock<P>
 where
-    P: Provider<PubSubFrontend> + 'static,
+    P: Provider + 'static,
 {
     async fn spawn(mut self, cancellation_token: CancellationToken) -> Result<ClockRef, Error> {
         let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
@@ -115,9 +114,7 @@ impl BlockClock<BlockProvider> {
     ) -> Result<Self, BlockClockError> {
         let ws = WsConnectWithRetries(ws, Some(max_reconnection_elapsed_time));
         let client = ClientBuilder::default().pubsub(ws).await?;
-        let provider = ProviderBuilder::new()
-            .with_recommended_fillers()
-            .on_client(client);
+        let provider = ProviderBuilder::new().on_client(client);
 
         Ok(Self::new(provider, genesis_block, epoch_duration))
     }
@@ -145,7 +142,7 @@ pub enum BlockClockError {
 
 impl<P> BlockClock<P>
 where
-    P: Provider<PubSubFrontend> + 'static,
+    P: Provider + 'static,
 {
     /// Run the Clock task.
     async fn run(

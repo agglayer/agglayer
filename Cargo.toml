@@ -44,30 +44,30 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "c2f29f221e7500fc7ad132c72ba9a8f6adb0a8f0" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "c2f29f221e7500fc7ad132c72ba9a8f6adb0a8f0" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", rev = "c2f29f221e7500fc7ad132c72ba9a8f6adb0a8f0" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "c2f29f221e7500fc7ad132c72ba9a8f6adb0a8f0" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", rev = "c2f29f221e7500fc7ad132c72ba9a8f6adb0a8f0" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git", tag = "v0.5.0" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", tag = "v0.5.0" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", tag = "v0.5.0" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", tag = "v0.5.0" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.5.0" }
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "e5fb77b7aaa25c0e2dfd39c7142ba53584ed7a10" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "e5fb77b7aaa25c0e2dfd39c7142ba53584ed7a10" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "e5fb77b7aaa25c0e2dfd39c7142ba53584ed7a10" }
-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "e5fb77b7aaa25c0e2dfd39c7142ba53584ed7a10" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
+prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
 #       It is specified at the top of scripts/make/Makefile.elf.toml.
-sp1-core-machine = "=4.1.4"
-sp1-sdk = "=4.1.4"
-sp1-primitives = "=4.1.4"
-sp1-prover = "=4.1.4"
-sp1-zkvm = { version = "=4.1.4", default-features = false }
+sp1-core-machine = "=4.2.1"
+sp1-sdk = "=4.2.1"
+sp1-primitives = "=4.2.1"
+sp1-prover = "=4.2.1"
+sp1-zkvm = { version = "=4.2.1", default-features = false }
 
 # Core dependencies
-alloy = { version = "0.8.1", features = ["full"] }
-alloy-primitives = { version = "0.8.20", features = ["serde", "k256"] }
+alloy = { version = "0.14.0", features = ["full"] }
+alloy-primitives = { version = "1.1", features = ["serde", "k256"] }
 anyhow = "1.0"
 arbitrary = { version = "1.4", features = ["derive"] }
 arc-swap = "1.7"
