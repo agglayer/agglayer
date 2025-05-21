@@ -19,7 +19,7 @@ use agglayer_storage::{
 };
 use agglayer_types::{CertificateId, Height, NetworkId};
 use arc_swap::ArcSwap;
-use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt};
+use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt, TryFutureExt};
 use network_task::{NetworkTask, NewCertificate};
 use tokio::{
     sync::mpsc::{self, Receiver},
@@ -45,8 +45,9 @@ const MAX_POLL_READS: usize = 1_000;
 pub type EpochPackingTasks =
     FuturesUnordered<Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'static>>>;
 
-pub type NetworkTasks =
-    FuturesUnordered<Pin<Box<dyn Future<Output = Result<NetworkId, Error>> + Send + 'static>>>;
+pub type NetworkTasks = FuturesUnordered<
+    Pin<Box<dyn Future<Output = Result<NetworkId, (NetworkId, Error)>> + Send + 'static>>,
+>;
 
 pub type SettlementContext = (NetworkId, CertificateId);
 
@@ -269,8 +270,11 @@ where
             receiver,
         )?;
 
-        self.network_tasks
-            .push(task.run(self.cancellation_token.clone()).boxed());
+        let task_future = task
+            .run(self.cancellation_token.clone())
+            .map_err(move |err| (network_id, err))
+            .boxed();
+        self.network_tasks.push(task_future);
 
         self.spawned_network_tasks.insert(network_id, sender);
 
@@ -398,12 +402,9 @@ where
                 _ = self.spawned_network_tasks.remove(&network_id);
             }
 
-            Poll::Ready(Some(Err(error))) => {
-                warn!(
-                    "Network task Critical error during p-proof generation: {:?}",
-                    error
-                );
-                // TODO: Need to find a way to remove the task
+            Poll::Ready(Some(Err((network_id, error)))) => {
+                warn!("Network task for rollup {network_id} failed: {error:?}");
+                _ = self.spawned_network_tasks.remove(&network_id);
             }
             Poll::Ready(None) => {}
             Poll::Pending => {}
