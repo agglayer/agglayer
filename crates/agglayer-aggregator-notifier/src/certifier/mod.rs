@@ -165,10 +165,12 @@ where
 
         // SP1 native execution which includes the aggchain proof stark verification
         let (pv_sp1_execute, report) = {
+            // Do not verify the deferred proof if we are in mock mode
+            let deferred_proof_verification = !self.config.mock_verifier;
             let (pv, report) = self
                 .verifier
                 .execute(ELF, &stdin.clone())
-                .deferred_proof_verification(!self.config.mock_verifier)
+                .deferred_proof_verification(deferred_proof_verification)
                 .run()
                 .map_err(CertificationError::Sp1ExecuteFailed)?;
 
