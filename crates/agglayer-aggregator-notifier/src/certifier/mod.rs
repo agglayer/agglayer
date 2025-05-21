@@ -168,6 +168,7 @@ where
             let (pv, report) = self
                 .verifier
                 .execute(ELF, &stdin.clone())
+                .deferred_proof_verification(!self.config.mock_verifier)
                 .run()
                 .map_err(CertificationError::Sp1ExecuteFailed)?;
 
