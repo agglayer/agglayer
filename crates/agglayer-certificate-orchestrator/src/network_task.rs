@@ -10,7 +10,7 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
     Height, LocalNetworkStateData, NetworkId,
 };
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
@@ -24,6 +24,22 @@ mod tests;
 pub(crate) struct NewCertificate {
     pub(crate) certificate_id: CertificateId,
     pub(crate) height: Height,
+}
+
+pub enum NetworkTaskMessage {
+    GetLocalNetworkStateAtHeight {
+        height: Height,
+        response: oneshot::Sender<Box<LocalNetworkStateData>>,
+    },
+    CertificateProven {
+        height: Height,
+        certificate_id: CertificateId,
+        new_state: Box<LocalNetworkStateData>,
+    },
+    CertificateSettled {
+        height: Height,
+        certificate_id: CertificateId,
+    }
 }
 
 /// Network task that is responsible to certify the certificates for a network.

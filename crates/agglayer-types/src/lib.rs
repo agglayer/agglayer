@@ -177,7 +177,7 @@ pub enum CertificateStatusError {
     #[error("Last pessimistic root not found for network: {0}")]
     LastPessimisticRootNotFound(NetworkId),
 
-    #[error("Internal error")]
+    #[error("Internal error: {0}")]
     InternalError(String),
 
     #[error("Settlement error: {0}")]
@@ -240,6 +240,7 @@ pub enum CertificateStatus {
     /// Note that a certificate can be InError in agglayer but settled on L1,
     /// eg. if there was an error in agglayer but the certificate was valid
     /// and settled on L1.
+    // TODO: SHOULD BE A SEPARATE PR: MAKING A BOX HERE WOULD DIVIDE BY ~10 THE SIZE OF CERTIFICATESTATUS
     InError { error: CertificateStatusError },
 
     /// Transaction to settle the certificate was completed successfully on L1.
@@ -255,6 +256,32 @@ impl std::fmt::Display for CertificateStatus {
             CertificateStatus::InError { error } => write!(f, "InError: {}", error),
             CertificateStatus::Settled => write!(f, "Settled"),
         }
+    }
+}
+
+impl PartialOrd for CertificateStatus {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl CertificateStatus {
+    // Only ever used as implementation for Ord, feel free to change it
+    fn as_order_number(&self) -> usize {
+        use CertificateStatus::*;
+        match self {
+            Pending => 0,
+            Proven => 1,
+            Candidate => 2,
+            Settled => 3,
+            InError { .. } => 4,
+        }
+    }
+}
+
+impl Ord for CertificateStatus {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_order_number().cmp(&other.as_order_number())
     }
 }
 
