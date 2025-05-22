@@ -118,7 +118,6 @@ dependencies = [
  "agglayer-clock",
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-prover-types",
  "agglayer-storage",
  "agglayer-test-suite",
  "agglayer-types",
