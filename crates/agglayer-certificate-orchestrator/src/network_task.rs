@@ -226,8 +226,13 @@ where
         // Get the certificate the pending certificate for the network at the height
         let certificate = if let Some(certificate) = self
             .pending_store
-            .get_certificate(self.network_id, *next_expected_height)?
-        {
+            .get_certificate(self.network_id, *next_expected_height)
+            .inspect_err(|err| {
+                error!(
+                    "Cannot fetch pending certificate for {} at height {}: {}",
+                    self.network_id, *next_expected_height, err
+                )
+            })? {
             certificate
         } else {
             debug!(
