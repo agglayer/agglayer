@@ -111,6 +111,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-bincode"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
+dependencies = [
+ "bincode",
+ "serde",
+]
+
+[[package]]
 name = "agglayer-certificate-orchestrator"
 version = "0.1.0"
 dependencies = [
@@ -289,7 +298,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#18eb144cc9902c4028227976f9c8f7e78b923d76"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
 dependencies = [
  "agglayer-interop-grpc-types 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
  "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
@@ -313,7 +322,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#18eb144cc9902c4028227976f9c8f7e78b923d76"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
 dependencies = [
  "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
  "bincode",
@@ -348,8 +357,9 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#18eb144cc9902c4028227976f9c8f7e78b923d76"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
 dependencies = [
+ "agglayer-bincode",
  "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
  "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
  "arbitrary",
@@ -504,7 +514,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#18eb144cc9902c4028227976f9c8f7e78b923d76"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
 dependencies = [
  "alloy-primitives 1.1.2",
  "arbitrary",
@@ -719,7 +729,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#18eb144cc9902c4028227976f9c8f7e78b923d76"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
 dependencies = [
  "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
  "serde",
@@ -6867,7 +6877,7 @@ dependencies = [
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
+ "agglayer-bincode",
  "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
  "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
  "alloy-primitives 1.1.2",
@@ -10465,7 +10475,7 @@ dependencies = [
 [[package]]
 name = "unified-bridge"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#18eb144cc9902c4028227976f9c8f7e78b923d76"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
 dependencies = [
  "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
  "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode)",
