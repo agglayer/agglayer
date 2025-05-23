@@ -1,4 +1,4 @@
-use agglayer_types::{primitives::SignatureError, CertificateId, EpochConfiguration};
+use agglayer_types::{bincode, primitives::SignatureError, CertificateId, EpochConfiguration};
 use prost::Message;
 
 use super::Error;

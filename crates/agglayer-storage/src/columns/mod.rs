@@ -1,4 +1,4 @@
-use bincode::{DefaultOptions, Options};
+use agglayer_types::bincode;
 use serde::{de::DeserializeOwned, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -16,10 +16,8 @@ pub enum CodecError {
     BadCertificateVersion { version: u8 },
 }
 
-pub fn default_bincode_options() -> impl bincode::Options {
-    DefaultOptions::new()
-        .with_big_endian()
-        .with_fixint_encoding()
+pub fn bincode_codec() -> bincode::Codec<impl bincode::Options>  {
+    bincode::default()
 }
 
 // State related CFs
@@ -56,11 +54,11 @@ pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
 
 pub trait Codec: Sized + Serialize + DeserializeOwned {
     fn encode(&self) -> Result<Vec<u8>, CodecError> {
-        Ok(default_bincode_options().serialize(self)?)
+        Ok(bincode_codec().serialize(self)?)
     }
 
     fn decode(buf: &[u8]) -> Result<Self, CodecError> {
-        Ok(default_bincode_options().deserialize(buf)?)
+        Ok(bincode_codec().deserialize(buf)?)
     }
 }
 
