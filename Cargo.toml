@@ -44,6 +44,7 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
+agglayer-bincode = { git = "https://github.com/agglayer/interop.git", branch = "refactor/bincode" }
 agglayer-interop = { git = "https://github.com/agglayer/interop.git", branch = "refactor/bincode" }
 agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", branch = "refactor/bincode" }
 agglayer-primitives = { git = "https://github.com/agglayer/interop.git", branch = "refactor/bincode" }

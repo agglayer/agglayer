@@ -1,4 +1,4 @@
-use agglayer_interop_types::bincode;
+use agglayer_bincode as bincode;
 use agglayer_primitives::{keccak::Keccak256Hasher, Address, Digest, Signature, B256};
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
