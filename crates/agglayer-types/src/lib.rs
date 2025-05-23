@@ -7,7 +7,7 @@ use agglayer_interop_types::{
 };
 pub use agglayer_primitives::Digest;
 use agglayer_primitives::{keccak::Keccak256Hasher, FromBool, Hashable, SignatureError};
-use agglayer_tries::{error::SmtError, smt::Smt};
+use agglayer_tries::{error::SmtError, roots::LocalExitRoot, smt::Smt};
 use pessimistic_proof::{
     core::{
         self,
@@ -303,15 +303,15 @@ impl Default for Certificate {
     fn default() -> Self {
         let network_id = NetworkId::ETH_L1;
         let wallet = Self::wallet_for_test(network_id);
-        let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
+        let local_exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
         let height: Height = 0u64;
         let (_new_local_exit_root, signature, _signer) =
-            compute_signature_info(exit_root, &[], &wallet, height);
+            compute_signature_info(local_exit_root, &[], &wallet, height);
         Self {
             network_id,
             height,
-            prev_local_exit_root: exit_root,
-            new_local_exit_root: exit_root,
+            prev_local_exit_root: local_exit_root,
+            new_local_exit_root: local_exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
             aggchain_data: AggchainData::ECDSA { signature },
@@ -324,7 +324,7 @@ impl Default for Certificate {
 
 #[cfg(any(test, feature = "testutils"))]
 pub fn compute_signature_info(
-    new_local_exit_root: Digest,
+    new_local_exit_root: LocalExitRoot,
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &ethers::signers::LocalWallet,
     height: Height,

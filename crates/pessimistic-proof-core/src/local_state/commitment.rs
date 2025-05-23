@@ -3,6 +3,7 @@
 //! The pessimistic proof has the "pessimistic root" as part of its public
 //! inputs. Some logic in this file handles the migration on its computation.
 use agglayer_primitives::{keccak::keccak256_combine, Digest};
+use agglayer_tries::roots::{BalanceRoot, LocalExitRoot, NullifierRoot, TreeRoot};
 use serde::{Deserialize, Serialize};
 use unified_bridge::{CommitmentVersion, ImportedBridgeExitCommitmentValues, NetworkId};
 
@@ -11,17 +12,17 @@ use crate::{proof::EMPTY_PP_ROOT_V2, ProofError};
 /// The state commitment of one [`super::NetworkState`].
 #[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StateCommitment {
-    pub exit_root: Digest,
+    pub exit_root: LocalExitRoot,
     pub ler_leaf_count: u32,
-    pub balance_root: Digest,
-    pub nullifier_root: Digest,
+    pub balance_root: BalanceRoot,
+    pub nullifier_root: NullifierRoot,
 }
 
 /// The parameters which compose the pessimistic root.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PessimisticRoot {
-    pub balance_root: Digest,
-    pub nullifier_root: Digest,
+    pub balance_root: BalanceRoot,
+    pub nullifier_root: NullifierRoot,
     pub ler_leaf_count: u32,
     pub height: u64,
     pub origin_network: NetworkId,
@@ -78,7 +79,7 @@ impl PessimisticRoot {
 
 /// The values which compose the signature.
 pub struct SignatureCommitmentValues {
-    pub new_local_exit_root: Digest,
+    pub new_local_exit_root: LocalExitRoot,
     pub commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues,
     pub height: u64,
 }
