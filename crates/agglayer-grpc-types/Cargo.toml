@@ -6,7 +6,7 @@ license.workspace = true
 
 [features]
 default = []
-compat = ["dep:agglayer-types", "dep:bincode", "dep:thiserror"]
+compat = ["dep:agglayer-types", "dep:thiserror"]
 
 [lints]
 workspace = true
@@ -15,7 +15,6 @@ workspace = true
 agglayer-types = { workspace = true, optional = true }
 agglayer-interop = { workspace = true, features = ["grpc-compat"] }
 
-bincode = { workspace = true, optional = true }
 hex.workspace = true
 pbjson = "0.7.0"
 prost.workspace = true

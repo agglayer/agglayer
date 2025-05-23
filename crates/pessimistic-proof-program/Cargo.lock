@@ -29,9 +29,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
+name = "agglayer-interop-types"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#18eb144cc9902c4028227976f9c8f7e78b923d76"
+dependencies = [
+ "agglayer-primitives",
+ "agglayer-tries",
+ "bincode",
+ "educe",
+ "hex",
+ "rand 0.9.0",
+ "serde",
+ "serde_with",
+ "sp1-core-machine",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror 2.0.12",
+ "unified-bridge",
+]
+
+[[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#18eb144cc9902c4028227976f9c8f7e78b923d76"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -44,7 +64,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#18eb144cc9902c4028227976f9c8f7e78b923d76"
 dependencies = [
  "agglayer-primitives",
  "serde",
@@ -1665,6 +1685,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "educe"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d7bc049e1bd8cdeb31b68bbd586a9464ecf9f3944af3958a7a9d0f8b9799417"
+dependencies = [
+ "enum-ordinalize",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1722,6 +1754,26 @@ name = "enum-map-derive"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f282cfdfe92516eb26c2af8589c274c7c17681f5ecc03c18255fe741c6aa64eb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
+name = "enum-ordinalize"
+version = "4.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea0dcfa4e54eeb516fe454635a95753ddd39acda650ce703031c6973e315dd5"
+dependencies = [
+ "enum-ordinalize-derive",
+]
+
+[[package]]
+name = "enum-ordinalize-derive"
+version = "4.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d28318a75d4aead5c4db25382e8ef717932d0346600cacae6357eb5941bc5ff"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3507,10 +3559,10 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
+ "agglayer-interop-types",
  "agglayer-primitives",
  "agglayer-tries",
  "alloy-primitives",
- "bincode",
  "hex",
  "hex-literal 0.4.1",
  "semver 1.0.26",
@@ -3531,7 +3583,6 @@ dependencies = [
 name = "pessimistic-proof-program"
 version = "2.0.0"
 dependencies = [
- "bincode",
  "pessimistic-proof-core",
  "sp1-cli",
  "sp1-zkvm",
@@ -5891,7 +5942,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#18eb144cc9902c4028227976f9c8f7e78b923d76"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",
