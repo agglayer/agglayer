@@ -40,7 +40,7 @@ fn can_parse_value() {
 #[derive(Deserialize)]
 struct SP1ProofWithPublicValuesV3 {
     pub proof: sp1_sdk::SP1Proof,
-    #[allow(unused)]
+    #[allow(unused, reason = "part of the serialization's contract")]
     pub stdin: sp1_sdk::SP1Stdin,
     pub public_values: sp1_sdk::SP1PublicValues,
     pub sp1_version: String,
