@@ -244,8 +244,7 @@ impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
                 .storage
                 .path_contextualized(&self.path.canonicalize().map_err(|error| {
                     serde::de::Error::custom(format!(
-                        "Unable to canonicalize the storage path: {}",
-                        error
+                        "Unable to canonicalize the storage path: {error}"
                     ))
                 })?);
 

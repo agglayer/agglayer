@@ -209,11 +209,7 @@ fn adding_multiple_certificates(
         assert!(
             expected_result(
                 store.add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
-            ),
-            "{}:{} failed to pass the test",
-            network,
-            height
-        );
+            ), "{network}:{height} failed to pass the test");
 
         height += 1;
     }
@@ -264,10 +260,7 @@ fn adding_certificate_and_restart() {
         store
             .add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
             .is_ok(),
-        "{}:{} failed to pass the test",
-        network,
-        height
-    );
+        "{network}:{height} failed to pass the test");
 
     drop(store);
 
@@ -298,10 +291,7 @@ fn adding_certificate_and_restart() {
         store
             .add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
             .is_ok(),
-        "{}:{} failed to pass the test",
-        network,
-        height
-    );
+        "{network}:{height} failed to pass the test");
 
     let first = store.get_certificate_at_index(0).unwrap().unwrap();
     assert!(

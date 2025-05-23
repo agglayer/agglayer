@@ -354,7 +354,7 @@ where
         rate_guard: agglayer_rate_limiting::SendTxSlotGuard,
     ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
         let hex_hash = signed_tx.hash();
-        let hash = format!("{:?}", hex_hash);
+        let hash = format!("{hex_hash:?}");
 
         let f = self
             .build_verify_batches_trusted_aggregator_call(signed_tx)
@@ -362,7 +362,7 @@ where
             .map_err(SettlementError::ContractError)?;
 
         if let Ok(Some(tx)) = self.check_tx_status(hex_hash).await {
-            warn!(hash, "Transaction already settled: {:?}", tx);
+            warn!(hash, "Transaction already settled: {tx:?}");
         }
 
         // We submit the transaction in a separate task so we can observe the

@@ -87,8 +87,7 @@ impl TimeClock {
         ) {
             let error_message = format!(
                 "The current_epoch has already been modified. Shutting down the Clock task. \
-                 Stored value: {}",
-                stored_value
+                 Stored value: {stored_value}"
             );
             #[cfg(not(test))]
             {

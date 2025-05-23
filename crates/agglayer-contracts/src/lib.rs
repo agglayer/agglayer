@@ -235,8 +235,7 @@ mod tests {
 
         assert_eq!(
             default_leaf_count, expected_leaf_count,
-            "default: {}, expected: {}",
-            default_leaf_count, expected_leaf_count,
+            "default: {default_leaf_count}, expected: {expected_leaf_count}"
         );
 
         // check that the awaiting for finalization is done as expected

@@ -328,10 +328,7 @@ where
             match error {
                 agglayer_storage::error::Error::AlreadyPacked(_) => {}
                 agglayer_storage::error::Error::DBError(error) => {
-                    let msg = format!(
-                        "CRITICAL error during packing of epoch {}: {}",
-                        epoch, error
-                    );
+                    let msg = format!("CRITICAL error during packing of epoch {epoch}: {error}",);
                     error!(msg);
                     self.cancellation_token.cancel();
                     return Err(Error::InternalError(msg));
@@ -339,10 +336,8 @@ where
 
                 // Other errors shouldn't happen
                 error => {
-                    let msg = format!(
-                        "CRITICAL error: Failed to pack the epoch {}: {:?}",
-                        epoch, error
-                    );
+                    let msg =
+                        format!("CRITICAL error: Failed to pack the epoch {epoch}: {error:?}");
                     error!(msg);
                     return Err(Error::InternalError(msg));
                 }
@@ -359,8 +354,7 @@ where
             Ok(new_epoch) => self.current_epoch.store(Arc::new(new_epoch)),
             Err(error) => {
                 let msg = format!(
-                    "CRITICAL error: Failed to open the next epoch {}: {:?}",
-                    next_epoch, error
+                    "CRITICAL error: Failed to open the next epoch {next_epoch}: {error:?}",
                 );
 
                 error!(msg);

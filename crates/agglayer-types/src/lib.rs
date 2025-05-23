@@ -253,7 +253,7 @@ impl std::fmt::Display for CertificateStatus {
             CertificateStatus::Pending => write!(f, "Pending"),
             CertificateStatus::Proven => write!(f, "Proven"),
             CertificateStatus::Candidate => write!(f, "Candidate"),
-            CertificateStatus::InError { error } => write!(f, "InError: {}", error),
+            CertificateStatus::InError { error } => write!(f, "InError: {error}"),
             CertificateStatus::Settled => write!(f, "Settled"),
         }
     }

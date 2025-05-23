@@ -128,8 +128,7 @@ where
                 certificate
             } else {
                 return Err(Error::InternalError(format!(
-                    "Unable to find the certificate {} in pending store",
-                    certificate_id
+                    "Unable to find the certificate {certificate_id} in pending store"
                 )));
             };
 
@@ -356,9 +355,8 @@ where
                     match related_epoch.add_certificate(certificate_id, ExecutionMode::Default) {
                         Err(error) if max_retries == 0 => {
                             let error_msg = format!(
-                                "CRITICAL: Failed to add the certificate {} to the epoch after \
-                                 multiple retries: {}",
-                                certificate_id, error
+                                "CRITICAL: Failed to add the certificate {certificate_id} to the \
+                                 epoch after multiple retries: {error}"
                             );
                             error!(hash = certificate_id.to_string(), error_msg);
 

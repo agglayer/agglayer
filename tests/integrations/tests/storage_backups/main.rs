@@ -348,7 +348,7 @@ async fn restore_at_particular_level(#[case] state: Forest) {
         .request("interop_getCertificateHeader", rpc_params![certificate_id2])
         .await;
 
-    let expected_message = format!("Resource not found: Certificate({:#})", certificate_id2);
+    let expected_message = format!("Resource not found: Certificate({certificate_id2:#})");
 
     assert!(
         matches!(error.unwrap_err(), jsonrpsee::core::ClientError::Call(obj) if obj.message() == expected_message)
