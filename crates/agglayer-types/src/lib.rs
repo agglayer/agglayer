@@ -324,7 +324,7 @@ impl Default for Certificate {
 
 #[cfg(any(test, feature = "testutils"))]
 pub fn compute_signature_info(
-    new_local_exit_root: Digest,
+    new_local_exit_root: ExitRoot,
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &ethers::signers::LocalWallet,
     height: Height,

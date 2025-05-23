@@ -523,6 +523,19 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Ftyped-tree-roots#10ebfeacea710a0308d12c2b6ef4c88c43e6c4f6"
+dependencies = [
+ "alloy-primitives 1.1.2",
+ "byteorder",
+ "hex",
+ "k256",
+ "serde",
+ "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "agglayer-primitives"
+version = "0.1.0"
 source = "git+https://github.com/agglayer/interop.git#857a8514ca5d55ee5eae6163826088b9a5b13697"
 dependencies = [
  "alloy-primitives 0.8.25",
@@ -727,6 +740,17 @@ version = "0.1.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
 dependencies = [
  "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "agglayer-tries"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Ftyped-tree-roots#10ebfeacea710a0308d12c2b6ef4c88c43e6c4f6"
+dependencies = [
+ "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Ftyped-tree-roots)",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -6875,7 +6899,7 @@ name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Ftyped-tree-roots)",
  "alloy-primitives 1.1.2",
  "arbitrary",
  "bincode",

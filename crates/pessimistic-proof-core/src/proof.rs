@@ -1,4 +1,5 @@
 use agglayer_primitives::{keccak::Keccak256Hasher, Address, Digest, Signature, B256};
+use agglayer_tries::roots::ExitRoot;
 pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ use crate::{
         commitment::{PessimisticRoot, SignatureCommitmentValues, StateCommitment},
         NetworkState,
     },
-    multi_batch_header::MultiBatchHeader,
+    multi_batch_header::MultiBatchHeader
 };
 
 /// Refers to the commitment on the imported bridge exits involved in the
@@ -114,7 +115,7 @@ pub enum ProofError {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PessimisticProofOutput {
     /// The previous local exit root.
-    pub prev_local_exit_root: Digest,
+    pub prev_local_exit_root: ExitRoot,
     /// The previous pessimistic root.
     pub prev_pessimistic_root: Digest,
     /// The l1 info root against which we prove the inclusion of the imported
@@ -125,7 +126,7 @@ pub struct PessimisticProofOutput {
     /// The aggchain hash.
     pub aggchain_hash: Digest,
     /// The new local exit root.
-    pub new_local_exit_root: Digest,
+    pub new_local_exit_root: ExitRoot,
     /// The new pessimistic root.
     pub new_pessimistic_root: Digest,
 }
@@ -138,9 +139,9 @@ impl PessimisticProofOutput {
     }
 }
 
-pub const EMPTY_LER: Digest = Digest(hex!(
+pub const EMPTY_LER: ExitRoot = ExitRoot::new(Digest(hex!(
     "27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"
-));
+)));
 
 pub const EMPTY_PP_ROOT_V2: Digest = Digest(hex!(
     "c89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184"
@@ -195,9 +196,9 @@ pub fn generate_pessimistic_proof(
 // NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
 // empty roots of the different trees involved. Therefore, we do
 // one mapping of empty tree hash <> 0x00..0 on the public inputs.
-pub fn zero_if_empty_exit_root(root: Digest) -> Digest {
+pub fn zero_if_empty_exit_root(root: ExitRoot) -> ExitRoot {
     if root == EMPTY_LER {
-        Digest::default()
+        ExitRoot::default()
     } else {
         root
     }

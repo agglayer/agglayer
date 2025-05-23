@@ -74,6 +74,7 @@ mod tests {
     use pessimistic_proof_core::{
         keccak::keccak256_combine,
         proof::{EMPTY_LER, EMPTY_PP_ROOT_V2},
+        roots::ExitRoot,
     };
 
     use crate::local_state::LocalNetworkState;
@@ -82,7 +83,7 @@ mod tests {
     fn empty_tree_roots() {
         let empty_state = LocalNetworkState::default();
 
-        let ler = empty_state.exit_tree.get_root();
+        let ler = ExitRoot::new(empty_state.exit_tree.get_root());
         let ppr = keccak256_combine([
             empty_state.balance_tree.root.as_slice(),
             empty_state.nullifier_tree.root.as_slice(),

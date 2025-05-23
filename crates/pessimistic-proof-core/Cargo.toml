@@ -16,7 +16,7 @@ testutils = [
 
 [dependencies]
 agglayer-primitives.workspace = true
-agglayer-tries.workspace = true
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", branch = "feat/typed-tree-roots" }
 unified-bridge.workspace = true
 
 alloy-primitives.workspace = true
