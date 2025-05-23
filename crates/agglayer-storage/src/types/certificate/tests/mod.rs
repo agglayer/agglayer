@@ -14,7 +14,7 @@ use crate::columns::Codec;
 #[case(258.into(), [0, 0, 1, 2])]
 #[case(0x12345678.into(), [0x12, 0x34, 0x56, 0x78])]
 fn network_id_encoding(#[case] network_id: NetworkId, #[case] expected: [u8; 4]) {
-    let encoded = default_bincode_options().serialize(&network_id).unwrap();
+    let encoded = bincode_codec().serialize(&network_id).unwrap();
     assert_eq!(encoded, expected);
     assert_eq!(network_id.to_u32().to_be_bytes(), expected);
 }
@@ -181,7 +181,7 @@ impl CertificateV1<'_> {
 #[case(CertificateV0::test0().with_network_id(0x123456.into()), &[0x00, 0x12, 0x34, 0x56])]
 #[case(CertificateV1::test0(), &[0x01, 0x00, 0x00, 0x00, 57])]
 fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
-    let bytes = default_bincode_options().serialize(&cert).unwrap();
+    let bytes = bincode_codec().serialize(&cert).unwrap();
     assert!(bytes.starts_with(start));
 }
 
@@ -191,7 +191,7 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 #[case(CertificateV1::test1())]
 #[case(CertificateV1::from(&Certificate::new_for_test(74.into(), 998)).into_owned())]
 fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
-    let bytes = default_bincode_options().serialize(&orig).unwrap();
+    let bytes = bincode_codec().serialize(&orig).unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();
     let converted: Certificate = orig.into();
 
