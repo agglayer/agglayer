@@ -134,7 +134,7 @@ impl BackupEngine {
             let epochs_opts = rocksdb::backup::BackupEngineOptions::new(
                 self.config
                     .epochs_backup_path
-                    .join(format!("{}", epoch_number)),
+                    .join(format!("{epoch_number}")),
             )?;
 
             match RocksBackupEngine::open(&epochs_opts, &self.env) {

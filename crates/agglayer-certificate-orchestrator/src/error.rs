@@ -135,8 +135,7 @@ impl From<Error> for CertificateStatusError {
             Error::InternalError(error) => CertificateStatusError::InternalError(error),
             Error::UnableToGetVerifierType { network_id, .. } => {
                 CertificateStatusError::InternalError(format!(
-                    "Unable to get verifier type for NetworkId {}",
-                    network_id
+                    "Unable to get verifier type for NetworkId {network_id}"
                 ))
             }
             Error::InvalidCertificateStatus => {

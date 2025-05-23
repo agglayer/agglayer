@@ -23,7 +23,7 @@ async fn healthcheck_method_can_be_called() {
     );
 
     let http_client = Client::builder(TokioExecutor::new()).build_http();
-    let uri = format!("http://{}/health", addr);
+    let uri = format!("http://{addr}/health");
 
     let req = Request::builder()
         .method("GET")

@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
                             .context("Failed to serialize ValidateConfig to TOML")?
                     );
                 }
-                Err(error) => eprintln!("{}", error),
+                Err(error) => eprintln!("{error}"),
             }
         }
         cli::Commands::Vkey => {
@@ -55,7 +55,7 @@ fn main() -> anyhow::Result<()> {
             if let BackupConfig::Enabled { path, .. } = cfg.storage.backup {
                 match agglayer_storage::storage::backup::BackupEngine::list_backups(&path) {
                     Ok(result) => println!("{}", serde_json::to_string(&result).unwrap()),
-                    Err(error) => eprintln!("{}", error),
+                    Err(error) => eprintln!("{error}"),
                 }
             }
         }

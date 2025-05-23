@@ -60,7 +60,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         let path = config
             .storage
             .epochs_db_path
-            .join(format!("{}", epoch_number));
+            .join(format!("{epoch_number}"));
 
         let db = Arc::new(DB::open_cf(&path, epochs_db_cf_definitions())?);
 

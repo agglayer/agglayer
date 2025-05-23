@@ -92,8 +92,8 @@ impl DbKind {
             Self::State => (cfg.storage.state_db_path.clone(), path.join("state")),
             Self::Pending => (cfg.storage.pending_db_path.clone(), path.join("pending")),
             Self::Epoch(epoch_number) => (
-                cfg.storage.epochs_db_path.join(format!("{}", epoch_number)),
-                path.join(format!("epochs/{}", epoch_number)),
+                cfg.storage.epochs_db_path.join(format!("{epoch_number}")),
+                path.join(format!("epochs/{epoch_number}")),
             ),
         }
     }
@@ -108,12 +108,12 @@ impl std::str::FromStr for DbKind {
             "pending" => Ok(DbKind::Pending),
             s => {
                 let Some(epoch) = s.strip_prefix("epoch_") else {
-                    return Err(format!("Unexpected DbKind: {}", s));
+                    return Err(format!("Unexpected DbKind: {s}"));
                 };
 
                 let epoch = epoch
                     .parse::<u64>()
-                    .map_err(|e| format!("Invalid epoch: {}", e))?;
+                    .map_err(|e| format!("Invalid epoch: {e}"))?;
 
                 Ok(DbKind::Epoch(epoch))
             }
@@ -125,8 +125,7 @@ fn parse_db_kind_version(s: &str) -> Result<(DbKind, u32), String> {
     let parts: Vec<&str> = s.split(':').collect();
     if parts.len() != 2 {
         return Err(format!(
-            "Invalid format for argument '{}'. Expected 'name:version'",
-            s
+            "Invalid format for argument '{s}'. Expected 'name:version'"
         ));
     }
 
