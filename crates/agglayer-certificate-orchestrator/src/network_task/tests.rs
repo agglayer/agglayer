@@ -8,15 +8,14 @@ use agglayer_storage::{
     },
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
-use agglayer_types::PessimisticRootInput;
+use agglayer_types::{Certificate, CertificateStatus, PessimisticRootInput};
 use mockall::predicate::{always, eq, in_iter};
 use pessimistic_proof::unified_bridge::CommitmentVersion;
 use rstest::rstest;
 
 use super::*;
 use crate::{
-    epoch_packer::MockEpochPacker,
-    tests::{clock, mocks::MockCertifier},
+    epoch_packer::MockEpochPacker, tests::{clock, mocks::MockCertifier}, CertificationError, CertifierOutput
 };
 
 mod status;
@@ -788,10 +787,7 @@ async fn timeout_certifier() {
             Err(CertificationError::InternalError("TimedOut".to_string()))
         });
 
-    let expected_error = format!(
-        "Internal error happened in the certification process of {}: internal error: TimedOut",
-        certificate_id
-    );
+    let expected_error = String::from("Internal error: TimedOut");
 
     state
         .expect_get_latest_settled_certificate_per_network()

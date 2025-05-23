@@ -7,7 +7,9 @@ use agglayer_storage::{
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use ethers::types::H256;
 use mockall::predicate::{always, eq};
-use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
+use pessimistic_proof::{
+    core::generate_pessimistic_proof, LocalNetworkState, PessimisticProofOutput,
+};
 use rstest::rstest;
 
 use super::*;
@@ -127,7 +129,7 @@ async fn from_pending_to_settle() {
 #[rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(2))]
-async fn from_proven_to_settle() {
+async fn from_proven_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
 
@@ -153,19 +155,14 @@ async fn from_proven_to_settle() {
         .insert_certificate_header(&certificate, CertificateStatus::Proven)
         .expect("Failed to insert certificate header");
 
-    let pending_store = storage.pending.clone();
     certifier
-        .expect_certify()
+        .expect_witness_generation()
         .times(1)
-        .with(always(), eq(network_id), eq(0))
-        .returning(move |mut new_state, network, height| {
-            let certificate = pending_store
-                .get_certificate(network, height)
-                .expect("Failed to get certificate")
-                .expect("Certificate not found");
-
+        .with(always(), always())
+        .returning(move |certificate, new_state| {
             let signer = agglayer_types::Address::new([0; 20]);
-            let _ = new_state
+            let initial_state = LocalNetworkState::from(new_state.clone());
+            let multi_batch_header = new_state
                 .apply_certificate(
                     &certificate,
                     signer,
@@ -177,13 +174,17 @@ async fn from_proven_to_settle() {
                     None,
                 )
                 .expect("Failed to apply certificate");
-
-            Ok(CertifierOutput {
-                certificate,
-                height,
-                new_state,
-                network,
-            })
+            // This proof is obviously wrong, but it's actually unused in this test
+            let proof = PessimisticProofOutput {
+                prev_local_exit_root: Default::default(),
+                prev_pessimistic_root: Default::default(),
+                l1_info_root: Default::default(),
+                origin_network: NetworkId::ETH_L1,
+                aggchain_hash: Default::default(),
+                new_local_exit_root: Default::default(),
+                new_pessimistic_root: Default::default(),
+            };
+            Ok((multi_batch_header, initial_state, proof))
         });
 
     let mut packer = MockEpochPacker::new();
