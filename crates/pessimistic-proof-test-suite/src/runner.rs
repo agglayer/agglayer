@@ -1,4 +1,3 @@
-use bincode::config::Options;
 pub use pessimistic_proof::PessimisticProofOutput;
 use pessimistic_proof::{
     keccak::{Hasher, Keccak256Hasher},
@@ -47,7 +46,7 @@ impl Runner {
 
     /// Extract outputs from the committed public values.
     pub fn extract_output(public_vals: SP1PublicValues) -> PessimisticProofOutput {
-        PessimisticProofOutput::bincode_options()
+        PessimisticProofOutput::bincode_codec()
             .deserialize(public_vals.as_slice())
             .expect("deser")
     }

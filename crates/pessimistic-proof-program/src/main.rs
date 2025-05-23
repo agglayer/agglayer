@@ -1,6 +1,5 @@
 #![no_main]
 
-use bincode::Options;
 use pessimistic_proof_core::{
     generate_pessimistic_proof, keccak::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
     NetworkState, PessimisticProofOutput,
@@ -13,7 +12,7 @@ pub fn main() {
 
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header).unwrap();
 
-    let pp_inputs = PessimisticProofOutput::bincode_options()
+    let pp_inputs = PessimisticProofOutput::bincode_codec()
         .serialize(&outputs)
         .unwrap();
 

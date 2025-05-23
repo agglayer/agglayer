@@ -1,9 +1,8 @@
 use agglayer_types::{CertificateStatus, CertificateStatusError, Digest, NetworkId};
 use alloy_primitives::Bytes;
-use bincode::Options;
 use pessimistic_proof::{error::ProofVerificationError, ProofError};
 
-use crate::columns::default_bincode_options;
+use crate::columns::bincode_codec;
 
 type Cse = CertificateStatusError;
 type Pve = ProofVerificationError;
@@ -53,6 +52,6 @@ fn encoding(#[case] name: &'static str, #[case] status: CertificateStatus) {
     // Reordering arms in the status enum causes the storage encoding to change, causing
     // compatibility issues.
 
-    let bytes = Bytes::from(default_bincode_options().serialize(&status).unwrap());
+    let bytes = Bytes::from(bincode_codec().serialize(&status).unwrap());
     insta::assert_snapshot!(name, bytes);
 }
