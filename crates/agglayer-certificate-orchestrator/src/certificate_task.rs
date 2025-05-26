@@ -88,14 +88,16 @@ where
         }
     }
 
-    /// Process a certificate, not doing any specific error handling except for returning it
+    /// Process a certificate, not doing any specific error handling except for
+    /// returning it
     async fn process_impl(&mut self) -> Result<(), CertificateStatusError> {
         let network_id = self.header.network_id;
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
 
-        // TODO: when all the storage related to this cert is only ever handled from the certificate task,
-        // the certificate task should be the one to start with storing the certificate if needed.
+        // TODO: when all the storage related to this cert is only ever handled from the
+        // certificate task, the certificate task should be the one to start
+        // with storing the certificate if needed.
 
         debug!(initial_status = ?self.header.status, "Processing certificate");
 
@@ -109,7 +111,8 @@ where
             return Err(error.clone());
         }
 
-        // First, prove the certificate (or recompute just the new state if it's already proven)
+        // First, prove the certificate (or recompute just the new state if it's already
+        // proven)
         if self.header.status < CertificateStatus::Proven {
             // Retrieve local network state
             trace!("Retrieving local network state");
@@ -141,8 +144,9 @@ where
                 .await
                 .map_err(send_err)?;
         } else {
-            // TODO: once we store network_id -> height -> state and not just network_id -> state,
-            // we should not need this any longer, because the state will already be recorded.
+            // TODO: once we store network_id -> height -> state and not just network_id ->
+            // state, we should not need this any longer, because the state will
+            // already be recorded.
 
             // Retrieve local network state
             trace!("Retrieving local network state");
@@ -179,22 +183,25 @@ where
         // Second, submit settlement to L1
         let settled_certificate = if self.header.status < CertificateStatus::Candidate {
             debug!("Starting certificate settlement");
-            let result = self.settlement_client
+            let result = self
+                .settlement_client
                 .settle_certificate(certificate_id)
                 .await?;
             self.header.status = CertificateStatus::Settled;
             debug!("Certificate settlement completed");
             // Note: settle_certificate currently updates the certificate status itself.
-            // It will go to Candidate upon submission, and then up to Settled when the settlement is confirmed.
-            // However, if agglayer shuts down before settlement confirmation, we can still have a certificate with
+            // It will go to Candidate upon submission, and then up to Settled when the
+            // settlement is confirmed. However, if agglayer shuts down before
+            // settlement confirmation, we can still have a certificate with
             // a Candidate status.
-            // TODO: all the storage related to certificate should only be touched from this struct, we should refactor
+            // TODO: all the storage related to certificate should only be touched from this
+            // struct, we should refactor
             result.1
         }
         // If we're not in the shortcut path of `settle_certificate`, wait for settlement
         // TODO: once the storage is only ever touched from here, we can make this a regular `if`
-        // For now, the only way to reach this stage is to boot with an already-candidate certificate.
-        // So we know that `self.header.settlement_tx_hash` is set.
+        // For now, the only way to reach this stage is to boot with an already-candidate
+        // certificate. So we know that `self.header.settlement_tx_hash` is set.
         else if self.header.status < CertificateStatus::Settled {
             debug!("Resuming certificate settlement");
             let tx_hash = self.header.settlement_tx_hash.ok_or_else(|| {
@@ -212,7 +219,8 @@ where
                 ));
             }
             debug!("Found settlement transaction");
-            let result = self.settlement_client
+            let result = self
+                .settlement_client
                 .recover_settlement(tx_hash.0.into(), certificate_id, network_id, height)
                 .await?;
             self.header.status = CertificateStatus::Settled;
@@ -229,7 +237,8 @@ where
         }
 
         // We just finished settling a new certificate, record that
-        // TODO: once the storage is only ever touched from here, we can have that part of the last `if`
+        // TODO: once the storage is only ever touched from here, we can have that part
+        // of the last `if`
         self.network_task
             .send(NetworkTaskMessage::CertificateSettled {
                 height,

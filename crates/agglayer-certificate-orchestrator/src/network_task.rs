@@ -7,17 +7,13 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
-     CertificateId, CertificateStatusError,
-    Height, LocalNetworkStateData, NetworkId,
+    CertificateId, CertificateStatusError, Height, LocalNetworkStateData, NetworkId,
 };
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::{
-    certificate_task::CertificateTask, Certifier, EpochPacker,
-    Error,
-};
+use crate::{certificate_task::CertificateTask, Certifier, EpochPacker, Error};
 
 #[cfg(test)]
 mod tests;

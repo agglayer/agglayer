@@ -15,7 +15,9 @@ use rstest::rstest;
 
 use super::*;
 use crate::{
-    epoch_packer::MockEpochPacker, tests::{clock, mocks::MockCertifier}, CertificationError, CertifierOutput
+    epoch_packer::MockEpochPacker,
+    tests::{clock, mocks::MockCertifier},
+    CertificationError, CertifierOutput,
 };
 
 mod status;
