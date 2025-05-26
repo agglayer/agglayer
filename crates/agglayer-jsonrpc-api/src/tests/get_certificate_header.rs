@@ -371,12 +371,10 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
 
     let error = payload.unwrap_err();
 
-    let expected_message = format!("Resource not found: Certificate({:#})", id);
+    let expected_message = format!("Resource not found: Certificate({id:#})");
     assert!(
         matches!(&error, ClientError::Call(ref obj) if obj.message() == expected_message),
-        "{}, {:?}",
-        expected_message,
-        error
+        "{expected_message}, {error:?}"
     );
     context
         .state_store
@@ -408,7 +406,7 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
 
     let error = payload.unwrap_err();
 
-    let expected_message = format!("Resource not found: Certificate({:#})", id);
+    let expected_message = format!("Resource not found: Certificate({id:#})");
     assert!(matches!(error, ClientError::Call(obj) if obj.message() == expected_message));
 
     let payload: Result<(Certificate, Option<CertificateHeader>), ClientError> = context
@@ -418,6 +416,6 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
 
     let error = payload.unwrap_err();
 
-    let expected_message = format!("Resource not found: Certificate({:#})", id2);
+    let expected_message = format!("Resource not found: Certificate({id2:#})");
     assert!(matches!(error, ClientError::Call(obj) if obj.message() == expected_message));
 }

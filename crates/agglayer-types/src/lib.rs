@@ -82,13 +82,6 @@ pub enum Error {
     /// The imported bridge exits should refer to one and the same L1 info root.
     #[error("Imported bridge exits refer to multiple L1 info root")]
     MultipleL1InfoRoot,
-    /// The certificate refers to a prev local exit root which differ from the
-    /// one computed by the agglayer.
-    #[error(
-        "Mismatch on the certificate prev local exit root. declared: {declared:?}, computed: \
-         {computed:?}"
-    )]
-    MismatchPrevLocalExitRoot { computed: Digest, declared: Digest },
     /// The certificate refers to a new local exit root which differ from the
     /// one computed by the agglayer.
     #[error(
@@ -153,6 +146,14 @@ pub enum Error {
         expected_at_least: usize,
         actual: usize,
     },
+
+    /// The certificate refers to a prev local exit root which differ from the
+    /// one computed by the agglayer.
+    #[error(
+        "Mismatch on the certificate prev local exit root. declared: {declared:?}, computed: \
+         {computed:?}"
+    )]
+    MismatchPrevLocalExitRoot { computed: Digest, declared: Digest },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -256,7 +257,7 @@ impl std::fmt::Display for CertificateStatus {
             CertificateStatus::Pending => write!(f, "Pending"),
             CertificateStatus::Proven => write!(f, "Proven"),
             CertificateStatus::Candidate => write!(f, "Candidate"),
-            CertificateStatus::InError { error } => write!(f, "InError: {}", error),
+            CertificateStatus::InError { error } => write!(f, "InError: {error}"),
             CertificateStatus::Settled => write!(f, "Settled"),
         }
     }

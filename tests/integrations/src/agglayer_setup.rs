@@ -83,7 +83,7 @@ pub async fn start_agglayer(
     let fake_prover = FakeProver::new(ELF);
     let endpoint = prover_config.grpc_endpoint;
 
-    config.prover_entrypoint = format!("http://{}", endpoint);
+    config.prover_entrypoint = format!("http://{endpoint}");
     let cancellation = token.unwrap_or_default();
     FakeProver::spawn_at(fake_prover, endpoint, cancellation.clone())
         .await
@@ -135,7 +135,7 @@ pub async fn start_agglayer(
     let handle = std::thread::spawn(move || {
         if let Err(error) = agglayer_node::main(config_file, "test", Some(graceful_shutdown_token))
         {
-            eprintln!("Error: {}", error);
+            eprintln!("Error: {error}");
         }
         _ = shutdown.send(());
     });
@@ -154,7 +154,7 @@ pub async fn start_agglayer(
 
         if handle.is_finished() {
             let _result = handle.join();
-            println!("Agglayer result: {:?}", _result);
+            println!("Agglayer result: {_result:?}");
             panic!("Server has finished");
         }
 

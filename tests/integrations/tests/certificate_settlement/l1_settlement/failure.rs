@@ -69,7 +69,7 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
 
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
 
-    println!("{:?}", result);
+    println!("{result:?}",);
     assert!(matches!(result.status, CertificateStatus::InError { .. }));
 
     fail::cfg(

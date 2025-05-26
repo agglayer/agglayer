@@ -17,9 +17,9 @@ impl L1Docker {
             .args([
                 "run",
                 "-p",
-                &format!("{}:8545", rpc_port),
+                &format!("{rpc_port}:8545"),
                 "-p",
-                &format!("{}:8546", ws_port),
+                &format!("{ws_port}:8546"),
                 "-d",
                 "--name",
                 &name,
@@ -36,8 +36,8 @@ impl L1Docker {
         }
 
         let id = String::from_utf8(docker.stdout).unwrap().replace('\n', "");
-        let ws = format!("ws://127.0.0.1:{}", ws_port);
-        let rpc = format!("http://127.0.0.1:{}", rpc_port);
+        let ws = format!("ws://127.0.0.1:{ws_port}");
+        let rpc = format!("http://127.0.0.1:{rpc_port}");
 
         // Add delay to ensure the container is ready
         tokio::time::sleep(Duration::from_secs(5)).await;

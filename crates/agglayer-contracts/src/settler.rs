@@ -53,7 +53,7 @@ where
     fn decode_contract_revert(error: &ContractError<Self::M>) -> Option<String> {
         error
             .decode_contract_revert::<PolygonRollupManagerErrors>()
-            .map(|err| format!("{:?}", err))
+            .map(|err| format!("{err:?}"))
     }
 
     fn build_verify_pessimistic_trusted_aggregator_call(

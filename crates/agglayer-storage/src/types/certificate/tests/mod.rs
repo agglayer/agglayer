@@ -110,14 +110,14 @@ impl CertificateV1<'static> {
             new_local_exit_root: Digest([0x61; 32]),
             bridge_exits: Vec::new().into(),
             imported_bridge_exits: Vec::new().into(),
-            aggchain_data: AggchainDataV1::Generic {
+            aggchain_data: AggchainDataV1::GenericWithSignature {
                 proof: Cow::Owned(proof),
                 aggchain_params: Digest([0x58; 32]),
-                signature: Cow::Owned(Some(Box::new(Signature::new(
+                signature: Cow::Owned(Box::new(Signature::new(
                     U256::from_be_bytes([0x78; 32]),
                     U256::from_be_bytes([0x9a; 32]),
                     false,
-                )))),
+                ))),
             },
             metadata: Digest([0xb9; 32]),
             custom_chain_data: Cow::Owned(vec![]),
@@ -152,11 +152,18 @@ impl CertificateV1<'_> {
             imported_bridge_exits: imported_bridge_exits.into_owned().into(),
             aggchain_data: match aggchain_data {
                 AggchainDataV1::ECDSA { signature } => AggchainDataV1::ECDSA { signature },
-                AggchainDataV1::Generic {
+                AggchainDataV1::GenericNoSignature {
+                    proof,
+                    aggchain_params,
+                } => AggchainDataV1::GenericNoSignature {
+                    proof: Cow::Owned(proof.into_owned()),
+                    aggchain_params,
+                },
+                AggchainDataV1::GenericWithSignature {
                     proof,
                     aggchain_params,
                     signature,
-                } => AggchainDataV1::Generic {
+                } => AggchainDataV1::GenericWithSignature {
                     proof: Cow::Owned(proof.into_owned()),
                     aggchain_params,
                     signature: Cow::Owned(signature.into_owned()),
@@ -206,6 +213,14 @@ fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
 
     // Again comparing debug output due to lack of `Eq`.
     assert_eq!(format!("{from_bytes:?}"), format!("{from_json:?}"));
+}
+
+#[rstest::rstest]
+#[case::regression_01("regression_01.hex")]
+#[case::regression_02("regression_02.hex")]
+fn regressions(#[case] cert_filename: &str) {
+    let bytes = load_sample_certificate_bytes(cert_filename);
+    let _certificate = Certificate::decode(&bytes).expect("decoding failed");
 }
 
 #[test]

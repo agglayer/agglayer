@@ -188,10 +188,10 @@ fn main() -> io::Result<()> {
 
     // Process the file
     if let Err(e) = process_file(input_path, output_path) {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
         std::process::exit(1);
     }
 
-    println!("Processing complete. Output written to {}", output_path);
+    println!("Processing complete. Output written to {output_path}");
     Ok(())
 }
