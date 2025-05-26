@@ -164,7 +164,7 @@ async fn from_proven_to_settled() {
             let initial_state = LocalNetworkState::from(new_state.clone());
             let multi_batch_header = new_state
                 .apply_certificate(
-                    &certificate,
+                    certificate,
                     signer,
                     certificate
                         .l1_info_root()
