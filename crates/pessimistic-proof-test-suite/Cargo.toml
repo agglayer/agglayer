@@ -33,7 +33,7 @@ rand.workspace = true
 hex-literal = "0.4"
 hex.workspace = true
 tracing.workspace = true
-uuid = { version = "1.13.1", features = ["v4", "fast-rng"] }
+uuid = { version = "1.17.0", features = ["v4", "fast-rng"] }
 regex = "1.11"
 
 [dev-dependencies]
