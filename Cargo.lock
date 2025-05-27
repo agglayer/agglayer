@@ -5575,8 +5575,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-test-utils"
-version = "0.24.9"
-source = "git+https://github.com/paritytech/jsonrpsee.git?tag=v0.24.9#274a8f025daadb6a6b592ade55ea990bda2f440b"
+version = "0.25.1"
+source = "git+https://github.com/paritytech/jsonrpsee.git?tag=v0.25.1#6540970ddfa5e0c84cc0ec8567a32233dfa0591a"
 dependencies = [
  "futures-channel",
  "futures-util",
