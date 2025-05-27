@@ -8,9 +8,9 @@ anyhow.workspace = true
 clap = { workspace = true, features = ["derive", "env", "string"] }
 
 rand = "0.8.5"
-
+bincode.workspace = true
 dirs.workspace = true
-
+serde.workspace = true
 dotenvy.workspace = true
 hex.workspace = true
 serde_json.workspace = true

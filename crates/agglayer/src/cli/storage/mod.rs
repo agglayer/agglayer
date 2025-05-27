@@ -10,6 +10,7 @@ use agglayer_storage::{
         certificate_header::CertificateHeaderColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
         debug_certificates::DebugCertificatesColumn,
+        default_bincode_options,
         epochs::{
             certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
             start_checkpoint::StartCheckpointColumn,
@@ -20,7 +21,7 @@ use agglayer_storage::{
         local_exit_tree_per_network::LocalExitTreePerNetworkColumn,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
-        Codec, ColumnSchema,
+        Codec, ColumnSchema, CERTIFICATE_HEADER_CF,
     },
     storage::{
         backup::BackupClient, debug_db_cf_definitions, epochs_db_cf_definitions,
@@ -30,7 +31,8 @@ use agglayer_storage::{
     types::{MetadataKey, MetadataValue},
 };
 use agglayer_types::{
-    Address, Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput,
+    Address, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
+    EpochNumber, Height, LocalNetworkStateData, Metadata, NetworkId, PessimisticRootInput,
 };
 use clap::Subcommand;
 
@@ -41,6 +43,7 @@ mod ui;
 pub enum Storage {
     Ui { storage_path: PathBuf },
     Rebuild { from_path: PathBuf },
+    Test { storage_path: PathBuf },
 }
 
 impl Storage {
@@ -117,6 +120,44 @@ impl Storage {
         match self {
             Storage::Ui { storage_path } => {
                 _ = Self::ui(storage_path);
+            }
+            Storage::Test { storage_path } => {
+                let db = Arc::new(agglayer_storage::storage::DB::open_cf_read_only(
+                    &storage_path.join("state"),
+                    state_db_cf_definitions(),
+                )?);
+                let key =
+                    hex::decode("504cd18d93f6a80a877a1c8db881d559902a0a2edf294d526574e6a17ca7ee3b")
+                        .unwrap();
+
+                let cf = db.rocksdb.cf_handle(CERTIFICATE_HEADER_CF).unwrap();
+                let bytes = db.rocksdb.get_cf(cf, &key);
+
+                if let Ok(Some(bytes)) = bytes {
+                    println!("{:?}", bytes);
+
+                    use bincode::config::Options;
+                    let parsed_length = (4 + 8 + 1 + 1 + 32 + 32 + 32 + 32);
+                    let certificate: Result<CertificateHeader, _> =
+                        // default_bincode_options().deserialize(&bytes[..parsed_length]);
+                    default_bincode_options().deserialize(&bytes);
+                    println!("{:?}", certificate);
+                    println!("{:?}", &bytes[parsed_length..]);
+                    #[derive(serde::Deserialize, Debug)]
+                    pub struct CertificateHeader {
+                        // 32
+                        pub network_id: NetworkId,
+                        pub height: Height,
+                        pub epoch_number: Option<EpochNumber>,
+                        pub certificate_index: Option<CertificateIndex>,
+                        pub certificate_id: CertificateId,
+                        pub prev_local_exit_root: Digest,
+                        pub new_local_exit_root: Digest,
+                        pub metadata: Metadata,
+                        pub status: CertificateStatus,
+                        pub settlement_tx_hash: Option<Digest>,
+                    }
+                }
             }
             Storage::Rebuild { from_path } => {
                 print!("Opening state database...");
