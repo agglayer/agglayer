@@ -1,6 +1,6 @@
 use alloy_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
-use unified_bridge::aggchain_proof::AggchainProofPublicValues;
+use unified_bridge::AggchainProofPublicValues;
 
 pub type Digest = [u8; 32];
 

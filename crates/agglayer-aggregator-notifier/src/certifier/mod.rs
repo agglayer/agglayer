@@ -22,6 +22,9 @@ use pessimistic_proof::{
     core::{commitment::StateCommitment, generate_pessimistic_proof},
     local_state::LocalNetworkState,
     multi_batch_header::MultiBatchHeader,
+    unified_bridge::{
+        AggchainProofPublicValues, CommitmentVersion, ImportedBridgeExitCommitmentValues,
+    },
     NetworkState, PessimisticProofOutput,
 };
 use sp1_sdk::{
@@ -461,6 +464,48 @@ where
         let (pv, targets_native_execution) =
             generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
                 .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
+
+        // Verify consistency on the aggchain proof public values if provided in the
+        // optional context
+        if let AggchainData::Generic {
+            public_values,
+            aggchain_params,
+            ..
+        } = &certificate.aggchain_data
+        {
+            if let Some(pv_from_proof) = public_values {
+                // Consistency check across the 3 sources:
+                //
+                // - Public values expected by the L1 (i.e., the ones that the L1 will feed in
+                //   its verifier)
+                //
+                // - Public values expected by the proof (i.e., the valid ones to succeed the
+                //   proof verification, provided in the Certificate as-is)
+                //
+                // - Public values inferred from PP witnesses (i.e., the ones used to verify the
+                //   aggchain proof in the PP)
+
+                let _pv_from_l1 = (); // TODO: Fetch those from the contracts
+                let pv_from_pp_witness = AggchainProofPublicValues {
+                    prev_local_exit_root: initial_state.exit_tree.get_root(),
+                    new_local_exit_root: targets_native_execution.exit_root,
+                    l1_info_root: multi_batch_header.l1_info_root,
+                    origin_network: multi_batch_header.origin_network,
+                    commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
+                        claims: multi_batch_header
+                            .imported_bridge_exits
+                            .iter()
+                            .map(|(exit, _)| exit.to_indexed_exit_hash())
+                            .collect(),
+                    }
+                    .commitment(CommitmentVersion::V3),
+                    aggchain_params: aggchain_params.clone(),
+                };
+
+                info!("pv_from_proof: {pv_from_proof:?}");
+                info!("pv_from_witness: {pv_from_pp_witness:?}");
+            }
+        }
 
         debug!(
             "Witness generation target roots: {:?}. Native execution target roots: {:?}",
