@@ -19,7 +19,7 @@ fn network_id_encoding(#[case] network_id: NetworkId, #[case] expected: [u8; 4])
     assert_eq!(network_id.to_u32().to_be_bytes(), expected);
 }
 
-fn load_sample_certificate_bytes(filename: &str) -> Vec<u8> {
+fn load_sample_bytes(filename: &str) -> Vec<u8> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src/types/certificate/tests")
         .join(filename);
@@ -208,7 +208,7 @@ fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> 
 fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
     let from_json = sample_data::load_certificate(&format!("{cert_name}.json"));
 
-    let bytes = load_sample_certificate_bytes(&format!("encoded_v0-{cert_name}.hex"));
+    let bytes = load_sample_bytes(&format!("encoded_v0-{cert_name}.hex"));
     let from_bytes = Certificate::decode(&bytes).expect("v0 certificate to decode successfully");
 
     // Again comparing debug output due to lack of `Eq`.
@@ -219,7 +219,7 @@ fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
 #[case::regression_01("regression_01.hex")]
 #[case::regression_02("regression_02.hex")]
 fn regressions(#[case] cert_filename: &str) {
-    let bytes = load_sample_certificate_bytes(cert_filename);
+    let bytes = load_sample_bytes(cert_filename);
     let _certificate = Certificate::decode(&bytes).expect("decoding failed");
 }
 
@@ -247,4 +247,5 @@ fn bad_format() {
     }
 }
 
+mod header;
 mod status;
