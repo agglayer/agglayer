@@ -29,9 +29,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
+name = "agglayer-bincode"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
+dependencies = [
+ "bincode",
+ "serde",
+]
+
+[[package]]
 name = "agglayer-primitives"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -44,7 +53,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
 dependencies = [
  "agglayer-primitives",
  "serde",
@@ -3507,10 +3516,10 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
+ "agglayer-bincode",
  "agglayer-primitives",
  "agglayer-tries",
  "alloy-primitives",
- "bincode",
  "hex",
  "hex-literal 0.4.1",
  "semver 1.0.26",
@@ -3531,7 +3540,6 @@ dependencies = [
 name = "pessimistic-proof-program"
 version = "2.0.0"
 dependencies = [
- "bincode",
  "pessimistic-proof-core",
  "sp1-cli",
  "sp1-zkvm",
@@ -5891,7 +5899,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",
