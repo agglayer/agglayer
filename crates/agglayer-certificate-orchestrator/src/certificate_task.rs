@@ -7,6 +7,13 @@ use tracing::{debug, error, trace, warn};
 
 use crate::{network_task::NetworkTaskMessage, Certifier, EpochPacker};
 
+/// A task that processes a certificate, including certifying it and settling
+/// it.
+///
+/// Once the `process` function is called, this task will handle everything
+/// related to the certificate until it gets finalized, including exchanging the
+/// required messages with the network task to both get required information
+/// from it and notify it of certificate progress.
 pub struct CertificateTask<StateStore, CertifierClient, SettlementClient> {
     certificate: Certificate,
     header: CertificateHeader,
@@ -157,7 +164,7 @@ where
                 .map_err(send_err)?;
             let mut state = state.await.map_err(recv_err)?;
 
-            // Actually certify
+            // Execute the witness generation to retrieve the new local network state
             debug!("Recomputing new state for already-proven certificate");
             let _ = self
                 .certifier_client
@@ -169,7 +176,11 @@ where
                 })?;
             debug!("Recomputing new state completed");
 
-            // Record the certification success
+            // Send the new state to the network task
+            // TODO: Once we update the storage we'll have to remove this! It wouldn't be
+            // valid if we had multiple certificates inflight. Thankfully, until
+            // we update the storage we cannot have multiple certificates
+            // inflight, so we should be fine until then.
             self.network_task
                 .send(NetworkTaskMessage::CertificateProven {
                     height,
@@ -181,6 +192,11 @@ where
         }
 
         // Second, submit settlement to L1
+        if self.header.status < CertificateStatus::Proven {
+            return Err(CertificateStatusError::InternalError(
+                "Trying to settle a non-proven certificate".into(),
+            ));
+        }
         let settled_certificate = if self.header.status < CertificateStatus::Candidate {
             debug!("Starting certificate settlement");
             let result = self
@@ -227,12 +243,15 @@ where
             debug!("Resumed certificate settlement completed");
             result.1
         } else {
-            unreachable!() // The Settled and InError statuses are handled above
+            // The Settled and InError statuses are handled above
+            return Err(CertificateStatusError::InternalError(
+                "Certificate task reached code expected to be unreachable".into(),
+            ));
         };
 
         if self.header.status != CertificateStatus::Settled {
             return Err(CertificateStatusError::InternalError(
-                "CertificateTask completed with a non-settled certificated".into(),
+                "CertificateTask completed with a non-settled certificate".into(),
             ));
         }
 

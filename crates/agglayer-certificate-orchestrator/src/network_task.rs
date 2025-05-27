@@ -180,7 +180,7 @@ where
                         error!("Error during the certification process: {}", error);
 
                         match error {
-                            Error::InternalError(_) | Error::Storage(_) => return Err(error),
+                            Error::InternalError(_) | Error::Storage(_) | Error::PersistenceError { .. } => return Err(error),
                             _ => {}
                         }
                     }
