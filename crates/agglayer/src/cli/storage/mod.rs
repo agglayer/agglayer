@@ -48,18 +48,19 @@ pub enum Storage {
 
 impl Storage {
     pub fn ui(storage_path: &Path) -> anyhow::Result<()> {
-        use std::io;
-        use std::time::{Duration, Instant};
+        use std::{
+            io,
+            time::{Duration, Instant},
+        };
 
-        use crossterm::event::{
-            self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
+        use crossterm::{
+            event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+            execute,
+            terminal::{
+                disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+            },
         };
-        use crossterm::execute;
-        use crossterm::terminal::{
-            disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-        };
-        use ratatui::backend::CrosstermBackend;
-        use ratatui::Terminal;
+        use ratatui::{backend::CrosstermBackend, Terminal};
 
         // setup terminal
         enable_raw_mode()?;
@@ -134,29 +135,9 @@ impl Storage {
                 let bytes = db.rocksdb.get_cf(cf, &key);
 
                 if let Ok(Some(bytes)) = bytes {
-                    println!("{:?}", bytes);
-
                     use bincode::config::Options;
-                    let parsed_length = (4 + 8 + 1 + 1 + 32 + 32 + 32 + 32);
                     let certificate: Result<CertificateHeader, _> =
-                        // default_bincode_options().deserialize(&bytes[..parsed_length]);
-                    default_bincode_options().deserialize(&bytes);
-                    println!("{:?}", certificate);
-                    println!("{:?}", &bytes[parsed_length..]);
-                    #[derive(serde::Deserialize, Debug)]
-                    pub struct CertificateHeader {
-                        // 32
-                        pub network_id: NetworkId,
-                        pub height: Height,
-                        pub epoch_number: Option<EpochNumber>,
-                        pub certificate_index: Option<CertificateIndex>,
-                        pub certificate_id: CertificateId,
-                        pub prev_local_exit_root: Digest,
-                        pub new_local_exit_root: Digest,
-                        pub metadata: Metadata,
-                        pub status: CertificateStatus,
-                        pub settlement_tx_hash: Option<Digest>,
-                    }
+                        default_bincode_options().deserialize(&bytes);
                 }
             }
             Storage::Rebuild { from_path } => {
@@ -260,10 +241,11 @@ impl Storage {
                     let mut current_height = 0;
 
                     while current_height < max_settled_height {
-                        let certificate_id =
-                            db.get::<CertificatePerNetworkColumn>(
-                                &certificate_per_network::Key::new(*network_id, current_height),
-                            )
+                        let certificate_id = db
+                            .get::<CertificatePerNetworkColumn>(&certificate_per_network::Key::new(
+                                network_id.to_u32(),
+                                current_height,
+                            ))
                             .unwrap()
                             .unwrap();
 
