@@ -3,7 +3,7 @@
 //! The pessimistic proof has the "pessimistic root" as part of its public
 //! inputs. Some logic in this file handles the migration on its computation.
 use agglayer_primitives::{keccak::keccak256_combine, Digest};
-use agglayer_tries::roots::{BalanceRoot, LocalExitRoot, NullifierRoot, TreeRoot};
+use agglayer_tries::roots::{BalanceRoot, LocalExitRoot, NullifierRoot};
 use serde::{Deserialize, Serialize};
 use unified_bridge::{CommitmentVersion, ImportedBridgeExitCommitmentValues, NetworkId};
 
@@ -62,13 +62,13 @@ impl PessimisticRoot {
     pub fn compute_pp_root(&self, version: CommitmentVersion) -> Digest {
         match version {
             CommitmentVersion::V2 => keccak256_combine([
-                self.balance_root.as_slice(),
-                self.nullifier_root.as_slice(),
+                self.balance_root.as_ref(),
+                self.nullifier_root.as_ref(),
                 self.ler_leaf_count.to_le_bytes().as_slice(),
             ]),
             CommitmentVersion::V3 => keccak256_combine([
-                self.balance_root.as_slice(),
-                self.nullifier_root.as_slice(),
+                self.balance_root.as_ref(),
+                self.nullifier_root.as_ref(),
                 self.ler_leaf_count.to_le_bytes().as_slice(),
                 self.height.to_le_bytes().as_slice(),
                 self.origin_network.to_le_bytes().as_slice(),
@@ -87,7 +87,7 @@ pub struct SignatureCommitmentValues {
 impl SignatureCommitmentValues {
     pub fn aggchain_proof_commitment(&self, aggchain_params: &Digest) -> Digest {
         keccak256_combine([
-            self.new_local_exit_root.as_slice(),
+            self.new_local_exit_root.as_ref(),
             self.commit_imported_bridge_exits
                 .commitment(CommitmentVersion::V3)
                 .as_slice(),
@@ -102,11 +102,11 @@ impl SignatureCommitmentValues {
         let imported_bridge_exit_commitment = self.commit_imported_bridge_exits.commitment(version);
         match version {
             CommitmentVersion::V2 => keccak256_combine([
-                self.new_local_exit_root.as_slice(),
+                self.new_local_exit_root.as_ref(),
                 imported_bridge_exit_commitment.as_slice(),
             ]),
             CommitmentVersion::V3 => keccak256_combine([
-                self.new_local_exit_root.as_slice(),
+                self.new_local_exit_root.as_ref(),
                 imported_bridge_exit_commitment.as_slice(),
                 self.height.to_le_bytes().as_slice(),
             ]),

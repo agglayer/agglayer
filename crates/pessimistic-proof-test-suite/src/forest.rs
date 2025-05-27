@@ -12,7 +12,7 @@ use pessimistic_proof::{
     keccak::{keccak256_combine, Keccak256Hasher},
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
     local_state::LocalNetworkState,
-    proof::zero_if_empty_exit_root,
+    proof::zero_if_empty_local_exit_root,
     unified_bridge::{
         BridgeExit, Claim, ClaimFromMainnet, CommitmentVersion, GlobalIndex, ImportedBridgeExit,
         L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
@@ -205,7 +205,7 @@ impl Forest {
             })
             .collect();
 
-        let new_local_exit_root = self.state_b.exit_tree.get_root();
+        let new_local_exit_root = self.state_b.exit_tree.get_root().into();
 
         let height = 0;
         let (_combined_hash, signature, _signer) = compute_signature_info(
@@ -219,7 +219,7 @@ impl Forest {
             network_id: self.network_id.into(),
             height,
             prev_local_exit_root,
-            new_local_exit_root,
+            new_local_exit_root: new_local_exit_root.into(),
             bridge_exits,
             imported_bridge_exits,
             aggchain_data: AggchainData::ECDSA { signature },
@@ -277,7 +277,7 @@ impl Forest {
     pub fn assert_output_matches(&self, output: &PessimisticProofOutput) {
         assert_eq!(
             output.new_local_exit_root,
-            zero_if_empty_exit_root(self.state_b.exit_tree.get_root())
+            zero_if_empty_local_exit_root(self.state_b.exit_tree.get_root().into())
         );
         assert_eq!(
             output.new_pessimistic_root,

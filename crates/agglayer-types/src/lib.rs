@@ -306,7 +306,7 @@ impl Default for Certificate {
         let local_exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
         let height: Height = 0u64;
         let (_new_local_exit_root, signature, _signer) =
-            compute_signature_info(local_exit_root, &[], &wallet, height);
+            compute_signature_info(local_exit_root.into(), &[], &wallet, height);
         Self {
             network_id,
             height,
@@ -371,7 +371,7 @@ impl Certificate {
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_, signature, _signer) = compute_signature_info(exit_root, &[], &wallet, height);
+        let (_, signature, _signer) = compute_signature_info(exit_root.into(), &[], &wallet, height);
 
         Self {
             network_id,
@@ -476,7 +476,7 @@ impl Certificate {
 impl From<&Certificate> for SignatureCommitmentValues {
     fn from(certificate: &Certificate) -> Self {
         Self {
-            new_local_exit_root: certificate.new_local_exit_root,
+            new_local_exit_root: certificate.new_local_exit_root.into(),
             commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
                 claims: certificate
                     .imported_bridge_exits
@@ -558,8 +558,8 @@ impl LocalNetworkStateData {
         let prev_pessimistic_root = match prev_pp_root {
             PessimisticRootInput::Fetched(settled_from_l1) => settled_from_l1,
             PessimisticRootInput::Computed(version) => PessimisticRoot {
-                balance_root: self.balance_tree.root,
-                nullifier_root: self.nullifier_tree.root,
+                balance_root: self.balance_tree.root.into(),
+                nullifier_root: self.nullifier_tree.root.into(),
                 ler_leaf_count: self.exit_tree.leaf_count(),
                 height: certificate.height,
                 origin_network: certificate.network_id,

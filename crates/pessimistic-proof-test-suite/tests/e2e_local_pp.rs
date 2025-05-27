@@ -63,8 +63,8 @@ fn pp_root_migration_helper(
 
     // Previous state settled in L1
     let prev_pp_root = PessimisticRoot {
-        balance_root: initial_state.balance_tree.root,
-        nullifier_root: initial_state.nullifier_tree.root,
+        balance_root: initial_state.balance_tree.root.into(),
+        nullifier_root: initial_state.nullifier_tree.root.into(),
         ler_leaf_count: initial_state.exit_tree.leaf_count(),
         height: certificate.height,
         origin_network: certificate.network_id,
@@ -75,8 +75,8 @@ fn pp_root_migration_helper(
 
     // New state about to be settled in L1
     let new_pp_root = PessimisticRoot {
-        balance_root: new_state.balance_tree.root,
-        nullifier_root: new_state.nullifier_tree.root,
+        balance_root: new_state.balance_tree.root.into(),
+        nullifier_root: new_state.nullifier_tree.root.into(),
         ler_leaf_count: new_state.exit_tree.leaf_count(),
         height: certificate.height + 1,
         origin_network: certificate.network_id,
