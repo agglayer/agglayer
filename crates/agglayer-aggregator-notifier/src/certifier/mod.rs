@@ -473,6 +473,7 @@ where
             ..
         } = &certificate.aggchain_data
         {
+            info!("raw pv_: {public_values:?}");
             if let Some(pv_from_proof) = public_values {
                 // Consistency check across the 3 sources:
                 //
