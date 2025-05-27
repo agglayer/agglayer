@@ -85,7 +85,10 @@ pub enum Error {
         "Mismatch on the certificate new local exit root. declared: {declared:?}, computed: \
          {computed:?}"
     )]
-    MismatchNewLocalExitRoot { computed: LocalExitRoot, declared: LocalExitRoot },
+    MismatchNewLocalExitRoot {
+        computed: LocalExitRoot,
+        declared: LocalExitRoot,
+    },
     /// The given token balance cannot overflow.
     #[error("Token balance cannot overflow. token: {0:?}")]
     BalanceOverflow(TokenInfo),
@@ -150,7 +153,10 @@ pub enum Error {
         "Mismatch on the certificate prev local exit root. declared: {declared:?}, computed: \
          {computed:?}"
     )]
-    MismatchPrevLocalExitRoot { computed: LocalExitRoot, declared: LocalExitRoot },
+    MismatchPrevLocalExitRoot {
+        computed: LocalExitRoot,
+        declared: LocalExitRoot,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]

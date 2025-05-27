@@ -1,5 +1,5 @@
-use alloy_primitives::{Address, Signature};
 use agglayer_tries::roots::LocalExitRoot;
+use alloy_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
 use unified_bridge::AggchainProofPublicValues;
 
