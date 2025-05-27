@@ -195,7 +195,7 @@ impl Forest {
         imported_bridge_events: impl IntoIterator<Item = (TokenInfo, U256)>,
         bridge_exits: impl IntoIterator<Item = BridgeExit>,
     ) -> Certificate {
-        let prev_local_exit_root = self.state_b.exit_tree.get_root();
+        let prev_local_exit_root = self.state_b.exit_tree.get_root().into();
 
         let imported_bridge_exits = self.imported_bridge_exits(imported_bridge_events);
         let bridge_exits = bridge_exits
@@ -219,7 +219,7 @@ impl Forest {
             network_id: self.network_id.into(),
             height,
             prev_local_exit_root,
-            new_local_exit_root: new_local_exit_root.into(),
+            new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
             aggchain_data: AggchainData::ECDSA { signature },
@@ -260,8 +260,8 @@ impl Forest {
                 commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
                     .commitment(CommitmentVersion::V2)
                     .0,
-                prev_local_exit_root: *certificate.prev_local_exit_root,
-                new_local_exit_root: *certificate.new_local_exit_root,
+                prev_local_exit_root: certificate.prev_local_exit_root,
+                new_local_exit_root: certificate.new_local_exit_root,
                 l1_info_root: *certificate.l1_info_root().unwrap().unwrap(),
                 origin_network: self.network_id,
             });
