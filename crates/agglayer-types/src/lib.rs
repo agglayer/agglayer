@@ -181,9 +181,6 @@ pub enum CertificateStatusError {
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
 
-    #[error("Last pessimistic root not found for network: {0}")]
-    LastPessimisticRootNotFound(NetworkId),
-
     #[error("Internal error")]
     InternalError(String),
 
@@ -198,6 +195,9 @@ pub enum CertificateStatusError {
 
     #[error("L1 Info root not found for l1 leaf count: {0}")]
     L1InfoRootNotFound(u32),
+
+    #[error("Last pessimistic root not found for network: {0}")]
+    LastPessimisticRootNotFound(NetworkId),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
