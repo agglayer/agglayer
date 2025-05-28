@@ -383,7 +383,7 @@ async fn verify_cert_signature() {
     {
         // wrong signature with valid signer
         let mut signed_cert = Certificate::new_for_test(1.into(), 0);
-        signed_cert.new_local_exit_root.0[0] += 1;
+        signed_cert.new_local_exit_root.as_mut()[0] += 1;
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
             Err(crate::kernel::SignatureVerificationError::InvalidSigner { signer: _, trusted_sequencer })

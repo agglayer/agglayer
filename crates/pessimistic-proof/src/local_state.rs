@@ -1,4 +1,5 @@
 use agglayer_primitives::{keccak::Keccak256Hasher, Digest};
+use agglayer_tries::roots::{LocalBalanceRoot, LocalExitRoot, LocalNullifierRoot};
 use serde::{Deserialize, Serialize};
 use unified_bridge::LocalExitTree;
 
@@ -48,10 +49,10 @@ impl StateCommitment {
 impl From<StateCommitment> for pessimistic_proof_core::local_state::commitment::StateCommitment {
     fn from(commitment: StateCommitment) -> Self {
         Self {
-            exit_root: commitment.exit_root,
+            exit_root: LocalExitRoot::new(commitment.exit_root),
             ler_leaf_count: commitment.ler_leaf_count,
-            balance_root: commitment.balance_root,
-            nullifier_root: commitment.nullifier_root,
+            balance_root: LocalBalanceRoot::new(commitment.balance_root),
+            nullifier_root: LocalNullifierRoot::new(commitment.nullifier_root),
         }
     }
 }

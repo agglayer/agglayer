@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+agglayer-tries.workspace = true
 alloy-primitives = { version = "1.1", features = ["serde", "k256"] }
 k256 = "0.13.4"
 serde = { version = "1.0.217", features = ["derive"] }
@@ -11,4 +12,4 @@ tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch
     "keccak",
 ] }
 
-unified-bridge = { git = "https://github.com/agglayer/interop.git" }
+unified-bridge.workspace = true

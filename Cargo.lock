@@ -112,6 +112,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-bincode"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
+dependencies = [
+ "bincode",
+ "serde",
+]
+
+[[package]]
 name = "agglayer-certificate-orchestrator"
 version = "0.1.0"
 dependencies = [
@@ -225,7 +234,7 @@ dependencies = [
  "agglayer-grpc-client",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
- "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-interop 0.6.0",
  "agglayer-rpc",
  "agglayer-storage",
  "agglayer-types",
@@ -266,7 +275,7 @@ dependencies = [
 name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-interop 0.6.0",
  "agglayer-types",
  "anyhow",
  "bincode",
@@ -286,17 +295,17 @@ name = "agglayer-interop"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.5.0#6e51ba8ede65c8ffb8d341628cb94766fc5af298"
 dependencies = [
- "agglayer-interop-grpc-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.5.0)",
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.5.0)",
+ "agglayer-interop-grpc-types 0.1.0",
+ "agglayer-interop-types 0.1.0",
 ]
 
 [[package]]
 name = "agglayer-interop"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
- "agglayer-interop-grpc-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-interop-grpc-types 0.6.0",
+ "agglayer-interop-types 0.6.0",
 ]
 
 [[package]]
@@ -304,7 +313,7 @@ name = "agglayer-interop-grpc-types"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.5.0#6e51ba8ede65c8ffb8d341628cb94766fc5af298"
 dependencies = [
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.5.0)",
+ "agglayer-interop-types 0.1.0",
  "bincode",
  "hex",
  "pbjson",
@@ -316,10 +325,10 @@ dependencies = [
 
 [[package]]
 name = "agglayer-interop-grpc-types"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-interop-types 0.6.0",
  "bincode",
  "hex",
  "pbjson",
@@ -334,8 +343,8 @@ name = "agglayer-interop-types"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.5.0#6e51ba8ede65c8ffb8d341628cb94766fc5af298"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.5.0)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.5.0)",
+ "agglayer-primitives 0.1.0",
+ "agglayer-tries 0.1.0",
  "bincode",
  "educe",
  "hex",
@@ -346,16 +355,17 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.5.0)",
+ "unified-bridge 0.1.0",
 ]
 
 [[package]]
 name = "agglayer-interop-types"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-bincode",
+ "agglayer-primitives 0.6.0",
+ "agglayer-tries 0.6.0",
  "arbitrary",
  "bincode",
  "educe",
@@ -368,7 +378,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "unified-bridge 0.6.0",
 ]
 
 [[package]]
@@ -497,7 +507,7 @@ name = "agglayer-primitives"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.5.0#6e51ba8ede65c8ffb8d341628cb94766fc5af298"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "byteorder",
  "hex",
  "k256",
@@ -507,10 +517,10 @@ dependencies = [
 
 [[package]]
 name = "agglayer-primitives"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "arbitrary",
  "byteorder",
  "hex",
@@ -518,19 +528,6 @@ dependencies = [
  "rand 0.9.0",
  "serde",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "agglayer-primitives"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git#857a8514ca5d55ee5eae6163826088b9a5b13697"
-dependencies = [
- "alloy-primitives 0.8.25",
- "byteorder",
- "hex",
- "k256",
- "serde",
- "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
 ]
 
 [[package]]
@@ -576,7 +573,7 @@ name = "agglayer-prover-types"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git?rev=v0.1.0-rc.26#4ccf434f19684086014bc9afbb18865aa07f1e6d"
 dependencies = [
- "agglayer-interop 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.5.0)",
+ "agglayer-interop 0.1.0",
  "bincode",
  "pbjson",
  "prost 0.13.5",
@@ -638,9 +635,9 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-tries 0.6.0",
  "agglayer-types",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "arc-swap",
  "bincode",
  "chrono",
@@ -715,7 +712,7 @@ name = "agglayer-tries"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.5.0#6e51ba8ede65c8ffb8d341628cb94766fc5af298"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.5.0)",
+ "agglayer-primitives 0.1.0",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -723,21 +720,11 @@ dependencies = [
 
 [[package]]
 name = "agglayer-tries"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
- "serde",
- "serde_with",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "agglayer-tries"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git#857a8514ca5d55ee5eae6163826088b9a5b13697"
-dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git)",
+ "agglayer-primitives 0.6.0",
+ "hex",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -747,9 +734,9 @@ dependencies = [
 name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop-types 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-interop-types 0.6.0",
+ "agglayer-primitives 0.6.0",
+ "agglayer-tries 0.6.0",
  "agglayer-types",
  "arbitrary",
  "bincode",
@@ -763,7 +750,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "unified-bridge 0.6.0",
 ]
 
 [[package]]
@@ -847,7 +834,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5848366a4f08dca1caca0a6151294a4799fe2e59ba25df100491d92e0b921b1c"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "num_enum 0.7.3",
  "strum 0.27.1",
 ]
@@ -859,7 +846,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2179ba839ac532f50279f5da2a6c5047f791f03f6f808b4dfab11327b97902f"
 dependencies = [
  "alloy-eips",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rlp",
  "alloy-serde",
  "alloy-trie",
@@ -883,7 +870,7 @@ checksum = "aec6f67bdc62aa277e0ec13c1b1fb396c8a62b65c8e9bd8c1d3583cc6d1a8dd3"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rlp",
  "alloy-serde",
  "serde",
@@ -900,7 +887,7 @@ dependencies = [
  "alloy-json-abi",
  "alloy-network",
  "alloy-network-primitives",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-provider",
  "alloy-pubsub",
  "alloy-rpc-types-eth",
@@ -919,7 +906,7 @@ checksum = "a3c5a28f166629752f2e7246b813cdea3243cca59aab2d4264b1fd68392c10eb"
 dependencies = [
  "alloy-dyn-abi",
  "alloy-json-abi",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rlp",
  "alloy-sol-types",
 ]
@@ -931,7 +918,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18cc14d832bc3331ca22a1c7819de1ede99f58f61a7d123952af7dde8de124a6"
 dependencies = [
  "alloy-json-abi",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-sol-type-parser",
  "alloy-sol-types",
  "itoa",
@@ -946,7 +933,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "741bdd7499908b3aa0b159bba11e71c8cddd009a2c2eb7a06e825f1ec87900a5"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rlp",
  "crc",
  "serde",
@@ -959,7 +946,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b82752a889170df67bbb36d42ca63c531eb16274f0d7299ae2a680facba17bd"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rlp",
  "serde",
 ]
@@ -970,7 +957,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d4769c6ffddca380b0070d71c8b7f30bed375543fe76bb2f74ec0acf4b7cd16"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rlp",
  "k256",
  "serde",
@@ -986,7 +973,7 @@ dependencies = [
  "alloy-eip2124",
  "alloy-eip2930",
  "alloy-eip7702",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rlp",
  "alloy-serde",
  "auto_impl",
@@ -994,7 +981,7 @@ dependencies = [
  "derive_more 2.0.1",
  "either",
  "serde",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
 ]
 
 [[package]]
@@ -1004,7 +991,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dfec8348d97bd624901c6a4b22bb4c24df8a3128fc3d5e42d24f7b79dfa8588"
 dependencies = [
  "alloy-eips",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-serde",
  "alloy-trie",
  "serde",
@@ -1018,7 +1005,7 @@ checksum = "b40cc82a2283e3ce6317bc1f0134ea50d20e8c1965393045ee952fb28a65ddbd"
 dependencies = [
  "alloy-chains",
  "alloy-eip2124",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "auto_impl",
  "dyn-clone",
 ]
@@ -1029,7 +1016,7 @@ version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ccaa79753d7bf15f06399ea76922afbfaf8d18bebed9e8fc452984b4a90dcc9"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-sol-type-parser",
  "serde",
  "serde_json",
@@ -1041,7 +1028,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3994ab6ff6bdeb5aebe65381a8f6a47534789817570111555e8ac413e242ce06"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-sol-types",
  "serde",
  "serde_json",
@@ -1060,7 +1047,7 @@ dependencies = [
  "alloy-eips",
  "alloy-json-rpc",
  "alloy-network-primitives",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rpc-types-any",
  "alloy-rpc-types-eth",
  "alloy-serde",
@@ -1083,7 +1070,7 @@ checksum = "498f2ee2eef38a6db0fc810c7bf7daebdf5f2fa8d04adb8bd53e54e91ddbdea3"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-serde",
  "serde",
 ]
@@ -1097,7 +1084,7 @@ dependencies = [
  "alloy-genesis",
  "alloy-hardforks",
  "alloy-network",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-signer",
  "alloy-signer-local",
  "k256",
@@ -1107,33 +1094,6 @@ dependencies = [
  "thiserror 2.0.12",
  "tracing",
  "url",
-]
-
-[[package]]
-name = "alloy-primitives"
-version = "0.8.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c77490fe91a0ce933a1f219029521f20fc28c2c0ca95d53fa4da9c00b8d9d4e"
-dependencies = [
- "alloy-rlp",
- "bytes",
- "cfg-if",
- "const-hex",
- "derive_more 2.0.1",
- "foldhash",
- "hashbrown 0.15.2",
- "indexmap 2.9.0",
- "itoa",
- "k256",
- "keccak-asm",
- "paste",
- "proptest",
- "rand 0.8.5",
- "ruint",
- "rustc-hash 2.1.1",
- "serde",
- "sha3",
- "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1179,7 +1139,7 @@ dependencies = [
  "alloy-network",
  "alloy-network-primitives",
  "alloy-node-bindings",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-pubsub",
  "alloy-rpc-client",
  "alloy-rpc-types-anvil",
@@ -1220,7 +1180,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04135d2fd7fa1fba3afe9f79ec2967259dbc0948e02fa0cd0e33a4a812e2cb0a"
 dependencies = [
  "alloy-json-rpc",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-transport",
  "bimap",
  "futures",
@@ -1263,7 +1223,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d6a6985b48a536b47aa0aece56e6a0f49240ce5d33a7f0c94f1b312eda79aa1"
 dependencies = [
  "alloy-json-rpc",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-pubsub",
  "alloy-transport",
  "alloy-transport-http",
@@ -1290,7 +1250,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bf27873220877cb15125eb6eec2f86c6e9b41473aca85844bd3d9d755bfc0a0"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rpc-types-anvil",
  "alloy-rpc-types-engine",
  "alloy-rpc-types-eth",
@@ -1306,7 +1266,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c349f7339476f13e23308111dfeb67d136c11e7b2a6b1d162f6a124ad4ffb9b"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rpc-types-eth",
  "alloy-serde",
  "serde",
@@ -1329,7 +1289,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05525519bd7f37f98875354f0b3693d3ad3c7a7f067e3b8946777920be15cb5b"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "serde",
 ]
 
@@ -1341,7 +1301,7 @@ checksum = "4235d79af20fe5583ca26096258fe9307571a345745c433cfd8c91b41aa2611e"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rlp",
  "alloy-serde",
  "derive_more 2.0.1",
@@ -1360,7 +1320,7 @@ dependencies = [
  "alloy-consensus-any",
  "alloy-eips",
  "alloy-network-primitives",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rlp",
  "alloy-serde",
  "alloy-sol-types",
@@ -1376,7 +1336,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bccbe4594eaa2d69d21fa0b558c44e36202e599eb209da70b405415cb37a354"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rpc-types-eth",
  "alloy-serde",
  "serde",
@@ -1390,7 +1350,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56b8de4afea88d9ca1504b9dee40ffae69a2364aed82ab6e88e4348b41f57f6b"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rpc-types-eth",
  "alloy-serde",
  "serde",
@@ -1402,7 +1362,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4dba6ff08916bc0a9cbba121ce21f67c0b554c39cf174bc7b9df6c651bd3c3b"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "serde",
  "serde_json",
 ]
@@ -1413,7 +1373,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c580da7f00f3999e44e327223044d6732358627f93043e22d92c583f6583556"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "async-trait",
  "auto_impl",
  "either",
@@ -1430,7 +1390,7 @@ checksum = "a00f0f07862bd8f6bc66c953660693c5903062c2c9d308485b2a6eee411089e7"
 dependencies = [
  "alloy-consensus",
  "alloy-network",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-signer",
  "async-trait",
  "k256",
@@ -1506,7 +1466,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "584cb97bfc5746cb9dcc4def77da11694b5d6d7339be91b7480a6a68dc129387"
 dependencies = [
  "alloy-json-abi",
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-sol-macro",
  "serde",
 ]
@@ -1592,7 +1552,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "983d99aa81f586cef9dae38443245e585840fcf0fc58b09aee0b1f27aed1d500"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-rlp",
  "arrayvec",
  "derive_more 2.0.1",
@@ -2501,7 +2461,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
 dependencies = [
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "tinyvec",
 ]
 
@@ -2821,7 +2781,7 @@ dependencies = [
  "hmac",
  "k256",
  "serde",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "thiserror 1.0.69",
 ]
 
@@ -2837,7 +2797,7 @@ dependencies = [
  "once_cell",
  "pbkdf2 0.12.2",
  "rand 0.8.5",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "thiserror 1.0.69",
 ]
 
@@ -2856,7 +2816,7 @@ dependencies = [
  "ripemd",
  "serde",
  "serde_derive",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "sha3",
  "thiserror 1.0.69",
 ]
@@ -3526,11 +3486,12 @@ dependencies = [
 name = "ecdsa-proof-lib"
 version = "0.1.0"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "agglayer-tries 0.6.0",
+ "alloy-primitives",
  "k256",
  "serde",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git)",
+ "unified-bridge 0.6.0",
 ]
 
 [[package]]
@@ -3718,7 +3679,7 @@ dependencies = [
  "scrypt",
  "serde",
  "serde_json",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "sha3",
  "thiserror 1.0.69",
  "uuid 0.8.2",
@@ -4000,7 +3961,7 @@ dependencies = [
  "eth-keystore",
  "ethers-core",
  "rand 0.8.5",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "thiserror 1.0.69",
  "tracing",
 ]
@@ -5666,7 +5627,7 @@ dependencies = [
  "elliptic-curve",
  "once_cell",
  "serdect",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "signature",
 ]
 
@@ -6420,7 +6381,7 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "primeorder",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
 ]
 
 [[package]]
@@ -6809,7 +6770,7 @@ dependencies = [
  "digest 0.10.7",
  "hmac",
  "password-hash",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
 ]
 
 [[package]]
@@ -6850,8 +6811,8 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-primitives 0.6.0",
+ "agglayer-tries 0.6.0",
  "arbitrary",
  "bincode",
  "hex",
@@ -6867,16 +6828,16 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "unified-bridge 0.6.0",
 ]
 
 [[package]]
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
- "alloy-primitives 1.1.2",
+ "agglayer-primitives 0.6.0",
+ "agglayer-tries 0.6.0",
+ "alloy-primitives",
  "arbitrary",
  "bincode",
  "hex",
@@ -6894,14 +6855,14 @@ dependencies = [
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
  "toml",
  "tracing",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "unified-bridge 0.6.0",
 ]
 
 [[package]]
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-tries 0.6.0",
  "agglayer-types",
  "anyhow",
  "base64 0.22.1",
@@ -6923,7 +6884,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "tracing",
- "unified-bridge 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "unified-bridge 0.6.0",
  "uuid 1.16.0",
 ]
 
@@ -6969,7 +6930,7 @@ checksum = "7f9f832470494906d1fca5329f8ab5791cc60beb230c74815dff541cbd2b5ca0"
 dependencies = [
  "once_cell",
  "pest",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
 ]
 
 [[package]]
@@ -8010,7 +7971,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb09b49230ba22e8c676e7b75dfe2887dea8121f18b530ae0ba519ce442d2b21"
 dependencies = [
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
 ]
 
 [[package]]
@@ -8357,7 +8318,7 @@ dependencies = [
  "hmac",
  "pbkdf2 0.11.0",
  "salsa20",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
 ]
 
 [[package]]
@@ -8623,16 +8584,6 @@ name = "sha2"
 version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "793db75ad2bcafc3ffa7c68b215fee268f537982cd901d132f89c6343f3a3dc8"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "digest 0.10.7",
-]
-
-[[package]]
-name = "sha2"
-version = "0.10.8"
-source = "git+https://github.com/sp1-patches/RustCrypto-hashes.git?tag=patch-sha2-0.10.8-sp1-4.0.0#1f224388fdede7cef649bce0d63876d1a9e3f515"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -8978,7 +8929,7 @@ dependencies = [
  "p3-poseidon2",
  "p3-symmetric",
  "serde",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
 ]
 
 [[package]]
@@ -9011,7 +8962,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "sp1-core-executor",
  "sp1-core-machine",
  "sp1-primitives",
@@ -9154,7 +9105,7 @@ dependencies = [
  "p3-symmetric",
  "serde",
  "serde_json",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "sp1-core-machine",
  "sp1-recursion-compiler",
  "sp1-stark",
@@ -9168,7 +9119,7 @@ version = "4.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "318a3e83b1e3056a219ea16c946b7e184a2f17299e9de57aeb4818e9b8eb15d9"
 dependencies = [
- "alloy-primitives 1.1.2",
+ "alloy-primitives",
  "alloy-signer",
  "alloy-signer-local",
  "alloy-sol-types",
@@ -9255,7 +9206,7 @@ dependencies = [
  "cfg-if",
  "hex",
  "lazy_static",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "sp1-build",
  "substrate-bn-succinct",
  "thiserror 2.0.12",
@@ -9274,7 +9225,7 @@ dependencies = [
  "p3-baby-bear",
  "p3-field",
  "rand 0.8.5",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "sp1-lib",
  "sp1-primitives",
 ]
@@ -9434,7 +9385,7 @@ dependencies = [
  "semver 1.0.26",
  "serde",
  "serde_json",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "thiserror 1.0.69",
  "url",
  "zip",
@@ -10461,41 +10412,27 @@ name = "unified-bridge"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.5.0#6e51ba8ede65c8ffb8d341628cb94766fc5af298"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.5.0)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.5.0)",
+ "agglayer-primitives 0.1.0",
+ "agglayer-tries 0.1.0",
  "hex-literal 1.0.0",
  "serde",
  "serde_with",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "thiserror 2.0.12",
 ]
 
 [[package]]
 name = "unified-bridge"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.6.0#812bc77b4ac5f7159e9eaec525a05657e159d229"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git?tag=v0.6.0)",
+ "agglayer-primitives 0.6.0",
+ "agglayer-tries 0.6.0",
  "arbitrary",
  "hex-literal 1.0.0",
  "serde",
  "serde_with",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "unified-bridge"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git#857a8514ca5d55ee5eae6163826088b9a5b13697"
-dependencies = [
- "agglayer-primitives 0.1.0 (git+https://github.com/agglayer/interop.git)",
- "agglayer-tries 0.1.0 (git+https://github.com/agglayer/interop.git)",
- "hex-literal 0.4.1",
- "serde",
- "serde_with",
- "sha2 0.10.8 (git+https://github.com/sp1-patches/RustCrypto-hashes.git?tag=patch-sha2-0.10.8-sp1-4.0.0)",
+ "sha2",
  "thiserror 2.0.12",
 ]
 
@@ -11489,7 +11426,7 @@ dependencies = [
  "pasta_curves 0.5.1",
  "rand 0.8.5",
  "serde",
- "sha2 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2",
  "sha3",
  "subtle",
 ]
