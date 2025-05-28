@@ -1,4 +1,4 @@
-use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
+use agglayer_types::{CertificateId, CertificateStatusError, EpochNumber, Height, NetworkId};
 
 use crate::storage::DBError;
 
@@ -43,6 +43,12 @@ pub enum Error {
 
     #[error("Smt node not found")]
     SmtNodeNotFound,
+}
+
+impl From<Error> for CertificateStatusError {
+    fn from(error: Error) -> Self {
+        CertificateStatusError::InternalError(format!("{error:?}"))
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
