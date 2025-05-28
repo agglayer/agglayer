@@ -114,7 +114,7 @@ dependencies = [
 [[package]]
 name = "agglayer-bincode"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?rev=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "bincode",
  "serde",
@@ -302,7 +302,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?rev=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "agglayer-interop-grpc-types 0.6.0",
  "agglayer-interop-types 0.6.0",
@@ -326,7 +326,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?rev=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "agglayer-interop-types 0.6.0",
  "bincode",
@@ -361,7 +361,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?rev=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "agglayer-bincode",
  "agglayer-primitives 0.6.0",
@@ -518,7 +518,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?rev=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -721,7 +721,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?rev=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "agglayer-primitives 0.6.0",
  "hex",
@@ -10424,7 +10424,7 @@ dependencies = [
 [[package]]
 name = "unified-bridge"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?rev=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "agglayer-primitives 0.6.0",
  "agglayer-tries 0.6.0",
