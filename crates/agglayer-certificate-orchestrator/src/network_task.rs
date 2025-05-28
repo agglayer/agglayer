@@ -295,7 +295,7 @@ where
             .iter()
             .map(|exit| exit.hash())
             .collect::<Vec<Digest>>();
-        tokio::spawn(
+        let task = tokio::spawn(
             CertificateTask::new(
                 certificate,
                 header,
@@ -361,16 +361,21 @@ where
                                 error: e.to_string(),
                             })?;
 
-                        return Ok(());
+                        break;
                     }
                     Some(NetworkTaskMessage::CertificateErrored { .. }) => {
                         // The certificate task already logged everything that should be logged.
                         self.pending_state = None;
                         self.at_capacity_for_epoch = false;
-                        return Ok(());
+                        break;
                     }
                 }
             }
         }
+
+        task.await
+            .map_err(|e| Error::InternalError(format!("Certificate task panicked: {e}")))?;
+
+        Ok(())
     }
 }
