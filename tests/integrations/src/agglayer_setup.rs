@@ -1,6 +1,6 @@
 use std::{path::Path, time::Duration};
 
-use agglayer_config::{log::LogLevel, Config};
+use agglayer_config::{tracing::TracingLevel, Config};
 use agglayer_prover::fake::FakeProver;
 use ethers::{
     core::k256::ecdsa::SigningKey,
@@ -110,7 +110,7 @@ pub async fn start_agglayer(
     config.rpc.admin_port = admin_addr.port();
 
     config.telemetry.addr = next_available_addr();
-    config.log.level = LogLevel::Debug;
+    config.log.level = TracingLevel::Debug;
     config.l1.node_url = l1.rpc.parse().unwrap();
     config.l1.ws_node_url = l1.ws.parse().unwrap();
     config.l1.rollup_manager_contract = "0x0B306BF915C4d645ff596e518fAf3F9669b97016"

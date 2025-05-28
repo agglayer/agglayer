@@ -24,23 +24,23 @@ pub mod certificate_orchestrator;
 pub mod epoch;
 pub(crate) mod l1;
 pub(crate) mod l2;
-pub mod log;
 pub mod outbound;
 pub mod rate_limiting;
 pub(crate) mod rpc;
 pub mod shutdown;
 pub mod storage;
 pub(crate) mod telemetry;
+pub mod tracing;
 mod with;
 
 pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
 pub use epoch::Epoch;
 pub use l1::L1;
 pub use l2::L2;
-pub use log::Log;
 use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
+pub use tracing::Tracing;
 
 /// The Agglayer configuration.
 #[serde_with::serde_as]
@@ -65,7 +65,7 @@ pub struct Config {
 
     /// The log configuration.
     #[serde(default)]
-    pub log: Log,
+    pub log: Tracing,
 
     /// The local RPC server configuration.
     #[serde(default)]
