@@ -91,8 +91,7 @@ pub fn setup_tracing(config: &agglayer_config::Tracing, version: &str) -> anyhow
                 )
                 .build();
 
-            let tracer = trace_provider
-                .tracer("agglayer-otlp");
+            let tracer = trace_provider.tracer("agglayer-otlp");
 
             let _ = global::set_tracer_provider(trace_provider);
 
