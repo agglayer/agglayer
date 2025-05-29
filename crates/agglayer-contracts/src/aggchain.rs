@@ -1,4 +1,7 @@
-use ethers::{providers::Middleware, types::Address};
+use ethers::{
+    providers::Middleware,
+    types::{Address, Bytes},
+};
 use tracing::error;
 
 use crate::{aggchain_base::AggchainBase, L1RpcClient, L1RpcError};
@@ -24,6 +27,12 @@ pub trait AggchainContract {
         rollup_address: Address,
         aggchain_vkey_selector: u16,
     ) -> Result<AggchainVkeyHash, L1RpcError>;
+
+    async fn get_aggchain_hash(
+        &self,
+        rollup_address: Address,
+        aggchain_data: Bytes,
+    ) -> Result<[u8; 32], L1RpcError>;
 }
 
 #[async_trait::async_trait]
@@ -50,6 +59,21 @@ where
                 error!("Error fetching aggchain vkey: {:?}", error);
 
                 L1RpcError::AggchainVkeyFetchFailed
+            })
+    }
+
+    async fn get_aggchain_hash(
+        &self,
+        rollup_address: Address,
+        aggchain_data: Bytes,
+    ) -> Result<[u8; 32], L1RpcError> {
+        AggchainBase::new(rollup_address, self.rpc.clone())
+            .get_aggchain_hash(aggchain_data)
+            .await
+            .map_err(|error| {
+                error!("Error fetching aggchain hash: {:?}", error);
+
+                L1RpcError::AggchainHashFetchFailed
             })
     }
 }

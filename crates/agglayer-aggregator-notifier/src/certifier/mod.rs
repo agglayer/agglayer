@@ -15,7 +15,7 @@ use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWrite
 use agglayer_types::{
     aggchain_proof::AggchainData,
     primitives::{keccak::Keccak256Hasher, Address},
-    Certificate, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
+    Certificate, Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
 };
 use bincode::Options;
 use pessimistic_proof::{
@@ -164,7 +164,7 @@ where
         };
 
         // SP1 native execution which includes the aggchain proof stark verification
-        let (pv_sp1_execute, report) = {
+        let (pv_sp1_execute, _report) = {
             // Do not verify the deferred proof if we are in mock mode
             let deferred_proof_verification = !self.config.mock_verifier;
             let (pv, report) = self
@@ -188,11 +188,7 @@ where
             });
         }
 
-        info!(
-            "Successfully executed the PP in SP1 for the Certificate {}: {} sp1-cycles ",
-            report.cycle_tracker.values().sum::<u64>(),
-            certificate_id
-        );
+        info!("Successfully executed the PP in SP1 for the Certificate {certificate_id}");
 
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
@@ -392,6 +388,13 @@ where
             }
         };
 
+        // Fetching rollup contract address
+        let rollup_address = self
+            .l1_rpc
+            .get_rollup_contract_address(network_id.to_u32())
+            .await
+            .map_err(|source| CertificationError::RollupContractAddressNotFound { source })?;
+
         let aggchain_vkey = match certificate.aggchain_data {
             AggchainData::ECDSA { .. } => None,
             AggchainData::Generic { ref proof, .. } => {
@@ -405,15 +408,6 @@ where
                         },
                     })
                     .map(|bytes| u16::from_be_bytes(*bytes))?;
-
-                // Fetching rollup contract address
-                let rollup_address = self
-                    .l1_rpc
-                    .get_rollup_contract_address(network_id.to_u32())
-                    .await
-                    .map_err(|source| CertificationError::RollupContractAddressNotFound {
-                        source,
-                    })?;
 
                 let aggchain_vkey = self
                     .l1_rpc
@@ -451,6 +445,25 @@ where
             )
             .map_err(|source| CertificationError::Types { source })?;
 
+        // Verify matching on the aggchain hash between the L1 and the agglayer
+        {
+            let l1_aggchain_hash: Digest = self
+                .l1_rpc
+                .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
+                .await
+                .map_err(|source| CertificationError::UnableToFindAggchainHash { source })?
+                .into();
+
+            let computed_aggchain_hash = multi_batch_header.aggchain_proof.aggchain_hash();
+
+            if l1_aggchain_hash != computed_aggchain_hash {
+                return Err(CertificationError::AggchainHashMismatch {
+                    from_l1: l1_aggchain_hash,
+                    from_certificate: computed_aggchain_hash,
+                });
+            }
+        }
+
         let targets_witness_generation: StateCommitment = {
             let ns: LocalNetworkState = state.clone().into();
             NetworkState::from(ns).get_state_commitment()
@@ -462,10 +475,12 @@ where
             generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
                 .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
-        debug!(
-            "Witness generation target roots: {:?}. Native execution target roots: {:?}",
-            targets_witness_generation, targets_native_execution
-        );
+        if targets_witness_generation != targets_native_execution {
+            return Err(CertificationError::StateCommitmentMismatch {
+                witness_generation: targets_witness_generation,
+                native_execution: targets_native_execution,
+            });
+        }
 
         Ok((multi_batch_header, initial_state, pv))
     }

@@ -1,6 +1,9 @@
 use agglayer_contracts::L1RpcError;
-use agglayer_types::{CertificateId, CertificateStatusError, Height, NetworkId};
-use pessimistic_proof::{error::ProofVerificationError, PessimisticProofOutput, ProofError};
+use agglayer_types::{CertificateId, CertificateStatusError, Digest, Height, NetworkId};
+use pessimistic_proof::{
+    core::commitment::StateCommitment, error::ProofVerificationError, PessimisticProofOutput,
+    ProofError,
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PreCertificationError {
@@ -71,6 +74,25 @@ pub enum CertificationError {
     AggchainProofVkeyMismatch { expected: String, actual: String },
     #[error("Missing L1 info tree leaf count for generic aggchain data")]
     MissingL1InfoTreeLeafCountForGenericAggchainData,
+    #[error("Unable to find aggchain hash")]
+    UnableToFindAggchainHash { source: L1RpcError },
+    /// Mismatch on the aggchain hash between the one fetched from the L1, and
+    /// the one computed from the received Certificate.
+    #[error("Aggchain hash mismatch. from l1: {from_l1}, from certificate: {from_certificate}.")]
+    AggchainHashMismatch {
+        from_l1: Digest,
+        from_certificate: Digest,
+    },
+    /// Target state commitment mismatch between witness generation and native
+    /// execution.
+    #[error(
+        "Target state commitment mismatch. after witness generation: {witness_generation:?}, \
+         after native execution: {native_execution:?}"
+    )]
+    StateCommitmentMismatch {
+        witness_generation: StateCommitment,
+        native_execution: StateCommitment,
+    },
 }
 
 #[derive(thiserror::Error, Debug)]
