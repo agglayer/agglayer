@@ -21,6 +21,7 @@ use crate::{
 
 mod constant;
 mod error;
+pub mod traces;
 
 pub use error::Error;
 pub use opentelemetry::KeyValue;
