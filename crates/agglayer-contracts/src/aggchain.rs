@@ -56,7 +56,7 @@ where
             .await
             .map(AggchainVkeyHash)
             .map_err(|error| {
-                error!("Error fetching aggchain vkey: {:?}", error);
+                error!(?error, "Unable to fetch the aggchain vkey");
 
                 L1RpcError::AggchainVkeyFetchFailed
             })
@@ -71,7 +71,7 @@ where
             .get_aggchain_hash(aggchain_data)
             .await
             .map_err(|error| {
-                error!("Error fetching aggchain hash: {:?}", error);
+                error!(?error, "Unable to fetch the aggchain hash");
 
                 L1RpcError::AggchainHashFetchFailed
             })

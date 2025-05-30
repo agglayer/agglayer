@@ -188,7 +188,7 @@ where
             });
         }
 
-        info!("Successfully executed the PP in SP1 for the Certificate {certificate_id}");
+        info!("Successfully executed the PP in SP1 for the Certificate");
 
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
