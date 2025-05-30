@@ -17,9 +17,7 @@ pub fn setup_tracing(config: &agglayer_config::Tracing, version: &str) -> anyhow
 
     // Setup instrumentation if both otlp agent url and
     // otlp service name are provided as arguments
-    if config
-        .outputs.contains(&TracingOutput::Otlp)
-    {
+    if config.outputs.contains(&TracingOutput::Otlp) {
         if let (Some(otlp_agent), Some(otlp_service_name)) =
             (&config.otlp_agent, &config.otlp_service_name)
         {
