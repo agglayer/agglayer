@@ -67,7 +67,7 @@ pub enum CertificationError {
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
     #[error("rollup contract address not found")]
-    RollupContractAddressNotFound { source: L1RpcError },
+    RollupContractAddressNotFound(#[source] L1RpcError),
     #[error("Unable to find aggchain vkey")]
     UnableToFindAggchainVkey { source: L1RpcError },
     #[error("Aggchain proof vkey mismatch: expected {expected}, actual {actual}")]
@@ -75,7 +75,7 @@ pub enum CertificationError {
     #[error("Missing L1 info tree leaf count for generic aggchain data")]
     MissingL1InfoTreeLeafCountForGenericAggchainData,
     #[error("Unable to find aggchain hash")]
-    UnableToFindAggchainHash { source: L1RpcError },
+    UnableToFindAggchainHash(#[source] L1RpcError),
     /// Mismatch on the aggchain hash between the one fetched from the L1, and
     /// the one computed from the received Certificate.
     #[error("Aggchain hash mismatch. from l1: {from_l1}, from certificate: {from_certificate}.")]

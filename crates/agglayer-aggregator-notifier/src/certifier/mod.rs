@@ -393,7 +393,7 @@ where
             .l1_rpc
             .get_rollup_contract_address(network_id.to_u32())
             .await
-            .map_err(|source| CertificationError::RollupContractAddressNotFound { source })?;
+            .map_err(CertificationError::RollupContractAddressNotFound)?;
 
         let aggchain_vkey = match certificate.aggchain_data {
             AggchainData::ECDSA { .. } => None,
@@ -451,7 +451,7 @@ where
                 .l1_rpc
                 .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
                 .await
-                .map_err(|source| CertificationError::UnableToFindAggchainHash { source })?
+                .map_err(CertificationError::UnableToFindAggchainHash)?
                 .into();
 
             let computed_aggchain_hash = multi_batch_header.aggchain_proof.aggchain_hash();
