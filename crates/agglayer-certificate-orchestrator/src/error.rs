@@ -90,8 +90,8 @@ pub enum CertificationError {
          after native execution: {native_execution:?}"
     )]
     StateCommitmentMismatch {
-        witness_generation: StateCommitment,
-        native_execution: StateCommitment,
+        witness_generation: Box<StateCommitment>,
+        native_execution: Box<StateCommitment>,
     },
 }
 

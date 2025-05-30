@@ -477,8 +477,8 @@ where
 
         if targets_witness_generation != targets_native_execution {
             return Err(CertificationError::StateCommitmentMismatch {
-                witness_generation: targets_witness_generation,
-                native_execution: targets_native_execution,
+                witness_generation: Box::new(targets_witness_generation),
+                native_execution: Box::new(targets_native_execution),
             });
         }
 
