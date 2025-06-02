@@ -40,7 +40,7 @@ pub use l2::L2;
 use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
-pub use tracing::Tracing;
+pub use tracing::TracingConfig;
 
 /// The Agglayer configuration.
 #[serde_with::serde_as]
@@ -65,7 +65,7 @@ pub struct Config {
 
     /// The log configuration.
     #[serde(default)]
-    pub log: Tracing,
+    pub log: TracingConfig,
 
     /// The local RPC server configuration.
     #[serde(default)]

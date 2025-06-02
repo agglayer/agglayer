@@ -6,7 +6,7 @@ use tracing_subscriber::{fmt::writer::BoxMakeWriter, EnvFilter};
 /// The tracing configuration.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub struct Tracing {
+pub struct TracingConfig {
     /// The `RUST_LOG` environment variable will take precedence over the
     /// configuration tracing level.
     #[serde(default)]

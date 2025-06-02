@@ -10,7 +10,7 @@ use opentelemetry_sdk::{
 };
 use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
 
-pub fn setup_tracing(config: &agglayer_config::Tracing, version: &str) -> anyhow::Result<()> {
+pub fn setup_tracing(config: &agglayer_config::TracingConfig, version: &str) -> anyhow::Result<()> {
     let writer = config.outputs.first().cloned().unwrap_or_default();
 
     let mut layers = Vec::new();
