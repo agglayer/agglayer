@@ -1,5 +1,8 @@
 use agglayer_contracts::L1RpcError;
-use agglayer_types::{CertificateId, CertificateStatusError, Digest, Height, NetworkId};
+use agglayer_types::{
+    aggchain_proof::AggchainProofPublicValues, CertificateId, CertificateStatusError, Digest,
+    Height, NetworkId,
+};
 use pessimistic_proof::{
     core::commitment::StateCommitment, error::ProofVerificationError, PessimisticProofOutput,
     ProofError,
@@ -92,6 +95,16 @@ pub enum CertificationError {
     StateCommitmentMismatch {
         witness_generation: Box<StateCommitment>,
         native_execution: Box<StateCommitment>,
+    },
+    /// Aggchain proof public values mismatch between PP witness and the ones
+    /// expected by the received aggchain proof.
+    #[error(
+        "Aggchain proof public values mismatch. expected by the PP: {from_witness:?}, expected by \
+         the aggchain proof: {from_proof:?}"
+    )]
+    AggchainProofPublicValuesMismatch {
+        from_proof: Box<AggchainProofPublicValues>,
+        from_witness: Box<AggchainProofPublicValues>,
     },
 }
 

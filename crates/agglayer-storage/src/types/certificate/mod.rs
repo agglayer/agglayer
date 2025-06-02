@@ -25,7 +25,9 @@ use agglayer_types::{
     Certificate, Height, Metadata, NetworkId, Signature,
 };
 use bincode::Options;
-use pessimistic_proof::unified_bridge::{BridgeExit, ImportedBridgeExit};
+use pessimistic_proof::unified_bridge::{
+    AggchainProofPublicValues, BridgeExit, ImportedBridgeExit,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::columns::{default_bincode_options, CodecError};
@@ -198,12 +200,14 @@ pub enum AggchainDataV1<'a> {
     GenericNoSignature {
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
+        public_values: Option<Box<AggchainProofPublicValues>>,
     },
 
     GenericWithSignature {
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
         signature: Cow<'a, Box<Signature>>,
+        public_values: Option<Box<AggchainProofPublicValues>>,
     },
 }
 
@@ -218,6 +222,7 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
                 proof,
                 aggchain_params,
                 signature,
+                public_values,
             } => {
                 let proof = Cow::Borrowed(proof);
                 let aggchain_params = *aggchain_params;
@@ -225,11 +230,13 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
                     None => Self::GenericNoSignature {
                         proof,
                         aggchain_params,
+                        public_values: public_values.clone(),
                     },
                     Some(signature) => Self::GenericWithSignature {
                         proof,
                         aggchain_params,
                         signature: Cow::Borrowed(signature),
+                        public_values: public_values.clone(),
                     },
                 }
             }
@@ -245,20 +252,24 @@ impl From<AggchainDataV1<'_>> for AggchainData {
             AggchainDataV1::GenericNoSignature {
                 proof,
                 aggchain_params,
+                public_values,
             } => Self::Generic {
                 proof: proof.into_owned(),
                 aggchain_params,
                 signature: None,
+                public_values,
             },
 
             AggchainDataV1::GenericWithSignature {
                 proof,
                 aggchain_params,
                 signature,
+                public_values,
             } => Self::Generic {
                 proof: proof.into_owned(),
                 aggchain_params,
                 signature: Some(signature.into_owned()),
+                public_values,
             },
         }
     }
