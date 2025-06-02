@@ -47,6 +47,7 @@ impl Proof {
             proof: SP1Proof::Core(vec![]),
             public_values: SP1PublicValues::new(),
             sp1_version: "".to_string(),
+            tee_proof: None,
         })
     }
 

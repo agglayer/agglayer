@@ -1,24 +1,24 @@
 [package]
 name = "pessimistic-proof-program"
-version = "1.0.0"
+version = "2.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
 bincode = "1.3.3"
 pessimistic-proof-core = { path = "../pessimistic-proof-core", default-features = false }
-sp1-zkvm = { version = "=4.1.4", features = ["verify"] }
+sp1-zkvm = { version = "=4.2.1", features = ["verify"] }
 
 [build-dependencies]
-sp1-cli = "=4.1.4"
+sp1-cli = "=4.2.1"
 
 [profile.release]
 panic = "abort"
 lto = "fat"
 codegen-units = 1
+overflow-checks = true
 
 # Inject sp1-friendly versions of the relevant crypto packages.
-
 [patch.crates-io.ecdsa-core]
 git = "https://github.com/sp1-patches/signatures"
 package = "ecdsa"

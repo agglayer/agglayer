@@ -174,8 +174,7 @@ where
                 }
             },
             Ok(None) => Err(Error::ResourceNotFound(format!(
-                "Certificate({})",
-                certificate_id
+                "Certificate({certificate_id})"
             ))),
             Err(error) => {
                 error!("Failed to get certificate: {}", error);
@@ -234,8 +233,7 @@ where
             certificate
         } else {
             return Err(Error::ResourceNotFound(format!(
-                "CertificateHeader({})",
-                certificate_id
+                "CertificateHeader({certificate_id})"
             )));
         };
 
@@ -272,8 +270,7 @@ where
             certificate
         } else {
             return Err(Error::ResourceNotFound(format!(
-                "CertificateHeader({})",
-                certificate_id
+                "CertificateHeader({certificate_id})"
             )));
         };
 
@@ -330,15 +327,14 @@ where
             certificate.hash()
         } else {
             return Err(Error::ResourceNotFound(format!(
-                "PendingCertificate({:?}, {:?})",
-                network_id, height
+                "PendingCertificate({network_id:?}, {height:?})",
             )));
         };
 
         self.pending_store
             .remove_pending_certificate(network_id, height)
             .map_err(|error| {
-                error!("Failed to remove pending certificate: {}", error);
+                error!("Failed to remove pending certificate: {error}");
                 Error::internal("Unable to remove pending certificate")
             })?;
 

@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use agglayer_grpc_types::node::v1::SubmitCertificateErrorKind;
 use agglayer_rpc::CertificateSubmissionError;
 use ethers::providers::Middleware;
-use tonic_types::ErrorDetails;
-use tonic_types::StatusExt as _;
+use tonic_types::{ErrorDetails, StatusExt as _};
 use tracing::{error, warn};
 
 pub(crate) struct CertificateSubmissionErrorWrapper<Rpc: Middleware> {

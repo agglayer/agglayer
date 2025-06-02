@@ -27,6 +27,7 @@ mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion = "0.5.1"
+alloy-primitives.workspace = true
 insta.workspace = true
 rand.workspace = true
 rstest.workspace = true

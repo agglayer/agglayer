@@ -1,5 +1,4 @@
-use agglayer_primitives::keccak::Keccak256Hasher;
-use agglayer_primitives::{digest::Digest, Address, Signature, B256};
+use agglayer_primitives::{keccak::Keccak256Hasher, Address, Digest, Signature, B256};
 pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
@@ -7,20 +6,17 @@ use thiserror::Error;
 #[cfg(not(target_os = "zkvm"))]
 use tracing::warn;
 #[cfg(target_os = "zkvm")]
-use unified_bridge::aggchain_proof::AggchainProofPublicValues;
-use unified_bridge::global_index::GlobalIndex;
-use unified_bridge::imported_bridge_exit::Error;
-use unified_bridge::imported_bridge_exit::ImportedBridgeExitCommitmentValues;
-use unified_bridge::CommitmentVersion;
+use unified_bridge::AggchainProofPublicValues;
 use unified_bridge::{
-    bridge_exit::NetworkId, local_exit_tree::LocalExitTreeError, token_info::TokenInfo,
+    CommitmentVersion, Error, GlobalIndex, ImportedBridgeExitCommitmentValues, LocalExitTreeError,
+    NetworkId, TokenInfo,
 };
 
 use crate::{
     aggchain_proof::AggchainData,
     local_state::{
-        commitment::PessimisticRoot, commitment::SignatureCommitmentValues,
-        commitment::StateCommitment, NetworkState,
+        commitment::{PessimisticRoot, SignatureCommitmentValues, StateCommitment},
+        NetworkState,
     },
     multi_batch_header::MultiBatchHeader,
 };
@@ -40,18 +36,6 @@ pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: CommitmentVersion = Commitmen
 /// as witness and what is *computed* by the prover.
 #[derive(Clone, Error, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ProofError {
-    /// The previous local exit root declared by the chain does not match the
-    /// one computed by the prover.
-    #[error("Invalid previous local exit root. declared: {declared}, computed: {computed}")]
-    InvalidPreviousLocalExitRoot { declared: Digest, computed: Digest },
-    /// The previous balance root declared by the agglayer does not match the
-    /// one computed by the prover.
-    #[error("Invalid previous balance root. declared: {declared}, computed: {computed}")]
-    InvalidPreviousBalanceRoot { declared: Digest, computed: Digest },
-    /// The previous nullifier root declared by the agglayer does not match the
-    /// one computed by the prover.
-    #[error("Invalid previous nullifier root. declared: {declared}, computed: {computed}")]
-    InvalidPreviousNullifierRoot { declared: Digest, computed: Digest },
     /// The previous pessimistic root is not re-computable.
     #[error(
         "Invalid previous pessimistic root. declared: {declared}, ppr_v2: {computed_v2}, ppr_v3: \
@@ -62,18 +46,6 @@ pub enum ProofError {
         computed_v2: Digest,
         computed_v3: Digest,
     },
-    /// The new local exit root declared by the chain does not match the
-    /// one computed by the prover.
-    #[error("Invalid new local exit root. declared: {declared}, computed: {computed}")]
-    InvalidNewLocalExitRoot { declared: Digest, computed: Digest },
-    /// The new balance root declared by the agglayer does not match the
-    /// one computed by the prover.
-    #[error("Invalid new balance root. declared: {declared}, computed: {computed}")]
-    InvalidNewBalanceRoot { declared: Digest, computed: Digest },
-    /// The new nullifier root declared by the agglayer does not match the
-    /// one computed by the prover.
-    #[error("Invalid new nullifier root. declared: {declared}, computed: {computed}")]
-    InvalidNewNullifierRoot { declared: Digest, computed: Digest },
     /// The provided imported bridge exit is invalid.
     #[error("Invalid imported bridge exit. global index: {global_index:?}, error: {source}")]
     InvalidImportedBridgeExit {
@@ -139,7 +111,7 @@ pub enum ProofError {
 }
 
 /// Outputs of the pessimistic proof.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PessimisticProofOutput {
     /// The previous local exit root.
     pub prev_local_exit_root: Digest,
@@ -179,7 +151,7 @@ pub const EMPTY_PP_ROOT_V2: Digest = Digest(hex!(
 pub fn generate_pessimistic_proof(
     initial_network_state: NetworkState,
     batch_header: &MultiBatchHeader<Keccak256Hasher>,
-) -> Result<PessimisticProofOutput, ProofError> {
+) -> Result<(PessimisticProofOutput, StateCommitment), ProofError> {
     // Get the initial state commitment
     let initial_state_commitment = initial_network_state.get_state_commitment();
     let mut network_state: NetworkState = initial_network_state;
@@ -192,9 +164,10 @@ pub fn generate_pessimistic_proof(
         &final_state_commitment,
     )?;
 
-    let Some(height) = batch_header.height.checked_add(1) else {
-        return Err(ProofError::HeightOverflow);
-    };
+    let height = batch_header
+        .height
+        .checked_add(1)
+        .ok_or(ProofError::HeightOverflow)?;
 
     let new_pessimistic_root = PessimisticRoot {
         balance_root: final_state_commitment.balance_root,
@@ -205,15 +178,18 @@ pub fn generate_pessimistic_proof(
     }
     .compute_pp_root(target_pp_root_version);
 
-    Ok(PessimisticProofOutput {
-        prev_local_exit_root: zero_if_empty_exit_root(initial_state_commitment.exit_root),
-        prev_pessimistic_root: batch_header.prev_pessimistic_root,
-        l1_info_root: batch_header.l1_info_root,
-        origin_network: batch_header.origin_network,
-        aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),
-        new_local_exit_root: zero_if_empty_exit_root(final_state_commitment.exit_root),
-        new_pessimistic_root,
-    })
+    Ok((
+        PessimisticProofOutput {
+            prev_local_exit_root: zero_if_empty_exit_root(initial_state_commitment.exit_root),
+            prev_pessimistic_root: batch_header.prev_pessimistic_root,
+            l1_info_root: batch_header.l1_info_root,
+            origin_network: batch_header.origin_network,
+            aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),
+            new_local_exit_root: zero_if_empty_exit_root(final_state_commitment.exit_root),
+            new_pessimistic_root,
+        },
+        final_state_commitment,
+    ))
 }
 
 // NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
@@ -317,7 +293,7 @@ pub fn verify_consensus(
                 prev_local_exit_root: initial_state_commitment.exit_root,
                 new_local_exit_root: final_state_commitment.exit_root,
                 l1_info_root: multi_batch_header.l1_info_root,
-                origin_network: *multi_batch_header.origin_network,
+                origin_network: multi_batch_header.origin_network,
                 aggchain_params: *aggchain_params,
                 commit_imported_bridge_exits: commit_imported_bridge_exits
                     .commitment(IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION),

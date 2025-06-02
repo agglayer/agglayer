@@ -789,8 +789,8 @@ async fn timeout_certifier() {
         });
 
     let expected_error = format!(
-        "Internal error happened in the certification process of {}: internal error: TimedOut",
-        certificate_id
+        "Internal error happened in the certification process of {certificate_id}: internal \
+         error: TimedOut"
     );
 
     state

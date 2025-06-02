@@ -9,6 +9,7 @@ use agglayer_storage::{
     },
 };
 use anyhow::Result;
+use tokio::sync::broadcast::error::TryRecvError;
 use tracing::{debug, error, info};
 
 pub(crate) struct EpochSynchronizer {}
@@ -48,8 +49,23 @@ impl EpochSynchronizer {
                 opened_epoch.get_end_checkpoint(),
             )?;
 
-            if let Ok(agglayer_clock::Event::EpochEnded(n)) = epoch_stream.try_recv() {
-                current_epoch_number = n;
+            match epoch_stream.try_recv() {
+                Ok(agglayer_clock::Event::EpochEnded(n)) => {
+                    current_epoch_number = n;
+                }
+                Err(TryRecvError::Closed) => {
+                    anyhow::bail!("Epoch stream closed during epoch synchronization");
+                }
+                Err(TryRecvError::Lagged(n)) => {
+                    debug!(
+                        "Epoch stream lagged on {} EpochEnded update during epoch synchronization",
+                        n
+                    );
+                }
+                Err(TryRecvError::Empty) => {
+                    // We don't care about empty stream during epoch
+                    // synchronization
+                }
             }
         }
 
@@ -76,9 +92,20 @@ impl EpochSynchronizer {
         debug!("synchronizer: Current epoch: {}", current_epoch_number);
         let opened_epoch = match lse_number {
             // No LSE, we start from epoch 0
-            None => epochs_store.open(0)?,
+            None => {
+                debug!("synchronizer: No LSE, starting from epoch 0");
+                epochs_store.open(0)?
+            }
 
             Some(lse_number) => {
+                debug!("synchronizer: Latest settled epoch: {}", lse_number);
+                if current_epoch_number < lse_number {
+                    anyhow::bail!(
+                        "Unable to synchronize: Current epoch is less than the latest settled \
+                         epoch"
+                    );
+                }
+
                 let lse = epochs_store.open(lse_number)?;
                 epochs_store.open_with_start_checkpoint(
                     lse.get_epoch_number() + 1,

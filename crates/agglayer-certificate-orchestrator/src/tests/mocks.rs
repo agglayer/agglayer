@@ -1,7 +1,6 @@
 use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
 use mockall::mock;
-use pessimistic_proof::multi_batch_header::MultiBatchHeader;
-use pessimistic_proof::LocalNetworkState;
+use pessimistic_proof::{multi_batch_header::MultiBatchHeader, LocalNetworkState};
 
 use crate::{error::CertificationError, Certifier, CertifierOutput};
 
@@ -17,11 +16,11 @@ mock! {
             height: Height,
         ) -> Result<CertifierOutput, CertificationError>;
 
-        async fn witness_execution(
+        async fn witness_generation(
             &self,
             certificate: &agglayer_types::Certificate,
-            state: &mut LocalNetworkStateData
-        ) -> Result<(MultiBatchHeader<pessimistic_proof::keccak::Keccak256Hasher>, LocalNetworkState), CertificationError>;
+            state: &mut LocalNetworkStateData,
+        ) -> Result<(MultiBatchHeader<pessimistic_proof::keccak::Keccak256Hasher>, LocalNetworkState, pessimistic_proof::PessimisticProofOutput), CertificationError>;
     }
 }
 

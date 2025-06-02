@@ -9,7 +9,7 @@ use agglayer_types::{Height, NetworkId, Proof};
 use parking_lot::RwLock;
 use rstest::{fixture, rstest};
 
-use crate::stores::{PendingCertificateWriter as _, StateReader};
+use crate::stores::{PendingCertificateWriter as _, PerEpochReader as _, StateReader};
 use crate::{
     error::Error,
     stores::{
@@ -209,12 +209,103 @@ fn adding_multiple_certificates(
         assert!(
             expected_result(
                 store.add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
-            ),
-            "{}:{} failed to pass the test",
-            network,
-            height
-        );
+            ), "{network}:{height} failed to pass the test");
 
         height += 1;
     }
+}
+
+#[rstest]
+fn adding_certificate_and_restart() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+
+    let backup_client = BackupClient::noop();
+    let store = PerEpochStore::try_open(
+        config.clone(),
+        0,
+        pending_store,
+        state_store,
+        None,
+        backup_client.clone(),
+    )
+    .unwrap();
+
+    let network = 1.into();
+    let height = 0;
+
+    let certificate = Certificate::new_for_test(network, height);
+    let certificate_id = certificate.hash();
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_pending_certificate(network, height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
+        .unwrap();
+
+    assert!(
+        store
+            .add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
+            .is_ok(),
+        "{network}:{height} failed to pass the test");
+
+    drop(store);
+
+    let store = PerEpochStore::try_open(config, 0, pending_store, state_store, None, backup_client)
+        .unwrap();
+
+    let network = 2.into();
+    let height = 0;
+
+    let certificate = Certificate::new_for_test(network, height);
+    let certificate_id = certificate.hash();
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_pending_certificate(network, height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
+        .unwrap();
+
+    assert!(
+        store
+            .add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
+            .is_ok(),
+        "{network}:{height} failed to pass the test");
+
+    let first = store.get_certificate_at_index(0).unwrap().unwrap();
+    assert!(
+        first.network_id == 1.into(),
+        "Network ID mismatch {} != {}",
+        first.network_id,
+        1
+    );
+
+    let second = store.get_certificate_at_index(1).unwrap().unwrap();
+    assert!(
+        second.network_id == 2.into(),
+        "Network ID mismatch {} != {}",
+        second.network_id,
+        2
+    );
 }

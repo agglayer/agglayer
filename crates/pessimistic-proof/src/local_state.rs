@@ -1,6 +1,6 @@
-use agglayer_primitives::{digest::Digest, keccak::Keccak256Hasher};
+use agglayer_primitives::{keccak::Keccak256Hasher, Digest};
 use serde::{Deserialize, Serialize};
-use unified_bridge::local_exit_tree::LocalExitTree;
+use unified_bridge::LocalExitTree;
 
 use crate::{local_balance_tree::LocalBalanceTree, nullifier_tree::NullifierTree};
 

@@ -301,7 +301,10 @@ where
     ) -> Result<(), SignatureVerificationError<L1Rpc::M>> {
         let sequencer_address = self
             .l1_rpc_provider
-            .get_trusted_sequencer_address(*cert.network_id, self.config.proof_signers.clone())
+            .get_trusted_sequencer_address(
+                cert.network_id.to_u32(),
+                self.config.proof_signers.clone(),
+            )
             .await
             .map_err(|_| {
                 SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(cert.network_id)
@@ -324,7 +327,7 @@ where
 
         Ok(())
     }
-    #[instrument(skip(self, certificate), fields(hash, rollup_id = *certificate.network_id), level = "info")]
+    #[instrument(skip(self, certificate), fields(hash, rollup_id = certificate.network_id.to_u32()), level = "info")]
     pub async fn send_certificate(
         &self,
         certificate: Certificate,
@@ -335,7 +338,7 @@ where
 
         info!(
             %hash,
-            "Received certificate {hash} for rollup {} at height {}", *certificate.network_id, certificate.height
+            "Received certificate {hash} for rollup {} at height {}", certificate.network_id.to_u32(), certificate.height
         );
         self.validate_pre_existing_certificate(&certificate).await?;
         self.verify_cert_signature(&certificate)

@@ -1,28 +1,26 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use agglayer_interop_types::aggchain_proof;
-use agglayer_interop_types::aggchain_proof::AggchainData;
-use agglayer_interop_types::ImportedBridgeExitCommitmentValues;
-use agglayer_interop_types::{BridgeExit, GlobalIndex, ImportedBridgeExit, TokenInfo};
-pub use agglayer_primitives::digest::Digest;
-use agglayer_primitives::keccak::Keccak256Hasher;
-use agglayer_primitives::utils::{FromBool, Hashable};
-use agglayer_primitives::SignatureError;
-use agglayer_tries::error::SmtError;
-use agglayer_tries::smt::Smt;
-use pessimistic_proof::core::commitment::{PessimisticRoot, SignatureCommitmentValues};
-use pessimistic_proof::core::{self, Vkey};
-use pessimistic_proof::error::ProofVerificationError;
-use pessimistic_proof::keccak::keccak256_combine;
-use pessimistic_proof::local_balance_tree::{LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH};
-use pessimistic_proof::local_state::StateCommitment;
-use pessimistic_proof::nullifier_tree::{NullifierTree, NULLIFIER_TREE_DEPTH};
-use pessimistic_proof::LocalNetworkState;
+use agglayer_interop_types::{
+    aggchain_proof::AggchainData, BridgeExit, GlobalIndex, ImportedBridgeExit,
+    ImportedBridgeExitCommitmentValues, TokenInfo,
+};
+pub use agglayer_primitives::Digest;
+use agglayer_primitives::{keccak::Keccak256Hasher, FromBool, Hashable, SignatureError};
+use agglayer_tries::{error::SmtError, smt::Smt};
 use pessimistic_proof::{
-    local_balance_tree::LocalBalancePath,
+    core::{
+        self,
+        commitment::{PessimisticRoot, SignatureCommitmentValues},
+        Vkey,
+    },
+    error::ProofVerificationError,
+    keccak::keccak256_combine,
+    local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
+    local_state::StateCommitment,
     multi_batch_header::MultiBatchHeader,
-    nullifier_tree::{NullifierKey, NullifierPath},
-    ProofError,
+    nullifier_tree::{NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
+    LocalNetworkState, ProofError,
 };
 use serde::{Deserialize, Serialize};
 use unified_bridge::CommitmentVersion;
@@ -36,7 +34,7 @@ pub use agglayer_primitives as primitives;
 // Re-export common primitives again as agglayer-types root types
 pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
 pub use pessimistic_proof::proof::Proof;
-use unified_bridge::local_exit_tree::{LocalExitTree, LocalExitTreeError};
+use unified_bridge::{LocalExitTree, LocalExitTreeError};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {
@@ -145,6 +143,14 @@ pub enum Error {
         expected_at_least: usize,
         actual: usize,
     },
+
+    /// The certificate refers to a prev local exit root which differ from the
+    /// one computed by the agglayer.
+    #[error(
+        "Mismatch on the certificate prev local exit root. declared: {declared:?}, computed: \
+         {computed:?}"
+    )]
+    MismatchPrevLocalExitRoot { computed: Digest, declared: Digest },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -158,19 +164,16 @@ pub enum CertificateStatusError {
     },
 
     /// Failure on the proof verification.
-    #[error("proof verification failed")]
-    ProofVerificationFailed(#[from] ProofVerificationError),
+    #[error("Proof verification failed")]
+    ProofVerificationFailed(#[source] ProofVerificationError),
 
     /// Failure on the pessimistic proof witness generation from the
     /// [`LocalNetworkStateData`] and the provided [`Certificate`].
-    #[error(transparent)]
-    TypeConversionError(#[from] Error),
+    #[error("Cannot produce local network state from certificate")]
+    TypeConversionError(#[source] Error),
 
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
-
-    #[error("Last pessimistic root not found for network: {0}")]
-    LastPessimisticRootNotFound(NetworkId),
 
     #[error("Internal error")]
     InternalError(String),
@@ -186,6 +189,9 @@ pub enum CertificateStatusError {
 
     #[error("L1 Info root not found for l1 leaf count: {0}")]
     L1InfoRootNotFound(u32),
+
+    #[error("Last pessimistic root not found for network: {0}")]
+    LastPessimisticRootNotFound(NetworkId),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -247,7 +253,7 @@ impl std::fmt::Display for CertificateStatus {
             CertificateStatus::Pending => write!(f, "Pending"),
             CertificateStatus::Proven => write!(f, "Proven"),
             CertificateStatus::Candidate => write!(f, "Candidate"),
-            CertificateStatus::InError { error } => write!(f, "InError: {}", error),
+            CertificateStatus::InError { error } => write!(f, "InError: {error}"),
             CertificateStatus::Settled => write!(f, "Settled"),
         }
     }
@@ -295,7 +301,7 @@ pub struct Certificate {
 #[cfg(any(test, feature = "testutils"))]
 impl Default for Certificate {
     fn default() -> Self {
-        let network_id = Default::default();
+        let network_id = NetworkId::ETH_L1;
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
         let height: Height = 0u64;
@@ -450,6 +456,18 @@ impl Certificate {
                     .recover_address_from_prehash(&B256::new(combined_hash.0))
                     .map(Some)
             }
+            AggchainData::Generic {
+                signature: Some(ref signature),
+                aggchain_params,
+                ..
+            } => {
+                let commitment = SignatureCommitmentValues::from(self)
+                    .aggchain_proof_commitment(&aggchain_params);
+
+                signature
+                    .recover_address_from_prehash(&B256::new(commitment.0))
+                    .map(Some)
+            }
             _ => Ok(None),
         }
     }
@@ -548,6 +566,14 @@ impl LocalNetworkStateData {
             }
             .compute_pp_root(version),
         };
+
+        let prev_local_exit_root = self.exit_tree.get_root();
+        if certificate.prev_local_exit_root != prev_local_exit_root {
+            return Err(Error::MismatchPrevLocalExitRoot {
+                computed: prev_local_exit_root,
+                declared: certificate.prev_local_exit_root,
+            });
+        }
 
         for e in certificate.bridge_exits.iter() {
             self.exit_tree.add_leaf(e.hash())?;

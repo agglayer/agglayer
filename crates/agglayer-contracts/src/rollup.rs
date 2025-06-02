@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
-use ethers::prelude::*;
-use ethers::providers::Middleware;
+use ethers::{prelude::*, providers::Middleware};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use tracing::{debug, error};
 
-use super::polygon_rollup_manager::RollupIDToRollupDataReturn;
-use super::polygon_zk_evm::PolygonZkEvm;
-use super::polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2Events;
+use super::{
+    polygon_rollup_manager::RollupIDToRollupDataReturn, polygon_zk_evm::PolygonZkEvm,
+    polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2Events,
+};
 use crate::{polygon_rollup_manager::RollupDataReturnV2, L1RpcClient, L1RpcError};
 
 #[derive(Debug, FromPrimitive)]

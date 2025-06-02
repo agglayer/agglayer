@@ -25,7 +25,7 @@ jobs:
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly-2024-07-15
+          toolchain: nightly
           components: clippy rustfmt llvm-tools-preview
 
       - name: Set up rust cache
@@ -39,11 +39,9 @@ jobs:
       - uses: taiki-e/install-action@grcov
       - uses: taiki-e/install-action@protoc
       - uses: taiki-e/install-action@nextest
-      - name: Install cargo-sonar and run Clippy
+      - name: Run Clippy
         run: |
-          cargo install cargo-sonar
-          cargo clippy --all-features --all-targets --message-format=json > clippy.json
-          cargo sonar --clippy
+          cargo clippy --all-features --all-targets
 
       - name: Build with coverage
         env:

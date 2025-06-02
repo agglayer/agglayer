@@ -16,8 +16,7 @@ use ethers::{
     providers::PendingTransaction,
     types::{TransactionReceipt, H256, U256, U64},
 };
-use pessimistic_proof::proof::DisplayToHex;
-use pessimistic_proof::PessimisticProofOutput;
+use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
 use tracing::{debug, error, info, instrument, warn};
 
 #[cfg(test)]
@@ -129,13 +128,12 @@ where
                 certificate
             } else {
                 return Err(Error::InternalError(format!(
-                    "Unable to find the certificate {} in pending store",
-                    certificate_id
+                    "Unable to find the certificate {certificate_id} in pending store"
                 )));
             };
 
         let network_id = certificate.network_id;
-        tracing::Span::current().record("network_id", *network_id);
+        tracing::Span::current().record("network_id", network_id.to_u32());
 
         let height = certificate.height;
 
@@ -162,7 +160,7 @@ where
 
         let verifier_type = self
             .l1_rpc
-            .get_verifier_type(*network_id)
+            .get_verifier_type(network_id.to_u32())
             .await
             .map_err(|_| Error::UnableToGetVerifierType {
                 certificate_id,
@@ -189,7 +187,7 @@ where
         let contract_call = self
             .l1_rpc
             .build_verify_pessimistic_trusted_aggregator_call(
-                *output.origin_network,
+                output.origin_network.to_u32(),
                 l_1_info_tree_leaf_count,
                 *output.new_local_exit_root,
                 *output.new_pessimistic_root,
@@ -357,9 +355,8 @@ where
                     match related_epoch.add_certificate(certificate_id, ExecutionMode::Default) {
                         Err(error) if max_retries == 0 => {
                             let error_msg = format!(
-                                "CRITICAL: Failed to add the certificate {} to the epoch after \
-                                 multiple retries: {}",
-                                certificate_id, error
+                                "CRITICAL: Failed to add the certificate {certificate_id} to the \
+                                 epoch after multiple retries: {error}"
                             );
                             error!(hash = certificate_id.to_string(), error_msg);
 

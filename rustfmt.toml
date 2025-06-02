@@ -4,3 +4,4 @@ group_imports = "StdExternalCrate"
 reorder_imports = true
 unstable_features = true
 wrap_comments = true
+imports_granularity = "Crate"

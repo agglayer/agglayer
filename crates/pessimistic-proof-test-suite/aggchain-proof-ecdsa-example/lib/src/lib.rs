@@ -1,4 +1,4 @@
-use alloy_primitives::{Address, PrimitiveSignature};
+use alloy_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
 use unified_bridge::aggchain_proof::AggchainProofPublicValues;
 
@@ -19,7 +19,7 @@ pub struct AggchainECDSA {
     /// Signer (aggchain_params).
     pub signer: Address,
     /// Signature of the commitment.
-    pub signature: PrimitiveSignature,
+    pub signature: Signature,
 }
 
 impl AggchainECDSA {

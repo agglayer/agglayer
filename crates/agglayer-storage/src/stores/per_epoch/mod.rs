@@ -60,7 +60,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         let path = config
             .storage
             .epochs_db_path
-            .join(format!("{}", epoch_number));
+            .join(format!("{epoch_number}"));
 
         let db = Arc::new(DB::open_cf(&path, epochs_db_cf_definitions())?);
 
@@ -117,7 +117,8 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             )?
             .next()
         {
-            AtomicU64::new(index)
+            // We're starting from the next index after the last one found in the database.
+            AtomicU64::new(index + 1)
         } else {
             AtomicU64::new(0)
         };

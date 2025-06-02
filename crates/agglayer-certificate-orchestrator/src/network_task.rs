@@ -5,11 +5,10 @@ use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
-use agglayer_types::primitives::utils::Hashable as _;
-use agglayer_types::CertificateHeader;
 use agglayer_types::{
-    primitives::digest::Digest, Certificate, CertificateId, CertificateStatus,
-    CertificateStatusError, Height, LocalNetworkStateData, NetworkId,
+    primitives::{Digest, Hashable as _},
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
+    Height, LocalNetworkStateData, NetworkId,
 };
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
@@ -227,8 +226,13 @@ where
         // Get the certificate the pending certificate for the network at the height
         let certificate = if let Some(certificate) = self
             .pending_store
-            .get_certificate(self.network_id, *next_expected_height)?
-        {
+            .get_certificate(self.network_id, *next_expected_height)
+            .inspect_err(|err| {
+                error!(
+                    "Cannot fetch pending certificate for {} at height {}: {}",
+                    self.network_id, *next_expected_height, err
+                )
+            })? {
             certificate
         } else {
             debug!(
@@ -331,9 +335,9 @@ where
                 })?
             {
                 let mut new_state = self.local_state.clone();
-                let (_multi_batch_header, _initial_state) = self
+                let (_multi_batch_header, _initial_state, _targets) = self
                     .certifier_client
-                    .witness_execution(certificate, &mut new_state)
+                    .witness_generation(certificate, &mut new_state)
                     .await
                     .map_err(|error| {
                         error!(hash, "Error while witnessing the execution: {}", error);
@@ -469,7 +473,9 @@ where
                     CertificationError::LastPessimisticRootNotFound(network_id) => {
                         CertificateStatusError::LastPessimisticRootNotFound(network_id)
                     }
-                    CertificationError::ProofVerificationFailed { source } => source.into(),
+                    CertificationError::ProofVerificationFailed { source } => {
+                        CertificateStatusError::ProofVerificationFailed(source)
+                    }
                     CertificationError::L1InfoRootNotFound(_certificate_id, l1_leaf_count) => {
                         CertificateStatusError::L1InfoRootNotFound(l1_leaf_count)
                     }
@@ -485,7 +491,9 @@ where
                             source,
                         }
                     }
-                    CertificationError::Types { source } => source.into(),
+                    CertificationError::Types { source } => {
+                        CertificateStatusError::TypeConversionError(source)
+                    }
 
                     CertificationError::Storage(source) => {
                         let error_msg = format!(

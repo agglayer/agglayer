@@ -308,7 +308,7 @@ async fn regression_block_disconnection() {
 
 #[rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(20))]
+#[timeout(Duration::from_secs(50))]
 async fn disconnection_with_timeout() {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let port = anvil.port();
@@ -330,8 +330,9 @@ async fn disconnection_with_timeout() {
     // Kill & restart using the same port so we end up with the same endpoint url:
     drop(anvil);
 
-    // Add some delay to make the reconnect fails
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // Add some delay to make the reconnect fails. There are 10 tries spread 3
+    // seconds apart each.
+    tokio::time::sleep(Duration::from_secs(35)).await;
 
     let _anvil = Anvil::new().port(port).block_time(1u64).spawn();
 

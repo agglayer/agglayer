@@ -21,13 +21,11 @@ use std::borrow::Cow;
 
 use agglayer_types::{
     aggchain_proof::{AggchainData, Proof},
-    primitives::digest::Digest,
+    primitives::Digest,
     Certificate, Height, Metadata, NetworkId, Signature,
 };
 use bincode::Options;
-use pessimistic_proof::unified_bridge::{
-    bridge_exit::BridgeExit, imported_bridge_exit::ImportedBridgeExit,
-};
+use pessimistic_proof::unified_bridge::{BridgeExit, ImportedBridgeExit};
 use serde::{Deserialize, Serialize};
 
 use crate::columns::{default_bincode_options, CodecError};
@@ -196,9 +194,16 @@ pub enum AggchainDataV1<'a> {
     ECDSA {
         signature: Signature,
     },
-    Generic {
+
+    GenericNoSignature {
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
+    },
+
+    GenericWithSignature {
+        proof: Cow<'a, Proof>,
+        aggchain_params: Digest,
+        signature: Cow<'a, Box<Signature>>,
     },
 }
 
@@ -208,13 +213,26 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
             AggchainData::ECDSA { signature } => Self::ECDSA {
                 signature: *signature,
             },
+
             AggchainData::Generic {
                 proof,
                 aggchain_params,
-            } => Self::Generic {
-                proof: Cow::Borrowed(proof),
-                aggchain_params: *aggchain_params,
-            },
+                signature,
+            } => {
+                let proof = Cow::Borrowed(proof);
+                let aggchain_params = *aggchain_params;
+                match signature {
+                    None => Self::GenericNoSignature {
+                        proof,
+                        aggchain_params,
+                    },
+                    Some(signature) => Self::GenericWithSignature {
+                        proof,
+                        aggchain_params,
+                        signature: Cow::Borrowed(signature),
+                    },
+                }
+            }
         }
     }
 }
@@ -223,12 +241,24 @@ impl From<AggchainDataV1<'_>> for AggchainData {
     fn from(proof: AggchainDataV1) -> Self {
         match proof {
             AggchainDataV1::ECDSA { signature } => Self::ECDSA { signature },
-            AggchainDataV1::Generic {
+
+            AggchainDataV1::GenericNoSignature {
                 proof,
                 aggchain_params,
             } => Self::Generic {
                 proof: proof.into_owned(),
                 aggchain_params,
+                signature: None,
+            },
+
+            AggchainDataV1::GenericWithSignature {
+                proof,
+                aggchain_params,
+                signature,
+            } => Self::Generic {
+                proof: proof.into_owned(),
+                aggchain_params,
+                signature: Some(signature.into_owned()),
             },
         }
     }

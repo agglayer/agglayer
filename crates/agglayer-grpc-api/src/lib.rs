@@ -20,8 +20,7 @@ use tonic::{
     codec::CompressionEncoding,
     server::NamedService,
 };
-use tower::Service;
-use tower::ServiceExt as _;
+use tower::{Service, ServiceExt as _};
 
 mod certificate_submission_service;
 mod configuration_service;

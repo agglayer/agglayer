@@ -19,7 +19,7 @@ fn network_id_encoding(#[case] network_id: NetworkId, #[case] expected: [u8; 4])
     assert_eq!(network_id.to_u32().to_be_bytes(), expected);
 }
 
-fn load_sample_certificate_bytes(filename: &str) -> Vec<u8> {
+fn load_sample_bytes(filename: &str) -> Vec<u8> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src/types/certificate/tests")
         .join(filename);
@@ -110,9 +110,14 @@ impl CertificateV1<'static> {
             new_local_exit_root: Digest([0x61; 32]),
             bridge_exits: Vec::new().into(),
             imported_bridge_exits: Vec::new().into(),
-            aggchain_data: AggchainDataV1::Generic {
+            aggchain_data: AggchainDataV1::GenericWithSignature {
                 proof: Cow::Owned(proof),
                 aggchain_params: Digest([0x58; 32]),
+                signature: Cow::Owned(Box::new(Signature::new(
+                    U256::from_be_bytes([0x78; 32]),
+                    U256::from_be_bytes([0x9a; 32]),
+                    false,
+                ))),
             },
             metadata: Digest([0xb9; 32]),
             custom_chain_data: Cow::Owned(vec![]),
@@ -147,12 +152,21 @@ impl CertificateV1<'_> {
             imported_bridge_exits: imported_bridge_exits.into_owned().into(),
             aggchain_data: match aggchain_data {
                 AggchainDataV1::ECDSA { signature } => AggchainDataV1::ECDSA { signature },
-                AggchainDataV1::Generic {
+                AggchainDataV1::GenericNoSignature {
                     proof,
                     aggchain_params,
-                } => AggchainDataV1::Generic {
+                } => AggchainDataV1::GenericNoSignature {
                     proof: Cow::Owned(proof.into_owned()),
                     aggchain_params,
+                },
+                AggchainDataV1::GenericWithSignature {
+                    proof,
+                    aggchain_params,
+                    signature,
+                } => AggchainDataV1::GenericWithSignature {
+                    proof: Cow::Owned(proof.into_owned()),
+                    aggchain_params,
+                    signature: Cow::Owned(signature.into_owned()),
                 },
             },
             metadata,
@@ -194,11 +208,19 @@ fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> 
 fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
     let from_json = sample_data::load_certificate(&format!("{cert_name}.json"));
 
-    let bytes = load_sample_certificate_bytes(&format!("encoded_v0-{cert_name}.hex"));
+    let bytes = load_sample_bytes(&format!("encoded_v0-{cert_name}.hex"));
     let from_bytes = Certificate::decode(&bytes).expect("v0 certificate to decode successfully");
 
     // Again comparing debug output due to lack of `Eq`.
     assert_eq!(format!("{from_bytes:?}"), format!("{from_json:?}"));
+}
+
+#[rstest::rstest]
+#[case::regression_01("regression_01.hex")]
+#[case::regression_02("regression_02.hex")]
+fn regressions(#[case] cert_filename: &str) {
+    let bytes = load_sample_bytes(cert_filename);
+    let _certificate = Certificate::decode(&bytes).expect("decoding failed");
 }
 
 #[test]
@@ -224,3 +246,6 @@ fn bad_format() {
         }
     }
 }
+
+mod header;
+mod status;

@@ -2,8 +2,7 @@
 
 use std::sync::Arc;
 
-use ethers::prelude::*;
-use ethers::providers::Middleware;
+use ethers::{prelude::*, providers::Middleware};
 use polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2Events;
 use tracing::{debug, error};
 
@@ -236,8 +235,7 @@ mod tests {
 
         assert_eq!(
             default_leaf_count, expected_leaf_count,
-            "default: {}, expected: {}",
-            default_leaf_count, expected_leaf_count,
+            "default: {default_leaf_count}, expected: {expected_leaf_count}"
         );
 
         // check that the awaiting for finalization is done as expected

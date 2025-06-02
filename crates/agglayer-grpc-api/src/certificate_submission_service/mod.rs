@@ -1,18 +1,17 @@
 use std::sync::Arc;
 
-use agglayer_contracts::L1TransactionFetcher;
-use agglayer_contracts::RollupContract;
+use agglayer_contracts::{L1TransactionFetcher, RollupContract};
 use agglayer_grpc_server::node::v1::certificate_submission_service_server::CertificateSubmissionService;
-use agglayer_grpc_types::node::v1::SubmitCertificateErrorKind;
-use agglayer_grpc_types::node::v1::{SubmitCertificateRequest, SubmitCertificateResponse};
+use agglayer_grpc_types::node::v1::{
+    SubmitCertificateErrorKind, SubmitCertificateRequest, SubmitCertificateResponse,
+};
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter,
 };
 use error::CertificateSubmissionErrorWrapper;
-use tonic_types::ErrorDetails;
-use tonic_types::StatusExt;
+use tonic_types::{ErrorDetails, StatusExt};
 use tracing::instrument;
 
 const SUBMIT_CERTIFICATE_METHOD_PATH: &str =

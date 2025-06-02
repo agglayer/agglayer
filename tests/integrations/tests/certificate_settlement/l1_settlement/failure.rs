@@ -4,8 +4,7 @@ use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{CertificateId, CertificateStatus};
 use fail::FailScenario;
 use integrations::{agglayer_setup::setup_network, wait_for_settlement_or_error};
-use jsonrpsee::core::client::ClientT as _;
-use jsonrpsee::rpc_params;
+use jsonrpsee::{core::client::ClientT as _, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 
@@ -70,7 +69,7 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
 
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
 
-    println!("{:?}", result);
+    println!("{result:?}",);
     assert!(matches!(result.status, CertificateStatus::InError { .. }));
 
     fail::cfg(
