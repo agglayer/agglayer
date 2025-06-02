@@ -110,6 +110,7 @@ impl TracingOutput {
         match self {
             TracingOutput::Stdout => BoxMakeWriter::new(std::io::stdout),
             TracingOutput::Stderr => BoxMakeWriter::new(std::io::stderr),
+            // For OTLP, output traces also to stdout
             TracingOutput::Otlp => BoxMakeWriter::new(std::io::stdout),
             TracingOutput::File(path) => {
                 let appender = tracing_appender::rolling::never(".", path);
