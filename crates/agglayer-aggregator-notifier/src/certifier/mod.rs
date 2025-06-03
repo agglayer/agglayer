@@ -116,7 +116,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     L1Rpc: RollupContract + AggchainContract + Send + Sync + 'static,
 {
-    #[instrument(skip(self, state, height), fields(hash, %network_id), level = "info")]
+    #[instrument(skip(self, state, height), fields(certificate_id, %network_id), level = "info")]
     async fn certify(
         &self,
         state: LocalNetworkStateData,
@@ -132,7 +132,7 @@ where
             .ok_or(CertificationError::CertificateNotFound(network_id, height))?;
 
         let certificate_id = certificate.hash();
-        tracing::Span::current().record("hash", certificate_id.to_string());
+        tracing::Span::current().record("certificate_id", certificate_id.to_string());
 
         let mut prover_client = self.prover.clone();
         let pending_store = self.pending_store.clone();
