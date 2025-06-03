@@ -29,9 +29,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 serde_with = { version = "3" }
 thiserror = "2.0.8"
-tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-4.0.0", features = [
-    "keccak",
-] }
+tiny-keccak.workspace = true
 rand = { version = "0.9.0", optional = true }
 sp1-primitives.workspace = true
 sp1-verifier.workspace = true

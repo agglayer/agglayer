@@ -24,7 +24,7 @@ sp1-core-machine.workspace = true
 sp1-prover.workspace = true
 sp1-sdk.workspace = true
 thiserror.workspace = true
-tiny-keccak = { version = "2.0", features = ["keccak"] }
+tiny-keccak.workspace = true
 
 [dev-dependencies]
 pessimistic-proof-core = { workspace = true, features = ["testutils"] }
@@ -33,3 +33,4 @@ rs_merkle = { version = "1.4", default-features = false }
 
 [lints]
 workspace = true
+
