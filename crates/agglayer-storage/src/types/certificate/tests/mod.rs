@@ -118,6 +118,7 @@ impl CertificateV1<'static> {
                     U256::from_be_bytes([0x9a; 32]),
                     false,
                 ))),
+                public_values: None,
             },
             metadata: Digest([0xb9; 32]),
             custom_chain_data: Cow::Owned(vec![]),
@@ -155,18 +156,22 @@ impl CertificateV1<'_> {
                 AggchainDataV1::GenericNoSignature {
                     proof,
                     aggchain_params,
+                    public_values,
                 } => AggchainDataV1::GenericNoSignature {
                     proof: Cow::Owned(proof.into_owned()),
                     aggchain_params,
+                    public_values,
                 },
                 AggchainDataV1::GenericWithSignature {
                     proof,
                     aggchain_params,
                     signature,
+                    public_values,
                 } => AggchainDataV1::GenericWithSignature {
                     proof: Cow::Owned(proof.into_owned()),
                     aggchain_params,
                     signature: Cow::Owned(signature.into_owned()),
+                    public_values,
                 },
             },
             metadata,

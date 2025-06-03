@@ -15,13 +15,16 @@ use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWrite
 use agglayer_types::{
     aggchain_proof::AggchainData,
     primitives::{keccak::Keccak256Hasher, Address},
-    Certificate, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
+    Certificate, Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
 };
 use bincode::Options;
 use pessimistic_proof::{
     core::{commitment::StateCommitment, generate_pessimistic_proof},
     local_state::LocalNetworkState,
     multi_batch_header::MultiBatchHeader,
+    unified_bridge::{
+        AggchainProofPublicValues, CommitmentVersion, ImportedBridgeExitCommitmentValues,
+    },
     NetworkState, PessimisticProofOutput,
 };
 use sp1_sdk::{
@@ -113,7 +116,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     L1Rpc: RollupContract + AggchainContract + Send + Sync + 'static,
 {
-    #[instrument(skip(self, state, height), fields(hash, %network_id), level = "info")]
+    #[instrument(skip(self, state, height), fields(certificate_id, %network_id), level = "info")]
     async fn certify(
         &self,
         state: LocalNetworkStateData,
@@ -129,7 +132,7 @@ where
             .ok_or(CertificationError::CertificateNotFound(network_id, height))?;
 
         let certificate_id = certificate.hash();
-        tracing::Span::current().record("hash", certificate_id.to_string());
+        tracing::Span::current().record("certificate_id", certificate_id.to_string());
 
         let mut prover_client = self.prover.clone();
         let pending_store = self.pending_store.clone();
@@ -164,7 +167,7 @@ where
         };
 
         // SP1 native execution which includes the aggchain proof stark verification
-        let (pv_sp1_execute, report) = {
+        let (pv_sp1_execute, _report) = {
             // Do not verify the deferred proof if we are in mock mode
             let deferred_proof_verification = !self.config.mock_verifier;
             let (pv, report) = self
@@ -188,11 +191,7 @@ where
             });
         }
 
-        info!(
-            "Successfully executed the PP in SP1 for the Certificate {}: {} sp1-cycles ",
-            report.cycle_tracker.values().sum::<u64>(),
-            certificate_id
-        );
+        info!("Successfully executed the PP in SP1 for the Certificate");
 
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
@@ -392,6 +391,13 @@ where
             }
         };
 
+        // Fetching rollup contract address
+        let rollup_address = self
+            .l1_rpc
+            .get_rollup_contract_address(network_id.to_u32())
+            .await
+            .map_err(CertificationError::RollupContractAddressNotFound)?;
+
         let aggchain_vkey = match certificate.aggchain_data {
             AggchainData::ECDSA { .. } => None,
             AggchainData::Generic { ref proof, .. } => {
@@ -405,15 +411,6 @@ where
                         },
                     })
                     .map(|bytes| u16::from_be_bytes(*bytes))?;
-
-                // Fetching rollup contract address
-                let rollup_address = self
-                    .l1_rpc
-                    .get_rollup_contract_address(network_id.to_u32())
-                    .await
-                    .map_err(|source| CertificationError::RollupContractAddressNotFound {
-                        source,
-                    })?;
 
                 let aggchain_vkey = self
                     .l1_rpc
@@ -451,6 +448,25 @@ where
             )
             .map_err(|source| CertificationError::Types { source })?;
 
+        // Verify matching on the aggchain hash between the L1 and the agglayer
+        {
+            let l1_aggchain_hash: Digest = self
+                .l1_rpc
+                .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
+                .await
+                .map_err(CertificationError::UnableToFindAggchainHash)?
+                .into();
+
+            let computed_aggchain_hash = multi_batch_header.aggchain_proof.aggchain_hash();
+
+            if l1_aggchain_hash != computed_aggchain_hash {
+                return Err(CertificationError::AggchainHashMismatch {
+                    from_l1: l1_aggchain_hash,
+                    from_certificate: computed_aggchain_hash,
+                });
+            }
+        }
+
         let targets_witness_generation: StateCommitment = {
             let ns: LocalNetworkState = state.clone().into();
             NetworkState::from(ns).get_state_commitment()
@@ -462,10 +478,54 @@ where
             generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
                 .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
-        debug!(
-            "Witness generation target roots: {:?}. Native execution target roots: {:?}",
-            targets_witness_generation, targets_native_execution
-        );
+        // Verify consistency on the aggchain proof public values if provided in the
+        // optional context
+        if let AggchainData::Generic {
+            public_values: Some(pv_from_proof),
+            aggchain_params,
+            ..
+        } = &certificate.aggchain_data
+        {
+            // Consistency check across these 2 sources:
+            //
+            // - Public values expected by the proof (i.e., the valid ones to succeed the
+            //   proof verification, provided as metadata in the Certificate as-is)
+            //
+            // - Public values expected by the PP (i.e., the ones used to verify the
+            //   aggchain proof in the PP)
+            debug!(%certificate_id, "Aggchain proof public values expected by the received aggchain proof: {pv_from_proof:?}");
+
+            let pv_from_pp_witness = AggchainProofPublicValues {
+                prev_local_exit_root: initial_state.exit_tree.get_root(),
+                new_local_exit_root: targets_native_execution.exit_root,
+                l1_info_root: multi_batch_header.l1_info_root,
+                origin_network: multi_batch_header.origin_network,
+                commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
+                    claims: multi_batch_header
+                        .imported_bridge_exits
+                        .iter()
+                        .map(|(exit, _)| exit.to_indexed_exit_hash())
+                        .collect(),
+                }
+                .commitment(CommitmentVersion::V3),
+                aggchain_params: *aggchain_params,
+            };
+
+            if **pv_from_proof != pv_from_pp_witness {
+                error!(%certificate_id, "Mismatch on the aggchain proof public values.");
+                return Err(CertificationError::AggchainProofPublicValuesMismatch {
+                    from_proof: pv_from_proof.clone(),
+                    from_witness: Box::new(pv_from_pp_witness),
+                });
+            }
+        }
+
+        if targets_witness_generation != targets_native_execution {
+            return Err(CertificationError::StateCommitmentMismatch {
+                witness_generation: Box::new(targets_witness_generation),
+                native_execution: Box::new(targets_native_execution),
+            });
+        }
 
         Ok((multi_batch_header, initial_state, pv))
     }

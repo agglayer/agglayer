@@ -9,10 +9,11 @@ use agglayer_types::{LocalNetworkStateData, NetworkId};
 use ethers::{
     middleware::NonceManagerMiddleware,
     providers::{MockProvider, Provider},
-    types::H160,
+    types::{Address, H160},
 };
 use fail::FailScenario;
 use mockall::predicate::{always, eq};
+use pessimistic_proof::keccak::keccak256_combine;
 use pessimistic_proof_test_suite::forest::Forest;
 use prover_config::ProverType;
 use tokio_util::sync::CancellationToken;
@@ -66,10 +67,22 @@ async fn happy_path() {
         .with(eq(certificate_id), always())
         .return_once(|_, _| Ok(()));
 
+    let expected_aggchain_hash = keccak256_combine([&0u32.to_be_bytes(), signer.0.as_slice()]).0;
+
+    l1_rpc
+        .expect_get_aggchain_hash()
+        .once()
+        .returning(move |_, _| Ok(expected_aggchain_hash));
+
     l1_rpc
         .expect_get_trusted_sequencer_address()
         .once()
         .returning(move |_, _| Ok(signer));
+
+    l1_rpc
+        .expect_get_rollup_contract_address()
+        .once()
+        .returning(|_| Ok(Address::default()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -166,10 +179,22 @@ async fn prover_timeout() {
         .with(eq(certificate_id), always())
         .return_once(|_, _| Ok(()));
 
+    let expected_aggchain_hash = keccak256_combine([&0u32.to_be_bytes(), signer.0.as_slice()]).0;
+
+    l1_rpc
+        .expect_get_aggchain_hash()
+        .once()
+        .returning(move |_, _| Ok(expected_aggchain_hash));
+
     l1_rpc
         .expect_get_trusted_sequencer_address()
         .once()
         .returning(move |_, _| Ok(signer));
+
+    l1_rpc
+        .expect_get_rollup_contract_address()
+        .once()
+        .returning(|_| Ok(Address::default()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -234,6 +259,12 @@ mockall::mock! {
             rollup_address: ethers::types::Address,
             aggchain_vkey_selector: u16,
         ) -> Result<AggchainVkeyHash, L1RpcError>;
+
+        async fn get_aggchain_hash(
+            &self,
+            rollup_address: ethers::types::Address,
+            aggchain_data: ethers::types::Bytes,
+        ) -> Result<[u8; 32], L1RpcError>;
     }
 
     #[async_trait::async_trait]

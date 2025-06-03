@@ -299,17 +299,7 @@ pub fn verify_consensus(
                     .commitment(IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION),
             };
 
-            eprintln!(
-                "AP public values: prev_local_exit_root: {:?}, new_local_exit_root: {:?}, \
-                 l1_info_root: {:?}, origin_network: {:?}, aggchain_params: {:?}, \
-                 commit_imported_bridge_exits: {:?}",
-                aggchain_proof_public_values.prev_local_exit_root,
-                aggchain_proof_public_values.new_local_exit_root,
-                aggchain_proof_public_values.l1_info_root,
-                aggchain_proof_public_values.origin_network,
-                aggchain_proof_public_values.aggchain_params,
-                aggchain_proof_public_values.commit_imported_bridge_exits
-            );
+            eprintln!("AP public values: {aggchain_proof_public_values:?}");
 
             sp1_zkvm::lib::verify::verify_sp1_proof(
                 aggchain_vkey,
