@@ -44,26 +44,27 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", tag = "v0.6.0" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", tag = "v0.6.0" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", tag = "v0.6.0" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", tag = "v0.6.0" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.6.0" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "v0.1.0-rc.26" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", branch = "fix/debug-sketches" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", branch = "fix/debug-sketches" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", branch = "fix/debug-sketches" }
+prover-config = { git = "https://github.com/agglayer/provers.git", branch = "fix/debug-sketches" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
 #       It is specified at the top of scripts/make/Makefile.elf.toml.
-sp1-core-machine = "=4.2.1"
-sp1-sdk = "=4.2.1"
-sp1-primitives = "=4.2.1"
-sp1-prover = "=4.2.1"
-sp1-zkvm = { version = "=4.2.1", default-features = false }
+sp1-core-machine = "=5.0.0"
+sp1-sdk = "=5.0.3"
+sp1-primitives = "=5.0.0"
+sp1-prover = "=5.0.1"
+sp1-verifier = "=5.0.0"
+sp1-zkvm = { version = "=5.0.0", default-features = false }
 
 # Core dependencies
 alloy = { version = "0.14.0", features = ["full"] }
