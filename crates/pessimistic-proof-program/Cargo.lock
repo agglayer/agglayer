@@ -30,8 +30,8 @@ checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
 name = "agglayer-bincode"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "bincode",
  "serde",
@@ -39,8 +39,8 @@ dependencies = [
 
 [[package]]
 name = "agglayer-primitives"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -52,10 +52,11 @@ dependencies = [
 
 [[package]]
 name = "agglayer-tries"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "agglayer-primitives",
+ "hex",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -5898,8 +5899,8 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "unified-bridge"
-version = "0.1.0"
-source = "git+https://github.com/agglayer/interop.git?branch=refactor%2Fbincode#7e94dd828f0d00de04e848efe528c93e3a24fdfe"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.6.1#7e64e0a1312e47aaca13f03ea12fbe7fe5bedd95"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",
