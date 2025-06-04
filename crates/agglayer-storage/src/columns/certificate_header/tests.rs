@@ -1,11 +1,11 @@
-use agglayer_types::CertificateId;
+use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height, Metadata};
 
 use super::{Key, Value};
 use crate::columns::Codec as _;
 
 #[test]
 fn can_parse_key() {
-    let key: CertificateId = [1; 32].into();
+    let key = CertificateId([1; 32].into());
 
     let encoded = key.encode().expect("Unable to encode key");
 
@@ -18,14 +18,14 @@ fn can_parse_key() {
 fn can_parse_value() {
     let value = Value {
         network_id: 1.into(),
-        certificate_id: [1; 32].into(),
-        height: 2,
-        epoch_number: Some(3),
-        certificate_index: Some(4),
+        certificate_id: CertificateId([1; 32].into()),
+        height: Height(2),
+        epoch_number: Some(EpochNumber(3)),
+        certificate_index: Some(CertificateIndex(4)),
         prev_local_exit_root: [4; 32].into(),
         new_local_exit_root: [5; 32].into(),
         status: agglayer_types::CertificateStatus::Pending,
-        metadata: [6; 32].into(),
+        metadata: Metadata([6; 32].into()),
         settlement_tx_hash: None,
     };
 

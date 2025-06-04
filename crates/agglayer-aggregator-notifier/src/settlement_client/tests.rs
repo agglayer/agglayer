@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
-use agglayer_certificate_orchestrator::EpochPacker;
+use agglayer_certificate_orchestrator::SettlementClient;
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{L1RpcError, Settler};
 use agglayer_storage::tests::mocks::{MockPendingStore, MockPerEpochStore, MockStateStore};
-use agglayer_types::{CertificateHeader, PessimisticRootInput, Proof};
+use agglayer_types::{
+    CertificateHeader, CertificateStatus, Height, Metadata, PessimisticRootInput, Proof,
+};
 use arc_swap::ArcSwap;
 use ethers::{
     contract::{ContractCall, ContractError},
@@ -17,7 +19,7 @@ use pessimistic_proof::unified_bridge::CommitmentVersion;
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 
-use crate::EpochPackerClient;
+use crate::settlement_client::EthersSettlementClient;
 
 mockall::mock! {
     L1Rpc {}
@@ -45,7 +47,6 @@ mockall::mock! {
     impl Settler for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
 
-        async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, L1RpcError>;
         fn build_pending_transaction(
             &self,
             tx_hash: ethers::types::H256,
@@ -97,7 +98,7 @@ async fn epoch_packer_can_settle_one_certificate() {
     pending_store
         .expect_get_certificate()
         .once()
-        .with(eq(network_id), eq(0))
+        .with(eq(network_id), eq(Height(0)))
         .returning(move |_, _| Ok(Some(certificate.clone())));
 
     state_store
@@ -107,14 +108,14 @@ async fn epoch_packer_can_settle_one_certificate() {
         .returning(move |_| {
             Ok(Some(CertificateHeader {
                 network_id,
-                height: 0,
+                height: Height(0),
                 epoch_number: None,
                 certificate_index: None,
                 certificate_id,
                 prev_local_exit_root: [1; 32].into(),
                 new_local_exit_root: [0; 32].into(),
-                metadata: [0; 32].into(),
-                status: agglayer_types::CertificateStatus::Proven,
+                metadata: Metadata([0; 32].into()),
+                status: CertificateStatus::Proven,
                 settlement_tx_hash: None,
             }))
         });
@@ -139,7 +140,7 @@ async fn epoch_packer_can_settle_one_certificate() {
         .with(eq(certificate_id))
         .returning(move |_| Ok(Some(proof.clone())));
 
-    let epoch_packer = EpochPackerClient::<_, _, MockPerEpochStore, _>::try_new(
+    let epoch_packer = EthersSettlementClient::<_, _, MockPerEpochStore, _>::try_new(
         config,
         Arc::new(state_store),
         Arc::new(pending_store),
@@ -148,7 +149,12 @@ async fn epoch_packer_can_settle_one_certificate() {
     )
     .unwrap();
 
-    let r = epoch_packer.settle_certificate(certificate_id).await;
-
-    assert!(r.is_ok());
+    let settlement_tx_hash = epoch_packer
+        .submit_certificate_settlement(certificate_id)
+        .await
+        .unwrap();
+    epoch_packer
+        .wait_for_settlement(settlement_tx_hash, certificate_id)
+        .await
+        .unwrap();
 }

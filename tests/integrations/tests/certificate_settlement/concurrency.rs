@@ -13,6 +13,8 @@ use rstest::rstest;
 #[timeout(Duration::from_secs(180))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn schedule_two_certs(#[case] mut state: Forest) {
+    use agglayer_types::Height;
+
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
@@ -23,7 +25,7 @@ async fn schedule_two_certs(#[case] mut state: Forest) {
 
     let certificate_one = state.apply_events(&[], &withdrawals);
     let mut certificate_two = state.apply_events(&[], &withdrawals);
-    certificate_two.height = 1;
+    certificate_two.height = Height(1);
 
     let certificate_one_id: CertificateId = client
         .request(

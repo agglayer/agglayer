@@ -5,7 +5,7 @@ use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainVkeyHash, L1RpcError, Settler};
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
-use agglayer_types::{LocalNetworkStateData, NetworkId};
+use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
 use ethers::{
     middleware::NonceManagerMiddleware,
     providers::{MockProvider, Provider},
@@ -43,7 +43,7 @@ async fn happy_path() {
 
     let local_state = LocalNetworkStateData::default();
     let network: NetworkId = 1.into();
-    let height = 0;
+    let height = Height(0);
 
     let state = Forest::new(vec![]);
 
@@ -142,8 +142,8 @@ async fn prover_timeout() {
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     let local_state = LocalNetworkStateData::default();
-    let network: NetworkId = 1.into();
-    let height = 0;
+    let network = NetworkId::new(1);
+    let height = Height(0);
 
     let state = Forest::new(vec![]);
 
@@ -239,8 +239,6 @@ mockall::mock! {
     #[async_trait::async_trait]
     impl Settler for L1Rpc {
         type M = NonceManagerMiddleware<Provider<MockProvider>>;
-
-        async fn transaction_exists(&self, tx_hash: ethers::types::H256) -> Result<bool, L1RpcError>;
 
         fn build_pending_transaction(
             &self,

@@ -66,7 +66,7 @@ fn pp_root_migration_helper(
         balance_root: initial_state.balance_tree.root,
         nullifier_root: initial_state.nullifier_tree.root,
         ler_leaf_count: initial_state.exit_tree.leaf_count(),
-        height: certificate.height,
+        height: certificate.height.0,
         origin_network: certificate.network_id,
     };
 
@@ -78,7 +78,7 @@ fn pp_root_migration_helper(
         balance_root: new_state.balance_tree.root,
         nullifier_root: new_state.nullifier_tree.root,
         ler_leaf_count: new_state.exit_tree.leaf_count(),
-        height: certificate.height + 1,
+        height: certificate.height.0 + 1,
         origin_network: certificate.network_id,
     };
 

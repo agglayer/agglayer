@@ -3,7 +3,7 @@ use agglayer_types::{
     aggchain_proof::AggchainData,
     compute_signature_info,
     primitives::{keccak::keccak256, Hashable},
-    Address, Certificate, Digest, LocalNetworkStateData, Signature, U256,
+    Address, Certificate, Digest, Height, LocalNetworkStateData, Signature, U256,
 };
 use ecdsa_proof_lib::AggchainECDSA;
 use ethers_signers::{LocalWallet, Signer, WalletError};
@@ -207,7 +207,7 @@ impl Forest {
 
         let new_local_exit_root = self.state_b.exit_tree.get_root();
 
-        let height = 0;
+        let height = Height(0);
         let (_combined_hash, signature, _signer) = compute_signature_info(
             new_local_exit_root,
             &imported_bridge_exits,

@@ -3,7 +3,7 @@
 use agglayer_contracts::L1RpcError;
 pub use agglayer_storage::error::Error as StorageError;
 pub use agglayer_types::primitives::Digest;
-use agglayer_types::NetworkId;
+use agglayer_types::{CertificateId, Height, NetworkId};
 use ethers::{contract::ContractError, providers::Middleware, types::Address};
 
 pub use crate::rate_limiting::RateLimited as RateLimitedError;
@@ -14,7 +14,7 @@ pub enum CertificateRetrievalError {
     Storage(#[from] StorageError),
 
     #[error("Data for certificate {certificate_id} not found")]
-    NotFound { certificate_id: Digest },
+    NotFound { certificate_id: CertificateId },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -31,10 +31,10 @@ pub enum CertificateSubmissionError<Rpc: Middleware> {
     #[error("Unable to replace pending certificate at height {height} for network {network_id}")]
     UnableToReplacePendingCertificate {
         reason: String,
-        height: u64,
+        height: Height,
         network_id: NetworkId,
-        stored_certificate_id: Digest,
-        replacement_certificate_id: Digest,
+        stored_certificate_id: CertificateId,
+        replacement_certificate_id: CertificateId,
         #[source]
         source: Option<L1RpcError>,
     },

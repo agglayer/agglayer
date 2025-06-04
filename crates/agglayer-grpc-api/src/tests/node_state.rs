@@ -9,7 +9,7 @@ use agglayer_storage::{
     stores::{debug::DebugStore, pending::PendingStore, state::StateStore, StateWriter as _},
     tests::TempDBDir,
 };
-use agglayer_types::CertificateStatus;
+use agglayer_types::{CertificateId, CertificateStatus, Digest, Height};
 use tokio::{net::TcpListener, sync::oneshot};
 use tonic::{
     transport::{server::TcpIncoming, Server},
@@ -27,7 +27,7 @@ async fn get_certificate_header() {
 
     let state_store =
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap();
-    let certificate = agglayer_types::Certificate::new_for_test(1.into(), 0);
+    let certificate = agglayer_types::Certificate::new_for_test(1.into(), Height(0));
     state_store
         .insert_certificate_header(&certificate, CertificateStatus::Pending)
         .expect("Failed to insert certificate header");
@@ -70,7 +70,7 @@ async fn get_certificate_header() {
 
     let response = client
         .get_certificate_header(GetCertificateHeaderRequest {
-            certificate_id: Some(agglayer_types::Digest([0u8; 32]).into()),
+            certificate_id: Some(CertificateId(Digest([0u8; 32])).into()),
         })
         .await;
 

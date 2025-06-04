@@ -1,13 +1,20 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    ops::{Add, AddAssign, Sub},
+};
 
-pub use agglayer_interop_types::aggchain_proof;
+pub use agglayer_interop_types::{aggchain_proof, NetworkId};
 use agglayer_interop_types::{
     aggchain_proof::AggchainData, BridgeExit, GlobalIndex, ImportedBridgeExit,
     ImportedBridgeExitCommitmentValues, TokenInfo,
 };
-pub use agglayer_primitives::Digest;
+pub use agglayer_primitives as primitives;
 use agglayer_primitives::{keccak::Keccak256Hasher, FromBool, Hashable, SignatureError};
+pub use agglayer_primitives::{Address, Digest, Signature, B256, U256, U512};
 use agglayer_tries::{error::SmtError, smt::Smt};
+use ethers::types::H256;
+pub use pessimistic_proof::proof::Proof;
 use pessimistic_proof::{
     core::{
         self,
@@ -23,21 +30,133 @@ use pessimistic_proof::{
     LocalNetworkState, ProofError,
 };
 use serde::{Deserialize, Serialize};
-use unified_bridge::CommitmentVersion;
-pub type EpochNumber = u64;
+use unified_bridge::{CommitmentVersion, LocalExitTree, LocalExitTreeError};
+
+// TODO: consider moving these newtype structs to interop some day, so that the
+// proofs could use eg. CertificateId and Height at least
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct EpochNumber(pub u64);
+
+impl Add<u64> for EpochNumber {
+    type Output = EpochNumber;
+
+    fn add(self, rhs: u64) -> Self::Output {
+        EpochNumber(self.0 + rhs)
+    }
+}
 
 /// Index of the certificate inside its epoch
-pub type CertificateIndex = u64;
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct CertificateIndex(pub u64);
 
-pub type CertificateId = Digest;
-pub type Height = u64;
-pub type Metadata = Digest;
-pub use agglayer_interop_types::NetworkId;
-pub use agglayer_primitives as primitives;
-// Re-export common primitives again as agglayer-types root types
-pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
-pub use pessimistic_proof::proof::Proof;
-use unified_bridge::{LocalExitTree, LocalExitTreeError};
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct CertificateId(pub Digest);
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct Height(pub u64);
+
+impl Add<u64> for Height {
+    type Output = Height;
+
+    fn add(self, rhs: u64) -> Self::Output {
+        Height(self.0 + rhs)
+    }
+}
+
+impl AddAssign<u64> for Height {
+    fn add_assign(&mut self, rhs: u64) {
+        self.0 += rhs
+    }
+}
+
+impl Sub<u64> for Height {
+    type Output = Height;
+
+    fn sub(self, rhs: u64) -> Self::Output {
+        Height(self.0 - rhs)
+    }
+}
+
+impl Sub<&Height> for Height {
+    type Output = u64;
+
+    fn sub(self, rhs: &Height) -> Self::Output {
+        self.0 - rhs.0
+    }
+}
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct Metadata(pub Digest);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {
@@ -74,7 +193,7 @@ pub struct CertificateHeader {
     pub new_local_exit_root: Digest,
     pub metadata: Metadata,
     pub status: CertificateStatus,
-    pub settlement_tx_hash: Option<Digest>,
+    pub settlement_tx_hash: Option<SettlementTxHash>,
 }
 
 #[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -203,8 +322,8 @@ pub enum GenerationType {
     Prover,
 }
 
-impl std::fmt::Display for GenerationType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for GenerationType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             GenerationType::Native => write!(f, "native"),
             GenerationType::Prover => write!(f, "prover"),
@@ -252,8 +371,8 @@ pub enum CertificateStatus {
     Settled,
 }
 
-impl std::fmt::Display for CertificateStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for CertificateStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CertificateStatus::Pending => write!(f, "Pending"),
             CertificateStatus::Proven => write!(f, "Proven"),
@@ -335,7 +454,7 @@ impl Default for Certificate {
         let network_id = NetworkId::ETH_L1;
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let height: Height = 0u64;
+        let height = Height(0);
         let (_new_local_exit_root, signature, _signer) =
             compute_signature_info(exit_root, &[], &wallet, height);
         Self {
@@ -371,7 +490,7 @@ pub fn compute_signature_info(
                 .map(|exit| exit.to_indexed_exit_hash())
                 .collect(),
         },
-        height,
+        height: height.0,
     }
     .commitment(version);
 
@@ -430,15 +549,15 @@ impl Certificate {
         let commit_imported_bridge_exits =
             keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
 
-        keccak256_combine([
+        CertificateId(keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
-            self.height.to_be_bytes().as_slice(),
+            self.height.0.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_slice(),
             self.new_local_exit_root.as_slice(),
             commit_bridge_exits.as_slice(),
             commit_imported_bridge_exits.as_slice(),
-            self.metadata.as_slice(),
-        ])
+            self.metadata.0.as_slice(),
+        ]))
     }
 
     /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].
@@ -515,7 +634,7 @@ impl From<&Certificate> for SignatureCommitmentValues {
                     .map(|exit| exit.to_indexed_exit_hash())
                     .collect(),
             },
-            height: certificate.height,
+            height: certificate.height.0,
         }
     }
 }
@@ -592,7 +711,7 @@ impl LocalNetworkStateData {
                 balance_root: self.balance_tree.root,
                 nullifier_root: self.nullifier_tree.root,
                 ler_leaf_count: self.exit_tree.leaf_count(),
-                height: certificate.height,
+                height: certificate.height.0,
                 origin_network: certificate.network_id,
             }
             .compute_pp_root(version),
@@ -739,7 +858,7 @@ impl LocalNetworkStateData {
             balances_proofs,
             l1_info_root,
             aggchain_proof,
-            height: certificate.height,
+            height: certificate.height.0,
             prev_pessimistic_root,
         })
     }
@@ -770,5 +889,55 @@ impl LocalNetworkStateData {
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(transparent)]
+pub struct SettlementTxHash(Digest);
+
+impl SettlementTxHash {
+    pub const fn for_tests() -> Self {
+        SettlementTxHash(Digest::ZERO)
+    }
+
+    pub const fn new(hash: Digest) -> Self {
+        SettlementTxHash(hash)
+    }
+}
+
+impl From<Digest> for SettlementTxHash {
+    fn from(hash: Digest) -> Self {
+        SettlementTxHash(hash)
+    }
+}
+
+impl From<SettlementTxHash> for Digest {
+    fn from(tx_hash: SettlementTxHash) -> Self {
+        tx_hash.0
+    }
+}
+
+impl From<H256> for SettlementTxHash {
+    fn from(hash: H256) -> Self {
+        SettlementTxHash(Digest::from(*hash.as_fixed_bytes()))
+    }
+}
+
+impl From<SettlementTxHash> for H256 {
+    fn from(tx_hash: SettlementTxHash) -> Self {
+        tx_hash.0.as_bytes().into()
+    }
+}
+
+impl AsRef<Digest> for SettlementTxHash {
+    fn as_ref(&self) -> &Digest {
+        &self.0
+    }
+}
+
+impl fmt::Display for SettlementTxHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }

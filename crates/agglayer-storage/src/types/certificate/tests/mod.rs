@@ -39,7 +39,7 @@ impl CertificateV0 {
         Self {
             version: VersionTag,
             network_id: NetworkId::new(55).into(),
-            height: 987,
+            height: Height(987),
             prev_local_exit_root: Digest([0x01; 32]),
             new_local_exit_root: Digest([0x67; 32]),
             bridge_exits: Vec::new(),
@@ -49,7 +49,7 @@ impl CertificateV0 {
                 U256::from_be_bytes([0x9a; 32]),
                 false,
             ),
-            metadata: Digest([0xa5; 32]),
+            metadata: Metadata(Digest([0xa5; 32])),
         }
     }
 
@@ -64,7 +64,7 @@ impl CertificateV1<'static> {
         Self {
             version: VersionTag,
             network_id: NetworkId::new(57),
-            height: 987,
+            height: Height(987),
             prev_local_exit_root: Digest([0x02; 32]),
             new_local_exit_root: Digest([0x65; 32]),
             bridge_exits: Vec::new().into(),
@@ -76,7 +76,7 @@ impl CertificateV1<'static> {
                     false,
                 ),
             },
-            metadata: Digest([0xa9; 32]),
+            metadata: Metadata(Digest([0xa9; 32])),
             custom_chain_data: Cow::Owned(vec![]),
             l1_info_tree_leaf_count: None,
         }
@@ -105,7 +105,7 @@ impl CertificateV1<'static> {
         Self {
             version: VersionTag,
             network_id: NetworkId::new(59),
-            height: 987.try_into().unwrap(),
+            height: Height(987),
             prev_local_exit_root: Digest([0x03; 32]),
             new_local_exit_root: Digest([0x61; 32]),
             bridge_exits: Vec::new().into(),
@@ -119,7 +119,7 @@ impl CertificateV1<'static> {
                     false,
                 ))),
             },
-            metadata: Digest([0xb9; 32]),
+            metadata: Metadata(Digest([0xb9; 32])),
             custom_chain_data: Cow::Owned(vec![]),
             l1_info_tree_leaf_count: None,
         }
@@ -189,7 +189,7 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 #[case(CertificateV0::test0())]
 #[case(CertificateV1::test0())]
 #[case(CertificateV1::test1())]
-#[case(CertificateV1::from(&Certificate::new_for_test(74.into(), 998)).into_owned())]
+#[case(CertificateV1::from(&Certificate::new_for_test(74.into(), Height(998))).into_owned())]
 fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
     let bytes = default_bincode_options().serialize(&orig).unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();

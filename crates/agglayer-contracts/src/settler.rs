@@ -4,17 +4,19 @@ use ethers::{
 };
 use ethers_contract::{ContractCall, ContractError};
 
-use crate::{polygon_rollup_manager::PolygonRollupManagerErrors, L1RpcClient, L1RpcError};
+use crate::{polygon_rollup_manager::PolygonRollupManagerErrors, L1RpcClient};
 
 #[async_trait::async_trait]
 pub trait Settler {
     type M: Middleware;
-    async fn transaction_exists(&self, tx_hash: H256) -> Result<bool, L1RpcError>;
+
     fn build_pending_transaction(
         &self,
         tx_hash: H256,
     ) -> PendingTransaction<'_, <Self::M as ethers::providers::Middleware>::Provider>;
+
     fn decode_contract_revert(error: &ContractError<Self::M>) -> Option<String>;
+
     fn build_verify_pessimistic_trusted_aggregator_call(
         &self,
         rollup_id: u32,
@@ -32,16 +34,6 @@ where
     RpcProvider: Middleware + 'static,
 {
     type M = RpcProvider;
-
-    async fn transaction_exists(&self, tx_hash: H256) -> Result<bool, L1RpcError> {
-        self.rpc
-            .get_transaction(tx_hash)
-            .await
-            .map_err(|e| L1RpcError::UnableToGetTransaction {
-                source: Box::new(anyhow::Error::new(e)),
-            })
-            .map(|v| v.is_some())
-    }
 
     fn build_pending_transaction(
         &self,

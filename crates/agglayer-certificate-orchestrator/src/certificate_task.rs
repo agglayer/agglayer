@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
-use agglayer_storage::stores::{StateReader, StateWriter};
+use agglayer_storage::{
+    columns::latest_settled_certificate_per_network::SettledCertificate,
+    stores::{StateReader, StateWriter},
+};
 use agglayer_types::{Certificate, CertificateHeader, CertificateStatus, CertificateStatusError};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, trace, warn};
 
-use crate::{network_task::NetworkTaskMessage, Certifier, EpochPacker};
+use crate::{network_task::NetworkTaskMessage, Certifier};
 
 /// A task that processes a certificate, including certifying it and settling
 /// it.
@@ -14,22 +17,19 @@ use crate::{network_task::NetworkTaskMessage, Certifier, EpochPacker};
 /// related to the certificate until it gets finalized, including exchanging the
 /// required messages with the network task to both get required information
 /// from it and notify it of certificate progress.
-pub struct CertificateTask<StateStore, CertifierClient, SettlementClient> {
+pub struct CertificateTask<StateStore, CertifierClient> {
     certificate: Certificate,
     header: CertificateHeader,
 
     network_task: mpsc::Sender<NetworkTaskMessage>,
     state_store: Arc<StateStore>,
     certifier_client: Arc<CertifierClient>,
-    settlement_client: Arc<SettlementClient>,
 }
 
-impl<StateStore, CertifierClient, SettlementClient>
-    CertificateTask<StateStore, CertifierClient, SettlementClient>
+impl<StateStore, CertifierClient> CertificateTask<StateStore, CertifierClient>
 where
     StateStore: StateReader + StateWriter,
     CertifierClient: Certifier,
-    SettlementClient: EpochPacker,
 {
     pub fn new(
         certificate: Certificate,
@@ -37,7 +37,6 @@ where
         network_task: mpsc::Sender<NetworkTaskMessage>,
         state_store: Arc<StateStore>,
         certifier_client: Arc<CertifierClient>,
-        settlement_client: Arc<SettlementClient>,
     ) -> Self {
         Self {
             certificate,
@@ -45,7 +44,6 @@ where
             network_task,
             state_store,
             certifier_client,
-            settlement_client,
         }
     }
 
@@ -54,7 +52,7 @@ where
         skip_all,
         fields(
             network_id = %self.header.network_id,
-            height = self.header.height,
+            height = self.header.height.0,
             certificate_id = %self.header.certificate_id,
         )
     )]
@@ -128,7 +126,7 @@ where
                 .send(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight { height, response })
                 .await
                 .map_err(send_err)?;
-            let state = state.await.map_err(recv_err)?;
+            let state = state.await.map_err(recv_err)??;
 
             // Actually certify
             debug!("Starting certification");
@@ -139,14 +137,19 @@ where
             debug!("Proof certification completed");
 
             // Record the certification success
-            self.header.status = CertificateStatus::Proven;
-            self.state_store
-                .update_certificate_header_status(&certificate_id, &CertificateStatus::Proven)?;
+            self.set_status(CertificateStatus::Proven)?;
+            self.network_task
+                .send(NetworkTaskMessage::CertificateExecuted {
+                    height,
+                    certificate_id,
+                    new_state: Box::new(certifier_output.new_state),
+                })
+                .await
+                .map_err(send_err)?;
             self.network_task
                 .send(NetworkTaskMessage::CertificateProven {
                     height,
                     certificate_id,
-                    new_state: Box::new(certifier_output.new_state),
                 })
                 .await
                 .map_err(send_err)?;
@@ -162,7 +165,7 @@ where
                 .send(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight { height, response })
                 .await
                 .map_err(send_err)?;
-            let mut state = state.await.map_err(recv_err)?;
+            let mut state = state.await.map_err(recv_err)??;
 
             // Execute the witness generation to retrieve the new local network state
             debug!("Recomputing new state for already-proven certificate");
@@ -182,7 +185,7 @@ where
             // we update the storage we cannot have multiple certificates
             // inflight, so we should be fine until then.
             self.network_task
-                .send(NetworkTaskMessage::CertificateProven {
+                .send(NetworkTaskMessage::CertificateExecuted {
                     height,
                     certificate_id,
                     new_state: state,
@@ -197,57 +200,65 @@ where
                 "Trying to settle a non-proven certificate".into(),
             ));
         }
-        let settled_certificate = if self.header.status < CertificateStatus::Candidate {
-            debug!("Starting certificate settlement");
-            let result = self
-                .settlement_client
-                .settle_certificate(certificate_id)
-                .await?;
-            self.header.status = CertificateStatus::Settled;
-            debug!("Certificate settlement completed");
-            // Note: settle_certificate currently updates the certificate status itself.
-            // It will go to Candidate upon submission, and then up to Settled when the
-            // settlement is confirmed. However, if agglayer shuts down before
-            // settlement confirmation, we can still have a certificate with
-            // a Candidate status.
-            // TODO: all the storage related to certificate should only be touched from this
-            // struct, we should refactor
-            result.1
+        if self.header.status < CertificateStatus::Candidate {
+            debug!("Submitting certificate for settlement");
+            let (settlement_submitted_notifier, settlement_submitted) = oneshot::channel();
+            self.network_task
+                .send(NetworkTaskMessage::CertificateReadyForSettlement {
+                    height,
+                    certificate_id,
+                    settlement_submitted_notifier,
+                })
+                .await
+                .map_err(send_err)?;
+
+            let settlement_tx_hash = settlement_submitted.await.map_err(recv_err)??;
+            self.header.settlement_tx_hash = Some(settlement_tx_hash);
+            self.state_store
+                .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
+            self.set_status(CertificateStatus::Candidate)?;
+            debug!(tx_hash = ?self.header.settlement_tx_hash, "Submitted certificate for settlement");
         }
-        // If we're not in the shortcut path of `settle_certificate`, wait for settlement
-        // TODO: once the storage is only ever touched from here, we can make this a regular `if`
-        // For now, the only way to reach this stage is to boot with an already-candidate
-        // certificate. So we know that `self.header.settlement_tx_hash` is set.
-        else if self.header.status < CertificateStatus::Settled {
-            debug!("Resuming certificate settlement");
-            let tx_hash = self.header.settlement_tx_hash.ok_or_else(|| {
+
+        // Third, wait for settlement to complete
+        if self.header.status < CertificateStatus::Candidate {
+            return Err(CertificateStatusError::InternalError(
+                "Trying to wait on a non-settling certificate".into(),
+            ));
+        }
+        if self.header.status < CertificateStatus::Settled {
+            debug!(tx_hash = ?self.header.settlement_tx_hash, "Waiting for certificate settlement to complete");
+            let settlement_tx_hash = self.header.settlement_tx_hash.ok_or_else(|| {
                 CertificateStatusError::SettlementError(
-                    "Settled certificate header has no settlement tx hash".into(),
+                    "Candidate certificate header has no settlement tx hash".into(),
                 )
             })?;
-            if !self
-                .settlement_client
-                .transaction_exists(tx_hash.0.into())
-                .await?
-            {
-                return Err(CertificateStatusError::SettlementError(
-                    "Settlement transaction not found".into(),
-                ));
-            }
-            debug!("Found settlement transaction");
-            let result = self
-                .settlement_client
-                .recover_settlement(tx_hash.0.into(), certificate_id, network_id, height)
-                .await?;
-            self.header.status = CertificateStatus::Settled;
-            debug!("Resumed certificate settlement completed");
-            result.1
-        } else {
-            // The Settled and InError statuses are handled above
-            return Err(CertificateStatusError::InternalError(
-                "Certificate task reached code expected to be unreachable".into(),
-            ));
-        };
+            let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
+            self.network_task
+                .send(NetworkTaskMessage::CertificateWaitingForSettlement {
+                    height,
+                    certificate_id,
+                    settlement_tx_hash,
+                    settlement_complete_notifier,
+                })
+                .await
+                .map_err(send_err)?;
+
+            let (epoch_number, certificate_index) =
+                settlement_complete.await.map_err(recv_err)??;
+            let settled_certificate =
+                SettledCertificate(certificate_id, height, epoch_number, certificate_index);
+            self.set_status(CertificateStatus::Settled)?;
+            debug!(tx_hash = ?settlement_tx_hash, ?settled_certificate, "Certificate settlement completed");
+            self.network_task
+                .send(NetworkTaskMessage::CertificateSettled {
+                    height,
+                    certificate_id,
+                    settled_certificate,
+                })
+                .await
+                .map_err(send_err)?;
+        }
 
         if self.header.status != CertificateStatus::Settled {
             return Err(CertificateStatusError::InternalError(
@@ -255,18 +266,13 @@ where
             ));
         }
 
-        // We just finished settling a new certificate, record that
-        // TODO: once the storage is only ever touched from here, we can have that part
-        // of the last `if`
-        self.network_task
-            .send(NetworkTaskMessage::CertificateSettled {
-                height,
-                certificate_id,
-                settled_certificate,
-            })
-            .await
-            .map_err(send_err)?;
+        Ok(())
+    }
 
+    fn set_status(&mut self, status: CertificateStatus) -> Result<(), CertificateStatusError> {
+        self.state_store
+            .update_certificate_header_status(&self.header.certificate_id, &status)?;
+        self.header.status = status;
         Ok(())
     }
 }

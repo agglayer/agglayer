@@ -1,4 +1,4 @@
-use agglayer_types::{Certificate, NetworkId};
+use agglayer_types::{Certificate, Height, Metadata, NetworkId};
 
 use super::Error;
 use crate::node::types::v1;
@@ -9,7 +9,7 @@ impl TryFrom<v1::Certificate> for Certificate {
     fn try_from(value: v1::Certificate) -> Result<Self, Self::Error> {
         Ok(Certificate {
             network_id: NetworkId::new(value.network_id),
-            height: value.height,
+            height: Height(value.height),
             prev_local_exit_root: required_field!(value, prev_local_exit_root),
             new_local_exit_root: required_field!(value, new_local_exit_root),
             bridge_exits: value
@@ -25,7 +25,7 @@ impl TryFrom<v1::Certificate> for Certificate {
                 .collect::<Result<_, _>>()
                 .map_err(|e: Error| e.inside_field("imported_bridge_exits"))?,
             aggchain_data: required_field!(value, aggchain_data),
-            metadata: required_field!(value, metadata),
+            metadata: Metadata(required_field!(value, metadata)),
             custom_chain_data: value.custom_chain_data.to_vec(),
             l1_info_tree_leaf_count: value.l1_info_tree_leaf_count,
         })
@@ -38,7 +38,7 @@ impl TryFrom<Certificate> for v1::Certificate {
     fn try_from(value: Certificate) -> Result<Self, Self::Error> {
         Ok(v1::Certificate {
             network_id: value.network_id.into(),
-            height: value.height,
+            height: value.height.0,
             prev_local_exit_root: Some(value.prev_local_exit_root.into()),
             new_local_exit_root: Some(value.new_local_exit_root.into()),
             bridge_exits: value.bridge_exits.into_iter().map(Into::into).collect(),
@@ -48,7 +48,7 @@ impl TryFrom<Certificate> for v1::Certificate {
                 .map(Into::into)
                 .collect(),
             aggchain_data: Some(value.aggchain_data.try_into()?),
-            metadata: Some(value.metadata.into()),
+            metadata: Some(value.metadata.0.into()),
             custom_chain_data: value.custom_chain_data.into(),
             l1_info_tree_leaf_count: value.l1_info_tree_leaf_count,
         })

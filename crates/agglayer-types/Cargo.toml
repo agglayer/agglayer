@@ -16,6 +16,7 @@ pessimistic-proof.workspace = true
 unified-bridge.workspace = true
 
 arbitrary = { workspace = true, optional = true }
+derive_more.workspace = true
 ethers = { workspace = true, optional = true }
 hex.workspace = true
 serde.workspace = true

@@ -1,4 +1,5 @@
-use agglayer_types::{CertificateHeader, CertificateStatus, CertificateStatusError};
+use agglayer_interop::grpc::v1::FixedBytes32;
+use agglayer_types::{CertificateHeader, CertificateStatus, CertificateStatusError, Digest};
 
 use crate::node::types::v1;
 
@@ -24,16 +25,19 @@ impl From<CertificateHeader> for v1::CertificateHeader {
         };
         v1::CertificateHeader {
             network_id: value.network_id.into(),
-            height: value.height,
-            epoch_number: value.epoch_number,
-            certificate_index: value.certificate_index,
+            height: value.height.0,
+            epoch_number: value.epoch_number.map(|e| e.0),
+            certificate_index: value.certificate_index.map(|i| i.0),
             certificate_id: Some(value.certificate_id.into()),
             prev_local_exit_root: Some(value.prev_local_exit_root.into()),
             new_local_exit_root: Some(value.new_local_exit_root.into()),
-            metadata: Some(value.metadata.into()),
+            metadata: Some(value.metadata.0.into()),
             status: status.into(),
             error,
-            settlement_tx_hash: value.settlement_tx_hash.map(Into::into),
+            settlement_tx_hash: value
+                .settlement_tx_hash
+                .map(Digest::from)
+                .map(FixedBytes32::from),
         }
     }
 }

@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use agglayer_types::EpochNumber;
 use alloy::{
     network::Ethereum,
     providers::{
@@ -131,7 +132,7 @@ pub enum BlockClockError {
     #[error("Failed to set the current block height, already set to: {0}")]
     SetBlockHeight(u64),
     #[error("Failed to set the current Epoch number: previous={0}, expected={1}")]
-    SetEpochNumber(u64, u64),
+    SetEpochNumber(EpochNumber, EpochNumber),
     #[error("Failed to notify the start of the Clock task")]
     UnableToNotifyStart,
     #[error("Transport initialization: {0}")]
@@ -270,7 +271,7 @@ where
                         return Err(BlockClockError::SetEpochNumber(previous, expected));
                     }
                     Ok(epoch_ended) => {
-                        info!("Clock detected the end of the Epoch: {}", epoch_ended);
+                        info!("Clock detected the end of the Epoch: {epoch_ended}");
                         _ = sender.send(Event::EpochEnded(epoch_ended));
                     }
                 }
@@ -294,7 +295,10 @@ where
     ///
     /// To define the current Epoch number, the Epoch duration divides the Block
     /// height.
-    fn update_epoch_number(&mut self, current_block: u64) -> Result<u64, (u64, u64)> {
+    fn update_epoch_number(
+        &mut self,
+        current_block: u64,
+    ) -> Result<EpochNumber, (EpochNumber, EpochNumber)> {
         let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
         let expected_epoch = current_epoch.saturating_sub(1);
 
@@ -309,8 +313,8 @@ where
             Ordering::Acquire,
             Ordering::Relaxed,
         ) {
-            Ok(previous) => Ok(previous),
-            Err(stored) => Err((stored, expected_epoch)),
+            Ok(previous) => Ok(EpochNumber(previous)),
+            Err(stored) => Err((EpochNumber(stored), EpochNumber(expected_epoch))),
         }
     }
 }

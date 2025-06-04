@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, Height, LocalNetworkStateData,
-    NetworkId, Proof,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof
 };
 
 use crate::{
@@ -54,7 +53,7 @@ pub trait PendingCertificateReader: Send + Sync {
 
 pub trait MetadataReader: Send + Sync {
     /// Get the latest settled epoch.
-    fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error>;
+    fn get_latest_settled_epoch(&self) -> Result<Option<EpochNumber>, Error>;
 }
 
 pub trait StateReader: Send + Sync {
@@ -93,7 +92,7 @@ pub trait PerEpochReader: Send + Sync {
     fn get_end_checkpoint(&self) -> BTreeMap<NetworkId, Height>;
 
     /// Get epoch number
-    fn get_epoch_number(&self) -> u64;
+    fn get_epoch_number(&self) -> EpochNumber;
 
     fn get_certificate_at_index(
         &self,

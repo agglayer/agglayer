@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_types::primitives::Hashable as _;
-use agglayer_types::{Certificate, Digest, LocalNetworkStateData, NetworkId, PessimisticRootInput};
+use agglayer_types::{Certificate, CertificateId, CertificateIndex, Digest, EpochNumber, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput};
 use pessimistic_proof::unified_bridge::CommitmentVersion;
 use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
 use rstest::{fixture, rstest};
@@ -28,7 +28,7 @@ fn can_retrieve_list_of_network() {
 
     db.put::<LatestSettledCertificatePerNetworkColumn>(
         &1.into(),
-        &SettledCertificate([0; 32].into(), 0, 0, 0),
+        &SettledCertificate(CertificateId([0; 32].into()), Height(0), EpochNumber(0), CertificateIndex(0)),
     )
     .expect("Unable to put certificate into storage");
     assert!(store.get_active_networks().unwrap().len() == 1);

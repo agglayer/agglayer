@@ -1,7 +1,7 @@
 use agglayer_storage::stores::StateWriter as _;
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
-    Digest,
+    Digest, Height,
 };
 use insta::assert_snapshot;
 use jsonrpsee::{
@@ -35,7 +35,7 @@ async fn fetch_unknown_certificate_header(#[future] context: TestContext) {
 #[awt]
 #[test_log::test(tokio::test)]
 async fn fetch_known_certificate_header(#[future] mut context: TestContext) {
-    let certificate = Certificate::new_for_test(1.into(), 0);
+    let certificate = Certificate::new_for_test(1.into(), Height(0));
     let id = certificate.hash();
 
     let res: CertificateId = context
@@ -61,7 +61,7 @@ async fn fetch_known_certificate_header(#[future] mut context: TestContext) {
 #[awt]
 #[test_log::test(tokio::test)]
 async fn get_certificate_header_after_sending_the_certificate(#[future] mut context: TestContext) {
-    let certificate = Certificate::new_for_test(1.into(), 0);
+    let certificate = Certificate::new_for_test(1.into(), Height(0));
     let id = certificate.hash();
 
     let res: CertificateId = context
@@ -128,7 +128,7 @@ async fn certificate_error_message(#[future] raw_rpc: RawRpcContext) {
 #[test_log::test(tokio::test)]
 async fn certificate_header(#[future] raw_rpc: RawRpcContext) {
     let rpc = raw_rpc.rpc.into_rpc();
-    let certificate = Certificate::new_for_test(1.into(), 0);
+    let certificate = Certificate::new_for_test(1.into(), Height(0));
     let id = certificate.hash();
 
     let params = vec![certificate];
@@ -194,7 +194,7 @@ async fn debug_fetch_known_certificate() {
 
     let mut context = TestContext::new_with_config(config).await;
 
-    let certificate = Certificate::new_for_test(1.into(), 0);
+    let certificate = Certificate::new_for_test(1.into(), Height(0));
     let id = certificate.hash();
 
     let res: CertificateId = context
@@ -227,7 +227,7 @@ async fn debug_get_certificate_after_sending_the_certificate() {
 
     let mut context = TestContext::new_with_config(config).await;
 
-    let certificate = Certificate::new_for_test(1.into(), 0);
+    let certificate = Certificate::new_for_test(1.into(), Height(0));
     let id = certificate.hash();
 
     let res: CertificateId = context
@@ -270,7 +270,7 @@ async fn debug_get_certificate_after_overwrite() {
 
     let mut context = TestContext::new_with_config(config).await;
 
-    let certificate = Certificate::new_for_test(1.into(), 0);
+    let certificate = Certificate::new_for_test(1.into(), Height(0));
     let id = certificate.hash();
 
     let res: CertificateId = context
@@ -294,7 +294,7 @@ async fn debug_get_certificate_after_overwrite() {
     assert_eq!(recv_cert.hash(), id);
     assert_eq!(header.status, CertificateStatus::Pending);
 
-    let mut certificate = Certificate::new_for_test(1.into(), 0);
+    let mut certificate = Certificate::new_for_test(1.into(), Height(0));
     certificate.prev_local_exit_root = [2; 32].into();
     let id2 = certificate.hash();
 
@@ -352,7 +352,7 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
 
     let mut context = TestContext::new_with_config(config).await;
 
-    let certificate = Certificate::new_for_test(1.into(), 0);
+    let certificate = Certificate::new_for_test(1.into(), Height(0));
     let id = certificate.hash();
 
     let res: CertificateId = context
@@ -386,7 +386,7 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
         )
         .expect("unable to update certificate header status");
 
-    let mut certificate = Certificate::new_for_test(1.into(), 0);
+    let mut certificate = Certificate::new_for_test(1.into(), Height(0));
     certificate.prev_local_exit_root = [2; 32].into();
     let id2 = certificate.hash();
 

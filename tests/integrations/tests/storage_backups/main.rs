@@ -87,6 +87,8 @@ async fn recover_with_backup(#[case] state: Forest) {
 #[timeout(Duration::from_secs(360))]
 #[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
 async fn purge_after_n_backup(#[case] state: Forest) {
+    use agglayer_types::Height;
+
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -110,7 +112,7 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
     let mut certificate2 = state.clone().apply_events(&[], &[]);
-    certificate2.height = 1;
+    certificate2.height = Height(1);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -180,6 +182,8 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 #[timeout(Duration::from_secs(360))]
 #[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
 async fn report_contains_all_backups(#[case] state: Forest) {
+    use agglayer_types::Height;
+
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -199,7 +203,7 @@ async fn report_contains_all_backups(#[case] state: Forest) {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
     let mut certificate2 = state.clone().apply_events(&[], &[]);
-    certificate2.height = 1;
+    certificate2.height = Height(1);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -272,6 +276,8 @@ async fn report_contains_all_backups(#[case] state: Forest) {
 #[timeout(Duration::from_secs(360))]
 #[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
 async fn restore_at_particular_level(#[case] state: Forest) {
+    use agglayer_types::Height;
+
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -291,7 +297,7 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
     let mut certificate2 = state.clone().apply_events(&[], &[]);
-    certificate2.height = 1;
+    certificate2.height = Height(1);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
