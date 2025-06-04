@@ -11,9 +11,6 @@ use opentelemetry_sdk::{
 };
 use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
 
-pub const OTLP_BATCH_SCHEDULED_DELAY: Duration = Duration::from_millis(5_000);
-pub const OTLP_BATCH_MAX_QUEUE_SIZE: usize = 2048;
-pub const OTLP_BATCH_MAX_EXPORTER_BATCH_SIZE: usize = 512;
 
 pub fn setup_tracing(config: &agglayer_config::TracingConfig, version: &str) -> anyhow::Result<()> {
     let mut layers = Vec::new();
@@ -36,47 +33,61 @@ pub fn setup_tracing(config: &agglayer_config::TracingConfig, version: &str) -> 
                 .with_endpoint(otlp_agent)
                 .build()?;
 
-            let batch_processor_config = BatchConfigBuilder::default()
-                .with_scheduled_delay(match std::env::var("OTLP_BATCH_SCHEDULED_DELAY") {
-                    Ok(v) => {
-                        if let Ok(millis) = v.parse::<u64>() {
-                            Duration::from_millis(millis)
-                        } else {
-                            OTLP_BATCH_SCHEDULED_DELAY
-                        }
-                    }
-                    _ => OTLP_BATCH_SCHEDULED_DELAY,
-                })
-                .with_max_queue_size(match std::env::var("OTLP_BATCH_MAX_QUEUE_SIZE") {
-                    Ok(v) => v.parse::<usize>().unwrap_or(OTLP_BATCH_MAX_QUEUE_SIZE),
-                    _ => OTLP_BATCH_MAX_QUEUE_SIZE,
-                })
-                .with_max_export_batch_size(
-                    match std::env::var("OTLP_BATCH_MAX_EXPORTER_BATCH_SIZE") {
-                        Ok(v) => v
-                            .parse::<usize>()
-                            .unwrap_or(OTLP_BATCH_MAX_EXPORTER_BATCH_SIZE),
-                        _ => OTLP_BATCH_MAX_EXPORTER_BATCH_SIZE,
-                    },
-                );
+            let mut batch_processor_config = BatchConfigBuilder::default();
+
+            if let Ok(otlp_batch_scheduled_delay) = std::env::var("OTLP_BATCH_SCHEDULED_DELAY") {
+                if let Ok(millis) = otlp_batch_scheduled_delay.parse::<u64>() {
+                    batch_processor_config =
+                        batch_processor_config.with_scheduled_delay(Duration::from_millis(millis));
+                } else {
+                    eprintln!("Failed to parse OTLP_BATCH_SCHEDULED_DELAY, using default value");
+                }
+            }
+
+            if let Ok(otlp_batch_max_queue_size) = std::env::var("OTLP_BATCH_MAX_QUEUE_SIZE") {
+                if let Ok(size) = otlp_batch_max_queue_size.parse::<usize>() {
+                    batch_processor_config = batch_processor_config.with_max_queue_size(size);
+                } else {
+                    eprintln!("Failed to parse OTLP_BATCH_MAX_QUEUE_SIZE, using default value");
+                }
+            }
+
+            if let Ok(otlp_batch_max_exporter_batch_size) =
+                std::env::var("OTLP_BATCH_MAX_EXPORTER_BATCH_SIZE")
+            {
+                if let Ok(size) = otlp_batch_max_exporter_batch_size.parse::<usize>() {
+                    batch_processor_config =
+                        batch_processor_config.with_max_export_batch_size(size);
+                } else {
+                    eprintln!(
+                        "Failed to parse OTLP_BATCH_MAX_EXPORTER_BATCH_SIZE, using default value"
+                    );
+                }
+            }
 
             let span_limits = {
                 let mut span_limits = SpanLimits::default();
                 if let Ok(max_events) = std::env::var("OTLP_MAX_EVENTS_PER_SPAN") {
                     if let Ok(value) = max_events.parse::<u32>() {
                         span_limits.max_events_per_span = value;
+                    } else {
+                        eprintln!("Failed to parse OTLP_MAX_EVENTS_PER_SPAN");
                     }
                 }
 
                 if let Ok(max_attributes) = std::env::var("OTLP_MAX_ATTRIBUTES_PER_SPAN") {
                     if let Ok(value) = max_attributes.parse::<u32>() {
                         span_limits.max_attributes_per_span = value;
+                    } else {
+                        eprintln!("Failed to parse OTLP_MAX_ATTRIBUTES_PER_SPAN");
                     }
                 }
 
                 if let Ok(max_links_per_span) = std::env::var("OTLP_MAX_LINKS_PER_SPAN") {
                     if let Ok(value) = max_links_per_span.parse::<u32>() {
                         span_limits.max_links_per_span = value;
+                    } else {
+                        eprintln!("Failed to parse OTLP_MAX_LINKS_PER_SPAN");
                     }
                 }
 
@@ -84,18 +95,21 @@ pub fn setup_tracing(config: &agglayer_config::TracingConfig, version: &str) -> 
                 {
                     if let Ok(value) = max_attributes_per_event.parse::<u32>() {
                         span_limits.max_attributes_per_event = value;
+                    } else {
+                        eprintln!("Failed to parse OTLP_MAX_ATTRIBUTES_PER_EVENT");
                     }
                 }
 
                 if let Ok(max_attributes_per_link) = std::env::var("OTLP_MAX_ATTRIBUTES_PER_LINK") {
                     if let Ok(value) = max_attributes_per_link.parse::<u32>() {
                         span_limits.max_attributes_per_link = value;
+                    } else {
+                        eprintln!("Failed to parse OTLP_MAX_ATTRIBUTES_PER_LINK");
                     }
                 }
                 span_limits
             };
 
-            // Ensure that the span limits are not too low
             let trace_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
                 .with_sampler(Sampler::AlwaysOn)
                 .with_span_limits(span_limits)
@@ -173,7 +187,7 @@ fn build_resources(otlp_service_name: &str, version: &str) -> Vec<KeyValue> {
                     ))
                 }
                 _ => {
-                    eprint!(
+                    eprintln!(
                         "Invalid AGGLAYER_OTLP_TAGS entry: {tag_raw}. Expected format: key=value"
                     );
                     None
