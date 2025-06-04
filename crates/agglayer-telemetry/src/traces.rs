@@ -163,8 +163,6 @@ fn build_resources(otlp_service_name: &str, version: &str) -> Vec<KeyValue> {
     let custom_resources: Vec<_> = std::env::var("AGGLAYER_OTLP_TAGS")
         .unwrap_or_default()
         .split(',')
-        // NOTE: limit to 10 tags to avoid exploit
-        .take(10)
         .filter_map(|tag_raw| {
             let mut v = tag_raw.splitn(2, '=');
             match (v.next(), v.next()) {
