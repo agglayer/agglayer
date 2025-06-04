@@ -5,7 +5,6 @@ use anyhow::{bail, Result};
 use node::Node;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
-mod logging;
 
 mod epoch_synchronizer;
 mod node;
@@ -48,9 +47,6 @@ pub fn main(
         bail!("Received cancellation signal before starting the node.");
     }
 
-    // Initialize the logger
-    logging::tracing(&config.log);
-
     info!("Starting agglayer node version info: {}", version);
 
     let node_runtime = tokio::runtime::Builder::new_multi_thread()
@@ -63,6 +59,10 @@ pub fn main(
         .worker_threads(2)
         .enable_all()
         .build()?;
+
+    // Initialize the tracing
+    metrics_runtime
+        .block_on(async { agglayer_telemetry::traces::setup_tracing(&config.log, version) })?;
 
     // Create the metrics server.
     let metric_server = metrics_runtime.block_on(
