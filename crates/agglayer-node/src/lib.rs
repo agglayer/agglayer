@@ -47,9 +47,6 @@ pub fn main(
         bail!("Received cancellation signal before starting the node.");
     }
 
-    // // Initialize the logger
-    // logging::tracing(&config.log);
-
     info!("Starting agglayer node version info: {}", version);
 
     let node_runtime = tokio::runtime::Builder::new_multi_thread()

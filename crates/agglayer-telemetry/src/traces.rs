@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use agglayer_config::tracing::{TracingFormat, TracingOutput};
+use anyhow::anyhow;
 use opentelemetry::{global, trace::TracerProvider, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
@@ -10,17 +11,25 @@ use opentelemetry_sdk::{
 };
 use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
 
-pub fn setup_tracing(config: &agglayer_config::TracingConfig, version: &str) -> anyhow::Result<()> {
-    let writer = config.outputs.first().cloned().unwrap_or_default();
+pub const OTLP_BATCH_SCHEDULED_DELAY: Duration = Duration::from_millis(5_000);
+pub const OTLP_BATCH_MAX_QUEUE_SIZE: usize = 2048;
+pub const OTLP_BATCH_MAX_EXPORTER_BATCH_SIZE: usize = 512;
 
+pub fn setup_tracing(config: &agglayer_config::TracingConfig, version: &str) -> anyhow::Result<()> {
     let mut layers = Vec::new();
 
-    // Setup instrumentation if both otlp agent url and
-    // otlp service name are provided as arguments
-    if config.outputs.contains(&TracingOutput::Otlp) {
-        if let (Some(otlp_agent), Some(otlp_service_name)) =
-            (&config.otlp_agent, &config.otlp_service_name)
-        {
+    for writer in &config.outputs {
+        // Setup instrumentation if both otlp agent url and
+        // otlp service name are provided as arguments
+        if writer == &TracingOutput::Otlp {
+            let (Some(otlp_agent), Some(otlp_service_name)) =
+                (&config.otlp_agent, &config.otlp_service_name)
+            else {
+                anyhow::bail!(
+                    "Otlp tracing requires both otlp agent url and otlp service provided"
+                );
+            };
+
             let resources = build_resources(otlp_service_name, version);
             let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
                 .with_tonic()
@@ -29,56 +38,67 @@ pub fn setup_tracing(config: &agglayer_config::TracingConfig, version: &str) -> 
 
             let batch_processor_config = BatchConfigBuilder::default()
                 .with_scheduled_delay(match std::env::var("OTLP_BATCH_SCHEDULED_DELAY") {
-                    Ok(v) => Duration::from_millis(v.parse::<u64>().unwrap_or(5_000)),
-                    _ => Duration::from_millis(5_000),
+                    Ok(v) => {
+                        if let Ok(millis) = v.parse::<u64>() {
+                            Duration::from_millis(millis)
+                        } else {
+                            OTLP_BATCH_SCHEDULED_DELAY
+                        }
+                    }
+                    _ => OTLP_BATCH_SCHEDULED_DELAY,
                 })
                 .with_max_queue_size(match std::env::var("OTLP_BATCH_MAX_QUEUE_SIZE") {
-                    Ok(v) => v.parse::<usize>().unwrap_or(2048),
-                    _ => 2048,
+                    Ok(v) => v.parse::<usize>().unwrap_or(OTLP_BATCH_MAX_QUEUE_SIZE),
+                    _ => OTLP_BATCH_MAX_QUEUE_SIZE,
                 })
                 .with_max_export_batch_size(
                     match std::env::var("OTLP_BATCH_MAX_EXPORTER_BATCH_SIZE") {
-                        Ok(v) => v.parse::<usize>().unwrap_or(512),
-                        _ => 512,
+                        Ok(v) => v
+                            .parse::<usize>()
+                            .unwrap_or(OTLP_BATCH_MAX_EXPORTER_BATCH_SIZE),
+                        _ => OTLP_BATCH_MAX_EXPORTER_BATCH_SIZE,
                     },
                 );
 
-            let span_limits_default = SpanLimits::default();
+            let span_limits = {
+                let mut span_limits = SpanLimits::default();
+                if let Ok(max_events) = std::env::var("OTLP_MAX_EVENTS_PER_SPAN") {
+                    if let Ok(value) = max_events.parse::<u32>() {
+                        span_limits.max_events_per_span = value;
+                    }
+                }
 
+                if let Ok(max_attributes) = std::env::var("OTLP_MAX_ATTRIBUTES_PER_SPAN") {
+                    if let Ok(value) = max_attributes.parse::<u32>() {
+                        span_limits.max_attributes_per_span = value;
+                    }
+                }
+
+                if let Ok(max_links_per_span) = std::env::var("OTLP_MAX_LINKS_PER_SPAN") {
+                    if let Ok(value) = max_links_per_span.parse::<u32>() {
+                        span_limits.max_links_per_span = value;
+                    }
+                }
+
+                if let Ok(max_attributes_per_event) = std::env::var("OTLP_MAX_ATTRIBUTES_PER_EVENT")
+                {
+                    if let Ok(value) = max_attributes_per_event.parse::<u32>() {
+                        span_limits.max_attributes_per_event = value;
+                    }
+                }
+
+                if let Ok(max_attributes_per_link) = std::env::var("OTLP_MAX_ATTRIBUTES_PER_LINK") {
+                    if let Ok(value) = max_attributes_per_link.parse::<u32>() {
+                        span_limits.max_attributes_per_link = value;
+                    }
+                }
+                span_limits
+            };
+
+            // Ensure that the span limits are not too low
             let trace_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
                 .with_sampler(Sampler::AlwaysOn)
-                .with_max_events_per_span(match std::env::var("OTLP_MAX_EVENTS_PER_SPAN") {
-                    Ok(v) => v
-                        .parse::<u32>()
-                        .unwrap_or(span_limits_default.max_events_per_span),
-                    _ => span_limits_default.max_events_per_span,
-                })
-                .with_max_attributes_per_span(match std::env::var("OTLP_MAX_ATTRIBUTES_PER_SPAN") {
-                    Ok(v) => v
-                        .parse::<u32>()
-                        .unwrap_or(span_limits_default.max_attributes_per_span),
-                    _ => span_limits_default.max_attributes_per_span,
-                })
-                .with_max_links_per_span(match std::env::var("OTLP_MAX_LINK_PER_SPAN") {
-                    Ok(v) => v
-                        .parse::<u32>()
-                        .unwrap_or(span_limits_default.max_links_per_span),
-                    _ => span_limits_default.max_links_per_span,
-                })
-                .with_max_attributes_per_event(
-                    match std::env::var("OTLP_MAX_ATTRIBUTES_PER_EVENT") {
-                        Ok(v) => v
-                            .parse::<u32>()
-                            .unwrap_or(span_limits_default.max_attributes_per_event),
-                        _ => span_limits_default.max_attributes_per_event,
-                    },
-                )
-                .with_max_attributes_per_link(match std::env::var("OTLP_MAX_ATTRIBUTES_PER_LINK") {
-                    Ok(v) => v
-                        .parse::<u32>()
-                        .unwrap_or(span_limits_default.max_attributes_per_link),
-                    _ => span_limits_default.max_attributes_per_link,
-                })
+                .with_span_limits(span_limits)
                 .with_resource(Resource::builder().with_attributes(resources).build())
                 .with_span_processor(
                     BatchSpanProcessor::builder(otlp_exporter)
@@ -102,29 +122,32 @@ pub fn setup_tracing(config: &agglayer_config::TracingConfig, version: &str) -> 
 
             global::set_text_map_propagator(TraceContextPropagator::new());
         } else {
-            anyhow::bail!("Otlp tracing requires both otlp agent url and otlp service provided");
+            layers.push(match config.format {
+                TracingFormat::Pretty => tracing_subscriber::fmt::layer()
+                    .pretty()
+                    .with_writer(writer.as_make_writer())
+                    .with_filter(
+                        EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into()),
+                    )
+                    .boxed(),
+
+                TracingFormat::Json => tracing_subscriber::fmt::layer()
+                    .json()
+                    .with_writer(writer.as_make_writer())
+                    .with_filter(
+                        EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into()),
+                    )
+                    .boxed(),
+            });
         }
     }
 
-    layers.push(match config.format {
-        TracingFormat::Pretty => tracing_subscriber::fmt::layer()
-            .pretty()
-            .with_writer(writer.as_make_writer())
-            .with_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into()))
-            .boxed(),
-
-        TracingFormat::Json => tracing_subscriber::fmt::layer()
-            .json()
-            .with_writer(writer.as_make_writer())
-            .with_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into()))
-            .boxed(),
-    });
-
     // We are using try_init because integration test may try
     // to initialize this multiple times.
-    _ = tracing_subscriber::Registry::default()
+    tracing_subscriber::Registry::default()
         .with(layers)
-        .try_init();
+        .try_init()
+        .map_err(|e| anyhow!("Unable to initialize tracing subscriber: {e:?}"))?;
 
     tracing::info!("Tracing initialized with config: {config:?}");
 
@@ -151,7 +174,12 @@ fn build_resources(otlp_service_name: &str, version: &str) -> Vec<KeyValue> {
                         value.trim().to_string(),
                     ))
                 }
-                _ => None,
+                _ => {
+                    eprint!(
+                        "Invalid AGGLAYER_OTLP_TAGS entry: {tag_raw}. Expected format: key=value"
+                    );
+                    None
+                }
             }
         })
         .collect();
