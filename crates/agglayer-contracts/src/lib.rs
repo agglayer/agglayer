@@ -97,6 +97,8 @@ pub enum L1RpcError {
     UnableToParseAggchainVkey,
     #[error("Unable to retrieve verifier type")]
     VerifierTypeRetrievalFailed,
+    #[error("Unable to retrieve the aggchain hash")]
+    AggchainHashFetchFailed,
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>

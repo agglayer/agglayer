@@ -24,6 +24,28 @@ pub mod aggchain_base {
                             outputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
                                     name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        2usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes2"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("CONSENSUS_TYPE"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("CONSENSUS_TYPE"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Uint(32usize),
                                     internal_type: ::core::option::Option::Some(
                                         ::std::borrow::ToOwned::to_owned("uint32"),
@@ -40,6 +62,20 @@ pub mod aggchain_base {
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
                             name: ::std::borrow::ToOwned::to_owned("acceptAdminRole"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("acceptAggchainManagerRole"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "acceptAggchainManagerRole",
+                            ),
                             inputs: ::std::vec![],
                             outputs: ::std::vec![],
                             constant: ::core::option::Option::None,
@@ -70,7 +106,9 @@ pub mod aggchain_base {
                             ),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("aggchainSelector"),
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "aggchainVKeySelector",
+                                    ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
                                         4usize,
                                     ),
@@ -128,6 +166,26 @@ pub mod aggchain_base {
                                         ::std::borrow::ToOwned::to_owned(
                                             "contract IAggLayerGateway",
                                         ),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("aggchainManager"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("aggchainManager"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("address"),
                                     ),
                                 },
                             ],
@@ -297,13 +355,81 @@ pub mod aggchain_base {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("getAggchainHash"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("getAggchainHash"),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("aggchainData"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes32"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("getAggchainTypeFromSelector"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "getAggchainTypeFromSelector",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "aggchainVKeySelector",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        4usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes4"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        2usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes2"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::Pure,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("getAggchainVKey"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
                             name: ::std::borrow::ToOwned::to_owned("getAggchainVKey"),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("aggchainSelector"),
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "aggchainVKeySelector",
+                                    ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
                                         4usize,
                                     ),
@@ -329,6 +455,89 @@ pub mod aggchain_base {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("getAggchainVKeySelector"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "getAggchainVKeySelector",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "aggchainVKeyVersion",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        2usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes2"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("aggchainType"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        2usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes2"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        4usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes4"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::Pure,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned(
+                        "getAggchainVKeyVersionFromSelector",
+                    ),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "getAggchainVKeyVersionFromSelector",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "aggchainVKeySelector",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        4usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes4"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        2usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes2"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::Pure,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("globalExitRootManager"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
@@ -349,6 +558,30 @@ pub mod aggchain_base {
                             ],
                             constant: ::core::option::Option::None,
                             state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("initAggchainManager"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "initAggchainManager",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "newAggchainManager",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("address"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
                         },
                     ],
                 ),
@@ -492,6 +725,28 @@ pub mod aggchain_base {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("onVerifyPessimistic"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "onVerifyPessimistic",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("aggchainData"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Bytes,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bytes"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("ownedAggchainVKeys"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
@@ -530,6 +785,28 @@ pub mod aggchain_base {
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
                             name: ::std::borrow::ToOwned::to_owned("pendingAdmin"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("address"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("pendingAggchainManager"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "pendingAggchainManager",
+                            ),
                             inputs: ::std::vec![],
                             outputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
@@ -678,6 +955,30 @@ pub mod aggchain_base {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("transferAggchainManagerRole"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "transferAggchainManagerRole",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "newAggchainManager",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("address"),
+                                    ),
+                                },
+                            ],
+                            outputs: ::std::vec![],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::NonPayable,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("transferVKeyManagerRole"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
@@ -750,7 +1051,9 @@ pub mod aggchain_base {
                             ),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::Param {
-                                    name: ::std::borrow::ToOwned::to_owned("aggchainSelector"),
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "aggchainVKeySelector",
+                                    ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
                                         4usize,
                                     ),
@@ -835,6 +1138,33 @@ pub mod aggchain_base {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("AcceptAggchainManagerRole"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Event {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "AcceptAggchainManagerRole",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "oldAggchainManager",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    indexed: false,
+                                },
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "newAggchainManager",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    indexed: false,
+                                },
+                            ],
+                            anonymous: false,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("AcceptVKeyManagerRole"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Event {
@@ -842,6 +1172,11 @@ pub mod aggchain_base {
                                 "AcceptVKeyManagerRole",
                             ),
                             inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned("oldVKeyManager"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    indexed: false,
+                                },
                                 ::ethers::core::abi::ethabi::EventParam {
                                     name: ::std::borrow::ToOwned::to_owned("newVKeyManager"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
@@ -873,6 +1208,30 @@ pub mod aggchain_base {
                                     indexed: false,
                                 },
                             ],
+                            anonymous: false,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("DisableUseDefaultGatewayFlag"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Event {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "DisableUseDefaultGatewayFlag",
+                            ),
+                            inputs: ::std::vec![],
+                            anonymous: false,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("EnableUseDefaultGatewayFlag"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Event {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "EnableUseDefaultGatewayFlag",
+                            ),
+                            inputs: ::std::vec![],
                             anonymous: false,
                         },
                     ],
@@ -950,6 +1309,33 @@ pub mod aggchain_base {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("TransferAggchainManagerRole"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Event {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "TransferAggchainManagerRole",
+                            ),
+                            inputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "currentAggchainManager",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    indexed: false,
+                                },
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "newPendingAggchainManager",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    indexed: false,
+                                },
+                            ],
+                            anonymous: false,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("TransferVKeyManagerRole"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Event {
@@ -958,7 +1344,16 @@ pub mod aggchain_base {
                             ),
                             inputs: ::std::vec![
                                 ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("newVKeyManager"),
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "currentVKeyManager",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    indexed: false,
+                                },
+                                ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "newPendingVKeyManager",
+                                    ),
                                     kind: ::ethers::core::abi::ethabi::ParamType::Address,
                                     indexed: false,
                                 },
@@ -981,6 +1376,15 @@ pub mod aggchain_base {
                                     indexed: false,
                                 },
                                 ::ethers::core::abi::ethabi::EventParam {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "previousAggchainVKey",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
+                                        32usize,
+                                    ),
+                                    indexed: false,
+                                },
+                                ::ethers::core::abi::ethabi::EventParam {
                                     name: ::std::borrow::ToOwned::to_owned("newAggchainVKey"),
                                     kind: ::ethers::core::abi::ethabi::ParamType::FixedBytes(
                                         32usize,
@@ -992,26 +1396,19 @@ pub mod aggchain_base {
                         },
                     ],
                 ),
+            ]),
+            errors: ::core::convert::From::from([
                 (
-                    ::std::borrow::ToOwned::to_owned("UpdateUseDefaultGatewayFlag"),
+                    ::std::borrow::ToOwned::to_owned("AggchainManagerCannotBeZero"),
                     ::std::vec![
-                        ::ethers::core::abi::ethabi::Event {
+                        ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
-                                "UpdateUseDefaultGatewayFlag",
+                                "AggchainManagerCannotBeZero",
                             ),
-                            inputs: ::std::vec![
-                                ::ethers::core::abi::ethabi::EventParam {
-                                    name: ::std::borrow::ToOwned::to_owned("useDefaultGateway"),
-                                    kind: ::ethers::core::abi::ethabi::ParamType::Bool,
-                                    indexed: false,
-                                },
-                            ],
-                            anonymous: false,
+                            inputs: ::std::vec![],
                         },
                     ],
                 ),
-            ]),
-            errors: ::core::convert::From::from([
                 (
                     ::std::borrow::ToOwned::to_owned("AggchainVKeyNotFound"),
                     ::std::vec![
@@ -1280,11 +1677,33 @@ pub mod aggchain_base {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("InvalidAggchainVKey"),
+                    ::std::borrow::ToOwned::to_owned("InvalidAggLayerGatewayAddress"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
-                                "InvalidAggchainVKey",
+                                "InvalidAggLayerGatewayAddress",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("InvalidAggchainDataLength"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "InvalidAggchainDataLength",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("InvalidAggchainType"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "InvalidAggchainType",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -1308,15 +1727,6 @@ pub mod aggchain_base {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "InvalidInitializeTransaction",
                             ),
-                            inputs: ::std::vec![],
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("InvalidInitializer"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::AbiError {
-                            name: ::std::borrow::ToOwned::to_owned("InvalidInitializer"),
                             inputs: ::std::vec![],
                         },
                     ],
@@ -1359,6 +1769,15 @@ pub mod aggchain_base {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "InvalidRangeMultiplierBatchFee",
                             ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("InvalidZeroAddress"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned("InvalidZeroAddress"),
                             inputs: ::std::vec![],
                         },
                     ],
@@ -1485,10 +1904,32 @@ pub mod aggchain_base {
                     ],
                 ),
                 (
+                    ::std::borrow::ToOwned::to_owned("OnlyAggchainManager"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "OnlyAggchainManager",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("OnlyPendingAdmin"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned("OnlyPendingAdmin"),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("OnlyPendingAggchainManager"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "OnlyPendingAggchainManager",
+                            ),
                             inputs: ::std::vec![],
                         },
                     ],
@@ -1550,17 +1991,6 @@ pub mod aggchain_base {
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
                                 "OwnedAggchainVKeyAlreadyAdded",
-                            ),
-                            inputs: ::std::vec![],
-                        },
-                    ],
-                ),
-                (
-                    ::std::borrow::ToOwned::to_owned("OwnedAggchainVKeyLengthMismatch"),
-                    ::std::vec![
-                        ::ethers::core::abi::ethabi::AbiError {
-                            name: ::std::borrow::ToOwned::to_owned(
-                                "OwnedAggchainVKeyLengthMismatch",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -1709,11 +2139,33 @@ pub mod aggchain_base {
                     ],
                 ),
                 (
-                    ::std::borrow::ToOwned::to_owned("UseDefaultGatewayAlreadySet"),
+                    ::std::borrow::ToOwned::to_owned("UseDefaultGatewayAlreadyDisabled"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::AbiError {
                             name: ::std::borrow::ToOwned::to_owned(
-                                "UseDefaultGatewayAlreadySet",
+                                "UseDefaultGatewayAlreadyDisabled",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("UseDefaultGatewayAlreadyEnabled"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "UseDefaultGatewayAlreadyEnabled",
+                            ),
+                            inputs: ::std::vec![],
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("ZeroValueAggchainVKey"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::AbiError {
+                            name: ::std::borrow::ToOwned::to_owned(
+                                "ZeroValueAggchainVKey",
                             ),
                             inputs: ::std::vec![],
                         },
@@ -1770,9 +2222,17 @@ pub mod aggchain_base {
         ///Calls the contract's `AGGCHAIN_TYPE` (0x6e7fbce9) function
         pub fn aggchain_type(
             &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, u32> {
+        ) -> ::ethers::contract::builders::ContractCall<M, [u8; 2]> {
             self.0
                 .method_hash([110, 127, 188, 233], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `CONSENSUS_TYPE` (0xcea5a4c0) function
+        pub fn consensus_type(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<M, u32> {
+            self.0
+                .method_hash([206, 165, 164, 192], ())
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `acceptAdminRole` (0x8c3d7301) function
@@ -1781,6 +2241,14 @@ pub mod aggchain_base {
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
                 .method_hash([140, 61, 115, 1], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `acceptAggchainManagerRole` (0x15981b29) function
+        pub fn accept_aggchain_manager_role(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash([21, 152, 27, 41], ())
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `acceptVKeyManagerRole` (0x368c822c) function
@@ -1794,11 +2262,14 @@ pub mod aggchain_base {
         ///Calls the contract's `addOwnedAggchainVKey` (0x19451a8f) function
         pub fn add_owned_aggchain_v_key(
             &self,
-            aggchain_selector: [u8; 4],
+            aggchain_v_key_selector: [u8; 4],
             new_aggchain_v_key: [u8; 32],
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
-                .method_hash([25, 69, 26, 143], (aggchain_selector, new_aggchain_v_key))
+                .method_hash(
+                    [25, 69, 26, 143],
+                    (aggchain_v_key_selector, new_aggchain_v_key),
+                )
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `admin` (0xf851a440) function
@@ -1821,6 +2292,17 @@ pub mod aggchain_base {
         > {
             self.0
                 .method_hash([171, 4, 117, 207], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `aggchainManager` (0x7388c436) function
+        pub fn aggchain_manager(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<
+            M,
+            ::ethers::core::types::Address,
+        > {
+            self.0
+                .method_hash([115, 136, 196, 54], ())
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `bridgeAddress` (0xa3c573eb) function
@@ -1897,13 +2379,50 @@ pub mod aggchain_base {
                 .method_hash([60, 188, 121, 91], ())
                 .expect("method not found (this should never happen)")
         }
+        ///Calls the contract's `getAggchainHash` (0x6a55f66c) function
+        pub fn get_aggchain_hash(
+            &self,
+            aggchain_data: ::ethers::core::types::Bytes,
+        ) -> ::ethers::contract::builders::ContractCall<M, [u8; 32]> {
+            self.0
+                .method_hash([106, 85, 246, 108], aggchain_data)
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `getAggchainTypeFromSelector` (0x26f9b76d) function
+        pub fn get_aggchain_type_from_selector(
+            &self,
+            aggchain_v_key_selector: [u8; 4],
+        ) -> ::ethers::contract::builders::ContractCall<M, [u8; 2]> {
+            self.0
+                .method_hash([38, 249, 183, 109], aggchain_v_key_selector)
+                .expect("method not found (this should never happen)")
+        }
         ///Calls the contract's `getAggchainVKey` (0x01fcf6a0) function
         pub fn get_aggchain_v_key(
             &self,
-            aggchain_selector: [u8; 4],
+            aggchain_v_key_selector: [u8; 4],
         ) -> ::ethers::contract::builders::ContractCall<M, [u8; 32]> {
             self.0
-                .method_hash([1, 252, 246, 160], aggchain_selector)
+                .method_hash([1, 252, 246, 160], aggchain_v_key_selector)
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `getAggchainVKeySelector` (0x1d0b435e) function
+        pub fn get_aggchain_v_key_selector(
+            &self,
+            aggchain_v_key_version: [u8; 2],
+            aggchain_type: [u8; 2],
+        ) -> ::ethers::contract::builders::ContractCall<M, [u8; 4]> {
+            self.0
+                .method_hash([29, 11, 67, 94], (aggchain_v_key_version, aggchain_type))
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `getAggchainVKeyVersionFromSelector` (0xe90a3409) function
+        pub fn get_aggchain_v_key_version_from_selector(
+            &self,
+            aggchain_v_key_selector: [u8; 4],
+        ) -> ::ethers::contract::builders::ContractCall<M, [u8; 2]> {
+            self.0
+                .method_hash([233, 10, 52, 9], aggchain_v_key_selector)
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `globalExitRootManager` (0xd02103ca) function
@@ -1915,6 +2434,15 @@ pub mod aggchain_base {
         > {
             self.0
                 .method_hash([208, 33, 3, 202], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `initAggchainManager` (0xb3a326f7) function
+        pub fn init_aggchain_manager(
+            &self,
+            new_aggchain_manager: ::ethers::core::types::Address,
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash([179, 163, 38, 247], new_aggchain_manager)
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `initialize` (0x71257022) function
@@ -1963,6 +2491,15 @@ pub mod aggchain_base {
                 .method_hash([16, 123, 242, 140], ())
                 .expect("method not found (this should never happen)")
         }
+        ///Calls the contract's `onVerifyPessimistic` (0x9ee4afa3) function
+        pub fn on_verify_pessimistic(
+            &self,
+            aggchain_data: ::ethers::core::types::Bytes,
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash([158, 228, 175, 163], aggchain_data)
+                .expect("method not found (this should never happen)")
+        }
         ///Calls the contract's `ownedAggchainVKeys` (0xeffb8479) function
         pub fn owned_aggchain_v_keys(
             &self,
@@ -1981,6 +2518,17 @@ pub mod aggchain_base {
         > {
             self.0
                 .method_hash([38, 120, 34, 71], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `pendingAggchainManager` (0x527570f1) function
+        pub fn pending_aggchain_manager(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<
+            M,
+            ::ethers::core::types::Address,
+        > {
+            self.0
+                .method_hash([82, 117, 112, 241], ())
                 .expect("method not found (this should never happen)")
         }
         ///Calls the contract's `pendingVKeyManager` (0xbfb193b6) function
@@ -2043,6 +2591,15 @@ pub mod aggchain_base {
                 .method_hash([173, 168, 249, 25], new_pending_admin)
                 .expect("method not found (this should never happen)")
         }
+        ///Calls the contract's `transferAggchainManagerRole` (0xbdfbed7e) function
+        pub fn transfer_aggchain_manager_role(
+            &self,
+            new_aggchain_manager: ::ethers::core::types::Address,
+        ) -> ::ethers::contract::builders::ContractCall<M, ()> {
+            self.0
+                .method_hash([189, 251, 237, 126], new_aggchain_manager)
+                .expect("method not found (this should never happen)")
+        }
         ///Calls the contract's `transferVKeyManagerRole` (0x85018182) function
         pub fn transfer_v_key_manager_role(
             &self,
@@ -2074,13 +2631,13 @@ pub mod aggchain_base {
         ///Calls the contract's `updateOwnedAggchainVKey` (0x314eb17b) function
         pub fn update_owned_aggchain_v_key(
             &self,
-            aggchain_selector: [u8; 4],
+            aggchain_v_key_selector: [u8; 4],
             updated_aggchain_v_key: [u8; 32],
         ) -> ::ethers::contract::builders::ContractCall<M, ()> {
             self.0
                 .method_hash(
                     [49, 78, 177, 123],
-                    (aggchain_selector, updated_aggchain_v_key),
+                    (aggchain_v_key_selector, updated_aggchain_v_key),
                 )
                 .expect("method not found (this should never happen)")
         }
@@ -2113,6 +2670,16 @@ pub mod aggchain_base {
         > {
             self.0.event()
         }
+        ///Gets the contract's `AcceptAggchainManagerRole` event
+        pub fn accept_aggchain_manager_role_filter(
+            &self,
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            AcceptAggchainManagerRoleFilter,
+        > {
+            self.0.event()
+        }
         ///Gets the contract's `AcceptVKeyManagerRole` event
         pub fn accept_v_key_manager_role_filter(
             &self,
@@ -2130,6 +2697,26 @@ pub mod aggchain_base {
             ::std::sync::Arc<M>,
             M,
             AddAggchainVKeyFilter,
+        > {
+            self.0.event()
+        }
+        ///Gets the contract's `DisableUseDefaultGatewayFlag` event
+        pub fn disable_use_default_gateway_flag_filter(
+            &self,
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            DisableUseDefaultGatewayFlagFilter,
+        > {
+            self.0.event()
+        }
+        ///Gets the contract's `EnableUseDefaultGatewayFlag` event
+        pub fn enable_use_default_gateway_flag_filter(
+            &self,
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            EnableUseDefaultGatewayFlagFilter,
         > {
             self.0.event()
         }
@@ -2173,6 +2760,16 @@ pub mod aggchain_base {
         > {
             self.0.event()
         }
+        ///Gets the contract's `TransferAggchainManagerRole` event
+        pub fn transfer_aggchain_manager_role_filter(
+            &self,
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            TransferAggchainManagerRoleFilter,
+        > {
+            self.0.event()
+        }
         ///Gets the contract's `TransferVKeyManagerRole` event
         pub fn transfer_v_key_manager_role_filter(
             &self,
@@ -2193,16 +2790,6 @@ pub mod aggchain_base {
         > {
             self.0.event()
         }
-        ///Gets the contract's `UpdateUseDefaultGatewayFlag` event
-        pub fn update_use_default_gateway_flag_filter(
-            &self,
-        ) -> ::ethers::contract::builders::Event<
-            ::std::sync::Arc<M>,
-            M,
-            UpdateUseDefaultGatewayFlagFilter,
-        > {
-            self.0.event()
-        }
         /// Returns an `Event` builder for all the events of this contract.
         pub fn events(
             &self,
@@ -2220,6 +2807,22 @@ pub mod aggchain_base {
             Self::new(contract.address(), contract.client())
         }
     }
+    ///Custom Error type `AggchainManagerCannotBeZero` with signature `AggchainManagerCannotBeZero()` and selector `0xd6bdac3f`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "AggchainManagerCannotBeZero",
+        abi = "AggchainManagerCannotBeZero()"
+    )]
+    pub struct AggchainManagerCannotBeZero;
     ///Custom Error type `AggchainVKeyNotFound` with signature `AggchainVKeyNotFound()` and selector `0x925e5a3a`
     #[derive(
         Clone,
@@ -2558,7 +3161,7 @@ pub mod aggchain_base {
         abi = "InitSequencedBatchDoesNotMatch()"
     )]
     pub struct InitSequencedBatchDoesNotMatch;
-    ///Custom Error type `InvalidAggchainVKey` with signature `InvalidAggchainVKey()` and selector `0x4aac8b88`
+    ///Custom Error type `InvalidAggLayerGatewayAddress` with signature `InvalidAggLayerGatewayAddress()` and selector `0xae7e6e0f`
     #[derive(
         Clone,
         ::ethers::contract::EthError,
@@ -2569,8 +3172,37 @@ pub mod aggchain_base {
         Eq,
         Hash
     )]
-    #[etherror(name = "InvalidAggchainVKey", abi = "InvalidAggchainVKey()")]
-    pub struct InvalidAggchainVKey;
+    #[etherror(
+        name = "InvalidAggLayerGatewayAddress",
+        abi = "InvalidAggLayerGatewayAddress()"
+    )]
+    pub struct InvalidAggLayerGatewayAddress;
+    ///Custom Error type `InvalidAggchainDataLength` with signature `InvalidAggchainDataLength()` and selector `0x30639654`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "InvalidAggchainDataLength", abi = "InvalidAggchainDataLength()")]
+    pub struct InvalidAggchainDataLength;
+    ///Custom Error type `InvalidAggchainType` with signature `InvalidAggchainType()` and selector `0x45707950`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "InvalidAggchainType", abi = "InvalidAggchainType()")]
+    pub struct InvalidAggchainType;
     ///Custom Error type `InvalidInitializeFunction` with signature `InvalidInitializeFunction()` and selector `0xf57ac683`
     #[derive(
         Clone,
@@ -2600,19 +3232,6 @@ pub mod aggchain_base {
         abi = "InvalidInitializeTransaction()"
     )]
     pub struct InvalidInitializeTransaction;
-    ///Custom Error type `InvalidInitializer` with signature `InvalidInitializer()` and selector `0xadc06ae7`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthError,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[etherror(name = "InvalidInitializer", abi = "InvalidInitializer()")]
-    pub struct InvalidInitializer;
     ///Custom Error type `InvalidProof` with signature `InvalidProof()` and selector `0x09bde339`
     #[derive(
         Clone,
@@ -2674,6 +3293,19 @@ pub mod aggchain_base {
         abi = "InvalidRangeMultiplierBatchFee()"
     )]
     pub struct InvalidRangeMultiplierBatchFee;
+    ///Custom Error type `InvalidZeroAddress` with signature `InvalidZeroAddress()` and selector `0xf6b2911f`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "InvalidZeroAddress", abi = "InvalidZeroAddress()")]
+    pub struct InvalidZeroAddress;
     ///Custom Error type `L1InfoTreeLeafCountInvalid` with signature `L1InfoTreeLeafCountInvalid()` and selector `0xa60721e1`
     #[derive(
         Clone,
@@ -2838,6 +3470,19 @@ pub mod aggchain_base {
     )]
     #[etherror(name = "OnlyAdmin", abi = "OnlyAdmin()")]
     pub struct OnlyAdmin;
+    ///Custom Error type `OnlyAggchainManager` with signature `OnlyAggchainManager()` and selector `0x660a7ce5`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "OnlyAggchainManager", abi = "OnlyAggchainManager()")]
+    pub struct OnlyAggchainManager;
     ///Custom Error type `OnlyPendingAdmin` with signature `OnlyPendingAdmin()` and selector `0xd1ec4b23`
     #[derive(
         Clone,
@@ -2851,6 +3496,22 @@ pub mod aggchain_base {
     )]
     #[etherror(name = "OnlyPendingAdmin", abi = "OnlyPendingAdmin()")]
     pub struct OnlyPendingAdmin;
+    ///Custom Error type `OnlyPendingAggchainManager` with signature `OnlyPendingAggchainManager()` and selector `0x3ac87ac9`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "OnlyPendingAggchainManager",
+        abi = "OnlyPendingAggchainManager()"
+    )]
+    pub struct OnlyPendingAggchainManager;
     ///Custom Error type `OnlyPendingVKeyManager` with signature `OnlyPendingVKeyManager()` and selector `0x05882cf0`
     #[derive(
         Clone,
@@ -2932,22 +3593,6 @@ pub mod aggchain_base {
         abi = "OwnedAggchainVKeyAlreadyAdded()"
     )]
     pub struct OwnedAggchainVKeyAlreadyAdded;
-    ///Custom Error type `OwnedAggchainVKeyLengthMismatch` with signature `OwnedAggchainVKeyLengthMismatch()` and selector `0x68965113`
-    #[derive(
-        Clone,
-        ::ethers::contract::EthError,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[etherror(
-        name = "OwnedAggchainVKeyLengthMismatch",
-        abi = "OwnedAggchainVKeyLengthMismatch()"
-    )]
-    pub struct OwnedAggchainVKeyLengthMismatch;
     ///Custom Error type `OwnedAggchainVKeyNotFound` with signature `OwnedAggchainVKeyNotFound()` and selector `0xf360deaf`
     #[derive(
         Clone,
@@ -3125,7 +3770,7 @@ pub mod aggchain_base {
         abi = "TrustedAggregatorTimeoutNotExpired()"
     )]
     pub struct TrustedAggregatorTimeoutNotExpired;
-    ///Custom Error type `UseDefaultGatewayAlreadySet` with signature `UseDefaultGatewayAlreadySet()` and selector `0x6f318e4c`
+    ///Custom Error type `UseDefaultGatewayAlreadyDisabled` with signature `UseDefaultGatewayAlreadyDisabled()` and selector `0x62de0445`
     #[derive(
         Clone,
         ::ethers::contract::EthError,
@@ -3137,13 +3782,43 @@ pub mod aggchain_base {
         Hash
     )]
     #[etherror(
-        name = "UseDefaultGatewayAlreadySet",
-        abi = "UseDefaultGatewayAlreadySet()"
+        name = "UseDefaultGatewayAlreadyDisabled",
+        abi = "UseDefaultGatewayAlreadyDisabled()"
     )]
-    pub struct UseDefaultGatewayAlreadySet;
+    pub struct UseDefaultGatewayAlreadyDisabled;
+    ///Custom Error type `UseDefaultGatewayAlreadyEnabled` with signature `UseDefaultGatewayAlreadyEnabled()` and selector `0x93be8051`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(
+        name = "UseDefaultGatewayAlreadyEnabled",
+        abi = "UseDefaultGatewayAlreadyEnabled()"
+    )]
+    pub struct UseDefaultGatewayAlreadyEnabled;
+    ///Custom Error type `ZeroValueAggchainVKey` with signature `ZeroValueAggchainVKey()` and selector `0xe1dbcf2e`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthError,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[etherror(name = "ZeroValueAggchainVKey", abi = "ZeroValueAggchainVKey()")]
+    pub struct ZeroValueAggchainVKey;
     ///Container type for all of the contract's custom errors
     #[derive(Clone, ::ethers::contract::EthAbiType, Debug, PartialEq, Eq, Hash)]
     pub enum AggchainBaseErrors {
+        AggchainManagerCannotBeZero(AggchainManagerCannotBeZero),
         AggchainVKeyNotFound(AggchainVKeyNotFound),
         BatchAlreadyVerified(BatchAlreadyVerified),
         BatchNotSequencedOrNotSequenceEnd(BatchNotSequencedOrNotSequenceEnd),
@@ -3169,14 +3844,16 @@ pub mod aggchain_base {
         InitNumBatchAboveLastVerifiedBatch(InitNumBatchAboveLastVerifiedBatch),
         InitNumBatchDoesNotMatchPendingState(InitNumBatchDoesNotMatchPendingState),
         InitSequencedBatchDoesNotMatch(InitSequencedBatchDoesNotMatch),
-        InvalidAggchainVKey(InvalidAggchainVKey),
+        InvalidAggLayerGatewayAddress(InvalidAggLayerGatewayAddress),
+        InvalidAggchainDataLength(InvalidAggchainDataLength),
+        InvalidAggchainType(InvalidAggchainType),
         InvalidInitializeFunction(InvalidInitializeFunction),
         InvalidInitializeTransaction(InvalidInitializeTransaction),
-        InvalidInitializer(InvalidInitializer),
         InvalidProof(InvalidProof),
         InvalidRangeBatchTimeTarget(InvalidRangeBatchTimeTarget),
         InvalidRangeForceBatchTimeout(InvalidRangeForceBatchTimeout),
         InvalidRangeMultiplierBatchFee(InvalidRangeMultiplierBatchFee),
+        InvalidZeroAddress(InvalidZeroAddress),
         L1InfoTreeLeafCountInvalid(L1InfoTreeLeafCountInvalid),
         MaxTimestampSequenceInvalid(MaxTimestampSequenceInvalid),
         NewAccInputHashDoesNotExist(NewAccInputHashDoesNotExist),
@@ -3188,14 +3865,15 @@ pub mod aggchain_base {
         OldAccInputHashDoesNotExist(OldAccInputHashDoesNotExist),
         OldStateRootDoesNotExist(OldStateRootDoesNotExist),
         OnlyAdmin(OnlyAdmin),
+        OnlyAggchainManager(OnlyAggchainManager),
         OnlyPendingAdmin(OnlyPendingAdmin),
+        OnlyPendingAggchainManager(OnlyPendingAggchainManager),
         OnlyPendingVKeyManager(OnlyPendingVKeyManager),
         OnlyRollupManager(OnlyRollupManager),
         OnlyTrustedAggregator(OnlyTrustedAggregator),
         OnlyTrustedSequencer(OnlyTrustedSequencer),
         OnlyVKeyManager(OnlyVKeyManager),
         OwnedAggchainVKeyAlreadyAdded(OwnedAggchainVKeyAlreadyAdded),
-        OwnedAggchainVKeyLengthMismatch(OwnedAggchainVKeyLengthMismatch),
         OwnedAggchainVKeyNotFound(OwnedAggchainVKeyNotFound),
         PendingStateDoesNotExist(PendingStateDoesNotExist),
         PendingStateInvalid(PendingStateInvalid),
@@ -3212,7 +3890,9 @@ pub mod aggchain_base {
             TrustedAggregatorTimeoutExceedHaltAggregationTimeout,
         ),
         TrustedAggregatorTimeoutNotExpired(TrustedAggregatorTimeoutNotExpired),
-        UseDefaultGatewayAlreadySet(UseDefaultGatewayAlreadySet),
+        UseDefaultGatewayAlreadyDisabled(UseDefaultGatewayAlreadyDisabled),
+        UseDefaultGatewayAlreadyEnabled(UseDefaultGatewayAlreadyEnabled),
+        ZeroValueAggchainVKey(ZeroValueAggchainVKey),
         /// The standard solidity revert string, with selector
         /// Error(string) -- 0x08c379a0
         RevertString(::std::string::String),
@@ -3226,6 +3906,11 @@ pub mod aggchain_base {
                 data,
             ) {
                 return Ok(Self::RevertString(decoded));
+            }
+            if let Ok(decoded) = <AggchainManagerCannotBeZero as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::AggchainManagerCannotBeZero(decoded));
             }
             if let Ok(decoded) = <AggchainVKeyNotFound as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3342,10 +4027,20 @@ pub mod aggchain_base {
             ) {
                 return Ok(Self::InitSequencedBatchDoesNotMatch(decoded));
             }
-            if let Ok(decoded) = <InvalidAggchainVKey as ::ethers::core::abi::AbiDecode>::decode(
+            if let Ok(decoded) = <InvalidAggLayerGatewayAddress as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
-                return Ok(Self::InvalidAggchainVKey(decoded));
+                return Ok(Self::InvalidAggLayerGatewayAddress(decoded));
+            }
+            if let Ok(decoded) = <InvalidAggchainDataLength as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidAggchainDataLength(decoded));
+            }
+            if let Ok(decoded) = <InvalidAggchainType as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidAggchainType(decoded));
             }
             if let Ok(decoded) = <InvalidInitializeFunction as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3356,11 +4051,6 @@ pub mod aggchain_base {
                 data,
             ) {
                 return Ok(Self::InvalidInitializeTransaction(decoded));
-            }
-            if let Ok(decoded) = <InvalidInitializer as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::InvalidInitializer(decoded));
             }
             if let Ok(decoded) = <InvalidProof as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3381,6 +4071,11 @@ pub mod aggchain_base {
                 data,
             ) {
                 return Ok(Self::InvalidRangeMultiplierBatchFee(decoded));
+            }
+            if let Ok(decoded) = <InvalidZeroAddress as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InvalidZeroAddress(decoded));
             }
             if let Ok(decoded) = <L1InfoTreeLeafCountInvalid as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3437,10 +4132,20 @@ pub mod aggchain_base {
             ) {
                 return Ok(Self::OnlyAdmin(decoded));
             }
+            if let Ok(decoded) = <OnlyAggchainManager as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OnlyAggchainManager(decoded));
+            }
             if let Ok(decoded) = <OnlyPendingAdmin as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::OnlyPendingAdmin(decoded));
+            }
+            if let Ok(decoded) = <OnlyPendingAggchainManager as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OnlyPendingAggchainManager(decoded));
             }
             if let Ok(decoded) = <OnlyPendingVKeyManager as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3471,11 +4176,6 @@ pub mod aggchain_base {
                 data,
             ) {
                 return Ok(Self::OwnedAggchainVKeyAlreadyAdded(decoded));
-            }
-            if let Ok(decoded) = <OwnedAggchainVKeyLengthMismatch as ::ethers::core::abi::AbiDecode>::decode(
-                data,
-            ) {
-                return Ok(Self::OwnedAggchainVKeyLengthMismatch(decoded));
             }
             if let Ok(decoded) = <OwnedAggchainVKeyNotFound as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -3541,10 +4241,20 @@ pub mod aggchain_base {
             ) {
                 return Ok(Self::TrustedAggregatorTimeoutNotExpired(decoded));
             }
-            if let Ok(decoded) = <UseDefaultGatewayAlreadySet as ::ethers::core::abi::AbiDecode>::decode(
+            if let Ok(decoded) = <UseDefaultGatewayAlreadyDisabled as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
-                return Ok(Self::UseDefaultGatewayAlreadySet(decoded));
+                return Ok(Self::UseDefaultGatewayAlreadyDisabled(decoded));
+            }
+            if let Ok(decoded) = <UseDefaultGatewayAlreadyEnabled as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::UseDefaultGatewayAlreadyEnabled(decoded));
+            }
+            if let Ok(decoded) = <ZeroValueAggchainVKey as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::ZeroValueAggchainVKey(decoded));
             }
             Err(::ethers::core::abi::Error::InvalidData.into())
         }
@@ -3552,6 +4262,9 @@ pub mod aggchain_base {
     impl ::ethers::core::abi::AbiEncode for AggchainBaseErrors {
         fn encode(self) -> ::std::vec::Vec<u8> {
             match self {
+                Self::AggchainManagerCannotBeZero(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::AggchainVKeyNotFound(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
@@ -3621,16 +4334,19 @@ pub mod aggchain_base {
                 Self::InitSequencedBatchDoesNotMatch(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::InvalidAggchainVKey(element) => {
+                Self::InvalidAggLayerGatewayAddress(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InvalidAggchainDataLength(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InvalidAggchainType(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::InvalidInitializeFunction(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::InvalidInitializeTransaction(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::InvalidInitializer(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::InvalidProof(element) => {
@@ -3643,6 +4359,9 @@ pub mod aggchain_base {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::InvalidRangeMultiplierBatchFee(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InvalidZeroAddress(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::L1InfoTreeLeafCountInvalid(element) => {
@@ -3678,7 +4397,13 @@ pub mod aggchain_base {
                 Self::OnlyAdmin(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::OnlyAggchainManager(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::OnlyPendingAdmin(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::OnlyPendingAggchainManager(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::OnlyPendingVKeyManager(element) => {
@@ -3697,9 +4422,6 @@ pub mod aggchain_base {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::OwnedAggchainVKeyAlreadyAdded(element) => {
-                    ::ethers::core::abi::AbiEncode::encode(element)
-                }
-                Self::OwnedAggchainVKeyLengthMismatch(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::OwnedAggchainVKeyNotFound(element) => {
@@ -3738,7 +4460,13 @@ pub mod aggchain_base {
                 Self::TrustedAggregatorTimeoutNotExpired(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
-                Self::UseDefaultGatewayAlreadySet(element) => {
+                Self::UseDefaultGatewayAlreadyDisabled(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::UseDefaultGatewayAlreadyEnabled(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::ZeroValueAggchainVKey(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::RevertString(s) => ::ethers::core::abi::AbiEncode::encode(s),
@@ -3749,6 +4477,10 @@ pub mod aggchain_base {
         fn valid_selector(selector: [u8; 4]) -> bool {
             match selector {
                 [0x08, 0xc3, 0x79, 0xa0] => true,
+                _ if selector
+                    == <AggchainManagerCannotBeZero as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
                 _ if selector
                     == <AggchainVKeyNotFound as ::ethers::contract::EthError>::selector() => {
                     true
@@ -3842,7 +4574,15 @@ pub mod aggchain_base {
                     true
                 }
                 _ if selector
-                    == <InvalidAggchainVKey as ::ethers::contract::EthError>::selector() => {
+                    == <InvalidAggLayerGatewayAddress as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InvalidAggchainDataLength as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InvalidAggchainType as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -3851,10 +4591,6 @@ pub mod aggchain_base {
                 }
                 _ if selector
                     == <InvalidInitializeTransaction as ::ethers::contract::EthError>::selector() => {
-                    true
-                }
-                _ if selector
-                    == <InvalidInitializer as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -3869,6 +4605,10 @@ pub mod aggchain_base {
                 }
                 _ if selector
                     == <InvalidRangeMultiplierBatchFee as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <InvalidZeroAddress as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -3914,7 +4654,15 @@ pub mod aggchain_base {
                 _ if selector
                     == <OnlyAdmin as ::ethers::contract::EthError>::selector() => true,
                 _ if selector
+                    == <OnlyAggchainManager as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
                     == <OnlyPendingAdmin as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <OnlyPendingAggchainManager as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -3939,10 +4687,6 @@ pub mod aggchain_base {
                 }
                 _ if selector
                     == <OwnedAggchainVKeyAlreadyAdded as ::ethers::contract::EthError>::selector() => {
-                    true
-                }
-                _ if selector
-                    == <OwnedAggchainVKeyLengthMismatch as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ if selector
@@ -3994,7 +4738,15 @@ pub mod aggchain_base {
                     true
                 }
                 _ if selector
-                    == <UseDefaultGatewayAlreadySet as ::ethers::contract::EthError>::selector() => {
+                    == <UseDefaultGatewayAlreadyDisabled as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <UseDefaultGatewayAlreadyEnabled as ::ethers::contract::EthError>::selector() => {
+                    true
+                }
+                _ if selector
+                    == <ZeroValueAggchainVKey as ::ethers::contract::EthError>::selector() => {
                     true
                 }
                 _ => false,
@@ -4004,6 +4756,9 @@ pub mod aggchain_base {
     impl ::core::fmt::Display for AggchainBaseErrors {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
             match self {
+                Self::AggchainManagerCannotBeZero(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::AggchainVKeyNotFound(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -4073,16 +4828,19 @@ pub mod aggchain_base {
                 Self::InitSequencedBatchDoesNotMatch(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::InvalidAggchainVKey(element) => {
+                Self::InvalidAggLayerGatewayAddress(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::InvalidAggchainDataLength(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::InvalidAggchainType(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::InvalidInitializeFunction(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::InvalidInitializeTransaction(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::InvalidInitializer(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::InvalidProof(element) => ::core::fmt::Display::fmt(element, f),
@@ -4093,6 +4851,9 @@ pub mod aggchain_base {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::InvalidRangeMultiplierBatchFee(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::InvalidZeroAddress(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::L1InfoTreeLeafCountInvalid(element) => {
@@ -4126,7 +4887,13 @@ pub mod aggchain_base {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::OnlyAdmin(element) => ::core::fmt::Display::fmt(element, f),
+                Self::OnlyAggchainManager(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::OnlyPendingAdmin(element) => ::core::fmt::Display::fmt(element, f),
+                Self::OnlyPendingAggchainManager(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::OnlyPendingVKeyManager(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -4139,9 +4906,6 @@ pub mod aggchain_base {
                 }
                 Self::OnlyVKeyManager(element) => ::core::fmt::Display::fmt(element, f),
                 Self::OwnedAggchainVKeyAlreadyAdded(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::OwnedAggchainVKeyLengthMismatch(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::OwnedAggchainVKeyNotFound(element) => {
@@ -4180,7 +4944,13 @@ pub mod aggchain_base {
                 Self::TrustedAggregatorTimeoutNotExpired(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
-                Self::UseDefaultGatewayAlreadySet(element) => {
+                Self::UseDefaultGatewayAlreadyDisabled(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::UseDefaultGatewayAlreadyEnabled(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::ZeroValueAggchainVKey(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::RevertString(s) => ::core::fmt::Display::fmt(s, f),
@@ -4190,6 +4960,11 @@ pub mod aggchain_base {
     impl ::core::convert::From<::std::string::String> for AggchainBaseErrors {
         fn from(value: String) -> Self {
             Self::RevertString(value)
+        }
+    }
+    impl ::core::convert::From<AggchainManagerCannotBeZero> for AggchainBaseErrors {
+        fn from(value: AggchainManagerCannotBeZero) -> Self {
+            Self::AggchainManagerCannotBeZero(value)
         }
     }
     impl ::core::convert::From<AggchainVKeyNotFound> for AggchainBaseErrors {
@@ -4314,9 +5089,19 @@ pub mod aggchain_base {
             Self::InitSequencedBatchDoesNotMatch(value)
         }
     }
-    impl ::core::convert::From<InvalidAggchainVKey> for AggchainBaseErrors {
-        fn from(value: InvalidAggchainVKey) -> Self {
-            Self::InvalidAggchainVKey(value)
+    impl ::core::convert::From<InvalidAggLayerGatewayAddress> for AggchainBaseErrors {
+        fn from(value: InvalidAggLayerGatewayAddress) -> Self {
+            Self::InvalidAggLayerGatewayAddress(value)
+        }
+    }
+    impl ::core::convert::From<InvalidAggchainDataLength> for AggchainBaseErrors {
+        fn from(value: InvalidAggchainDataLength) -> Self {
+            Self::InvalidAggchainDataLength(value)
+        }
+    }
+    impl ::core::convert::From<InvalidAggchainType> for AggchainBaseErrors {
+        fn from(value: InvalidAggchainType) -> Self {
+            Self::InvalidAggchainType(value)
         }
     }
     impl ::core::convert::From<InvalidInitializeFunction> for AggchainBaseErrors {
@@ -4327,11 +5112,6 @@ pub mod aggchain_base {
     impl ::core::convert::From<InvalidInitializeTransaction> for AggchainBaseErrors {
         fn from(value: InvalidInitializeTransaction) -> Self {
             Self::InvalidInitializeTransaction(value)
-        }
-    }
-    impl ::core::convert::From<InvalidInitializer> for AggchainBaseErrors {
-        fn from(value: InvalidInitializer) -> Self {
-            Self::InvalidInitializer(value)
         }
     }
     impl ::core::convert::From<InvalidProof> for AggchainBaseErrors {
@@ -4352,6 +5132,11 @@ pub mod aggchain_base {
     impl ::core::convert::From<InvalidRangeMultiplierBatchFee> for AggchainBaseErrors {
         fn from(value: InvalidRangeMultiplierBatchFee) -> Self {
             Self::InvalidRangeMultiplierBatchFee(value)
+        }
+    }
+    impl ::core::convert::From<InvalidZeroAddress> for AggchainBaseErrors {
+        fn from(value: InvalidZeroAddress) -> Self {
+            Self::InvalidZeroAddress(value)
         }
     }
     impl ::core::convert::From<L1InfoTreeLeafCountInvalid> for AggchainBaseErrors {
@@ -4411,9 +5196,19 @@ pub mod aggchain_base {
             Self::OnlyAdmin(value)
         }
     }
+    impl ::core::convert::From<OnlyAggchainManager> for AggchainBaseErrors {
+        fn from(value: OnlyAggchainManager) -> Self {
+            Self::OnlyAggchainManager(value)
+        }
+    }
     impl ::core::convert::From<OnlyPendingAdmin> for AggchainBaseErrors {
         fn from(value: OnlyPendingAdmin) -> Self {
             Self::OnlyPendingAdmin(value)
+        }
+    }
+    impl ::core::convert::From<OnlyPendingAggchainManager> for AggchainBaseErrors {
+        fn from(value: OnlyPendingAggchainManager) -> Self {
+            Self::OnlyPendingAggchainManager(value)
         }
     }
     impl ::core::convert::From<OnlyPendingVKeyManager> for AggchainBaseErrors {
@@ -4444,11 +5239,6 @@ pub mod aggchain_base {
     impl ::core::convert::From<OwnedAggchainVKeyAlreadyAdded> for AggchainBaseErrors {
         fn from(value: OwnedAggchainVKeyAlreadyAdded) -> Self {
             Self::OwnedAggchainVKeyAlreadyAdded(value)
-        }
-    }
-    impl ::core::convert::From<OwnedAggchainVKeyLengthMismatch> for AggchainBaseErrors {
-        fn from(value: OwnedAggchainVKeyLengthMismatch) -> Self {
-            Self::OwnedAggchainVKeyLengthMismatch(value)
         }
     }
     impl ::core::convert::From<OwnedAggchainVKeyNotFound> for AggchainBaseErrors {
@@ -4516,9 +5306,19 @@ pub mod aggchain_base {
             Self::TrustedAggregatorTimeoutNotExpired(value)
         }
     }
-    impl ::core::convert::From<UseDefaultGatewayAlreadySet> for AggchainBaseErrors {
-        fn from(value: UseDefaultGatewayAlreadySet) -> Self {
-            Self::UseDefaultGatewayAlreadySet(value)
+    impl ::core::convert::From<UseDefaultGatewayAlreadyDisabled> for AggchainBaseErrors {
+        fn from(value: UseDefaultGatewayAlreadyDisabled) -> Self {
+            Self::UseDefaultGatewayAlreadyDisabled(value)
+        }
+    }
+    impl ::core::convert::From<UseDefaultGatewayAlreadyEnabled> for AggchainBaseErrors {
+        fn from(value: UseDefaultGatewayAlreadyEnabled) -> Self {
+            Self::UseDefaultGatewayAlreadyEnabled(value)
+        }
+    }
+    impl ::core::convert::From<ZeroValueAggchainVKey> for AggchainBaseErrors {
+        fn from(value: ZeroValueAggchainVKey) -> Self {
+            Self::ZeroValueAggchainVKey(value)
         }
     }
     #[derive(
@@ -4545,8 +5345,30 @@ pub mod aggchain_base {
         Eq,
         Hash
     )]
-    #[ethevent(name = "AcceptVKeyManagerRole", abi = "AcceptVKeyManagerRole(address)")]
+    #[ethevent(
+        name = "AcceptAggchainManagerRole",
+        abi = "AcceptAggchainManagerRole(address,address)"
+    )]
+    pub struct AcceptAggchainManagerRoleFilter {
+        pub old_aggchain_manager: ::ethers::core::types::Address,
+        pub new_aggchain_manager: ::ethers::core::types::Address,
+    }
+    #[derive(
+        Clone,
+        ::ethers::contract::EthEvent,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethevent(
+        name = "AcceptVKeyManagerRole",
+        abi = "AcceptVKeyManagerRole(address,address)"
+    )]
     pub struct AcceptVKeyManagerRoleFilter {
+        pub old_v_key_manager: ::ethers::core::types::Address,
         pub new_v_key_manager: ::ethers::core::types::Address,
     }
     #[derive(
@@ -4564,6 +5386,36 @@ pub mod aggchain_base {
         pub selector: [u8; 4],
         pub new_aggchain_v_key: [u8; 32],
     }
+    #[derive(
+        Clone,
+        ::ethers::contract::EthEvent,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethevent(
+        name = "DisableUseDefaultGatewayFlag",
+        abi = "DisableUseDefaultGatewayFlag()"
+    )]
+    pub struct DisableUseDefaultGatewayFlagFilter;
+    #[derive(
+        Clone,
+        ::ethers::contract::EthEvent,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethevent(
+        name = "EnableUseDefaultGatewayFlag",
+        abi = "EnableUseDefaultGatewayFlag()"
+    )]
+    pub struct EnableUseDefaultGatewayFlagFilter;
     #[derive(
         Clone,
         ::ethers::contract::EthEvent,
@@ -4631,26 +5483,12 @@ pub mod aggchain_base {
         Hash
     )]
     #[ethevent(
-        name = "TransferVKeyManagerRole",
-        abi = "TransferVKeyManagerRole(address)"
+        name = "TransferAggchainManagerRole",
+        abi = "TransferAggchainManagerRole(address,address)"
     )]
-    pub struct TransferVKeyManagerRoleFilter {
-        pub new_v_key_manager: ::ethers::core::types::Address,
-    }
-    #[derive(
-        Clone,
-        ::ethers::contract::EthEvent,
-        ::ethers::contract::EthDisplay,
-        Default,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash
-    )]
-    #[ethevent(name = "UpdateAggchainVKey", abi = "UpdateAggchainVKey(bytes4,bytes32)")]
-    pub struct UpdateAggchainVKeyFilter {
-        pub selector: [u8; 4],
-        pub new_aggchain_v_key: [u8; 32],
+    pub struct TransferAggchainManagerRoleFilter {
+        pub current_aggchain_manager: ::ethers::core::types::Address,
+        pub new_pending_aggchain_manager: ::ethers::core::types::Address,
     }
     #[derive(
         Clone,
@@ -4663,25 +5501,48 @@ pub mod aggchain_base {
         Hash
     )]
     #[ethevent(
-        name = "UpdateUseDefaultGatewayFlag",
-        abi = "UpdateUseDefaultGatewayFlag(bool)"
+        name = "TransferVKeyManagerRole",
+        abi = "TransferVKeyManagerRole(address,address)"
     )]
-    pub struct UpdateUseDefaultGatewayFlagFilter {
-        pub use_default_gateway: bool,
+    pub struct TransferVKeyManagerRoleFilter {
+        pub current_v_key_manager: ::ethers::core::types::Address,
+        pub new_pending_v_key_manager: ::ethers::core::types::Address,
+    }
+    #[derive(
+        Clone,
+        ::ethers::contract::EthEvent,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethevent(
+        name = "UpdateAggchainVKey",
+        abi = "UpdateAggchainVKey(bytes4,bytes32,bytes32)"
+    )]
+    pub struct UpdateAggchainVKeyFilter {
+        pub selector: [u8; 4],
+        pub previous_aggchain_v_key: [u8; 32],
+        pub new_aggchain_v_key: [u8; 32],
     }
     ///Container type for all of the contract's events
     #[derive(Clone, ::ethers::contract::EthAbiType, Debug, PartialEq, Eq, Hash)]
     pub enum AggchainBaseEvents {
         AcceptAdminRoleFilter(AcceptAdminRoleFilter),
+        AcceptAggchainManagerRoleFilter(AcceptAggchainManagerRoleFilter),
         AcceptVKeyManagerRoleFilter(AcceptVKeyManagerRoleFilter),
         AddAggchainVKeyFilter(AddAggchainVKeyFilter),
+        DisableUseDefaultGatewayFlagFilter(DisableUseDefaultGatewayFlagFilter),
+        EnableUseDefaultGatewayFlagFilter(EnableUseDefaultGatewayFlagFilter),
         InitializedFilter(InitializedFilter),
         SetTrustedSequencerFilter(SetTrustedSequencerFilter),
         SetTrustedSequencerURLFilter(SetTrustedSequencerURLFilter),
         TransferAdminRoleFilter(TransferAdminRoleFilter),
+        TransferAggchainManagerRoleFilter(TransferAggchainManagerRoleFilter),
         TransferVKeyManagerRoleFilter(TransferVKeyManagerRoleFilter),
         UpdateAggchainVKeyFilter(UpdateAggchainVKeyFilter),
-        UpdateUseDefaultGatewayFlagFilter(UpdateUseDefaultGatewayFlagFilter),
     }
     impl ::ethers::contract::EthLogDecode for AggchainBaseEvents {
         fn decode_log(
@@ -4690,11 +5551,24 @@ pub mod aggchain_base {
             if let Ok(decoded) = AcceptAdminRoleFilter::decode_log(log) {
                 return Ok(AggchainBaseEvents::AcceptAdminRoleFilter(decoded));
             }
+            if let Ok(decoded) = AcceptAggchainManagerRoleFilter::decode_log(log) {
+                return Ok(AggchainBaseEvents::AcceptAggchainManagerRoleFilter(decoded));
+            }
             if let Ok(decoded) = AcceptVKeyManagerRoleFilter::decode_log(log) {
                 return Ok(AggchainBaseEvents::AcceptVKeyManagerRoleFilter(decoded));
             }
             if let Ok(decoded) = AddAggchainVKeyFilter::decode_log(log) {
                 return Ok(AggchainBaseEvents::AddAggchainVKeyFilter(decoded));
+            }
+            if let Ok(decoded) = DisableUseDefaultGatewayFlagFilter::decode_log(log) {
+                return Ok(
+                    AggchainBaseEvents::DisableUseDefaultGatewayFlagFilter(decoded),
+                );
+            }
+            if let Ok(decoded) = EnableUseDefaultGatewayFlagFilter::decode_log(log) {
+                return Ok(
+                    AggchainBaseEvents::EnableUseDefaultGatewayFlagFilter(decoded),
+                );
             }
             if let Ok(decoded) = InitializedFilter::decode_log(log) {
                 return Ok(AggchainBaseEvents::InitializedFilter(decoded));
@@ -4708,16 +5582,16 @@ pub mod aggchain_base {
             if let Ok(decoded) = TransferAdminRoleFilter::decode_log(log) {
                 return Ok(AggchainBaseEvents::TransferAdminRoleFilter(decoded));
             }
+            if let Ok(decoded) = TransferAggchainManagerRoleFilter::decode_log(log) {
+                return Ok(
+                    AggchainBaseEvents::TransferAggchainManagerRoleFilter(decoded),
+                );
+            }
             if let Ok(decoded) = TransferVKeyManagerRoleFilter::decode_log(log) {
                 return Ok(AggchainBaseEvents::TransferVKeyManagerRoleFilter(decoded));
             }
             if let Ok(decoded) = UpdateAggchainVKeyFilter::decode_log(log) {
                 return Ok(AggchainBaseEvents::UpdateAggchainVKeyFilter(decoded));
-            }
-            if let Ok(decoded) = UpdateUseDefaultGatewayFlagFilter::decode_log(log) {
-                return Ok(
-                    AggchainBaseEvents::UpdateUseDefaultGatewayFlagFilter(decoded),
-                );
             }
             Err(::ethers::core::abi::Error::InvalidData)
         }
@@ -4728,10 +5602,19 @@ pub mod aggchain_base {
                 Self::AcceptAdminRoleFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::AcceptAggchainManagerRoleFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::AcceptVKeyManagerRoleFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::AddAggchainVKeyFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::DisableUseDefaultGatewayFlagFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::EnableUseDefaultGatewayFlagFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::InitializedFilter(element) => ::core::fmt::Display::fmt(element, f),
@@ -4744,13 +5627,13 @@ pub mod aggchain_base {
                 Self::TransferAdminRoleFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
+                Self::TransferAggchainManagerRoleFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::TransferVKeyManagerRoleFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::UpdateAggchainVKeyFilter(element) => {
-                    ::core::fmt::Display::fmt(element, f)
-                }
-                Self::UpdateUseDefaultGatewayFlagFilter(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
             }
@@ -4761,6 +5644,11 @@ pub mod aggchain_base {
             Self::AcceptAdminRoleFilter(value)
         }
     }
+    impl ::core::convert::From<AcceptAggchainManagerRoleFilter> for AggchainBaseEvents {
+        fn from(value: AcceptAggchainManagerRoleFilter) -> Self {
+            Self::AcceptAggchainManagerRoleFilter(value)
+        }
+    }
     impl ::core::convert::From<AcceptVKeyManagerRoleFilter> for AggchainBaseEvents {
         fn from(value: AcceptVKeyManagerRoleFilter) -> Self {
             Self::AcceptVKeyManagerRoleFilter(value)
@@ -4769,6 +5657,18 @@ pub mod aggchain_base {
     impl ::core::convert::From<AddAggchainVKeyFilter> for AggchainBaseEvents {
         fn from(value: AddAggchainVKeyFilter) -> Self {
             Self::AddAggchainVKeyFilter(value)
+        }
+    }
+    impl ::core::convert::From<DisableUseDefaultGatewayFlagFilter>
+    for AggchainBaseEvents {
+        fn from(value: DisableUseDefaultGatewayFlagFilter) -> Self {
+            Self::DisableUseDefaultGatewayFlagFilter(value)
+        }
+    }
+    impl ::core::convert::From<EnableUseDefaultGatewayFlagFilter>
+    for AggchainBaseEvents {
+        fn from(value: EnableUseDefaultGatewayFlagFilter) -> Self {
+            Self::EnableUseDefaultGatewayFlagFilter(value)
         }
     }
     impl ::core::convert::From<InitializedFilter> for AggchainBaseEvents {
@@ -4791,6 +5691,12 @@ pub mod aggchain_base {
             Self::TransferAdminRoleFilter(value)
         }
     }
+    impl ::core::convert::From<TransferAggchainManagerRoleFilter>
+    for AggchainBaseEvents {
+        fn from(value: TransferAggchainManagerRoleFilter) -> Self {
+            Self::TransferAggchainManagerRoleFilter(value)
+        }
+    }
     impl ::core::convert::From<TransferVKeyManagerRoleFilter> for AggchainBaseEvents {
         fn from(value: TransferVKeyManagerRoleFilter) -> Self {
             Self::TransferVKeyManagerRoleFilter(value)
@@ -4799,12 +5705,6 @@ pub mod aggchain_base {
     impl ::core::convert::From<UpdateAggchainVKeyFilter> for AggchainBaseEvents {
         fn from(value: UpdateAggchainVKeyFilter) -> Self {
             Self::UpdateAggchainVKeyFilter(value)
-        }
-    }
-    impl ::core::convert::From<UpdateUseDefaultGatewayFlagFilter>
-    for AggchainBaseEvents {
-        fn from(value: UpdateUseDefaultGatewayFlagFilter) -> Self {
-            Self::UpdateUseDefaultGatewayFlagFilter(value)
         }
     }
     ///Container type for all input parameters for the `AGGCHAIN_TYPE` function with signature `AGGCHAIN_TYPE()` and selector `0x6e7fbce9`
@@ -4820,6 +5720,19 @@ pub mod aggchain_base {
     )]
     #[ethcall(name = "AGGCHAIN_TYPE", abi = "AGGCHAIN_TYPE()")]
     pub struct AggchainTypeCall;
+    ///Container type for all input parameters for the `CONSENSUS_TYPE` function with signature `CONSENSUS_TYPE()` and selector `0xcea5a4c0`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "CONSENSUS_TYPE", abi = "CONSENSUS_TYPE()")]
+    pub struct ConsensusTypeCall;
     ///Container type for all input parameters for the `acceptAdminRole` function with signature `acceptAdminRole()` and selector `0x8c3d7301`
     #[derive(
         Clone,
@@ -4833,6 +5746,19 @@ pub mod aggchain_base {
     )]
     #[ethcall(name = "acceptAdminRole", abi = "acceptAdminRole()")]
     pub struct AcceptAdminRoleCall;
+    ///Container type for all input parameters for the `acceptAggchainManagerRole` function with signature `acceptAggchainManagerRole()` and selector `0x15981b29`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "acceptAggchainManagerRole", abi = "acceptAggchainManagerRole()")]
+    pub struct AcceptAggchainManagerRoleCall;
     ///Container type for all input parameters for the `acceptVKeyManagerRole` function with signature `acceptVKeyManagerRole()` and selector `0x368c822c`
     #[derive(
         Clone,
@@ -4862,7 +5788,7 @@ pub mod aggchain_base {
         abi = "addOwnedAggchainVKey(bytes4,bytes32)"
     )]
     pub struct AddOwnedAggchainVKeyCall {
-        pub aggchain_selector: [u8; 4],
+        pub aggchain_v_key_selector: [u8; 4],
         pub new_aggchain_v_key: [u8; 32],
     }
     ///Container type for all input parameters for the `admin` function with signature `admin()` and selector `0xf851a440`
@@ -4891,6 +5817,19 @@ pub mod aggchain_base {
     )]
     #[ethcall(name = "aggLayerGateway", abi = "aggLayerGateway()")]
     pub struct AggLayerGatewayCall;
+    ///Container type for all input parameters for the `aggchainManager` function with signature `aggchainManager()` and selector `0x7388c436`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "aggchainManager", abi = "aggchainManager()")]
+    pub struct AggchainManagerCall;
     ///Container type for all input parameters for the `bridgeAddress` function with signature `bridgeAddress()` and selector `0xa3c573eb`
     #[derive(
         Clone,
@@ -5001,6 +5940,39 @@ pub mod aggchain_base {
     )]
     #[ethcall(name = "gasTokenNetwork", abi = "gasTokenNetwork()")]
     pub struct GasTokenNetworkCall;
+    ///Container type for all input parameters for the `getAggchainHash` function with signature `getAggchainHash(bytes)` and selector `0x6a55f66c`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "getAggchainHash", abi = "getAggchainHash(bytes)")]
+    pub struct GetAggchainHashCall {
+        pub aggchain_data: ::ethers::core::types::Bytes,
+    }
+    ///Container type for all input parameters for the `getAggchainTypeFromSelector` function with signature `getAggchainTypeFromSelector(bytes4)` and selector `0x26f9b76d`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(
+        name = "getAggchainTypeFromSelector",
+        abi = "getAggchainTypeFromSelector(bytes4)"
+    )]
+    pub struct GetAggchainTypeFromSelectorCall {
+        pub aggchain_v_key_selector: [u8; 4],
+    }
     ///Container type for all input parameters for the `getAggchainVKey` function with signature `getAggchainVKey(bytes4)` and selector `0x01fcf6a0`
     #[derive(
         Clone,
@@ -5014,7 +5986,44 @@ pub mod aggchain_base {
     )]
     #[ethcall(name = "getAggchainVKey", abi = "getAggchainVKey(bytes4)")]
     pub struct GetAggchainVKeyCall {
-        pub aggchain_selector: [u8; 4],
+        pub aggchain_v_key_selector: [u8; 4],
+    }
+    ///Container type for all input parameters for the `getAggchainVKeySelector` function with signature `getAggchainVKeySelector(bytes2,bytes2)` and selector `0x1d0b435e`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(
+        name = "getAggchainVKeySelector",
+        abi = "getAggchainVKeySelector(bytes2,bytes2)"
+    )]
+    pub struct GetAggchainVKeySelectorCall {
+        pub aggchain_v_key_version: [u8; 2],
+        pub aggchain_type: [u8; 2],
+    }
+    ///Container type for all input parameters for the `getAggchainVKeyVersionFromSelector` function with signature `getAggchainVKeyVersionFromSelector(bytes4)` and selector `0xe90a3409`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(
+        name = "getAggchainVKeyVersionFromSelector",
+        abi = "getAggchainVKeyVersionFromSelector(bytes4)"
+    )]
+    pub struct GetAggchainVKeyVersionFromSelectorCall {
+        pub aggchain_v_key_selector: [u8; 4],
     }
     ///Container type for all input parameters for the `globalExitRootManager` function with signature `globalExitRootManager()` and selector `0xd02103ca`
     #[derive(
@@ -5029,6 +6038,21 @@ pub mod aggchain_base {
     )]
     #[ethcall(name = "globalExitRootManager", abi = "globalExitRootManager()")]
     pub struct GlobalExitRootManagerCall;
+    ///Container type for all input parameters for the `initAggchainManager` function with signature `initAggchainManager(address)` and selector `0xb3a326f7`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "initAggchainManager", abi = "initAggchainManager(address)")]
+    pub struct InitAggchainManagerCall {
+        pub new_aggchain_manager: ::ethers::core::types::Address,
+    }
     ///Container type for all input parameters for the `initialize` function with signature `initialize(address,address,uint32,address,string,string)` and selector `0x71257022`
     #[derive(
         Clone,
@@ -5104,6 +6128,21 @@ pub mod aggchain_base {
     )]
     #[ethcall(name = "networkName", abi = "networkName()")]
     pub struct NetworkNameCall;
+    ///Container type for all input parameters for the `onVerifyPessimistic` function with signature `onVerifyPessimistic(bytes)` and selector `0x9ee4afa3`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "onVerifyPessimistic", abi = "onVerifyPessimistic(bytes)")]
+    pub struct OnVerifyPessimisticCall {
+        pub aggchain_data: ::ethers::core::types::Bytes,
+    }
     ///Container type for all input parameters for the `ownedAggchainVKeys` function with signature `ownedAggchainVKeys(bytes4)` and selector `0xeffb8479`
     #[derive(
         Clone,
@@ -5132,6 +6171,19 @@ pub mod aggchain_base {
     )]
     #[ethcall(name = "pendingAdmin", abi = "pendingAdmin()")]
     pub struct PendingAdminCall;
+    ///Container type for all input parameters for the `pendingAggchainManager` function with signature `pendingAggchainManager()` and selector `0x527570f1`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "pendingAggchainManager", abi = "pendingAggchainManager()")]
+    pub struct PendingAggchainManagerCall;
     ///Container type for all input parameters for the `pendingVKeyManager` function with signature `pendingVKeyManager()` and selector `0xbfb193b6`
     #[derive(
         Clone,
@@ -5216,6 +6268,24 @@ pub mod aggchain_base {
     pub struct TransferAdminRoleCall {
         pub new_pending_admin: ::ethers::core::types::Address,
     }
+    ///Container type for all input parameters for the `transferAggchainManagerRole` function with signature `transferAggchainManagerRole(address)` and selector `0xbdfbed7e`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(
+        name = "transferAggchainManagerRole",
+        abi = "transferAggchainManagerRole(address)"
+    )]
+    pub struct TransferAggchainManagerRoleCall {
+        pub new_aggchain_manager: ::ethers::core::types::Address,
+    }
     ///Container type for all input parameters for the `transferVKeyManagerRole` function with signature `transferVKeyManagerRole(address)` and selector `0x85018182`
     #[derive(
         Clone,
@@ -5276,7 +6346,7 @@ pub mod aggchain_base {
         abi = "updateOwnedAggchainVKey(bytes4,bytes32)"
     )]
     pub struct UpdateOwnedAggchainVKeyCall {
-        pub aggchain_selector: [u8; 4],
+        pub aggchain_v_key_selector: [u8; 4],
         pub updated_aggchain_v_key: [u8; 32],
     }
     ///Container type for all input parameters for the `useDefaultGateway` function with signature `useDefaultGateway()` and selector `0xff904079`
@@ -5309,11 +6379,14 @@ pub mod aggchain_base {
     #[derive(Clone, ::ethers::contract::EthAbiType, Debug, PartialEq, Eq, Hash)]
     pub enum AggchainBaseCalls {
         AggchainType(AggchainTypeCall),
+        ConsensusType(ConsensusTypeCall),
         AcceptAdminRole(AcceptAdminRoleCall),
+        AcceptAggchainManagerRole(AcceptAggchainManagerRoleCall),
         AcceptVKeyManagerRole(AcceptVKeyManagerRoleCall),
         AddOwnedAggchainVKey(AddOwnedAggchainVKeyCall),
         Admin(AdminCall),
         AggLayerGateway(AggLayerGatewayCall),
+        AggchainManager(AggchainManagerCall),
         BridgeAddress(BridgeAddressCall),
         DisableUseDefaultGatewayFlag(DisableUseDefaultGatewayFlagCall),
         EnableUseDefaultGatewayFlag(EnableUseDefaultGatewayFlagCall),
@@ -5322,21 +6395,29 @@ pub mod aggchain_base {
         ForcedBatches(ForcedBatchesCall),
         GasTokenAddress(GasTokenAddressCall),
         GasTokenNetwork(GasTokenNetworkCall),
+        GetAggchainHash(GetAggchainHashCall),
+        GetAggchainTypeFromSelector(GetAggchainTypeFromSelectorCall),
         GetAggchainVKey(GetAggchainVKeyCall),
+        GetAggchainVKeySelector(GetAggchainVKeySelectorCall),
+        GetAggchainVKeyVersionFromSelector(GetAggchainVKeyVersionFromSelectorCall),
         GlobalExitRootManager(GlobalExitRootManagerCall),
+        InitAggchainManager(InitAggchainManagerCall),
         Initialize(InitializeCall),
         LastAccInputHash(LastAccInputHashCall),
         LastForceBatch(LastForceBatchCall),
         LastForceBatchSequenced(LastForceBatchSequencedCall),
         NetworkName(NetworkNameCall),
+        OnVerifyPessimistic(OnVerifyPessimisticCall),
         OwnedAggchainVKeys(OwnedAggchainVKeysCall),
         PendingAdmin(PendingAdminCall),
+        PendingAggchainManager(PendingAggchainManagerCall),
         PendingVKeyManager(PendingVKeyManagerCall),
         Pol(PolCall),
         RollupManager(RollupManagerCall),
         SetTrustedSequencer(SetTrustedSequencerCall),
         SetTrustedSequencerURL(SetTrustedSequencerURLCall),
         TransferAdminRole(TransferAdminRoleCall),
+        TransferAggchainManagerRole(TransferAggchainManagerRoleCall),
         TransferVKeyManagerRole(TransferVKeyManagerRoleCall),
         TrustedSequencer(TrustedSequencerCall),
         TrustedSequencerURL(TrustedSequencerURLCall),
@@ -5354,10 +6435,20 @@ pub mod aggchain_base {
             ) {
                 return Ok(Self::AggchainType(decoded));
             }
+            if let Ok(decoded) = <ConsensusTypeCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::ConsensusType(decoded));
+            }
             if let Ok(decoded) = <AcceptAdminRoleCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::AcceptAdminRole(decoded));
+            }
+            if let Ok(decoded) = <AcceptAggchainManagerRoleCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::AcceptAggchainManagerRole(decoded));
             }
             if let Ok(decoded) = <AcceptVKeyManagerRoleCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -5378,6 +6469,11 @@ pub mod aggchain_base {
                 data,
             ) {
                 return Ok(Self::AggLayerGateway(decoded));
+            }
+            if let Ok(decoded) = <AggchainManagerCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::AggchainManager(decoded));
             }
             if let Ok(decoded) = <BridgeAddressCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -5419,15 +6515,40 @@ pub mod aggchain_base {
             ) {
                 return Ok(Self::GasTokenNetwork(decoded));
             }
+            if let Ok(decoded) = <GetAggchainHashCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::GetAggchainHash(decoded));
+            }
+            if let Ok(decoded) = <GetAggchainTypeFromSelectorCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::GetAggchainTypeFromSelector(decoded));
+            }
             if let Ok(decoded) = <GetAggchainVKeyCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::GetAggchainVKey(decoded));
             }
+            if let Ok(decoded) = <GetAggchainVKeySelectorCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::GetAggchainVKeySelector(decoded));
+            }
+            if let Ok(decoded) = <GetAggchainVKeyVersionFromSelectorCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::GetAggchainVKeyVersionFromSelector(decoded));
+            }
             if let Ok(decoded) = <GlobalExitRootManagerCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
                 return Ok(Self::GlobalExitRootManager(decoded));
+            }
+            if let Ok(decoded) = <InitAggchainManagerCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::InitAggchainManager(decoded));
             }
             if let Ok(decoded) = <InitializeCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -5454,6 +6575,11 @@ pub mod aggchain_base {
             ) {
                 return Ok(Self::NetworkName(decoded));
             }
+            if let Ok(decoded) = <OnVerifyPessimisticCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::OnVerifyPessimistic(decoded));
+            }
             if let Ok(decoded) = <OwnedAggchainVKeysCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -5463,6 +6589,11 @@ pub mod aggchain_base {
                 data,
             ) {
                 return Ok(Self::PendingAdmin(decoded));
+            }
+            if let Ok(decoded) = <PendingAggchainManagerCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::PendingAggchainManager(decoded));
             }
             if let Ok(decoded) = <PendingVKeyManagerCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -5493,6 +6624,11 @@ pub mod aggchain_base {
                 data,
             ) {
                 return Ok(Self::TransferAdminRole(decoded));
+            }
+            if let Ok(decoded) = <TransferAggchainManagerRoleCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::TransferAggchainManagerRole(decoded));
             }
             if let Ok(decoded) = <TransferVKeyManagerRoleCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
@@ -5533,7 +6669,13 @@ pub mod aggchain_base {
                 Self::AggchainType(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::ConsensusType(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::AcceptAdminRole(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::AcceptAggchainManagerRole(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::AcceptVKeyManagerRole(element) => {
@@ -5544,6 +6686,9 @@ pub mod aggchain_base {
                 }
                 Self::Admin(element) => ::ethers::core::abi::AbiEncode::encode(element),
                 Self::AggLayerGateway(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::AggchainManager(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::BridgeAddress(element) => {
@@ -5570,10 +6715,25 @@ pub mod aggchain_base {
                 Self::GasTokenNetwork(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::GetAggchainHash(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::GetAggchainTypeFromSelector(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::GetAggchainVKey(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::GetAggchainVKeySelector(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::GetAggchainVKeyVersionFromSelector(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::GlobalExitRootManager(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::InitAggchainManager(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::Initialize(element) => {
@@ -5591,10 +6751,16 @@ pub mod aggchain_base {
                 Self::NetworkName(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
+                Self::OnVerifyPessimistic(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::OwnedAggchainVKeys(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::PendingAdmin(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::PendingAggchainManager(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::PendingVKeyManager(element) => {
@@ -5611,6 +6777,9 @@ pub mod aggchain_base {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::TransferAdminRole(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::TransferAggchainManagerRole(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
                 Self::TransferVKeyManagerRole(element) => {
@@ -5638,7 +6807,11 @@ pub mod aggchain_base {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
             match self {
                 Self::AggchainType(element) => ::core::fmt::Display::fmt(element, f),
+                Self::ConsensusType(element) => ::core::fmt::Display::fmt(element, f),
                 Self::AcceptAdminRole(element) => ::core::fmt::Display::fmt(element, f),
+                Self::AcceptAggchainManagerRole(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::AcceptVKeyManagerRole(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -5647,6 +6820,7 @@ pub mod aggchain_base {
                 }
                 Self::Admin(element) => ::core::fmt::Display::fmt(element, f),
                 Self::AggLayerGateway(element) => ::core::fmt::Display::fmt(element, f),
+                Self::AggchainManager(element) => ::core::fmt::Display::fmt(element, f),
                 Self::BridgeAddress(element) => ::core::fmt::Display::fmt(element, f),
                 Self::DisableUseDefaultGatewayFlag(element) => {
                     ::core::fmt::Display::fmt(element, f)
@@ -5659,8 +6833,21 @@ pub mod aggchain_base {
                 Self::ForcedBatches(element) => ::core::fmt::Display::fmt(element, f),
                 Self::GasTokenAddress(element) => ::core::fmt::Display::fmt(element, f),
                 Self::GasTokenNetwork(element) => ::core::fmt::Display::fmt(element, f),
+                Self::GetAggchainHash(element) => ::core::fmt::Display::fmt(element, f),
+                Self::GetAggchainTypeFromSelector(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::GetAggchainVKey(element) => ::core::fmt::Display::fmt(element, f),
+                Self::GetAggchainVKeySelector(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::GetAggchainVKeyVersionFromSelector(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::GlobalExitRootManager(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::InitAggchainManager(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::Initialize(element) => ::core::fmt::Display::fmt(element, f),
@@ -5670,10 +6857,16 @@ pub mod aggchain_base {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::NetworkName(element) => ::core::fmt::Display::fmt(element, f),
+                Self::OnVerifyPessimistic(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::OwnedAggchainVKeys(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::PendingAdmin(element) => ::core::fmt::Display::fmt(element, f),
+                Self::PendingAggchainManager(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::PendingVKeyManager(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -5686,6 +6879,9 @@ pub mod aggchain_base {
                     ::core::fmt::Display::fmt(element, f)
                 }
                 Self::TransferAdminRole(element) => ::core::fmt::Display::fmt(element, f),
+                Self::TransferAggchainManagerRole(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::TransferVKeyManagerRole(element) => {
                     ::core::fmt::Display::fmt(element, f)
                 }
@@ -5706,9 +6902,19 @@ pub mod aggchain_base {
             Self::AggchainType(value)
         }
     }
+    impl ::core::convert::From<ConsensusTypeCall> for AggchainBaseCalls {
+        fn from(value: ConsensusTypeCall) -> Self {
+            Self::ConsensusType(value)
+        }
+    }
     impl ::core::convert::From<AcceptAdminRoleCall> for AggchainBaseCalls {
         fn from(value: AcceptAdminRoleCall) -> Self {
             Self::AcceptAdminRole(value)
+        }
+    }
+    impl ::core::convert::From<AcceptAggchainManagerRoleCall> for AggchainBaseCalls {
+        fn from(value: AcceptAggchainManagerRoleCall) -> Self {
+            Self::AcceptAggchainManagerRole(value)
         }
     }
     impl ::core::convert::From<AcceptVKeyManagerRoleCall> for AggchainBaseCalls {
@@ -5729,6 +6935,11 @@ pub mod aggchain_base {
     impl ::core::convert::From<AggLayerGatewayCall> for AggchainBaseCalls {
         fn from(value: AggLayerGatewayCall) -> Self {
             Self::AggLayerGateway(value)
+        }
+    }
+    impl ::core::convert::From<AggchainManagerCall> for AggchainBaseCalls {
+        fn from(value: AggchainManagerCall) -> Self {
+            Self::AggchainManager(value)
         }
     }
     impl ::core::convert::From<BridgeAddressCall> for AggchainBaseCalls {
@@ -5771,14 +6982,40 @@ pub mod aggchain_base {
             Self::GasTokenNetwork(value)
         }
     }
+    impl ::core::convert::From<GetAggchainHashCall> for AggchainBaseCalls {
+        fn from(value: GetAggchainHashCall) -> Self {
+            Self::GetAggchainHash(value)
+        }
+    }
+    impl ::core::convert::From<GetAggchainTypeFromSelectorCall> for AggchainBaseCalls {
+        fn from(value: GetAggchainTypeFromSelectorCall) -> Self {
+            Self::GetAggchainTypeFromSelector(value)
+        }
+    }
     impl ::core::convert::From<GetAggchainVKeyCall> for AggchainBaseCalls {
         fn from(value: GetAggchainVKeyCall) -> Self {
             Self::GetAggchainVKey(value)
         }
     }
+    impl ::core::convert::From<GetAggchainVKeySelectorCall> for AggchainBaseCalls {
+        fn from(value: GetAggchainVKeySelectorCall) -> Self {
+            Self::GetAggchainVKeySelector(value)
+        }
+    }
+    impl ::core::convert::From<GetAggchainVKeyVersionFromSelectorCall>
+    for AggchainBaseCalls {
+        fn from(value: GetAggchainVKeyVersionFromSelectorCall) -> Self {
+            Self::GetAggchainVKeyVersionFromSelector(value)
+        }
+    }
     impl ::core::convert::From<GlobalExitRootManagerCall> for AggchainBaseCalls {
         fn from(value: GlobalExitRootManagerCall) -> Self {
             Self::GlobalExitRootManager(value)
+        }
+    }
+    impl ::core::convert::From<InitAggchainManagerCall> for AggchainBaseCalls {
+        fn from(value: InitAggchainManagerCall) -> Self {
+            Self::InitAggchainManager(value)
         }
     }
     impl ::core::convert::From<InitializeCall> for AggchainBaseCalls {
@@ -5806,6 +7043,11 @@ pub mod aggchain_base {
             Self::NetworkName(value)
         }
     }
+    impl ::core::convert::From<OnVerifyPessimisticCall> for AggchainBaseCalls {
+        fn from(value: OnVerifyPessimisticCall) -> Self {
+            Self::OnVerifyPessimistic(value)
+        }
+    }
     impl ::core::convert::From<OwnedAggchainVKeysCall> for AggchainBaseCalls {
         fn from(value: OwnedAggchainVKeysCall) -> Self {
             Self::OwnedAggchainVKeys(value)
@@ -5814,6 +7056,11 @@ pub mod aggchain_base {
     impl ::core::convert::From<PendingAdminCall> for AggchainBaseCalls {
         fn from(value: PendingAdminCall) -> Self {
             Self::PendingAdmin(value)
+        }
+    }
+    impl ::core::convert::From<PendingAggchainManagerCall> for AggchainBaseCalls {
+        fn from(value: PendingAggchainManagerCall) -> Self {
+            Self::PendingAggchainManager(value)
         }
     }
     impl ::core::convert::From<PendingVKeyManagerCall> for AggchainBaseCalls {
@@ -5844,6 +7091,11 @@ pub mod aggchain_base {
     impl ::core::convert::From<TransferAdminRoleCall> for AggchainBaseCalls {
         fn from(value: TransferAdminRoleCall) -> Self {
             Self::TransferAdminRole(value)
+        }
+    }
+    impl ::core::convert::From<TransferAggchainManagerRoleCall> for AggchainBaseCalls {
+        fn from(value: TransferAggchainManagerRoleCall) -> Self {
+            Self::TransferAggchainManagerRole(value)
         }
     }
     impl ::core::convert::From<TransferVKeyManagerRoleCall> for AggchainBaseCalls {
@@ -5887,7 +7139,19 @@ pub mod aggchain_base {
         Eq,
         Hash
     )]
-    pub struct AggchainTypeReturn(pub u32);
+    pub struct AggchainTypeReturn(pub [u8; 2]);
+    ///Container type for all return fields from the `CONSENSUS_TYPE` function with signature `CONSENSUS_TYPE()` and selector `0xcea5a4c0`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct ConsensusTypeReturn(pub u32);
     ///Container type for all return fields from the `admin` function with signature `admin()` and selector `0xf851a440`
     #[derive(
         Clone,
@@ -5912,6 +7176,18 @@ pub mod aggchain_base {
         Hash
     )]
     pub struct AggLayerGatewayReturn(pub ::ethers::core::types::Address);
+    ///Container type for all return fields from the `aggchainManager` function with signature `aggchainManager()` and selector `0x7388c436`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct AggchainManagerReturn(pub ::ethers::core::types::Address);
     ///Container type for all return fields from the `bridgeAddress` function with signature `bridgeAddress()` and selector `0xa3c573eb`
     #[derive(
         Clone,
@@ -5984,6 +7260,30 @@ pub mod aggchain_base {
         Hash
     )]
     pub struct GasTokenNetworkReturn(pub u32);
+    ///Container type for all return fields from the `getAggchainHash` function with signature `getAggchainHash(bytes)` and selector `0x6a55f66c`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct GetAggchainHashReturn(pub [u8; 32]);
+    ///Container type for all return fields from the `getAggchainTypeFromSelector` function with signature `getAggchainTypeFromSelector(bytes4)` and selector `0x26f9b76d`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct GetAggchainTypeFromSelectorReturn(pub [u8; 2]);
     ///Container type for all return fields from the `getAggchainVKey` function with signature `getAggchainVKey(bytes4)` and selector `0x01fcf6a0`
     #[derive(
         Clone,
@@ -5998,6 +7298,30 @@ pub mod aggchain_base {
     pub struct GetAggchainVKeyReturn {
         pub aggchain_v_key: [u8; 32],
     }
+    ///Container type for all return fields from the `getAggchainVKeySelector` function with signature `getAggchainVKeySelector(bytes2,bytes2)` and selector `0x1d0b435e`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct GetAggchainVKeySelectorReturn(pub [u8; 4]);
+    ///Container type for all return fields from the `getAggchainVKeyVersionFromSelector` function with signature `getAggchainVKeyVersionFromSelector(bytes4)` and selector `0xe90a3409`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct GetAggchainVKeyVersionFromSelectorReturn(pub [u8; 2]);
     ///Container type for all return fields from the `globalExitRootManager` function with signature `globalExitRootManager()` and selector `0xd02103ca`
     #[derive(
         Clone,
@@ -6084,6 +7408,18 @@ pub mod aggchain_base {
         Hash
     )]
     pub struct PendingAdminReturn(pub ::ethers::core::types::Address);
+    ///Container type for all return fields from the `pendingAggchainManager` function with signature `pendingAggchainManager()` and selector `0x527570f1`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct PendingAggchainManagerReturn(pub ::ethers::core::types::Address);
     ///Container type for all return fields from the `pendingVKeyManager` function with signature `pendingVKeyManager()` and selector `0xbfb193b6`
     #[derive(
         Clone,

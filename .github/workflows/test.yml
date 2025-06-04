@@ -57,7 +57,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          repository: agglayer/agg-contracts-internal
+          repository: agglayer/agglayer-contracts
           token: ${{ secrets.GH_PAT }}
           ref: ${{ env.ZKEVM_CONTRACT_GIT_REF }}
 
