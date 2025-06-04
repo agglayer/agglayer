@@ -11,7 +11,6 @@ use opentelemetry_sdk::{
 };
 use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
 
-
 pub fn setup_tracing(config: &agglayer_config::TracingConfig, version: &str) -> anyhow::Result<()> {
     let mut layers = Vec::new();
 
