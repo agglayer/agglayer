@@ -20,7 +20,7 @@ impl From<CertificateId> for v1::CertificateId {
     fn from(value: CertificateId) -> Self {
         v1::CertificateId {
             value: Some(FixedBytes32 {
-                value: Bytes::copy_from_slice(&value.as_slice()),
+                value: Bytes::copy_from_slice(value.as_slice()),
             }),
         }
     }
