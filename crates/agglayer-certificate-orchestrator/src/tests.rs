@@ -104,7 +104,7 @@ impl PerEpochWriter for DummyPendingStore {
         _certificate_id: CertificateId,
         _mode: ExecutionMode,
     ) -> Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
-        Ok((EpochNumber::ZERO, CertificateIndex(0)))
+        Ok((EpochNumber::ZERO, CertificateIndex::ZERO))
     }
 
     fn start_packing(&self) -> Result<(), agglayer_storage::error::Error> {
@@ -145,7 +145,7 @@ impl StateReader for DummyPendingStore {
             .map(|(network_id, (height, id))| {
                 Ok((
                     *network_id,
-                    SettledCertificate(*id, *height, EpochNumber::ZERO, CertificateIndex(0)),
+                    SettledCertificate(*id, *height, EpochNumber::ZERO, CertificateIndex::ZERO),
                 ))
             })
             .collect()
@@ -889,7 +889,7 @@ impl SettlementClient for Check {
         _settlement_tx_hash: SettlementTxHash,
         _certificate_id: CertificateId,
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
-        Ok((EpochNumber::ZERO, CertificateIndex(0)))
+        Ok((EpochNumber::ZERO, CertificateIndex::ZERO))
     }
 }
 

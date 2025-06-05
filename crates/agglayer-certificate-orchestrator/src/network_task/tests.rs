@@ -131,7 +131,7 @@ async fn start_from_zero() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     state
         .expect_update_certificate_header_status()
@@ -147,7 +147,7 @@ async fn start_from_zero() {
             eq(Height(0)),
             eq(certificate_id),
             eq(EpochNumber::ZERO),
-            eq(CertificateIndex(0)),
+            eq(CertificateIndex::ZERO),
         )
         .returning(|_, _, _, _, _| Ok(()));
 
@@ -332,7 +332,7 @@ async fn one_per_epoch() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     state
         .expect_update_certificate_header_status()
@@ -348,7 +348,7 @@ async fn one_per_epoch() {
             eq(Height(0)),
             eq(certificate_id),
             eq(EpochNumber::ZERO),
-            eq(CertificateIndex(0)),
+            eq(CertificateIndex::ZERO),
         )
         .returning(|_, _, _, _, _| Ok(()));
 
@@ -596,7 +596,7 @@ async fn retries() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     state
         .expect_update_certificate_header_status()
@@ -612,7 +612,7 @@ async fn retries() {
             eq(Height(0)),
             eq(certificate_id2),
             eq(EpochNumber::ZERO),
-            eq(CertificateIndex(0)),
+            eq(CertificateIndex::ZERO),
         )
         .returning(|_, _, _, _, _| Ok(()));
 
@@ -835,7 +835,7 @@ async fn changing_epoch_triggers_certify() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_1 && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     state
         .expect_update_certificate_header_status()
@@ -851,7 +851,7 @@ async fn changing_epoch_triggers_certify() {
             eq(Height(0)),
             eq(certificate_id),
             eq(EpochNumber::ZERO),
-            eq(CertificateIndex(0)),
+            eq(CertificateIndex::ZERO),
         )
         .returning(|_, _, _, _, _| Ok(()));
 
@@ -859,7 +859,7 @@ async fn changing_epoch_triggers_certify() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_2 && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::ONE, CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ONE, CertificateIndex::ZERO)));
 
     state
         .expect_update_certificate_header_status()
@@ -875,7 +875,7 @@ async fn changing_epoch_triggers_certify() {
             eq(Height(1)),
             eq(certificate_id2),
             eq(EpochNumber::ONE),
-            eq(CertificateIndex(0)),
+            eq(CertificateIndex::ZERO),
         )
         .returning(|_, _, _, _, _| Ok(()));
 
@@ -1134,13 +1134,13 @@ async fn process_next_certificate() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_1 && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     settlement_client
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_2 && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::ONE, CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ONE, CertificateIndex::ZERO)));
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),

@@ -48,7 +48,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
                     CertificateId([0; 32].into()),
                     Height(0),
                     EpochNumber::ZERO,
-                    CertificateIndex(u64::from(i - 1)),
+                    CertificateIndex::new(u64::from(i - 1)),
                 ),
             )
             .expect("Unable to put certificate into storage");

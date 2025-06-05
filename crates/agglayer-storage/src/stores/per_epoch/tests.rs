@@ -71,7 +71,7 @@ type EndCheckpointState = CheckpointState;
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
     |result: Result<_, Error>| result.is_ok(),
-    Height(0), Some(EpochNumber::ZERO), Some(CertificateIndex(0)))]
+    Height(0), Some(EpochNumber::ZERO), Some(CertificateIndex::ZERO))]
 #[case::when_state_is_incorrect(
     StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height(0))]),
     EndCheckpointState::Empty,
@@ -296,7 +296,7 @@ fn adding_certificate_and_restart() {
             .is_ok(),
         "{network}:{height} failed to pass the test");
 
-    let first = store.get_certificate_at_index(CertificateIndex(0)).unwrap().unwrap();
+    let first = store.get_certificate_at_index(CertificateIndex::ZERO).unwrap().unwrap();
     assert!(
         first.network_id == 1.into(),
         "Network ID mismatch {} != {}",
@@ -304,7 +304,7 @@ fn adding_certificate_and_restart() {
         1
     );
 
-    let second = store.get_certificate_at_index(CertificateIndex(1)).unwrap().unwrap();
+    let second = store.get_certificate_at_index(CertificateIndex::new(1)).unwrap().unwrap();
     assert!(
         second.network_id == 2.into(),
         "Network ID mismatch {} != {}",

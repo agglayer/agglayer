@@ -118,7 +118,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             .next()
         {
             // We're starting from the next index after the last one found in the database.
-            AtomicU64::new(index.0 + 1)
+            AtomicU64::new(index.as_u64() + 1)
         } else {
             AtomicU64::new(0)
         };
@@ -300,7 +300,7 @@ where
             // The certificate index is informal
             return Ok((
                 *self.epoch_number,
-                CertificateIndex(self.next_certificate_index.load(Ordering::Relaxed)),
+                CertificateIndex::new(self.next_certificate_index.load(Ordering::Relaxed)),
             ));
         }
 
@@ -315,7 +315,7 @@ where
                 )
             })?;
 
-        let certificate_index = CertificateIndex(self.next_certificate_index.fetch_add(1, Ordering::SeqCst));
+        let certificate_index = CertificateIndex::new(self.next_certificate_index.fetch_add(1, Ordering::SeqCst));
 
         // TODO: all of this need to be batched
 

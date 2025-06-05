@@ -94,7 +94,19 @@ impl From<u64> for EpochNumber {
 )]
 #[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 #[serde(transparent)]
-pub struct CertificateIndex(pub u64);
+pub struct CertificateIndex(u64);
+
+impl CertificateIndex {
+    pub const ZERO: CertificateIndex = CertificateIndex(0);
+
+    pub const fn new(index: u64) -> CertificateIndex {
+        CertificateIndex(index)
+    }
+
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
+}
 
 #[derive(
     Clone,

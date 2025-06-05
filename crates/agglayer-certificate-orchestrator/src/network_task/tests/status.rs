@@ -89,7 +89,7 @@ async fn from_pending_to_settle() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),
@@ -191,7 +191,7 @@ async fn from_proven_to_settled() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),
@@ -288,7 +288,7 @@ async fn from_candidate_to_settle() {
         .expect_wait_for_settlement()
         .with(eq(SettlementTxHash::for_tests()), eq(certificate_id))
         .once()
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),

@@ -21,7 +21,7 @@ fn can_parse_value() {
         certificate_id: CertificateId([1; 32].into()),
         height: Height(2),
         epoch_number: Some(EpochNumber::new(3)),
-        certificate_index: Some(CertificateIndex(4)),
+        certificate_index: Some(CertificateIndex::new(4)),
         prev_local_exit_root: [4; 32].into(),
         new_local_exit_root: [5; 32].into(),
         status: agglayer_types::CertificateStatus::Pending,
