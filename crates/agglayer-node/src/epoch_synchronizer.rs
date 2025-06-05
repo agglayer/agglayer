@@ -46,7 +46,7 @@ impl EpochSynchronizer {
                 Ok(_) => {}
             }
             opened_epoch = epochs_store.open_with_start_checkpoint(
-                opened_epoch.get_epoch_number() + 1,
+                opened_epoch.get_epoch_number().next(),
                 opened_epoch.get_end_checkpoint(),
             )?;
 
@@ -109,7 +109,7 @@ impl EpochSynchronizer {
 
                 let lse = epochs_store.open(lse_number)?;
                 epochs_store.open_with_start_checkpoint(
-                    lse.get_epoch_number() + 1,
+                    lse.get_epoch_number().next(),
                     lse.get_end_checkpoint(),
                 )?
             }

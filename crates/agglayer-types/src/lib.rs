@@ -2,7 +2,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
-    ops::Add,
 };
 
 pub use agglayer_interop_types::{aggchain_proof, NetworkId};
@@ -52,11 +51,13 @@ use unified_bridge::{CommitmentVersion, LocalExitTree, LocalExitTreeError};
 #[serde(transparent)]
 pub struct EpochNumber(pub u64);
 
-impl Add<u64> for EpochNumber {
-    type Output = EpochNumber;
+impl EpochNumber {
+    pub fn next(&self) -> EpochNumber {
+        EpochNumber(self.0.checked_add(1).expect("Epoch number overflow"))
+    }
 
-    fn add(self, rhs: u64) -> Self::Output {
-        EpochNumber(self.0 + rhs)
+    pub fn increment(&mut self) {
+        *self = self.next();
     }
 }
 

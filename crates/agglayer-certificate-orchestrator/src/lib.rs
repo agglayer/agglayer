@@ -346,7 +346,7 @@ where
         }
 
         // TODO: Check for overflow
-        let next_epoch = epoch + 1;
+        let next_epoch = epoch.next();
 
         match self
             .epochs_store
