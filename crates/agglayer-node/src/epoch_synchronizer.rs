@@ -376,7 +376,7 @@ mod tests {
 
         expected_end_checkpoint_15
             .entry(network_1)
-            .and_modify(|e| *e += 1);
+            .and_modify(|e| e.increment());
 
         epoch_15
             .multi_insert::<EndCheckpointColumn>(&expected_end_checkpoint_15)
@@ -511,7 +511,7 @@ mod tests {
 
         expected_end_checkpoint_15
             .entry(network_1)
-            .and_modify(|e| *e += 1);
+            .and_modify(|e| e.increment());
 
         epoch_15
             .multi_insert::<EndCheckpointColumn>(&expected_end_checkpoint_15)

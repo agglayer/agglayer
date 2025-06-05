@@ -214,7 +214,7 @@ fn adding_multiple_certificates(
                 store.add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
             ), "{network}:{height} failed to pass the test");
 
-        height += 1;
+        height.increment();
     }
 }
 

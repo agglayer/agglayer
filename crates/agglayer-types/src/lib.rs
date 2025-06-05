@@ -1,7 +1,8 @@
+// TODO: split into smaller files
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
-    ops::{Add, AddAssign, Sub},
+    ops::Add,
 };
 
 pub use agglayer_interop_types::{aggchain_proof, NetworkId};
@@ -111,33 +112,19 @@ pub struct CertificateId(pub Digest);
 #[serde(transparent)]
 pub struct Height(pub u64);
 
-impl Add<u64> for Height {
-    type Output = Height;
-
-    fn add(self, rhs: u64) -> Self::Output {
-        Height(self.0 + rhs)
+impl Height {
+    pub fn next(&self) -> Height {
+        Height(self.0.checked_add(1).expect("Height overflow"))
     }
-}
 
-impl AddAssign<u64> for Height {
-    fn add_assign(&mut self, rhs: u64) {
-        self.0 += rhs
+    pub fn increment(&mut self) {
+        *self = self.next();
     }
-}
 
-impl Sub<u64> for Height {
-    type Output = Height;
-
-    fn sub(self, rhs: u64) -> Self::Output {
-        Height(self.0 - rhs)
-    }
-}
-
-impl Sub<&Height> for Height {
-    type Output = u64;
-
-    fn sub(self, rhs: &Height) -> Self::Output {
-        self.0 - rhs.0
+    pub fn distance_since(&self, o: &Height) -> u64 {
+        self.0
+            .checked_sub(o.0)
+            .expect("Subtracting to negative values")
     }
 }
 
@@ -391,6 +378,9 @@ impl PartialOrd for CertificateStatus {
 
 impl CertificateStatus {
     // Only ever used as implementation for Ord, feel free to change it
+    // TODO: now that certificatetask handles settling properly, we should be able
+    // to refactor it to no longer require Ord here Then we can delete this
+    // function
     fn as_order_number(&self) -> usize {
         use CertificateStatus::*;
         match self {

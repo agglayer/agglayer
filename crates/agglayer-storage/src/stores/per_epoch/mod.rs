@@ -273,8 +273,8 @@ where
             // If the network is found in the end checkpoint and the height minus one is equal to
             // the current network height. We can add the certificate.
             (Some(start_height), Entry::Occupied(current_height))
-                if (*current_height.get()) == height - 1
-                    && height - start_height <= MAX_CERTIFICATE_PER_EPOCH =>
+                if current_height.get().next() == height
+                    && height.distance_since(start_height) <= MAX_CERTIFICATE_PER_EPOCH =>
             {
                 debug!(
                     "{}Certificate candidate for network {} at height {} accepted",

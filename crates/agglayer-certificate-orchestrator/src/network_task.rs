@@ -177,7 +177,7 @@ where
                     self.at_capacity_for_epoch = true;
                 }
 
-                current_height + 1
+                current_height.next()
             } else {
                 debug!("Network never settled any certificate");
                 Height(0)
@@ -385,7 +385,7 @@ where
                         let epoch_number = settled_certificate.2;
                         let certificate_index = settled_certificate.3;
                         self.latest_settled = Some(settled_certificate);
-                        *next_expected_height += 1;
+                        next_expected_height.increment();
                         debug!(%certificate_id, "Certification process completed");
                         let Some(new) = self.pending_state.take() else {
                             return Err(Error::InternalError(format!("Missing pending state needed upon settlement, current state: {}", self.local_state.get_roots().display_to_hex() )))
