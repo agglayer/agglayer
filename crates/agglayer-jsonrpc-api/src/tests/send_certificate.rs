@@ -87,7 +87,7 @@ async fn pending_certificate_in_error_can_be_replaced() {
 
     let pending_certificate = Certificate::new_for_test(network_id, Height::ZERO);
     let mut second_pending = Certificate::new_for_test(network_id, Height::ZERO);
-    second_pending.metadata = Metadata([1; 32].into());
+    second_pending.metadata = Metadata::new([1; 32].into());
 
     assert_ne!(pending_certificate.hash(), second_pending.hash());
     context

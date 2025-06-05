@@ -28,7 +28,7 @@ fn can_parse_value() {
         prev_local_exit_root: [4; 32].into(),
         new_local_exit_root: [5; 32].into(),
         status: agglayer_types::CertificateStatus::Pending,
-        metadata: Metadata([6; 32].into()),
+        metadata: Metadata::new([6; 32].into()),
         settlement_tx_hash: None,
     };
 

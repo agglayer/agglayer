@@ -114,7 +114,7 @@ async fn epoch_packer_can_settle_one_certificate() {
                 certificate_id,
                 prev_local_exit_root: [1; 32].into(),
                 new_local_exit_root: [0; 32].into(),
-                metadata: Metadata([0; 32].into()),
+                metadata: Metadata::ZERO,
                 status: CertificateStatus::Proven,
                 settlement_tx_hash: None,
             }))

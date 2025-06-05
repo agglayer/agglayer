@@ -25,7 +25,7 @@ impl TryFrom<v1::Certificate> for Certificate {
                 .collect::<Result<_, _>>()
                 .map_err(|e: Error| e.inside_field("imported_bridge_exits"))?,
             aggchain_data: required_field!(value, aggchain_data),
-            metadata: Metadata(required_field!(value, metadata)),
+            metadata: Metadata::new(required_field!(value, metadata)),
             custom_chain_data: value.custom_chain_data.to_vec(),
             l1_info_tree_leaf_count: value.l1_info_tree_leaf_count,
         })
@@ -48,7 +48,7 @@ impl TryFrom<Certificate> for v1::Certificate {
                 .map(Into::into)
                 .collect(),
             aggchain_data: Some(value.aggchain_data.try_into()?),
-            metadata: Some(value.metadata.0.into()),
+            metadata: Some((*value.metadata).into()),
             custom_chain_data: value.custom_chain_data.into(),
             l1_info_tree_leaf_count: value.l1_info_tree_leaf_count,
         })

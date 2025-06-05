@@ -68,7 +68,7 @@ async fn start_from_zero() {
                 certificate_id: *certificate_id,
                 prev_local_exit_root: [1; 32].into(),
                 new_local_exit_root: [0; 32].into(),
-                metadata: Metadata([0; 32].into()),
+                metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
             }))
@@ -236,7 +236,7 @@ async fn one_per_epoch() {
                 certificate_id: *certificate_id,
                 prev_local_exit_root: [1; 32].into(),
                 new_local_exit_root: [0; 32].into(),
-                metadata: Metadata([0; 32].into()),
+                metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
             }))
@@ -255,7 +255,7 @@ async fn one_per_epoch() {
                 certificate_id: *certificate_id,
                 prev_local_exit_root: [1; 32].into(),
                 new_local_exit_root: [0; 32].into(),
-                metadata: Metadata([0; 32].into()),
+                metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
             }))
@@ -459,7 +459,7 @@ async fn retries() {
                 certificate_id: *certificate_id,
                 prev_local_exit_root: [1; 32].into(),
                 new_local_exit_root: [0; 32].into(),
-                metadata: Metadata([0; 32].into()),
+                metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
             }))
@@ -478,7 +478,7 @@ async fn retries() {
                 certificate_id: *certificate_id,
                 prev_local_exit_root: [1; 32].into(),
                 new_local_exit_root: [2; 32].into(),
-                metadata: Metadata([0; 32].into()),
+                metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
             }))
@@ -716,7 +716,7 @@ async fn changing_epoch_triggers_certify() {
                 certificate_id: *certificate_id,
                 new_local_exit_root: [0; 32].into(),
                 prev_local_exit_root: [1; 32].into(),
-                metadata: Metadata([0; 32].into()),
+                metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
             }))
@@ -735,7 +735,7 @@ async fn changing_epoch_triggers_certify() {
                 certificate_id: *certificate_id,
                 prev_local_exit_root: [1; 32].into(),
                 new_local_exit_root: [0; 32].into(),
-                metadata: Metadata([0; 32].into()),
+                metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
             }))
@@ -971,7 +971,7 @@ async fn timeout_certifier() {
                 certificate_id: *certificate_id,
                 prev_local_exit_root: [1; 32].into(),
                 new_local_exit_root: [0; 32].into(),
-                metadata: Metadata([0; 32].into()),
+                metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
             }))

@@ -31,7 +31,7 @@ impl From<CertificateHeader> for v1::CertificateHeader {
             certificate_id: Some(value.certificate_id.into()),
             prev_local_exit_root: Some(value.prev_local_exit_root.into()),
             new_local_exit_root: Some(value.new_local_exit_root.into()),
-            metadata: Some(value.metadata.0.into()),
+            metadata: Some((*value.metadata).into()),
             status: status.into(),
             error,
             settlement_tx_hash: value

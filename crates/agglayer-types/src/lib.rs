@@ -221,7 +221,33 @@ impl From<u64> for Height {
 )]
 #[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 #[serde(transparent)]
-pub struct Metadata(pub Digest);
+pub struct Metadata(Digest);
+
+impl Metadata {
+    pub const ZERO: Metadata = Metadata(Digest::ZERO);
+
+    pub const fn new(metadata: Digest) -> Metadata {
+        Metadata(metadata)
+    }
+
+    pub fn as_digest(&self) -> &Digest {
+        &self.0
+    }
+}
+
+impl From<Digest> for Metadata {
+    fn from(digest: Digest) -> Self {
+        Metadata(digest)
+    }
+}
+
+impl Deref for Metadata {
+    type Target = Digest;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {

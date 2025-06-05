@@ -49,7 +49,7 @@ impl CertificateV0 {
                 U256::from_be_bytes([0x9a; 32]),
                 false,
             ),
-            metadata: Metadata(Digest([0xa5; 32])),
+            metadata: Metadata::new(Digest([0xa5; 32])),
         }
     }
 
@@ -76,7 +76,7 @@ impl CertificateV1<'static> {
                     false,
                 ),
             },
-            metadata: Metadata(Digest([0xa9; 32])),
+            metadata: Metadata::new(Digest([0xa9; 32])),
             custom_chain_data: Cow::Owned(vec![]),
             l1_info_tree_leaf_count: None,
         }
@@ -119,7 +119,7 @@ impl CertificateV1<'static> {
                     false,
                 ))),
             },
-            metadata: Metadata(Digest([0xb9; 32])),
+            metadata: Metadata::new(Digest([0xb9; 32])),
             custom_chain_data: Cow::Owned(vec![]),
             l1_info_tree_leaf_count: None,
         }
