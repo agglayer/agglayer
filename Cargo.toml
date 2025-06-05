@@ -58,7 +58,7 @@ prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.0
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
-#       It is specified at the top of scripts/make/Makefile.elf.toml.
+#       It is specified at the top of scripts/make/Makefile.pp.toml.
 sp1-core-machine = "=5.0.0"
 sp1-sdk = "=5.0.3"
 sp1-primitives = "=5.0.0"
