@@ -19,7 +19,7 @@ fn can_parse_value() {
     let value = Value {
         network_id: 1.into(),
         certificate_id: CertificateId::new([1; 32].into()),
-        height: Height(2),
+        height: Height::new(2),
         epoch_number: Some(EpochNumber::new(3)),
         certificate_index: Some(CertificateIndex::new(4)),
         prev_local_exit_root: [4; 32].into(),

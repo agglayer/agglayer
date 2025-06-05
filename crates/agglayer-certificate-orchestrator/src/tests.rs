@@ -555,7 +555,7 @@ async fn test_collect_certificates() {
     .expect("Unable to create orchestrator");
 
     _ = data_sender
-        .send((1.into(), Height(1), CertificateId::new([0; 32].into())))
+        .send((1.into(), Height::ONE, CertificateId::new([0; 32].into())))
         .await;
     let current_epoch = orchestrator.current_epoch.load().clone();
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::ONE));
@@ -629,7 +629,7 @@ async fn test_collect_certificates_after_epoch() {
     let _poll = poll!(&mut orchestrator);
 
     _ = data_sender
-        .send((1.into(), Height(1), CertificateId::new([0; 32].into())))
+        .send((1.into(), Height::ONE, CertificateId::new([0; 32].into())))
         .await;
 
     let _poll = poll!(&mut orchestrator);

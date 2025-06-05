@@ -245,14 +245,14 @@ where
             }
             // If the network is not found in the end checkpoint and the height is 0,
             // this is the first certificate for this network.
-            (None, Entry::Vacant(_entry)) if height == Height(0) => {
+            (None, Entry::Vacant(_entry)) if height == Height::ZERO => {
                 debug!(
                     "{}First certificate for network {}",
                     mode.prefix(),
                     network_id
                 );
                 // Adding the network to the end checkpoint.
-                end_checkpoint_entry_assigment = Some(Height(0));
+                end_checkpoint_entry_assigment = Some(Height::ZERO);
 
                 // Adding the certificate to the DB
             }
@@ -263,7 +263,7 @@ where
             }
             // If the network is found in the end checkpoint and the height is 0,
             // this is an invalid certificate candidate and the operation should fail.
-            (Some(_start_height), Entry::Occupied(ref current_height)) if height == Height(0) => {
+            (Some(_start_height), Entry::Occupied(ref current_height)) if height == Height::ZERO => {
                 return Err(CertificateCandidateError::UnexpectedHeight(
                     network_id,
                     height,

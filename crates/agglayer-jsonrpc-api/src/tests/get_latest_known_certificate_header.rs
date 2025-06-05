@@ -22,9 +22,9 @@ async fn returns_the_pending_certificate_header() {
 
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, Height(0));
-    let proven_certificate = Certificate::new_for_test(network_id, Height(1));
-    let pending_certificate = Certificate::new_for_test(network_id, Height(2));
+    let settled_certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let proven_certificate = Certificate::new_for_test(network_id, Height::ONE);
+    let pending_certificate = Certificate::new_for_test(network_id, Height::new(2));
 
     context
         .state_store
@@ -43,7 +43,7 @@ async fn returns_the_pending_certificate_header() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &Height(0),
+            &Height::ZERO,
             &settled_certificate.hash(),
             &EpochNumber::ZERO,
             &CertificateIndex::ZERO,
@@ -54,14 +54,14 @@ async fn returns_the_pending_certificate_header() {
         .pending_store
         .set_latest_proven_certificate_per_network(
             &network_id,
-            &Height(1),
+            &Height::ONE,
             &proven_certificate.hash(),
         )
         .expect("unable to set latest proven certificate");
 
     context
         .pending_store
-        .insert_pending_certificate(network_id, Height(2), &pending_certificate)
+        .insert_pending_certificate(network_id, Height::new(2), &pending_certificate)
         .expect("unable to insert pending certificate");
 
     let payload: CertificateHeader = context
@@ -109,8 +109,8 @@ async fn returns_the_proven_certificate_header() {
 
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, Height(0));
-    let proven_certificate = Certificate::new_for_test(network_id, Height(1));
+    let settled_certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let proven_certificate = Certificate::new_for_test(network_id, Height::ONE);
 
     context
         .state_store
@@ -135,7 +135,7 @@ async fn returns_the_proven_certificate_header() {
         .pending_store
         .set_latest_proven_certificate_per_network(
             &network_id,
-            &Height(1),
+            &Height::ONE,
             &proven_certificate.hash(),
         )
         .expect("unable to set latest proven certificate");
@@ -193,7 +193,7 @@ async fn returns_the_settled_certificate_header() {
 
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, Height(0));
+    let settled_certificate = Certificate::new_for_test(network_id, Height::ZERO);
 
     context
         .state_store
@@ -312,8 +312,8 @@ async fn returns_the_highest_height() {
 
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, Height(10));
-    let pending_certificate = Certificate::new_for_test(network_id, Height(3));
+    let settled_certificate = Certificate::new_for_test(network_id, Height::new(10));
+    let pending_certificate = Certificate::new_for_test(network_id, Height::new(3));
 
     context
         .state_store
@@ -328,7 +328,7 @@ async fn returns_the_highest_height() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &Height(10),
+            &Height::new(10),
             &settled_certificate.hash(),
             &EpochNumber::ZERO,
             &CertificateIndex::ZERO,
@@ -337,7 +337,7 @@ async fn returns_the_highest_height() {
 
     context
         .pending_store
-        .insert_pending_certificate(network_id, Height(3), &pending_certificate)
+        .insert_pending_certificate(network_id, Height::new(3), &pending_certificate)
         .expect("unable to insert pending certificate");
 
     drop(context);
@@ -357,7 +357,7 @@ async fn returns_the_highest_height() {
 
     assert_eq!(payload.certificate_id, settled_certificate.hash());
     assert_eq!(payload.status, CertificateStatus::Settled);
-    assert_eq!(payload.height, Height(10));
+    assert_eq!(payload.height, Height::new(10));
 
     drop(context);
 
@@ -392,14 +392,14 @@ async fn returns_the_settled_one_at_same_height() {
 
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, Height(10));
+    let settled_certificate = Certificate::new_for_test(network_id, Height::new(10));
 
-    let mut pending_certificate = Certificate::new_for_test(network_id, Height(5));
-    pending_certificate.height = Height(10);
+    let mut pending_certificate = Certificate::new_for_test(network_id, Height::new(5));
+    pending_certificate.height = Height::new(10);
     let pending_certificate = pending_certificate.with_new_local_exit_root([2; 32].into());
 
-    let mut proven_certificate = Certificate::new_for_test(network_id, Height(3));
-    proven_certificate.height = Height(10);
+    let mut proven_certificate = Certificate::new_for_test(network_id, Height::new(3));
+    proven_certificate.height = Height::new(10);
     let proven_certificate = proven_certificate.with_new_local_exit_root([1; 32].into());
 
     context
@@ -419,7 +419,7 @@ async fn returns_the_settled_one_at_same_height() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &Height(10),
+            &Height::new(10),
             &settled_certificate.hash(),
             &EpochNumber::ZERO,
             &CertificateIndex::ZERO,
@@ -428,14 +428,14 @@ async fn returns_the_settled_one_at_same_height() {
 
     context
         .pending_store
-        .insert_pending_certificate(network_id, Height(10), &pending_certificate)
+        .insert_pending_certificate(network_id, Height::new(10), &pending_certificate)
         .expect("unable to insert pending certificate");
 
     context
         .pending_store
         .set_latest_proven_certificate_per_network(
             &network_id,
-            &Height(10),
+            &Height::new(10),
             &proven_certificate.hash(),
         )
         .expect("unable to set latest proven certificate");
@@ -457,7 +457,7 @@ async fn returns_the_settled_one_at_same_height() {
 
     assert_eq!(payload.certificate_id, settled_certificate.hash());
     assert_eq!(payload.status, CertificateStatus::Settled);
-    assert_eq!(payload.height, Height(10));
+    assert_eq!(payload.height, Height::new(10));
 
     drop(context);
 

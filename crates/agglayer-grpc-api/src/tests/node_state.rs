@@ -27,7 +27,7 @@ async fn get_certificate_header() {
 
     let state_store =
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap();
-    let certificate = agglayer_types::Certificate::new_for_test(1.into(), Height(0));
+    let certificate = agglayer_types::Certificate::new_for_test(1.into(), Height::ZERO);
     state_store
         .insert_certificate_header(&certificate, CertificateStatus::Pending)
         .expect("Failed to insert certificate header");

@@ -71,33 +71,37 @@ type EndCheckpointState = CheckpointState;
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
     |result: Result<_, Error>| result.is_ok(),
-    Height(0), Some(EpochNumber::ZERO), Some(CertificateIndex::ZERO))]
+    Height::ZERO, Some(EpochNumber::ZERO), Some(CertificateIndex::ZERO))]
 #[case::when_state_is_incorrect(
-    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height(0))]),
+    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ZERO)]),
     EndCheckpointState::Empty,
     |result: Result<_, Error>| matches!(result, Err(Error::Unexpected(_))),
-    Height(0), None, None)]
+    Height::ZERO, None, None)]
 #[case::when_certificate_is_unexpected(
-    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height(1))]),
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height(1))]),
+    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ONE)]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ONE)]),
     |result: Result<_, Error>| {
-        matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, Height(0), Height(1)))))
+        matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, Height::ZERO, Height::ONE))))
     },
-    Height(0), None, None)]
+    Height::ZERO, None, None)]
 #[case::when_certificate_is_already_present(
-    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height(1))]),
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height(1))]),
+    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ONE)]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ONE)]),
     |result: Result<_, Error>| {
-        matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, Height(1), Height(1)))))
+        matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, Height::ONE, Height::ONE))))
     },
-    Height(1), None, None)]
+    Height::ONE, None, None)]
 #[case::when_there_is_a_gap(
-    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height(1))]),
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height(1))]),
+    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ONE)]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ONE)]),
     |result: Result<_, Error>| {
-        matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, Height(3), Height(1)))))
+        matches!(
+            result,
+            Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, h3, Height::ONE)))
+                if h3.as_u64() == 3
+        )
     },
-    Height(3), None, None)]
+    Height::new(3), None, None)]
 fn adding_a_certificate(
     mut store: PerEpochStore<PendingStore, StateStore>,
     #[case] start_checkpoint: StartCheckpointState,
@@ -156,27 +160,27 @@ fn adding_a_certificate(
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
     VecDeque::from([|result: Result<_, Error>| result.is_ok(), |result: Result<_, Error>| result.is_err()]),
-    Height(0))]
+    Height::ZERO)]
 #[case::when_state_are_empty_and_starting_at_wrong_height(
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
     VecDeque::from([|result: Result<_, Error>| result.is_err()]),
-    Height(1))]
+    Height::ONE)]
 #[case::when_state_is_already_full(
     StartCheckpointState::Empty,
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height(0))]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ZERO)]),
     VecDeque::from([|result: Result<_, Error>| result.is_err()]),
-    Height(1))]
+    Height::ONE)]
 #[case::when_state_contains_other_network(
     StartCheckpointState::Empty,
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(1), Height(0))]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(1), Height::ZERO)]),
     VecDeque::from([|result: Result<_, Error>| result.is_ok()]),
-    Height(0))]
+    Height::ZERO)]
 #[case::when_state_contains_other_network_but_wrong_height(
     StartCheckpointState::Empty,
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(1), Height(0))]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(1), Height::ZERO)]),
     VecDeque::from([|result: Result<_, Error>| result.is_err()]),
-    Height(1))]
+    Height::ONE)]
 fn adding_multiple_certificates(
     mut store: PerEpochStore<PendingStore, StateStore>,
     #[case] start_checkpoint: StartCheckpointState,
@@ -240,7 +244,7 @@ fn adding_certificate_and_restart() {
     .unwrap();
 
     let network = 1.into();
-    let height = Height(0);
+    let height = Height::ZERO;
 
     let certificate = Certificate::new_for_test(network, height);
     let certificate_id = certificate.hash();
@@ -271,7 +275,7 @@ fn adding_certificate_and_restart() {
         .unwrap();
 
     let network = 2.into();
-    let height = Height(0);
+    let height = Height::ZERO;
 
     let certificate = Certificate::new_for_test(network, height);
     let certificate_id = certificate.hash();

@@ -52,7 +52,7 @@ where
         skip_all,
         fields(
             network_id = %self.header.network_id,
-            height = self.header.height.0,
+            height = self.header.height.as_u64(),
             certificate_id = %self.header.certificate_id,
         )
     )]

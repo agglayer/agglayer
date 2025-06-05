@@ -46,7 +46,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
                 &i.into(),
                 &SettledCertificate(
                     CertificateId::new([0; 32].into()),
-                    Height(0),
+                    Height::ZERO,
                     EpochNumber::ZERO,
                     CertificateIndex::new(u64::from(i - 1)),
                 ),

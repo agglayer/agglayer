@@ -25,7 +25,7 @@ impl From<CertificateHeader> for v1::CertificateHeader {
         };
         v1::CertificateHeader {
             network_id: value.network_id.into(),
-            height: value.height.0,
+            height: value.height.as_u64(),
             epoch_number: value.epoch_number.map(|e| e.as_u64()),
             certificate_index: value.certificate_index.map(|i| i.as_u64()),
             certificate_id: Some(value.certificate_id.into()),

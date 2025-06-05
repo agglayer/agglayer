@@ -39,7 +39,7 @@ impl CertificateV0 {
         Self {
             version: VersionTag,
             network_id: NetworkId::new(55).into(),
-            height: Height(987),
+            height: Height::new(987),
             prev_local_exit_root: Digest([0x01; 32]),
             new_local_exit_root: Digest([0x67; 32]),
             bridge_exits: Vec::new(),
@@ -64,7 +64,7 @@ impl CertificateV1<'static> {
         Self {
             version: VersionTag,
             network_id: NetworkId::new(57),
-            height: Height(987),
+            height: Height::new(987),
             prev_local_exit_root: Digest([0x02; 32]),
             new_local_exit_root: Digest([0x65; 32]),
             bridge_exits: Vec::new().into(),
@@ -105,7 +105,7 @@ impl CertificateV1<'static> {
         Self {
             version: VersionTag,
             network_id: NetworkId::new(59),
-            height: Height(987),
+            height: Height::new(987),
             prev_local_exit_root: Digest([0x03; 32]),
             new_local_exit_root: Digest([0x61; 32]),
             bridge_exits: Vec::new().into(),
@@ -189,7 +189,7 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 #[case(CertificateV0::test0())]
 #[case(CertificateV1::test0())]
 #[case(CertificateV1::test1())]
-#[case(CertificateV1::from(&Certificate::new_for_test(74.into(), Height(998))).into_owned())]
+#[case(CertificateV1::from(&Certificate::new_for_test(74.into(), Height::new(998))).into_owned())]
 fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
     let bytes = default_bincode_options().serialize(&orig).unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();

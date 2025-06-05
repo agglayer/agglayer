@@ -112,7 +112,7 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
     let mut certificate2 = state.clone().apply_events(&[], &[]);
-    certificate2.height = Height(1);
+    certificate2.height = Height::ONE;
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -203,7 +203,7 @@ async fn report_contains_all_backups(#[case] state: Forest) {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
     let mut certificate2 = state.clone().apply_events(&[], &[]);
-    certificate2.height = Height(1);
+    certificate2.height = Height::ONE;
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -297,7 +297,7 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
     let mut certificate2 = state.clone().apply_events(&[], &[]);
-    certificate2.height = Height(1);
+    certificate2.height = Height::ONE;
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])

@@ -9,7 +9,7 @@ impl TryFrom<v1::Certificate> for Certificate {
     fn try_from(value: v1::Certificate) -> Result<Self, Self::Error> {
         Ok(Certificate {
             network_id: NetworkId::new(value.network_id),
-            height: Height(value.height),
+            height: Height::new(value.height),
             prev_local_exit_root: required_field!(value, prev_local_exit_root),
             new_local_exit_root: required_field!(value, new_local_exit_root),
             bridge_exits: value
@@ -38,7 +38,7 @@ impl TryFrom<Certificate> for v1::Certificate {
     fn try_from(value: Certificate) -> Result<Self, Self::Error> {
         Ok(v1::Certificate {
             network_id: value.network_id.into(),
-            height: value.height.0,
+            height: value.height.as_u64(),
             prev_local_exit_root: Some(value.prev_local_exit_root.into()),
             new_local_exit_root: Some(value.new_local_exit_root.into()),
             bridge_exits: value.bridge_exits.into_iter().map(Into::into).collect(),

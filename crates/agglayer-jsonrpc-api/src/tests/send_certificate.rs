@@ -27,7 +27,7 @@ async fn send_certificate_method_can_be_called_and_succeed() {
     let _: CertificateId = client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), Height(0))],
+            rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
         )
         .await
         .unwrap();
@@ -45,7 +45,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
         .client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(0.into(), Height(0))],
+            rpc_params![Certificate::new_for_test(0.into(), Height::ZERO)],
         )
         .await;
 
@@ -66,7 +66,7 @@ async fn send_certificate_method_requires_known_signer() {
         .client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), Height(0))],
+            rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
         )
         .await;
 
@@ -85,8 +85,8 @@ async fn pending_certificate_in_error_can_be_replaced() {
     let context = TestContext::new_with_config(config).await;
     let network_id = 1.into();
 
-    let pending_certificate = Certificate::new_for_test(network_id, Height(0));
-    let mut second_pending = Certificate::new_for_test(network_id, Height(0));
+    let pending_certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let mut second_pending = Certificate::new_for_test(network_id, Height::ZERO);
     second_pending.metadata = Metadata([1; 32].into());
 
     assert_ne!(pending_certificate.hash(), second_pending.hash());
@@ -96,7 +96,7 @@ async fn pending_certificate_in_error_can_be_replaced() {
         .expect("unable to insert pending certificate header");
     context
         .pending_store
-        .insert_pending_certificate(network_id, Height(0), &pending_certificate)
+        .insert_pending_certificate(network_id, Height::ZERO, &pending_certificate)
         .expect("unable to insert pending certificate");
 
     let res: Result<CertificateId, _> = context
@@ -137,7 +137,7 @@ async fn pending_certificate_in_error_force_push() {
     let context = TestContext::new_with_config(config).await;
     let network_id = 1.into();
 
-    let pending_certificate = Certificate::new_for_test(network_id, Height(0));
+    let pending_certificate = Certificate::new_for_test(network_id, Height::ZERO);
     let certificate_id = pending_certificate.hash();
 
     context
@@ -155,7 +155,7 @@ async fn pending_certificate_in_error_force_push() {
 
     context
         .pending_store
-        .insert_pending_certificate(network_id, Height(0), &pending_certificate)
+        .insert_pending_certificate(network_id, Height::ZERO, &pending_certificate)
         .expect("unable to insert pending certificate");
 
     let res: Result<CertificateId, _> = context

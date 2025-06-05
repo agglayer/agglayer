@@ -171,9 +171,20 @@ impl Deref for CertificateId {
 )]
 #[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 #[serde(transparent)]
-pub struct Height(pub u64);
+pub struct Height(u64);
 
 impl Height {
+    pub const ZERO: Height = Height::new(0);
+    pub const ONE: Height = Height::new(1);
+
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
+
+    pub const fn new(height: u64) -> Height {
+        Height(height)
+    }
+
     pub fn next(&self) -> Height {
         Height(self.0.checked_add(1).expect("Height overflow"))
     }
@@ -186,6 +197,12 @@ impl Height {
         self.0
             .checked_sub(o.0)
             .expect("Subtracting to negative values")
+    }
+}
+
+impl From<u64> for Height {
+    fn from(value: u64) -> Self {
+        Height(value)
     }
 }
 
@@ -505,7 +522,7 @@ impl Default for Certificate {
         let network_id = NetworkId::ETH_L1;
         let wallet = Self::wallet_for_test(network_id);
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let height = Height(0);
+        let height = Height::ZERO;
         let (_new_local_exit_root, signature, _signer) =
             compute_signature_info(exit_root, &[], &wallet, height);
         Self {

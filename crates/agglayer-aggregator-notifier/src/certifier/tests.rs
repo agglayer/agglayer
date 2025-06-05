@@ -43,7 +43,7 @@ async fn happy_path() {
 
     let local_state = LocalNetworkStateData::default();
     let network: NetworkId = 1.into();
-    let height = Height(0);
+    let height = Height::ZERO;
 
     let state = Forest::new(vec![]);
 
@@ -143,7 +143,7 @@ async fn prover_timeout() {
 
     let local_state = LocalNetworkStateData::default();
     let network = NetworkId::new(1);
-    let height = Height(0);
+    let height = Height::ZERO;
 
     let state = Forest::new(vec![]);
 

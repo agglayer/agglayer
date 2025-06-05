@@ -25,7 +25,7 @@ async fn schedule_two_certs(#[case] mut state: Forest) {
 
     let certificate_one = state.apply_events(&[], &withdrawals);
     let mut certificate_two = state.apply_events(&[], &withdrawals);
-    certificate_two.height = Height(1);
+    certificate_two.height = Height::ONE;
 
     let certificate_one_id: CertificateId = client
         .request(

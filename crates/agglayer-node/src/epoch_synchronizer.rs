@@ -234,7 +234,7 @@ mod tests {
             .returning(|| Ok(Some(EpochNumber::new(10))));
 
         let mut start_checkpoint = BTreeMap::new();
-        start_checkpoint.insert(0.into(), Height(0));
+        start_checkpoint.insert(0.into(), Height::ZERO);
 
         let mut epochs_store = MockEpochsStore::new();
         let end_checkpoint = start_checkpoint.clone();
@@ -335,10 +335,10 @@ mod tests {
         let epoch_10 = epochs_store
             .open_with_start_checkpoint(EpochNumber::new(10), start_checkpoint.clone())
             .unwrap();
-        let certificate_1 = Certificate::new_for_test(network_1, Height(0));
-        let certificate_2 = Certificate::new_for_test(network_2, Height(0));
+        let certificate_1 = Certificate::new_for_test(network_1, Height::ZERO);
+        let certificate_2 = Certificate::new_for_test(network_2, Height::ZERO);
         pending_store
-            .insert_pending_certificate(network_1, Height(0), &certificate_1)
+            .insert_pending_certificate(network_1, Height::ZERO, &certificate_1)
             .unwrap();
         pending_store
             .insert_generated_proof(&certificate_1.hash(), &Proof::dummy())
@@ -347,7 +347,7 @@ mod tests {
             .insert_certificate_header(&certificate_1, CertificateStatus::Pending)
             .unwrap();
         pending_store
-            .insert_pending_certificate(network_2, Height(0), &certificate_2)
+            .insert_pending_certificate(network_2, Height::ZERO, &certificate_2)
             .unwrap();
         pending_store
             .insert_generated_proof(&certificate_2.hash(), &Proof::dummy())
@@ -365,8 +365,8 @@ mod tests {
 
         let mut expected_end_checkpoint = BTreeMap::new();
 
-        expected_end_checkpoint.insert(network_1, Height(0));
-        expected_end_checkpoint.insert(network_2, Height(0));
+        expected_end_checkpoint.insert(network_1, Height::ZERO);
+        expected_end_checkpoint.insert(network_2, Height::ZERO);
 
         let path_15 = config.storage.epochs_db_path.join("15");
         let epoch_15 =
@@ -467,10 +467,10 @@ mod tests {
         let epoch_10 = epochs_store
             .open_with_start_checkpoint(EpochNumber::new(10), start_checkpoint.clone())
             .unwrap();
-        let certificate_1 = Certificate::new_for_test(network_1, Height(0));
-        let certificate_2 = Certificate::new_for_test(network_2, Height(0));
+        let certificate_1 = Certificate::new_for_test(network_1, Height::ZERO);
+        let certificate_2 = Certificate::new_for_test(network_2, Height::ZERO);
         pending_store
-            .insert_pending_certificate(network_1, Height(0), &certificate_1)
+            .insert_pending_certificate(network_1, Height::ZERO, &certificate_1)
             .unwrap();
         state_store
             .insert_certificate_header(&certificate_1, CertificateStatus::Pending)
@@ -481,7 +481,7 @@ mod tests {
             .unwrap();
 
         pending_store
-            .insert_pending_certificate(network_2, Height(0), &certificate_2)
+            .insert_pending_certificate(network_2, Height::ZERO, &certificate_2)
             .unwrap();
         state_store
             .insert_certificate_header(&certificate_2, CertificateStatus::Pending)
@@ -500,8 +500,8 @@ mod tests {
 
         let mut expected_end_checkpoint = BTreeMap::new();
 
-        expected_end_checkpoint.insert(network_1, Height(0));
-        expected_end_checkpoint.insert(network_2, Height(0));
+        expected_end_checkpoint.insert(network_1, Height::ZERO);
+        expected_end_checkpoint.insert(network_2, Height::ZERO);
 
         let path_15 = config.storage.epochs_db_path.join("15");
         let epoch_15 =

@@ -7,7 +7,7 @@ use crate::columns::Codec as _;
 fn can_parse_key() {
     let key = Key {
         network_id: 1,
-        height: Height(200),
+        height: Height::new(200),
     };
 
     let encoded = key.encode().expect("Unable to encode key");
@@ -24,7 +24,7 @@ fn can_parse_value() {
         certificate_id: CertificateId::new([1; 32].into()),
         epoch_number: Some(EpochNumber::new(3)),
         certificate_index: Some(CertificateIndex::new(4)),
-        height: Height(0),
+        height: Height::ZERO,
         prev_local_exit_root: [4; 32].into(),
         new_local_exit_root: [5; 32].into(),
         status: agglayer_types::CertificateStatus::Pending,

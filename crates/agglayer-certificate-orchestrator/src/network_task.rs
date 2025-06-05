@@ -180,7 +180,7 @@ where
                 current_height.next()
             } else {
                 debug!("Network never settled any certificate");
-                Height(0)
+                Height::ZERO
             };
 
         let mut first_run = true;
@@ -328,7 +328,7 @@ where
             tokio::select! {
                 msg = receiver.recv() => match msg {
                     None => {
-                        error!(height = next_expected_height.0, %certificate_id, "Certificate task channel closed");
+                        error!(height = next_expected_height.as_u64(), %certificate_id, "Certificate task channel closed");
                         return Err(Error::InternalError("Certificate task channel closed".into()));
                     }
                     Some(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight { response, .. }) => {

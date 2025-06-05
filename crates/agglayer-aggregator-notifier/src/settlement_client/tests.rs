@@ -98,7 +98,7 @@ async fn epoch_packer_can_settle_one_certificate() {
     pending_store
         .expect_get_certificate()
         .once()
-        .with(eq(network_id), eq(Height(0)))
+        .with(eq(network_id), eq(Height::ZERO))
         .returning(move |_, _| Ok(Some(certificate.clone())));
 
     state_store
@@ -108,7 +108,7 @@ async fn epoch_packer_can_settle_one_certificate() {
         .returning(move |_| {
             Ok(Some(CertificateHeader {
                 network_id,
-                height: Height(0),
+                height: Height::ZERO,
                 epoch_number: None,
                 certificate_index: None,
                 certificate_id,

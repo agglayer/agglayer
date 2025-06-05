@@ -207,7 +207,7 @@ impl Forest {
 
         let new_local_exit_root = self.state_b.exit_tree.get_root();
 
-        let height = Height(0);
+        let height = Height::ZERO;
         let (_combined_hash, signature, _signer) = compute_signature_info(
             new_local_exit_root,
             &imported_bridge_exits,
