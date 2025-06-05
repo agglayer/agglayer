@@ -36,7 +36,7 @@ const MAX_CERTIFICATE_PER_EPOCH: u64 = 1;
 
 /// A logical store for an Epoch.
 pub struct PerEpochStore<PendingStore, StateStore> {
-    pub epoch_number: Arc<u64>,
+    pub epoch_number: Arc<EpochNumber>,
     db: Arc<DB>,
     pending_store: Arc<PendingStore>,
     state_store: Arc<StateStore>,
@@ -50,7 +50,7 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     pub fn try_open(
         config: Arc<agglayer_config::Config>,
-        epoch_number: u64,
+        epoch_number: EpochNumber,
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         optional_start_checkpoint: Option<BTreeMap<NetworkId, Height>>,
@@ -118,7 +118,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             .next()
         {
             // We're starting from the next index after the last one found in the database.
-            AtomicU64::new(index + 1)
+            AtomicU64::new(index.as_u64() + 1)
         } else {
             AtomicU64::new(0)
         };
@@ -245,14 +245,14 @@ where
             }
             // If the network is not found in the end checkpoint and the height is 0,
             // this is the first certificate for this network.
-            (None, Entry::Vacant(_entry)) if height == 0 => {
+            (None, Entry::Vacant(_entry)) if height == Height::ZERO => {
                 debug!(
                     "{}First certificate for network {}",
                     mode.prefix(),
                     network_id
                 );
                 // Adding the network to the end checkpoint.
-                end_checkpoint_entry_assigment = Some(0);
+                end_checkpoint_entry_assigment = Some(Height::ZERO);
 
                 // Adding the certificate to the DB
             }
@@ -263,7 +263,7 @@ where
             }
             // If the network is found in the end checkpoint and the height is 0,
             // this is an invalid certificate candidate and the operation should fail.
-            (Some(_start_height), Entry::Occupied(ref current_height)) if height == 0 => {
+            (Some(_start_height), Entry::Occupied(ref current_height)) if height == Height::ZERO => {
                 return Err(CertificateCandidateError::UnexpectedHeight(
                     network_id,
                     height,
@@ -273,8 +273,8 @@ where
             // If the network is found in the end checkpoint and the height minus one is equal to
             // the current network height. We can add the certificate.
             (Some(start_height), Entry::Occupied(current_height))
-                if *current_height.get() == height - 1
-                    && height - start_height <= MAX_CERTIFICATE_PER_EPOCH =>
+                if current_height.get().next() == height
+                    && height.distance_since(start_height) <= MAX_CERTIFICATE_PER_EPOCH =>
             {
                 debug!(
                     "{}Certificate candidate for network {} at height {} accepted",
@@ -300,7 +300,7 @@ where
             // The certificate index is informal
             return Ok((
                 *self.epoch_number,
-                self.next_certificate_index.load(Ordering::Relaxed),
+                CertificateIndex::new(self.next_certificate_index.load(Ordering::Relaxed)),
             ));
         }
 
@@ -315,7 +315,7 @@ where
                 )
             })?;
 
-        let certificate_index = self.next_certificate_index.fetch_add(1, Ordering::SeqCst);
+        let certificate_index = CertificateIndex::new(self.next_certificate_index.fetch_add(1, Ordering::SeqCst));
 
         // TODO: all of this need to be batched
 
@@ -410,7 +410,7 @@ where
         *self.lock_for_adding_certificate()
     }
 
-    fn get_epoch_number(&self) -> u64 {
+    fn get_epoch_number(&self) -> EpochNumber {
         *self.epoch_number
     }
     fn get_certificate_at_index(

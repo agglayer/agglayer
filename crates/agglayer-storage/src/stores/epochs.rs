@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use agglayer_types::{Height, NetworkId};
+use agglayer_types::{EpochNumber, Height, NetworkId};
 use parking_lot::RwLock;
 
 use super::{
@@ -15,7 +15,7 @@ use crate::{error::Error, storage::backup::BackupClient};
 pub struct EpochsStore<PendingStore, StateStore> {
     config: Arc<agglayer_config::Config>,
     #[allow(dead_code)]
-    open_epochs: RwLock<BTreeSet<u64>>,
+    open_epochs: RwLock<BTreeSet<EpochNumber>>,
     pending_store: Arc<PendingStore>,
     state_store: Arc<StateStore>,
     backup_client: BackupClient,
@@ -24,7 +24,7 @@ pub struct EpochsStore<PendingStore, StateStore> {
 impl<PendingStore, StateStore> EpochsStore<PendingStore, StateStore> {
     pub fn new(
         config: Arc<agglayer_config::Config>,
-        epoch_number: u64,
+        epoch_number: EpochNumber,
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         backup_client: BackupClient,
@@ -48,7 +48,7 @@ where
     StateStore: StateWriter + StateReader + MetadataWriter,
 {
     type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
-    fn open(&self, epoch_number: u64) -> Result<PerEpochStore<PendingStore, StateStore>, Error> {
+    fn open(&self, epoch_number: EpochNumber) -> Result<PerEpochStore<PendingStore, StateStore>, Error> {
         PerEpochStore::try_open(
             self.config.clone(),
             epoch_number,
@@ -61,7 +61,7 @@ where
 
     fn open_with_start_checkpoint(
         &self,
-        epoch_number: u64,
+        epoch_number: EpochNumber,
         start_checkpoint: BTreeMap<NetworkId, Height>,
     ) -> Result<Self::PerEpochStore, Error> {
         PerEpochStore::try_open(

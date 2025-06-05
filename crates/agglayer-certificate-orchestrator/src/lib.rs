@@ -17,7 +17,7 @@ use agglayer_storage::{
         PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
 };
-use agglayer_types::{CertificateId, Height, NetworkId};
+use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
 use arc_swap::ArcSwap;
 use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt, TryFutureExt};
 use network_task::{NetworkTask, NewCertificate};
@@ -28,17 +28,18 @@ use tokio::{
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
 use tracing::{debug, error, warn};
 
+mod certificate_task;
 mod certifier;
-mod epoch_packer;
 mod error;
 mod network_task;
+mod settlement_client;
 
 #[cfg(test)]
 mod tests;
 
 pub use certifier::{CertificateInput, Certifier, CertifierOutput, CertifierResult};
-pub use epoch_packer::EpochPacker;
 pub use error::{CertificationError, Error, PreCertificationError};
+pub use settlement_client::SettlementClient;
 
 const MAX_POLL_READS: usize = 1_000;
 
@@ -71,7 +72,7 @@ pub type SettlementTasks = FuturesUnordered<
 /// The Certificate Orchestrator collects the generated proofs and settles
 /// them on the L1 on the go.
 pub struct CertificateOrchestrator<
-    E,
+    Sc,
     CertifierClient,
     PendingStore,
     EpochsStore,
@@ -81,7 +82,7 @@ pub struct CertificateOrchestrator<
     /// Epoch packing task resolver.
     epoch_packing_tasks: EpochPackingTasks,
     /// Epoch packing task builder.
-    epoch_packing_task_builder: Arc<E>,
+    epoch_packing_task_builder: Arc<Sc>,
     /// Certifier task builder.
     certifier_task_builder: Arc<CertifierClient>,
     /// Clock stream to receive EpochEnded events.
@@ -112,9 +113,9 @@ pub struct CertificateOrchestrator<
     network_tasks: NetworkTasks,
 }
 
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
     CertificateOrchestrator<
-        E,
+        Sc,
         CertifierClient,
         PendingStore,
         EpochsStore,
@@ -132,7 +133,7 @@ where
         clock: ClockRef,
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
         cancellation_token: CancellationToken,
-        epoch_packing_task_builder: E,
+        epoch_packing_task_builder: Sc,
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
@@ -162,9 +163,9 @@ where
 }
 
 #[buildstructor::buildstructor]
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
     CertificateOrchestrator<
-        E,
+        Sc,
         CertifierClient,
         PendingStore,
         EpochsStore,
@@ -173,7 +174,7 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
     >
 where
     CertifierClient: Certifier,
-    E: EpochPacker<PerEpochStore = PerEpochStore>,
+    Sc: SettlementClient,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
@@ -202,7 +203,7 @@ where
         clock: ClockRef,
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
         cancellation_token: CancellationToken,
-        epoch_packing_task_builder: E,
+        epoch_packing_task_builder: Sc,
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
@@ -234,9 +235,9 @@ where
     }
 }
 
-impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
     CertificateOrchestrator<
-        E,
+        Sc,
         CertifierClient,
         PendingStore,
         EpochsStore,
@@ -245,7 +246,7 @@ impl<E, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
     >
 where
     CertifierClient: Certifier,
-    E: EpochPacker<PerEpochStore = PerEpochStore>,
+    Sc: SettlementClient,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
@@ -318,7 +319,7 @@ where
     /// event. The function is responsible for:
     /// - Opening the next epoch.
     /// - Spawning the epoch packing task.
-    fn handle_epoch_end(&mut self, epoch: u64) -> Result<(), Error> {
+    fn handle_epoch_end(&mut self, epoch: EpochNumber) -> Result<(), Error> {
         debug!("Start the settlement of the epoch {}", epoch);
 
         let closing_epoch = self.current_epoch.load_full();
@@ -345,7 +346,7 @@ where
         }
 
         // TODO: Check for overflow
-        let next_epoch = epoch + 1;
+        let next_epoch = epoch.next();
 
         match self
             .epochs_store
@@ -369,11 +370,11 @@ where
     fn handle_epoch_packing_result(&mut self) {}
 }
 
-impl<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore> Future
-    for CertificateOrchestrator<E, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore> Future
+    for CertificateOrchestrator<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
 where
     A: Certifier,
-    E: EpochPacker<PerEpochStore = PerEpochStore>,
+    Sc: SettlementClient,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,

@@ -165,6 +165,7 @@ dependencies = [
 name = "agglayer-clock"
 version = "0.1.0"
 dependencies = [
+ "agglayer-types",
  "alloy",
  "async-trait",
  "backoff",
@@ -776,6 +777,7 @@ dependencies = [
  "agglayer-types",
  "arbitrary",
  "bincode",
+ "derive_more 2.0.1",
  "ethers",
  "hex",
  "pessimistic-proof",
