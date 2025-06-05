@@ -104,7 +104,7 @@ impl PerEpochWriter for DummyPendingStore {
         _certificate_id: CertificateId,
         _mode: ExecutionMode,
     ) -> Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
-        Ok((EpochNumber(0), CertificateIndex(0)))
+        Ok((EpochNumber::ZERO, CertificateIndex(0)))
     }
 
     fn start_packing(&self) -> Result<(), agglayer_storage::error::Error> {
@@ -145,7 +145,7 @@ impl StateReader for DummyPendingStore {
             .map(|(network_id, (height, id))| {
                 Ok((
                     *network_id,
-                    SettledCertificate(*id, *height, EpochNumber(0), CertificateIndex(0)),
+                    SettledCertificate(*id, *height, EpochNumber::ZERO, CertificateIndex(0)),
                 ))
             })
             .collect()
@@ -444,7 +444,7 @@ async fn test_certificate_orchestrator_can_stop() {
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
-            EpochNumber(0),
+            EpochNumber::ZERO,
             pending_store.clone(),
             state_store.clone(),
             BackupClient::noop(),
@@ -454,7 +454,7 @@ async fn test_certificate_orchestrator_can_stop() {
 
     let current_epoch = ArcSwap::new(Arc::new(
         epochs_store
-            .open(EpochNumber(0))
+            .open(EpochNumber::ZERO)
             .expect("Unable to open epoch"),
     ));
 
@@ -512,7 +512,7 @@ async fn test_collect_certificates() {
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
-            EpochNumber(0),
+            EpochNumber::ZERO,
             pending_store.clone(),
             state_store.clone(),
             BackupClient::noop(),
@@ -522,7 +522,7 @@ async fn test_collect_certificates() {
 
     let current_epoch = ArcSwap::new(Arc::new(
         epochs_store
-            .open(EpochNumber(1))
+            .open(EpochNumber::ONE)
             .expect("Unable to open epoch"),
     ));
     let (clock_sender, _receiver) = broadcast::channel(1);
@@ -558,7 +558,7 @@ async fn test_collect_certificates() {
         .send((1.into(), Height(1), CertificateId([0; 32].into())))
         .await;
     let current_epoch = orchestrator.current_epoch.load().clone();
-    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber(1)));
+    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::ONE));
 
     let _poll = poll!(&mut orchestrator);
 
@@ -582,7 +582,7 @@ async fn test_collect_certificates_after_epoch() {
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
-            EpochNumber(0),
+            EpochNumber::ZERO,
             pending_store.clone(),
             state_store.clone(),
             BackupClient::noop(),
@@ -592,7 +592,7 @@ async fn test_collect_certificates_after_epoch() {
 
     let current_epoch = ArcSwap::new(Arc::new(
         epochs_store
-            .open(EpochNumber(0))
+            .open(EpochNumber::ZERO)
             .expect("Unable to open epoch"),
     ));
     let (clock_sender, _receiver) = broadcast::channel(1);
@@ -625,7 +625,7 @@ async fn test_collect_certificates_after_epoch() {
     )
     .expect("Unable to create orchestrator");
 
-    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber(1)));
+    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::ONE));
     let _poll = poll!(&mut orchestrator);
 
     _ = data_sender
@@ -654,7 +654,7 @@ async fn test_collect_certificates_when_empty() {
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
-            EpochNumber(0),
+            EpochNumber::ZERO,
             pending_store.clone(),
             state_store.clone(),
             BackupClient::noop(),
@@ -664,7 +664,7 @@ async fn test_collect_certificates_when_empty() {
 
     let current_epoch = ArcSwap::new(Arc::new(
         epochs_store
-            .open(EpochNumber(0))
+            .open(EpochNumber::ZERO)
             .expect("Unable to open epoch"),
     ));
     let (clock_sender, _receiver) = broadcast::channel(1);
@@ -698,7 +698,7 @@ async fn test_collect_certificates_when_empty() {
     )
     .expect("Unable to create orchestrator");
 
-    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber(1)));
+    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::ONE));
     let _poll = poll!(&mut orchestrator);
 
     assert!(check_receiver.recv().await.is_some());
@@ -735,7 +735,7 @@ fn check() -> (
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
-            EpochNumber(0),
+            EpochNumber::ZERO,
             pending_store.clone(),
             state_store.clone(),
             BackupClient::noop(),
@@ -745,7 +745,7 @@ fn check() -> (
 
     let _current_epoch = ArcSwap::new(Arc::new(
         epochs_store
-            .open(EpochNumber(0))
+            .open(EpochNumber::ZERO)
             .expect("Unable to open epoch"),
     ));
 
@@ -889,7 +889,7 @@ impl SettlementClient for Check {
         _settlement_tx_hash: SettlementTxHash,
         _certificate_id: CertificateId,
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
-        Ok((EpochNumber(0), CertificateIndex(0)))
+        Ok((EpochNumber::ZERO, CertificateIndex(0)))
     }
 }
 

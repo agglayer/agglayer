@@ -45,7 +45,7 @@ async fn returns_the_pending_certificate_header() {
             &network_id,
             &Height(0),
             &settled_certificate.hash(),
-            &EpochNumber(0),
+            &EpochNumber::ZERO,
             &CertificateIndex(0),
         )
         .expect("unable to set latest settled certificate");
@@ -127,7 +127,7 @@ async fn returns_the_proven_certificate_header() {
             &network_id,
             &settled_certificate.height,
             &settled_certificate.hash(),
-            &EpochNumber(0),
+            &EpochNumber::ZERO,
             &CertificateIndex(0),
         )
         .expect("unable to set latest settled certificate");
@@ -206,7 +206,7 @@ async fn returns_the_settled_certificate_header() {
             &network_id,
             &settled_certificate.height,
             &settled_certificate.hash(),
-            &EpochNumber(0),
+            &EpochNumber::ZERO,
             &CertificateIndex(0),
         )
         .expect("unable to set latest settled certificate");
@@ -330,7 +330,7 @@ async fn returns_the_highest_height() {
             &network_id,
             &Height(10),
             &settled_certificate.hash(),
-            &EpochNumber(0),
+            &EpochNumber::ZERO,
             &CertificateIndex(0),
         )
         .expect("unable to set latest settled certificate");
@@ -421,7 +421,7 @@ async fn returns_the_settled_one_at_same_height() {
             &network_id,
             &Height(10),
             &settled_certificate.hash(),
-            &EpochNumber(0),
+            &EpochNumber::ZERO,
             &CertificateIndex(0),
         )
         .expect("unable to set latest settled certificate");

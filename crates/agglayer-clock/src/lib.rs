@@ -83,7 +83,7 @@ impl ClockRef {
 
     /// Returns the current Epoch.
     pub fn current_epoch(&self) -> EpochNumber {
-        EpochNumber(self.current_block_height() / *self.block_per_epoch)
+        EpochNumber::new(self.current_block_height() / *self.block_per_epoch)
     }
 
     /// Returns the current Block height.

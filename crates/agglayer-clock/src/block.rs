@@ -313,8 +313,8 @@ where
             Ordering::Acquire,
             Ordering::Relaxed,
         ) {
-            Ok(previous) => Ok(EpochNumber(previous)),
-            Err(stored) => Err((EpochNumber(stored), EpochNumber(expected_epoch))),
+            Ok(previous) => Ok(EpochNumber::new(previous)),
+            Err(stored) => Err((EpochNumber::new(stored), EpochNumber::new(expected_epoch))),
         }
     }
 }

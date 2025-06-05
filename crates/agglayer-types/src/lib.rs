@@ -49,15 +49,32 @@ use unified_bridge::{CommitmentVersion, LocalExitTree, LocalExitTreeError};
 )]
 #[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 #[serde(transparent)]
-pub struct EpochNumber(pub u64);
+pub struct EpochNumber(u64);
 
 impl EpochNumber {
+    pub const ZERO: EpochNumber = EpochNumber(0);
+    pub const ONE: EpochNumber = EpochNumber(1);
+
+    pub const fn new(epoch: u64) -> EpochNumber {
+        EpochNumber(epoch)
+    }
+
     pub fn next(&self) -> EpochNumber {
         EpochNumber(self.0.checked_add(1).expect("Epoch number overflow"))
     }
 
     pub fn increment(&mut self) {
         *self = self.next();
+    }
+
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
+}
+
+impl From<u64> for EpochNumber {
+    fn from(value: u64) -> Self {
+        EpochNumber(value)
     }
 }
 

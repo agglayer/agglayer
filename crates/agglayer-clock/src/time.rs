@@ -181,8 +181,8 @@ impl TimeClock {
             Ordering::Acquire,
             Ordering::Relaxed,
         ) {
-            Ok(previous) => Ok(EpochNumber(previous)),
-            Err(stored) => Err((EpochNumber(stored), EpochNumber(expected_epoch))),
+            Ok(previous) => Ok(EpochNumber::new(previous)),
+            Err(stored) => Err((EpochNumber::new(stored), EpochNumber::new(expected_epoch))),
         }
     }
 
@@ -222,8 +222,11 @@ mod tests {
 
         let mut recv = clock_ref.subscribe().unwrap();
 
-        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber(6))));
-        assert_eq!(clock_ref.current_epoch(), EpochNumber(7));
+        assert_eq!(
+            recv.recv().await,
+            Ok(Event::EpochEnded(EpochNumber::new(6)))
+        );
+        assert_eq!(clock_ref.current_epoch(), EpochNumber::new(7));
         assert!(clock_ref.current_block_height() >= 30);
     }
 
@@ -239,16 +242,25 @@ mod tests {
         let clock_ref = clock.spawn(token.clone()).await.unwrap();
 
         let mut recv = clock_ref.subscribe().unwrap();
-        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber(15))));
+        assert_eq!(
+            recv.recv().await,
+            Ok(Event::EpochEnded(EpochNumber::new(15)))
+        );
         assert!(recv.try_recv().is_err());
-        assert_eq!(clock_ref.current_epoch(), EpochNumber(16));
+        assert_eq!(clock_ref.current_epoch(), EpochNumber::new(16));
         assert!(clock_ref.current_block_height() >= 30);
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
-        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber(16))));
-        assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber(17))));
+        assert_eq!(
+            recv.recv().await,
+            Ok(Event::EpochEnded(EpochNumber::new(16)))
+        );
+        assert_eq!(
+            recv.recv().await,
+            Ok(Event::EpochEnded(EpochNumber::new(17)))
+        );
 
-        assert_eq!(clock_ref.current_epoch(), EpochNumber(18));
+        assert_eq!(clock_ref.current_epoch(), EpochNumber::new(18));
         assert!(clock_ref.current_block_height() >= 35);
     }
 
@@ -276,7 +288,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
         _ = futures::poll!(&mut fut);
-        assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(EpochNumber(15))));
+        assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(EpochNumber::new(15))));
 
         // Overflow the block height on next poll
         blocks.store(u64::MAX - 1, std::sync::atomic::Ordering::SeqCst);

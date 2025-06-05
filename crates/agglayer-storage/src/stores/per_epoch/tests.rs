@@ -31,7 +31,7 @@ fn store() -> PerEpochStore<PendingStore, StateStore> {
     );
 
     let backup_client = BackupClient::noop();
-    PerEpochStore::try_open(config, EpochNumber(0), pending_store, state_store, None, backup_client).unwrap()
+    PerEpochStore::try_open(config, EpochNumber::ZERO, pending_store, state_store, None, backup_client).unwrap()
 }
 
 #[rstest]
@@ -71,7 +71,7 @@ type EndCheckpointState = CheckpointState;
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
     |result: Result<_, Error>| result.is_ok(),
-    Height(0), Some(EpochNumber(0)), Some(CertificateIndex(0)))]
+    Height(0), Some(EpochNumber::ZERO), Some(CertificateIndex(0)))]
 #[case::when_state_is_incorrect(
     StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height(0))]),
     EndCheckpointState::Empty,
@@ -231,7 +231,7 @@ fn adding_certificate_and_restart() {
     let backup_client = BackupClient::noop();
     let store = PerEpochStore::try_open(
         config.clone(),
-        EpochNumber(0),
+        EpochNumber::ZERO,
         pending_store,
         state_store,
         None,
@@ -267,7 +267,7 @@ fn adding_certificate_and_restart() {
 
     drop(store);
 
-    let store = PerEpochStore::try_open(config, EpochNumber(0), pending_store, state_store, None, backup_client)
+    let store = PerEpochStore::try_open(config, EpochNumber::ZERO, pending_store, state_store, None, backup_client)
         .unwrap();
 
     let network = 2.into();

@@ -131,7 +131,7 @@ async fn start_from_zero() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber(0), CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
 
     state
         .expect_update_certificate_header_status()
@@ -146,7 +146,7 @@ async fn start_from_zero() {
             eq(network_id),
             eq(Height(0)),
             eq(certificate_id),
-            eq(EpochNumber(0)),
+            eq(EpochNumber::ZERO),
             eq(CertificateIndex(0)),
         )
         .returning(|_, _, _, _, _| Ok(()));
@@ -332,7 +332,7 @@ async fn one_per_epoch() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber(0), CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
 
     state
         .expect_update_certificate_header_status()
@@ -347,7 +347,7 @@ async fn one_per_epoch() {
             eq(network_id),
             eq(Height(0)),
             eq(certificate_id),
-            eq(EpochNumber(0)),
+            eq(EpochNumber::ZERO),
             eq(CertificateIndex(0)),
         )
         .returning(|_, _, _, _, _| Ok(()));
@@ -596,7 +596,7 @@ async fn retries() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber(0), CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
 
     state
         .expect_update_certificate_header_status()
@@ -611,7 +611,7 @@ async fn retries() {
             eq(network_id),
             eq(Height(0)),
             eq(certificate_id2),
-            eq(EpochNumber(0)),
+            eq(EpochNumber::ZERO),
             eq(CertificateIndex(0)),
         )
         .returning(|_, _, _, _, _| Ok(()));
@@ -835,7 +835,7 @@ async fn changing_epoch_triggers_certify() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_1 && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber(0), CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
 
     state
         .expect_update_certificate_header_status()
@@ -850,7 +850,7 @@ async fn changing_epoch_triggers_certify() {
             eq(network_id),
             eq(Height(0)),
             eq(certificate_id),
-            eq(EpochNumber(0)),
+            eq(EpochNumber::ZERO),
             eq(CertificateIndex(0)),
         )
         .returning(|_, _, _, _, _| Ok(()));
@@ -859,7 +859,7 @@ async fn changing_epoch_triggers_certify() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_2 && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber(1), CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ONE, CertificateIndex(0))));
 
     state
         .expect_update_certificate_header_status()
@@ -874,7 +874,7 @@ async fn changing_epoch_triggers_certify() {
             eq(network_id),
             eq(Height(1)),
             eq(certificate_id2),
-            eq(EpochNumber(1)),
+            eq(EpochNumber::ONE),
             eq(CertificateIndex(0)),
         )
         .returning(|_, _, _, _, _| Ok(()));
@@ -928,7 +928,7 @@ async fn changing_epoch_triggers_certify() {
 
     clock_ref
         .get_sender()
-        .send(agglayer_clock::Event::EpochEnded(EpochNumber(0)))
+        .send(agglayer_clock::Event::EpochEnded(EpochNumber::ZERO))
         .expect("Failed to send");
     let mut first_run = true;
     task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
@@ -1134,13 +1134,13 @@ async fn process_next_certificate() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_1 && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber(0), CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex(0))));
 
     settlement_client
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_2 && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber(1), CertificateIndex(0))));
+        .returning(move |_, _| Ok((EpochNumber::ONE, CertificateIndex(0))));
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),
@@ -1170,7 +1170,7 @@ async fn process_next_certificate() {
 
     assert_eq!(next_expected_height, Height(1));
     clock_ref.update_block_height(2);
-    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber(0)));
+    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::ZERO));
 
     task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
         .await
@@ -1220,7 +1220,9 @@ async fn epoch_jammed(#[values(false, true)] at_capacity: bool) {
     // Jam the epoch channel with a bunch of epoch events.
     for epoch_no in 1..=105 {
         epoch_sender
-            .send(agglayer_clock::Event::EpochEnded(EpochNumber(epoch_no)))
+            .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(
+                epoch_no,
+            )))
             .unwrap();
     }
 

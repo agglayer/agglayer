@@ -20,11 +20,11 @@ fn can_retrieve_the_last_settled_epoch() {
 
     db.put::<MetadataColumn>(
         &MetadataKey::LatestSettledEpoch,
-        &MetadataValue::LatestSettledEpoch(EpochNumber(1)),
+        &MetadataValue::LatestSettledEpoch(EpochNumber::ONE),
     )
     .expect("Unable to put latest settled epoch into storage");
 
-    assert!(matches!(store.get_latest_settled_epoch().unwrap(), Some(EpochNumber(1))));
+    assert!(matches!(store.get_latest_settled_epoch().unwrap(), Some(EpochNumber::ONE)));
 }
 
 #[test]
@@ -36,11 +36,11 @@ fn can_set_the_latest_epoch_settled() {
     assert!(store.get_latest_settled_epoch().unwrap().is_none());
 
     store
-        .set_latest_settled_epoch(EpochNumber(2))
+        .set_latest_settled_epoch(EpochNumber::new(2))
         .expect("Unable to set latest settled epoch");
 
     assert!(matches!(
         db.get::<MetadataColumn>(&MetadataKey::LatestSettledEpoch),
-        Ok(Some(MetadataValue::LatestSettledEpoch(EpochNumber(2))))
+        Ok(Some(MetadataValue::LatestSettledEpoch(e))) if e.as_u64() == 2
     ));
 }
