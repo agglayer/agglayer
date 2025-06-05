@@ -35,5 +35,5 @@ args = [
 
 [tasks.install-cargo-prove]
 description = "Install the appropriate version of `cargo prove`"
-command = "$HOME/.sp1/bin/sp1up"
+command = "${HOME}/.sp1/bin/sp1up"
 args = [ "--version", "${CARGO_PROVE_VERSION}" ]
