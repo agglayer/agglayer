@@ -1,5 +1,6 @@
 [env]
 SP1_DOCKER_TAG="v4.1.3@sha256:b94d8953d824bd9f80d7176e2eed11fde1f7689fc880f5c1fdd2ed812ead92a8"
+CARGO_PROVE_VERSION="v4.2.1"
 
 [tasks.pp-elf]
 description = "Install pessimistic proof ELF file"
@@ -31,3 +32,8 @@ args = [
     "-ppessimistic-proof-test-suite",
     "--test=cycle-tracker",
 ]
+
+[tasks.install-cargo-prove]
+description = "Install the appropriate version of `cargo prove`"
+command = "$HOME/.sp1/bin/sp1up"
+args = [ "--version", "${CARGO_PROVE_VERSION}" ]
