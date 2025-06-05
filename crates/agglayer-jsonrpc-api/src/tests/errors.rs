@@ -132,7 +132,7 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 )]
 #[case(
     "cert_notfound",
-    agglayer_rpc::CertificateRetrievalError::NotFound { certificate_id: CertificateId(Digest([0x51; 32])) }
+    agglayer_rpc::CertificateRetrievalError::NotFound { certificate_id: CertificateId::new(Digest([0x51; 32])) }
 )]
 fn rpc_error_rendering(#[case] name: &str, #[case] err: impl Into<Error>) {
     let err: Error = err.into();

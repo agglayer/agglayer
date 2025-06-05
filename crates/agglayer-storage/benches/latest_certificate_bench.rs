@@ -45,7 +45,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
             db.put::<LatestSettledCertificatePerNetworkColumn>(
                 &i.into(),
                 &SettledCertificate(
-                    CertificateId([0; 32].into()),
+                    CertificateId::new([0; 32].into()),
                     Height(0),
                     EpochNumber::ZERO,
                     CertificateIndex::new(u64::from(i - 1)),

@@ -70,7 +70,7 @@ async fn get_certificate_header() {
 
     let response = client
         .get_certificate_header(GetCertificateHeaderRequest {
-            certificate_id: Some(CertificateId(Digest([0u8; 32])).into()),
+            certificate_id: Some(CertificateId::new(Digest([0u8; 32])).into()),
         })
         .await;
 

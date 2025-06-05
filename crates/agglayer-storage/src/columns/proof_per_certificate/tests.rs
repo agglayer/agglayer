@@ -9,7 +9,7 @@ use crate::columns::{
 
 #[test]
 fn can_parse_key() {
-    let key = CertificateId([1; 32].into());
+    let key = CertificateId::new([1; 32].into());
 
     let encoded = key.encode().expect("Unable to encode key");
 

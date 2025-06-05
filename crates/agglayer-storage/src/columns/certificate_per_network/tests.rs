@@ -21,7 +21,7 @@ fn can_parse_key() {
 fn can_parse_value() {
     let value = CertificateHeader {
         network_id: 1.into(),
-        certificate_id: CertificateId([1; 32].into()),
+        certificate_id: CertificateId::new([1; 32].into()),
         epoch_number: Some(EpochNumber::new(3)),
         certificate_index: Some(CertificateIndex::new(4)),
         height: Height(0),

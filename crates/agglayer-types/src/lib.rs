@@ -2,6 +2,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
+    ops::Deref,
 };
 
 pub use agglayer_interop_types::{aggchain_proof, NetworkId};
@@ -123,7 +124,37 @@ impl CertificateIndex {
 )]
 #[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
 #[serde(transparent)]
-pub struct CertificateId(pub Digest);
+pub struct CertificateId(Digest);
+
+impl CertificateId {
+    pub const fn new(id: Digest) -> CertificateId {
+        CertificateId(id)
+    }
+
+    pub fn as_digest(&self) -> &Digest {
+        &self.0
+    }
+}
+
+impl From<Digest> for CertificateId {
+    fn from(digest: Digest) -> Self {
+        CertificateId(digest)
+    }
+}
+
+impl From<CertificateId> for Digest {
+    fn from(cert_id: CertificateId) -> Self {
+        cert_id.0
+    }
+}
+
+impl Deref for CertificateId {
+    type Target = Digest;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(
     Clone,

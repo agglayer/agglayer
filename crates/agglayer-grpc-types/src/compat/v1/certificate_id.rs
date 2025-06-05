@@ -10,7 +10,9 @@ impl TryFrom<v1::CertificateId> for CertificateId {
 
     fn try_from(value: v1::CertificateId) -> Result<Self, Self::Error> {
         let value = value.value.ok_or(Error::missing_field("value"))?;
-        Ok(CertificateId(Digest::from(<[u8; 32]>::try_from(value)?)))
+        Ok(CertificateId::new(Digest::from(<[u8; 32]>::try_from(
+            value,
+        )?)))
     }
 }
 
@@ -18,7 +20,7 @@ impl From<CertificateId> for v1::CertificateId {
     fn from(value: CertificateId) -> Self {
         v1::CertificateId {
             value: Some(FixedBytes32 {
-                value: Bytes::copy_from_slice(&value.0 .0),
+                value: Bytes::copy_from_slice(&value.as_slice()),
             }),
         }
     }
