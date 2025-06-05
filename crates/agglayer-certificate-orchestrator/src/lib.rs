@@ -28,6 +28,7 @@ use tokio::{
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
 use tracing::{debug, error, warn};
 
+mod certificate_task;
 mod certifier;
 mod epoch_packer;
 mod error;
