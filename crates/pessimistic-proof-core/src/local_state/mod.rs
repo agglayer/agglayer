@@ -1,6 +1,7 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use agglayer_primitives::{keccak::Keccak256Hasher, ruint::UintTryFrom, Hashable, U256, U512};
+use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
 use unified_bridge::{Error, LocalExitTree, NetworkId, L1_ETH};
@@ -31,10 +32,10 @@ impl NetworkState {
     /// Returns the roots.
     pub fn get_state_commitment(&self) -> StateCommitment {
         StateCommitment {
-            exit_root: self.exit_tree.get_root(),
+            exit_root: self.exit_tree.get_root().into(),
             ler_leaf_count: self.exit_tree.leaf_count,
-            balance_root: self.balance_tree.root,
-            nullifier_root: self.nullifier_tree.root,
+            balance_root: LocalBalanceRoot::new(self.balance_tree.root),
+            nullifier_root: LocalNullifierRoot::new(self.nullifier_tree.root),
         }
     }
 

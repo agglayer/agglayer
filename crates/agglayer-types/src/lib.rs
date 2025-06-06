@@ -7,7 +7,7 @@ use agglayer_interop_types::{
 };
 pub use agglayer_primitives::Digest;
 use agglayer_primitives::{keccak::Keccak256Hasher, FromBool, Hashable, SignatureError};
-use agglayer_tries::{error::SmtError, smt::Smt};
+use agglayer_tries::{error::SmtError, roots::LocalExitRoot, smt::Smt};
 use pessimistic_proof::{
     core::{
         self,
@@ -67,8 +67,8 @@ pub struct CertificateHeader {
     pub epoch_number: Option<EpochNumber>,
     pub certificate_index: Option<CertificateIndex>,
     pub certificate_id: CertificateId,
-    pub prev_local_exit_root: Digest,
-    pub new_local_exit_root: Digest,
+    pub prev_local_exit_root: LocalExitRoot,
+    pub new_local_exit_root: LocalExitRoot,
     pub metadata: Metadata,
     pub status: CertificateStatus,
     pub settlement_tx_hash: Option<Digest>,
@@ -85,7 +85,10 @@ pub enum Error {
         "Mismatch on the certificate new local exit root. declared: {declared:?}, computed: \
          {computed:?}"
     )]
-    MismatchNewLocalExitRoot { computed: Digest, declared: Digest },
+    MismatchNewLocalExitRoot {
+        computed: LocalExitRoot,
+        declared: LocalExitRoot,
+    },
     /// The given token balance cannot overflow.
     #[error("Token balance cannot overflow. token: {0:?}")]
     BalanceOverflow(TokenInfo),
@@ -150,7 +153,10 @@ pub enum Error {
         "Mismatch on the certificate prev local exit root. declared: {declared:?}, computed: \
          {computed:?}"
     )]
-    MismatchPrevLocalExitRoot { computed: Digest, declared: Digest },
+    MismatchPrevLocalExitRoot {
+        computed: LocalExitRoot,
+        declared: LocalExitRoot,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -280,9 +286,9 @@ pub struct Certificate {
     /// Simple increment to count the Certificate per network.
     pub height: Height,
     /// Previous local exit root.
-    pub prev_local_exit_root: Digest,
+    pub prev_local_exit_root: LocalExitRoot,
     /// New local exit root.
-    pub new_local_exit_root: Digest,
+    pub new_local_exit_root: LocalExitRoot,
     /// List of bridge exits included in this state transition.
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits included in this state transition.
@@ -303,15 +309,17 @@ impl Default for Certificate {
     fn default() -> Self {
         let network_id = NetworkId::ETH_L1;
         let wallet = Self::wallet_for_test(network_id);
-        let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
+        let local_exit_root = LocalExitTree::<Keccak256Hasher>::default()
+            .get_root()
+            .into();
         let height: Height = 0u64;
         let (_new_local_exit_root, signature, _signer) =
-            compute_signature_info(exit_root, &[], &wallet, height);
+            compute_signature_info(local_exit_root, &[], &wallet, height);
         Self {
             network_id,
             height,
-            prev_local_exit_root: exit_root,
-            new_local_exit_root: exit_root,
+            prev_local_exit_root: local_exit_root,
+            new_local_exit_root: local_exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
             aggchain_data: AggchainData::ECDSA { signature },
@@ -324,7 +332,7 @@ impl Default for Certificate {
 
 #[cfg(any(test, feature = "testutils"))]
 pub fn compute_signature_info(
-    new_local_exit_root: Digest,
+    new_local_exit_root: LocalExitRoot,
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &ethers::signers::LocalWallet,
     height: Height,
@@ -370,14 +378,16 @@ impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
         let wallet = Self::wallet_for_test(network_id);
-        let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_, signature, _signer) = compute_signature_info(exit_root, &[], &wallet, height);
+        let local_exit_root = LocalExitTree::<Keccak256Hasher>::default()
+            .get_root()
+            .into();
+        let (_, signature, _signer) = compute_signature_info(local_exit_root, &[], &wallet, height);
 
         Self {
             network_id,
             height,
-            prev_local_exit_root: exit_root,
-            new_local_exit_root: exit_root,
+            prev_local_exit_root: local_exit_root,
+            new_local_exit_root: local_exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
             aggchain_data: AggchainData::ECDSA { signature },
@@ -388,7 +398,7 @@ impl Certificate {
     }
 
     #[cfg(any(test, feature = "testutils"))]
-    pub fn with_new_local_exit_root(mut self, new_local_exit_root: Digest) -> Self {
+    pub fn with_new_local_exit_root(mut self, new_local_exit_root: LocalExitRoot) -> Self {
         self.new_local_exit_root = new_local_exit_root;
         self
     }
@@ -402,8 +412,8 @@ impl Certificate {
         keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
             self.height.to_be_bytes().as_slice(),
-            self.prev_local_exit_root.as_slice(),
-            self.new_local_exit_root.as_slice(),
+            self.prev_local_exit_root.as_ref(),
+            self.new_local_exit_root.as_ref(),
             commit_bridge_exits.as_slice(),
             commit_imported_bridge_exits.as_slice(),
             self.metadata.as_slice(),
@@ -558,8 +568,8 @@ impl LocalNetworkStateData {
         let prev_pessimistic_root = match prev_pp_root {
             PessimisticRootInput::Fetched(settled_from_l1) => settled_from_l1,
             PessimisticRootInput::Computed(version) => PessimisticRoot {
-                balance_root: self.balance_tree.root,
-                nullifier_root: self.nullifier_tree.root,
+                balance_root: self.balance_tree.root.into(),
+                nullifier_root: self.nullifier_tree.root.into(),
                 ler_leaf_count: self.exit_tree.leaf_count(),
                 height: certificate.height,
                 origin_network: certificate.network_id,
@@ -567,7 +577,7 @@ impl LocalNetworkStateData {
             .compute_pp_root(version),
         };
 
-        let prev_local_exit_root = self.exit_tree.get_root();
+        let prev_local_exit_root = self.exit_tree.get_root().into();
         if certificate.prev_local_exit_root != prev_local_exit_root {
             return Err(Error::MismatchPrevLocalExitRoot {
                 computed: prev_local_exit_root,
@@ -680,11 +690,11 @@ impl LocalNetworkStateData {
                 .collect::<Result<Vec<_>, Error>>()?;
 
         // Check that the certificate referred to the right target
-        let computed = self.exit_tree.get_root();
+        let computed = LocalExitRoot::from(self.exit_tree.get_root());
         if computed != certificate.new_local_exit_root {
             return Err(Error::MismatchNewLocalExitRoot {
-                declared: (*certificate.new_local_exit_root).into(),
-                computed: (*computed).into(),
+                declared: certificate.new_local_exit_root,
+                computed,
             });
         }
 
