@@ -690,7 +690,7 @@ impl LocalNetworkStateData {
                 .collect::<Result<Vec<_>, Error>>()?;
 
         // Check that the certificate referred to the right target
-        let computed: LocalExitRoot = self.exit_tree.get_root().into();
+        let computed = LocalExitRoot::from(self.exit_tree.get_root());
         if computed != certificate.new_local_exit_root {
             return Err(Error::MismatchNewLocalExitRoot {
                 declared: certificate.new_local_exit_root,
