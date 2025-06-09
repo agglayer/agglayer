@@ -5,8 +5,8 @@
 
 use std::{collections::HashMap, path::Path};
 
+use agglayer_primitives::Address;
 use agglayer_prover_config::GrpcConfig;
-use ethers::types::Address;
 use outbound::OutboundConfig;
 use serde::{de::DeserializeSeed, Deserialize, Serialize};
 use serde_with::DisplayFromStr;

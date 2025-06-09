@@ -185,6 +185,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
  "agglayer-prover-config",
  "dirs",
  "ethers",
@@ -208,20 +209,37 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
+ "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
  "agglayer-types",
+ "alloy",
  "anyhow",
  "async-trait",
- "ethers",
  "ethers-contract",
  "hex",
  "mockall",
  "num-derive",
  "num-traits",
+ "prover-alloy",
  "sp1-primitives",
  "sp1-zkvm",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
+ "url",
+]
+
+[[package]]
+name = "agglayer-evm-client"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+dependencies = [
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
+ "alloy",
+ "anyhow",
+ "async-trait",
+ "futures",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -748,10 +766,11 @@ dependencies = [
  "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
  "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
  "agglayer-types",
+ "alloy-signer",
+ "alloy-signer-local",
  "arbitrary",
  "bincode",
  "derive_more 2.0.1",
- "ethers",
  "hex",
  "pessimistic-proof",
  "rand 0.9.1",
@@ -2180,7 +2199,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.11.0",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2200,7 +2219,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -2220,7 +2239,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -6853,6 +6872,8 @@ version = "0.1.0"
 dependencies = [
  "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
  "agglayer-types",
+ "alloy-signer",
+ "alloy-signer-local",
  "anyhow",
  "base64 0.22.1",
  "bincode",
@@ -7334,7 +7355,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
@@ -7367,7 +7388,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.101",
@@ -7396,6 +7417,22 @@ name = "protobuf"
 version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
+
+[[package]]
+name = "prover-alloy"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+dependencies = [
+ "agglayer-evm-client",
+ "alloy",
+ "anyhow",
+ "async-trait",
+ "derive_more 2.0.1",
+ "educe",
+ "ff 0.13.1",
+ "serde",
+ "url",
+]
 
 [[package]]
 name = "prover-config"
