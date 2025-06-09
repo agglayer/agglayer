@@ -17,7 +17,7 @@ fail = { workspace = true, features = ["failpoints"] }
 futures.workspace = true
 hex.workspace = true
 http-body-util = "0.1.2"
-hyper-util = { version = "0.1.10", features = ["client"] }
+hyper-util = { version = "0.1.14", features = ["client"] }
 hyper.workspace = true
 insta.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
