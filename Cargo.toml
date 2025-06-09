@@ -54,6 +54,7 @@ unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.
 agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
 agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
 agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
 prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
 
 # SP1 dependencies
@@ -68,6 +69,20 @@ sp1-zkvm = { version = "=5.0.0", default-features = false }
 # Core dependencies
 alloy = { version = "0.14.0", features = ["full"] }
 alloy-primitives = { version = "1.1", features = ["serde", "k256"] }
+alloy-rlp = "0.3.10"
+alloy-sol-macro = "1.1"
+alloy-sol-types = "1.1"
+# Add missing alloy dependencies for migration
+alloy-contract = "0.14.0"
+alloy-provider = { version = "0.14.0", features = ["ws"] }
+alloy-signer = "0.14.0"
+alloy-signer-local = "0.14.0"
+alloy-transport = "0.14.0"
+alloy-transport-http = "0.14.0"
+alloy-transport-ws = "0.14.0"
+alloy-network = "0.14.0"
+alloy-rpc-types = "0.14.0"
+alloy-json-rpc = "0.14.0"
 anyhow = "1.0"
 arbitrary = { version = "1.4", features = ["derive"] }
 arc-swap = "1.7"
