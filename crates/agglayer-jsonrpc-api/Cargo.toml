@@ -13,7 +13,6 @@ agglayer-contracts.workspace = true
 
 alloy = { workspace = true }
 futures = { workspace = true }
-ethers = { workspace = true, features = ["solc"] }
 jsonrpsee = { workspace = true, features = ["full"] }
 hex.workspace = true
 
@@ -54,7 +53,6 @@ rstest = { workspace = true, optional = true }
 
 [dev-dependencies]
 alloy = { workspace = true, features = ["full", "node-bindings"] }
-ethers.workspace = true
 http-body-util = "0.1.2"
 hyper-util = { version = "0.1.10", features = ["client"] }
 insta.workspace = true

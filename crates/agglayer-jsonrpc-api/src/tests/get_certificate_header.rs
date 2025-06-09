@@ -21,7 +21,7 @@ use crate::{
 #[test_log::test(tokio::test)]
 async fn fetch_unknown_certificate_header(#[future] context: TestContext) {
     let payload: Result<CertificateHeader, ClientError> = context
-        .client
+        .api_client
         .request("interop_getCertificateHeader", rpc_params![Digest([0; 32])])
         .await;
 
@@ -39,7 +39,7 @@ async fn fetch_known_certificate_header(#[future] mut context: TestContext) {
     let id = certificate.hash();
 
     let res: CertificateId = context
-        .client
+        .api_client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
         .unwrap();
@@ -48,7 +48,7 @@ async fn fetch_known_certificate_header(#[future] mut context: TestContext) {
     assert!(context.certificate_receiver.try_recv().is_ok());
 
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request("interop_getCertificateHeader", rpc_params![id])
         .await
         .unwrap();
@@ -65,7 +65,7 @@ async fn get_certificate_header_after_sending_the_certificate(#[future] mut cont
     let id = certificate.hash();
 
     let res: CertificateId = context
-        .client
+        .api_client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
         .unwrap();
@@ -74,7 +74,7 @@ async fn get_certificate_header_after_sending_the_certificate(#[future] mut cont
     assert!(context.certificate_receiver.try_recv().is_ok());
 
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request("interop_getCertificateHeader", rpc_params![id])
         .await
         .unwrap();
@@ -83,7 +83,7 @@ async fn get_certificate_header_after_sending_the_certificate(#[future] mut cont
     assert_eq!(payload.status, CertificateStatus::Pending);
 
     let payload: Result<CertificateHeader, ClientError> = context
-        .client
+        .api_client
         .request("interop_getCertificateHeader", rpc_params![Digest([0; 32])])
         .await;
 
@@ -198,9 +198,12 @@ async fn debug_fetch_known_certificate() {
     let id = certificate.hash();
 
     let res: CertificateId = context
-        .client
+        .api_client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
+        .inspect_err(|e| {
+            eprintln!("Error interop_sendCertificate: {e:?}");
+        })
         .unwrap();
 
     assert_eq!(id, res);
@@ -231,7 +234,7 @@ async fn debug_get_certificate_after_sending_the_certificate() {
     let id = certificate.hash();
 
     let res: CertificateId = context
-        .client
+        .api_client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
         .unwrap();
@@ -274,7 +277,7 @@ async fn debug_get_certificate_after_overwrite() {
     let id = certificate.hash();
 
     let res: CertificateId = context
-        .client
+        .api_client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
         .unwrap();
@@ -309,7 +312,7 @@ async fn debug_get_certificate_after_overwrite() {
         .expect("unable to update certificate header status");
 
     let res: CertificateId = context
-        .client
+        .api_client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
         .unwrap();
@@ -356,7 +359,7 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
     let id = certificate.hash();
 
     let res: CertificateId = context
-        .client
+        .api_client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
         .unwrap();
@@ -391,7 +394,7 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
     let id2 = certificate.hash();
 
     let res: CertificateId = context
-        .client
+        .api_client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
         .unwrap();

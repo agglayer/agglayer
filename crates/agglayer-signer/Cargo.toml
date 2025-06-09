@@ -5,8 +5,12 @@ edition = "2021"
 
 [dependencies]
 async-trait.workspace = true
-ethers.workspace = true
 thiserror.workspace = true
+
+# Alloy dependencies for the migration from ethers
+alloy.workspace = true
+alloy-primitives.workspace = true
+alloy-signer-local.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
 agglayer-gcp-kms = { path = "../agglayer-gcp-kms" }

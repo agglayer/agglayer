@@ -11,7 +11,7 @@ async-trait.workspace = true
 anyhow.workspace = true
 arc-swap.workspace = true
 buildstructor.workspace = true
-ethers.workspace = true
+alloy.workspace = true
 fail.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true
@@ -20,6 +20,7 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 futures-util = "0.3.31"
+reqwest.workspace = true
 agglayer-contracts.workspace = true
 agglayer-clock.workspace = true
 agglayer-storage.workspace = true
@@ -36,7 +37,7 @@ agglayer-storage = { workspace = true, features = ["testutils"] }
 agglayer-test-suite = { path = "../agglayer-test-suite" }
 agglayer-types = { workspace = true, features = ["testutils"] }
 async-trait.workspace = true
-ethers.workspace = true
+alloy.workspace = true
 lazy_static.workspace = true
 mockall.workspace = true
 rstest.workspace = true

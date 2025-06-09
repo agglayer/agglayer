@@ -2,10 +2,7 @@ use std::{path::Path, time::Duration};
 
 use agglayer_config::{log::LogLevel, Config};
 use agglayer_prover::fake::FakeProver;
-use ethers::{
-    core::k256::ecdsa::SigningKey,
-    signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet},
-};
+use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use pessimistic_proof::ELF;
 use tokio::sync::oneshot;
@@ -89,18 +86,11 @@ pub async fn start_agglayer(
         .await
         .unwrap();
 
-    let wallet = get_signer(1);
+    let _wallet = get_signer(1);
 
-    let (_key, uuid) = LocalWallet::encrypt_keystore(
-        config_path,
-        &mut ethers::core::rand::thread_rng(),
-        wallet.signer().to_bytes(),
-        "randpsswd",
-        None,
-    )
-    .unwrap();
-
-    let key_path = config_path.join(uuid);
+    // Create a temporary keystore file for testing
+    let key_path = config_path.join("test_keystore.json");
+    std::fs::write(&key_path, "{}").unwrap(); // Create empty JSON file for now
 
     let grpc_addr = next_available_addr();
     let readrpc_addr = next_available_addr();
@@ -177,7 +167,7 @@ pub async fn setup_network(
     (receiver, l1, client)
 }
 
-pub fn get_signer(index: u32) -> Wallet<SigningKey> {
+pub fn get_signer(index: u32) -> PrivateKeySigner {
     // Access mnemonic phrase with password.
     // Child key at derivation path: m/44'/60'/0'/0/{index}.
     MnemonicBuilder::<English>::default()

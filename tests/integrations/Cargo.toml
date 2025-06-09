@@ -12,7 +12,6 @@ alloy.workspace = true
 anyhow.workspace = true
 arc-swap.workspace = true
 buildstructor.workspace = true
-ethers = { workspace = true, features = ["solc"] }
 fail = { workspace = true, features = ["failpoints"] }
 futures.workspace = true
 hex.workspace = true
