@@ -40,8 +40,8 @@ impl CertificateV0 {
             version: VersionTag,
             network_id: NetworkId::new(55).into(),
             height: 987,
-            prev_local_exit_root: Digest([0x01; 32]),
-            new_local_exit_root: Digest([0x67; 32]),
+            prev_local_exit_root: LocalExitRoot::from([0x01; 32]),
+            new_local_exit_root: LocalExitRoot::from([0x67; 32]),
             bridge_exits: Vec::new(),
             imported_bridge_exits: Vec::new(),
             signature: Signature::new(

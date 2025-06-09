@@ -18,7 +18,7 @@
 //! one of the future versions.
 
 use std::borrow::Cow;
-
+use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
     aggchain_proof::{AggchainData, Proof},
     primitives::Digest,
@@ -71,8 +71,8 @@ struct CertificateV0 {
     version: VersionTag<0>,
     network_id: NetworkIdV0,
     height: Height,
-    prev_local_exit_root: Digest,
-    new_local_exit_root: Digest,
+    prev_local_exit_root: LocalExitRoot,
+    new_local_exit_root: LocalExitRoot,
     bridge_exits: Vec<BridgeExit>,
     imported_bridge_exits: Vec<ImportedBridgeExit>,
     signature: Signature,
@@ -96,8 +96,8 @@ impl From<CertificateV0> for Certificate {
         Certificate {
             network_id: network_id.into(),
             height,
-            prev_local_exit_root: prev_local_exit_root.into(),
-            new_local_exit_root: new_local_exit_root.into(),
+            prev_local_exit_root,
+            new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
             aggchain_data: AggchainData::ECDSA { signature },
