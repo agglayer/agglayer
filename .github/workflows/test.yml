@@ -228,7 +228,7 @@ jobs:
       - name: Install sp1 toolchain
         run: |
           curl -L https://sp1up.succinct.xyz | bash
-          /home/runner/.sp1/bin/sp1up
+          cargo make install-cargo-prove
           PATH="/home/runner/.sp1/bin:$PATH" cargo prove --version
 
       - name: Build the PP elf
