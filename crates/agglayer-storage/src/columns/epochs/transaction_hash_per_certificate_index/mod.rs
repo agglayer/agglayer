@@ -9,6 +9,7 @@ use crate::columns::PER_EPOCH_TRANSACTION_HASH_PER_CERTIFICATE_INDEX;
 /// | key                | value    |
 /// | --                 | --       |
 /// | `CertificateIndex` | `Hash`   |
+#[allow(unused)]
 pub struct TransactionHashPerCertificateIndexColumn;
 
 impl crate::columns::ColumnSchema for TransactionHashPerCertificateIndexColumn {

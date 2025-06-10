@@ -5,7 +5,6 @@ use agglayer_types::{
 use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
-use agglayer_config::AuthConfig::Local;
 use super::*;
 use crate::columns::Codec;
 
