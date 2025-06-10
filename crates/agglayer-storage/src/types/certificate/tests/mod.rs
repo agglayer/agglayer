@@ -1,6 +1,6 @@
 use agglayer_types::{
     aggchain_proof::{Proof, SP1StarkWithContext},
-    U256,
+    bincode, U256,
 };
 use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
@@ -222,7 +222,7 @@ fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> 
 #[case("aggdata_v1_02", AggchainDataV1::test2())]
 fn encoding(#[case] name: &str, #[case] value: impl Serialize) {
     // Snapshots for types where the encoding must stay stable.
-    let bytes = Bytes::from(default_bincode_options().serialize(&value).unwrap());
+    let bytes = Bytes::from(bincode::default().serialize(&value).unwrap());
     insta::assert_snapshot!(name, bytes);
 }
 
