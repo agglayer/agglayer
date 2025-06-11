@@ -3,8 +3,8 @@ use std::sync::Arc;
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
+use agglayer_storage::columns::default_bincode_options;
 use agglayer_prover_types::{
-    default_bincode_options,
     v1::{
         generate_proof_request::Stdin,
         pessimistic_proof_service_client::PessimisticProofServiceClient, ErrorKind,
