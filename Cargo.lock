@@ -556,7 +556,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#959e99eda28c56ef90d1fb3a5582ffddedffebe0"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
@@ -580,7 +580,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#959e99eda28c56ef90d1fb3a5582ffddedffebe0"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
 dependencies = [
  "prover-config",
  "prover-logger",
@@ -593,7 +593,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#959e99eda28c56ef90d1fb3a5582ffddedffebe0"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
 dependencies = [
  "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
  "pbjson",
@@ -2203,7 +2203,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.11.0",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2223,7 +2223,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -2243,7 +2243,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -4148,12 +4148,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
-name = "fixedbitset"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
-
-[[package]]
 name = "flate2"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5666,7 +5660,7 @@ dependencies = [
  "ena",
  "itertools 0.11.0",
  "lalrpop-util",
- "petgraph 0.6.5",
+ "petgraph",
  "regex",
  "regex-syntax 0.8.5",
  "string_cache",
@@ -6200,7 +6194,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 3.3.0",
+ "proc-macro-crate 2.0.0",
  "proc-macro2",
  "quote",
  "syn 2.0.101",
@@ -6956,17 +6950,7 @@ version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
- "fixedbitset 0.4.2",
- "indexmap 2.9.0",
-]
-
-[[package]]
-name = "petgraph"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
-dependencies = [
- "fixedbitset 0.5.7",
+ "fixedbitset",
  "indexmap 2.9.0",
 ]
 
@@ -7372,11 +7356,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
- "petgraph 0.7.1",
+ "petgraph",
  "prettyplease",
  "prost 0.13.5",
  "prost-types 0.13.5",
@@ -7405,7 +7389,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.101",
@@ -7438,7 +7422,7 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#959e99eda28c56ef90d1fb3a5582ffddedffebe0"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
 dependencies = [
  "prover-utils",
  "serde",
@@ -7449,7 +7433,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#959e99eda28c56ef90d1fb3a5582ffddedffebe0"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -7468,7 +7452,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#959e99eda28c56ef90d1fb3a5582ffddedffebe0"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
 dependencies = [
  "anyhow",
  "buildstructor",
@@ -7494,7 +7478,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#959e99eda28c56ef90d1fb3a5582ffddedffebe0"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
 dependencies = [
  "serde",
  "tracing",
@@ -7505,7 +7489,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#959e99eda28c56ef90d1fb3a5582ffddedffebe0"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
 dependencies = [
  "humantime-serde",
  "serde",
