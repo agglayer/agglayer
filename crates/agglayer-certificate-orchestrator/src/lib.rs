@@ -81,8 +81,8 @@ pub struct CertificateOrchestrator<
 > {
     /// Epoch packing task resolver.
     epoch_packing_tasks: EpochPackingTasks,
-    /// Epoch packing task builder.
-    epoch_packing_task_builder: Arc<Sc>,
+    /// Settlement client.
+    settlement_client: Arc<Sc>,
     /// Certifier task builder.
     certifier_task_builder: Arc<CertifierClient>,
     /// Clock stream to receive EpochEnded events.
@@ -133,7 +133,7 @@ where
         clock: ClockRef,
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
         cancellation_token: CancellationToken,
-        epoch_packing_task_builder: Sc,
+        settlement_client: Sc,
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
@@ -147,7 +147,7 @@ where
                 |v| v.ok(),
             )),
             clock_ref: clock,
-            epoch_packing_task_builder: Arc::new(epoch_packing_task_builder),
+            settlement_client: Arc::new(settlement_client),
             certifier_task_builder: Arc::new(certifier_task_builder),
             data_receiver,
             cancellation_token: cancellation_token.clone(),
@@ -203,7 +203,7 @@ where
         clock: ClockRef,
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
         cancellation_token: CancellationToken,
-        epoch_packing_task_builder: Sc,
+        settlement_client: Sc,
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
@@ -214,7 +214,7 @@ where
             clock,
             data_receiver,
             cancellation_token,
-            epoch_packing_task_builder,
+            settlement_client,
             certifier_task_builder,
             pending_store.clone(),
             epochs_store,
@@ -265,7 +265,7 @@ where
             self.pending_store.clone(),
             self.state_store.clone(),
             self.certifier_task_builder.clone(),
-            self.epoch_packing_task_builder.clone(),
+            self.settlement_client.clone(),
             self.clock_ref.clone(),
             network_id,
             receiver,

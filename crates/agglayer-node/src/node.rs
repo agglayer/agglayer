@@ -245,7 +245,7 @@ impl Node {
             .clock(clock_ref)
             .data_receiver(data_receiver)
             .cancellation_token(cancellation_token.clone())
-            .epoch_packing_task_builder(epoch_packing_aggregator_task)
+            .settlement_client(epoch_packing_aggregator_task)
             .pending_store(pending_store.clone())
             .epochs_store(epochs_store.clone())
             .current_epoch(current_epoch_store)

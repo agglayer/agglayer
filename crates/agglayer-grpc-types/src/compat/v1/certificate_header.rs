@@ -36,8 +36,7 @@ impl From<CertificateHeader> for v1::CertificateHeader {
             error,
             settlement_tx_hash: value
                 .settlement_tx_hash
-                .map(Digest::from)
-                .map(FixedBytes32::from),
+                .map(|h| FixedBytes32::from(Digest::from(h))),
         }
     }
 }

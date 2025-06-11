@@ -60,15 +60,15 @@ impl EpochNumber {
         EpochNumber(epoch)
     }
 
-    pub fn next(&self) -> EpochNumber {
+    pub const fn next(&self) -> EpochNumber {
         EpochNumber(self.0.checked_add(1).expect("Epoch number overflow"))
     }
 
-    pub fn increment(&mut self) {
+    pub const fn increment(&mut self) {
         *self = self.next();
     }
 
-    pub fn as_u64(&self) -> u64 {
+    pub const fn as_u64(&self) -> u64 {
         self.0
     }
 }
@@ -104,7 +104,7 @@ impl CertificateIndex {
         CertificateIndex(index)
     }
 
-    pub fn as_u64(&self) -> u64 {
+    pub const fn as_u64(&self) -> u64 {
         self.0
     }
 }
@@ -131,7 +131,7 @@ impl CertificateId {
         CertificateId(id)
     }
 
-    pub fn as_digest(&self) -> &Digest {
+    pub const fn as_digest(&self) -> &Digest {
         &self.0
     }
 }
@@ -177,7 +177,7 @@ impl Height {
     pub const ZERO: Height = Height::new(0);
     pub const ONE: Height = Height::new(1);
 
-    pub fn as_u64(&self) -> u64 {
+    pub const fn as_u64(&self) -> u64 {
         self.0
     }
 
@@ -185,15 +185,15 @@ impl Height {
         Height(height)
     }
 
-    pub fn next(&self) -> Height {
+    pub const fn next(&self) -> Height {
         Height(self.0.checked_add(1).expect("Height overflow"))
     }
 
-    pub fn increment(&mut self) {
+    pub const fn increment(&mut self) {
         *self = self.next();
     }
 
-    pub fn distance_since(&self, o: &Height) -> u64 {
+    pub const fn distance_since(&self, o: &Height) -> u64 {
         self.0
             .checked_sub(o.0)
             .expect("Subtracting to negative values")
@@ -230,7 +230,7 @@ impl Metadata {
         Metadata(metadata)
     }
 
-    pub fn as_digest(&self) -> &Digest {
+    pub const fn as_digest(&self) -> &Digest {
         &self.0
     }
 }
