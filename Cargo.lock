@@ -556,7 +556,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#dc803711bc41c4f8077d0c98c0eb4b425fbaf716"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
@@ -580,7 +580,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#dc803711bc41c4f8077d0c98c0eb4b425fbaf716"
 dependencies = [
  "prover-config",
  "prover-logger",
@@ -593,7 +593,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#dc803711bc41c4f8077d0c98c0eb4b425fbaf716"
 dependencies = [
  "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
  "pbjson",
@@ -2203,7 +2203,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2223,7 +2223,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -2243,7 +2243,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -7356,7 +7356,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "log",
  "multimap",
  "once_cell",
@@ -7389,7 +7389,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.101",
@@ -7422,7 +7422,7 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#dc803711bc41c4f8077d0c98c0eb4b425fbaf716"
 dependencies = [
  "prover-utils",
  "serde",
@@ -7433,7 +7433,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#dc803711bc41c4f8077d0c98c0eb4b425fbaf716"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -7452,7 +7452,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#dc803711bc41c4f8077d0c98c0eb4b425fbaf716"
 dependencies = [
  "anyhow",
  "buildstructor",
@@ -7478,7 +7478,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#dc803711bc41c4f8077d0c98c0eb4b425fbaf716"
 dependencies = [
  "serde",
  "tracing",
@@ -7489,7 +7489,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#cf68af33aa11a232f7b063e2902fcc894de4862d"
+source = "git+https://github.com/agglayer/provers.git?branch=chore%2Fbump-proposer#dc803711bc41c4f8077d0c98c0eb4b425fbaf716"
 dependencies = [
  "humantime-serde",
  "serde",
