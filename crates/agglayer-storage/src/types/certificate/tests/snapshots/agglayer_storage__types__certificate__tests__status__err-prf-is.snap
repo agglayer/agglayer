@@ -3,4 +3,4 @@ source: crates/agglayer-storage/src/types/certificate/tests/status.rs
 expression: bytes
 snapshot_kind: text
 ---
-0x0000000300000000000000010000000c
+0x00000003000000000000000100000012
