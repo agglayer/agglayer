@@ -41,7 +41,7 @@ impl RateLimiter {
         limiter.reserve::<C>(time)
     }
 
-    fn lock(&self) -> MutexGuard<inner::RateLimiter> {
+    fn lock(&self) -> MutexGuard<'_, inner::RateLimiter> {
         self.0.lock()
     }
 }
