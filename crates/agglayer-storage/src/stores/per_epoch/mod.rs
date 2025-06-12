@@ -160,10 +160,10 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         })
     }
 
-    fn lock_for_adding_certificate(&self) -> RwLockReadGuard<bool> {
+    fn lock_for_adding_certificate(&self) -> RwLockReadGuard<'_, bool> {
         self.packing_lock.read()
     }
-    fn lock_for_packing(&self) -> RwLockWriteGuard<bool> {
+    fn lock_for_packing(&self) -> RwLockWriteGuard<'_, bool> {
         self.packing_lock.write()
     }
 }

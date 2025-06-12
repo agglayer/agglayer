@@ -12,7 +12,7 @@ use pessimistic_proof::{
     keccak::{keccak256_combine, Keccak256Hasher},
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
     local_state::LocalNetworkState,
-    proof::zero_if_empty_exit_root,
+    proof::zero_if_empty_local_exit_root,
     unified_bridge::{
         BridgeExit, Claim, ClaimFromMainnet, CommitmentVersion, GlobalIndex, ImportedBridgeExit,
         L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
@@ -195,7 +195,7 @@ impl Forest {
         imported_bridge_events: impl IntoIterator<Item = (TokenInfo, U256)>,
         bridge_exits: impl IntoIterator<Item = BridgeExit>,
     ) -> Certificate {
-        let prev_local_exit_root = self.state_b.exit_tree.get_root();
+        let prev_local_exit_root = self.state_b.exit_tree.get_root().into();
 
         let imported_bridge_exits = self.imported_bridge_exits(imported_bridge_events);
         let bridge_exits = bridge_exits
@@ -205,7 +205,7 @@ impl Forest {
             })
             .collect();
 
-        let new_local_exit_root = self.state_b.exit_tree.get_root();
+        let new_local_exit_root = self.state_b.exit_tree.get_root().into();
 
         let height = Height::ZERO;
         let (_combined_hash, signature, _signer) = compute_signature_info(
@@ -260,8 +260,8 @@ impl Forest {
                 commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
                     .commitment(CommitmentVersion::V2)
                     .0,
-                prev_local_exit_root: *certificate.prev_local_exit_root,
-                new_local_exit_root: *certificate.new_local_exit_root,
+                prev_local_exit_root: certificate.prev_local_exit_root,
+                new_local_exit_root: certificate.new_local_exit_root,
                 l1_info_root: *certificate.l1_info_root().unwrap().unwrap(),
                 origin_network: self.network_id,
             });
@@ -277,7 +277,7 @@ impl Forest {
     pub fn assert_output_matches(&self, output: &PessimisticProofOutput) {
         assert_eq!(
             output.new_local_exit_root,
-            zero_if_empty_exit_root(self.state_b.exit_tree.get_root())
+            zero_if_empty_local_exit_root(self.state_b.exit_tree.get_root().into())
         );
         assert_eq!(
             output.new_pessimistic_root,
