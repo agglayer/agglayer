@@ -44,8 +44,6 @@ pub const PER_EPOCH_METADATA_CF: &str = "per_epoch_metadata_cf";
 pub const PER_EPOCH_PROOFS_CF: &str = "per_epoch_proofs_cf";
 pub const PER_EPOCH_END_CHECKPOINT_CF: &str = "per_epoch_end_checkpoint_cf";
 pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
-pub const PER_EPOCH_TRANSACTION_HASH_PER_CERTIFICATE_INDEX: &str =
-    "per_epoch_transaction_hash_per_certificate_index";
 
 // Pending related CFs
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
@@ -98,5 +96,4 @@ pub mod epochs {
     pub(crate) mod metadata;
     pub(crate) mod proofs;
     pub(crate) mod start_checkpoint;
-    mod transaction_hash_per_certificate_index;
 }
