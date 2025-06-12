@@ -8,6 +8,8 @@ use sp1_sdk::Prover;
 use super::*;
 use crate::columns::Codec;
 
+const EMPTY_ELF: &[u8] = include_bytes!("empty.elf");
+
 #[rstest::rstest]
 #[case(0.into(), [0, 0, 0, 0])]
 #[case(100.into(), [0, 0, 0, 100])]
@@ -44,7 +46,7 @@ impl AggchainDataV1<'static> {
     fn proof0() -> Proof {
         let (proof, vkey) = {
             let client = sp1_sdk::ProverClient::builder().mock().build();
-            let (proving_key, verif_key) = client.setup(pessimistic_proof::ELF);
+            let (proving_key, verif_key) = client.setup(EMPTY_ELF);
             let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
                 &proving_key,
                 sp1_sdk::SP1PublicValues::new(),
