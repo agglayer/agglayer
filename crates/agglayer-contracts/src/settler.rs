@@ -12,7 +12,7 @@ pub trait Settler {
     async fn transaction_exists(&self, tx_hash: B256) -> Result<bool, L1RpcError>;
 
     fn decode_contract_revert(error: &ContractError) -> Option<String>;
-    
+
     async fn build_verify_pessimistic_trusted_aggregator_call(
         &self,
         rollup_id: u32,

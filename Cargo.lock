@@ -7445,7 +7445,7 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 [[package]]
 name = "prover-alloy"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.0#c0566200078b234d30fba58e369d12d1b8ded5f7"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
 dependencies = [
  "agglayer-evm-client",
  "alloy",
