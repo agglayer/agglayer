@@ -212,7 +212,7 @@ pub enum AggchainDataV1<'a> {
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
         signature: Option<Box<Signature>>,
-        public_values: Box<AggchainProofPublicValues>,
+        public_values: Cow<'a, Box<AggchainProofPublicValues>>,
     },
 }
 
@@ -236,7 +236,7 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
                         proof,
                         aggchain_params,
                         signature: signature.clone(),
-                        public_values: pv.clone(),
+                        public_values: Cow::Borrowed(pv),
                     },
                     None => match signature {
                         None => Self::GenericNoSignature {
@@ -286,8 +286,8 @@ impl From<AggchainDataV1<'_>> for AggchainData {
             } => Self::Generic {
                 proof: proof.into_owned(),
                 aggchain_params,
-                signature: signature,
-                public_values: Some(public_values),
+                signature,
+                public_values: Some(public_values.into_owned()),
             },
         }
     }
