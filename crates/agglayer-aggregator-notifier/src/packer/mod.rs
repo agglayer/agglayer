@@ -188,7 +188,7 @@ where
             .build_verify_pessimistic_trusted_aggregator_call(
                 output.origin_network.to_u32(),
                 l_1_info_tree_leaf_count,
-                *output.new_local_exit_root,
+                *output.new_local_exit_root.as_ref(),
                 *output.new_pessimistic_root,
                 proof_with_selector.into(),
                 certificate.custom_chain_data.into(),

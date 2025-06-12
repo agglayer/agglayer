@@ -537,19 +537,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "agglayer-primitives"
-version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
-dependencies = [
- "alloy-primitives",
- "byteorder",
- "hex",
- "k256",
- "serde",
- "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "agglayer-prover"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
@@ -741,18 +728,6 @@ version = "0.6.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
 dependencies = [
  "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
- "hex",
- "serde",
- "serde_with",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "agglayer-tries"
-version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
-dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git)",
  "hex",
  "serde",
  "serde_with",
@@ -3513,11 +3488,12 @@ dependencies = [
 name = "ecdsa-proof-lib"
 version = "0.1.0"
 dependencies = [
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
  "alloy-primitives",
  "k256",
  "serde",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
 ]
 
 [[package]]
@@ -10442,20 +10418,6 @@ source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2
 dependencies = [
  "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
  "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
- "hex-literal 1.0.0",
- "serde",
- "serde_with",
- "sha2",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "unified-bridge"
-version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
-dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git)",
  "hex-literal 1.0.0",
  "serde",
  "serde_with",
