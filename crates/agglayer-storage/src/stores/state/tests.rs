@@ -166,7 +166,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
             certificate.bridge_exits.len(),
         );
 
-        let signer = certificate.signer().unwrap().unwrap();
+        let signer = certificate.signer().unwrap();
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
         let multi_batch_header = lns
@@ -262,7 +262,7 @@ fn import_native_tokens() {
             certificate.bridge_exits.len(),
         );
 
-        let signer = certificate.signer().unwrap().expect("Signer");
+        let signer = certificate.signer().unwrap();
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
         let multi_batch_header = lns

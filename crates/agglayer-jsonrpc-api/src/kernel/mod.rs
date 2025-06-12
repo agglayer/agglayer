@@ -310,8 +310,7 @@ where
 
         let signer: H160 = cert
             .signer()
-            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
-            .ok_or(SignatureVerificationError::SP1AggchainProofUnsupported)?
+            .map_err(SignatureVerificationError::from_signer_error)?
             .into_array()
             .into();
 
