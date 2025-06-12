@@ -31,7 +31,7 @@ checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 [[package]]
 name = "agglayer-primitives"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -44,7 +44,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
 dependencies = [
  "agglayer-primitives",
  "hex",
@@ -1271,7 +1271,8 @@ dependencies = [
 [[package]]
 name = "ecdsa"
 version = "0.16.9"
-source = "git+https://github.com/sp1-patches/signatures?tag=patch-16.9-sp1-4.1.0#1880299a48fe7ef249edaa616fd411239fb5daf1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee27f32b5c5292967d2d4a9d7f1e0b0aed2c15daded5a60300e4abb9d8020bca"
 dependencies = [
  "der",
  "digest 0.10.7",
@@ -2262,17 +2263,16 @@ dependencies = [
 [[package]]
 name = "k256"
 version = "0.13.4"
-source = "git+https://github.com/sp1-patches/elliptic-curves?tag=patch-k256-13.4-sp1-5.0.0#f7d8998e05d8cbcbd8e543eba1030a7385011fa8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6e3919bbaa2945715f0bb6d3934a173d1e9a59ac23767fbaaef277265a7411b"
 dependencies = [
  "cfg-if",
  "ecdsa",
  "elliptic-curve",
- "hex",
  "once_cell",
  "serdect",
  "sha2",
  "signature",
- "sp1-lib",
 ]
 
 [[package]]
@@ -2702,14 +2702,13 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 [[package]]
 name = "p256"
 version = "0.13.2"
-source = "git+https://github.com/sp1-patches/elliptic-curves?tag=patch-p256-13.2-sp1-5.0.0#10cca2ef98bebbad35e2475849433fc3e75e27d9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9863ad85fa8f4460f9c48cb909d38a0d689dba1f6f6988a5e3e0d31071bcd4b"
 dependencies = [
  "ecdsa",
  "elliptic-curve",
- "hex",
  "primeorder",
  "sha2",
- "sp1-lib",
 ]
 
 [[package]]
@@ -3232,8 +3231,9 @@ dependencies = [
 
 [[package]]
 name = "primeorder"
-version = "0.13.1"
-source = "git+https://github.com/sp1-patches/elliptic-curves?tag=patch-p256-13.2-sp1-5.0.0#10cca2ef98bebbad35e2475849433fc3e75e27d9"
+version = "0.13.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "353e1ca18966c16d9deb1c69278edbc5f194139612772bd9537af60ac231e1e6"
 dependencies = [
  "elliptic-curve",
 ]
@@ -3639,7 +3639,8 @@ dependencies = [
 [[package]]
 name = "rfc6979"
 version = "0.4.0"
-source = "git+https://github.com/sp1-patches/signatures?tag=patch-16.9-sp1-4.1.0#1880299a48fe7ef249edaa616fd411239fb5daf1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8dd2a808d456c4a54e300a23e9f5a67e122c3024119acbfd73e3bf664491cb2"
 dependencies = [
  "hmac",
  "subtle",
@@ -4118,9 +4119,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.9"
+version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
+checksum = "793db75ad2bcafc3ffa7c68b215fee268f537982cd901d132f89c6343f3a3dc8"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -5447,7 +5448,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",
