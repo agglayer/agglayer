@@ -478,7 +478,7 @@ impl Certificate {
             } => {
                 let signature = signature.as_ref().ok_or(SignerError::Missing)?;
                 let commitment = SignatureCommitmentValues::from(self)
-                    .aggchain_proof_commitment(&aggchain_params);
+                    .aggchain_proof_commitment(aggchain_params);
                 (signature.as_ref(), commitment)
             }
         };
