@@ -200,6 +200,15 @@ pub enum CertificateStatusError {
     LastPessimisticRootNotFound(NetworkId),
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum SignerError {
+    #[error("Signature not provided")]
+    Missing,
+
+    #[error("Signature recovery error")]
+    Recovery(#[source] SignatureError),
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
 pub enum GenerationType {
     Native,
@@ -455,31 +464,28 @@ impl Certificate {
         }
     }
 
-    pub fn signer(&self) -> Result<Option<Address>, SignatureError> {
-        match self.aggchain_data {
+    pub fn signer(&self) -> Result<Address, SignerError> {
+        let (signature, commitment) = match &self.aggchain_data {
             AggchainData::ECDSA { signature } => {
-                // retrieve signer
                 let version = CommitmentVersion::V2;
-                let combined_hash = SignatureCommitmentValues::from(self).commitment(version);
-
-                signature
-                    .recover_address_from_prehash(&B256::new(combined_hash.0))
-                    .map(Some)
+                let commitment = SignatureCommitmentValues::from(self).commitment(version);
+                (signature, commitment)
             }
             AggchainData::Generic {
-                signature: Some(ref signature),
+                signature,
                 aggchain_params,
                 ..
             } => {
+                let signature = signature.as_ref().ok_or(SignerError::Missing)?;
                 let commitment = SignatureCommitmentValues::from(self)
-                    .aggchain_proof_commitment(&aggchain_params);
-
-                signature
-                    .recover_address_from_prehash(&B256::new(commitment.0))
-                    .map(Some)
+                    .aggchain_proof_commitment(aggchain_params);
+                (signature.as_ref(), commitment)
             }
-            _ => Ok(None),
-        }
+        };
+
+        signature
+            .recover_address_from_prehash(&B256::new(commitment.0))
+            .map_err(SignerError::Recovery)
     }
 }
 

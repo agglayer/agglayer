@@ -310,19 +310,19 @@ where
                 SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(cert.network_id)
             })?;
 
-        if let Some(signer) = cert
+        let signer = cert
             .signer()
-            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
-            .map(|signature| signature.into_array().into())
-        {
-            // ECDSA-k256 signature verification works by recovering the public key from the
-            // signature, and then checking that it is the expected one.
-            if signer != sequencer_address {
-                return Err(SignatureVerificationError::InvalidSigner {
-                    signer,
-                    trusted_sequencer: sequencer_address,
-                });
-            }
+            .map_err(SignatureVerificationError::from_signer_error)?
+            .into_array()
+            .into();
+
+        // ECDSA-k256 signature verification works by recovering the public key from the
+        // signature, and then checking that it is the expected one.
+        if signer != sequencer_address {
+            return Err(SignatureVerificationError::InvalidSigner {
+                signer,
+                trusted_sequencer: sequencer_address,
+            });
         }
 
         Ok(())
