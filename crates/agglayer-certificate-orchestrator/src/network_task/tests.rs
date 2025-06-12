@@ -859,7 +859,7 @@ async fn changing_epoch_triggers_certify() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_2 && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::ONE, CertificateIndex::ZERO)));
+        .returning(move |_, _| Ok((EpochNumber::new(1), CertificateIndex::ZERO)));
 
     state
         .expect_update_certificate_header_status()
@@ -874,7 +874,7 @@ async fn changing_epoch_triggers_certify() {
             eq(network_id),
             eq(Height::new(1)),
             eq(certificate_id2),
-            eq(EpochNumber::ONE),
+            eq(EpochNumber::new(1)),
             eq(CertificateIndex::ZERO),
         )
         .returning(|_, _, _, _, _| Ok(()));
@@ -1140,7 +1140,7 @@ async fn process_next_certificate() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_2 && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::ONE, CertificateIndex::ZERO)));
+        .returning(move |_, _| Ok((EpochNumber::new(1), CertificateIndex::ZERO)));
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),

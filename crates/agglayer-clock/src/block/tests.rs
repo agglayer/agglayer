@@ -57,7 +57,7 @@ async fn test_block_clock() {
     let mut recv = clock_ref.subscribe().unwrap();
 
     assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
-    assert_eq!(clock_ref.current_epoch(), EpochNumber::ONE);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
     assert!(clock_ref.current_block_height() >= 3);
 }
 
@@ -77,7 +77,7 @@ async fn test_block_clock_with_genesis() {
     let mut recv = clock_ref.subscribe().unwrap();
 
     assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
-    assert_eq!(clock_ref.current_epoch(), EpochNumber::ONE);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
     assert!(clock_ref.current_block_height() >= 3);
 }
 
@@ -98,7 +98,7 @@ async fn test_block_clock_with_genesis_in_future() {
     let mut recv = clock_ref.subscribe().unwrap();
 
     assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
-    assert_eq!(clock_ref.current_epoch(), EpochNumber::ONE);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
     assert!(clock_ref.current_block_height() >= 2);
 }
 
@@ -117,7 +117,7 @@ async fn test_block_clock_starting_with_genesis_in_future_should_trigger_epoch_0
 
     let mut recv = clock_ref.subscribe().unwrap();
     assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
-    assert_eq!(clock_ref.current_epoch(), EpochNumber::ONE);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
     assert!(clock_ref.current_block_height() >= 3);
 }
 
@@ -155,7 +155,7 @@ async fn test_block_clock_starting_with_genesis() {
                 recv.recv().await,
                 Ok(Event::EpochEnded(EpochNumber::ZERO))
             ));
-            assert_eq!(clock_ref.current_epoch(), EpochNumber::ONE);
+            assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
             assert!(clock_ref.current_block_height() >= 1);
             break;
         } else {
@@ -279,7 +279,7 @@ async fn test_block_epoch_calculation() {
 
     assert_eq!(clock_ref.current_epoch(), EpochNumber::ZERO);
     block_height.fetch_add(301, std::sync::atomic::Ordering::SeqCst);
-    assert_eq!(clock_ref.current_epoch(), EpochNumber::ONE);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
 }
 
 #[rstest]
@@ -313,7 +313,10 @@ async fn regression_block_disconnection() {
     let _anvil = Anvil::new().port(port).block_time(1u64).spawn();
 
     // Wait for the next epoch on existing subscription.
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ONE)));
+    assert_eq!(
+        recv.recv().await,
+        Ok(Event::EpochEnded(EpochNumber::new(1)))
+    );
 }
 
 #[rstest]
@@ -385,7 +388,10 @@ async fn can_catchup_on_disconnection() {
     .unwrap();
 
     // Wait for the next epoch on existing subscription.
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ONE)));
+    assert_eq!(
+        recv.recv().await,
+        Ok(Event::EpochEnded(EpochNumber::new(1)))
+    );
 
     tokio::time::timeout(Duration::from_secs(1), async move {
         assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(EpochNumber::new(2))));

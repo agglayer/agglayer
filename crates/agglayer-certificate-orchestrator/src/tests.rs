@@ -522,7 +522,7 @@ async fn test_collect_certificates() {
 
     let current_epoch = ArcSwap::new(Arc::new(
         epochs_store
-            .open(EpochNumber::ONE)
+            .open(EpochNumber::new(1))
             .expect("Unable to open epoch"),
     ));
     let (clock_sender, _receiver) = broadcast::channel(1);
@@ -558,7 +558,7 @@ async fn test_collect_certificates() {
         .send((1.into(), Height::new(1), CertificateId::new([0; 32].into())))
         .await;
     let current_epoch = orchestrator.current_epoch.load().clone();
-    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::ONE));
+    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)));
 
     let _poll = poll!(&mut orchestrator);
 
@@ -625,7 +625,7 @@ async fn test_collect_certificates_after_epoch() {
     )
     .expect("Unable to create orchestrator");
 
-    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::ONE));
+    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)));
     let _poll = poll!(&mut orchestrator);
 
     _ = data_sender
@@ -698,7 +698,7 @@ async fn test_collect_certificates_when_empty() {
     )
     .expect("Unable to create orchestrator");
 
-    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::ONE));
+    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)));
     let _poll = poll!(&mut orchestrator);
 
     assert!(check_receiver.recv().await.is_some());
