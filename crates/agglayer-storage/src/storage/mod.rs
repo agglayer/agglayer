@@ -163,7 +163,7 @@ impl DB {
     }
 
     /// Try to get every key in the column family.
-    pub fn keys<C: ColumnSchema>(&self) -> Result<KeysIterator<C>, DBError> {
+    pub fn keys<C: ColumnSchema>(&self) -> Result<KeysIterator<'_, C>, DBError> {
         let cf = self
             .rocksdb
             .cf_handle(C::COLUMN_FAMILY_NAME)
@@ -179,7 +179,7 @@ impl DB {
         &self,
         opts: ReadOptions,
         direction: Direction,
-    ) -> Result<ColumnIterator<C>, DBError> {
+    ) -> Result<ColumnIterator<'_, C>, DBError> {
         let cf = self
             .rocksdb
             .cf_handle(C::COLUMN_FAMILY_NAME)

@@ -51,10 +51,10 @@ agglayer-tries = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.
 unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.0" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.0" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.0" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.0" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
