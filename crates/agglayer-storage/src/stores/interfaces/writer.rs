@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof,
+    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 
 use crate::{error::Error, stores::PerEpochReader};
@@ -23,24 +23,24 @@ pub trait PerEpochWriter: Send + Sync {
 pub trait EpochStoreWriter: Send + Sync {
     type PerEpochStore: PerEpochWriter + PerEpochReader;
 
-    fn open(&self, epoch_number: u64) -> Result<Self::PerEpochStore, Error>;
+    fn open(&self, epoch_number: EpochNumber) -> Result<Self::PerEpochStore, Error>;
     fn open_with_start_checkpoint(
         &self,
-        epoch_number: u64,
+        epoch_number: EpochNumber,
         start_checkpoint: BTreeMap<NetworkId, Height>,
     ) -> Result<Self::PerEpochStore, Error>;
 }
 
 pub trait MetadataWriter: Send + Sync {
     /// Set the latest settled epoch.
-    fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error>;
+    fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error>;
 }
 
 pub trait StateWriter: Send + Sync {
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
-        tx_hash: Digest,
+        tx_hash: SettlementTxHash,
     ) -> Result<(), Error>;
     fn insert_certificate_header(
         &self,
