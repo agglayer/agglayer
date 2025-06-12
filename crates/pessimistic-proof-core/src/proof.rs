@@ -327,8 +327,8 @@ pub fn verify_consensus(
             aggchain_params,
         } => {
             let aggchain_proof_public_values = AggchainProofPublicValues {
-                prev_local_exit_root: initial_state_commitment.exit_root,
-                new_local_exit_root: final_state_commitment.exit_root,
+                prev_local_exit_root: initial_state_commitment.exit_root.into(),
+                new_local_exit_root: final_state_commitment.exit_root.into(),
                 l1_info_root: multi_batch_header.l1_info_root,
                 origin_network: multi_batch_header.origin_network,
                 aggchain_params: *aggchain_params,
