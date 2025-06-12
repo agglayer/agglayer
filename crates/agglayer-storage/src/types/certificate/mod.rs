@@ -200,14 +200,19 @@ pub enum AggchainDataV1<'a> {
     GenericNoSignature {
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
-        public_values: Option<Box<AggchainProofPublicValues>>,
     },
 
     GenericWithSignature {
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
         signature: Cow<'a, Box<Signature>>,
-        public_values: Option<Box<AggchainProofPublicValues>>,
+    },
+
+    GenericWithPublicValues {
+        proof: Cow<'a, Proof>,
+        aggchain_params: Digest,
+        signature: Option<Box<Signature>>,
+        public_values: Box<AggchainProofPublicValues>,
     },
 }
 
@@ -226,17 +231,23 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
             } => {
                 let proof = Cow::Borrowed(proof);
                 let aggchain_params = *aggchain_params;
-                match signature {
-                    None => Self::GenericNoSignature {
+                match public_values {
+                    Some(pv) => Self::GenericWithPublicValues {
                         proof,
                         aggchain_params,
-                        public_values: public_values.clone(),
+                        signature: signature.clone(),
+                        public_values: pv.clone(),
                     },
-                    Some(signature) => Self::GenericWithSignature {
-                        proof,
-                        aggchain_params,
-                        signature: Cow::Borrowed(signature),
-                        public_values: public_values.clone(),
+                    None => match signature {
+                        None => Self::GenericNoSignature {
+                            proof,
+                            aggchain_params,
+                        },
+                        Some(signature) => Self::GenericWithSignature {
+                            proof,
+                            aggchain_params,
+                            signature: Cow::Borrowed(signature),
+                        },
                     },
                 }
             }
@@ -248,19 +259,26 @@ impl From<AggchainDataV1<'_>> for AggchainData {
     fn from(proof: AggchainDataV1) -> Self {
         match proof {
             AggchainDataV1::ECDSA { signature } => Self::ECDSA { signature },
-
             AggchainDataV1::GenericNoSignature {
                 proof,
                 aggchain_params,
-                public_values,
             } => Self::Generic {
                 proof: proof.into_owned(),
                 aggchain_params,
                 signature: None,
-                public_values,
+                public_values: None,
             },
-
             AggchainDataV1::GenericWithSignature {
+                proof,
+                aggchain_params,
+                signature,
+            } => Self::Generic {
+                proof: proof.into_owned(),
+                aggchain_params,
+                signature: Some(signature.into_owned()),
+                public_values: None,
+            },
+            AggchainDataV1::GenericWithPublicValues {
                 proof,
                 aggchain_params,
                 signature,
@@ -268,8 +286,8 @@ impl From<AggchainDataV1<'_>> for AggchainData {
             } => Self::Generic {
                 proof: proof.into_owned(),
                 aggchain_params,
-                signature: Some(signature.into_owned()),
-                public_values,
+                signature: signature,
+                public_values: Some(public_values),
             },
         }
     }

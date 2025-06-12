@@ -73,7 +73,6 @@ impl AggchainDataV1<'static> {
             proof: Cow::Owned(Self::proof0()),
             aggchain_params: Digest([0x58; 32]),
             signature: Cow::Owned(Box::new(sig(0x78, 0x9a))),
-            public_values: None,
         }
     }
 
@@ -81,7 +80,23 @@ impl AggchainDataV1<'static> {
         AggchainDataV1::GenericNoSignature {
             proof: Cow::Owned(Self::proof0()),
             aggchain_params: Digest([0x59; 32]),
-            public_values: None,
+        }
+    }
+
+    fn test3() -> Self {
+        let aggchain_params = Digest([0x60; 32]);
+        AggchainDataV1::GenericWithPublicValues {
+            proof: Cow::Owned(Self::proof0()),
+            aggchain_params: aggchain_params.clone(),
+            signature: None,
+            public_values: Box::new(AggchainProofPublicValues {
+                prev_local_exit_root: Default::default(),
+                new_local_exit_root: Default::default(),
+                l1_info_root: Default::default(),
+                origin_network: NetworkId::new(0u32),
+                commit_imported_bridge_exits: Default::default(),
+                aggchain_params,
+            }),
         }
     }
 }
@@ -170,21 +185,28 @@ impl CertificateV1<'_> {
                 AggchainDataV1::GenericNoSignature {
                     proof,
                     aggchain_params,
-                    public_values,
                 } => AggchainDataV1::GenericNoSignature {
                     proof: Cow::Owned(proof.into_owned()),
                     aggchain_params,
-                    public_values,
                 },
                 AggchainDataV1::GenericWithSignature {
                     proof,
                     aggchain_params,
                     signature,
-                    public_values,
                 } => AggchainDataV1::GenericWithSignature {
                     proof: Cow::Owned(proof.into_owned()),
                     aggchain_params,
                     signature: Cow::Owned(signature.into_owned()),
+                },
+                AggchainDataV1::GenericWithPublicValues {
+                    proof,
+                    aggchain_params,
+                    signature,
+                    public_values,
+                } => AggchainDataV1::GenericWithPublicValues {
+                    proof: Cow::Owned(proof.into_owned()),
+                    aggchain_params,
+                    signature,
                     public_values,
                 },
             },
