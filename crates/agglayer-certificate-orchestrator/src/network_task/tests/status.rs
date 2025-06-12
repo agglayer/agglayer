@@ -109,7 +109,7 @@ async fn from_pending_to_settle() {
         .await
         .unwrap();
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
 
     let header = storage
         .state
@@ -211,7 +211,7 @@ async fn from_proven_to_settled() {
         .await
         .unwrap();
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
 
     let header = storage
         .state
@@ -308,7 +308,7 @@ async fn from_candidate_to_settle() {
         .await
         .unwrap();
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
 
     let header = storage
         .state
@@ -364,13 +364,13 @@ async fn from_settle_to_settle() {
     .expect("Failed to create a new network task");
 
     let mut epochs = task.clock_ref.subscribe().unwrap();
-    let mut next_expected_height = Height::ONE;
+    let mut next_expected_height = Height::new(1);
     let mut first_run = true;
     task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
         .await
         .unwrap();
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
 
     let header = storage
         .state

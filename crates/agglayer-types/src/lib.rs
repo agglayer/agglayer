@@ -175,7 +175,6 @@ pub struct Height(u64);
 
 impl Height {
     pub const ZERO: Height = Height::new(0);
-    pub const ONE: Height = Height::new(1);
 
     pub const fn as_u64(&self) -> u64 {
         self.0

@@ -23,7 +23,7 @@ async fn returns_the_pending_certificate_header() {
     let network_id = 1.into();
 
     let settled_certificate = Certificate::new_for_test(network_id, Height::ZERO);
-    let proven_certificate = Certificate::new_for_test(network_id, Height::ONE);
+    let proven_certificate = Certificate::new_for_test(network_id, Height::new(1));
     let pending_certificate = Certificate::new_for_test(network_id, Height::new(2));
 
     context
@@ -54,7 +54,7 @@ async fn returns_the_pending_certificate_header() {
         .pending_store
         .set_latest_proven_certificate_per_network(
             &network_id,
-            &Height::ONE,
+            &Height::new(1),
             &proven_certificate.hash(),
         )
         .expect("unable to set latest proven certificate");
@@ -110,7 +110,7 @@ async fn returns_the_proven_certificate_header() {
     let network_id = 1.into();
 
     let settled_certificate = Certificate::new_for_test(network_id, Height::ZERO);
-    let proven_certificate = Certificate::new_for_test(network_id, Height::ONE);
+    let proven_certificate = Certificate::new_for_test(network_id, Height::new(1));
 
     context
         .state_store
@@ -135,7 +135,7 @@ async fn returns_the_proven_certificate_header() {
         .pending_store
         .set_latest_proven_certificate_per_network(
             &network_id,
-            &Height::ONE,
+            &Height::new(1),
             &proven_certificate.hash(),
         )
         .expect("unable to set latest proven certificate");

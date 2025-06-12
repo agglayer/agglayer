@@ -177,7 +177,7 @@ async fn start_from_zero() {
         .await
         .unwrap();
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
 }
 
 #[rstest]
@@ -193,7 +193,7 @@ async fn one_per_epoch() {
     let (sender, certificate_stream) = mpsc::channel(100);
 
     let certificate = Certificate::new_for_test(network_id, Height::ZERO);
-    let certificate2 = Certificate::new_for_test(network_id, Height::ONE);
+    let certificate2 = Certificate::new_for_test(network_id, Height::new(1));
     let certificate_id = certificate.hash();
     let certificate_id2 = certificate2.hash();
 
@@ -210,7 +210,7 @@ async fn one_per_epoch() {
     pending
         .expect_get_certificate()
         .never()
-        .with(eq(network_id), eq(Height::ONE))
+        .with(eq(network_id), eq(Height::new(1)))
         .returning(|network_id, height| {
             let c = Certificate::new_for_test(network_id, height);
 
@@ -249,7 +249,7 @@ async fn one_per_epoch() {
         .returning(|certificate_id| {
             Ok(Some(agglayer_types::CertificateHeader {
                 network_id: 1.into(),
-                height: Height::ONE,
+                height: Height::new(1),
                 epoch_number: None,
                 certificate_index: None,
                 certificate_id: *certificate_id,
@@ -286,11 +286,11 @@ async fn one_per_epoch() {
     certifier
         .expect_certify()
         .never()
-        .with(always(), eq(network_id), eq(Height::ONE))
+        .with(always(), eq(network_id), eq(Height::new(1)))
         .return_once(move |new_state, network_id, _height| {
             let result = crate::CertifierOutput {
                 certificate: certificate2,
-                height: Height::ONE,
+                height: Height::new(1),
                 new_state,
                 network: network_id,
             };
@@ -377,7 +377,7 @@ async fn one_per_epoch() {
     sender
         .send(NewCertificate {
             certificate_id: certificate_id2,
-            height: Height::ONE,
+            height: Height::new(1),
         })
         .await
         .expect("Failed to send the certificate");
@@ -387,7 +387,7 @@ async fn one_per_epoch() {
         .await
         .unwrap();
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
     tokio::time::timeout(
         Duration::from_millis(100),
         task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run),
@@ -395,7 +395,7 @@ async fn one_per_epoch() {
     .await
     .expect_err("Should have timed out");
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
 }
 
 #[rstest]
@@ -434,7 +434,7 @@ async fn retries() {
     pending
         .expect_get_certificate()
         .never()
-        .with(eq(network_id), eq(Height::ONE))
+        .with(eq(network_id), eq(Height::new(1)))
         .returning(|network_id, height| {
             let c = Certificate::new_for_test(network_id, height);
             Ok(Some(c))
@@ -519,11 +519,11 @@ async fn retries() {
     certifier
         .expect_certify()
         .never()
-        .with(always(), eq(network_id), eq(Height::ONE))
+        .with(always(), eq(network_id), eq(Height::new(1)))
         .return_once(move |new_state, network_id, _height| {
             let result = crate::CertifierOutput {
                 certificate: certificate2,
-                height: Height::ONE,
+                height: Height::new(1),
                 new_state,
                 network: network_id,
             };
@@ -657,7 +657,7 @@ async fn retries() {
         .await
         .unwrap();
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
 }
 
 #[rstest]
@@ -673,7 +673,7 @@ async fn changing_epoch_triggers_certify() {
     let (sender, certificate_stream) = mpsc::channel(100);
 
     let certificate = Certificate::new_for_test(network_id, Height::ZERO);
-    let certificate2 = Certificate::new_for_test(network_id, Height::ONE);
+    let certificate2 = Certificate::new_for_test(network_id, Height::new(1));
     let certificate_id = certificate.hash();
     let certificate_id2 = certificate2.hash();
 
@@ -686,7 +686,7 @@ async fn changing_epoch_triggers_certify() {
     pending
         .expect_get_certificate()
         .once()
-        .with(eq(network_id), eq(Height::ONE))
+        .with(eq(network_id), eq(Height::new(1)))
         .returning(|network_id, height| Ok(Some(Certificate::new_for_test(network_id, height))));
 
     state
@@ -729,7 +729,7 @@ async fn changing_epoch_triggers_certify() {
         .returning(|certificate_id| {
             Ok(Some(agglayer_types::CertificateHeader {
                 network_id: 1.into(),
-                height: Height::ONE,
+                height: Height::new(1),
                 epoch_number: None,
                 certificate_index: None,
                 certificate_id: *certificate_id,
@@ -759,11 +759,11 @@ async fn changing_epoch_triggers_certify() {
     certifier
         .expect_certify()
         .once()
-        .with(always(), eq(network_id), eq(Height::ONE))
+        .with(always(), eq(network_id), eq(Height::new(1)))
         .return_once(move |new_state, network_id, _height| {
             let result = crate::CertifierOutput {
                 certificate: certificate2,
-                height: Height::ONE,
+                height: Height::new(1),
                 new_state,
                 network: network_id,
             };
@@ -780,7 +780,7 @@ async fn changing_epoch_triggers_certify() {
     pending
         .expect_set_latest_proven_certificate_per_network()
         .once()
-        .with(eq(network_id), eq(Height::ONE), eq(certificate_id2))
+        .with(eq(network_id), eq(Height::new(1)), eq(certificate_id2))
         .returning(|_, _, _| Ok(()));
 
     state
@@ -872,7 +872,7 @@ async fn changing_epoch_triggers_certify() {
         .once()
         .with(
             eq(network_id),
-            eq(Height::ONE),
+            eq(Height::new(1)),
             eq(certificate_id2),
             eq(EpochNumber::ONE),
             eq(CertificateIndex::ZERO),
@@ -904,7 +904,7 @@ async fn changing_epoch_triggers_certify() {
     sender
         .send(NewCertificate {
             certificate_id: certificate_id2,
-            height: Height::ONE,
+            height: Height::new(1),
         })
         .await
         .expect("Failed to send the certificate");
@@ -913,7 +913,7 @@ async fn changing_epoch_triggers_certify() {
         .await
         .unwrap();
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
 
     tokio::time::timeout(
         Duration::from_millis(100),
@@ -922,7 +922,7 @@ async fn changing_epoch_triggers_certify() {
     .await
     .expect_err("Should have timed out");
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
 
     clock_ref.update_block_height(2);
 
@@ -1069,12 +1069,12 @@ async fn process_next_certificate() {
         .expect("Failed to insert certificate header");
 
     let mut certificate = forest.apply_events(&[], &[(USDC, 1.try_into().unwrap())]);
-    certificate.height = Height::ONE;
+    certificate.height = Height::new(1);
     let certificate_id2 = certificate.hash();
 
     storage
         .pending
-        .insert_pending_certificate(network_id, Height::ONE, &certificate)
+        .insert_pending_certificate(network_id, Height::new(1), &certificate)
         .expect("unable to insert certificate in pending");
     storage
         .state
@@ -1088,7 +1088,7 @@ async fn process_next_certificate() {
         .with(
             always(),
             eq(network_id),
-            in_iter(vec![Height::ZERO, Height::ONE]),
+            in_iter(vec![Height::ZERO, Height::new(1)]),
         )
         .returning(move |mut new_state, network, height| {
             let certificate = pending_store
@@ -1168,7 +1168,7 @@ async fn process_next_certificate() {
         .await
         .unwrap();
 
-    assert_eq!(next_expected_height, Height::ONE);
+    assert_eq!(next_expected_height, Height::new(1));
     clock_ref.update_block_height(2);
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::ZERO));
 
