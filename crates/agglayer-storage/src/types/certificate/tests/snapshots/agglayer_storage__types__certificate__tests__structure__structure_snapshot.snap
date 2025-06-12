@@ -4,9 +4,6 @@ expression: "&registry"
 snapshot_kind: text
 ---
 {
-  "Address": {
-    "NEWTYPESTRUCT": "BYTES"
-  },
   "CertificateStatus": {
     "ENUM": {
       "0": {
@@ -149,6 +146,207 @@ snapshot_kind: text
   "ProofError": {
     "ENUM": {
       "0": {
+        "InvalidPreviousLocalExitRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "1": {
+        "InvalidPreviousBalanceRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "2": {
+        "InvalidPreviousNullifierRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "3": {
+        "InvalidNewLocalExitRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "4": {
+        "InvalidNewBalanceRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "5": {
+        "InvalidNewNullifierRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "6": {
+        "InvalidImportedBridgeExit": {
+          "STRUCT": [
+            {
+              "source": {
+                "TYPENAME": "unified_bridge::Error"
+              }
+            },
+            {
+              "global_index": {
+                "TYPENAME": "GlobalIndex"
+              }
+            }
+          ]
+        }
+      },
+      "7": {
+        "InvalidImportedExitsRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "8": {
+        "MismatchImportedExitsRoot": "UNIT"
+      },
+      "9": {
+        "InvalidNullifierPath": "UNIT"
+      },
+      "10": {
+        "InvalidBalancePath": "UNIT"
+      },
+      "11": {
+        "BalanceOverflowInBridgeExit": "UNIT"
+      },
+      "12": {
+        "BalanceUnderflowInBridgeExit": "UNIT"
+      },
+      "13": {
+        "CannotExitToSameNetwork": "UNIT"
+      },
+      "14": {
+        "InvalidMessageOriginNetwork": "UNIT"
+      },
+      "15": {
+        "InvalidL1TokenInfo": {
+          "NEWTYPE": {
+            "TYPENAME": "TokenInfo"
+          }
+        }
+      },
+      "16": {
+        "MissingTokenBalanceProof": {
+          "NEWTYPE": {
+            "TYPENAME": "TokenInfo"
+          }
+        }
+      },
+      "17": {
+        "DuplicateTokenBalanceProof": {
+          "NEWTYPE": {
+            "TYPENAME": "TokenInfo"
+          }
+        }
+      },
+      "18": {
+        "InvalidSignature": "UNIT"
+      },
+      "19": {
+        "InvalidSigner": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "recovered": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            }
+          ]
+        }
+      },
+      "20": {
+        "InvalidLocalExitTreeOperation": {
+          "NEWTYPE": {
+            "TYPENAME": "LocalExitTreeError"
+          }
+        }
+      },
+      "21": {
+        "Unknown": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "22": {
         "InvalidPreviousPessimisticRoot": {
           "STRUCT": [
             {
@@ -169,112 +367,10 @@ snapshot_kind: text
           ]
         }
       },
-      "1": {
-        "InvalidImportedBridgeExit": {
-          "STRUCT": [
-            {
-              "source": {
-                "TYPENAME": "unified_bridge::Error"
-              }
-            },
-            {
-              "global_index": {
-                "TYPENAME": "GlobalIndex"
-              }
-            }
-          ]
-        }
-      },
-      "2": {
-        "InvalidImportedExitsRoot": {
-          "STRUCT": [
-            {
-              "declared": {
-                "TYPENAME": "agglayer_primitives::Digest"
-              }
-            },
-            {
-              "computed": {
-                "TYPENAME": "agglayer_primitives::Digest"
-              }
-            }
-          ]
-        }
-      },
-      "3": {
-        "InvalidNullifierPath": "UNIT"
-      },
-      "4": {
-        "InvalidBalancePath": "UNIT"
-      },
-      "5": {
-        "BalanceOverflowInBridgeExit": "UNIT"
-      },
-      "6": {
-        "BalanceUnderflowInBridgeExit": "UNIT"
-      },
-      "7": {
-        "CannotExitToSameNetwork": "UNIT"
-      },
-      "8": {
-        "InvalidMessageOriginNetwork": "UNIT"
-      },
-      "9": {
-        "InvalidL1TokenInfo": {
-          "NEWTYPE": {
-            "TYPENAME": "TokenInfo"
-          }
-        }
-      },
-      "10": {
-        "MissingTokenBalanceProof": {
-          "NEWTYPE": {
-            "TYPENAME": "TokenInfo"
-          }
-        }
-      },
-      "11": {
-        "DuplicateTokenBalanceProof": {
-          "NEWTYPE": {
-            "TYPENAME": "TokenInfo"
-          }
-        }
-      },
-      "12": {
-        "InvalidSignature": "UNIT"
-      },
-      "13": {
+      "23": {
         "InconsistentSignedPayload": "UNIT"
       },
-      "14": {
-        "InvalidSigner": {
-          "STRUCT": [
-            {
-              "declared": {
-                "TYPENAME": "Address"
-              }
-            },
-            {
-              "recovered": {
-                "TYPENAME": "Address"
-              }
-            }
-          ]
-        }
-      },
-      "15": {
-        "InvalidLocalExitTreeOperation": {
-          "NEWTYPE": {
-            "TYPENAME": "LocalExitTreeError"
-          }
-        }
-      },
-      "16": {
-        "Unknown": {
-          "NEWTYPE": "STR"
-        }
-      },
-      "17": {
+      "24": {
         "HeightOverflow": "UNIT"
       }
     }
@@ -341,10 +437,13 @@ snapshot_kind: text
       },
       {
         "origin_token_address": {
-          "TYPENAME": "Address"
+          "TYPENAME": "agglayer_primitives::Address"
         }
       }
     ]
+  },
+  "agglayer_primitives::Address": {
+    "NEWTYPESTRUCT": "BYTES"
   },
   "agglayer_primitives::Digest": {
     "NEWTYPESTRUCT": {
