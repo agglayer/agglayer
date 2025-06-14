@@ -108,3 +108,38 @@ impl KMS {
         Ok(KmsSigner::new(gcp_signer))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agglayer_config::GcpKmsConfig;
+
+    #[tokio::test]
+    async fn test_kms_signer_returns_config_error() {
+        let config = GcpKmsConfig {
+            project_id: None,
+            location: None,
+            keyring: None,
+            key_name: None,
+            key_version: None,
+        };
+        let kms = KMS::new(1, config);
+        let result = kms.gcp_kms_signer().await;
+        assert!(matches!(result, Err(Error::KmsConfig(_))));
+    }
+
+    #[tokio::test]
+    async fn test_gcp_kms_signer_returns_error_when_mock_env() {
+        std::env::set_var("GOOGLE_PROJECT_ID", "mock-project");
+        std::env::set_var("GOOGLE_LOCATION", "global");
+        std::env::set_var("GOOGLE_KEYRING", "test-ring");
+        std::env::set_var("GOOGLE_KEY_NAME", "test-key");
+        std::env::set_var("GOOGLE_KEY_VERSION", "1");
+
+        let config = GcpKmsConfig::default();
+        let kms = KMS::new(1, config);
+        let result = kms.gcp_kms_signer().await;
+
+        assert!(result.is_err());
+    }
+}
