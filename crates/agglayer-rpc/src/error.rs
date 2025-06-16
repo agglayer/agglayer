@@ -69,7 +69,16 @@ pub enum SignatureVerificationError<Rpc: Middleware> {
     #[error("contract error: {0}")]
     ContractError(#[from] ContractError<Rpc>),
 
-    /// SP1-based Aggchain proof not yet supported.
-    #[error("SP1-based Aggchain proof not yet supported")]
-    SP1AggchainProofUnsupported,
+    /// Signature is missing.
+    #[error("signature not provided")]
+    SignatureMissing,
+}
+
+impl<Rpc: Middleware> SignatureVerificationError<Rpc> {
+    pub fn from_signer_error(e: agglayer_types::SignerError) -> Self {
+        match e {
+            agglayer_types::SignerError::Missing => Self::SignatureMissing,
+            agglayer_types::SignerError::Recovery(e) => Self::CouldNotRecoverCertSigner(e),
+        }
+    }
 }
