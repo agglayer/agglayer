@@ -15,7 +15,6 @@ use agglayer_types::{
     NetworkId,
 };
 use error::SignatureVerificationError;
-use ethers::types::TransactionReceipt;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -197,7 +196,7 @@ where
     async fn validate_pre_existing_certificate(
         &self,
         certificate: &Certificate,
-    ) -> Result<(), CertificateSubmissionError<L1Rpc::M>> {
+    ) -> Result<(), CertificateSubmissionError> {
         let new_certificate_id = certificate.hash();
         // Get pre-existing certificate in pending
         if let Some(certificate) = self
@@ -247,8 +246,7 @@ where
                                 }
                             })?;
 
-                        if matches!(l1_transaction, TransactionReceipt { status: Some(status), .. } if status.as_u64() == 0)
-                        {
+                        if !l1_transaction.status() {
                             info!(
                                 %pre_existing_certificate_id,
                                 %tx_hash,
@@ -298,7 +296,7 @@ where
     pub(crate) async fn verify_cert_signature(
         &self,
         cert: &Certificate,
-    ) -> Result<(), SignatureVerificationError<L1Rpc::M>> {
+    ) -> Result<(), SignatureVerificationError> {
         let sequencer_address = self
             .l1_rpc_provider
             .get_trusted_sequencer_address(
@@ -331,7 +329,7 @@ where
     pub async fn send_certificate(
         &self,
         certificate: Certificate,
-    ) -> Result<CertificateId, CertificateSubmissionError<L1Rpc::M>> {
+    ) -> Result<CertificateId, CertificateSubmissionError> {
         let hash = certificate.hash();
         let hash_string = hash.to_string();
         tracing::Span::current().record("hash", &hash_string);

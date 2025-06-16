@@ -4,7 +4,7 @@ use agglayer_contracts::L1RpcError;
 pub use agglayer_storage::error::Error as StorageError;
 pub use agglayer_types::primitives::Digest;
 use agglayer_types::{CertificateId, Height, NetworkId};
-use ethers::{contract::ContractError, providers::Middleware, types::Address};
+use alloy::{contract::Error as ContractError, primitives::Address};
 
 pub use crate::rate_limiting::RateLimited as RateLimitedError;
 
@@ -18,7 +18,7 @@ pub enum CertificateRetrievalError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum CertificateSubmissionError<Rpc: Middleware> {
+pub enum CertificateSubmissionError {
     #[error(transparent)]
     Storage(#[from] StorageError),
 
@@ -26,7 +26,7 @@ pub enum CertificateSubmissionError<Rpc: Middleware> {
     OrchestratorNotResponsive,
 
     #[error("Failed to validate certificate signature: {0}")]
-    SignatureError(#[source] SignatureVerificationError<Rpc>),
+    SignatureError(#[source] SignatureVerificationError),
 
     #[error("Unable to replace pending certificate at height {height} for network {network_id}")]
     UnableToReplacePendingCertificate {
@@ -42,10 +42,10 @@ pub enum CertificateSubmissionError<Rpc: Middleware> {
 
 /// Errors related to signature verification process.
 #[derive(thiserror::Error, Debug)]
-pub enum SignatureVerificationError<Rpc: Middleware> {
+pub enum SignatureVerificationError {
     /// FEP (0.1): The signer could not be recovered from the [`SignedTx`].
     #[error("could not recover transaction signer: {0}")]
-    CouldNotRecoverTxSigner(#[source] ethers::types::SignatureError),
+    CouldNotRecoverTxSigner(#[source] alloy::primitives::SignatureError),
 
     /// The signer could not be recovered from the certificate signature.
     #[error("could not recover certificate signer: {0}")]
@@ -67,7 +67,7 @@ pub enum SignatureVerificationError<Rpc: Middleware> {
     /// Generic network error when attempting to retrieve the trusted sequencer
     /// address from the rollup contract.
     #[error("contract error: {0}")]
-    ContractError(#[from] ContractError<Rpc>),
+    ContractError(#[from] ContractError),
 
     /// SP1-based Aggchain proof not yet supported.
     #[error("SP1-based Aggchain proof not yet supported")]
