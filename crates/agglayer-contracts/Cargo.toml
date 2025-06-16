@@ -26,6 +26,3 @@ prover-alloy.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true
-
-[build-dependencies]
-ethers-contract = "2.0.14"
