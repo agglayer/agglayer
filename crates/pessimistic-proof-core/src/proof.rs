@@ -1,6 +1,6 @@
+use agglayer_bincode as bincode;
 use agglayer_primitives::{keccak::Keccak256Hasher, Address, Digest, Signature, B256};
 use agglayer_tries::roots::LocalExitRoot;
-pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -168,10 +168,8 @@ pub struct PessimisticProofOutput {
 }
 
 impl PessimisticProofOutput {
-    pub fn bincode_options() -> impl bincode::Options {
-        bincode::DefaultOptions::new()
-            .with_big_endian()
-            .with_fixint_encoding()
+    pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
+        bincode::contracts()
     }
 }
 

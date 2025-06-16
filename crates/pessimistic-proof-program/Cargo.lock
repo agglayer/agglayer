@@ -29,6 +29,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
+name = "agglayer-bincode"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
+dependencies = [
+ "bincode",
+ "serde",
+]
+
+[[package]]
 name = "agglayer-primitives"
 version = "0.6.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
@@ -1356,7 +1365,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cea14ef9355e3beab063703aa9dab15afd25f0667c341310c1e5274bb1d0da18"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2174,7 +2183,7 @@ checksum = "e04d7f318608d35d4b61ddd75cbdaee86b023ebe2bd5a66ee0915f0bf93095a9"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3081,10 +3090,10 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
+ "agglayer-bincode",
  "agglayer-primitives",
  "agglayer-tries",
  "alloy-primitives",
- "bincode",
  "hex",
  "hex-literal 0.4.1",
  "semver 1.0.26",
@@ -3105,7 +3114,6 @@ dependencies = [
 name = "pessimistic-proof-program"
 version = "4.0.0"
 dependencies = [
- "bincode",
  "pessimistic-proof-core",
  "sp1-cli",
  "sp1-zkvm",
@@ -3378,7 +3386,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3765,7 +3773,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4913,7 +4921,7 @@ dependencies = [
  "getrandom 0.3.3",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
