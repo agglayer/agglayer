@@ -636,7 +636,6 @@ dependencies = [
  "agglayer-telemetry 0.1.0",
  "agglayer-types",
  "alloy",
- "ethers",
  "futures",
  "thiserror 2.0.12",
  "tokio",
