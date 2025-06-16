@@ -2,7 +2,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
-    ops::Deref,
 };
 
 pub use agglayer_interop_types::{aggchain_proof, NetworkId};
