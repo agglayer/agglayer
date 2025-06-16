@@ -45,6 +45,7 @@ use unified_bridge::{CommitmentVersion, LocalExitTree, LocalExitTreeError};
     PartialEq,
     PartialOrd,
     derive_more::Display,
+    derive_more::From,
     serde::Deserialize,
     serde::Serialize,
 )]
@@ -70,12 +71,6 @@ impl EpochNumber {
 
     pub const fn as_u64(&self) -> u64 {
         self.0
-    }
-}
-
-impl From<u64> for EpochNumber {
-    fn from(value: u64) -> Self {
-        EpochNumber(value)
     }
 }
 
@@ -118,7 +113,10 @@ impl CertificateIndex {
     Ord,
     PartialEq,
     PartialOrd,
+    derive_more::Deref,
     derive_more::Display,
+    derive_more::From,
+    derive_more::Into,
     serde::Deserialize,
     serde::Serialize,
 )]
@@ -136,26 +134,6 @@ impl CertificateId {
     }
 }
 
-impl From<Digest> for CertificateId {
-    fn from(digest: Digest) -> Self {
-        CertificateId(digest)
-    }
-}
-
-impl From<CertificateId> for Digest {
-    fn from(cert_id: CertificateId) -> Self {
-        cert_id.0
-    }
-}
-
-impl Deref for CertificateId {
-    type Target = Digest;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 #[derive(
     Clone,
     Copy,
@@ -166,6 +144,7 @@ impl Deref for CertificateId {
     PartialEq,
     PartialOrd,
     derive_more::Display,
+    derive_more::From,
     serde::Deserialize,
     serde::Serialize,
 )]
@@ -199,12 +178,6 @@ impl Height {
     }
 }
 
-impl From<u64> for Height {
-    fn from(value: u64) -> Self {
-        Height(value)
-    }
-}
-
 #[derive(
     Clone,
     Copy,
@@ -215,6 +188,8 @@ impl From<u64> for Height {
     PartialEq,
     PartialOrd,
     derive_more::Display,
+    derive_more::Deref,
+    derive_more::From,
     serde::Deserialize,
     serde::Serialize,
 )]
@@ -230,20 +205,6 @@ impl Metadata {
     }
 
     pub const fn as_digest(&self) -> &Digest {
-        &self.0
-    }
-}
-
-impl From<Digest> for Metadata {
-    fn from(digest: Digest) -> Self {
-        Metadata(digest)
-    }
-}
-
-impl Deref for Metadata {
-    type Target = Digest;
-
-    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
