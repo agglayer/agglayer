@@ -1,27 +1,24 @@
-//! The [`KmsSigner`] struct is a wrapper around [`GcpKmsSigner`] providing
-//! additional functionality for signing messages, transactions, and typed data.
+//! The [`KmsSigner`] struct is a wrapper around [`GcpSigner`] providing
+//! additional functionality for signing messages and transactions.
 
-use ethers::{
-    signers::Signer,
-    types::{
-        transaction::{eip2718::TypedTransaction, eip712::Eip712},
-        Address, Signature,
-    },
-};
-use ethers_gcp_kms_signer::GcpKmsSigner;
+use alloy_consensus::TypedTransaction;
+use alloy_network::TxSigner;
+use alloy_primitives::{Address, ChainId, Signature};
+use alloy_signer::Signer;
+use alloy_signer_gcp::GcpSigner;
 
 use crate::Error;
 
-/// A wrapper around [`GcpKmsSigner`] providing additional functionality
-/// for signing messages, transactions, and typed data.
+/// A wrapper around [`GcpSigner`] providing additional functionality
+/// for signing messages and transactions.
 #[derive(Debug)]
 pub struct KmsSigner {
-    signer: GcpKmsSigner,
+    signer: GcpSigner,
 }
 
 impl KmsSigner {
     /// Creates a new [`KmsSigner`] instance.
-    pub fn new(signer: GcpKmsSigner) -> Self {
+    pub fn new(signer: GcpSigner) -> Self {
         Self { signer }
     }
 
@@ -31,39 +28,36 @@ impl KmsSigner {
         &self,
         message: S,
     ) -> Result<Signature, Error> {
-        Ok(self.signer.sign_message(message).await?)
+        self.signer
+            .sign_message(message.as_ref())
+            .await
+            .map_err(|e| Error::KmsError(e.to_string()))
     }
 
     /// Signs a transaction using the internal signer, this method can fail if
     /// the signer fails to create the digest.
     pub async fn sign_transaction(&self, tx: &TypedTransaction) -> Result<Signature, Error> {
-        Ok(self.signer.sign_transaction(tx).await?)
-    }
-
-    /// Signs typed data using internal signer.
-    ///
-    /// This method can fail while trying to encode the payload using EIP-712 or
-    /// during the digest creation.
-    pub async fn sign_typed_data<T: Eip712 + Send + Sync>(
-        &self,
-        payload: &T,
-    ) -> Result<Signature, Error> {
-        Ok(self.signer.sign_typed_data(payload).await?)
+        // Convert the TypedTransaction to a mutable dyn SignableTransaction
+        let mut tx_clone = tx.clone();
+        self.signer
+            .sign_transaction(&mut tx_clone)
+            .await
+            .map_err(|e| Error::KmsError(e.to_string()))
     }
 
     /// Returns the address associated with the signer.
     pub fn address(&self) -> Address {
-        self.signer.address()
+        alloy_signer::Signer::address(&self.signer)
     }
 
     /// Returns the chain ID associated with the signer.
-    pub fn chain_id(&self) -> u64 {
+    pub fn chain_id(&self) -> Option<ChainId> {
         self.signer.chain_id()
     }
 
     /// Sets a new chain ID for the signer.
     pub fn with_chain_id<T: Into<u64>>(mut self, chain_id: T) -> Self {
-        self.signer = self.signer.with_chain_id(chain_id);
+        self.signer = self.signer.with_chain_id(Some(chain_id.into()));
         self
     }
 }

@@ -68,6 +68,7 @@ sp1-zkvm = { version = "=5.0.0", default-features = false }
 
 # Core dependencies
 alloy = { version = "0.14.0", features = ["full"] }
+alloy-consensus = "0.14.0"
 alloy-primitives = { version = "1.1", features = ["serde", "k256"] }
 alloy-rlp = "0.3.10"
 alloy-sol-macro = "1.1"
@@ -76,6 +77,7 @@ alloy-sol-types = "1.1"
 alloy-contract = "0.14.0"
 alloy-provider = { version = "0.14.0", features = ["ws"] }
 alloy-signer = "0.14.0"
+alloy-signer-gcp = "0.14.0"
 alloy-signer-local = "0.14.0"
 alloy-transport = "0.14.0"
 alloy-transport-http = "0.14.0"
@@ -101,6 +103,7 @@ ethers-gcp-kms-signer = "0.1.5"
 ethers-signers = "2.0"
 fail = { version = "0.5.1", default-features = false }
 futures = "0.3.31"
+gcloud-sdk = "0.26.4"
 hex = "0.4.3"
 http = "1.2"
 hyper = "1.6"
