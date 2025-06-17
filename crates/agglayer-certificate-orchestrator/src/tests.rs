@@ -30,7 +30,6 @@ use agglayer_types::{
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 use arc_swap::ArcSwap;
-use ethers::providers::MockProvider;
 use futures_util::poll;
 use mocks::MockCertifier;
 use pessimistic_proof::{
@@ -42,7 +41,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    settlement_client::{MockSettlementClient, SettlementClient},
+    settlement_client::{MockSettlementClient, MockTransport, SettlementClient},
     CertificateInput, CertificateOrchestrator, CertificationError, Certifier, CertifierOutput,
     CertifierResult, Error,
 };
@@ -873,7 +872,7 @@ impl Check {
 
 #[async_trait::async_trait]
 impl SettlementClient for Check {
-    type Provider = MockProvider;
+    type Provider = MockTransport;
 
     async fn submit_certificate_settlement(
         &self,

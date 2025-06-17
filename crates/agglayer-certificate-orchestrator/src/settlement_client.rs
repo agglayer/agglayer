@@ -1,7 +1,10 @@
 use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, SettlementTxHash};
-use ethers::providers::JsonRpcClient;
+use alloy::transports::Transport;
 
 use crate::Error;
+
+#[cfg(any(test, feature = "testutils"))]
+pub type MockTransport = alloy::transports::http::Http<reqwest::Client>;
 
 /// Epoch Packer used to gather all the proofs generated on-the-go
 /// and to submit them in a settlement tx to the L1.
@@ -9,12 +12,12 @@ use crate::Error;
     any(test, feature = "testutils"),
     mockall::automock(
         type PerEpochStore=MockPerEpochStore;
-        type Provider=ethers::providers::MockProvider;
+        type Provider=MockTransport;
     )
 )]
 #[async_trait::async_trait]
 pub trait SettlementClient: Unpin + Send + Sync + 'static {
-    type Provider: JsonRpcClient;
+    type Provider: Transport + Clone;
 
     async fn submit_certificate_settlement(
         &self,
