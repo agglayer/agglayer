@@ -335,13 +335,13 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateSettled { settled_certificate, .. }) => {
-                        self.at_capacity_for_epoch = true;
-                        self.latest_settled = Some(settled_certificate);
-                        *next_expected_height += 1;
                         debug!(%certificate_id, "Certification process completed");
                         let Some(new) = self.pending_state.take() else {
                             return Err(Error::InternalError(format!("Missing pending state needed upon settlement, current state: {}", self.local_state.get_roots().display_to_hex() )))
                         };
+                        self.at_capacity_for_epoch = true;
+                        self.latest_settled = Some(settled_certificate);
+                        *next_expected_height += 1;
                         debug!(
                             old_state = self.local_state.get_roots().display_to_hex(),
                             new_state = new.get_roots().display_to_hex(),
