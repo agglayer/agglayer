@@ -4,8 +4,9 @@
 
 use agglayer_config::GcpKmsConfig;
 use alloy_signer_gcp::{GcpKeyRingRef, GcpSigner, KeySpecifier};
-use gcloud_sdk::GoogleApi;
-use gcloud_sdk::google::cloud::kms::v1::key_management_service_client::KeyManagementServiceClient;
+use gcloud_sdk::{
+    google::cloud::kms::v1::key_management_service_client::KeyManagementServiceClient, GoogleApi,
+};
 use serde::Deserialize;
 
 pub(crate) mod error;
@@ -86,15 +87,12 @@ impl KMS {
 
         let keyring = GcpKeyRingRef::new(&project_id, &location, &keyring_name);
         let specifier = KeySpecifier::new(keyring, &key_name, key_version);
-        
+
         // Create the GoogleApi client matching the type expected by GcpSigner
-        let client = GoogleApi::from_function(
-            KeyManagementServiceClient::new,
-            GOOGLE_API_URL,
-            None,
-        )
-        .await
-        .map_err(|e| Error::KmsError(e.to_string()))?;
+        let client =
+            GoogleApi::from_function(KeyManagementServiceClient::new, GOOGLE_API_URL, None)
+                .await
+                .map_err(|e| Error::KmsError(e.to_string()))?;
 
         // Use GcpSigner::new with the proper client type
         let gcp_signer = GcpSigner::new(client, specifier, Some(self.chain_id))
