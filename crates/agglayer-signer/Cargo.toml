@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 async-trait.workspace = true
-ethers.workspace = true
+#ethers.workspace = true
 thiserror.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
