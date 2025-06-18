@@ -1,0 +1,334 @@
+use std::{sync::Arc, time::Duration};
+
+use agglayer_certificate_orchestrator::{Error, SettlementClient};
+use agglayer_config::outbound::OutboundRpcSettleConfig;
+use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
+use agglayer_storage::stores::{
+    PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+};
+use agglayer_types::{
+    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber,
+    ExecutionMode, Proof, SettlementTxHash,
+};
+use alloy::rpc::types::TransactionReceipt;
+use arc_swap::ArcSwap;
+use bincode::Options;
+use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
+use tracing::{debug, error, info, instrument, warn};
+
+const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
+
+/// Alloy-based settlement client for L1 certificate settlement
+#[derive(Default, Clone)]
+pub struct AlloySettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
+    state_store: Arc<StateStore>,
+    pending_store: Arc<PendingStore>,
+    config: Arc<OutboundRpcSettleConfig>,
+    l1_rpc: Arc<RollupManagerRpc>,
+    current_epoch: Arc<ArcSwap<PerEpochStore>>,
+}
+
+impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    AlloySettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+{
+    /// Try to create a new alloy-based settlement client
+    pub fn try_new(
+        config: Arc<OutboundRpcSettleConfig>,
+        state_store: Arc<StateStore>,
+        pending_store: Arc<PendingStore>,
+        l1_rpc: Arc<RollupManagerRpc>,
+        current_epoch: Arc<ArcSwap<PerEpochStore>>,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            config,
+            l1_rpc,
+            state_store,
+            pending_store,
+            current_epoch,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> SettlementClient
+    for AlloySettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+where
+    StateStore: StateReader + StateWriter + 'static,
+    PendingStore: PendingCertificateReader + 'static,
+    RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+{
+    type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
+
+    #[instrument(skip(self), fields(network_id, calldata), level = "debug")]
+    async fn submit_certificate_settlement(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<SettlementTxHash, Error> {
+        // Step 1: Get certificate header and validate
+        let (network_id, height) = if let Some(CertificateHeader {
+            status,
+            network_id,
+            height,
+            ..
+        }) =
+            self.state_store.get_certificate_header(&certificate_id)?
+        {
+            if status == CertificateStatus::Settled {
+                error!("Certificate is already settled");
+                return Err(Error::InvalidCertificateStatus);
+            }
+            (network_id, height)
+        } else {
+            error!("Certificate header not found");
+            return Err(Error::NotFoundCertificateHeader);
+        };
+
+        // Step 2: Validate epoch assignment
+        let dry_current_epoch = self.current_epoch.load();
+        match dry_current_epoch.add_certificate(certificate_id, ExecutionMode::DryRun) {
+            Err(error) => {
+                drop(dry_current_epoch);
+                error!(
+                    %error,
+                    "{}Failed to add the certificate to the current epoch",
+                    ExecutionMode::DryRun.prefix(),
+                );
+                return Err(Error::Storage(error));
+            }
+            Ok((_epoch_number, _certificate_index)) => {
+                drop(dry_current_epoch);
+                info!("Certificate passes the epoch dry run");
+            }
+        }
+
+        // Step 3: Get certificate
+        let certificate =
+            if let Some(certificate) = self.pending_store.get_certificate(network_id, height)? {
+                certificate
+            } else {
+                return Err(Error::InternalError(format!(
+                    "Unable to find the certificate {certificate_id} in pending store"
+                )));
+            };
+
+        let network_id = certificate.network_id;
+        tracing::Span::current().record("network_id", network_id.to_u32());
+
+        let l1_info_tree_leaf_count = certificate
+            .l1_info_tree_leaf_count()
+            .unwrap_or_else(|| self.l1_rpc.default_l1_info_tree_entry().0);
+
+        // Step 4: Prepare the proof
+        let (output, proof) =
+            if let Some(Proof::SP1(proof)) = self.pending_store.get_proof(certificate_id)? {
+                if let Ok(output) =
+                    pessimistic_proof::PessimisticProofOutput::bincode_options()
+                        .deserialize::<PessimisticProofOutput>(proof.public_values.as_slice())
+                {
+                    (output, proof.bytes())
+                } else {
+                    return Err(Error::InternalError(
+                        "Unable to deserialize the proof output".to_string(),
+                    ));
+                }
+            } else {
+                return Err(Error::InternalError("Unable to find the proof".to_string()));
+            };
+
+        // Step 5: Get verifier type and prepare proof
+        let verifier_type = self
+            .l1_rpc
+            .get_verifier_type(network_id.to_u32())
+            .await
+            .map_err(|_| Error::UnableToGetVerifierType {
+                certificate_id,
+                network_id,
+            })?;
+
+        debug!("Network {network_id} has {verifier_type:?}");
+
+        let proof_with_selector: Vec<u8> = match verifier_type {
+            VerifierType::StateTransition => {
+                return Err(Error::InternalError(
+                    "Unsupported verifier type".to_string(),
+                ));
+            }
+            VerifierType::Pessimistic => proof,
+            VerifierType::ALGateway => {
+                let mut proof_with_selector =
+                    pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR.to_vec();
+                proof_with_selector.extend(&proof);
+                proof_with_selector
+            }
+        };
+
+        info!(
+            "Initializing the settlement on L1 with public inputs: {}",
+            output.display_to_hex()
+        );
+
+        // Step 6: Call the contract settlement function and get the pending transaction
+        let pending_tx = match self
+            .l1_rpc
+            .verify_pessimistic_trusted_aggregator(
+                output.origin_network.to_u32(),
+                l1_info_tree_leaf_count,
+                *output.new_local_exit_root.as_ref(),
+                *output.new_pessimistic_root,
+                proof_with_selector.into(),
+                certificate.custom_chain_data.into(),
+            )
+            .await
+        {
+            Ok(pending_tx) => {
+                info!(
+                    "Certificate settlement transaction submitted for {}",
+                    certificate_id
+                );
+                pending_tx
+            }
+            Err(error) => {
+                let error_str = RollupManagerRpc::decode_contract_revert(&error)
+                    .unwrap_or_else(|| error.to_string());
+
+                error!(
+                    error_code = %error,
+                    error = error_str,
+                    "Failed to settle certificate"
+                );
+
+                return Err(Error::SettlementError {
+                    certificate_id,
+                    error: error_str,
+                });
+            }
+        };
+
+        // Get the transaction hash from the pending transaction
+        let tx_hash = *pending_tx.tx_hash();
+        info!(
+            "Settlement transaction hash: {} for certificate {}",
+            tx_hash, certificate_id
+        );
+
+        Ok(SettlementTxHash::from(tx_hash))
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn wait_for_settlement(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+        certificate_id: CertificateId,
+    ) -> Result<(EpochNumber, CertificateIndex), Error> {
+        info!(
+            "AlloySettlementClient: waiting for settlement {}",
+            settlement_tx_hash
+        );
+
+        // Step 1: Wait for transaction receipt with retries
+        let receipt = self
+            .wait_for_transaction_receipt(settlement_tx_hash, certificate_id)
+            .await?;
+
+        // Step 2: Check transaction status
+        if !receipt.status() {
+            warn!("Transaction failed to settle");
+            return Err(Error::SettlementError {
+                certificate_id,
+                error: "Settlement transaction failed".to_string(),
+            });
+        }
+
+        info!("Transaction successfully settled");
+
+        // Step 3: Add certificate to epoch with retries
+        let mut max_retries = MAX_EPOCH_ASSIGNMENT_RETRIES;
+        let (epoch_number, certificate_index) = loop {
+            max_retries -= 1;
+
+            let related_epoch = self.current_epoch.load_full();
+            if related_epoch.is_epoch_packed() {
+                drop(related_epoch);
+                warn!("The epoch is already packed, adding delay and retry the assignment");
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+
+            match related_epoch.add_certificate(certificate_id, ExecutionMode::Default) {
+                Err(error) if max_retries == 0 => {
+                    let error_msg = format!(
+                        "CRITICAL: Failed to add the certificate to the epoch after multiple \
+                         retries: {error}"
+                    );
+                    error!(%error, error_msg);
+
+                    return Err(Error::SettlementError {
+                        certificate_id,
+                        error: error_msg,
+                    });
+                }
+                Err(error) => {
+                    warn!(%error, "Failed to add the certificate to the epoch (retrying)");
+                }
+                Ok((epoch_number, certificate_index)) => {
+                    info!(
+                        "Certificate added to epoch {epoch_number} with index {certificate_index}"
+                    );
+                    break (epoch_number, certificate_index);
+                }
+            }
+        };
+
+        Ok((epoch_number, certificate_index))
+    }
+}
+
+impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    AlloySettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+where
+    StateStore: StateReader + StateWriter + 'static,
+    PendingStore: PendingCertificateReader + 'static,
+    RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+{
+    /// Wait for transaction receipt with configurable retries and intervals
+    async fn wait_for_transaction_receipt(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+        certificate_id: CertificateId,
+    ) -> Result<TransactionReceipt, Error> {
+        let tx_hash = settlement_tx_hash.into();
+        let mut retries = self.config.max_retries;
+
+        loop {
+            match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
+                Ok(receipt) => {
+                    info!(
+                        "Successfully retrieved transaction receipt for {}",
+                        settlement_tx_hash
+                    );
+                    return Ok(receipt);
+                }
+                Err(_) if retries > 0 => {
+                    retries -= 1;
+                    debug!(
+                        "Transaction receipt not yet available for {} (retries left: {})",
+                        settlement_tx_hash, retries
+                    );
+                    tokio::time::sleep(self.config.retry_interval).await;
+                }
+                Err(error) => {
+                    error!(
+                        "Failed to fetch transaction receipt after all retries: {}",
+                        error
+                    );
+                    return Err(Error::SettlementError {
+                        certificate_id,
+                        error: format!("Failed to fetch transaction receipt: {error}"),
+                    });
+                }
+            }
+        }
+    }
+}

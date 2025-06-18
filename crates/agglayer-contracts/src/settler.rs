@@ -1,7 +1,7 @@
 use alloy::{
     contract::Error as ContractError,
     primitives::{Bytes, B256},
-    providers::Provider,
+    providers::{PendingTransactionBuilder, Provider},
 };
 
 use crate::{L1RpcClient, L1RpcError};
@@ -12,7 +12,7 @@ pub trait Settler {
 
     fn decode_contract_revert(error: &ContractError) -> Option<String>;
 
-    async fn build_verify_pessimistic_trusted_aggregator_call(
+    async fn verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
         l_1_info_tree_leaf_count: u32,
@@ -20,7 +20,7 @@ pub trait Settler {
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
-    ) -> Result<(), ContractError>;
+    ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
 }
 
 #[async_trait::async_trait]
@@ -55,7 +55,7 @@ where
         Some(format!("{error:?}"))
     }
 
-    async fn build_verify_pessimistic_trusted_aggregator_call(
+    async fn verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
         l_1_info_tree_leaf_count: u32,
@@ -63,8 +63,9 @@ where
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
-    ) -> Result<(), ContractError> {
-        self.inner
+    ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
+        let pending_tx = self
+            .inner
             .verifyPessimisticTrustedAggregator(
                 rollup_id,
                 l_1_info_tree_leaf_count,
@@ -73,8 +74,9 @@ where
                 proof,
                 custom_chain_data,
             )
-            .call()
-            .await
-            .map(|_| ())
+            .send()
+            .await?;
+
+        Ok(pending_tx)
     }
 }
