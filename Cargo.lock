@@ -440,7 +440,6 @@ dependencies = [
  "arc-swap",
  "axum 0.8.4",
  "buildstructor",
- "ethers",
  "fail",
  "futures",
  "hex",

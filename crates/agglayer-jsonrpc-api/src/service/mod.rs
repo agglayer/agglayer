@@ -1,5 +1,5 @@
 use agglayer_telemetry::KeyValue;
-use ethers::{providers::Middleware, types::H256};
+use alloy::{primitives::B256, providers::Provider};
 use futures::future::try_join;
 use tracing::{debug, error, info, instrument};
 
@@ -28,10 +28,10 @@ impl<Rpc> Drop for AgglayerService<Rpc> {
 
 impl<Rpc> AgglayerService<Rpc>
 where
-    Rpc: Middleware + 'static,
+    Rpc: Provider + Clone + 'static,
 {
     #[instrument(skip(self, tx), fields(hash, rollup_id = tx.tx.rollup_id), level = "info")]
-    pub async fn send_tx(&self, tx: SignedTx) -> Result<H256, SendTxError<Rpc>> {
+    pub async fn send_tx(&self, tx: SignedTx) -> Result<B256, SendTxError> {
         let hash = format!("{:?}", tx.hash());
         tracing::Span::current().record("hash", &hash);
 
@@ -72,18 +72,16 @@ where
         let _ = try_join(
             async {
                 self.kernel
-                    .verify_proof_eth_call(&tx)
+                    .verify_batches_trusted_aggregator(&tx)
                     .await
                     .map_err(|e| {
-                        let error = SendTxError::dry_run(&e);
                         error!(
                             error_code = %e,
-                            error = error.to_string(),
                             hash,
                             "Failed to dry-run the verify_batches_trusted_aggregator for \
-                             transaction {hash}: {error}"
+                             transaction {hash}: {e}"
                         );
-                        error
+                        SendTxError::dry_run(e)
                     })
                     .inspect(|_| agglayer_telemetry::EXECUTE.add(1, metrics_attrs))
             },
@@ -122,7 +120,7 @@ where
     }
 
     #[instrument(skip(self), fields(hash = hash.to_string()), level = "info")]
-    pub async fn get_tx_status(&self, hash: H256) -> Result<TxStatus, TxStatusError<Rpc>> {
+    pub async fn get_tx_status(&self, hash: B256) -> Result<TxStatus, TxStatusError> {
         debug!("Received request to get transaction status for hash {hash}");
 
         let receipt = self.kernel.check_tx_status(hash).await.map_err(|e| {
