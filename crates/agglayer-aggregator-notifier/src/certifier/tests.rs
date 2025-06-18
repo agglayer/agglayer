@@ -6,11 +6,8 @@ use agglayer_contracts::{aggchain::AggchainVkeyHash, L1RpcError, Settler};
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
-use ethers::{
-    middleware::NonceManagerMiddleware,
-    providers::{MockProvider, Provider},
-    types::H160,
-};
+use alloy::contract::Error as ContractError;
+// Removed unused ethers imports after migration to alloy
 use fail::FailScenario;
 use mockall::predicate::{always, eq};
 use pessimistic_proof_test_suite::forest::Forest;
@@ -51,7 +48,7 @@ async fn happy_path() {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
 
-    let signer: H160 = H160(**state.get_signer());
+    let signer = agglayer_types::Address::new(**state.get_signer());
     let certificate_id = certificate.hash();
 
     pending_store
@@ -151,7 +148,7 @@ async fn prover_timeout() {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
 
-    let signer: H160 = H160(**state.get_signer());
+    let signer = agglayer_types::Address::new(**state.get_signer());
     let certificate_id = certificate.hash();
 
     pending_store
@@ -209,15 +206,15 @@ mockall::mock! {
     L1Rpc {}
     #[async_trait::async_trait]
     impl agglayer_contracts::RollupContract for L1Rpc {
-        type M = NonceManagerMiddleware<Provider<MockProvider>>;
+        type P = alloy::providers::RootProvider<alloy::network::Ethereum>;
 
         async fn get_trusted_sequencer_address(
             &self,
             rollup_id: u32,
-            proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
-        ) -> Result<ethers::types::Address, L1RpcError>;
+            proof_signers: std::collections::HashMap<u32, agglayer_types::Address>,
+        ) -> Result<agglayer_types::Address, L1RpcError>;
 
-        async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<ethers::types::Address, L1RpcError>;
+        async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<agglayer_types::Address, L1RpcError>;
 
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
@@ -227,34 +224,35 @@ mockall::mock! {
 
     #[async_trait::async_trait]
     impl agglayer_contracts::AggchainContract for L1Rpc {
-        type M = NonceManagerMiddleware<Provider<MockProvider>>;
+        type M = alloy::providers::RootProvider<alloy::network::Ethereum>;
 
         async fn get_aggchain_vkey_hash(
             &self,
-            rollup_address: ethers::types::Address,
+            rollup_address: agglayer_types::Address,
             aggchain_vkey_selector: u16,
         ) -> Result<AggchainVkeyHash, L1RpcError>;
     }
 
     #[async_trait::async_trait]
+    impl agglayer_contracts::L1TransactionFetcher for L1Rpc {
+        async fn fetch_transaction_receipt(&self, tx_hash: alloy::primitives::FixedBytes<32>) -> Result<alloy::rpc::types::TransactionReceipt, L1RpcError>;
+    }
+
+    #[async_trait::async_trait]
     impl Settler for L1Rpc {
-        type M = NonceManagerMiddleware<Provider<MockProvider>>;
+        fn decode_contract_revert(error: &alloy::contract::Error) -> Option<String>;
 
-        fn build_pending_transaction(
-            &self,
-            tx_hash: ethers::types::H256,
-        ) -> ethers::providers::PendingTransaction<'_, <NonceManagerMiddleware<Provider<MockProvider>> as ethers::providers::Middleware>::Provider>;
-
-        fn decode_contract_revert(error: &ethers::contract::ContractError<NonceManagerMiddleware<Provider<MockProvider> > > ) -> Option<String>;
-        fn build_verify_pessimistic_trusted_aggregator_call(
+        async fn verify_pessimistic_trusted_aggregator(
             &self,
             rollup_id: u32,
             l_1_info_tree_leaf_count: u32,
             new_local_exit_root: [u8; 32],
             new_pessimistic_root: [u8; 32],
-            proof: ::ethers::core::types::Bytes,
-            custom_chain_data: ::ethers::core::types::Bytes,
-        ) -> ethers::contract::ContractCall<NonceManagerMiddleware<Provider<MockProvider> > ,()> ;
+            proof: alloy::primitives::Bytes,
+            custom_chain_data: alloy::primitives::Bytes,
+        ) -> Result<alloy::providers::PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
+
+        async fn transaction_exists(&self, tx_hash: alloy::primitives::FixedBytes<32>) -> Result<bool, L1RpcError>;
     }
 }
 

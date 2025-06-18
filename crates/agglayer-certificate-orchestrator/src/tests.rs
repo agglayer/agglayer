@@ -41,7 +41,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    settlement_client::{MockSettlementClient, MockTransport, SettlementClient},
+    settlement_client::{MockProvider, MockSettlementClient, SettlementClient},
     CertificateInput, CertificateOrchestrator, CertificationError, Certifier, CertifierOutput,
     CertifierResult, Error,
 };
@@ -872,7 +872,7 @@ impl Check {
 
 #[async_trait::async_trait]
 impl SettlementClient for Check {
-    type Provider = MockTransport;
+    type Provider = MockProvider;
 
     async fn submit_certificate_settlement(
         &self,

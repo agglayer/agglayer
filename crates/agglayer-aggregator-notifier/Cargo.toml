@@ -21,9 +21,11 @@ async-trait.workspace = true
 arc-swap.workspace = true
 bincode.workspace = true
 ethers.workspace = true
+alloy.workspace = true
 fail.workspace = true
 futures.workspace = true
 hex.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -42,6 +44,7 @@ pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
 async-trait.workspace = true
 ethers.workspace = true
+alloy.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
 mockall.workspace = true
 rstest.workspace = true
