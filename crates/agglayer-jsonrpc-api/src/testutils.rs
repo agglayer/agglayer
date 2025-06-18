@@ -6,8 +6,9 @@ use std::{
 
 use agglayer_config::Config;
 use agglayer_contracts::{
-    polygon_rollup_manager::PolygonRollupManager,
-    polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
+    L1RpcClient, 
+    contracts::PolygonRollupManager::PolygonRollupManagerInstance as PolygonRollupManager,
+    contracts::PolygonZkEVMGlobalExitRootV2::PolygonZkEVMGlobalExitRootV2Instance as PolygonZkEVMGlobalExitRootV2,
 };
 use agglayer_storage::{
     storage::{backup::BackupClient, pending_db_cf_definitions, state_db_cf_definitions, DB},
@@ -15,10 +16,7 @@ use agglayer_storage::{
     tests::TempDBDir,
 };
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId};
-use ethers::{
-    providers::{self, MockProvider, Provider},
-    signers::Signer,
-};
+use alloy::providers::{Provider, ProviderBuilder};
 use jsonrpsee::http_client::HttpClientBuilder;
 use rstest::*;
 use tokio_util::sync::CancellationToken;

@@ -1,23 +1,24 @@
 use std::sync::Arc;
 
 use agglayer_config::{Config, L1};
-use agglayer_contracts::{
-    polygon_rollup_manager::{
+use agglayer_contracts::contracts::{
+    PolygonRollupManager::{
         FinalNumBatchBelowLastVerifiedBatch, PolygonRollupManagerErrors, RollupDataReturn,
-        RollupIDToRollupDataCall, RollupIDToRollupDataReturn, VerifyBatchesTrustedAggregatorCall,
+        RollupDataReturnV2, verifyBatchesTrustedAggregatorCall, rollupIDToRollupDataCall,
     },
-    polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn},
+    PolygonZkEVM::{trustedSequencerCall, TrustedSequencerReturn},
 };
 use agglayer_types::{Certificate, Height};
-use ethers::{
-    abi::AbiEncode,
-    core::utils,
-    prelude::*,
-    providers,
-    signers::LocalWallet,
-    types::{transaction::eip2718::TypedTransaction, Signature, H256, U256},
+use alloy::{
+    hex,
+    primitives::{Address, B256, U256, Signature},
+    providers::{ProviderBuilder, Provider},
+    signers::{local::LocalSigner, SignerSync},
+    rpc::{json_rpc::RpcError, types::BlockNumberOrTag},
+    network::Ethereum,
+    sol_types::SolCall,
 };
-use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
+use jsonrpsee_test_utils::{helpers::ok_response, mocks::{Id, MockResponse}, TimeoutFutureExt as _};
 use serde_json::json;
 
 use crate::{
@@ -107,19 +108,22 @@ async fn interop_executor_verify_zkp() {
     push_response!(mock, to_hex: TrustedSequencerReturn(sequencer_address));
     push_response!(mock, response);
 
-    assert!(kernel.verify_proof_eth_call(&signed_tx).await.is_ok());
+    assert!(kernel
+        .verify_batches_trusted_aggregator(&signed_tx)
+        .await
+        .is_ok());
 
     let tx_rollup_data = transaction_request!(
         to: l1.rollup_manager_contract,
-        data: RollupIDToRollupDataCall { rollup_id: 1 }
+        data: rollupIDToRollupDataCall { rollup_id: 1 }
     );
 
     let tx_trusted_sequencer =
-        transaction_request!(to: l1.rollup_manager_contract, data: TrustedSequencerCall {});
+        transaction_request!(to: l1.rollup_manager_contract, data: trustedSequencerCall {});
 
     let tx_verify_batch = transaction_request!(
         to: l1.rollup_manager_contract,
-        data: VerifyBatchesTrustedAggregatorCall {
+        data: verifyBatchesTrustedAggregatorCall {
             rollup_id: 1,
             pending_state_num: 0,
             init_num_batch: signed_tx.tx.last_verified_batch.as_u64(),
@@ -171,7 +175,7 @@ async fn interop_executor_verify_zkp_failure() {
     push_response!(mock, to_hex: TrustedSequencerReturn(sequencer_address));
     push_response!(mock, response);
 
-    let res = kernel.verify_proof_eth_call(&signed_tx).await;
+    let res = kernel.verify_batches_trusted_aggregator(&signed_tx).await;
     assert!(res.is_err());
 
     if let Err(e) = res {
@@ -183,15 +187,15 @@ async fn interop_executor_verify_zkp_failure() {
     }
     let tx_rollup_data = transaction_request!(
         to: l1.rollup_manager_contract,
-        data: RollupIDToRollupDataCall { rollup_id: 1 }
+        data: rollupIDToRollupDataCall { rollup_id: 1 }
     );
 
     let tx_trusted_sequencer =
-        transaction_request!(to: l1.rollup_manager_contract, data: TrustedSequencerCall {});
+        transaction_request!(to: l1.rollup_manager_contract, data: trustedSequencerCall {});
 
     let tx_verify_batch = transaction_request!(
         to: l1.rollup_manager_contract,
-        data: VerifyBatchesTrustedAggregatorCall {
+        data: verifyBatchesTrustedAggregatorCall {
             rollup_id: 1,
             pending_state_num: 0,
             init_num_batch: signed_tx.tx.last_verified_batch.as_u64(),
@@ -265,12 +269,12 @@ async fn interop_executor_verify_tx_signature() {
 
     let tx_rollup_data = transaction_request!(
         to: l1.rollup_manager_contract,
-        data: RollupIDToRollupDataCall { rollup_id: 1 }
+        data: rollupIDToRollupDataCall { rollup_id: 1 }
     );
 
     let tx_trusted_sequencer = transaction_request!(
         to: l1.rollup_manager_contract,
-        data: TrustedSequencerCall {}
+        data: trustedSequencerCall {}
     );
 
     let block = utils::serialize(&(BlockNumber::Latest));
@@ -312,12 +316,12 @@ async fn interop_executor_verify_tx_signature_proof_signer() {
 
     let tx_rollup_data = transaction_request!(
         to: l1.rollup_manager_contract,
-        data: RollupIDToRollupDataCall { rollup_id: 1 }
+        data: rollupIDToRollupDataCall { rollup_id: 1 }
     );
 
     let tx_trusted_sequencer = transaction_request!(
         to: l1.rollup_manager_contract,
-        data: TrustedSequencerCall {}
+        data: trustedSequencerCall {}
     );
 
     let block = utils::serialize(&(BlockNumber::Latest));
