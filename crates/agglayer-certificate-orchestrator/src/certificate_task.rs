@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
-    stores::{
-    PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
-}};
+    stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
+};
 use agglayer_types::{Certificate, CertificateHeader, CertificateStatus, CertificateStatusError};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, trace, warn};
@@ -28,7 +27,8 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     certifier_client: Arc<CertifierClient>,
 }
 
-impl<StateStore, PendingStore, CertifierClient> CertificateTask<StateStore, PendingStore, CertifierClient>
+impl<StateStore, PendingStore, CertifierClient>
+    CertificateTask<StateStore, PendingStore, CertifierClient>
 where
     StateStore: StateReader + StateWriter,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,

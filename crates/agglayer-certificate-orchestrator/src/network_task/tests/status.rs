@@ -151,7 +151,7 @@ async fn from_proven_to_settled() {
     certifier
         .expect_certify()
         .times(1)
-        .with(always(), eq(network_id), eq(0))
+        .with(always(), eq(network_id), eq(Height::ZERO))
         .returning(move |mut new_state, network, height| {
             let certificate = pending_store
                 .get_certificate(network, height)
