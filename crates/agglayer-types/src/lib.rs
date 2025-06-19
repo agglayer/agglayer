@@ -1,13 +1,20 @@
-use std::collections::{BTreeMap, BTreeSet};
+// TODO: split into smaller files
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
-pub use agglayer_interop_types::aggchain_proof;
+pub use agglayer_interop_types::{aggchain_proof, NetworkId};
 use agglayer_interop_types::{
     aggchain_proof::AggchainData, BridgeExit, GlobalIndex, ImportedBridgeExit,
     ImportedBridgeExitCommitmentValues, TokenInfo,
 };
-pub use agglayer_primitives::Digest;
+pub use agglayer_primitives as primitives;
 use agglayer_primitives::{keccak::Keccak256Hasher, FromBool, Hashable, SignatureError};
+pub use agglayer_primitives::{Address, Digest, Signature, B256, U256, U512};
 use agglayer_tries::{error::SmtError, roots::LocalExitRoot, smt::Smt};
+use ethers::types::H256;
+pub use pessimistic_proof::proof::Proof;
 use pessimistic_proof::{
     core::{
         self,
@@ -23,18 +30,183 @@ use pessimistic_proof::{
     LocalNetworkState, ProofError,
 };
 use serde::{Deserialize, Serialize};
-use unified_bridge::CommitmentVersion;
-pub type EpochNumber = u64;
-pub type CertificateIndex = u64;
-pub type CertificateId = Digest;
-pub type Height = u64;
-pub type Metadata = Digest;
-pub use agglayer_interop_types::NetworkId;
-pub use agglayer_primitives as primitives;
-// Re-export common primitives again as agglayer-types root types
-pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
-pub use pessimistic_proof::proof::Proof;
-use unified_bridge::{LocalExitTree, LocalExitTreeError};
+use unified_bridge::{CommitmentVersion, LocalExitTree, LocalExitTreeError};
+
+// TODO: consider moving these newtype structs to interop some day, so that the
+// proofs could use eg. CertificateId and Height at least
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    derive_more::From,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct EpochNumber(u64);
+
+impl EpochNumber {
+    pub const ZERO: EpochNumber = EpochNumber(0);
+    pub const ONE: EpochNumber = EpochNumber(1);
+
+    pub const fn new(epoch: u64) -> EpochNumber {
+        EpochNumber(epoch)
+    }
+
+    pub const fn next(&self) -> EpochNumber {
+        EpochNumber(self.0.checked_add(1).expect("Epoch number overflow"))
+    }
+
+    pub const fn increment(&mut self) {
+        *self = self.next();
+    }
+
+    pub const fn as_u64(&self) -> u64 {
+        self.0
+    }
+}
+
+/// Index of the certificate inside its epoch
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct CertificateIndex(u64);
+
+impl CertificateIndex {
+    pub const ZERO: CertificateIndex = CertificateIndex(0);
+
+    pub const fn new(index: u64) -> CertificateIndex {
+        CertificateIndex(index)
+    }
+
+    pub const fn as_u64(&self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Deref,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::Into,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct CertificateId(Digest);
+
+impl CertificateId {
+    pub const fn new(id: Digest) -> CertificateId {
+        CertificateId(id)
+    }
+
+    pub const fn as_digest(&self) -> &Digest {
+        &self.0
+    }
+}
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    derive_more::From,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct Height(u64);
+
+impl Height {
+    pub const ZERO: Height = Height::new(0);
+
+    pub const fn as_u64(&self) -> u64 {
+        self.0
+    }
+
+    pub const fn new(height: u64) -> Height {
+        Height(height)
+    }
+
+    pub const fn next(&self) -> Height {
+        Height(self.0.checked_add(1).expect("Height overflow"))
+    }
+
+    pub const fn increment(&mut self) {
+        *self = self.next();
+    }
+
+    pub const fn distance_since(&self, o: &Height) -> u64 {
+        self.0
+            .checked_sub(o.0)
+            .expect("Subtracting to negative values")
+    }
+}
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    derive_more::Deref,
+    derive_more::From,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct Metadata(Digest);
+
+impl Metadata {
+    pub const ZERO: Metadata = Metadata(Digest::ZERO);
+
+    pub const fn new(metadata: Digest) -> Metadata {
+        Metadata(metadata)
+    }
+
+    pub const fn as_digest(&self) -> &Digest {
+        &self.0
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {
@@ -71,7 +243,7 @@ pub struct CertificateHeader {
     pub new_local_exit_root: LocalExitRoot,
     pub metadata: Metadata,
     pub status: CertificateStatus,
-    pub settlement_tx_hash: Option<Digest>,
+    pub settlement_tx_hash: Option<SettlementTxHash>,
 }
 
 #[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -181,7 +353,7 @@ pub enum CertificateStatusError {
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
 
-    #[error("Internal error")]
+    #[error("Internal error: {0}")]
     InternalError(String),
 
     #[error("Settlement error: {0}")]
@@ -215,8 +387,8 @@ pub enum GenerationType {
     Prover,
 }
 
-impl std::fmt::Display for GenerationType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for GenerationType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             GenerationType::Native => write!(f, "native"),
             GenerationType::Prover => write!(f, "prover"),
@@ -256,14 +428,16 @@ pub enum CertificateStatus {
     /// Note that a certificate can be InError in agglayer but settled on L1,
     /// eg. if there was an error in agglayer but the certificate was valid
     /// and settled on L1.
+    // TODO: SHOULD BE A SEPARATE PR: MAKING A BOX HERE WOULD DIVIDE BY ~10 THE SIZE OF
+    // CERTIFICATESTATUS
     InError { error: CertificateStatusError },
 
     /// Transaction to settle the certificate was completed successfully on L1.
     Settled,
 }
 
-impl std::fmt::Display for CertificateStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for CertificateStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CertificateStatus::Pending => write!(f, "Pending"),
             CertificateStatus::Proven => write!(f, "Proven"),
@@ -271,6 +445,35 @@ impl std::fmt::Display for CertificateStatus {
             CertificateStatus::InError { error } => write!(f, "InError: {error}"),
             CertificateStatus::Settled => write!(f, "Settled"),
         }
+    }
+}
+
+impl PartialOrd for CertificateStatus {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl CertificateStatus {
+    // Only ever used as implementation for Ord, feel free to change it
+    // TODO: now that certificatetask handles settling properly, we should be able
+    // to refactor it to no longer require Ord here Then we can delete this
+    // function
+    fn as_order_number(&self) -> usize {
+        use CertificateStatus::*;
+        match self {
+            Pending => 0,
+            Proven => 1,
+            Candidate => 2,
+            Settled => 3,
+            InError { .. } => 4,
+        }
+    }
+}
+
+impl Ord for CertificateStatus {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_order_number().cmp(&other.as_order_number())
     }
 }
 
@@ -321,7 +524,7 @@ impl Default for Certificate {
         let local_exit_root = LocalExitTree::<Keccak256Hasher>::default()
             .get_root()
             .into();
-        let height: Height = 0u64;
+        let height = Height::ZERO;
         let (_new_local_exit_root, signature, _signer) =
             compute_signature_info(local_exit_root, &[], &wallet, height);
         Self {
@@ -357,7 +560,7 @@ pub fn compute_signature_info(
                 .map(|exit| exit.to_indexed_exit_hash())
                 .collect(),
         },
-        height,
+        height: height.0,
     }
     .commitment(version);
 
@@ -418,15 +621,15 @@ impl Certificate {
         let commit_imported_bridge_exits =
             keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
 
-        keccak256_combine([
+        CertificateId(keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
-            self.height.to_be_bytes().as_slice(),
+            self.height.0.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_ref(),
             self.new_local_exit_root.as_ref(),
             commit_bridge_exits.as_slice(),
             commit_imported_bridge_exits.as_slice(),
-            self.metadata.as_slice(),
-        ])
+            self.metadata.0.as_slice(),
+        ]))
     }
 
     /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].
@@ -500,7 +703,7 @@ impl From<&Certificate> for SignatureCommitmentValues {
                     .map(|exit| exit.to_indexed_exit_hash())
                     .collect(),
             },
-            height: certificate.height,
+            height: certificate.height.0,
         }
     }
 }
@@ -577,7 +780,7 @@ impl LocalNetworkStateData {
                 balance_root: self.balance_tree.root.into(),
                 nullifier_root: self.nullifier_tree.root.into(),
                 ler_leaf_count: self.exit_tree.leaf_count(),
-                height: certificate.height,
+                height: certificate.height.0,
                 origin_network: certificate.network_id,
             }
             .compute_pp_root(version),
@@ -724,7 +927,7 @@ impl LocalNetworkStateData {
             balances_proofs,
             l1_info_root,
             aggchain_proof,
-            height: certificate.height,
+            height: certificate.height.0,
             prev_pessimistic_root,
         })
     }
@@ -755,5 +958,55 @@ impl LocalNetworkStateData {
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(transparent)]
+pub struct SettlementTxHash(Digest);
+
+impl SettlementTxHash {
+    pub const fn for_tests() -> Self {
+        SettlementTxHash(Digest::ZERO)
+    }
+
+    pub const fn new(hash: Digest) -> Self {
+        SettlementTxHash(hash)
+    }
+}
+
+impl From<Digest> for SettlementTxHash {
+    fn from(hash: Digest) -> Self {
+        SettlementTxHash(hash)
+    }
+}
+
+impl From<SettlementTxHash> for Digest {
+    fn from(tx_hash: SettlementTxHash) -> Self {
+        tx_hash.0
+    }
+}
+
+impl From<H256> for SettlementTxHash {
+    fn from(hash: H256) -> Self {
+        SettlementTxHash(Digest::from(*hash.as_fixed_bytes()))
+    }
+}
+
+impl From<SettlementTxHash> for H256 {
+    fn from(tx_hash: SettlementTxHash) -> Self {
+        tx_hash.0.as_bytes().into()
+    }
+}
+
+impl AsRef<Digest> for SettlementTxHash {
+    fn as_ref(&self) -> &Digest {
+        &self.0
+    }
+}
+
+impl fmt::Display for SettlementTxHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
