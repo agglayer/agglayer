@@ -4,7 +4,7 @@ use agglayer_config::{epoch::TimeClockConfig, Epoch};
 use agglayer_types::EpochConfiguration;
 use insta::assert_snapshot;
 use jsonrpsee::{
-    core::{client::ClientT, ClientError},
+    core::{ClientError},
     rpc_params,
 };
 use rstest::*;
@@ -12,7 +12,6 @@ use serde_json::json;
 
 use crate::{
     testutils::{context, raw_rpc, RawRpcContext, TestContext},
-    AgglayerServer,
 };
 
 #[test_log::test(tokio::test)]

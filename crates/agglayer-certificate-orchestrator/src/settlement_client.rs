@@ -3,6 +3,7 @@ use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, SettlementTxH
 use crate::Error;
 
 #[cfg(any(test, feature = "testutils"))]
+#[allow(unused)]
 pub type MockProvider = alloy::providers::RootProvider<alloy::network::Ethereum>;
 
 /// Epoch Packer used to gather all the proofs generated on-the-go

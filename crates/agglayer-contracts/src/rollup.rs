@@ -117,8 +117,7 @@ where
                         .get_block(BlockId::Number(BlockNumberOrTag::Finalized))
                         .await
                         .ok()
-                        .flatten()
-                        .and_then(|block| Some(block.header.number))
+                        .flatten().map(|block| block.header.number)
                         .ok_or(L1RpcError::LatestFinalizedBlockNotFound)?;
 
                     debug!(
@@ -136,8 +135,7 @@ where
                             .get_block(BlockId::Number(event_block_number.into()))
                             .await
                             .ok()
-                            .flatten()
-                            .and_then(|block| Some(block.header.hash))
+                            .flatten().map(|block| block.header.hash)
                             .ok_or(L1RpcError::BlockHashNotFound(event_block_number))?;
 
                         if retrieved_block_hash != event_block_hash {
