@@ -316,8 +316,7 @@ where
         let signer: Address = cert
             .signer()
             .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
-            .ok_or(SignatureVerificationError::SP1AggchainProofUnsupported)?
-            .into();
+            .ok_or(SignatureVerificationError::SP1AggchainProofUnsupported)?;
 
         // ECDSA-k256 signature verification works by recovering the public key from the
         // signature, and then checking that it is the expected one.

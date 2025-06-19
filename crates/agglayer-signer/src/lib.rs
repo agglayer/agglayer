@@ -70,7 +70,7 @@ impl Signer for ConfiguredSigner {
             ConfiguredSigner::Kms(signer) => signer
                 .sign_message(hash.as_slice())
                 .await
-                .map_err(|e| alloy_signer::Error::other(e)),
+                .map_err(alloy_signer::Error::other),
         }
     }
 
@@ -80,7 +80,7 @@ impl Signer for ConfiguredSigner {
             ConfiguredSigner::Kms(signer) => signer
                 .sign_message(message)
                 .await
-                .map_err(|e| alloy_signer::Error::other(e)),
+                .map_err(alloy_signer::Error::other),
         }
     }
 

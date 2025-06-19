@@ -9,10 +9,10 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateIndex, CertificateStatus, EpochNumber, Height,
 };
 use insta::assert_snapshot;
-use jsonrpsee::{core::client::ClientT, rpc_params};
+use jsonrpsee::{rpc_params};
 use serde_json::json;
 
-use crate::{testutils::TestContext, AgglayerServer as _};
+use crate::{testutils::TestContext};
 
 #[test_log::test(tokio::test)]
 async fn returns_the_pending_certificate_header() {

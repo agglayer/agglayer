@@ -79,14 +79,14 @@ impl Signer for KmsSigner {
         self.signer
             .sign_hash(hash)
             .await
-            .map_err(|e| alloy_signer::Error::other(e))
+            .map_err(alloy_signer::Error::other)
     }
 
     async fn sign_message(&self, message: &[u8]) -> Result<Signature, alloy_signer::Error> {
         self.signer
             .sign_message(message)
             .await
-            .map_err(|e| alloy_signer::Error::other(e))
+            .map_err(alloy_signer::Error::other)
     }
 
     fn address(&self) -> Address {
@@ -119,6 +119,6 @@ impl TxSigner<Signature> for KmsSigner {
         self.signer
             .sign_transaction(tx)
             .await
-            .map_err(|e| alloy_signer::Error::other(e))
+            .map_err(alloy_signer::Error::other)
     }
 }
