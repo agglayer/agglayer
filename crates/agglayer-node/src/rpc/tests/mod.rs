@@ -15,8 +15,8 @@ use agglayer_storage::{
     tests::TempDBDir,
 };
 use agglayer_types::{Certificate, CertificateId, CertificateStatus, Digest, Height, NetworkId};
-use ethers::providers::{self, MockProvider, Provider};
-use ethers::signers::Signer;
+use alloy::providers::{self, Provider, ProviderBuilder};
+use alloy::signers::Signer;
 use http_body_util::Empty;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;

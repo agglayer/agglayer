@@ -1,14 +1,13 @@
 ---
-source: crates/agglayer-node/src/rpc/tests/errors.rs
-expression: "Status(TxStatus { detail: \"middleware error: Attempted to sign a transaction with no available signer. Hint: did you mean to use a SignerMiddleware?\" })"
-snapshot_kind: text
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "Status(TxStatus { detail: \"provider error: Signer unavailable\" })"
 ---
 {
   "code": -10005,
   "data": {
     "status": {
       "tx-status": {
-        "detail": "middleware error: Attempted to sign a transaction with no available signer. Hint: did you mean to use a SignerMiddleware?"
+        "detail": "provider error: Signer unavailable"
       }
     }
   },

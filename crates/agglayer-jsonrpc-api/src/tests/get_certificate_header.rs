@@ -5,7 +5,7 @@ use agglayer_types::{
 };
 use insta::assert_snapshot;
 use jsonrpsee::{
-    core::{client::ClientT, ClientError},
+    core::ClientError,
     rpc_params,
 };
 use rstest::*;
@@ -13,7 +13,6 @@ use serde_json::json;
 
 use crate::{
     testutils::{context, raw_rpc, RawRpcContext, TestContext},
-    AgglayerServer,
 };
 
 #[rstest]
