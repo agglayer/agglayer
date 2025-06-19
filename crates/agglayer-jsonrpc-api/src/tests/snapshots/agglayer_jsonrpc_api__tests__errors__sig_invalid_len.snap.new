@@ -1,0 +1,15 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+assertion_line: 154
+expression: "SignatureMismatch { detail: \"could not recover transaction signer: invalid parity: 99\" }"
+snapshot_kind: text
+---
+{
+  "code": -10002,
+  "data": {
+    "signature-mismatch": {
+      "detail": "could not recover transaction signer: invalid parity: 99"
+    }
+  },
+  "message": "Rollup signature verification failed"
+}

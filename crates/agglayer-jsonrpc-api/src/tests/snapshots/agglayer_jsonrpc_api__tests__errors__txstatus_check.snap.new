@@ -1,0 +1,17 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+assertion_line: 154
+expression: "Status(TxStatus { detail: \"provider error: Signer unavailable\" })"
+snapshot_kind: text
+---
+{
+  "code": -10005,
+  "data": {
+    "status": {
+      "tx-status": {
+        "detail": "provider error: Signer unavailable"
+      }
+    }
+  },
+  "message": "Status retrieval error: Failed to get tx status"
+}
