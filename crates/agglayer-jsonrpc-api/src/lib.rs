@@ -34,13 +34,11 @@ pub mod service;
 mod signed_tx;
 mod zkevm_node_client;
 
-// Temporarily disabled complex ethers-based tests during alloy migration
-// #[cfg(test)]
-// pub mod tests;
+#[cfg(test)]
+pub mod tests;
 
-// Temporarily disabled complex testutils during alloy migration
-// #[cfg(any(test, feature = "testutils"))]
-// pub mod testutils;
+#[cfg(any(test, feature = "testutils"))]
+pub mod testutils;
 
 pub mod admin;
 

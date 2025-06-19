@@ -7,7 +7,7 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, Digest, Height, Metadata,
     NetworkId, SettlementTxHash,
 };
-use ethers::signers::Signer as _;
+use alloy::signers::Signer as _;
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder, rpc_params};
 
 use crate::testutils::TestContext;
@@ -56,7 +56,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
 async fn send_certificate_method_requires_known_signer() {
     let path = TempDBDir::new();
     let mut config = Config::new(&path.path);
-    // Willingly insert a signer that is not the one that’ll be used down below
+    // Willingly insert a signer that is not the one that'll be used down below
     config
         .proof_signers
         .insert(1, Certificate::wallet_for_test(NetworkId::new(2)).address());

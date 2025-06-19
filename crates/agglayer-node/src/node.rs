@@ -5,8 +5,8 @@ use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
 use agglayer_contracts::{
-    polygon_rollup_manager::PolygonRollupManager,
-    polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2, L1RpcClient,
+    contracts::PolygonRollupManager, 
+    L1RpcClient,
 };
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
@@ -22,13 +22,11 @@ use agglayer_storage::{
         PerEpochReader as _,
     },
 };
-use alloy::providers::WsConnect;
-use anyhow::Result;
-use ethers::{
-    middleware::MiddlewareBuilder,
-    providers::{Http, Provider},
+use alloy::{
+    providers::{ProviderBuilder, WsConnect},
     signers::Signer,
 };
+use anyhow::Result;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -191,22 +189,17 @@ impl Node {
         let address = signer.address();
         tracing::info!("Signer address: {:?}", address);
 
-        // Create a new L1 RPC provider with the configured signer.
-        let rpc = Arc::new(
-            Provider::<Http>::try_from(config.l1.node_url.as_str())?
-                .with_signer(signer)
-                .nonce_manager(address),
-        );
+        // Create a new L1 RPC provider (without signer for now - TODO: add signer support)
+        let provider = ProviderBuilder::new()
+            .on_http(config.l1.node_url.clone());
+        let rpc = Arc::new(provider);
 
         tracing::debug!("RPC provider created");
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
                 rpc.clone(),
-                PolygonRollupManager::new(config.l1.rollup_manager_contract, rpc.clone()),
-                PolygonZkEVMGlobalExitRootV2::new(
-                    config.l1.polygon_zkevm_global_exit_root_v2_contract,
-                    rpc.clone(),
-                ),
+                PolygonRollupManager::new(config.l1.rollup_manager_contract, (*rpc).clone()),
+                config.l1.polygon_zkevm_global_exit_root_v2_contract,
             )
             .await?,
         );
