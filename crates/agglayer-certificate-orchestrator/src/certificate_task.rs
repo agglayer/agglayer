@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
-    stores::{StateReader, StateWriter},
-};
+    stores::{
+    PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
+}};
 use agglayer_types::{Certificate, CertificateHeader, CertificateStatus, CertificateStatusError};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, trace, warn};
@@ -17,18 +18,20 @@ use crate::{network_task::NetworkTaskMessage, Certifier};
 /// related to the certificate until it gets finalized, including exchanging the
 /// required messages with the network task to both get required information
 /// from it and notify it of certificate progress.
-pub struct CertificateTask<StateStore, CertifierClient> {
+pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     certificate: Certificate,
     header: CertificateHeader,
 
     network_task: mpsc::Sender<NetworkTaskMessage>,
     state_store: Arc<StateStore>,
+    pending_store: Arc<PendingStore>,
     certifier_client: Arc<CertifierClient>,
 }
 
-impl<StateStore, CertifierClient> CertificateTask<StateStore, CertifierClient>
+impl<StateStore, PendingStore, CertifierClient> CertificateTask<StateStore, PendingStore, CertifierClient>
 where
     StateStore: StateReader + StateWriter,
+    PendingStore: PendingCertificateReader + PendingCertificateWriter,
     CertifierClient: Certifier,
 {
     pub fn new(
@@ -36,6 +39,7 @@ where
         header: CertificateHeader,
         network_task: mpsc::Sender<NetworkTaskMessage>,
         state_store: Arc<StateStore>,
+        pending_store: Arc<PendingStore>,
         certifier_client: Arc<CertifierClient>,
     ) -> Self {
         Self {
@@ -43,6 +47,7 @@ where
             header,
             network_task,
             state_store,
+            pending_store,
             certifier_client,
         }
     }
@@ -114,6 +119,23 @@ where
         if let CertificateStatus::InError { error } = &self.header.status {
             warn!(error = ?anyhow::Error::from(error.clone()), "Certificate is already in error");
             return Err(error.clone());
+        }
+
+        // TODO: Hack to deal with Proven certificates in case the PP changed.
+        // See https://github.com/agglayer/agglayer/pull/819#discussion_r2152193517 for the details
+        // Note that we still have the problem, this is here only to mitigate a bit the
+        // issue When we finally make the storage refactoring, we should remove
+        // this
+        if self.header.status == CertificateStatus::Proven {
+            warn!(
+                "Certificate is already proven but we do not have the  new_state anymore... \
+                 reproving"
+            );
+
+            self.state_store
+                .update_certificate_header_status(&certificate_id, &CertificateStatus::Pending)?;
+            self.header.status = CertificateStatus::Pending;
+            self.pending_store.remove_generated_proof(&certificate_id)?;
         }
 
         // First, prove the certificate (or recompute just the new state if it's already

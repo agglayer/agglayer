@@ -100,7 +100,7 @@ impl<CertifierClient, Sc, PendingStore, StateStore>
 where
     CertifierClient: 'static + Certifier,
     Sc: 'static + SettlementClient,
-    PendingStore: PendingCertificateReader + PendingCertificateWriter,
+    PendingStore: 'static + PendingCertificateReader + PendingCertificateWriter,
     StateStore: 'static + StateReader + StateWriter,
 {
     #[allow(clippy::too_many_arguments)]
@@ -319,6 +319,7 @@ where
                 header,
                 sender,
                 self.state_store.clone(),
+                self.pending_store.clone(),
                 self.certifier_client.clone(),
             )
             .process(),
@@ -390,6 +391,9 @@ where
                         let Some(new) = self.pending_state.take() else {
                             return Err(Error::InternalError(format!("Missing pending state needed upon settlement, current state: {}", self.local_state.get_roots().display_to_hex() )))
                         };
+                        self.at_capacity_for_epoch = true;
+                        self.latest_settled = Some(settled_certificate);
+                        *next_expected_height += 1;
                         debug!(
                             old_state = self.local_state.get_roots().display_to_hex(),
                             new_state = new.get_roots().display_to_hex(),
