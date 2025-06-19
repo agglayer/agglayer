@@ -8,7 +8,7 @@ use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use ethers::types::H256;
 use mockall::predicate::{always, eq};
 use pessimistic_proof::{
-    core::generate_pessimistic_proof, LocalNetworkState, PessimisticProofOutput,
+    core::generate_pessimistic_proof, LocalNetworkState,
 };
 use rstest::rstest;
 
@@ -155,16 +155,21 @@ async fn from_proven_to_settled() {
         .insert_certificate_header(&certificate, CertificateStatus::Proven)
         .expect("Failed to insert certificate header");
 
+    let pending_store = storage.pending.clone();
     certifier
-        .expect_witness_generation()
+        .expect_certify()
         .times(1)
-        .with(always(), always())
-        .returning(move |certificate, new_state| {
+        .with(always(), eq(network_id), eq(0))
+        .returning(move |mut new_state, network, height| {
+            let certificate = pending_store
+                .get_certificate(network, height)
+                .expect("Failed to get certificate")
+                .expect("Certificate not found");
             let signer = agglayer_types::Address::new([0; 20]);
-            let initial_state = LocalNetworkState::from(new_state.clone());
-            let multi_batch_header = new_state
+
+            let _ = new_state
                 .apply_certificate(
-                    certificate,
+                    &certificate,
                     signer,
                     certificate
                         .l1_info_root()
@@ -174,17 +179,13 @@ async fn from_proven_to_settled() {
                     None,
                 )
                 .expect("Failed to apply certificate");
-            // This proof is obviously wrong, but it's actually unused in this test
-            let proof = PessimisticProofOutput {
-                prev_local_exit_root: Default::default(),
-                prev_pessimistic_root: Default::default(),
-                l1_info_root: Default::default(),
-                origin_network: NetworkId::ETH_L1,
-                aggchain_hash: Default::default(),
-                new_local_exit_root: Default::default(),
-                new_pessimistic_root: Default::default(),
-            };
-            Ok((multi_batch_header, initial_state, proof))
+
+            Ok(CertifierOutput {
+                certificate,
+                height,
+                new_state,
+                network,
+            })
         });
 
     let mut packer = MockEpochPacker::new();

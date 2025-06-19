@@ -82,7 +82,7 @@ impl<CertifierClient, SettlementClient, PendingStore, StateStore>
 where
     CertifierClient: 'static + Certifier,
     SettlementClient: 'static + EpochPacker,
-    PendingStore: PendingCertificateReader + PendingCertificateWriter,
+    PendingStore: 'static + PendingCertificateReader + PendingCertificateWriter,
     StateStore: 'static + StateReader + StateWriter,
 {
     #[allow(clippy::too_many_arguments)]
@@ -301,6 +301,7 @@ where
                 header,
                 sender,
                 self.state_store.clone(),
+                self.pending_store.clone(),
                 self.certifier_client.clone(),
                 self.settlement_client.clone(),
             )
