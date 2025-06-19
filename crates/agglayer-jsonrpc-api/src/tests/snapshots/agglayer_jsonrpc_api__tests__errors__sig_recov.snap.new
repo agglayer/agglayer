@@ -1,6 +1,6 @@
 ---
 source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
-assertion_line: 154
+assertion_line: 153
 expression: "SignatureMismatch { detail: \"could not recover transaction signer: invalid parity: 2\" }"
 snapshot_kind: text
 ---
