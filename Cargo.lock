@@ -170,6 +170,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-types",
  "alloy",
+ "alloy-node-bindings",
  "async-trait",
  "backoff",
  "chrono",
@@ -500,7 +501,6 @@ dependencies = [
  "arc-swap",
  "axum 0.8.4",
  "buildstructor",
- "ethers",
  "fail",
  "futures",
  "hex",

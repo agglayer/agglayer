@@ -10,10 +10,11 @@ use agglayer_storage::{
     stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
-use ethers::{
-    providers::{Http, Middleware, Provider, ProviderExt as _},
-    types::{TransactionRequest, H256},
-    utils::Anvil,
+use alloy::{
+    providers::{Provider, ProviderBuilder},
+    primitives::{B256, TxHash, U256},
+    rpc::types::{TransactionRequest, TransactionReceipt},
+    node_bindings::Anvil,
 };
 use jsonrpsee::{
     core::{client::ClientT, ClientError},
@@ -178,7 +179,7 @@ async fn check_tx_status_fail() {
     let client = HttpClientBuilder::default().build(url).unwrap();
 
     // Try to get status using a non-existent address
-    let fake_tx_hash = H256([0x27; 32]);
+    let fake_tx_hash = B256([0x27; 32]);
     let result: Result<TxStatus, ClientError> = client
         .request("interop_getTxStatus", rpc_params![fake_tx_hash])
         .await;
