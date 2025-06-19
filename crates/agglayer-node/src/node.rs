@@ -4,10 +4,7 @@ use agglayer_aggregator_notifier::{AlloySettlementClient, CertifierClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
-use agglayer_contracts::{
-    contracts::PolygonRollupManager, 
-    L1RpcClient,
-};
+use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
 };
@@ -189,9 +186,9 @@ impl Node {
         let address = signer.address();
         tracing::info!("Signer address: {:?}", address);
 
-        // Create a new L1 RPC provider (without signer for now - TODO: add signer support)
-        let provider = ProviderBuilder::new()
-            .on_http(config.l1.node_url.clone());
+        // Create a new L1 RPC provider (without signer for now - TODO: add signer
+        // support)
+        let provider = ProviderBuilder::new().on_http(config.l1.node_url.clone());
         let rpc = Arc::new(provider);
 
         tracing::debug!("RPC provider created");

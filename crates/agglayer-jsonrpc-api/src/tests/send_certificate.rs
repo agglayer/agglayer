@@ -7,7 +7,7 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, Digest, Height, Metadata,
     NetworkId, SettlementTxHash,
 };
-use alloy::signers::Signer as _;
+// use alloy::signers::Signer as _;
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder, rpc_params};
 
 use crate::testutils::TestContext;
