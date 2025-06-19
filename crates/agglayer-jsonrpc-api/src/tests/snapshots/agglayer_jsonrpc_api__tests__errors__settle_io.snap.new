@@ -1,6 +1,6 @@
 ---
 source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
-assertion_line: 154
+assertion_line: 153
 expression: "Settlement(IoError(\"Network error\"))"
 snapshot_kind: text
 ---
