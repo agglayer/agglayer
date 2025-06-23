@@ -9,7 +9,6 @@ workspace = true
 
 [dependencies]
 alloy.workspace = true
-alloy-signer-local = { workspace = true, features = ["mnemonic", "keystore"] }
 anyhow.workspace = true
 arc-swap.workspace = true
 buildstructor.workspace = true

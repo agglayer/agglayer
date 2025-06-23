@@ -1,6 +1,8 @@
-use alloy_consensus::{SignableTransaction, TxEip1559, TypedTransaction};
+use alloy::{
+    consensus::{SignableTransaction, TxEip1559, TypedTransaction},
+    signers::Signer,
+};
 use alloy_primitives::{Address, U256};
-use alloy_signer::Signer;
 
 use super::*;
 

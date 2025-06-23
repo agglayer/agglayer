@@ -3,7 +3,7 @@
 //! Cloud KMS signer.
 
 use agglayer_config::GcpKmsConfig;
-use alloy_signer_gcp::{GcpKeyRingRef, GcpSigner, KeySpecifier};
+use alloy::signers::gcp::{GcpKeyRingRef, GcpSigner, KeySpecifier};
 use gcloud_sdk::{
     google::cloud::kms::v1::key_management_service_client::KeyManagementServiceClient, GoogleApi,
 };

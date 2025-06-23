@@ -169,7 +169,6 @@ version = "0.1.0"
 dependencies = [
  "agglayer-types",
  "alloy",
- "alloy-node-bindings",
  "async-trait",
  "backoff",
  "chrono",
@@ -248,11 +247,8 @@ name = "agglayer-gcp-kms"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
- "alloy-consensus",
- "alloy-network",
+ "alloy",
  "alloy-primitives",
- "alloy-signer",
- "alloy-signer-gcp",
  "async-trait",
  "gcloud-sdk",
  "serde",
@@ -566,7 +562,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.2#f8580024d771580217ded443f85e42919d682595"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
@@ -590,7 +586,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.2#f8580024d771580217ded443f85e42919d682595"
 dependencies = [
  "prover-config",
  "prover-logger",
@@ -603,7 +599,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.2#f8580024d771580217ded443f85e42919d682595"
 dependencies = [
  "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
  "pbjson",
@@ -652,10 +648,8 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-gcp-kms",
- "alloy-consensus",
- "alloy-network",
+ "alloy",
  "alloy-primitives",
- "alloy-signer",
  "alloy-signer-local",
  "async-trait",
  "rstest",
@@ -773,8 +767,7 @@ dependencies = [
  "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
  "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
  "agglayer-types",
- "alloy-signer",
- "alloy-signer-local",
+ "alloy",
  "arbitrary",
  "bincode",
  "derive_more 2.0.1",
@@ -858,6 +851,7 @@ dependencies = [
  "alloy-rpc-types",
  "alloy-serde",
  "alloy-signer",
+ "alloy-signer-gcp",
  "alloy-signer-local",
  "alloy-transport",
  "alloy-transport-http",
@@ -5207,7 +5201,6 @@ dependencies = [
  "agglayer-telemetry 0.1.0",
  "agglayer-types",
  "alloy",
- "alloy-signer-local",
  "anyhow",
  "arc-swap",
  "buildstructor",
@@ -6888,8 +6881,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
  "agglayer-types",
- "alloy-signer",
- "alloy-signer-local",
+ "alloy",
  "anyhow",
  "base64 0.22.1",
  "bincode",
@@ -7404,7 +7396,7 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 [[package]]
 name = "prover-alloy"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.2#f8580024d771580217ded443f85e42919d682595"
 dependencies = [
  "agglayer-evm-client",
  "alloy",
@@ -7420,7 +7412,7 @@ dependencies = [
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.2#f8580024d771580217ded443f85e42919d682595"
 dependencies = [
  "prover-utils",
  "serde",
@@ -7431,7 +7423,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.2#f8580024d771580217ded443f85e42919d682595"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -7450,7 +7442,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.2#f8580024d771580217ded443f85e42919d682595"
 dependencies = [
  "anyhow",
  "buildstructor",
@@ -7476,7 +7468,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.2#f8580024d771580217ded443f85e42919d682595"
 dependencies = [
  "serde",
  "tracing",
@@ -7487,7 +7479,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.1.2#f8580024d771580217ded443f85e42919d682595"
 dependencies = [
  "humantime-serde",
  "serde",

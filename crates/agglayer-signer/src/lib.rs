@@ -8,11 +8,12 @@ use std::sync::Arc;
 
 use agglayer_config::{AuthConfig, Config, LocalConfig};
 use agglayer_gcp_kms::{KmsSigner, KMS};
-use alloy_consensus::TypedTransaction;
-use alloy_network::TxSigner;
+use alloy::{
+    consensus::TypedTransaction,
+    network::TxSigner,
+    signers::{local::PrivateKeySigner, Signer},
+};
 use alloy_primitives::{Address, ChainId, Signature, B256};
-use alloy_signer::Signer;
-use alloy_signer_local::{LocalSigner, PrivateKeySigner};
 use async_trait::async_trait;
 
 mod error;
@@ -40,8 +41,8 @@ impl ConfiguredSigner {
         local: &LocalConfig,
     ) -> Result<PrivateKeySigner, Error> {
         let pk = local.private_keys.first().ok_or(Error::NoPk)?;
-        let signer =
-            LocalSigner::decrypt_keystore(&pk.path, &pk.password)?.with_chain_id(Some(chain_id));
+        let signer = PrivateKeySigner::decrypt_keystore(&pk.path, &pk.password)?
+            .with_chain_id(Some(chain_id));
         Ok(signer)
     }
 
@@ -64,23 +65,23 @@ impl ConfiguredSigner {
 /// This implementation simply delegates to the underlying signer.
 #[async_trait]
 impl Signer for ConfiguredSigner {
-    async fn sign_hash(&self, hash: &B256) -> Result<Signature, alloy_signer::Error> {
+    async fn sign_hash(&self, hash: &B256) -> Result<Signature, alloy::signers::Error> {
         match self {
             ConfiguredSigner::Local(wallet) => wallet.sign_hash(hash).await,
             ConfiguredSigner::Kms(signer) => signer
                 .sign_message(hash.as_slice())
                 .await
-                .map_err(alloy_signer::Error::other),
+                .map_err(alloy::signers::Error::other),
         }
     }
 
-    async fn sign_message(&self, message: &[u8]) -> Result<Signature, alloy_signer::Error> {
+    async fn sign_message(&self, message: &[u8]) -> Result<Signature, alloy::signers::Error> {
         match self {
             ConfiguredSigner::Local(wallet) => wallet.sign_message(message).await,
             ConfiguredSigner::Kms(signer) => signer
                 .sign_message(message)
                 .await
-                .map_err(alloy_signer::Error::other),
+                .map_err(alloy::signers::Error::other),
         }
     }
 
@@ -129,8 +130,8 @@ impl TxSigner<Signature> for ConfiguredSigner {
 
     async fn sign_transaction(
         &self,
-        tx: &mut dyn alloy_consensus::SignableTransaction<Signature>,
-    ) -> Result<Signature, alloy_signer::Error> {
+        tx: &mut dyn alloy::consensus::SignableTransaction<Signature>,
+    ) -> Result<Signature, alloy::signers::Error> {
         match self {
             ConfiguredSigner::Local(wallet) => wallet.sign_transaction(tx).await,
             ConfiguredSigner::Kms(signer) => TxSigner::sign_transaction(signer, tx).await,

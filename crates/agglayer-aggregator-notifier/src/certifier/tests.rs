@@ -7,7 +7,6 @@ use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
 use alloy::contract::Error as ContractError;
-// Removed unused ethers imports after migration to alloy
 use fail::FailScenario;
 use mockall::predicate::{always, eq};
 use pessimistic_proof_test_suite::forest::Forest;

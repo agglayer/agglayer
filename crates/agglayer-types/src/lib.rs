@@ -536,10 +536,10 @@ impl Default for Certificate {
 pub fn compute_signature_info(
     new_local_exit_root: LocalExitRoot,
     imported_bridge_exits: &[ImportedBridgeExit],
-    wallet: &alloy_signer_local::PrivateKeySigner,
+    wallet: &alloy::signers::local::PrivateKeySigner,
     height: Height,
 ) -> (Digest, Signature, Address) {
-    use alloy_signer::SignerSync;
+    use alloy::signers::SignerSync;
     let version = CommitmentVersion::V2;
     let combined_hash = SignatureCommitmentValues {
         new_local_exit_root,
@@ -567,9 +567,9 @@ pub fn compute_signature_info(
 
 impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
-    pub fn wallet_for_test(network_id: NetworkId) -> alloy_signer_local::PrivateKeySigner {
+    pub fn wallet_for_test(network_id: NetworkId) -> alloy::signers::local::PrivateKeySigner {
         let fake_priv_key = keccak256_combine([b"FAKEKEY:", network_id.to_be_bytes().as_slice()]);
-        alloy_signer_local::PrivateKeySigner::from_slice(fake_priv_key.as_bytes())
+        alloy::signers::local::PrivateKeySigner::from_slice(fake_priv_key.as_bytes())
             .expect("valid fake private key")
     }
 

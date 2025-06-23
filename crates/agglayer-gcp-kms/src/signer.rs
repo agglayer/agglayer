@@ -1,11 +1,12 @@
 //! The [`KmsSigner`] struct is a wrapper around [`GcpSigner`] providing
 //! additional functionality for signing messages and transactions.
 
-use alloy_consensus::{SignableTransaction, TypedTransaction};
-use alloy_network::TxSigner;
+use alloy::{
+    consensus::{SignableTransaction, TypedTransaction},
+    network::TxSigner,
+    signers::{gcp::GcpSigner, Signer},
+};
 use alloy_primitives::{Address, ChainId, Signature, B256};
-use alloy_signer::Signer;
-use alloy_signer_gcp::GcpSigner;
 use async_trait::async_trait;
 
 use crate::Error;
@@ -48,7 +49,7 @@ impl KmsSigner {
 
     /// Returns the address associated with the signer.
     pub fn address(&self) -> Address {
-        alloy_signer::Signer::address(&self.signer)
+        alloy::signers::Signer::address(&self.signer)
     }
 
     /// Returns the chain ID associated with the signer.
@@ -75,22 +76,22 @@ impl KmsSigner {
 /// This allows the KmsSigner to be used anywhere an alloy Signer is expected.
 #[async_trait]
 impl Signer for KmsSigner {
-    async fn sign_hash(&self, hash: &B256) -> Result<Signature, alloy_signer::Error> {
+    async fn sign_hash(&self, hash: &B256) -> Result<Signature, alloy::signers::Error> {
         self.signer
             .sign_hash(hash)
             .await
-            .map_err(alloy_signer::Error::other)
+            .map_err(alloy::signers::Error::other)
     }
 
-    async fn sign_message(&self, message: &[u8]) -> Result<Signature, alloy_signer::Error> {
+    async fn sign_message(&self, message: &[u8]) -> Result<Signature, alloy::signers::Error> {
         self.signer
             .sign_message(message)
             .await
-            .map_err(alloy_signer::Error::other)
+            .map_err(alloy::signers::Error::other)
     }
 
     fn address(&self) -> Address {
-        alloy_signer::Signer::address(&self.signer)
+        alloy::signers::Signer::address(&self.signer)
     }
 
     fn chain_id(&self) -> Option<ChainId> {
@@ -109,16 +110,16 @@ impl Signer for KmsSigner {
 #[async_trait]
 impl TxSigner<Signature> for KmsSigner {
     fn address(&self) -> Address {
-        alloy_signer::Signer::address(&self.signer)
+        Signer::address(&self.signer)
     }
 
     async fn sign_transaction(
         &self,
         tx: &mut dyn SignableTransaction<Signature>,
-    ) -> Result<Signature, alloy_signer::Error> {
+    ) -> Result<Signature, alloy::signers::Error> {
         self.signer
             .sign_transaction(tx)
             .await
-            .map_err(alloy_signer::Error::other)
+            .map_err(alloy::signers::Error::other)
     }
 }

@@ -5,8 +5,7 @@ use agglayer_types::{
     primitives::{keccak::keccak256, Hashable},
     Address, Certificate, Digest, Height, LocalNetworkStateData, Signature, U256,
 };
-use alloy_signer::SignerSync;
-use alloy_signer_local::PrivateKeySigner;
+use alloy::signers::{local::PrivateKeySigner, SignerSync};
 use ecdsa_proof_lib::AggchainECDSA;
 use pessimistic_proof::{
     core::commitment::SignatureCommitmentValues,
@@ -179,7 +178,7 @@ impl Forest {
         LocalNetworkState::from(self.state_b.clone())
     }
 
-    pub fn sign(&self, commitment: Digest) -> Result<(Signature, Address), alloy_signer::Error> {
+    pub fn sign(&self, commitment: Digest) -> Result<(Signature, Address), alloy::signers::Error> {
         let signature = self.wallet.sign_hash_sync(&commitment.0.into())?;
         Ok((
             Signature::new(

@@ -9,7 +9,7 @@ use alloy::{
     providers::{Provider, ProviderBuilder, WsConnect},
     rpc::client::ClientBuilder,
 };
-use alloy_node_bindings::Anvil;
+use alloy::node_bindings::Anvil;
 use fail::FailScenario;
 use futures::StreamExt;
 use rstest::rstest;

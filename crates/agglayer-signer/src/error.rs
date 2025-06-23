@@ -1,6 +1,5 @@
 use agglayer_gcp_kms::Error as GcpKmsError;
-use alloy_signer::Error as SignerError;
-use alloy_signer_local::LocalSignerError;
+use alloy::signers::{local::LocalSignerError, Error as SignerError};
 use thiserror::Error;
 
 /// Errors that can occur when using a

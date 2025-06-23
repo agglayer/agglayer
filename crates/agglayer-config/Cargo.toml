@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-alloy-primitives = { workspace = true, features = ["serde"] }
+alloy-primitives.workspace = true
 dirs.workspace = true
 humantime-serde = "1.1.1"
 jsonrpsee.workspace = true
