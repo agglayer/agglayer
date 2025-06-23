@@ -175,7 +175,7 @@ where
                     return Ok(self.network_id);
                 }
 
-                result = self.make_progress(&mut stream_epoch, &mut next_expected_height, &mut first_run) => {
+                result = self.make_progress(&mut stream_epoch, &mut next_expected_height, &mut first_run, &cancellation_token) => {
                     if let Err(error)= result {
                         error!("Error during the certification process: {}", error);
 
@@ -194,6 +194,7 @@ where
         stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
         next_expected_height: &mut u64,
         first_run: &mut bool,
+        cancellation_token: &CancellationToken,
     ) -> Result<(), Error> {
         if *first_run {
             *first_run = false;
@@ -304,6 +305,7 @@ where
                 self.pending_store.clone(),
                 self.certifier_client.clone(),
                 self.settlement_client.clone(),
+                cancellation_token.clone(),
             )
             .process(),
         );

@@ -5,6 +5,7 @@ use agglayer_storage::stores::{
 };
 use agglayer_types::{Certificate, CertificateHeader, CertificateStatus, CertificateStatusError};
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
 
 use crate::{network_task::NetworkTaskMessage, Certifier, EpochPacker};
@@ -25,6 +26,7 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient, Settlement
     pending_store: Arc<PendingStore>,
     certifier_client: Arc<CertifierClient>,
     settlement_client: Arc<SettlementClient>,
+    cancellation_token: CancellationToken,
 }
 
 impl<StateStore, PendingStore, CertifierClient, SettlementClient>
@@ -43,6 +45,7 @@ where
         pending_store: Arc<PendingStore>,
         certifier_client: Arc<CertifierClient>,
         settlement_client: Arc<SettlementClient>,
+        cancellation_token: CancellationToken,
     ) -> Self {
         Self {
             certificate,
@@ -52,6 +55,7 @@ where
             pending_store,
             certifier_client,
             settlement_client,
+            cancellation_token,
         }
     }
 
@@ -66,6 +70,12 @@ where
     )]
     pub async fn process(mut self) {
         if let Err(error) = self.process_impl().await {
+            // If requested to cancel, don't do anything — the error could have arisen from
+            // a partially-shutdown process.
+            if self.cancellation_token.is_cancelled() {
+                return;
+            }
+
             // First, log the error
             match &error {
                 CertificateStatusError::InternalError(error) => {
