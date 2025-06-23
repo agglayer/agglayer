@@ -114,7 +114,7 @@ dependencies = [
 [[package]]
 name = "agglayer-bincode"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
 dependencies = [
  "bincode",
  "serde",
@@ -123,7 +123,7 @@ dependencies = [
 [[package]]
 name = "agglayer-bincode"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits#2518a133454b19d934354f54fb4758941a5c252c"
 dependencies = [
  "bincode",
  "serde",
@@ -243,7 +243,7 @@ dependencies = [
  "agglayer-grpc-client",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
- "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
  "agglayer-rpc",
  "agglayer-storage",
  "agglayer-types",
@@ -284,7 +284,7 @@ dependencies = [
 name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
  "agglayer-types",
  "anyhow",
  "bincode",
@@ -302,15 +302,6 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
-dependencies = [
- "agglayer-interop-grpc-types 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
-]
-
-[[package]]
-name = "agglayer-interop"
-version = "0.6.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
 dependencies = [
  "agglayer-interop-grpc-types 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
@@ -318,18 +309,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "agglayer-interop-grpc-types"
+name = "agglayer-interop"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits#2518a133454b19d934354f54fb4758941a5c252c"
 dependencies = [
- "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "bincode",
- "hex",
- "pbjson",
- "prost 0.13.5",
- "serde",
- "thiserror 2.0.12",
- "tonic-types 0.13.1",
+ "agglayer-interop-grpc-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
 ]
 
 [[package]]
@@ -348,26 +333,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "agglayer-interop-types"
+name = "agglayer-interop-grpc-types"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits#2518a133454b19d934354f54fb4758941a5c252c"
 dependencies = [
- "agglayer-bincode 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "arbitrary",
+ "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
  "bincode",
- "educe",
- "ethers",
  "hex",
- "rand 0.9.1",
+ "pbjson",
+ "prost 0.13.5",
  "serde",
- "serde_with",
- "sp1-core-machine",
- "sp1-prover",
- "sp1-sdk",
  "thiserror 2.0.12",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "tonic-types 0.13.1",
 ]
 
 [[package]]
@@ -389,6 +366,29 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
+]
+
+[[package]]
+name = "agglayer-interop-types"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits#2518a133454b19d934354f54fb4758941a5c252c"
+dependencies = [
+ "agglayer-bincode 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "arbitrary",
+ "bincode",
+ "educe",
+ "ethers",
+ "hex",
+ "rand 0.9.1",
+ "serde",
+ "serde_with",
+ "sp1-core-machine",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror 2.0.12",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
 ]
 
 [[package]]
@@ -515,14 +515,12 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
 dependencies = [
  "alloy-primitives",
- "arbitrary",
  "byteorder",
  "hex",
  "k256",
- "rand 0.9.1",
  "serde",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -530,12 +528,14 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits#2518a133454b19d934354f54fb4758941a5c252c"
 dependencies = [
  "alloy-primitives",
+ "arbitrary",
  "byteorder",
  "hex",
  "k256",
+ "rand 0.9.1",
  "serde",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -643,7 +643,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
  "agglayer-types",
  "alloy-primitives",
  "arc-swap",
@@ -718,18 +718,6 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
-dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "hex",
- "serde",
- "serde_with",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "agglayer-tries"
-version = "0.6.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
 dependencies = [
  "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
@@ -740,12 +728,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-tries"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits#2518a133454b19d934354f54fb4758941a5c252c"
+dependencies = [
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "hex",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
  "agglayer-types",
  "arbitrary",
  "bincode",
@@ -759,7 +759,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
 ]
 
 [[package]]
@@ -1107,9 +1107,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-primitives"
-version = "1.1.2"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18c35fc4b03ace65001676358ffbbaefe2a2b27ee50fe777c345082c7c888be8"
+checksum = "6177ed26655d4e84e00b65cb494d4e0b8830e7cae7ef5d63087d445a2600fb55"
 dependencies = [
  "alloy-rlp",
  "arbitrary",
@@ -3494,12 +3494,12 @@ dependencies = [
 name = "ecdsa-proof-lib"
 version = "0.1.0"
 dependencies = [
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
  "alloy-primitives",
  "k256",
  "serde",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
 ]
 
 [[package]]
@@ -6170,7 +6170,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 2.0.0",
+ "proc-macro-crate 3.3.0",
  "proc-macro2",
  "quote",
  "syn 2.0.101",
@@ -6798,8 +6798,8 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
  "arbitrary",
  "bincode",
  "hex",
@@ -6815,15 +6815,15 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
 ]
 
 [[package]]
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
  "alloy-primitives",
  "arbitrary",
  "bincode",
@@ -6842,14 +6842,14 @@ dependencies = [
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
  "toml",
  "tracing",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
 ]
 
 [[package]]
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
  "agglayer-types",
  "anyhow",
  "base64 0.22.1",
@@ -6871,7 +6871,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "tracing",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
  "uuid 1.17.0",
 ]
 
@@ -10407,11 +10407,10 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.0#205a983e1c12d533b592493fc99a4a3e68b2d8f5"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
 dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.0)",
- "arbitrary",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
  "hex-literal 1.0.0",
  "serde",
  "serde_with",
@@ -10422,10 +10421,11 @@ dependencies = [
 [[package]]
 name = "unified-bridge"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits#2518a133454b19d934354f54fb4758941a5c252c"
 dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?tag=v0.7.1)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fgi-unused-bits)",
+ "arbitrary",
  "hex-literal 1.0.0",
  "serde",
  "serde_with",
