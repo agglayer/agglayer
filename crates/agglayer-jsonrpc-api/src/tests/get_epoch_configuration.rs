@@ -3,16 +3,11 @@ use std::time::Duration;
 use agglayer_config::{epoch::TimeClockConfig, Epoch};
 use agglayer_types::EpochConfiguration;
 use insta::assert_snapshot;
-use jsonrpsee::{
-    core::{ClientError},
-    rpc_params,
-};
+use jsonrpsee::{core::ClientError, rpc_params};
 use rstest::*;
 use serde_json::json;
 
-use crate::{
-    testutils::{context, raw_rpc, RawRpcContext, TestContext},
-};
+use crate::testutils::{context, raw_rpc, RawRpcContext, TestContext};
 
 #[test_log::test(tokio::test)]
 async fn fetch_timeclock_config() {

@@ -4,16 +4,11 @@ use agglayer_types::{
     Digest, Height,
 };
 use insta::assert_snapshot;
-use jsonrpsee::{
-    core::ClientError,
-    rpc_params,
-};
+use jsonrpsee::{core::ClientError, rpc_params};
 use rstest::*;
 use serde_json::json;
 
-use crate::{
-    testutils::{context, raw_rpc, RawRpcContext, TestContext},
-};
+use crate::testutils::{context, raw_rpc, RawRpcContext, TestContext};
 
 #[rstest]
 #[awt]
