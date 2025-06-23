@@ -234,7 +234,12 @@ where
                 .await
                 .map_err(send_err)?;
 
-            let settlement_tx_hash = settlement_submitted.await.map_err(recv_err)??;
+            let Ok(settlement_tx_hash) = settlement_submitted.await else {
+                // Don't mark certificate as in error if network task goes away, it can happen
+                // eg. on shutdown.
+                return Ok(());
+            };
+            let settlement_tx_hash = settlement_tx_hash?;
             self.header.settlement_tx_hash = Some(settlement_tx_hash);
             self.state_store
                 .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
@@ -266,8 +271,12 @@ where
                 .await
                 .map_err(send_err)?;
 
-            let (epoch_number, certificate_index) =
-                settlement_complete.await.map_err(recv_err)??;
+            let Ok(settlement) = settlement_complete.await else {
+                // Don't mark certificate as in error if network task goes away, it can happen
+                // eg. on shutdown.
+                return Ok(());
+            };
+            let (epoch_number, certificate_index) = settlement?;
             let settled_certificate =
                 SettledCertificate(certificate_id, height, epoch_number, certificate_index);
             self.set_status(CertificateStatus::Settled)?;
