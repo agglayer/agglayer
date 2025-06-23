@@ -4,7 +4,7 @@ use agglayer_primitives::{keccak::Keccak256Hasher, ruint::UintTryFrom, Hashable,
 use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
-use unified_bridge::{Error, LocalExitTree, NetworkId, L1_ETH};
+use unified_bridge::{Error, GlobalIndex, LocalExitTree, NetworkId, L1_ETH};
 
 use crate::{
     local_balance_tree::LocalBalanceTree,
@@ -70,10 +70,20 @@ impl NetworkState {
 
         // Apply the imported bridge exits
         for (imported_bridge_exit, nullifier_path) in &multi_batch_header.imported_bridge_exits {
-            if imported_bridge_exit.global_index.network_id() == multi_batch_header.origin_network {
+            let global_index: GlobalIndex =
+                imported_bridge_exit
+                    .global_index
+                    .try_into()
+                    .map_err(|source| ProofError::InvalidImportedBridgeExit {
+                        source: Error::InvalidGlobalIndex(source),
+                        global_index: imported_bridge_exit.global_index,
+                    })?;
+
+            if global_index.network_id() == multi_batch_header.origin_network {
                 // We don't allow a chain to exit to itself
                 return Err(ProofError::CannotExitToSameNetwork);
             }
+
             // Check that the destination network of the bridge exit matches the current
             // network
             if imported_bridge_exit.bridge_exit.dest_network != multi_batch_header.origin_network {
@@ -92,7 +102,7 @@ impl NetworkState {
                 })?;
 
             // Check the nullifier non-inclusion path and update the nullifier tree
-            let nullifier_key: NullifierKey = imported_bridge_exit.global_index.into();
+            let nullifier_key: NullifierKey = global_index.into();
             self.nullifier_tree
                 .verify_and_update(nullifier_key, nullifier_path)?;
 

@@ -105,7 +105,7 @@ pub enum Error {
     )]
     NullifierPathGenerationFailed {
         source: SmtError,
-        global_index: GlobalIndex,
+        global_index: U256,
     },
     /// The operation cannot be applied on the local exit tree.
     #[error(transparent)]
@@ -157,6 +157,10 @@ pub enum Error {
         computed: LocalExitRoot,
         declared: LocalExitRoot,
     },
+
+    /// The received 32 bytes representing the global index are ill-formed.
+    #[error("Ill-formed 32bytes representing the global index.")]
+    InvalidImportedBridgeExit(#[source] unified_bridge::Error),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -679,7 +683,14 @@ impl LocalNetworkStateData {
                 .imported_bridge_exits
                 .iter()
                 .map(|exit| {
-                    let nullifier_key: NullifierKey = exit.global_index.into();
+                    let global_index: GlobalIndex =
+                        exit.global_index.try_into().map_err(|source| {
+                            Error::InvalidImportedBridgeExit(
+                                unified_bridge::Error::InvalidGlobalIndex(source),
+                            )
+                        })?;
+
+                    let nullifier_key: NullifierKey = global_index.into();
                     let nullifier_error = |source| Error::NullifierPathGenerationFailed {
                         source,
                         global_index: exit.global_index,

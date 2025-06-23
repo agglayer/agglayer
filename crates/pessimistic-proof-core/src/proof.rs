@@ -1,5 +1,6 @@
 use agglayer_primitives::{keccak::Keccak256Hasher, Address, Digest, Signature, B256};
 use agglayer_tries::roots::LocalExitRoot;
+use alloy_primitives::U256;
 pub use bincode::Options;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
@@ -9,8 +10,8 @@ use tracing::warn;
 #[cfg(target_os = "zkvm")]
 use unified_bridge::AggchainProofPublicValues;
 use unified_bridge::{
-    CommitmentVersion, Error, GlobalIndex, ImportedBridgeExitCommitmentValues, LocalExitTreeError,
-    NetworkId, TokenInfo,
+    CommitmentVersion, Error, ImportedBridgeExitCommitmentValues, LocalExitTreeError, NetworkId,
+    TokenInfo,
 };
 
 use crate::{
@@ -54,10 +55,7 @@ pub enum ProofError {
 
     /// The provided imported bridge exit is invalid.
     #[error("Invalid imported bridge exit. global index: {global_index:?}, error: {source}")]
-    InvalidImportedBridgeExit {
-        source: Error,
-        global_index: GlobalIndex,
-    },
+    InvalidImportedBridgeExit { source: Error, global_index: U256 },
 
     /// The commitment to the list of imported bridge exits is invalid.
     #[error(

@@ -156,7 +156,7 @@ impl Forest {
             let index = idx as u32;
             let imported_exit = ImportedBridgeExit {
                 bridge_exit: exit,
-                global_index: GlobalIndex::new(NETWORK_A, index),
+                global_index: GlobalIndex::new(NETWORK_A, index).into(),
                 claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
                     proof_leaf_mer: MerkleProof {
                         proof: self.local_exit_tree_data_a.get_proof(index).unwrap(),
