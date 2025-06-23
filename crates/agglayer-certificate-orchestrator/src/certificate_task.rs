@@ -6,6 +6,7 @@ use agglayer_storage::{
 };
 use agglayer_types::{Certificate, CertificateHeader, CertificateStatus, CertificateStatusError};
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
 
 use crate::{network_task::NetworkTaskMessage, Certifier};
@@ -25,6 +26,7 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     state_store: Arc<StateStore>,
     pending_store: Arc<PendingStore>,
     certifier_client: Arc<CertifierClient>,
+    cancellation_token: CancellationToken,
 }
 
 impl<StateStore, PendingStore, CertifierClient>
@@ -41,6 +43,7 @@ where
         state_store: Arc<StateStore>,
         pending_store: Arc<PendingStore>,
         certifier_client: Arc<CertifierClient>,
+        cancellation_token: CancellationToken,
     ) -> Self {
         Self {
             certificate,
@@ -49,6 +52,7 @@ where
             state_store,
             pending_store,
             certifier_client,
+            cancellation_token,
         }
     }
 
@@ -63,6 +67,12 @@ where
     )]
     pub async fn process(mut self) {
         if let Err(error) = self.process_impl().await {
+            // If requested to cancel, don't do anything — the error could have arisen from
+            // a partially-shutdown process.
+            if self.cancellation_token.is_cancelled() {
+                return;
+            }
+
             // First, log the error
             match &error {
                 CertificateStatusError::InternalError(error) => {
@@ -234,12 +244,7 @@ where
                 .await
                 .map_err(send_err)?;
 
-            let Ok(settlement_tx_hash) = settlement_submitted.await else {
-                // Don't mark certificate as in error if network task goes away, it can happen
-                // eg. on shutdown.
-                return Ok(());
-            };
-            let settlement_tx_hash = settlement_tx_hash?;
+            let settlement_tx_hash = settlement_submitted.await.map_err(recv_err)??;
             self.header.settlement_tx_hash = Some(settlement_tx_hash);
             self.state_store
                 .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
@@ -271,12 +276,8 @@ where
                 .await
                 .map_err(send_err)?;
 
-            let Ok(settlement) = settlement_complete.await else {
-                // Don't mark certificate as in error if network task goes away, it can happen
-                // eg. on shutdown.
-                return Ok(());
-            };
-            let (epoch_number, certificate_index) = settlement?;
+            let (epoch_number, certificate_index) =
+                settlement_complete.await.map_err(recv_err)??;
             let settled_certificate =
                 SettledCertificate(certificate_id, height, epoch_number, certificate_index);
             self.set_status(CertificateStatus::Settled)?;
