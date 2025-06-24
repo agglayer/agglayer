@@ -37,6 +37,7 @@ where
     CertifierClient: Certifier,
     SettlementClient: EpochPacker,
 {
+    #[allow(clippy::too_many_arguments)] // TODO: should go away with the next few PRs
     pub fn new(
         certificate: Certificate,
         header: CertificateHeader,
