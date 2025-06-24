@@ -142,10 +142,7 @@ where
         let (multi_batch_header, initial_state, pv_native) =
             self.witness_generation(&certificate, &mut state).await?;
 
-        info!(
-            "Successfully generated the witness for the PP for the Certificate {}",
-            certificate_id
-        );
+        info!("Successfully generated the witness for the PP for the Certificate {certificate_id}");
 
         let network_state = pessimistic_proof::NetworkState::from(initial_state);
         let mut stdin = SP1Stdin::new();
@@ -190,7 +187,7 @@ where
             });
         }
 
-        info!("Successfully executed the PP in SP1 for the Certificate");
+        info!("Successfully executed the PP program locally");
 
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
@@ -492,7 +489,7 @@ where
             //
             // - Public values expected by the PP (i.e., the ones used to verify the
             //   aggchain proof in the PP)
-            debug!(%certificate_id, "Aggchain proof public values expected by the received aggchain proof: {pv_from_proof:?}");
+            debug!("Public values expected by the certificate's aggchain-proof: {pv_from_proof:?}");
 
             let pv_from_pp_witness = AggchainProofPublicValues {
                 prev_local_exit_root: initial_state.exit_tree.get_root(),
@@ -511,7 +508,7 @@ where
             };
 
             if **pv_from_proof != pv_from_pp_witness {
-                error!(%certificate_id, "Mismatch on the aggchain proof public values.");
+                error!("Mismatch on the aggchain proof public values.");
                 return Err(CertificationError::AggchainProofPublicValuesMismatch {
                     from_proof: pv_from_proof.clone(),
                     from_witness: Box::new(pv_from_pp_witness),
