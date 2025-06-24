@@ -36,6 +36,9 @@ pub type MockProvider = FillProvider<
     alloy::network::Ethereum,
 >;
 
+// Note: We use generics instead of a concrete type alias for HTTP providers
+// This allows the method to work with any provider that implements the necessary traits
+
 pub struct RawRpcContext {
     pub rpc: crate::AgglayerImpl<
         MockProvider,
@@ -172,6 +175,101 @@ impl TestContext {
         }
     }
 
+    /// Create a TestContext with a real HTTP provider instead of mocks
+    /// This is useful for testing against real blockchain instances like Anvil
+    pub async fn new_with_real_provider<P>(config: Config, provider: P) -> Self 
+    where
+        P: alloy::providers::Provider + Clone + 'static,
+    {
+        let cancellation_token = CancellationToken::new();
+        let config = Arc::new(config);
+
+        let state_db = Arc::new(
+            DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions()).unwrap(),
+        );
+        let pending_db = Arc::new(
+            DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions()).unwrap(),
+        );
+        let debug_db = Arc::new(
+            DB::open_cf(&config.storage.debug_db_path, debug_db_cf_definitions()).unwrap(),
+        );
+
+        let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
+        let pending_store = Arc::new(PendingStore::new(pending_db));
+        let debug_store = Arc::new(DebugStore::new(debug_db));
+
+        // Use the real provider instead of mocks
+        let real_provider = Arc::new(provider);
+
+        // Create L1RpcClient with real provider
+        let l1_rpc_client = create_real_l1_rpc_client(real_provider.clone());
+
+        // Create certificate sender channel
+        let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
+
+        // Create AgglayerService (V0Rpc service) with real provider
+        let v0_service = Arc::new(crate::service::AgglayerService::new(
+            crate::kernel::Kernel::new(real_provider.clone(), config.clone()),
+        ));
+
+        // Create agglayer_rpc::AgglayerService with real provider
+        let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
+            certificate_sender,
+            pending_store.clone(),
+            state_store.clone(),
+            debug_store.clone(),
+            config.clone(),
+            Arc::new(l1_rpc_client),
+        ));
+
+        // Create AgglayerImpl
+        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
+        
+        // Create the routers
+        let router = agglayer_impl.start().await.unwrap();
+        let admin_router = AdminAgglayerImpl::new(
+            pending_store.clone(),
+            state_store.clone(), 
+            debug_store.clone(),
+            config.clone(),
+        )
+        .start()
+        .await
+        .unwrap();
+
+        // Create addresses for API and admin servers
+        let api_addr = Self::next_available_address();
+        let admin_addr = Self::next_available_address();
+        
+        let api_url = format!("http://{}/", api_addr);
+        let admin_url = format!("http://{}/", admin_addr);
+        
+        let client = HttpClientBuilder::default().build(api_url).unwrap();
+        let admin_client = HttpClientBuilder::default().build(admin_url).unwrap();
+
+        let listener_api = tokio::net::TcpListener::bind(api_addr).await.unwrap();
+
+        let listener_admin = tokio::net::TcpListener::bind(admin_addr).await.unwrap();
+
+        let api_server = axum::serve(listener_api, router)
+            .with_graceful_shutdown(cancellation_token.child_token().cancelled_owned());
+        let admin_server = axum::serve(listener_admin, admin_router)
+            .with_graceful_shutdown(cancellation_token.child_token().cancelled_owned());
+
+        tokio::spawn(api_server.into_future());
+        tokio::spawn(admin_server.into_future());
+
+        Self {
+            cancellation_token,
+            state_store,
+            pending_store,
+            client,
+            admin_client,
+            config,
+            certificate_receiver,
+        }
+    }
+
     pub fn get_default_config() -> Config {
         let tmp = TempDBDir::new();
         let mut cfg = Config::new(&tmp.path);
@@ -268,6 +366,27 @@ fn create_mock_l1_rpc_client(provider: Arc<MockProvider>) -> L1RpcClient<MockPro
         inner,
         Address::ZERO,     // Mock L1 info tree address
         (0u32, [0u8; 32]), // Mock default L1 info tree entry
+    )
+}
+
+// Helper function to create real L1RpcClient
+fn create_real_l1_rpc_client<P>(provider: Arc<P>) -> L1RpcClient<P> 
+where
+    P: alloy::providers::Provider + Clone + 'static,
+{
+    use agglayer_contracts::contracts::PolygonRollupManager;
+    use alloy::primitives::Address;
+
+    let inner = PolygonRollupManager::PolygonRollupManagerInstance::new(
+        Address::ZERO, // Use real contract address in production
+        (*provider).clone(),
+    );
+
+    L1RpcClient::new(
+        provider,
+        inner,
+        Address::ZERO,     // Use real L1 info tree address in production
+        (0u32, [0u8; 32]), // Use real default L1 info tree entry in production
     )
 }
 
