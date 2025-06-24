@@ -181,12 +181,12 @@ impl From<SendTxError> for Error {
                 Self::SignatureMismatch { detail }
             }
             E::RollupNotRegistered { rollup_id } => Self::RollupNotRegistered { rollup_id },
-            E::DryRunZkEvm(_error) => ValidationError::DryRun {
-                detail: "PolygonZkEVM contract error".to_string(),
+            E::DryRunZkEvm(error) => ValidationError::DryRun {
+                detail: format!("PolygonZkEVM contract error: {error:?}"),
             }
             .into(),
-            E::DryRunRollupManager(_error) => ValidationError::DryRun {
-                detail: "PolygonRollupManager contract error".to_string(),
+            E::DryRunRollupManager(error) => ValidationError::DryRun {
+                detail: format!("PolygonRollupManager contract error {error:?}"),
             }
             .into(),
             E::DryRunOther(error) => ValidationError::dry_run(error).into(),

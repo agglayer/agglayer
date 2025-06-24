@@ -29,7 +29,7 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 #[case(
     "sig_invalid_len",
     SendTxError::SignatureError(SignatureVerificationError::CouldNotRecoverTxSigner(
-        AlloySignatureError::InvalidParity(99)
+        AlloySignatureError::FromHex(hex::FromHexError::InvalidStringLength)
     ))
 )]
 #[case("sig_verif", SendTxError::SignatureError(SignatureVerificationError::InvalidSigner {
@@ -39,7 +39,7 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 #[case(
     "sig_recov",
     SendTxError::SignatureError(SignatureVerificationError::CouldNotRecoverTxSigner(
-        AlloySignatureError::InvalidParity(2)
+        AlloySignatureError::K256(k256::ecdsa::Error::new())
     ))
 )]
 #[case(
@@ -55,13 +55,17 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
         trusted_sequencer: Address::from([0x44; 20]),
     })
 )]
-#[case("sig_contract", SendTxError::DryRunOther(ContractError::TransportError(
-    alloy::transports::RpcError::Transport(
-        alloy::transports::TransportErrorKind::Custom("Transport error".to_string().into())
+#[case(
+    "sig_contract",
+    SendTxError::SignatureError(SignatureVerificationError::ContractError(
+        alloy::contract::Error::ContractNotDeployed
+    ))
+)]
+#[case("dry_run_rollup_man", SendTxError::DryRunRollupManager(
+    agglayer_contracts::contracts::PolygonRollupManager::PolygonRollupManagerErrors::FinalNumBatchBelowLastVerifiedBatch(
+        agglayer_contracts::contracts::PolygonRollupManager::FinalNumBatchBelowLastVerifiedBatch {}
     )
-)))]
-// Temporarily commenting out this test case due to complex type issues
-// #[case("dry_run_rollup_man", SendTxError::DryRunRollupManager(...))]
+))]
 #[case(
     "root_bad_rollup",
     SendTxError::RootVerification(ZkevmNodeVerificationError::InvalidRollupId(13))
@@ -89,8 +93,10 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 #[case("settle_receipt", SendTxError::Settlement(SettlementError::NoReceipt))]
 #[case(
     "settle_io",
-    SendTxError::Settlement(SettlementError::ProviderError("Network error".to_string()))
-)]
+    SendTxError::Settlement(SettlementError::ProviderError(alloy::transports::RpcError::Transport(
+        alloy::transports::TransportErrorKind::Custom("Settlement transport error".to_string().into())
+    ))
+))]
 #[case(
     "settle_contract",
     SendTxError::Settlement(SettlementError::ContractError(ContractError::TransportError(

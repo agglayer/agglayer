@@ -5,6 +5,7 @@ sol!(
     #[allow(missing_docs)]
     #[allow(clippy::too_many_arguments)]
     #[sol(rpc)]
+    #[derive(Debug, Eq, PartialEq)]
     AggchainBase,
     "src/contracts/AggchainBase.json"
 );
@@ -13,6 +14,7 @@ sol!(
     #[allow(missing_docs)]
     #[allow(clippy::too_many_arguments)]
     #[sol(rpc)]
+    #[derive(Debug, Eq, PartialEq)]
     AgglayerGateway,
     "src/contracts/AggLayerGateway.json"
 );
@@ -21,6 +23,7 @@ sol!(
     #[allow(missing_docs)]
     #[allow(clippy::too_many_arguments)]
     #[sol(rpc)]
+    #[derive(Debug, Eq, PartialEq)]
     PolygonRollupManager,
     "src/contracts/PolygonRollupManager.json"
 );
@@ -29,6 +32,7 @@ sol!(
     #[allow(missing_docs)]
     #[allow(clippy::too_many_arguments)]
     #[sol(rpc)]
+    #[derive(Debug, Eq, PartialEq)]
     PolygonZkEVM,
     "src/contracts/PolygonZkEVM.json"
 );
@@ -37,6 +41,7 @@ sol!(
     #[allow(missing_docs)]
     #[allow(clippy::too_many_arguments)]
     #[sol(rpc)]
+    #[derive(Debug, Eq, PartialEq)]
     PolygonZkEVMGlobalExitRootV2,
     "src/contracts/PolygonZkEVMGlobalExitRootV2.json"
 );

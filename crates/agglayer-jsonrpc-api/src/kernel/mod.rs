@@ -165,7 +165,7 @@ pub enum SettlementError {
     #[error("no receipt")]
     NoReceipt,
     #[error("provider error: {0}")]
-    ProviderError(String),
+    ProviderError(alloy::transports::RpcError<TransportErrorKind>),
     #[error("contract error: {0}")]
     ContractError(ContractError),
     #[error(transparent)]

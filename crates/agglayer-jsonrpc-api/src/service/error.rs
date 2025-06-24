@@ -28,7 +28,7 @@ pub enum TxStatusError {
     TxNotFound { hash: B256 },
 }
 
-#[derive(thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum SendTxError {
     #[error("Rate limited: {0}")]
     RateLimited(#[from] RateLimitedError),
@@ -74,26 +74,4 @@ impl From<SettlementError> for SendTxError {
     }
 }
 
-impl std::fmt::Debug for SendTxError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::RateLimited(arg) => f.debug_tuple("RateLimited").field(arg).finish(),
-            Self::SignatureError(arg) => f.debug_tuple("SignatureError").field(arg).finish(),
-            Self::RollupNotRegistered { rollup_id } => f
-                .debug_struct("RollupNotRegistered")
-                .field("rollup_id", rollup_id)
-                .finish(),
-            Self::DryRunZkEvm(_) => f
-                .debug_tuple("DryRunZkEvm")
-                .field(&"<PolygonZkEVMErrors>")
-                .finish(),
-            Self::DryRunRollupManager(_) => f
-                .debug_tuple("DryRunRollupManager")
-                .field(&"<PolygonRollupManagerErrors>")
-                .finish(),
-            Self::DryRunOther(arg) => f.debug_tuple("DryRunOther").field(arg).finish(),
-            Self::RootVerification(arg) => f.debug_tuple("RootVerification").field(arg).finish(),
-            Self::Settlement(arg) => f.debug_tuple("Settlement").field(arg).finish(),
-        }
-    }
-}
+
