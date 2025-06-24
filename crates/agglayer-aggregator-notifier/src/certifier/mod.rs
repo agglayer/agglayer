@@ -496,7 +496,7 @@ where
 
             let pv_from_pp_witness = AggchainProofPublicValues {
                 prev_local_exit_root: initial_state.exit_tree.get_root(),
-                new_local_exit_root: targets_native_execution.exit_root,
+                new_local_exit_root: targets_native_execution.exit_root.into(),
                 l1_info_root: multi_batch_header.l1_info_root,
                 origin_network: multi_batch_header.origin_network,
                 commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
