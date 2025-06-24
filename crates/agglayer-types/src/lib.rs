@@ -6,7 +6,9 @@ use agglayer_interop_types::{
     ImportedBridgeExitCommitmentValues, TokenInfo,
 };
 pub use agglayer_primitives::Digest;
-use agglayer_primitives::{keccak::Keccak256Hasher, FromBool, Hashable, SignatureError};
+use agglayer_primitives::{
+    keccak::Keccak256Hasher, ruint::UintTryFrom, FromBool, Hashable, SignatureError,
+};
 use agglayer_tries::{error::SmtError, roots::LocalExitRoot, smt::Smt};
 use pessimistic_proof::{
     core::{
@@ -625,13 +627,17 @@ impl LocalNetworkStateData {
                 })
                 .collect();
 
-            let mut new_balances = initial_balances.clone();
+            let mut new_balances: BTreeMap<_, _> = initial_balances
+                .iter()
+                .map(|(&token, &balance)| (token, U512::from(balance)))
+                .collect();
+
             for imported_bridge_exit in imported_bridge_exits {
                 let token = imported_bridge_exit.bridge_exit.amount_token_info();
                 new_balances.insert(
                     token,
                     new_balances[&token]
-                        .checked_add(imported_bridge_exit.bridge_exit.amount)
+                        .checked_add(U512::from(imported_bridge_exit.bridge_exit.amount))
                         .ok_or(Error::BalanceOverflow(token))?,
                 );
             }
@@ -641,7 +647,7 @@ impl LocalNetworkStateData {
                 new_balances.insert(
                     token,
                     new_balances[&token]
-                        .checked_sub(bridge_exit.amount)
+                        .checked_sub(U512::from(bridge_exit.amount))
                         .ok_or(Error::BalanceUnderflow(token))?,
                 );
             }
@@ -651,6 +657,9 @@ impl LocalNetworkStateData {
                 .into_iter()
                 .map(|token| {
                     let initial_balance = initial_balances[&token];
+
+                    let new_balance = U256::uint_try_from(new_balances[&token])
+                        .map_err(|_| Error::BalanceOverflow(token))?;
 
                     let balance_proof_error =
                         |source| Error::BalanceProofGenerationFailed { source, token };
@@ -666,7 +675,7 @@ impl LocalNetworkStateData {
                     };
 
                     self.balance_tree
-                        .update(token, new_balances[&token].to_be_bytes().into())
+                        .update(token, new_balance.to_be_bytes().into())
                         .map_err(balance_proof_error)?;
 
                     Ok((token, (initial_balance, path)))
