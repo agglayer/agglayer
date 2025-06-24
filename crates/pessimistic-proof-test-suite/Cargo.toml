@@ -12,14 +12,13 @@ name = "convertor"
 path = "src/bin/convertor.rs"
 
 [dependencies]
+agglayer-tries.workspace = true
 agglayer-types = { workspace = true, features = ["testutils"] }
 unified-bridge.workspace = true
-agglayer-tries.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 ecdsa-proof-lib = { path = "./aggchain-proof-ecdsa-example/lib/" }
 
 base64.workspace = true
-bincode.workspace = true
 clap.workspace = true
 ethers-signers.workspace = true
 serde.workspace = true

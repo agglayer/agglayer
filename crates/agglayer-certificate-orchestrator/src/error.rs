@@ -1,5 +1,5 @@
 use agglayer_contracts::L1RpcError;
-use agglayer_types::{CertificateId, CertificateStatusError, Height, NetworkId};
+use agglayer_types::{bincode, CertificateId, CertificateStatusError, Height, NetworkId};
 use pessimistic_proof::{error::ProofVerificationError, PessimisticProofOutput, ProofError};
 
 #[derive(thiserror::Error, Debug)]

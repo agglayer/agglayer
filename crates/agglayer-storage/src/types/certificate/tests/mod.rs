@@ -1,12 +1,14 @@
 use agglayer_types::{
     aggchain_proof::{Proof, SP1StarkWithContext},
-    U256,
+    bincode, U256,
 };
+use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
-
 use super::*;
 use crate::columns::Codec;
+
+const EMPTY_ELF: &[u8] = include_bytes!("empty.elf");
 
 #[rstest::rstest]
 #[case(0.into(), [0, 0, 0, 0])]
@@ -14,7 +16,7 @@ use crate::columns::Codec;
 #[case(258.into(), [0, 0, 1, 2])]
 #[case(0x12345678.into(), [0x12, 0x34, 0x56, 0x78])]
 fn network_id_encoding(#[case] network_id: NetworkId, #[case] expected: [u8; 4]) {
-    let encoded = default_bincode_options().serialize(&network_id).unwrap();
+    let encoded = bincode_codec().serialize(&network_id).unwrap();
     assert_eq!(encoded, expected);
     assert_eq!(network_id.to_u32().to_be_bytes(), expected);
 }
@@ -34,21 +36,66 @@ impl From<NetworkId> for NetworkIdV0 {
     }
 }
 
+fn sig(r_byte: u8, s_byte: u8) -> Signature {
+    let r = U256::from_be_bytes([r_byte; 32]);
+    let s = U256::from_be_bytes([s_byte; 32]);
+    Signature::new(r, s, false)
+}
+
+impl AggchainDataV1<'static> {
+    fn proof0() -> Proof {
+        let (proof, vkey) = {
+            let client = sp1_sdk::ProverClient::builder().mock().build();
+            let (proving_key, verif_key) = client.setup(EMPTY_ELF);
+            let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
+                &proving_key,
+                sp1_sdk::SP1PublicValues::new(),
+                sp1_sdk::SP1ProofMode::Compressed,
+                sp1_sdk::SP1_CIRCUIT_VERSION,
+            );
+            let proof = dummy_proof.proof.try_as_compressed().unwrap();
+            (proof, verif_key)
+        };
+
+        Proof::SP1Stark(SP1StarkWithContext {
+            proof,
+            vkey,
+            version: String::from("1.2.3"),
+        })
+    }
+
+    fn test0() -> Self {
+        let signature = sig(0x7a, 0x9b);
+        Self::ECDSA { signature }
+    }
+
+    fn test1() -> Self {
+        AggchainDataV1::GenericWithSignature {
+            proof: Cow::Owned(Self::proof0()),
+            aggchain_params: Digest([0x58; 32]),
+            signature: Cow::Owned(Box::new(sig(0x78, 0x9a))),
+        }
+    }
+
+    fn test2() -> Self {
+        AggchainDataV1::GenericNoSignature {
+            proof: Cow::Owned(Self::proof0()),
+            aggchain_params: Digest([0x59; 32]),
+        }
+    }
+}
+
 impl CertificateV0 {
     fn test0() -> Self {
         Self {
             version: VersionTag,
             network_id: NetworkId::new(55).into(),
             height: 987,
-            prev_local_exit_root: Digest([0x01; 32]),
-            new_local_exit_root: Digest([0x67; 32]),
+            prev_local_exit_root: LocalExitRoot::from([0x01; 32]),
+            new_local_exit_root: LocalExitRoot::from([0x67; 32]),
             bridge_exits: Vec::new(),
             imported_bridge_exits: Vec::new(),
-            signature: Signature::new(
-                U256::from_be_bytes([0x78; 32]),
-                U256::from_be_bytes([0x9a; 32]),
-                false,
-            ),
+            signature: sig(0x78, 0x9a),
             metadata: Digest([0xa5; 32]),
         }
     }
@@ -65,17 +112,11 @@ impl CertificateV1<'static> {
             version: VersionTag,
             network_id: NetworkId::new(57),
             height: 987,
-            prev_local_exit_root: Digest([0x02; 32]),
-            new_local_exit_root: Digest([0x65; 32]),
+            prev_local_exit_root: LocalExitRoot::from([0x02; 32]),
+            new_local_exit_root: LocalExitRoot::from([0x65; 32]),
             bridge_exits: Vec::new().into(),
             imported_bridge_exits: Vec::new().into(),
-            aggchain_data: AggchainDataV1::ECDSA {
-                signature: Signature::new(
-                    U256::from_be_bytes([0x7a; 32]),
-                    U256::from_be_bytes([0x9b; 32]),
-                    false,
-                ),
-            },
+            aggchain_data: AggchainDataV1::test0(),
             metadata: Digest([0xa9; 32]),
             custom_chain_data: Cow::Owned(vec![]),
             l1_info_tree_leaf_count: None,
@@ -83,42 +124,15 @@ impl CertificateV1<'static> {
     }
 
     fn test1() -> Self {
-        let (proof, vkey) = {
-            let client = sp1_sdk::ProverClient::builder().mock().build();
-            let (proving_key, verif_key) = client.setup(pessimistic_proof::ELF);
-            let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
-                &proving_key,
-                sp1_sdk::SP1PublicValues::new(),
-                sp1_sdk::SP1ProofMode::Compressed,
-                sp1_sdk::SP1_CIRCUIT_VERSION,
-            );
-            let proof = dummy_proof.proof.try_as_compressed().unwrap();
-            (proof, verif_key)
-        };
-
-        let proof = Proof::SP1Stark(SP1StarkWithContext {
-            proof,
-            vkey,
-            version: String::from("1.2.3"),
-        });
-
         Self {
             version: VersionTag,
             network_id: NetworkId::new(59),
             height: 987.try_into().unwrap(),
-            prev_local_exit_root: Digest([0x03; 32]),
-            new_local_exit_root: Digest([0x61; 32]),
+            prev_local_exit_root: LocalExitRoot::from([0x03; 32]),
+            new_local_exit_root: LocalExitRoot::from([0x61; 32]),
             bridge_exits: Vec::new().into(),
             imported_bridge_exits: Vec::new().into(),
-            aggchain_data: AggchainDataV1::GenericWithSignature {
-                proof: Cow::Owned(proof),
-                aggchain_params: Digest([0x58; 32]),
-                signature: Cow::Owned(Box::new(Signature::new(
-                    U256::from_be_bytes([0x78; 32]),
-                    U256::from_be_bytes([0x9a; 32]),
-                    false,
-                ))),
-            },
+            aggchain_data: AggchainDataV1::test1(),
             metadata: Digest([0xb9; 32]),
             custom_chain_data: Cow::Owned(vec![]),
             l1_info_tree_leaf_count: None,
@@ -181,7 +195,7 @@ impl CertificateV1<'_> {
 #[case(CertificateV0::test0().with_network_id(0x123456.into()), &[0x00, 0x12, 0x34, 0x56])]
 #[case(CertificateV1::test0(), &[0x01, 0x00, 0x00, 0x00, 57])]
 fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
-    let bytes = default_bincode_options().serialize(&cert).unwrap();
+    let bytes = bincode_codec().serialize(&cert).unwrap();
     assert!(bytes.starts_with(start));
 }
 
@@ -191,13 +205,26 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 #[case(CertificateV1::test1())]
 #[case(CertificateV1::from(&Certificate::new_for_test(74.into(), 998)).into_owned())]
 fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
-    let bytes = default_bincode_options().serialize(&orig).unwrap();
+    let bytes = bincode_codec().serialize(&orig).unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();
     let converted: Certificate = orig.into();
 
     // This should really compare the certificates directly but that requires adding
     // whole bunch of `Eq` impl to many types.
     assert_eq!(format!("{converted:?}"), format!("{decoded:?}"));
+}
+
+#[rstest::rstest]
+#[case("cert_v0_00", CertificateV0::test0())]
+#[case("cert_v1_00", CertificateV1::test0())]
+#[case("cert_v1_01", CertificateV1::test1())]
+#[case("aggdata_v1_00", AggchainDataV1::test0())]
+#[case("aggdata_v1_01", AggchainDataV1::test1())]
+#[case("aggdata_v1_02", AggchainDataV1::test2())]
+fn encoding(#[case] name: &str, #[case] value: impl Serialize) {
+    // Snapshots for types where the encoding must stay stable.
+    let bytes = Bytes::from(bincode::default().serialize(&value).unwrap());
+    insta::assert_snapshot!(name, bytes);
 }
 
 #[rstest::rstest]

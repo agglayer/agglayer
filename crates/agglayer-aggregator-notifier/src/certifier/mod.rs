@@ -3,21 +3,17 @@ use std::sync::Arc;
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
-use agglayer_prover_types::{
-    default_bincode_options,
-    v1::{
-        generate_proof_request::Stdin,
-        pessimistic_proof_service_client::PessimisticProofServiceClient, ErrorKind,
-        GenerateProofRequest, GenerateProofResponse,
-    },
+use agglayer_prover_types::v1::{
+    generate_proof_request::Stdin, pessimistic_proof_service_client::PessimisticProofServiceClient,
+    ErrorKind, GenerateProofRequest, GenerateProofResponse,
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
     aggchain_proof::AggchainData,
+    bincode,
     primitives::{keccak::Keccak256Hasher, Address},
     Certificate, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
 };
-use bincode::Options;
 use pessimistic_proof::{
     core::{commitment::StateCommitment, generate_pessimistic_proof},
     local_state::LocalNetworkState,
@@ -174,7 +170,7 @@ where
                 .run()
                 .map_err(CertificationError::Sp1ExecuteFailed)?;
 
-            let pv_sp1_execute: PessimisticProofOutput = PessimisticProofOutput::bincode_options()
+            let pv_sp1_execute: PessimisticProofOutput = PessimisticProofOutput::bincode_codec()
                 .deserialize(pv.as_slice())
                 .map_err(|source| CertificationError::Deserialize { source })?;
 
@@ -196,7 +192,7 @@ where
 
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
-                default_bincode_options()
+                bincode::default()
                     .serialize(&stdin)
                     .map_err(|source| CertificationError::Serialize { source })?
                     .into(),
@@ -209,10 +205,11 @@ where
             .await
             .map_err(|source_error| {
                 debug!("Failed to generate the p-proof: {:?}", source_error);
-                if let Ok(error) = default_bincode_options()
+                if let Ok(error) = bincode::default()
                     .deserialize::<agglayer_prover_types::v1::GenerateProofError>(
-                    source_error.details(),
-                ) {
+                        source_error.details(),
+                    )
+                {
                     match error.error_type() {
                         ErrorKind::UnableToExecuteProver => {
                             CertificationError::InternalError("Unable to execute prover".into())
@@ -224,7 +221,7 @@ where
                             let proof_error: Result<
                                 pessimistic_proof::error::ProofVerificationError,
                                 _,
-                            > = default_bincode_options().deserialize(&error.error);
+                            > = bincode::default().deserialize(&error.error);
 
                             match proof_error {
                                 Ok(error) => {
@@ -245,7 +242,7 @@ where
 
                         ErrorKind::ExecutorFailed => {
                             let proof_error: Result<pessimistic_proof::ProofError, _> =
-                                default_bincode_options().deserialize(&error.error);
+                                bincode::default().deserialize(&error.error);
 
                             match proof_error {
                                 Ok(error) => {
@@ -278,10 +275,9 @@ where
             })?;
 
         let proof = prover_response.into_inner().proof;
-        let proof: Proof =
-            std::panic::catch_unwind(|| default_bincode_options().deserialize(&proof))
-                .map_err(|_| CertificationError::InternalError(String::from("panic")))?
-                .map_err(|source| CertificationError::Deserialize { source })?;
+        let proof: Proof = std::panic::catch_unwind(|| bincode::default().deserialize(&proof))
+            .map_err(|_| CertificationError::InternalError(String::from("panic")))?
+            .map_err(|source| CertificationError::Deserialize { source })?;
 
         debug!("Proof successfully generated!");
 

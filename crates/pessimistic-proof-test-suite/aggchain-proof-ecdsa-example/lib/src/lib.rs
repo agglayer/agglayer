@@ -1,15 +1,16 @@
+use agglayer_tries::roots::LocalExitRoot;
 use alloy_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
-use unified_bridge::aggchain_proof::AggchainProofPublicValues;
+use unified_bridge::AggchainProofPublicValues;
 
 pub type Digest = [u8; 32];
 
 #[derive(Serialize, Deserialize)]
 pub struct AggchainECDSA {
     /// Previous local exit root.
-    pub prev_local_exit_root: Digest,
+    pub prev_local_exit_root: LocalExitRoot,
     /// New local exit root.
-    pub new_local_exit_root: Digest,
+    pub new_local_exit_root: LocalExitRoot,
     /// Commitment to the imported bridge exits indexes.
     pub commit_imported_bridge_exits: Digest,
     /// L1 info root used to import bridge exits.
@@ -36,7 +37,7 @@ impl AggchainECDSA {
             prev_local_exit_root: self.prev_local_exit_root.into(),
             new_local_exit_root: self.new_local_exit_root.into(),
             l1_info_root: self.l1_info_root.into(),
-            origin_network: self.origin_network,
+            origin_network: self.origin_network.into(),
             commit_imported_bridge_exits: self.commit_imported_bridge_exits.into(),
             aggchain_params: self.aggchain_params().into(),
         }
