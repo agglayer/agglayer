@@ -3,10 +3,13 @@ use agglayer_storage::tests::TempDBDir;
 use alloy::{
     node_bindings::Anvil,
     primitives::B256,
-    providers::{ProviderBuilder, Provider},
+    providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
 };
-use jsonrpsee::{core::ClientError, core::client::ClientT, rpc_params};
+use jsonrpsee::{
+    core::{client::ClientT, ClientError},
+    rpc_params,
+};
 use tracing::{debug, error, info};
 
 use crate::testutils::TestContext;
@@ -52,12 +55,13 @@ async fn check_tx_status() {
             // Log the error for debugging but don't fail the test yet
             // as the implementation might still be incomplete
             debug!("Error getting transaction status: {}", error);
-            
-            // For now, we'll accept errors as the implementation might not be complete
-            // In a complete implementation, this should succeed
+
+            // For now, we'll accept errors as the implementation might not be
+            // complete In a complete implementation, this should
+            // succeed
         }
     }
-    
+
     info!("Transaction hash: {}", hash);
 
     // Wait a bit and try again to see if status changes
@@ -99,7 +103,7 @@ async fn check_tx_status_fail() {
     // Should get an error for non-existent transaction
     assert!(result.is_err());
     let error = result.unwrap_err();
-    
+
     // Check that we get a proper error response
     match error {
         ClientError::Call(error_object) => {
@@ -149,15 +153,15 @@ async fn check_tx_status_with_real_node() {
     // 1. Create a test context that uses the real Anvil provider instead of mocks
     // 2. Set up the full AgglayerImpl with real L1 client connected to Anvil
     // 3. Configure the kernel to use the real provider
-    
+
     // This would require extending our TestContext to support real providers
     // For now, we'll just demonstrate the expected API:
-    
+
     debug!("Would test transaction status for hash: {hash}");
-    
+
     // In a full implementation, this would look like:
-    // let context = TestContext::new_with_real_provider(config, provider).await;
-    // let res: TxStatus = context
+    // let context = TestContext::new_with_real_provider(config,
+    // provider).await; let res: TxStatus = context
     //     .client
     //     .request("interop_getTxStatus", rpc_params![hash])
     //     .await
@@ -178,19 +182,24 @@ async fn tx_status_api_format() {
         .request("interop_getTxStatus", rpc_params![test_hash])
         .await;
 
-         // Verify the error structure matches expected RPC error format
-     if let Err(error) = result {
-         match error {
-             ClientError::Call(error_obj) => {
-                 // Check that error object has expected structure
-                 // Accept any error code - could be JSON-RPC standard or custom application errors
-                 debug!("Error code: {}, message: {}", error_obj.code(), error_obj.message());
-                 // Verify we have an error message
-                 assert!(!error_obj.message().is_empty());
-             }
-             _ => {
-                 debug!("Non-call error: {}", error);
-             }
-         }
-     }
+    // Verify the error structure matches expected RPC error format
+    if let Err(error) = result {
+        match error {
+            ClientError::Call(error_obj) => {
+                // Check that error object has expected structure
+                // Accept any error code - could be JSON-RPC standard or custom application
+                // errors
+                debug!(
+                    "Error code: {}, message: {}",
+                    error_obj.code(),
+                    error_obj.message()
+                );
+                // Verify we have an error message
+                assert!(!error_obj.message().is_empty());
+            }
+            _ => {
+                debug!("Non-call error: {}", error);
+            }
+        }
+    }
 }
