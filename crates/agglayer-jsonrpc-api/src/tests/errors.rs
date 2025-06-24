@@ -29,7 +29,7 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 #[case(
     "sig_invalid_len",
     SendTxError::SignatureError(SignatureVerificationError::CouldNotRecoverTxSigner(
-        AlloySignatureError::FromHex(hex::FromHexError::InvalidStringLength)
+        AlloySignatureError::FromHex(alloy::hex::FromHexError::InvalidStringLength)
     ))
 )]
 #[case("sig_verif", SendTxError::SignatureError(SignatureVerificationError::InvalidSigner {

@@ -73,5 +73,3 @@ impl From<SettlementError> for SendTxError {
         }
     }
 }
-
-

@@ -6,7 +6,11 @@ use alloy::{
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
 };
-use jsonrpsee::{core::ClientError, http_client::HttpClientBuilder, rpc_params};
+use jsonrpsee::{
+    core::{client::ClientT, ClientError},
+    http_client::HttpClientBuilder,
+    rpc_params,
+};
 use tracing::debug;
 
 use crate::testutils::{next_available_addr, TestContext};

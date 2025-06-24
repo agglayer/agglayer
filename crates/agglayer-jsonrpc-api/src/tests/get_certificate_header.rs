@@ -4,11 +4,17 @@ use agglayer_types::{
     Digest, Height,
 };
 use insta::assert_snapshot;
-use jsonrpsee::{core::ClientError, rpc_params};
+use jsonrpsee::{
+    core::{client::ClientT, ClientError},
+    rpc_params,
+};
 use rstest::*;
 use serde_json::json;
 
-use crate::testutils::{context, raw_rpc, RawRpcContext, TestContext};
+use crate::{
+    testutils::{context, raw_rpc, RawRpcContext, TestContext},
+    AgglayerServer,
+};
 
 #[rstest]
 #[awt]
@@ -195,6 +201,9 @@ async fn debug_fetch_known_certificate() {
         .client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
+        .inspect_err(|e| {
+            eprintln!("Error interop_sendCertificate: {:?}", e);
+        })
         .unwrap();
 
     assert_eq!(id, res);
