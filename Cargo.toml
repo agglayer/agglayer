@@ -44,18 +44,18 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
+agglayer-bincode = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.2" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.2" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.2" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.2" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
