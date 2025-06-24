@@ -5,7 +5,6 @@ use agglayer_types::{
 use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
-
 use super::*;
 use crate::columns::Codec;
 
@@ -115,8 +114,8 @@ impl CertificateV0 {
             version: VersionTag,
             network_id: NetworkId::new(55).into(),
             height: 987,
-            prev_local_exit_root: Digest([0x01; 32]),
-            new_local_exit_root: Digest([0x67; 32]),
+            prev_local_exit_root: LocalExitRoot::from([0x01; 32]),
+            new_local_exit_root: LocalExitRoot::from([0x67; 32]),
             bridge_exits: Vec::new(),
             imported_bridge_exits: Vec::new(),
             signature: sig(0x78, 0x9a),
@@ -136,8 +135,8 @@ impl CertificateV1<'static> {
             version: VersionTag,
             network_id: NetworkId::new(57),
             height: 987,
-            prev_local_exit_root: Digest([0x02; 32]),
-            new_local_exit_root: Digest([0x65; 32]),
+            prev_local_exit_root: LocalExitRoot::from([0x02; 32]),
+            new_local_exit_root: LocalExitRoot::from([0x65; 32]),
             bridge_exits: Vec::new().into(),
             imported_bridge_exits: Vec::new().into(),
             aggchain_data: AggchainDataV1::test0(),
@@ -152,8 +151,8 @@ impl CertificateV1<'static> {
             version: VersionTag,
             network_id: NetworkId::new(59),
             height: 987.try_into().unwrap(),
-            prev_local_exit_root: Digest([0x03; 32]),
-            new_local_exit_root: Digest([0x61; 32]),
+            prev_local_exit_root: LocalExitRoot::from([0x03; 32]),
+            new_local_exit_root: LocalExitRoot::from([0x61; 32]),
             bridge_exits: Vec::new().into(),
             imported_bridge_exits: Vec::new().into(),
             aggchain_data: AggchainDataV1::test1(),
