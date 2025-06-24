@@ -127,6 +127,7 @@ dependencies = [
  "bincode",
  "buildstructor",
  "ethers",
+ "fail",
  "futures-util",
  "lazy_static",
  "mockall",

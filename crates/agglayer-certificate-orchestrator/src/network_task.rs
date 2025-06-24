@@ -314,6 +314,7 @@ where
             tokio::select! {
                 msg = receiver.recv() => match msg {
                     None => {
+                        fail::fail_point!("network_task::kill_on_cert_task_closed");
                         error!(height = *next_expected_height, %certificate_id, "Certificate task channel closed");
                         return Err(Error::InternalError("Certificate task channel closed".into()));
                     }
