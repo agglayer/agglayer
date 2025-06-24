@@ -36,6 +36,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     CertifierClient: Certifier,
 {
+    #[allow(clippy::too_many_arguments)] // TODO: should go away with the next few PRs
     pub fn new(
         certificate: Certificate,
         header: CertificateHeader,

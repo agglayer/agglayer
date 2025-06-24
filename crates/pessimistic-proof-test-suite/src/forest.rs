@@ -255,7 +255,7 @@ impl Forest {
 
         let (aggchain_proof, aggchain_vkey, aggchain_params) =
             compute_aggchain_proof(AggchainECDSA {
-                signer: certificate.signer().unwrap().unwrap(),
+                signer: certificate.signer().unwrap(),
                 signature: signature.into(),
                 commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
                     .commitment(CommitmentVersion::V2)

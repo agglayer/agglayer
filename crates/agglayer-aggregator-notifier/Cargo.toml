@@ -19,7 +19,6 @@ agglayer-prover-config.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 arc-swap.workspace = true
-bincode.workspace = true
 ethers.workspace = true
 fail.workspace = true
 futures.workspace = true

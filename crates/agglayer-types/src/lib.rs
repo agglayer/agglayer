@@ -4,13 +4,15 @@ use std::{
     fmt,
 };
 
-pub use agglayer_interop_types::{aggchain_proof, NetworkId};
+pub use agglayer_interop_types::{aggchain_proof, bincode, NetworkId};
 use agglayer_interop_types::{
     aggchain_proof::AggchainData, BridgeExit, GlobalIndex, ImportedBridgeExit,
     ImportedBridgeExitCommitmentValues, TokenInfo,
 };
 pub use agglayer_primitives as primitives;
-use agglayer_primitives::{keccak::Keccak256Hasher, FromBool, Hashable, SignatureError};
+use agglayer_primitives::{
+    keccak::Keccak256Hasher, ruint::UintTryFrom, FromBool, Hashable, SignatureError,
+};
 pub use agglayer_primitives::{Address, Digest, Signature, B256, U256, U512};
 use agglayer_tries::{error::SmtError, roots::LocalExitRoot, smt::Smt};
 use ethers::types::H256;
@@ -372,6 +374,15 @@ pub enum CertificateStatusError {
     LastPessimisticRootNotFound(NetworkId),
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum SignerError {
+    #[error("Signature not provided")]
+    Missing,
+
+    #[error("Signature recovery error")]
+    Recovery(#[source] SignatureError),
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
 pub enum GenerationType {
     Native,
@@ -658,31 +669,28 @@ impl Certificate {
         }
     }
 
-    pub fn signer(&self) -> Result<Option<Address>, SignatureError> {
-        match self.aggchain_data {
+    pub fn signer(&self) -> Result<Address, SignerError> {
+        let (signature, commitment) = match &self.aggchain_data {
             AggchainData::ECDSA { signature } => {
-                // retrieve signer
                 let version = CommitmentVersion::V2;
-                let combined_hash = SignatureCommitmentValues::from(self).commitment(version);
-
-                signature
-                    .recover_address_from_prehash(&B256::new(combined_hash.0))
-                    .map(Some)
+                let commitment = SignatureCommitmentValues::from(self).commitment(version);
+                (signature, commitment)
             }
             AggchainData::Generic {
-                signature: Some(ref signature),
+                signature,
                 aggchain_params,
                 ..
             } => {
+                let signature = signature.as_ref().ok_or(SignerError::Missing)?;
                 let commitment = SignatureCommitmentValues::from(self)
-                    .aggchain_proof_commitment(&aggchain_params);
-
-                signature
-                    .recover_address_from_prehash(&B256::new(commitment.0))
-                    .map(Some)
+                    .aggchain_proof_commitment(aggchain_params);
+                (signature.as_ref(), commitment)
             }
-            _ => Ok(None),
-        }
+        };
+
+        signature
+            .recover_address_from_prehash(&B256::new(commitment.0))
+            .map_err(SignerError::Recovery)
     }
 }
 
@@ -822,13 +830,17 @@ impl LocalNetworkStateData {
                 })
                 .collect();
 
-            let mut new_balances = initial_balances.clone();
+            let mut new_balances: BTreeMap<_, _> = initial_balances
+                .iter()
+                .map(|(&token, &balance)| (token, U512::from(balance)))
+                .collect();
+
             for imported_bridge_exit in imported_bridge_exits {
                 let token = imported_bridge_exit.bridge_exit.amount_token_info();
                 new_balances.insert(
                     token,
                     new_balances[&token]
-                        .checked_add(imported_bridge_exit.bridge_exit.amount)
+                        .checked_add(U512::from(imported_bridge_exit.bridge_exit.amount))
                         .ok_or(Error::BalanceOverflow(token))?,
                 );
             }
@@ -838,7 +850,7 @@ impl LocalNetworkStateData {
                 new_balances.insert(
                     token,
                     new_balances[&token]
-                        .checked_sub(bridge_exit.amount)
+                        .checked_sub(U512::from(bridge_exit.amount))
                         .ok_or(Error::BalanceUnderflow(token))?,
                 );
             }
@@ -848,6 +860,9 @@ impl LocalNetworkStateData {
                 .into_iter()
                 .map(|token| {
                     let initial_balance = initial_balances[&token];
+
+                    let new_balance = U256::uint_try_from(new_balances[&token])
+                        .map_err(|_| Error::BalanceOverflow(token))?;
 
                     let balance_proof_error =
                         |source| Error::BalanceProofGenerationFailed { source, token };
@@ -863,7 +878,7 @@ impl LocalNetworkStateData {
                     };
 
                     self.balance_tree
-                        .update(token, new_balances[&token].to_be_bytes().into())
+                        .update(token, new_balance.to_be_bytes().into())
                         .map_err(balance_proof_error)?;
 
                     Ok((token, (initial_balance, path)))
