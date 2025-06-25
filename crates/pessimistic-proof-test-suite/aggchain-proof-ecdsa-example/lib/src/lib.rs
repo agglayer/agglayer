@@ -1,5 +1,5 @@
-use agglayer_tries::roots::LocalExitRoot;
 use agglayer_primitives::{Address, Signature};
+use agglayer_tries::roots::LocalExitRoot;
 use serde::{Deserialize, Serialize};
 use unified_bridge::AggchainProofPublicValues;
 
