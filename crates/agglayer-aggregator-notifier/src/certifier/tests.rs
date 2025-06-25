@@ -13,7 +13,6 @@ use ethers::{
 };
 use fail::FailScenario;
 use mockall::predicate::{always, eq};
-use pessimistic_proof::keccak::keccak256_combine;
 use pessimistic_proof_test_suite::forest::Forest;
 use prover_config::ProverType;
 use tokio_util::sync::CancellationToken;
