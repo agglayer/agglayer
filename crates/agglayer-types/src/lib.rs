@@ -26,6 +26,7 @@ use pessimistic_proof::{
 };
 use serde::{Deserialize, Serialize};
 use unified_bridge::CommitmentVersion;
+
 pub type EpochNumber = u64;
 
 /// Index of the certificate inside its epoch
