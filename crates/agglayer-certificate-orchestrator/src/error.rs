@@ -1,7 +1,7 @@
 use agglayer_contracts::L1RpcError;
 use agglayer_types::{
-    aggchain_proof::AggchainProofPublicValues, CertificateId, CertificateStatusError, Digest,
-    Height, NetworkId,
+    aggchain_proof::AggchainProofPublicValues, bincode, CertificateId, CertificateStatusError,
+    Digest, Height, NetworkId,
 };
 use pessimistic_proof::{
     core::commitment::StateCommitment, error::ProofVerificationError, PessimisticProofOutput,

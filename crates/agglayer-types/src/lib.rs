@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use agglayer_interop_types::aggchain_proof;
+pub use agglayer_interop_types::{aggchain_proof, bincode};
 use agglayer_interop_types::{
     aggchain_proof::AggchainData, BridgeExit, GlobalIndex, ImportedBridgeExit,
     ImportedBridgeExitCommitmentValues, TokenInfo,

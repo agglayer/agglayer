@@ -11,7 +11,6 @@ use agglayer_types::{
     CertificateHeader, CertificateId, CertificateStatus, ExecutionMode, Height, NetworkId, Proof,
 };
 use arc_swap::ArcSwap;
-use bincode::Options;
 use ethers::{
     providers::PendingTransaction,
     types::{TransactionReceipt, H256, U256, U64},
@@ -145,7 +144,7 @@ where
         let (output, proof) =
             if let Some(Proof::SP1(proof)) = self.pending_store.get_proof(certificate_id)? {
                 if let Ok(output) =
-                    pessimistic_proof::PessimisticProofOutput::bincode_options()
+                    pessimistic_proof::PessimisticProofOutput::bincode_codec()
                         .deserialize::<PessimisticProofOutput>(proof.public_values.as_slice())
                 {
                     (output, proof.bytes())

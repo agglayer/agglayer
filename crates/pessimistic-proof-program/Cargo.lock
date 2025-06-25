@@ -29,6 +29,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "agglayer-bincode"
+version = "0.6.0"
+source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+dependencies = [
+ "bincode",
+ "serde",
+]
+
+[[package]]
 name = "agglayer-primitives"
 version = "0.6.0"
 source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
@@ -614,9 +623,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.18.1"
+version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "793db76d6187cd04dff33004d8e6c9cc4e05cd330500379d2394209271b4aeee"
+checksum = "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43"
 
 [[package]]
 name = "byte-slice-cast"
@@ -3087,10 +3096,10 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
+ "agglayer-bincode",
  "agglayer-primitives",
  "agglayer-tries",
  "alloy-primitives",
- "bincode",
  "hex",
  "hex-literal 0.4.1",
  "semver 1.0.26",
@@ -3111,7 +3120,6 @@ dependencies = [
 name = "pessimistic-proof-program"
 version = "4.0.0"
 dependencies = [
- "bincode",
  "pessimistic-proof-core",
  "sp1-cli",
  "sp1-zkvm",

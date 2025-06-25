@@ -18,19 +18,19 @@
 //! one of the future versions.
 
 use std::borrow::Cow;
+
 use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
     aggchain_proof::{AggchainData, Proof},
     primitives::Digest,
     Certificate, Height, Metadata, NetworkId, Signature,
 };
-use bincode::Options;
 use pessimistic_proof::unified_bridge::{
     AggchainProofPublicValues, BridgeExit, ImportedBridgeExit,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::columns::{default_bincode_options, CodecError};
+use crate::columns::{bincode_codec, CodecError};
 
 /// A unit type serializing to a constant byte representing the storage version.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
@@ -299,13 +299,13 @@ type CurrentCertificate<'a> = CertificateV1<'a>;
 fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
     bytes: &[u8],
 ) -> Result<Certificate, CodecError> {
-    Ok(default_bincode_options().deserialize::<T>(bytes)?.into())
+    Ok(bincode_codec().deserialize::<T>(bytes)?.into())
 }
 
 impl crate::columns::Codec for Certificate {
     fn encode(&self) -> Result<Vec<u8>, CodecError> {
         // TODO get rid of the clones <https://github.com/agglayer/agglayer/issues/618>
-        Ok(default_bincode_options().serialize(&CurrentCertificate::from(self))?)
+        Ok(bincode_codec().serialize(&CurrentCertificate::from(self))?)
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
