@@ -5,6 +5,11 @@
   "abi": [
     {
       "inputs": [],
+      "name": "AggchainManagerCannotBeZero",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "AggchainVKeyNotFound",
       "type": "error"
     },
@@ -120,7 +125,17 @@
     },
     {
       "inputs": [],
-      "name": "InvalidAggchainVKey",
+      "name": "InvalidAggLayerGatewayAddress",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidAggchainDataLength",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidAggchainType",
       "type": "error"
     },
     {
@@ -131,11 +146,6 @@
     {
       "inputs": [],
       "name": "InvalidInitializeTransaction",
-      "type": "error"
-    },
-    {
-      "inputs": [],
-      "name": "InvalidInitializer",
       "type": "error"
     },
     {
@@ -156,6 +166,11 @@
     {
       "inputs": [],
       "name": "InvalidRangeMultiplierBatchFee",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidZeroAddress",
       "type": "error"
     },
     {
@@ -215,7 +230,17 @@
     },
     {
       "inputs": [],
+      "name": "OnlyAggchainManager",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "OnlyPendingAdmin",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OnlyPendingAggchainManager",
       "type": "error"
     },
     {
@@ -246,11 +271,6 @@
     {
       "inputs": [],
       "name": "OwnedAggchainVKeyAlreadyAdded",
-      "type": "error"
-    },
-    {
-      "inputs": [],
-      "name": "OwnedAggchainVKeyLengthMismatch",
       "type": "error"
     },
     {
@@ -315,7 +335,17 @@
     },
     {
       "inputs": [],
-      "name": "UseDefaultGatewayAlreadySet",
+      "name": "UseDefaultGatewayAlreadyDisabled",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UseDefaultGatewayAlreadyEnabled",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ZeroValueAggchainVKey",
       "type": "error"
     },
     {
@@ -334,6 +364,31 @@
     {
       "anonymous": false,
       "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "oldAggchainManager",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "newAggchainManager",
+          "type": "address"
+        }
+      ],
+      "name": "AcceptAggchainManagerRole",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "oldVKeyManager",
+          "type": "address"
+        },
         {
           "indexed": false,
           "internalType": "address",
@@ -361,6 +416,18 @@
         }
       ],
       "name": "AddAggchainVKey",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [],
+      "name": "DisableUseDefaultGatewayFlag",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [],
+      "name": "EnableUseDefaultGatewayFlag",
       "type": "event"
     },
     {
@@ -421,7 +488,32 @@
         {
           "indexed": false,
           "internalType": "address",
-          "name": "newVKeyManager",
+          "name": "currentAggchainManager",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "newPendingAggchainManager",
+          "type": "address"
+        }
+      ],
+      "name": "TransferAggchainManagerRole",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "currentVKeyManager",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "newPendingVKeyManager",
           "type": "address"
         }
       ],
@@ -440,6 +532,12 @@
         {
           "indexed": false,
           "internalType": "bytes32",
+          "name": "previousAggchainVKey",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
           "name": "newAggchainVKey",
           "type": "bytes32"
         }
@@ -448,21 +546,21 @@
       "type": "event"
     },
     {
-      "anonymous": false,
-      "inputs": [
+      "inputs": [],
+      "name": "AGGCHAIN_TYPE",
+      "outputs": [
         {
-          "indexed": false,
-          "internalType": "bool",
-          "name": "useDefaultGateway",
-          "type": "bool"
+          "internalType": "bytes2",
+          "name": "",
+          "type": "bytes2"
         }
       ],
-      "name": "UpdateUseDefaultGatewayFlag",
-      "type": "event"
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
-      "name": "AGGCHAIN_TYPE",
+      "name": "CONSENSUS_TYPE",
       "outputs": [
         {
           "internalType": "uint32",
@@ -482,6 +580,13 @@
     },
     {
       "inputs": [],
+      "name": "acceptAggchainManagerRole",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "acceptVKeyManagerRole",
       "outputs": [],
       "stateMutability": "nonpayable",
@@ -491,7 +596,7 @@
       "inputs": [
         {
           "internalType": "bytes4",
-          "name": "aggchainSelector",
+          "name": "aggchainVKeySelector",
           "type": "bytes4"
         },
         {
@@ -524,6 +629,19 @@
       "outputs": [
         {
           "internalType": "contract IAggLayerGateway",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "aggchainManager",
+      "outputs": [
+        {
+          "internalType": "address",
           "name": "",
           "type": "address"
         }
@@ -632,8 +750,46 @@
     {
       "inputs": [
         {
+          "internalType": "bytes",
+          "name": "aggchainData",
+          "type": "bytes"
+        }
+      ],
+      "name": "getAggchainHash",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "bytes4",
-          "name": "aggchainSelector",
+          "name": "aggchainVKeySelector",
+          "type": "bytes4"
+        }
+      ],
+      "name": "getAggchainTypeFromSelector",
+      "outputs": [
+        {
+          "internalType": "bytes2",
+          "name": "",
+          "type": "bytes2"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes4",
+          "name": "aggchainVKeySelector",
           "type": "bytes4"
         }
       ],
@@ -649,6 +805,49 @@
       "type": "function"
     },
     {
+      "inputs": [
+        {
+          "internalType": "bytes2",
+          "name": "aggchainVKeyVersion",
+          "type": "bytes2"
+        },
+        {
+          "internalType": "bytes2",
+          "name": "aggchainType",
+          "type": "bytes2"
+        }
+      ],
+      "name": "getAggchainVKeySelector",
+      "outputs": [
+        {
+          "internalType": "bytes4",
+          "name": "",
+          "type": "bytes4"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes4",
+          "name": "aggchainVKeySelector",
+          "type": "bytes4"
+        }
+      ],
+      "name": "getAggchainVKeyVersionFromSelector",
+      "outputs": [
+        {
+          "internalType": "bytes2",
+          "name": "",
+          "type": "bytes2"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
       "inputs": [],
       "name": "globalExitRootManager",
       "outputs": [
@@ -659,6 +858,19 @@
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newAggchainManager",
+          "type": "address"
+        }
+      ],
+      "name": "initAggchainManager",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
@@ -754,6 +966,19 @@
     {
       "inputs": [
         {
+          "internalType": "bytes",
+          "name": "aggchainData",
+          "type": "bytes"
+        }
+      ],
+      "name": "onVerifyPessimistic",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "bytes4",
           "name": "aggchainVKeySelector",
           "type": "bytes4"
@@ -773,6 +998,19 @@
     {
       "inputs": [],
       "name": "pendingAdmin",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "pendingAggchainManager",
       "outputs": [
         {
           "internalType": "address",
@@ -865,6 +1103,19 @@
       "inputs": [
         {
           "internalType": "address",
+          "name": "newAggchainManager",
+          "type": "address"
+        }
+      ],
+      "name": "transferAggchainManagerRole",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
           "name": "newVKeyManager",
           "type": "address"
         }
@@ -904,7 +1155,7 @@
       "inputs": [
         {
           "internalType": "bytes4",
-          "name": "aggchainSelector",
+          "name": "aggchainVKeySelector",
           "type": "bytes4"
         },
         {

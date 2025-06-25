@@ -17,7 +17,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
-  ZKEVM_CONTRACT_GIT_REF: feature/ongoing-v0.3.0
+  ZKEVM_CONTRACT_GIT_REF: v11.0.0-rc.1
 
 jobs:
   unit:
@@ -57,7 +57,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          repository: agglayer/agg-contracts-internal
+          repository: agglayer/agglayer-contracts
           token: ${{ secrets.GH_PAT }}
           ref: ${{ env.ZKEVM_CONTRACT_GIT_REF }}
 
