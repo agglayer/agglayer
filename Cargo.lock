@@ -134,6 +134,7 @@ dependencies = [
  "async-trait",
  "buildstructor",
  "ethers",
+ "fail",
  "futures-util",
  "lazy_static",
  "mockall",
