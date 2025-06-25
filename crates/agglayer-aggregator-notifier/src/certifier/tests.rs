@@ -9,7 +9,7 @@ use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
 use ethers::{
     middleware::NonceManagerMiddleware,
     providers::{MockProvider, Provider},
-    types::H160,
+    types::{Address, H160},
 };
 use fail::FailScenario;
 use mockall::predicate::{always, eq};
@@ -70,6 +70,11 @@ async fn happy_path() {
         .expect_get_trusted_sequencer_address()
         .once()
         .returning(move |_, _| Ok(signer));
+
+    l1_rpc
+        .expect_get_rollup_contract_address()
+        .once()
+        .returning(|_| Ok(Address::default()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -172,6 +177,11 @@ async fn prover_timeout() {
         .returning(move |_, _| Ok(signer));
 
     l1_rpc
+        .expect_get_rollup_contract_address()
+        .once()
+        .returning(|_| Ok(Address::default()));
+
+    l1_rpc
         .expect_default_l1_info_tree_entry()
         .once()
         .returning(|| (0u32, [1u8; 32]));
@@ -234,6 +244,12 @@ mockall::mock! {
             rollup_address: ethers::types::Address,
             aggchain_vkey_selector: u16,
         ) -> Result<AggchainVkeyHash, L1RpcError>;
+
+        async fn get_aggchain_hash(
+            &self,
+            rollup_address: ethers::types::Address,
+            aggchain_data: ethers::types::Bytes,
+        ) -> Result<[u8; 32], L1RpcError>;
     }
 
     #[async_trait::async_trait]

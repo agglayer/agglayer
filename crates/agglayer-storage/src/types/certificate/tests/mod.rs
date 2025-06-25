@@ -64,6 +64,17 @@ impl AggchainDataV1<'static> {
         })
     }
 
+    fn aggchain_proof_public_values0(aggchain_params: Digest) -> AggchainProofPublicValues {
+        AggchainProofPublicValues {
+            prev_local_exit_root: Default::default(),
+            new_local_exit_root: Default::default(),
+            l1_info_root: Default::default(),
+            origin_network: NetworkId::new(0u32),
+            commit_imported_bridge_exits: Default::default(),
+            aggchain_params,
+        }
+    }
+
     fn test0() -> Self {
         let signature = sig(0x7a, 0x9b);
         Self::ECDSA { signature }
@@ -81,6 +92,18 @@ impl AggchainDataV1<'static> {
         AggchainDataV1::GenericNoSignature {
             proof: Cow::Owned(Self::proof0()),
             aggchain_params: Digest([0x59; 32]),
+        }
+    }
+
+    fn test3() -> Self {
+        let aggchain_params = Digest([0x60; 32]);
+        AggchainDataV1::GenericWithPublicValues {
+            proof: Cow::Owned(Self::proof0()),
+            aggchain_params,
+            signature: None,
+            public_values: Cow::Owned(Box::new(Self::aggchain_proof_public_values0(
+                aggchain_params,
+            ))),
         }
     }
 }
@@ -182,6 +205,17 @@ impl CertificateV1<'_> {
                     aggchain_params,
                     signature: Cow::Owned(signature.into_owned()),
                 },
+                AggchainDataV1::GenericWithPublicValues {
+                    proof,
+                    aggchain_params,
+                    signature,
+                    public_values,
+                } => AggchainDataV1::GenericWithPublicValues {
+                    proof: Cow::Owned(proof.into_owned()),
+                    aggchain_params,
+                    signature,
+                    public_values: Cow::Owned(public_values.into_owned()),
+                },
             },
             metadata,
             custom_chain_data: Cow::Owned(custom_chain_data.into_owned()),
@@ -221,6 +255,7 @@ fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> 
 #[case("aggdata_v1_00", AggchainDataV1::test0())]
 #[case("aggdata_v1_01", AggchainDataV1::test1())]
 #[case("aggdata_v1_02", AggchainDataV1::test2())]
+#[case("aggdata_v1_03", AggchainDataV1::test3())]
 fn encoding(#[case] name: &str, #[case] value: impl Serialize) {
     // Snapshots for types where the encoding must stay stable.
     let bytes = Bytes::from(bincode::default().serialize(&value).unwrap());
