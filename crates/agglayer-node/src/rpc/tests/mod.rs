@@ -200,8 +200,10 @@ impl TestContext {
         let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
         let pending_store = Arc::new(PendingStore::new(pending_db));
         let debug_store = if config.debug_mode {
+            println!(">>>>>>>>>>>>>>>>>>>> CHECKPOINT 1");
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap())
         } else {
+            println!(">>>>>>>>>>>>>>>>>>>> CHECKPOINT 2");
             Arc::new(DebugStore::Disabled)
         };
         let (provider, _mock) = providers::Provider::mocked();

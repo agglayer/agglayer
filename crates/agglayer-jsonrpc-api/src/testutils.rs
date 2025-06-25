@@ -108,6 +108,7 @@ impl TestContext {
         let cancellation_token = CancellationToken::new();
         let config = Arc::new(config);
 
+        // Create the databases using the provided paths in the config
         let state_db = Arc::new(
             DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions()).unwrap(),
         );
@@ -118,9 +119,14 @@ impl TestContext {
             DB::open_cf(&config.storage.debug_db_path, debug_db_cf_definitions()).unwrap(),
         );
 
+        // Create stores using the provided databases
         let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
         let pending_store = Arc::new(PendingStore::new(pending_db));
-        let debug_store = Arc::new(DebugStore::new(debug_db));
+        let debug_store = if config.debug_mode {
+            Arc::new(DebugStore::new(debug_db))
+        } else {
+            Arc::new(DebugStore::Disabled)
+        };
 
         // Use the provided provider
         let real_provider = Arc::new(provider);
