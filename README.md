@@ -146,11 +146,11 @@ To run the integration tests, you'll need to build the contracts image first, an
 1. Clone the contracts repository:
    ```bash
    git clone https://github.com/agglayer/agglayer-contracts
-   cd agglayer-contracts
    ```
 
 2. Build the contracts Docker image:
    ```bash
+   cd agglayer-contracts
    npm install
    npm run dockerv2:contracts:all
    ```
@@ -159,7 +159,6 @@ To run the integration tests, you'll need to build the contracts image first, an
 
 Once the prerequisites are ready, you can now return to the main agglayer directory and run the integration tests:
 ```bash
-cd ../agglayer
 cargo nextest run --workspace -P integrations --no-fail-fast --retries 2
 ```
 
