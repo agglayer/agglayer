@@ -136,6 +136,42 @@ For those with the hardware and know-how, however, you can run the Pessimistic P
 cargo run --package pessimistic-proof-test-suite --bin ppgen
 ```
 
+
+## Running Integration Tests
+
+### Prerequisites
+
+To run the integration tests, you'll need to build the contracts image first, and then run the tests with the integration profile:
+
+1. Clone the contracts repository:
+   ```bash
+   git clone https://github.com/agglayer/agglayer-contracts
+   ```
+
+2. Build the contracts Docker image:
+   ```bash
+   cd agglayer-contracts
+   npm install
+   npm run dockerv2:contracts:all
+   ```
+
+### Running the tests
+
+Once the prerequisites are ready, you can now return to the main agglayer directory and run the integration tests:
+```bash
+cargo nextest run --workspace -P integrations --no-fail-fast --retries 2
+```
+
+### Potential issues
+
+Note that, due to the use of docker, sometimes there are leftover containers that cause issues with the integration tests.
+In this case, just delete any container you might have, and rerun the integration tests.
+You may also need to rebuild the contracts Docker image, if there have been updates there.
+
+Also, there are quite a few intermittent failures in the tests, that can be helped thanks to the suggested `--retries 2`.
+
+Finally, `--no-fail-fast` is useful to start the integration tests and then come back after a coffee to see all the failing tests: a full run of integration test takes around ten minutes on a Macbook M4 Pro.
+
 ## Development
 
 Contributions are very welcomed, the guidelines are currently not available (WIP)
