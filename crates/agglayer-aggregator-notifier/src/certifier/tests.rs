@@ -67,12 +67,13 @@ async fn happy_path() {
         .with(eq(certificate_id), always())
         .return_once(|_, _| Ok(()));
 
-    let expected_aggchain_hash = keccak256_combine([&0u32.to_be_bytes(), signer.0.as_slice()]).0;
+    // let expected_aggchain_hash = keccak256_combine([&0u32.to_be_bytes(),
+    // signer.0.as_slice()]).0;
 
-    l1_rpc
-        .expect_get_aggchain_hash()
-        .once()
-        .returning(move |_, _| Ok(expected_aggchain_hash));
+    // l1_rpc
+    //     .expect_get_aggchain_hash()
+    //     .once()
+    //     .returning(move |_, _| Ok(expected_aggchain_hash));
 
     l1_rpc
         .expect_get_trusted_sequencer_address()

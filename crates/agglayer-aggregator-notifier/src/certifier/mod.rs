@@ -441,25 +441,6 @@ where
             )
             .map_err(|source| CertificationError::Types { source })?;
 
-        // Verify matching on the aggchain hash between the L1 and the agglayer
-        {
-            let l1_aggchain_hash: Digest = self
-                .l1_rpc
-                .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
-                .await
-                .map_err(CertificationError::UnableToFindAggchainHash)?
-                .into();
-
-            let computed_aggchain_hash = multi_batch_header.aggchain_proof.aggchain_hash();
-
-            if l1_aggchain_hash != computed_aggchain_hash {
-                return Err(CertificationError::AggchainHashMismatch {
-                    from_l1: l1_aggchain_hash,
-                    from_certificate: computed_aggchain_hash,
-                });
-            }
-        }
-
         let targets_witness_generation: StateCommitment = {
             let ns: LocalNetworkState = state.clone().into();
             NetworkState::from(ns).get_state_commitment()
@@ -479,6 +460,23 @@ where
             ..
         } = &certificate.aggchain_data
         {
+            // Verify matching on the aggchain hash between the L1 and the agglayer
+            let l1_aggchain_hash: Digest = self
+                .l1_rpc
+                .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
+                .await
+                .map_err(CertificationError::UnableToFindAggchainHash)?
+                .into();
+
+            let computed_aggchain_hash = multi_batch_header.aggchain_proof.aggchain_hash();
+
+            if l1_aggchain_hash != computed_aggchain_hash {
+                return Err(CertificationError::AggchainHashMismatch {
+                    from_l1: l1_aggchain_hash,
+                    from_certificate: computed_aggchain_hash,
+                });
+            }
+
             // Consistency check across these 2 sources:
             //
             // - Public values expected by the proof (i.e., the valid ones to succeed the
