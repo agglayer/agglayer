@@ -41,7 +41,7 @@ async fn check_tx_status() {
 
     // Test with the real transaction hash - should work now!
     let result: Result<String, ClientError> = context
-        .client
+        .api_client
         .request("interop_getTxStatus", rpc_params![hash])
         .await;
 
@@ -68,7 +68,7 @@ async fn check_tx_status() {
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let result2: Result<String, ClientError> = context
-        .client
+        .api_client
         .request("interop_getTxStatus", rpc_params![hash])
         .await;
 
@@ -96,7 +96,7 @@ async fn check_tx_status_fail() {
     let fake_tx_hash = B256::from([0x27; 32]);
 
     let result: Result<String, ClientError> = context
-        .client
+        .api_client
         .request("interop_getTxStatus", rpc_params![fake_tx_hash])
         .await;
 

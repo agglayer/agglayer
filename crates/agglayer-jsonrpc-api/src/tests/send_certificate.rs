@@ -7,32 +7,30 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, Digest, Height, Metadata,
     NetworkId, SettlementTxHash,
 };
-// use alloy::signers::Signer as _;
-use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder, rpc_params};
+use jsonrpsee::{core::client::ClientT, rpc_params};
 
 use crate::testutils::TestContext;
 
 #[test_log::test(tokio::test)]
 async fn send_certificate_method_can_be_called_and_succeed() {
-    let db_dir = TempDBDir::new();
-    let mut config = Config::new(&db_dir.path);
+    let mut config = TestContext::get_default_config();
     config
         .proof_signers
         .insert(1, Certificate::wallet_for_test(NetworkId::new(1)).address());
-
     let mut context = TestContext::new_with_config(config).await;
+    let client = context.api_client.clone();
 
-    let url = format!("http://{}/", context.config.readrpc_addr());
-    let client = HttpClientBuilder::default().build(url).unwrap();
-    let _: CertificateId = client
+    let cert_id: CertificateId = client
         .request(
             "interop_sendCertificate",
             rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
         )
         .await
         .unwrap();
+    let received_cert = context.certificate_receiver.try_recv();
 
-    assert!(context.certificate_receiver.try_recv().is_ok());
+    assert!(received_cert.is_ok());
+    assert_eq!(received_cert.unwrap().2, cert_id);
 }
 
 #[test_log::test(tokio::test)]
@@ -42,7 +40,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
     let context = TestContext::new_with_config(config).await;
 
     let res: Result<(), _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![Certificate::new_for_test(0.into(), Height::ZERO)],
@@ -63,7 +61,7 @@ async fn send_certificate_method_requires_known_signer() {
 
     let context = TestContext::new_with_config(config).await;
     let send_request: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
@@ -100,7 +98,7 @@ async fn pending_certificate_in_error_can_be_replaced() {
         .expect("unable to insert pending certificate");
 
     let res: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![second_pending.clone()],
@@ -120,7 +118,7 @@ async fn pending_certificate_in_error_can_be_replaced() {
         .expect("unable to insert pending certificate header");
 
     let res: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request("interop_sendCertificate", rpc_params![second_pending])
         .await;
 
@@ -159,7 +157,7 @@ async fn pending_certificate_in_error_force_push() {
         .expect("unable to insert pending certificate");
 
     let res: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![pending_certificate.clone()],
@@ -179,7 +177,7 @@ async fn pending_certificate_in_error_force_push() {
         .expect("Unable to update certificate header status");
 
     let res: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![pending_certificate.clone()],
