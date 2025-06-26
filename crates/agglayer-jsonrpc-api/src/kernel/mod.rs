@@ -22,8 +22,8 @@ use tracing::{info, instrument, warn};
 
 use crate::{signed_tx::SignedTx, zkevm_node_client::ZkevmNodeClient};
 
-// #[cfg(test)]
-// pub(crate) mod tests;
+#[cfg(test)]
+pub(crate) mod tests;
 
 /// The core logic of the agglayer.
 ///
