@@ -165,6 +165,20 @@ fn e2e_local_pp_simple_zero_initial_balances() {
 }
 
 #[test]
+fn e2e_local_pp_overflow_attempt() {
+    e2e_local_pp_simple_helper(
+        [],
+        vec![
+            (USDC, U256::MAX),
+            (USDC, u(3)),
+            (ETH, u(100)),
+            (USDC, u(10)),
+        ],
+        vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(30))],
+    )
+}
+
+#[test]
 fn e2e_local_pp_random() {
     let target = u(u64::MAX);
     let upper = u64::MAX / 10;

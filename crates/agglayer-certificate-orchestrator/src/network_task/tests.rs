@@ -8,7 +8,7 @@ use agglayer_storage::{
     },
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
-use agglayer_types::PessimisticRootInput;
+use agglayer_types::{Certificate, CertificateStatus, PessimisticRootInput};
 use mockall::predicate::{always, eq, in_iter};
 use pessimistic_proof::unified_bridge::CommitmentVersion;
 use rstest::rstest;
@@ -17,6 +17,7 @@ use super::*;
 use crate::{
     epoch_packer::MockEpochPacker,
     tests::{clock, mocks::MockCertifier},
+    CertificationError, CertifierOutput,
 };
 
 mod status;
@@ -131,9 +132,14 @@ async fn start_from_zero() {
         .await;
 
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 1);
 }
@@ -303,14 +309,24 @@ async fn one_per_epoch() {
         .expect("Failed to send the certificate");
 
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 1);
     tokio::time::timeout(
         Duration::from_millis(100),
-        task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run),
+        task.make_progress(
+            &mut epochs,
+            &mut next_expected_height,
+            &mut first_run,
+            &CancellationToken::new(),
+        ),
     )
     .await
     .expect_err("Should have timed out");
@@ -524,15 +540,25 @@ async fn retries() {
         .await
         .expect("Failed to send the certificate");
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 0);
 
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 1);
 }
@@ -712,15 +738,25 @@ async fn changing_epoch_triggers_certify() {
         .await
         .expect("Failed to send the certificate");
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 1);
 
     tokio::time::timeout(
         Duration::from_millis(100),
-        task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run),
+        task.make_progress(
+            &mut epochs,
+            &mut next_expected_height,
+            &mut first_run,
+            &CancellationToken::new(),
+        ),
     )
     .await
     .expect_err("Should have timed out");
@@ -734,9 +770,14 @@ async fn changing_epoch_triggers_certify() {
         .send(agglayer_clock::Event::EpochEnded(0))
         .expect("Failed to send");
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 2);
 }
@@ -788,10 +829,7 @@ async fn timeout_certifier() {
             Err(CertificationError::InternalError("TimedOut".to_string()))
         });
 
-    let expected_error = format!(
-        "Internal error happened in the certification process of {certificate_id}: internal \
-         error: TimedOut"
-    );
+    let expected_error = String::from("Internal error: TimedOut");
 
     state
         .expect_get_latest_settled_certificate_per_network()
@@ -836,9 +874,14 @@ async fn timeout_certifier() {
         .await
         .expect("Failed to send the certificate");
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 0);
 }
@@ -953,17 +996,27 @@ async fn process_next_certificate() {
         .await
         .expect("Failed to send the certificate");
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 1);
     clock_ref.update_block_height(2);
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(0));
 
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
     assert_eq!(next_expected_height, 2);
 }
 
@@ -1016,14 +1069,24 @@ async fn epoch_jammed(#[values(false, true)] at_capacity: bool) {
     // Just make sure it does not panic or time out when epoch events are skipped.
     let mut first_run = false;
     task.at_capacity_for_epoch = at_capacity;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
     assert_eq!(task.at_capacity_for_epoch, at_capacity);
 
     // Taking the next item from the channel should advance the epoch.
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
     assert!(!task.at_capacity_for_epoch);
 }

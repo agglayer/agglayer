@@ -18,17 +18,19 @@
 //! one of the future versions.
 
 use std::borrow::Cow;
+
 use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
     aggchain_proof::{AggchainData, Proof},
     primitives::Digest,
     Certificate, Height, Metadata, NetworkId, Signature,
 };
-use bincode::Options;
-use pessimistic_proof::unified_bridge::{BridgeExit, ImportedBridgeExit};
+use pessimistic_proof::unified_bridge::{
+    AggchainProofPublicValues, BridgeExit, ImportedBridgeExit,
+};
 use serde::{Deserialize, Serialize};
 
-use crate::columns::{default_bincode_options, CodecError};
+use crate::columns::{bincode_codec, CodecError};
 
 /// A unit type serializing to a constant byte representing the storage version.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
@@ -205,6 +207,13 @@ pub enum AggchainDataV1<'a> {
         aggchain_params: Digest,
         signature: Cow<'a, Box<Signature>>,
     },
+
+    GenericWithPublicValues {
+        proof: Cow<'a, Proof>,
+        aggchain_params: Digest,
+        signature: Option<Box<Signature>>,
+        public_values: Cow<'a, Box<AggchainProofPublicValues>>,
+    },
 }
 
 impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
@@ -218,18 +227,27 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
                 proof,
                 aggchain_params,
                 signature,
+                public_values,
             } => {
                 let proof = Cow::Borrowed(proof);
                 let aggchain_params = *aggchain_params;
-                match signature {
-                    None => Self::GenericNoSignature {
+                match public_values {
+                    Some(pv) => Self::GenericWithPublicValues {
                         proof,
                         aggchain_params,
+                        signature: signature.clone(),
+                        public_values: Cow::Borrowed(pv),
                     },
-                    Some(signature) => Self::GenericWithSignature {
-                        proof,
-                        aggchain_params,
-                        signature: Cow::Borrowed(signature),
+                    None => match signature {
+                        None => Self::GenericNoSignature {
+                            proof,
+                            aggchain_params,
+                        },
+                        Some(signature) => Self::GenericWithSignature {
+                            proof,
+                            aggchain_params,
+                            signature: Cow::Borrowed(signature),
+                        },
                     },
                 }
             }
@@ -241,7 +259,6 @@ impl From<AggchainDataV1<'_>> for AggchainData {
     fn from(proof: AggchainDataV1) -> Self {
         match proof {
             AggchainDataV1::ECDSA { signature } => Self::ECDSA { signature },
-
             AggchainDataV1::GenericNoSignature {
                 proof,
                 aggchain_params,
@@ -249,8 +266,8 @@ impl From<AggchainDataV1<'_>> for AggchainData {
                 proof: proof.into_owned(),
                 aggchain_params,
                 signature: None,
+                public_values: None,
             },
-
             AggchainDataV1::GenericWithSignature {
                 proof,
                 aggchain_params,
@@ -259,6 +276,18 @@ impl From<AggchainDataV1<'_>> for AggchainData {
                 proof: proof.into_owned(),
                 aggchain_params,
                 signature: Some(signature.into_owned()),
+                public_values: None,
+            },
+            AggchainDataV1::GenericWithPublicValues {
+                proof,
+                aggchain_params,
+                signature,
+                public_values,
+            } => Self::Generic {
+                proof: proof.into_owned(),
+                aggchain_params,
+                signature,
+                public_values: Some(public_values.into_owned()),
             },
         }
     }
@@ -270,13 +299,13 @@ type CurrentCertificate<'a> = CertificateV1<'a>;
 fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
     bytes: &[u8],
 ) -> Result<Certificate, CodecError> {
-    Ok(default_bincode_options().deserialize::<T>(bytes)?.into())
+    Ok(bincode_codec().deserialize::<T>(bytes)?.into())
 }
 
 impl crate::columns::Codec for Certificate {
     fn encode(&self) -> Result<Vec<u8>, CodecError> {
         // TODO get rid of the clones <https://github.com/agglayer/agglayer/issues/618>
-        Ok(default_bincode_options().serialize(&CurrentCertificate::from(self))?)
+        Ok(bincode_codec().serialize(&CurrentCertificate::from(self))?)
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
