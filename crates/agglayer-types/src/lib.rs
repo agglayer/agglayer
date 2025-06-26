@@ -625,7 +625,7 @@ impl Certificate {
 
         CertificateId(keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
-            self.height.0.to_be_bytes().as_slice(),
+            self.height.as_u64().to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_ref(),
             self.new_local_exit_root.as_ref(),
             commit_bridge_exits.as_slice(),
