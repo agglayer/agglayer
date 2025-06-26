@@ -7,7 +7,6 @@ use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use pessimistic_proof::ELF;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
-
 use crate::l1_setup::{self, next_available_addr, L1Docker};
 
 const PHRASE: &str = "test test test test test test test test test test test junk";
@@ -86,11 +85,21 @@ pub async fn start_agglayer(
         .await
         .unwrap();
 
-    let _wallet = get_signer(1);
-
-    // Create a temporary keystore file for testing
+    // Create keystore file with embedded content for Docker compatibility
     let key_path = config_path.join("test_keystore.json");
-    std::fs::write(&key_path, "{}").unwrap(); // Create empty JSON file for now
+    let password = "randpsswd";
+
+    // Write the keystore content to a temporary file
+    let keystore_content = get_test_keystore_content();
+    std::fs::write(&key_path, keystore_content).unwrap();
+
+    // Configure authentication to use the keystore file
+    config.auth = agglayer_config::AuthConfig::Local(agglayer_config::LocalConfig {
+        private_keys: vec![agglayer_config::PrivateKey {
+            path: key_path,
+            password: password.to_string(),
+        }],
+    });
 
     let grpc_addr = next_available_addr();
     let readrpc_addr = next_available_addr();
@@ -110,12 +119,15 @@ pub async fn start_agglayer(
         "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"
             .parse()
             .unwrap();
-    config.auth = agglayer_config::AuthConfig::Local(agglayer_config::LocalConfig {
-        private_keys: vec![agglayer_config::PrivateKey {
-            path: key_path,
-            password: "randpsswd".into(),
-        }],
-    });
+    
+    // // Configure proof_signers to avoid contract calls for trusted sequencer address
+    // // This maps rollup_id to the sequencer address that will be used to sign certificates
+    // // Using the address from the mnemonic phrase (index 0) that matches get_signer(0)
+    // let sequencer_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266".parse().unwrap();
+    // config.proof_signers.insert(1, sequencer_address);
+    // config.proof_signers.insert(2, sequencer_address);
+    // config.proof_signers.insert(3, sequencer_address);
+    // // Use default auth config (no private keys needed for testing)
 
     let config_file = config_path.join("config.toml");
     let toml = toml::to_string_pretty(&config).unwrap();
@@ -176,4 +188,28 @@ pub fn get_signer(index: u32) -> PrivateKeySigner {
         .unwrap()
         .build()
         .unwrap()
+}
+
+fn get_test_keystore_content() -> &'static str {
+    r#"{
+  "address": "f39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "crypto": {
+    "cipher": "aes-128-ctr",
+    "ciphertext": "43038e54c38f28d03483a122aa1b327f8ea5128462a4008ed1d25eb0a8d7480b",
+    "cipherparams": {
+      "iv": "14ab845d00fd14fa2b50aa718cd5b5d9"
+    },
+    "mac": "25e1857d1a67a42ecff486dbe14e216094990773e8d54d3a7f9372dc37c69256",
+    "kdf": "scrypt",
+    "kdfparams": {
+      "dklen": 32,
+      "n": 262144,
+      "r": 8,
+      "p": 1,
+      "salt": "69a0f2e8911f80cf739db55d5d7a79db878fcb01ea54df4f5b6dbfa21d65c935"
+    }
+  },
+  "id": "716ff916-2550-4cdc-8b7d-907e65c5abc6",
+  "version": 3
+}"#
 }
