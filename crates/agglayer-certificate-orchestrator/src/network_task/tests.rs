@@ -121,12 +121,6 @@ async fn start_from_zero() {
         .withf(move |i, t| *i == certificate_id && *t == SettlementTxHash::for_tests())
         .returning(|_, _| Ok(()));
 
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id), eq(CertificateStatus::Candidate))
-        .returning(|_, _| Ok(()));
-
     settlement_client
         .expect_wait_for_settlement()
         .once()
@@ -325,12 +319,6 @@ async fn one_per_epoch() {
         .expect_update_settlement_tx_hash()
         .once()
         .withf(move |i, t| *i == certificate_id && *t == SettlementTxHash::for_tests())
-        .returning(|_, _| Ok(()));
-
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id), eq(CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
     settlement_client
@@ -601,12 +589,6 @@ async fn retries() {
         .withf(move |i, t| *i == certificate_id2 && *t == SettlementTxHash::for_tests())
         .returning(|_, _| Ok(()));
 
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id2), eq(CertificateStatus::Candidate))
-        .returning(|_, _| Ok(()));
-
     settlement_client
         .expect_wait_for_settlement()
         .once()
@@ -832,12 +814,6 @@ async fn changing_epoch_triggers_certify() {
         .withf(move |i, t| *i == certificate_id && *t == SETTLEMENT_TX_HASH_1)
         .returning(|_, _| Ok(()));
 
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id), eq(CertificateStatus::Candidate))
-        .returning(|_, _| Ok(()));
-
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
@@ -848,12 +824,6 @@ async fn changing_epoch_triggers_certify() {
         .expect_update_settlement_tx_hash()
         .once()
         .withf(move |i, t| *i == certificate_id2 && *t == SETTLEMENT_TX_HASH_2)
-        .returning(|_, _| Ok(()));
-
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id2), eq(CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
     settlement_client

@@ -6,7 +6,7 @@ use crate::Error;
 #[allow(unused)]
 pub type MockProvider = alloy::providers::RootProvider<alloy::network::Ethereum>;
 
-/// Epoch Packer used to gather all the proofs generated on-the-go
+/// Settlement client used to gather all the proofs generated on-the-go
 /// and to submit them in a settlement tx to the L1.
 #[cfg_attr(
     any(test, feature = "testutils"),

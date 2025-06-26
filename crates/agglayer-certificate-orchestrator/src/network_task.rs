@@ -26,27 +26,49 @@ pub(crate) struct NewCertificate {
     pub(crate) height: Height,
 }
 
-#[allow(dead_code)] // TODO: Once we have implemented storage properly, all this should become used
+#[allow(dead_code)] // TODO: Once we have implemented storage properly, all the fields should become used
+/// Enum listing all the potential messages that can be sent to the network
+/// task.
 pub enum NetworkTaskMessage {
+    /// Get the local network state before a given height.
     GetLocalNetworkStateBeforeHeight {
         height: Height,
         response: oneshot::Sender<Result<Box<LocalNetworkStateData>, CertificateStatusError>>,
     },
+
+    /// Notify the network task that a certificate has been successfully
+    /// executed.
+    ///
+    /// Also encodes the new state of the network after the certificate has been
+    /// executed.
     CertificateExecuted {
         height: Height,
         certificate_id: CertificateId,
         new_state: Box<LocalNetworkStateData>,
     },
+
+    /// Notify the network task that a certificate has been successfully proven.
     CertificateProven {
         height: Height,
         certificate_id: CertificateId,
     },
+
+    /// Notify the network task that a certificate is ready for settlement.
+    ///
+    /// The `settlement_submitted_notifier` is used to notify the certificate
+    /// task that the settlement has been successfully submitted.
     CertificateReadyForSettlement {
         height: Height,
         certificate_id: CertificateId,
         settlement_submitted_notifier:
             oneshot::Sender<Result<SettlementTxHash, CertificateStatusError>>,
     },
+
+    /// Notify the network task that a certificate is waiting for settlement to
+    /// complete.
+    ///
+    /// The `settlement_complete_notifier` is used to notify the certificate
+    /// task that the settlement has been successfully completed.
     CertificateWaitingForSettlement {
         height: Height,
         certificate_id: CertificateId,
@@ -54,11 +76,16 @@ pub enum NetworkTaskMessage {
         settlement_complete_notifier:
             oneshot::Sender<Result<(EpochNumber, CertificateIndex), CertificateStatusError>>,
     },
+
+    /// Notify the network task that a certificate has been successfully
+    /// settled.
     CertificateSettled {
         height: Height,
         certificate_id: CertificateId,
         settled_certificate: SettledCertificate,
     },
+
+    /// Notify the network task that a certificate has encountered an error.
     CertificateErrored {
         height: Height,
         certificate_id: CertificateId,
