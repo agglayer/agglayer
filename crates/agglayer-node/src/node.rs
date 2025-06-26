@@ -20,6 +20,7 @@ use agglayer_storage::{
     },
 };
 use alloy::{
+    network::EthereumWallet,
     providers::{ProviderBuilder, WsConnect},
     signers::Signer,
 };
@@ -186,9 +187,11 @@ impl Node {
         let address = signer.address();
         tracing::info!("Signer address: {:?}", address);
 
-        // Create a new L1 RPC provider (without signer for now - TODO: add signer
-        // support)
-        let provider = ProviderBuilder::new().on_http(config.l1.node_url.clone());
+        // Create a new L1 RPC provider with signer support
+        let wallet = EthereumWallet::from(signer);
+        let provider = ProviderBuilder::new()
+            .wallet(wallet)
+            .on_http(config.l1.node_url.clone());
         let rpc = Arc::new(provider);
 
         tracing::debug!("RPC provider created");

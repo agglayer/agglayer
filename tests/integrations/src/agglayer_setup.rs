@@ -86,11 +86,21 @@ pub async fn start_agglayer(
         .await
         .unwrap();
 
-    let _wallet = get_signer(1);
-
-    // Create a temporary keystore file for testing
+    // Create keystore file with embedded content for Docker compatibility
     let key_path = config_path.join("test_keystore.json");
-    std::fs::write(&key_path, "{}").unwrap(); // Create empty JSON file for now
+    let password = "randpsswd";
+
+    // Write the keystore content to a temporary file
+    let keystore_content = get_test_keystore_content();
+    std::fs::write(&key_path, keystore_content).unwrap();
+
+    // Configure authentication to use the keystore file
+    config.auth = agglayer_config::AuthConfig::Local(agglayer_config::LocalConfig {
+        private_keys: vec![agglayer_config::PrivateKey {
+            path: key_path,
+            password: password.to_string(),
+        }],
+    });
 
     let grpc_addr = next_available_addr();
     let readrpc_addr = next_available_addr();
@@ -110,12 +120,6 @@ pub async fn start_agglayer(
         "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"
             .parse()
             .unwrap();
-    config.auth = agglayer_config::AuthConfig::Local(agglayer_config::LocalConfig {
-        private_keys: vec![agglayer_config::PrivateKey {
-            path: key_path,
-            password: "randpsswd".into(),
-        }],
-    });
 
     let config_file = config_path.join("config.toml");
     let toml = toml::to_string_pretty(&config).unwrap();
@@ -176,4 +180,27 @@ pub fn get_signer(index: u32) -> PrivateKeySigner {
         .unwrap()
         .build()
         .unwrap()
+}
+
+fn get_test_keystore_content() -> &'static str {
+    r#"{
+  "crypto": {
+    "cipher": "aes-128-ctr",
+    "cipherparams": {
+      "iv": "192834bb98d005cf1c9f12644c433431"
+    },
+    "ciphertext": "c8c7274be71641e467a53177b657b86731469f21af33c8f30cac7d4c34e81d96",
+    "kdf": "scrypt",
+    "kdfparams": {
+      "dklen": 32,
+      "n": 8192,
+      "p": 1,
+      "r": 8,
+      "salt": "d56f2360d3214a1a95118e69e0cc533f7a5f9b5924041ee7f3f532a41da47e0f"
+    },
+    "mac": "e11920c6df25d3a25e557b3639481cca1a8702a6b9ca643e338b60e5603de279"
+  },
+  "id": "27833fa7-1081-474c-9417-bef6d869bd58",
+  "version": 3
+}"#
 }
