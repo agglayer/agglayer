@@ -998,18 +998,6 @@ impl SettlementTxHash {
     }
 }
 
-impl From<Digest> for SettlementTxHash {
-    fn from(hash: Digest) -> Self {
-        SettlementTxHash(hash)
-    }
-}
-
-impl From<SettlementTxHash> for Digest {
-    fn from(tx_hash: SettlementTxHash) -> Self {
-        tx_hash.0
-    }
-}
-
 impl From<B256> for SettlementTxHash {
     fn from(hash: B256) -> Self {
         SettlementTxHash(Digest::from(hash))
@@ -1019,17 +1007,5 @@ impl From<B256> for SettlementTxHash {
 impl From<SettlementTxHash> for B256 {
     fn from(tx_hash: SettlementTxHash) -> Self {
         tx_hash.0.as_bytes().into()
-    }
-}
-
-impl AsRef<Digest> for SettlementTxHash {
-    fn as_ref(&self) -> &Digest {
-        &self.0
-    }
-}
-
-impl fmt::Display for SettlementTxHash {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
     }
 }
