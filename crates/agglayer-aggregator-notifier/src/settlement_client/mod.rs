@@ -200,7 +200,7 @@ where
             error!(
                 error_code = %error,
                 error = error_str,
-                "Failed to settle certificate"
+                "Failed to estimate gas for certificate settlement"
             );
 
             Error::SettlementError {

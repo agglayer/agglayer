@@ -62,6 +62,7 @@ impl EpochNumber {
         EpochNumber(epoch)
     }
 
+    #[must_use = "The value of the next epoch is returned but not used"]
     pub const fn next(&self) -> EpochNumber {
         EpochNumber(self.0.checked_add(1).expect("Epoch number overflow"))
     }
@@ -164,6 +165,7 @@ impl Height {
         Height(height)
     }
 
+    #[must_use = "The value of the next height is returned but not used"]
     pub const fn next(&self) -> Height {
         Height(self.0.checked_add(1).expect("Height overflow"))
     }
@@ -970,7 +972,19 @@ impl LocalNetworkStateData {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    PartialEq,
+    derive_more::AsRef,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::Into,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 #[serde(transparent)]
 pub struct SettlementTxHash(Digest);
 
@@ -984,18 +998,6 @@ impl SettlementTxHash {
     }
 }
 
-impl From<Digest> for SettlementTxHash {
-    fn from(hash: Digest) -> Self {
-        SettlementTxHash(hash)
-    }
-}
-
-impl From<SettlementTxHash> for Digest {
-    fn from(tx_hash: SettlementTxHash) -> Self {
-        tx_hash.0
-    }
-}
-
 impl From<H256> for SettlementTxHash {
     fn from(hash: H256) -> Self {
         SettlementTxHash(Digest::from(*hash.as_fixed_bytes()))
@@ -1005,17 +1007,5 @@ impl From<H256> for SettlementTxHash {
 impl From<SettlementTxHash> for H256 {
     fn from(tx_hash: SettlementTxHash) -> Self {
         tx_hash.0.as_bytes().into()
-    }
-}
-
-impl AsRef<Digest> for SettlementTxHash {
-    fn as_ref(&self) -> &Digest {
-        &self.0
-    }
-}
-
-impl fmt::Display for SettlementTxHash {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
     }
 }

@@ -250,8 +250,9 @@ where
             self.header.settlement_tx_hash = Some(settlement_tx_hash);
             self.state_store
                 .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
-            self.set_status(CertificateStatus::Candidate)?;
-            debug!(tx_hash = ?self.header.settlement_tx_hash, "Submitted certificate for settlement");
+            self.header.status = CertificateStatus::Candidate; // No set_status: update_settlement_tx_hash already updates the status in
+                                                               // database
+            debug!(settlement_tx_hash = ?self.header.settlement_tx_hash, "Submitted certificate for settlement");
         }
 
         // Third, wait for settlement to complete
@@ -261,7 +262,7 @@ where
             ));
         }
         if self.header.status < CertificateStatus::Settled {
-            debug!(tx_hash = ?self.header.settlement_tx_hash, "Waiting for certificate settlement to complete");
+            debug!(settlement_tx_hash = ?self.header.settlement_tx_hash, "Waiting for certificate settlement to complete");
             let settlement_tx_hash = self.header.settlement_tx_hash.ok_or_else(|| {
                 CertificateStatusError::SettlementError(
                     "Candidate certificate header has no settlement tx hash".into(),
@@ -283,7 +284,11 @@ where
             let settled_certificate =
                 SettledCertificate(certificate_id, height, epoch_number, certificate_index);
             self.set_status(CertificateStatus::Settled)?;
-            debug!(tx_hash = ?settlement_tx_hash, ?settled_certificate, "Certificate settlement completed");
+            debug!(
+                ?settlement_tx_hash,
+                ?settled_certificate,
+                "Certificate settlement completed"
+            );
             self.network_task
                 .send(NetworkTaskMessage::CertificateSettled {
                     height,
