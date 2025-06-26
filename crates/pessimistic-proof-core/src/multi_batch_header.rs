@@ -1,5 +1,5 @@
 #![allow(clippy::too_many_arguments)]
-use std::{collections::BTreeMap, hash::Hash};
+use std::hash::Hash;
 
 use agglayer_primitives::{keccak::Hasher, U256};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -35,7 +35,8 @@ where
     pub l1_info_root: H::Digest,
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
-    pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
+    /// Optimized for SP1: Using Vec instead of BTreeMap for better cycle performance.
+    pub balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath<H>))>,
     /// Aggchain proof.
     pub aggchain_proof: AggchainData,
 }
