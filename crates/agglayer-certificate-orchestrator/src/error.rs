@@ -19,27 +19,31 @@ pub enum PreCertificationError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertificationError {
-    #[error("certificate not found for network {0} at height {1}")]
+    #[error("Certificate not found for network {0} at height {1}")]
     CertificateNotFound(NetworkId, Height),
+
     #[error(
         "Failed to retrieve the trusted sequencer address for network {0} during proving phase"
     )]
     TrustedSequencerNotFound(NetworkId),
+
     #[error("Failed to retrieve the last pessimistic root for network {0}")]
     LastPessimisticRootNotFound(NetworkId),
+
     #[error("Failed to retrieve the l1 info root for the l1 leaf count: {1} for certificate {0}")]
     L1InfoRootNotFound(CertificateId, u32),
-    #[error("proof verification failed")]
+
+    #[error("Proof verification failed")]
     ProofVerificationFailed { source: ProofVerificationError },
 
     /// Rust native execution without aggchain proof stark verification failed
     /// on the given error.
-    #[error("rust-native execution failed: {source:?}")]
+    #[error("Rust-native execution failed: {source:?}")]
     NativeExecutionFailed { source: ProofError },
 
     /// SP1 native execute call which includes the aggchain proof stark
     /// verification failed.
-    #[error("sp1-native execution failed.")]
+    #[error("Sp1-native execution failed.")]
     Sp1ExecuteFailed(#[source] anyhow::Error),
 
     /// The PP public values differ between the ones computed during the
@@ -55,30 +59,43 @@ pub enum CertificationError {
 
     #[error("Type error: {source}")]
     Types { source: agglayer_types::Error },
+
     #[error("Serialize error")]
     Serialize { source: bincode::Error },
+
     #[error("Deserialize error")]
     Deserialize { source: bincode::Error },
-    #[error("internal error: {0}")]
+
+    #[error("Internal error: {0}")]
     InternalError(String),
-    #[error("prover failed")]
+
+    #[error("Prover failed")]
     ProverFailed(String),
-    #[error("prover returned unspecified error")]
+
+    #[error("Prover returned unspecified error")]
     ProverReturnedUnspecifiedError,
-    #[error("prover execution failed")]
+
+    #[error("Prover execution failed")]
     ProverExecutionFailed { source: ProofError },
+
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
-    #[error("rollup contract address not found")]
+
+    #[error("Rollup contract address not found")]
     RollupContractAddressNotFound(#[source] L1RpcError),
+
     #[error("Unable to find aggchain vkey")]
     UnableToFindAggchainVkey { source: L1RpcError },
+
     #[error("Aggchain proof vkey mismatch: expected {expected}, actual {actual}")]
     AggchainProofVkeyMismatch { expected: String, actual: String },
+
     #[error("Missing L1 info tree leaf count for generic aggchain data")]
     MissingL1InfoTreeLeafCountForGenericAggchainData,
+
     #[error("Unable to find aggchain hash")]
     UnableToFindAggchainHash(#[source] L1RpcError),
+
     /// Mismatch on the aggchain hash between the one fetched from the L1, and
     /// the one computed from the received Certificate.
     #[error("Aggchain hash mismatch. from l1: {from_l1}, from certificate: {from_certificate}.")]
@@ -86,6 +103,7 @@ pub enum CertificationError {
         from_l1: Digest,
         from_certificate: Digest,
     },
+
     /// Target state commitment mismatch between witness generation and native
     /// execution.
     #[error(
@@ -96,6 +114,7 @@ pub enum CertificationError {
         witness_generation: Box<StateCommitment>,
         native_execution: Box<StateCommitment>,
     },
+
     /// Aggchain proof public values mismatch between PP witness and the ones
     /// expected by the received aggchain proof.
     #[error(
@@ -106,6 +125,44 @@ pub enum CertificationError {
         from_proof: Box<AggchainProofPublicValues>,
         from_witness: Box<AggchainProofPublicValues>,
     },
+}
+
+impl From<CertificationError> for CertificateStatusError {
+    fn from(value: CertificationError) -> Self {
+        match value {
+            CertificationError::TrustedSequencerNotFound(network) => {
+                CertificateStatusError::TrustedSequencerNotFound(network)
+            }
+            CertificationError::LastPessimisticRootNotFound(network_id) => {
+                CertificateStatusError::LastPessimisticRootNotFound(network_id)
+            }
+            CertificationError::ProofVerificationFailed { source } => {
+                CertificateStatusError::ProofVerificationFailed(source)
+            }
+            CertificationError::L1InfoRootNotFound(_certificate_id, l1_leaf_count) => {
+                CertificateStatusError::L1InfoRootNotFound(l1_leaf_count)
+            }
+            CertificationError::ProverExecutionFailed { source } => {
+                CertificateStatusError::ProofGenerationError {
+                    generation_type: agglayer_types::GenerationType::Prover,
+                    source,
+                }
+            }
+            CertificationError::NativeExecutionFailed { source } => {
+                CertificateStatusError::ProofGenerationError {
+                    generation_type: agglayer_types::GenerationType::Native,
+                    source,
+                }
+            }
+            CertificationError::Types { source } => {
+                CertificateStatusError::TypeConversionError(source)
+            }
+            error => {
+                let error = anyhow::Error::from(error);
+                CertificateStatusError::InternalError(format!("{error:?}"))
+            }
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

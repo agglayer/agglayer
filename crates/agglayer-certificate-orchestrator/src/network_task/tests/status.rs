@@ -109,9 +109,14 @@ async fn from_pending_to_settle() {
     let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 1);
 
@@ -127,7 +132,7 @@ async fn from_pending_to_settle() {
 #[rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(2))]
-async fn from_proven_to_settle() {
+async fn from_proven_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
 
@@ -163,8 +168,8 @@ async fn from_proven_to_settle() {
                 .get_certificate(network, height)
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
-
             let signer = agglayer_types::Address::new([0; 20]);
+
             let _ = new_state
                 .apply_certificate(
                     &certificate,
@@ -217,9 +222,14 @@ async fn from_proven_to_settle() {
     let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 1);
 
@@ -324,9 +334,14 @@ async fn from_candidate_to_settle() {
     let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 0;
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 1);
 
@@ -385,9 +400,14 @@ async fn from_settle_to_settle() {
     let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = 1;
     let mut first_run = true;
-    task.make_progress(&mut epochs, &mut next_expected_height, &mut first_run)
-        .await
-        .unwrap();
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(next_expected_height, 1);
 

@@ -12,6 +12,7 @@ anyhow.workspace = true
 arc-swap.workspace = true
 buildstructor.workspace = true
 ethers.workspace = true
+fail.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
