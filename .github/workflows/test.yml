@@ -44,7 +44,6 @@ jobs:
 
   build_contracts_image:
     runs-on: ubuntu-latest-16-cores
-    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     strategy:
       matrix:
         node-version: [20.x]
@@ -190,7 +189,6 @@ jobs:
 
   check_elf:
     runs-on: ubuntu-latest-16-cores
-    if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     name: ELF Checking
     steps:
       - name: Checkout sources
