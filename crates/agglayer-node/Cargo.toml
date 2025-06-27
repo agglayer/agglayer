@@ -13,7 +13,6 @@ anyhow.workspace = true
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }
 arc-swap.workspace = true
 buildstructor.workspace = true
-ethers = { workspace = true, features = ["solc"] }
 futures.workspace = true
 hex.workspace = true
 hyper.workspace = true
@@ -53,7 +52,6 @@ pessimistic-proof.workspace = true
 
 [dev-dependencies]
 alloy = { workspace = true, features = ["full", "node-bindings"] }
-ethers.workspace = true
 http-body-util = "0.1.2"
 hyper-util = { version = "0.1.10", features = ["client"] }
 insta.workspace = true

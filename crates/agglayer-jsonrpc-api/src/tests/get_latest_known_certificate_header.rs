@@ -12,7 +12,7 @@ use insta::assert_snapshot;
 use jsonrpsee::{core::client::ClientT, rpc_params};
 use serde_json::json;
 
-use crate::{testutils::TestContext, AgglayerServer as _};
+use crate::{testutils::TestContext, AgglayerServer};
 
 #[test_log::test(tokio::test)]
 async fn returns_the_pending_certificate_header() {
@@ -65,7 +65,7 @@ async fn returns_the_pending_certificate_header() {
         .expect("unable to insert pending certificate");
 
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -148,7 +148,7 @@ async fn returns_the_proven_certificate_header() {
 
     let context = TestContext::new_with_config(config).await;
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -218,7 +218,7 @@ async fn returns_the_settled_certificate_header() {
     let context = TestContext::new_with_config(config).await;
 
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -266,7 +266,7 @@ async fn returns_no_certificate_header() {
     let network_id = 1;
 
     let payload: Option<CertificateHeader> = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -347,7 +347,7 @@ async fn returns_the_highest_height() {
     let context = TestContext::new_with_config(config).await;
 
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -447,7 +447,7 @@ async fn returns_the_settled_one_at_same_height() {
     let context = TestContext::new_with_config(config).await;
 
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],

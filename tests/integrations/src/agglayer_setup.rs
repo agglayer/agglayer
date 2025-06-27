@@ -2,15 +2,11 @@ use std::{path::Path, time::Duration};
 
 use agglayer_config::{log::LogLevel, Config};
 use agglayer_prover::fake::FakeProver;
-use ethers::{
-    core::k256::ecdsa::SigningKey,
-    signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet},
-};
+use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use pessimistic_proof::ELF;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
-
 use crate::l1_setup::{self, next_available_addr, L1Docker};
 
 const PHRASE: &str = "test test test test test test test test test test test junk";
@@ -89,18 +85,21 @@ pub async fn start_agglayer(
         .await
         .unwrap();
 
-    let wallet = get_signer(1);
+    // Create keystore file with embedded content for Docker compatibility
+    let key_path = config_path.join("test_keystore.json");
+    let password = "randpsswd";
 
-    let (_key, uuid) = LocalWallet::encrypt_keystore(
-        config_path,
-        &mut ethers::core::rand::thread_rng(),
-        wallet.signer().to_bytes(),
-        "randpsswd",
-        None,
-    )
-    .unwrap();
+    // Write the keystore content to a temporary file
+    let keystore_content = get_test_keystore_content();
+    std::fs::write(&key_path, keystore_content).unwrap();
 
-    let key_path = config_path.join(uuid);
+    // Configure authentication to use the keystore file
+    config.auth = agglayer_config::AuthConfig::Local(agglayer_config::LocalConfig {
+        private_keys: vec![agglayer_config::PrivateKey {
+            path: key_path,
+            password: password.to_string(),
+        }],
+    });
 
     let grpc_addr = next_available_addr();
     let readrpc_addr = next_available_addr();
@@ -120,12 +119,15 @@ pub async fn start_agglayer(
         "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"
             .parse()
             .unwrap();
-    config.auth = agglayer_config::AuthConfig::Local(agglayer_config::LocalConfig {
-        private_keys: vec![agglayer_config::PrivateKey {
-            path: key_path,
-            password: "randpsswd".into(),
-        }],
-    });
+    
+    // // Configure proof_signers to avoid contract calls for trusted sequencer address
+    // // This maps rollup_id to the sequencer address that will be used to sign certificates
+    // // Using the address from the mnemonic phrase (index 0) that matches get_signer(0)
+    // let sequencer_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266".parse().unwrap();
+    // config.proof_signers.insert(1, sequencer_address);
+    // config.proof_signers.insert(2, sequencer_address);
+    // config.proof_signers.insert(3, sequencer_address);
+    // // Use default auth config (no private keys needed for testing)
 
     let config_file = config_path.join("config.toml");
     let toml = toml::to_string_pretty(&config).unwrap();
@@ -177,7 +179,7 @@ pub async fn setup_network(
     (receiver, l1, client)
 }
 
-pub fn get_signer(index: u32) -> Wallet<SigningKey> {
+pub fn get_signer(index: u32) -> PrivateKeySigner {
     // Access mnemonic phrase with password.
     // Child key at derivation path: m/44'/60'/0'/0/{index}.
     MnemonicBuilder::<English>::default()
@@ -186,4 +188,28 @@ pub fn get_signer(index: u32) -> Wallet<SigningKey> {
         .unwrap()
         .build()
         .unwrap()
+}
+
+fn get_test_keystore_content() -> &'static str {
+    r#"{
+  "address": "70997970c51812dc3a010c7d01b50e0d17dc79c8",
+  "crypto": {
+    "cipher": "aes-128-ctr",
+    "ciphertext": "9e9b666bee2090e229b72fb5333a64889e351ceaf9941df9c4342c47c90fe24c",
+    "cipherparams": {
+      "iv": "978d872b955493bab5f8c2a1e10a7df1"
+    },
+    "mac": "1540807af77a89ac64f5dffa2d8e786e7a47fd5da3d4945bbd09fd23d599cfaf",
+    "kdf": "scrypt",
+    "kdfparams": {
+      "dklen": 32,
+      "n": 262144,
+      "r": 8,
+      "p": 1,
+      "salt": "2d71709373cf54fc504bf53b276c5f39edfd9bae97f7ab563f0ff7cc5aa64f3d"
+    }
+  },
+  "id": "b0b70105-28e4-487a-aad3-17e71a5bc869",
+  "version": 3
+}"#
 }

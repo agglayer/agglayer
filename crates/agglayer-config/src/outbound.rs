@@ -76,8 +76,7 @@ const fn same_as_default_gas_multiplier_factor(v: &u32) -> bool {
     *v == default_gas_multiplier_factor()
 }
 
-/// Default number of retries for the transaction. It matches the ethers default
-/// value.
+/// Default number of retries for the transaction.
 const fn default_rpc_retries() -> usize {
     3
 }
