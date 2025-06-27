@@ -8,6 +8,10 @@ use sp1_sdk::Prover;
 use super::*;
 use crate::columns::Codec;
 
+mod header;
+mod status;
+mod structure;
+
 const EMPTY_ELF: &[u8] = include_bytes!("empty.elf");
 
 #[rstest::rstest]
@@ -308,6 +312,3 @@ fn bad_format() {
         }
     }
 }
-
-mod header;
-mod status;
