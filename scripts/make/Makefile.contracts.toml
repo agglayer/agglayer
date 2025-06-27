@@ -1,6 +1,6 @@
 [env]
 CONTRACT_VERSION = "feature/ongoing-v0.3.0"
-CONTRACT_REPO = "https://api.github.com/repos/agglayer/agg-contracts-internal"
+CONTRACT_REPO = "https://api.github.com/repos/agglayer/agglayer-contracts"
 
 [tasks.contracts]
 description = "Download and update the contracts of agglayer-contracts"
