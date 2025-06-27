@@ -30,13 +30,13 @@ This diagram illustrates our complete release workflow: minor releases branch fr
 
 ### Step 1: Release Initiation
 
-The release process begins when a codeowner determines that the codebase is ready for a new release. This decision is typically made after evaluating completed features, bug fixes, and overall code stability. Codeowners initiate the release through GitHub's manual workflow dispatch interface, selecting only the target branch (`main` for minor releases or `release/vX.Y` for patch releases). 
+The release process begins when a codeowner determines that the codebase is ready for a new release. This decision is typically made after evaluating completed features, bug fixes, and overall code stability. Codeowners initiate the release through GitHub's manual workflow dispatch interface, selecting only the target branch (`main` for minor releases or `release/vX.Y` for patch releases).
 
 The system automatically determines the appropriate version number by reading the current version from `Cargo.toml` and applying our semantic versioning rules. This eliminates manual version input errors and ensures consistency with our established versioning strategy.
 
 ### Step 2: Automated Release Preparation
 
-Once triggered, our automated system creates a dedicated release branch following our naming convention (`release/vX.Y` for minor releases or `release/vX.Y.Z` for patches). The system then performs several critical tasks: it reads the current version from `Cargo.toml` to determine the release version, generates a comprehensive changelog using `git-cliff` based on our conventional commit history, and creates a pull request tagged with the `release` label.
+Once triggered, our automated system creates a dedicated release branch following our naming convention (`release/vX.Y` for minor releases). The system then performs several critical tasks: it reads the current version from `Cargo.toml` to determine the release version, generates a comprehensive changelog using `git-cliff` based on our conventional commit history, and creates a pull request tagged with the `release` label.
 
 This automation ensures that all release preparations follow identical procedures, reducing human error and maintaining consistency across all releases. The generated changelog provides a clear overview of what changes will be included in the release, enabling informed review decisions.
 
@@ -64,7 +64,7 @@ Our branching strategy is designed to support parallel development and maintenan
 
 ### Main Branch Philosophy
 
-The main branch serves as our primary development artery, representing the latest state of our codebase and the foundation for all future releases. This branch maintains a continuous flow of new features, improvements, and non-breaking changes that have passed through our merge group validation process. 
+The main branch serves as our primary development artery, representing the latest state of our codebase and the foundation for all future releases. This branch maintains a continuous flow of new features, improvements, and non-breaking changes that have passed through our merge group validation process.
 
 The main branch follows a strict versioning discipline where the version number in `Cargo.toml` always reflects the next intended minor release in the format `vX.Y.0`. This convention ensures that every commit on main is clearly associated with an upcoming feature release, eliminating ambiguity about which version will contain specific changes.
 
