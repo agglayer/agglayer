@@ -1,12 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use agglayer_interop_types::aggchain_proof;
+pub use agglayer_interop_types::{aggchain_proof, bincode};
 use agglayer_interop_types::{
     aggchain_proof::AggchainData, BridgeExit, GlobalIndex, ImportedBridgeExit,
     ImportedBridgeExitCommitmentValues, TokenInfo,
 };
 pub use agglayer_primitives::Digest;
-use agglayer_primitives::{keccak::Keccak256Hasher, FromBool, Hashable, SignatureError};
+use agglayer_primitives::{
+    keccak::Keccak256Hasher, ruint::UintTryFrom, FromBool, Hashable, SignatureError,
+};
 use agglayer_tries::{error::SmtError, roots::LocalExitRoot, smt::Smt};
 use pessimistic_proof::{
     core::{
@@ -24,8 +26,12 @@ use pessimistic_proof::{
 };
 use serde::{Deserialize, Serialize};
 use unified_bridge::CommitmentVersion;
+
 pub type EpochNumber = u64;
+
+/// Index of the certificate inside its epoch
 pub type CertificateIndex = u64;
+
 pub type CertificateId = Digest;
 pub type Height = u64;
 pub type Metadata = Digest;
@@ -181,7 +187,7 @@ pub enum CertificateStatusError {
     #[error("Trusted sequencer address not found for network: {0}")]
     TrustedSequencerNotFound(NetworkId),
 
-    #[error("Internal error")]
+    #[error("Internal error: {0}")]
     InternalError(String),
 
     #[error("Settlement error: {0}")]
@@ -256,6 +262,8 @@ pub enum CertificateStatus {
     /// Note that a certificate can be InError in agglayer but settled on L1,
     /// eg. if there was an error in agglayer but the certificate was valid
     /// and settled on L1.
+    // TODO: SHOULD BE A SEPARATE PR: MAKING A BOX HERE WOULD DIVIDE BY ~10 THE SIZE OF
+    // CERTIFICATESTATUS
     InError { error: CertificateStatusError },
 
     /// Transaction to settle the certificate was completed successfully on L1.
@@ -271,6 +279,32 @@ impl std::fmt::Display for CertificateStatus {
             CertificateStatus::InError { error } => write!(f, "InError: {error}"),
             CertificateStatus::Settled => write!(f, "Settled"),
         }
+    }
+}
+
+impl PartialOrd for CertificateStatus {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl CertificateStatus {
+    // Only ever used as implementation for Ord, feel free to change it
+    fn as_order_number(&self) -> usize {
+        use CertificateStatus::*;
+        match self {
+            Pending => 0,
+            Proven => 1,
+            Candidate => 2,
+            Settled => 3,
+            InError { .. } => 4,
+        }
+    }
+}
+
+impl Ord for CertificateStatus {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_order_number().cmp(&other.as_order_number())
     }
 }
 
@@ -625,13 +659,17 @@ impl LocalNetworkStateData {
                 })
                 .collect();
 
-            let mut new_balances = initial_balances.clone();
+            let mut new_balances: BTreeMap<_, _> = initial_balances
+                .iter()
+                .map(|(&token, &balance)| (token, U512::from(balance)))
+                .collect();
+
             for imported_bridge_exit in imported_bridge_exits {
                 let token = imported_bridge_exit.bridge_exit.amount_token_info();
                 new_balances.insert(
                     token,
                     new_balances[&token]
-                        .checked_add(imported_bridge_exit.bridge_exit.amount)
+                        .checked_add(U512::from(imported_bridge_exit.bridge_exit.amount))
                         .ok_or(Error::BalanceOverflow(token))?,
                 );
             }
@@ -641,7 +679,7 @@ impl LocalNetworkStateData {
                 new_balances.insert(
                     token,
                     new_balances[&token]
-                        .checked_sub(bridge_exit.amount)
+                        .checked_sub(U512::from(bridge_exit.amount))
                         .ok_or(Error::BalanceUnderflow(token))?,
                 );
             }
@@ -651,6 +689,9 @@ impl LocalNetworkStateData {
                 .into_iter()
                 .map(|token| {
                     let initial_balance = initial_balances[&token];
+
+                    let new_balance = U256::uint_try_from(new_balances[&token])
+                        .map_err(|_| Error::BalanceOverflow(token))?;
 
                     let balance_proof_error =
                         |source| Error::BalanceProofGenerationFailed { source, token };
@@ -666,7 +707,7 @@ impl LocalNetworkStateData {
                     };
 
                     self.balance_tree
-                        .update(token, new_balances[&token].to_be_bytes().into())
+                        .update(token, new_balance.to_be_bytes().into())
                         .map_err(balance_proof_error)?;
 
                     Ok((token, (initial_balance, path)))

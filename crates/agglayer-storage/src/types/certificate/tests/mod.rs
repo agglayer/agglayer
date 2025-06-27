@@ -1,6 +1,6 @@
 use agglayer_types::{
     aggchain_proof::{Proof, SP1StarkWithContext},
-    U256,
+    bincode, U256,
 };
 use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
@@ -16,7 +16,7 @@ const EMPTY_ELF: &[u8] = include_bytes!("empty.elf");
 #[case(258.into(), [0, 0, 1, 2])]
 #[case(0x12345678.into(), [0x12, 0x34, 0x56, 0x78])]
 fn network_id_encoding(#[case] network_id: NetworkId, #[case] expected: [u8; 4]) {
-    let encoded = default_bincode_options().serialize(&network_id).unwrap();
+    let encoded = bincode_codec().serialize(&network_id).unwrap();
     assert_eq!(encoded, expected);
     assert_eq!(network_id.to_u32().to_be_bytes(), expected);
 }
@@ -64,6 +64,17 @@ impl AggchainDataV1<'static> {
         })
     }
 
+    fn aggchain_proof_public_values0(aggchain_params: Digest) -> AggchainProofPublicValues {
+        AggchainProofPublicValues {
+            prev_local_exit_root: Default::default(),
+            new_local_exit_root: Default::default(),
+            l1_info_root: Default::default(),
+            origin_network: NetworkId::new(0u32),
+            commit_imported_bridge_exits: Default::default(),
+            aggchain_params,
+        }
+    }
+
     fn test0() -> Self {
         let signature = sig(0x7a, 0x9b);
         Self::ECDSA { signature }
@@ -81,6 +92,18 @@ impl AggchainDataV1<'static> {
         AggchainDataV1::GenericNoSignature {
             proof: Cow::Owned(Self::proof0()),
             aggchain_params: Digest([0x59; 32]),
+        }
+    }
+
+    fn test3() -> Self {
+        let aggchain_params = Digest([0x60; 32]);
+        AggchainDataV1::GenericWithPublicValues {
+            proof: Cow::Owned(Self::proof0()),
+            aggchain_params,
+            signature: None,
+            public_values: Cow::Owned(Box::new(Self::aggchain_proof_public_values0(
+                aggchain_params,
+            ))),
         }
     }
 }
@@ -182,6 +205,17 @@ impl CertificateV1<'_> {
                     aggchain_params,
                     signature: Cow::Owned(signature.into_owned()),
                 },
+                AggchainDataV1::GenericWithPublicValues {
+                    proof,
+                    aggchain_params,
+                    signature,
+                    public_values,
+                } => AggchainDataV1::GenericWithPublicValues {
+                    proof: Cow::Owned(proof.into_owned()),
+                    aggchain_params,
+                    signature,
+                    public_values: Cow::Owned(public_values.into_owned()),
+                },
             },
             metadata,
             custom_chain_data: Cow::Owned(custom_chain_data.into_owned()),
@@ -195,7 +229,7 @@ impl CertificateV1<'_> {
 #[case(CertificateV0::test0().with_network_id(0x123456.into()), &[0x00, 0x12, 0x34, 0x56])]
 #[case(CertificateV1::test0(), &[0x01, 0x00, 0x00, 0x00, 57])]
 fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
-    let bytes = default_bincode_options().serialize(&cert).unwrap();
+    let bytes = bincode_codec().serialize(&cert).unwrap();
     assert!(bytes.starts_with(start));
 }
 
@@ -205,7 +239,7 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 #[case(CertificateV1::test1())]
 #[case(CertificateV1::from(&Certificate::new_for_test(74.into(), 998)).into_owned())]
 fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
-    let bytes = default_bincode_options().serialize(&orig).unwrap();
+    let bytes = bincode_codec().serialize(&orig).unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();
     let converted: Certificate = orig.into();
 
@@ -221,9 +255,10 @@ fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> 
 #[case("aggdata_v1_00", AggchainDataV1::test0())]
 #[case("aggdata_v1_01", AggchainDataV1::test1())]
 #[case("aggdata_v1_02", AggchainDataV1::test2())]
+#[case("aggdata_v1_03", AggchainDataV1::test3())]
 fn encoding(#[case] name: &str, #[case] value: impl Serialize) {
     // Snapshots for types where the encoding must stay stable.
-    let bytes = Bytes::from(default_bincode_options().serialize(&value).unwrap());
+    let bytes = Bytes::from(bincode::default().serialize(&value).unwrap());
     insta::assert_snapshot!(name, bytes);
 }
 
