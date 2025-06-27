@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use agglayer_types::EpochNumber;
 use alloy::{
     providers::{Provider, ProviderBuilder, WsConnect},
     rpc::client::ClientBuilder,
@@ -51,12 +52,12 @@ async fn test_block_clock() {
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
-    assert_eq!(clock_ref.current_epoch(), 0);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::ZERO);
 
     let mut recv = clock_ref.subscribe().unwrap();
 
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
-    assert_eq!(clock_ref.current_epoch(), 1);
+    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
     assert!(clock_ref.current_block_height() >= 3);
 }
 
@@ -71,12 +72,12 @@ async fn test_block_clock_with_genesis() {
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
-    assert_eq!(clock_ref.current_epoch(), 0);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::ZERO);
 
     let mut recv = clock_ref.subscribe().unwrap();
 
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
-    assert_eq!(clock_ref.current_epoch(), 1);
+    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
     assert!(clock_ref.current_block_height() >= 3);
 }
 
@@ -92,12 +93,12 @@ async fn test_block_clock_with_genesis_in_future() {
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
-    assert_eq!(clock_ref.current_epoch(), 0);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::ZERO);
 
     let mut recv = clock_ref.subscribe().unwrap();
 
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
-    assert_eq!(clock_ref.current_epoch(), 1);
+    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
     assert!(clock_ref.current_block_height() >= 2);
 }
 
@@ -115,8 +116,8 @@ async fn test_block_clock_starting_with_genesis_in_future_should_trigger_epoch_0
     let clock_ref = clock.spawn(token).await.unwrap();
 
     let mut recv = clock_ref.subscribe().unwrap();
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
-    assert_eq!(clock_ref.current_epoch(), 1);
+    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
     assert!(clock_ref.current_block_height() >= 3);
 }
 
@@ -150,8 +151,11 @@ async fn test_block_clock_starting_with_genesis() {
         let block_number = block.number;
 
         if block_number >= 11 {
-            assert!(matches!(recv.recv().await, Ok(Event::EpochEnded(0))));
-            assert_eq!(clock_ref.current_epoch(), 1);
+            assert!(matches!(
+                recv.recv().await,
+                Ok(Event::EpochEnded(EpochNumber::ZERO))
+            ));
+            assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
             assert!(clock_ref.current_block_height() >= 1);
             break;
         } else {
@@ -177,8 +181,11 @@ async fn test_block_clock_starting_with_genesis_already_passed() {
     let clock_ref = clock.spawn(token).await.unwrap();
 
     let mut recv = clock_ref.subscribe().unwrap();
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(3)));
-    assert_eq!(clock_ref.current_epoch(), 4);
+    assert_eq!(
+        recv.recv().await,
+        Ok(Event::EpochEnded(EpochNumber::new(3)))
+    );
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(4));
     assert!(clock_ref.current_block_height() >= 10);
 }
 
@@ -255,7 +262,10 @@ async fn test_block_clock_overflow_epoch() {
 
     assert!(matches!(
         res,
-        Err(BlockClockError::SetEpochNumber(u64::MAX, 0))
+        Err(BlockClockError::SetEpochNumber(
+            e,
+            EpochNumber::ZERO
+        )) if e.as_u64() == u64::MAX
     ));
     scenario.teardown();
 }
@@ -267,9 +277,9 @@ async fn test_block_epoch_calculation() {
     let block_per_epoch = Arc::new(NonZeroU64::new(300).unwrap());
     let clock_ref = ClockRef::new(sender, block_height.clone(), block_per_epoch);
 
-    assert_eq!(clock_ref.current_epoch(), 0);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::ZERO);
     block_height.fetch_add(301, std::sync::atomic::Ordering::SeqCst);
-    assert_eq!(clock_ref.current_epoch(), 1);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::new(1));
 }
 
 #[rstest]
@@ -287,12 +297,12 @@ async fn regression_block_disconnection() {
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
 
-    assert_eq!(clock_ref.current_epoch(), 0);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::ZERO);
 
     let mut recv = clock_ref.subscribe().unwrap();
 
     // Assert that we read the first epoch
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
+    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
 
     // Kill & restart using the same port so we end up with the same endpoint url:
     drop(anvil);
@@ -303,7 +313,10 @@ async fn regression_block_disconnection() {
     let _anvil = Anvil::new().port(port).block_time(1u64).spawn();
 
     // Wait for the next epoch on existing subscription.
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(1)));
+    assert_eq!(
+        recv.recv().await,
+        Ok(Event::EpochEnded(EpochNumber::new(1)))
+    );
 }
 
 #[rstest]
@@ -320,12 +333,12 @@ async fn disconnection_with_timeout() {
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token.clone()).await.unwrap();
 
-    assert_eq!(clock_ref.current_epoch(), 0);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::ZERO);
 
     let mut recv = clock_ref.subscribe().unwrap();
 
     // Assert that we read the first epoch
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
+    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
 
     // Kill & restart using the same port so we end up with the same endpoint url:
     drop(anvil);
@@ -355,12 +368,12 @@ async fn can_catchup_on_disconnection() {
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
 
-    assert_eq!(clock_ref.current_epoch(), 0);
+    assert_eq!(clock_ref.current_epoch(), EpochNumber::ZERO);
 
     let mut recv = clock_ref.subscribe().unwrap();
 
     // Assert that we read the first epoch
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(0)));
+    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
 
     // Kill & restart using the same port so we end up with the same endpoint url:
     drop(anvil);
@@ -375,12 +388,15 @@ async fn can_catchup_on_disconnection() {
     .unwrap();
 
     // Wait for the next epoch on existing subscription.
-    assert_eq!(recv.recv().await, Ok(Event::EpochEnded(1)));
+    assert_eq!(
+        recv.recv().await,
+        Ok(Event::EpochEnded(EpochNumber::new(1)))
+    );
 
     tokio::time::timeout(Duration::from_secs(1), async move {
-        assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(2)));
-        assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(3)));
-        assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(4)));
+        assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(EpochNumber::new(2))));
+        assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(EpochNumber::new(3))));
+        assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(EpochNumber::new(4))));
     })
     .await
     .expect("Timeout");
