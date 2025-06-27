@@ -192,24 +192,24 @@ pub fn get_signer(index: u32) -> PrivateKeySigner {
 
 fn get_test_keystore_content() -> &'static str {
     r#"{
-  "address": "f39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "address": "70997970c51812dc3a010c7d01b50e0d17dc79c8",
   "crypto": {
     "cipher": "aes-128-ctr",
-    "ciphertext": "43038e54c38f28d03483a122aa1b327f8ea5128462a4008ed1d25eb0a8d7480b",
+    "ciphertext": "9e9b666bee2090e229b72fb5333a64889e351ceaf9941df9c4342c47c90fe24c",
     "cipherparams": {
-      "iv": "14ab845d00fd14fa2b50aa718cd5b5d9"
+      "iv": "978d872b955493bab5f8c2a1e10a7df1"
     },
-    "mac": "25e1857d1a67a42ecff486dbe14e216094990773e8d54d3a7f9372dc37c69256",
+    "mac": "1540807af77a89ac64f5dffa2d8e786e7a47fd5da3d4945bbd09fd23d599cfaf",
     "kdf": "scrypt",
     "kdfparams": {
       "dklen": 32,
       "n": 262144,
       "r": 8,
       "p": 1,
-      "salt": "69a0f2e8911f80cf739db55d5d7a79db878fcb01ea54df4f5b6dbfa21d65c935"
+      "salt": "2d71709373cf54fc504bf53b276c5f39edfd9bae97f7ab563f0ff7cc5aa64f3d"
     }
   },
-  "id": "716ff916-2550-4cdc-8b7d-907e65c5abc6",
+  "id": "b0b70105-28e4-487a-aad3-17e71a5bc869",
   "version": 3
 }"#
 }

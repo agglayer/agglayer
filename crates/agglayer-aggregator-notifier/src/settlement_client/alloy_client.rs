@@ -1,5 +1,5 @@
 use std::{sync::Arc, time::Duration};
-
+use std::collections::HashMap;
 use agglayer_certificate_orchestrator::{Error, SettlementClient};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
@@ -144,7 +144,9 @@ where
                 network_id,
             })?;
 
-        debug!("Network {network_id} has {verifier_type:?}");
+        info!("Network {network_id} has {verifier_type:?}");
+        let trusted_sequencer = self.l1_rpc.get_trusted_sequencer_address(network_id.to_u32(), HashMap::new()).await.expect(">>>>>> FALIED");
+        println!(">>>>>>>>>>>>>>>>>>>>> CHECKPOINT 1 sequencer: {}", trusted_sequencer);
 
         let proof_with_selector: Vec<u8> = match verifier_type {
             VerifierType::StateTransition => {

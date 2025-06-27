@@ -209,6 +209,7 @@ where
         &self,
         rollup_id: u32,
     ) -> Result<PolygonZkEVMInstance<RpcProvider>, ContractError> {
+        println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Checkpoint 20");
         let rollup_metadata = self.get_rollup_metadata(rollup_id).await?;
 
         Ok(PolygonZkEVMInstance::new(
@@ -227,13 +228,16 @@ where
         rollup_id: u32,
     ) -> Result<Address, ContractError> {
         if let Some(addr) = self.config.proof_signers.get(&rollup_id) {
+            println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Checkpoint 10 sequencer address: {}, rollup_id: {}", *addr, rollup_id);
             Ok(*addr)
         } else {
             self.get_rollup_contract_instance(rollup_id)
                 .await?
                 .trustedSequencer()
                 .call()
-                .await
+                .await.inspect(|val| {
+                    println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Checkpoint 11 sequencer address: {val:?}, rollup_id: {}", rollup_id);
+            })
         }
     }
 
@@ -251,6 +255,9 @@ where
         let sequencer_address = self
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
+
+        println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Sequencer address: {sequencer_address:?}, rollup_id: {}", signed_tx.tx.rollup_id);
+        warn!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Sequencer address: {sequencer_address:?}, rollup_id: {}", signed_tx.tx.rollup_id);
 
         // TODO: pending state num is not yet supported
         const PENDING_STATE_NUM: u64 = 0;
@@ -282,6 +289,7 @@ where
         &self,
         signed_tx: &SignedTx,
     ) -> Result<(), SignatureVerificationError> {
+        println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Checkpoint 14");
         let sequencer_address = self
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
@@ -309,6 +317,7 @@ where
         &self,
         cert: &Certificate,
     ) -> Result<(), SignatureVerificationError> {
+        println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Checkpoint 13 cert: {}", cert.get_signer());
         let sequencer_address = self
             .get_trusted_sequencer_address(u32::from(cert.network_id))
             .await?;

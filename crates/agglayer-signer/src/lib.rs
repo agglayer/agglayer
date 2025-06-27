@@ -54,7 +54,9 @@ impl ConfiguredSigner {
                 Ok(Self::Kms(kms.gcp_kms_signer().await?))
             }
             AuthConfig::Local(ref local) => {
-                Ok(Self::Local(Self::local_wallet(config.l1.chain_id, local)?))
+                let wallet = Self::local_wallet(config.l1.chain_id, local)?;
+                println!(">>>>>>>>>>>>>>>>>> CHECKPOINT 0.1 Using local wallet: {}", wallet.address());
+                Ok(Self::Local(wallet))
             }
         }
     }

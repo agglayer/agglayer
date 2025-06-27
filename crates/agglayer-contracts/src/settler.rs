@@ -64,6 +64,7 @@ where
         proof: Bytes,
         custom_chain_data: Bytes,
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
+        println!(">>>>>>>>>>>>>>> Verifying pessimistic trusted aggregator for rollup ID: {rollup_id}");
         let pending_tx = self
             .inner
             .verifyPessimisticTrustedAggregator(

@@ -141,6 +141,7 @@ where
         certificate_stream: mpsc::Receiver<NewCertificate>,
     ) -> Result<Self, Error> {
         info!("Creating a new network task for network {}", network_id);
+        println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Checkpoint 0, network_id: {}", network_id);
 
         let local_state = Box::new(
             state_store

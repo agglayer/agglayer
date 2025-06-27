@@ -71,6 +71,7 @@ where
         // Run all the verification checks in parallel.
         let _ = try_join(
             async {
+                info!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Checkpoint 1");
                 self.kernel
                     .verify_batches_trusted_aggregator(&tx)
                     .await
@@ -86,6 +87,7 @@ where
                     .inspect(|_| agglayer_telemetry::EXECUTE.add(1, metrics_attrs))
             },
             async {
+                info!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Checkpoint 2");
                 self.kernel
                     .verify_proof_zkevm_node(&tx)
                     .await
