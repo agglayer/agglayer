@@ -19,7 +19,7 @@ const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
 
 /// Alloy-based settlement client for L1 certificate settlement
 #[derive(Default, Clone)]
-pub struct AlloySettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
+pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
     state_store: Arc<StateStore>,
     pending_store: Arc<PendingStore>,
     config: Arc<OutboundRpcSettleConfig>,
@@ -28,7 +28,7 @@ pub struct AlloySettlementClient<StateStore, PendingStore, PerEpochStore, Rollup
 }
 
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
-    AlloySettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 {
     /// Try to create a new alloy-based settlement client
     pub fn try_new(
@@ -50,7 +50,7 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 
 #[async_trait::async_trait]
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> SettlementClient
-    for AlloySettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    for RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 where
     StateStore: StateReader + StateWriter + 'static,
     PendingStore: PendingCertificateReader + 'static,
@@ -283,7 +283,7 @@ where
 }
 
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
-    AlloySettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 where
     StateStore: StateReader + StateWriter + 'static,
     PendingStore: PendingCertificateReader + 'static,

@@ -396,7 +396,7 @@ where
                         settlement_submitted_notifier
                             .send(result)
                             .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
-                        fail::fail_point!("network_task::settlement_submitted");
+                        fail::fail_point!("network_task::make_progress::settlement_submitted");
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier, .. }) => {

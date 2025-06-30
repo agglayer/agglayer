@@ -33,8 +33,6 @@ use pessimistic_proof::{
 use serde::{Deserialize, Serialize};
 use unified_bridge::{CommitmentVersion, LocalExitTree, LocalExitTreeError};
 
-// TODO: consider moving these newtype structs to interop some day, so that the
-// proofs could use eg. CertificateId and Height at least
 #[derive(
     Clone,
     Copy,

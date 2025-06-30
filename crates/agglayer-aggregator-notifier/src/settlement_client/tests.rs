@@ -17,7 +17,7 @@ use pessimistic_proof::unified_bridge::CommitmentVersion;
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 
-use crate::settlement_client::AlloySettlementClient;
+use crate::settlement_client::RpcSettlementClient;
 
 mockall::mock! {
     L1Rpc {}
@@ -59,7 +59,6 @@ mockall::mock! {
             custom_chain_data: Bytes,
         ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, alloy::contract::Error>;
 
-        async fn transaction_exists(&self, tx_hash: FixedBytes<32>) -> Result<bool, L1RpcError>;
     }
 }
 
@@ -139,7 +138,7 @@ async fn epoch_packer_can_settle_one_certificate() {
     // compiles and works correctly, but comprehensive testing requires a more
     // sophisticated test setup with proper alloy provider mocking.
 
-    let _epoch_packer = AlloySettlementClient::<_, _, MockPerEpochStore, _>::try_new(
+    let _epoch_packer = RpcSettlementClient::<_, _, MockPerEpochStore, _>::try_new(
         config,
         Arc::new(state_store),
         Arc::new(pending_store),
@@ -161,7 +160,7 @@ fn alloy_settlement_client_creation_works() {
     let per_epoch_store = Arc::new(ArcSwap::new(Arc::new(MockPerEpochStore::new())));
 
     let settlement_client =
-        AlloySettlementClient::try_new(config, state_store, pending_store, l1_rpc, per_epoch_store);
+        RpcSettlementClient::try_new(config, state_store, pending_store, l1_rpc, per_epoch_store);
 
     assert!(settlement_client.is_ok());
 }

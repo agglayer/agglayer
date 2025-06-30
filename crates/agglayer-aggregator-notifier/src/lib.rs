@@ -7,4 +7,4 @@ mod proof;
 mod settlement_client;
 
 pub use certifier::CertifierClient;
-pub use settlement_client::AlloySettlementClient;
+pub use settlement_client::RpcSettlementClient;

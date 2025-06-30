@@ -266,8 +266,6 @@ mockall::mock! {
             proof: alloy::primitives::Bytes,
             custom_chain_data: alloy::primitives::Bytes,
         ) -> Result<alloy::providers::PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
-
-        async fn transaction_exists(&self, tx_hash: alloy::primitives::FixedBytes<32>) -> Result<bool, L1RpcError>;
     }
 }
 

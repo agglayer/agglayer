@@ -1,15 +1,13 @@
 use alloy::{
     contract::Error as ContractError,
-    primitives::{Bytes, B256},
+    primitives::Bytes,
     providers::{PendingTransactionBuilder, Provider},
 };
 
-use crate::{L1RpcClient, L1RpcError};
+use crate::L1RpcClient;
 
 #[async_trait::async_trait]
 pub trait Settler {
-    async fn transaction_exists(&self, tx_hash: B256) -> Result<bool, L1RpcError>;
-
     fn decode_contract_revert(error: &ContractError) -> Option<String>;
 
     async fn verify_pessimistic_trusted_aggregator(
@@ -28,16 +26,6 @@ impl<RpcProvider> Settler for L1RpcClient<RpcProvider>
 where
     RpcProvider: Provider + Clone + 'static,
 {
-    async fn transaction_exists(&self, tx_hash: B256) -> Result<bool, L1RpcError> {
-        self.rpc
-            .get_transaction_by_hash(tx_hash)
-            .await
-            .map_err(|e| L1RpcError::UnableToGetTransaction {
-                source: Box::new(anyhow::Error::new(e)),
-            })
-            .map(|v| v.is_some())
-    }
-
     fn decode_contract_revert(error: &ContractError) -> Option<String> {
         // Try to get raw revert data and decode it manually if the interface method
         // fails
