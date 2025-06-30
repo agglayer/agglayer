@@ -44,12 +44,12 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = { git = "https://github.com/agglayer/interop.git", branch = "test/storage-encoding-format" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", branch = "test/storage-encoding-format" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", branch = "test/storage-encoding-format" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", branch = "test/storage-encoding-format" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", branch = "test/storage-encoding-format" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", branch = "test/storage-encoding-format" }
+agglayer-bincode = { git = "https://github.com/agglayer/interop.git", branch = "main" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git", branch = "main" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", branch = "main" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", branch = "main" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", branch = "main" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", branch = "main" }
 
 # Provers
 agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
