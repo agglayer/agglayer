@@ -31,7 +31,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 [[package]]
 name = "agglayer-bincode"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
  "bincode",
  "serde",
@@ -40,7 +40,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -54,7 +54,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
  "agglayer-primitives",
  "hex",
@@ -5488,7 +5488,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",

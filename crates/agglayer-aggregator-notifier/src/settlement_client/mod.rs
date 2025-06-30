@@ -1,19 +1,19 @@
 use std::{sync::Arc, time::Duration};
 
-use agglayer_certificate_orchestrator::{EpochPacker, Error};
+use agglayer_certificate_orchestrator::{Error, SettlementClient};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, RollupContract, Settler};
-use agglayer_storage::{
-    columns::latest_settled_certificate_per_network::SettledCertificate,
-    stores::{PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter},
+use agglayer_storage::stores::{
+    PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
 };
 use agglayer_types::{
-    CertificateHeader, CertificateId, CertificateStatus, ExecutionMode, Height, NetworkId, Proof,
+    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber,
+    ExecutionMode, Proof, SettlementTxHash,
 };
 use arc_swap::ArcSwap;
 use ethers::{
     providers::PendingTransaction,
-    types::{TransactionReceipt, H256, U256, U64},
+    types::{TransactionReceipt, U256, U64},
 };
 use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
 use tracing::{debug, error, info, instrument, warn};
@@ -24,7 +24,7 @@ mod tests;
 const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
 
 #[derive(Default, Clone)]
-pub struct EpochPackerClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
+pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
     state_store: Arc<StateStore>,
     pending_store: Arc<PendingStore>,
     config: Arc<OutboundRpcSettleConfig>,
@@ -33,7 +33,7 @@ pub struct EpochPackerClient<StateStore, PendingStore, PerEpochStore, RollupMana
 }
 
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
-    EpochPackerClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 {
     /// Try to create a new notifier using the given configuration
     pub fn try_new(
@@ -54,24 +54,21 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 }
 
 #[async_trait::async_trait]
-impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> EpochPacker
-    for EpochPackerClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> SettlementClient
+    for RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 where
     StateStore: StateReader + StateWriter + 'static,
     PendingStore: PendingCertificateReader + 'static,
     RollupManagerRpc: RollupContract + Settler + Send + Sync + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
-    type PerEpochStore = PerEpochStore;
     type Provider = <<RollupManagerRpc as Settler>::M as ethers::providers::Middleware>::Provider;
 
-    #[instrument(skip_all, fields(hash, network_id, calldata), level = "debug")]
-    async fn settle_certificate(
+    #[instrument(skip(self), fields(network_id, calldata), level = "debug")]
+    async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
-    ) -> Result<(NetworkId, SettledCertificate), Error> {
-        let hash = certificate_id.to_string();
-        tracing::Span::current().record("hash", &hash);
+    ) -> Result<SettlementTxHash, Error> {
         let (network_id, height) = if let Some(CertificateHeader {
             status,
             network_id,
@@ -81,10 +78,7 @@ where
             self.state_store.get_certificate_header(&certificate_id)?
         {
             if status == CertificateStatus::Settled {
-                error!(
-                    hash,
-                    "The certificate {} is already settled", certificate_id
-                );
+                error!("Certificate is already settled");
 
                 return Err(Error::InvalidCertificateStatus);
             }
@@ -92,10 +86,7 @@ where
             // TODO: Acquire lock for this certificate
             (network_id, height)
         } else {
-            error!(
-                hash,
-                "The certificate header of {} is not found", certificate_id
-            );
+            error!("Certificate header not found");
 
             return Err(Error::NotFoundCertificateHeader);
         };
@@ -105,20 +96,16 @@ where
             Err(error) => {
                 drop(dry_current_epoch);
                 error!(
-                    hash = certificate_id.to_string(),
-                    "{}Failed to add the certificate to the current epoch: {}",
+                    %error,
+                    "{}Failed to add the certificate to the current epoch",
                     ExecutionMode::DryRun.prefix(),
-                    error
                 );
 
                 return Err(Error::Storage(error));
             }
             Ok((_epoch_number, _certificate_index)) => {
                 drop(dry_current_epoch);
-                info!(
-                    "The certificate {} passes the epoch dry run",
-                    certificate_id
-                );
+                info!("Certificate passes the epoch dry run");
             }
         }
 
@@ -134,9 +121,7 @@ where
         let network_id = certificate.network_id;
         tracing::Span::current().record("network_id", network_id.to_u32());
 
-        let height = certificate.height;
-
-        let l_1_info_tree_leaf_count = certificate
+        let l1_info_tree_leaf_count = certificate
             .l1_info_tree_leaf_count()
             .unwrap_or_else(|| self.l1_rpc.default_l1_info_tree_entry().0);
 
@@ -166,7 +151,7 @@ where
                 network_id,
             })?;
 
-        debug!("Network {} has {:?}", network_id, verifier_type);
+        debug!("Network {network_id} has {verifier_type:?}");
 
         let proof_with_selector: Vec<u8> = match verifier_type {
             VerifierType::StateTransition => {
@@ -187,7 +172,7 @@ where
             .l1_rpc
             .build_verify_pessimistic_trusted_aggregator_call(
                 output.origin_network.to_u32(),
-                l_1_info_tree_leaf_count,
+                l1_info_tree_leaf_count,
                 *output.new_local_exit_root.as_ref(),
                 *output.new_pessimistic_root,
                 proof_with_selector.into(),
@@ -204,12 +189,9 @@ where
         );
 
         info!(
-            "Initializing the settlement of the certificate {} on L1 with public inputs: {}",
-            certificate_id,
+            "Initializing the settlement on L1 with public inputs: {}",
             output.display_to_hex()
         );
-
-        let state_store = self.state_store.clone();
 
         let gas_estimate = contract_call.estimate_gas().await.map_err(|error| {
             let error_str =
@@ -218,8 +200,7 @@ where
             error!(
                 error_code = %error,
                 error = error_str,
-                hash,
-                "Failed to settle the certificate {certificate_id}: {}", error_str
+                "Failed to estimate gas for certificate settlement"
             );
 
             Error::SettlementError {
@@ -229,10 +210,7 @@ where
         })?;
 
         let gas = calculate_gas(&gas_estimate, &self.config);
-        debug!(
-            hash,
-            "Gas estimate: {}, Gas calculated: {}", gas_estimate, gas
-        );
+        debug!("Gas estimate: {gas_estimate}, Gas calculated: {gas}");
 
         let contract_call = contract_call.gas(gas);
 
@@ -240,7 +218,7 @@ where
         let pending_tx = contract_call
             .send()
             .await
-            .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
+            .inspect(|tx| info!("Inspect settle transaction: {tx:?}"))
             .map_err(|e| {
                 let error_str =
                     RollupManagerRpc::decode_contract_revert(&e).unwrap_or(e.to_string());
@@ -248,8 +226,7 @@ where
                 error!(
                     error_code = %e,
                     error = error_str,
-                    hash,
-                    "Failed to settle the certificate {certificate_id}: {}", error_str
+                    "Failed to settle certificate"
                 );
 
                 Error::SettlementError {
@@ -258,45 +235,20 @@ where
                 }
             })?;
 
-        if let Err(error) =
-            state_store.update_settlement_tx_hash(&certificate_id, pending_tx.tx_hash().0.into())
-        {
-            error!(
-                hash,
-                "CRITICAL: Failed to update the settlement transaction hash of {} with {}. The \
-                 settlement transaction continues, this is due to: {}",
-                certificate_id,
-                pending_tx.tx_hash(),
-                error
-            );
-        }
-
         fail::fail_point!("notifier::packer::settle_certificate::transaction_sent::kill_node");
 
-        self.watch_and_update(pending_tx, certificate_id, network_id, height)
-            .await
+        Ok(SettlementTxHash::from(pending_tx.tx_hash()))
     }
 
-    async fn recover_settlement(
+    #[tracing::instrument(skip(self))]
+    async fn wait_for_settlement(
         &self,
-        tx_hash: H256,
+        settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
-        network_id: NetworkId,
-        height: Height,
-    ) -> Result<(NetworkId, SettledCertificate), Error> {
-        let pending_tx = self.l1_rpc.build_pending_transaction(tx_hash);
-        self.watch_and_update(pending_tx, certificate_id, network_id, height)
-            .await
-    }
-
-    async fn watch_and_update(
-        &self,
-        pending_tx: PendingTransaction<'_, Self::Provider>,
-        certificate_id: CertificateId,
-        network_id: NetworkId,
-        height: Height,
-    ) -> Result<(NetworkId, SettledCertificate), Error> {
-        let hash = certificate_id.to_string();
+    ) -> Result<(EpochNumber, CertificateIndex), Error> {
+        let pending_tx = self
+            .l1_rpc
+            .build_pending_transaction(settlement_tx_hash.into());
         // wait for the receipt
         let receipt =
             handle_pending_tx::<RollupManagerRpc>(pending_tx, certificate_id, &self.config)
@@ -310,20 +262,14 @@ where
 
         match receipt.status {
             Some(n) if n == U64::zero() => {
-                warn!(
-                    hash,
-                    "The transaction failed to settle the certificate {}", certificate_id
-                );
+                warn!("Transaction failed to settle");
                 Err(Error::SettlementError {
                     certificate_id,
                     error: "SettlementTransaction failed".to_string(),
                 })
             }
             None => {
-                error!(
-                    hash,
-                    "The transaction failed to settle the certificate {}", certificate_id
-                );
+                error!("Transaction failed to settle");
 
                 Err(Error::SettlementError {
                     certificate_id,
@@ -331,10 +277,7 @@ where
                 })
             }
             Some(_) => {
-                info!(
-                    "The transaction successfully settled the certificate {}",
-                    certificate_id
-                );
+                info!("Transaction successfully settled",);
 
                 let mut max_retries = MAX_EPOCH_ASSIGNMENT_RETRIES;
 
@@ -354,10 +297,10 @@ where
                     match related_epoch.add_certificate(certificate_id, ExecutionMode::Default) {
                         Err(error) if max_retries == 0 => {
                             let error_msg = format!(
-                                "CRITICAL: Failed to add the certificate {certificate_id} to the \
-                                 epoch after multiple retries: {error}"
+                                "CRITICAL: Failed to add the certificate to the epoch after \
+                                 multiple retries: {error}"
                             );
-                            error!(hash = certificate_id.to_string(), error_msg);
+                            error!(%error, error_msg);
 
                             return Err(Error::SettlementError {
                                 certificate_id,
@@ -365,61 +308,21 @@ where
                             });
                         }
                         Err(error) => warn!(
-                            "Failed to add the certificate {} to the epoch (retrying): {}",
-                            certificate_id, error
+                            %error, "Failed to add the certificate to the epoch (retrying)"
                         ),
                         Ok((epoch_number, certificate_index)) => {
                             info!(
-                                "The certificate {} is added to the epoch {} with index {}",
-                                certificate_id, epoch_number, certificate_index
+                                "Certificate added to epoch {epoch_number} with index \
+                                 {certificate_index}"
                             );
                             break (epoch_number, certificate_index);
                         }
                     }
                 };
 
-                if let Err(error) = self
-                    .state_store
-                    .update_certificate_header_status(&certificate_id, &CertificateStatus::Settled)
-                {
-                    error!(
-                        hash,
-                        "Certificate settled but failed to update the certificate status of {} \
-                         due to: {}",
-                        certificate_id,
-                        error
-                    );
-                }
-                if let Err(error) = self.state_store.set_latest_settled_certificate_for_network(
-                    &network_id,
-                    &height,
-                    &certificate_id,
-                    &epoch_number,
-                    &certificate_index,
-                ) {
-                    error!(
-                        hash,
-                        "Certificate settled but failed to update the latest settled certificate \
-                         for network {} with {} due to: {}",
-                        network_id,
-                        certificate_id,
-                        error
-                    );
-                }
-
-                Ok::<_, Error>((
-                    network_id,
-                    SettledCertificate(certificate_id, height, epoch_number, certificate_index),
-                ))
+                Ok::<_, Error>((epoch_number, certificate_index))
             }
         }
-    }
-
-    async fn transaction_exists(&self, tx_hash: H256) -> Result<bool, Error> {
-        self.l1_rpc
-            .transaction_exists(tx_hash)
-            .await
-            .map_err(Error::L1CommunicationError)
     }
 }
 

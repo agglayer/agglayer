@@ -1,15 +1,22 @@
-use std::collections::{BTreeMap, BTreeSet};
+// TODO: split into smaller files
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
-pub use agglayer_interop_types::{aggchain_proof, bincode};
+pub use agglayer_interop_types::{aggchain_proof, bincode, NetworkId};
 use agglayer_interop_types::{
     aggchain_proof::AggchainData, BridgeExit, GlobalIndex, ImportedBridgeExit,
     ImportedBridgeExitCommitmentValues, TokenInfo,
 };
-pub use agglayer_primitives::Digest;
+pub use agglayer_primitives as primitives;
 use agglayer_primitives::{
     keccak::Keccak256Hasher, ruint::UintTryFrom, FromBool, Hashable, SignatureError,
 };
+pub use agglayer_primitives::{Address, Digest, Signature, B256, U256, U512};
 use agglayer_tries::{error::SmtError, roots::LocalExitRoot, smt::Smt};
+use ethers::types::H256;
+pub use pessimistic_proof::proof::Proof;
 use pessimistic_proof::{
     core::{
         self,
@@ -25,22 +32,183 @@ use pessimistic_proof::{
     LocalNetworkState, ProofError,
 };
 use serde::{Deserialize, Serialize};
-use unified_bridge::CommitmentVersion;
+use unified_bridge::{CommitmentVersion, LocalExitTree, LocalExitTreeError};
 
-pub type EpochNumber = u64;
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    derive_more::From,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct EpochNumber(u64);
+
+impl EpochNumber {
+    pub const ZERO: EpochNumber = EpochNumber(0);
+    pub const ONE: EpochNumber = EpochNumber(1);
+
+    pub const fn new(epoch: u64) -> EpochNumber {
+        EpochNumber(epoch)
+    }
+
+    #[must_use = "The value of the next epoch is returned but not used"]
+    pub const fn next(&self) -> EpochNumber {
+        EpochNumber(self.0.checked_add(1).expect("Epoch number overflow"))
+    }
+
+    pub const fn increment(&mut self) {
+        *self = self.next();
+    }
+
+    pub const fn as_u64(&self) -> u64 {
+        self.0
+    }
+}
 
 /// Index of the certificate inside its epoch
-pub type CertificateIndex = u64;
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct CertificateIndex(u64);
 
-pub type CertificateId = Digest;
-pub type Height = u64;
-pub type Metadata = Digest;
-pub use agglayer_interop_types::NetworkId;
-pub use agglayer_primitives as primitives;
-// Re-export common primitives again as agglayer-types root types
-pub use agglayer_primitives::{Address, Signature, B256, U256, U512};
-pub use pessimistic_proof::proof::Proof;
-use unified_bridge::{LocalExitTree, LocalExitTreeError};
+impl CertificateIndex {
+    pub const ZERO: CertificateIndex = CertificateIndex(0);
+
+    pub const fn new(index: u64) -> CertificateIndex {
+        CertificateIndex(index)
+    }
+
+    pub const fn as_u64(&self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Deref,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::Into,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct CertificateId(Digest);
+
+impl CertificateId {
+    pub const fn new(id: Digest) -> CertificateId {
+        CertificateId(id)
+    }
+
+    pub const fn as_digest(&self) -> &Digest {
+        &self.0
+    }
+}
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    derive_more::From,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct Height(u64);
+
+impl Height {
+    pub const ZERO: Height = Height::new(0);
+
+    pub const fn as_u64(&self) -> u64 {
+        self.0
+    }
+
+    pub const fn new(height: u64) -> Height {
+        Height(height)
+    }
+
+    #[must_use = "The value of the next height is returned but not used"]
+    pub const fn next(&self) -> Height {
+        Height(self.0.checked_add(1).expect("Height overflow"))
+    }
+
+    pub const fn increment(&mut self) {
+        *self = self.next();
+    }
+
+    pub const fn distance_since(&self, o: &Height) -> u64 {
+        self.0
+            .checked_sub(o.0)
+            .expect("Subtracting to negative values")
+    }
+}
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    derive_more::Deref,
+    derive_more::From,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[cfg_attr(feature = "testutils", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
+pub struct Metadata(Digest);
+
+impl Metadata {
+    pub const ZERO: Metadata = Metadata(Digest::ZERO);
+
+    pub const fn new(metadata: Digest) -> Metadata {
+        Metadata(metadata)
+    }
+
+    pub const fn as_digest(&self) -> &Digest {
+        &self.0
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecutionMode {
@@ -77,7 +245,7 @@ pub struct CertificateHeader {
     pub new_local_exit_root: LocalExitRoot,
     pub metadata: Metadata,
     pub status: CertificateStatus,
-    pub settlement_tx_hash: Option<Digest>,
+    pub settlement_tx_hash: Option<SettlementTxHash>,
 }
 
 #[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -222,8 +390,8 @@ pub enum GenerationType {
     Prover,
 }
 
-impl std::fmt::Display for GenerationType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for GenerationType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             GenerationType::Native => write!(f, "native"),
             GenerationType::Prover => write!(f, "prover"),
@@ -271,8 +439,8 @@ pub enum CertificateStatus {
     Settled,
 }
 
-impl std::fmt::Display for CertificateStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for CertificateStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CertificateStatus::Pending => write!(f, "Pending"),
             CertificateStatus::Proven => write!(f, "Proven"),
@@ -291,6 +459,9 @@ impl PartialOrd for CertificateStatus {
 
 impl CertificateStatus {
     // Only ever used as implementation for Ord, feel free to change it
+    // TODO: now that certificatetask handles settling properly, we should be able
+    // to refactor it to no longer require Ord here Then we can delete this
+    // function
     fn as_order_number(&self) -> usize {
         use CertificateStatus::*;
         match self {
@@ -356,7 +527,7 @@ impl Default for Certificate {
         let local_exit_root = LocalExitTree::<Keccak256Hasher>::default()
             .get_root()
             .into();
-        let height: Height = 0u64;
+        let height = Height::ZERO;
         let (_new_local_exit_root, signature, _signer) =
             compute_signature_info(local_exit_root, &[], &wallet, height);
         Self {
@@ -392,7 +563,7 @@ pub fn compute_signature_info(
                 .map(|exit| exit.to_indexed_exit_hash())
                 .collect(),
         },
-        height,
+        height: height.0,
     }
     .commitment(version);
 
@@ -453,15 +624,15 @@ impl Certificate {
         let commit_imported_bridge_exits =
             keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
 
-        keccak256_combine([
+        CertificateId(keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
-            self.height.to_be_bytes().as_slice(),
+            self.height.as_u64().to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_ref(),
             self.new_local_exit_root.as_ref(),
             commit_bridge_exits.as_slice(),
             commit_imported_bridge_exits.as_slice(),
-            self.metadata.as_slice(),
-        ])
+            self.metadata.0.as_slice(),
+        ]))
     }
 
     /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].
@@ -535,7 +706,7 @@ impl From<&Certificate> for SignatureCommitmentValues {
                     .map(|exit| exit.to_indexed_exit_hash())
                     .collect(),
             },
-            height: certificate.height,
+            height: certificate.height.0,
         }
     }
 }
@@ -612,7 +783,7 @@ impl LocalNetworkStateData {
                 balance_root: self.balance_tree.root.into(),
                 nullifier_root: self.nullifier_tree.root.into(),
                 ler_leaf_count: self.exit_tree.leaf_count(),
-                height: certificate.height,
+                height: certificate.height.0,
                 origin_network: certificate.network_id,
             }
             .compute_pp_root(version),
@@ -766,7 +937,7 @@ impl LocalNetworkStateData {
             balances_proofs,
             l1_info_root,
             aggchain_proof,
-            height: certificate.height,
+            height: certificate.height.0,
             prev_pessimistic_root,
         })
     }
@@ -797,5 +968,43 @@ impl LocalNetworkStateData {
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }
+    }
+}
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    PartialEq,
+    derive_more::AsRef,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::Into,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[serde(transparent)]
+pub struct SettlementTxHash(Digest);
+
+impl SettlementTxHash {
+    pub const fn for_tests() -> Self {
+        SettlementTxHash(Digest::ZERO)
+    }
+
+    pub const fn new(hash: Digest) -> Self {
+        SettlementTxHash(hash)
+    }
+}
+
+impl From<H256> for SettlementTxHash {
+    fn from(hash: H256) -> Self {
+        SettlementTxHash(Digest::from(*hash.as_fixed_bytes()))
+    }
+}
+
+impl From<SettlementTxHash> for H256 {
+    fn from(tx_hash: SettlementTxHash) -> Self {
+        tx_hash.0.as_bytes().into()
     }
 }

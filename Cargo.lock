@@ -122,7 +122,7 @@ dependencies = [
 [[package]]
 name = "agglayer-bincode"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
  "bincode",
  "serde",
@@ -164,6 +164,7 @@ dependencies = [
 name = "agglayer-clock"
 version = "0.1.0"
 dependencies = [
+ "agglayer-types",
  "alloy",
  "async-trait",
  "backoff",
@@ -242,7 +243,7 @@ dependencies = [
  "agglayer-grpc-client",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
- "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "agglayer-rpc",
  "agglayer-storage",
  "agglayer-types",
@@ -282,7 +283,7 @@ dependencies = [
 name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "agglayer-types",
  "anyhow",
  "bolero",
@@ -308,10 +309,10 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
- "agglayer-interop-grpc-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
- "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-interop-grpc-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
+ "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
 ]
 
 [[package]]
@@ -332,11 +333,10 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
- "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "bincode",
- "hex",
  "pbjson",
  "prost 0.13.5",
  "serde",
@@ -368,24 +368,21 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
- "agglayer-bincode 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-bincode 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "arbitrary",
  "bincode",
  "educe",
- "ethers",
  "hex",
- "rand 0.9.1",
  "serde",
- "serde_with",
  "sp1-core-machine",
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
 ]
 
 [[package]]
@@ -525,7 +522,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -641,7 +638,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "agglayer-types",
  "alloy-primitives",
  "arc-swap",
@@ -728,9 +725,9 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "hex",
  "serde",
  "serde_with",
@@ -741,11 +738,12 @@ dependencies = [
 name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-interop-types 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "agglayer-types",
  "arbitrary",
+ "derive_more 2.0.1",
  "ethers",
  "hex",
  "pessimistic-proof",
@@ -756,7 +754,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.12",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
 ]
 
 [[package]]
@@ -3491,12 +3489,12 @@ dependencies = [
 name = "ecdsa-proof-lib"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "k256",
  "serde",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
 ]
 
 [[package]]
@@ -6811,8 +6809,8 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "arbitrary",
  "hex",
  "hex-literal 0.4.1",
@@ -6827,16 +6825,16 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
 ]
 
 [[package]]
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
- "agglayer-bincode 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-bincode 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "alloy-primitives",
  "arbitrary",
  "hex",
@@ -6854,14 +6852,14 @@ dependencies = [
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
  "toml",
  "tracing",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
 ]
 
 [[package]]
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "agglayer-types",
  "anyhow",
  "base64 0.22.1",
@@ -6882,7 +6880,7 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.12",
  "tracing",
- "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "unified-bridge 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "uuid 1.17.0",
 ]
 
@@ -10487,10 +10485,10 @@ dependencies = [
 [[package]]
 name = "unified-bridge"
 version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format#202ac809de513a43183ee7ff28d852866651359d"
+source = "git+https://github.com/agglayer/interop.git?branch=main#b1bac1e3df2185eb6928e46187ceb1e6783f21a2"
 dependencies = [
- "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
- "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=test%2Fstorage-encoding-format)",
+ "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
+ "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?branch=main)",
  "arbitrary",
  "hex-literal 1.0.0",
  "serde",

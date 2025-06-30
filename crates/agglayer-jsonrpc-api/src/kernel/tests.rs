@@ -8,7 +8,7 @@ use agglayer_contracts::{
     },
     polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn},
 };
-use agglayer_types::Certificate;
+use agglayer_types::{Certificate, Height};
 use ethers::{
     abi::AbiEncode,
     core::utils,
@@ -355,13 +355,13 @@ async fn verify_cert_signature() {
 
     {
         // valid signature
-        let signed_cert = Certificate::new_for_test(1.into(), 0);
+        let signed_cert = Certificate::new_for_test(1.into(), Height::ZERO);
         assert!(kernel.verify_cert_signature(&signed_cert).await.is_ok());
     }
 
     {
         // valid signature with wrong signer
-        let signed_cert = Certificate::new_for_test(2.into(), 0);
+        let signed_cert = Certificate::new_for_test(2.into(), Height::ZERO);
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
             Err(crate::kernel::SignatureVerificationError::InvalidSigner { signer, trusted_sequencer })
@@ -371,7 +371,7 @@ async fn verify_cert_signature() {
 
     {
         // valid signature with no signer
-        let signed_cert = Certificate::new_for_test(3.into(), 0);
+        let signed_cert = Certificate::new_for_test(3.into(), Height::ZERO);
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
             Err(crate::kernel::SignatureVerificationError::ContractError(
@@ -382,7 +382,7 @@ async fn verify_cert_signature() {
 
     {
         // wrong signature with valid signer
-        let mut signed_cert = Certificate::new_for_test(1.into(), 0);
+        let mut signed_cert = Certificate::new_for_test(1.into(), Height::ZERO);
         signed_cert.new_local_exit_root.as_mut()[0] += 1;
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
