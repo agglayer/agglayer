@@ -19,7 +19,7 @@ use pessimistic_proof::unified_bridge::CommitmentVersion;
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 
-use crate::settlement_client::EthersSettlementClient;
+use crate::settlement_client::RpcSettlementClient;
 
 mockall::mock! {
     L1Rpc {}
@@ -140,7 +140,7 @@ async fn epoch_packer_can_settle_one_certificate() {
         .with(eq(certificate_id))
         .returning(move |_| Ok(Some(proof.clone())));
 
-    let epoch_packer = EthersSettlementClient::<_, _, MockPerEpochStore, _>::try_new(
+    let epoch_packer = RpcSettlementClient::<_, _, MockPerEpochStore, _>::try_new(
         config,
         Arc::new(state_store),
         Arc::new(pending_store),

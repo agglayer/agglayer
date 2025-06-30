@@ -1,6 +1,6 @@
 use std::{num::NonZeroU64, sync::Arc};
 
-use agglayer_aggregator_notifier::{CertifierClient, EthersSettlementClient};
+use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
@@ -225,7 +225,7 @@ impl Node {
         let core = Kernel::new(rpc.clone(), config.clone());
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
-        let epoch_packing_aggregator_task = EthersSettlementClient::try_new(
+        let epoch_packing_aggregator_task = RpcSettlementClient::try_new(
             Arc::new(config.outbound.rpc.settle.clone()),
             state_store.clone(),
             pending_store.clone(),

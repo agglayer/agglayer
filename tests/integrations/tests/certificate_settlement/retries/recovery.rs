@@ -18,7 +18,7 @@ use rstest::rstest;
 //     crate::common::type_0_ecdsa_forest()
 // )]
 #[case::cert_task_type_0_ecdsa(
-    &["certificate_task::about_to_record_candidate", "network_task::settlement_submitted"],
+    &["certificate_task::process_impl::about_to_record_candidate", "network_task::make_progress::settlement_submitted"],
     crate::common::type_0_ecdsa_forest()
 )]
 #[tokio::test]

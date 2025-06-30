@@ -24,7 +24,7 @@ mod tests;
 const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
 
 #[derive(Default, Clone)]
-pub struct EthersSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
+pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
     state_store: Arc<StateStore>,
     pending_store: Arc<PendingStore>,
     config: Arc<OutboundRpcSettleConfig>,
@@ -33,7 +33,7 @@ pub struct EthersSettlementClient<StateStore, PendingStore, PerEpochStore, Rollu
 }
 
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
-    EthersSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 {
     /// Try to create a new notifier using the given configuration
     pub fn try_new(
@@ -55,7 +55,7 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 
 #[async_trait::async_trait]
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> SettlementClient
-    for EthersSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    for RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 where
     StateStore: StateReader + StateWriter + 'static,
     PendingStore: PendingCertificateReader + 'static,

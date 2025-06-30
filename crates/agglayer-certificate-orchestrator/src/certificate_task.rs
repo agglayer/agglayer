@@ -246,7 +246,7 @@ where
                 .map_err(send_err)?;
 
             let settlement_tx_hash = settlement_submitted.await.map_err(recv_err)??;
-            fail::fail_point!("certificate_task::about_to_record_candidate");
+            fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
             self.header.settlement_tx_hash = Some(settlement_tx_hash);
             self.state_store
                 .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
