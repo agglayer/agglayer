@@ -48,6 +48,39 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
     }
 }
 
+fn inject_settle_certificate_fail_points(certificate_id: CertificateId) -> Result<(), Error> {
+    // Check if fail points are active and log warnings
+    if fail::eval(
+        "notifier::packer::settle_certificate::receipt_future_ended::status_0",
+        |_| true,
+    )
+    .unwrap_or(false)
+    {
+        warn!(
+            "FAIL POINT ACTIVE: Simulating transaction receipt with status 0 (failed transaction)"
+        );
+        return Err(Error::SettlementError {
+            certificate_id,
+            error: "Settlement transaction failed (simulated via fail point)".to_string(),
+        });
+    }
+
+    if fail::eval(
+        "notifier::packer::settle_certificate::receipt_future_ended::no_receipt",
+        |_| true,
+    )
+    .unwrap_or(false)
+    {
+        warn!("FAIL POINT ACTIVE: Simulating no receipt found");
+        return Err(Error::SettlementError {
+            certificate_id,
+            error: "No transaction receipt found (simulated via fail point)".to_string(),
+        });
+    }
+
+    Ok(())
+}
+
 #[async_trait::async_trait]
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> SettlementClient
     for RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
@@ -228,6 +261,9 @@ where
         let receipt = self
             .wait_for_transaction_receipt(settlement_tx_hash, certificate_id)
             .await?;
+
+        // Apply fail points if they are active for integration testing
+        inject_settle_certificate_fail_points(certificate_id)?;
 
         // Step 2: Check transaction status
         if !receipt.status() {
