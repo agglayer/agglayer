@@ -1,6 +1,6 @@
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use mockall::mock;
 
@@ -12,18 +12,18 @@ use crate::{
 mock! {
     pub StateStore {}
     impl MetadataReader for StateStore {
-        fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error>;
+        fn get_latest_settled_epoch(&self) -> Result<Option<EpochNumber>, Error>;
     }
 
     impl MetadataWriter for StateStore {
-        fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error>;
+        fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error>;
     }
 
     impl StateWriter for StateStore {
         fn update_settlement_tx_hash(
             &self,
             certificate_id: &CertificateId,
-            tx_hash: Digest,
+            tx_hash: SettlementTxHash,
         ) -> Result<(), Error>;
         fn assign_certificate_to_epoch(
             &self,

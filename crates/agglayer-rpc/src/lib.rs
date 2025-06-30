@@ -15,7 +15,7 @@ use agglayer_types::{
     NetworkId,
 };
 use error::SignatureVerificationError;
-use ethers::types::{TransactionReceipt, H256};
+use ethers::types::TransactionReceipt;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -229,7 +229,7 @@ where
                     Some(tx_hash) => {
                         let l1_transaction = self
                             .l1_rpc_provider
-                            .fetch_transaction_receipt(H256::from_slice(tx_hash.as_ref()))
+                            .fetch_transaction_receipt(tx_hash.into())
                             .await
                             .map_err(|error| {
                                 warn!(
