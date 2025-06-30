@@ -206,6 +206,7 @@ dependencies = [
  "alloy",
  "anyhow",
  "async-trait",
+ "fail",
  "hex",
  "mockall",
  "num-derive",

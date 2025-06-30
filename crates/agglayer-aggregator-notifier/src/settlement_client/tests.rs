@@ -134,7 +134,7 @@ async fn epoch_packer_can_settle_one_certificate() {
         .returning(move |_| Ok(Some(proof.clone())));
 
     // Note: This test is currently ignored because it requires complex mock setup
-    // for alloy contract calls and transaction handling. The AlloySettlementClient
+    // for alloy contract calls and transaction handling. The RpcSettlementClient
     // compiles and works correctly, but comprehensive testing requires a more
     // sophisticated test setup with proper alloy provider mocking.
 

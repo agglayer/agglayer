@@ -220,7 +220,7 @@ where
         certificate_id: CertificateId,
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
         info!(
-            "AlloySettlementClient: waiting for settlement {}",
+            "RpcSettlementClient: waiting for settlement {}",
             settlement_tx_hash
         );
 

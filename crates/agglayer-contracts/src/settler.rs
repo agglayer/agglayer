@@ -3,6 +3,7 @@ use alloy::{
     primitives::Bytes,
     providers::{PendingTransactionBuilder, Provider},
 };
+use tracing::warn;
 
 use crate::L1RpcClient;
 
@@ -52,19 +53,28 @@ where
         proof: Bytes,
         custom_chain_data: Bytes,
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
-        let pending_tx = self
-            .inner
-            .verifyPessimisticTrustedAggregator(
-                rollup_id,
-                l_1_info_tree_leaf_count,
-                new_local_exit_root.into(),
-                new_pessimistic_root.into(),
-                proof,
-                custom_chain_data,
-            )
-            .send()
-            .await?;
+        // Build the transaction call
+        let mut tx_call = self.inner.verifyPessimisticTrustedAggregator(
+            rollup_id,
+            l_1_info_tree_leaf_count,
+            new_local_exit_root.into(),
+            new_pessimistic_root.into(),
+            proof,
+            custom_chain_data,
+        );
 
-        Ok(pending_tx)
+        // Check if the low gas fail point is active and set the low gas if it is
+        if fail::eval(
+            "notifier::packer::settle_certificate::gas_estimate::low_gas",
+            |_| true,
+        )
+        .unwrap_or(false)
+        {
+            // Set deliberately low gas to cause failure
+            warn!("Low gas fail point active for rollup_id: {}", rollup_id);
+            tx_call = tx_call.gas(30000);
+        }
+
+        tx_call.send().await
     }
 }
