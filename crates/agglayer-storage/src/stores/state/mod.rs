@@ -6,9 +6,9 @@ use std::{
 
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
-    primitives::Digest, primitives::keccak::Keccak256Hasher, Certificate,
+    primitives::{keccak::Keccak256Hasher, Digest}, Certificate,
     CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId,
+    LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
@@ -68,7 +68,7 @@ impl StateWriter for StateStore {
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
-        tx_hash: Digest,
+        tx_hash: SettlementTxHash,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
@@ -558,7 +558,7 @@ impl StateReader for StateStore {
 }
 
 impl MetadataWriter for StateStore {
-    fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error> {
+    fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error> {
         if let Some(current_latest_settled_epoch) = self.get_latest_settled_epoch()? {
             if current_latest_settled_epoch >= value {
                 return Err(Error::UnprocessedAction(
@@ -575,7 +575,7 @@ impl MetadataWriter for StateStore {
 }
 
 impl MetadataReader for StateStore {
-    fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error> {
+    fn get_latest_settled_epoch(&self) -> Result<Option<EpochNumber>, Error> {
         self.db
             .get::<MetadataColumn>(&MetadataKey::LatestSettledEpoch)
             .map_err(Into::into)

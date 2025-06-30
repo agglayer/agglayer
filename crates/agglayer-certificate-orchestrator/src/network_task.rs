@@ -7,13 +7,14 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
-    CertificateId, CertificateStatusError, Height, LocalNetworkStateData, NetworkId,
+    CertificateId, CertificateIndex, CertificateStatusError, EpochNumber, Height,
+    LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::{certificate_task::CertificateTask, Certifier, EpochPacker, Error};
+use crate::{certificate_task::CertificateTask, Certifier, Error, SettlementClient};
 
 #[cfg(test)]
 mod tests;
@@ -25,22 +26,66 @@ pub(crate) struct NewCertificate {
     pub(crate) height: Height,
 }
 
-#[allow(dead_code)] // TODO: Once we have implemented storage properly, all this should become used
+#[allow(dead_code)] // TODO: Once we have implemented storage properly, all the fields should become used
+/// Enum listing all the potential messages that can be sent to the network
+/// task.
 pub enum NetworkTaskMessage {
+    /// Get the local network state before a given height.
     GetLocalNetworkStateBeforeHeight {
         height: Height,
-        response: oneshot::Sender<Box<LocalNetworkStateData>>,
+        response: oneshot::Sender<Result<Box<LocalNetworkStateData>, CertificateStatusError>>,
     },
-    CertificateProven {
+
+    /// Notify the network task that a certificate has been successfully
+    /// executed.
+    ///
+    /// Also encodes the new state of the network after the certificate has been
+    /// executed.
+    CertificateExecuted {
         height: Height,
         certificate_id: CertificateId,
         new_state: Box<LocalNetworkStateData>,
     },
+
+    /// Notify the network task that a certificate has been successfully proven.
+    CertificateProven {
+        height: Height,
+        certificate_id: CertificateId,
+    },
+
+    /// Notify the network task that a certificate is ready for settlement.
+    ///
+    /// The `settlement_submitted_notifier` is used to notify the certificate
+    /// task that the settlement has been successfully submitted.
+    CertificateReadyForSettlement {
+        height: Height,
+        certificate_id: CertificateId,
+        settlement_submitted_notifier:
+            oneshot::Sender<Result<SettlementTxHash, CertificateStatusError>>,
+    },
+
+    /// Notify the network task that a certificate is waiting for settlement to
+    /// complete.
+    ///
+    /// The `settlement_complete_notifier` is used to notify the certificate
+    /// task that the settlement has been successfully completed.
+    CertificateWaitingForSettlement {
+        height: Height,
+        certificate_id: CertificateId,
+        settlement_tx_hash: SettlementTxHash,
+        settlement_complete_notifier:
+            oneshot::Sender<Result<(EpochNumber, CertificateIndex), CertificateStatusError>>,
+    },
+
+    /// Notify the network task that a certificate has been successfully
+    /// settled.
     CertificateSettled {
         height: Height,
         certificate_id: CertificateId,
         settled_certificate: SettledCertificate,
     },
+
+    /// Notify the network task that a certificate has encountered an error.
     CertificateErrored {
         height: Height,
         certificate_id: CertificateId,
@@ -77,11 +122,11 @@ pub(crate) struct NetworkTask<CertifierClient, SettlementClient, PendingStore, S
     latest_settled: Option<SettledCertificate>,
 }
 
-impl<CertifierClient, SettlementClient, PendingStore, StateStore>
-    NetworkTask<CertifierClient, SettlementClient, PendingStore, StateStore>
+impl<CertifierClient, Sc, PendingStore, StateStore>
+    NetworkTask<CertifierClient, Sc, PendingStore, StateStore>
 where
     CertifierClient: 'static + Certifier,
-    SettlementClient: 'static + EpochPacker,
+    Sc: 'static + SettlementClient,
     PendingStore: 'static + PendingCertificateReader + PendingCertificateWriter,
     StateStore: 'static + StateReader + StateWriter,
 {
@@ -90,7 +135,7 @@ where
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         certifier_client: Arc<CertifierClient>,
-        settlement_client: Arc<SettlementClient>,
+        settlement_client: Arc<Sc>,
         clock_ref: ClockRef,
         network_id: NetworkId,
         certificate_stream: mpsc::Receiver<NewCertificate>,
@@ -159,10 +204,10 @@ where
                     self.at_capacity_for_epoch = true;
                 }
 
-                current_height + 1
+                current_height.next()
             } else {
                 debug!("Network never settled any certificate");
-                0
+                Height::ZERO
             };
 
         let mut first_run = true;
@@ -192,7 +237,7 @@ where
     async fn make_progress(
         &mut self,
         stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
-        next_expected_height: &mut u64,
+        next_expected_height: &mut Height,
         first_run: &mut bool,
         cancellation_token: &CancellationToken,
     ) -> Result<(), Error> {
@@ -207,7 +252,7 @@ where
                             info!("Received an epoch event: {}", epoch);
 
                             let current_epoch = self.clock_ref.current_epoch();
-                            if epoch != 0 && (epoch + 1) < current_epoch {
+                            if epoch != EpochNumber::ZERO && epoch.next() < current_epoch {
                                 warn!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
 
                                 return Ok(());
@@ -304,7 +349,6 @@ where
                 self.state_store.clone(),
                 self.pending_store.clone(),
                 self.certifier_client.clone(),
-                self.settlement_client.clone(),
                 cancellation_token.clone(),
             )
             .process(),
@@ -314,19 +358,21 @@ where
             tokio::select! {
                 msg = receiver.recv() => match msg {
                     None => {
-                        fail::fail_point!("network_task::kill_on_cert_task_closed");
-                        error!(height = *next_expected_height, %certificate_id, "Certificate task channel closed");
+                        error!(height = next_expected_height.as_u64(), %certificate_id, "Certificate task channel closed");
                         return Err(Error::InternalError("Certificate task channel closed".into()));
                     }
                     Some(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight { response, .. }) => {
                         let state = self.local_state.clone();
-                        response.send(state).map_err(|_| {
+                        response.send(Ok(state)).map_err(|_| {
                             Error::InternalError("Certificate response channel closed".into())
                         })?;
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateProven { height, new_state, .. }) => {
+                    Some(NetworkTaskMessage::CertificateExecuted { new_state, .. }) => {
                         self.pending_state = Some(new_state);
+                        continue;
+                    }
+                    Some(NetworkTaskMessage::CertificateProven { height, .. }) => {
                         if let Err(error) = self
                             .pending_store
                             .set_latest_proven_certificate_per_network(&self.network_id, &height, &certificate_id)
@@ -338,14 +384,43 @@ where
                         }
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateSettled { settled_certificate, .. }) => {
+                    Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, .. }) => {
+                        // For now, the network task directly submits the settlement.
+                        // In the future, with aggregation, all this will likely move to a separate epoch packer task.
+                        // This is the reason why the certificate task does not directly submit and wait for settlement.
+                        let result = self
+                            .settlement_client
+                            .submit_certificate_settlement(certificate_id)
+                            .await
+                            .map_err(Into::into);
+                        settlement_submitted_notifier
+                            .send(result)
+                            .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
+                        fail::fail_point!("network_task::make_progress::settlement_submitted");
+                        continue;
+                    }
+                    Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier, .. }) => {
+                        // See comment on CertificateReadyForSettlement.
+                        let result = self
+                            .settlement_client
+                            .wait_for_settlement(settlement_tx_hash, certificate_id)
+                            .await
+                            .map_err(Into::into);
+                        settlement_complete_notifier
+                            .send(result)
+                            .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
+                        continue;
+                    }
+                    Some(NetworkTaskMessage::CertificateSettled { settled_certificate, height, .. }) => {
+                        self.at_capacity_for_epoch = true;
+                        let epoch_number = settled_certificate.2;
+                        let certificate_index = settled_certificate.3;
+                        self.latest_settled = Some(settled_certificate);
+                        next_expected_height.increment();
                         debug!(%certificate_id, "Certification process completed");
                         let Some(new) = self.pending_state.take() else {
                             return Err(Error::InternalError(format!("Missing pending state needed upon settlement, current state: {}", self.local_state.get_roots().display_to_hex() )))
                         };
-                        self.at_capacity_for_epoch = true;
-                        self.latest_settled = Some(settled_certificate);
-                        *next_expected_height += 1;
                         debug!(
                             old_state = self.local_state.get_roots().display_to_hex(),
                             new_state = new.get_roots().display_to_hex(),
@@ -364,6 +439,15 @@ where
                                 certificate_id,
                                 error: e.to_string(),
                             })?;
+                        self.state_store
+                            .set_latest_settled_certificate_for_network(
+                                &self.network_id,
+                                &height,
+                                &certificate_id,
+                                &epoch_number,
+                                &certificate_index,
+                            )
+                            .map_err(|e| Error::PersistenceError { certificate_id, error: e.to_string() })?;
 
                         break;
                     }

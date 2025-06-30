@@ -5,7 +5,7 @@ use std::time::Duration;
 use agglayer_contracts::polygon_rollup_manager::PolygonRollupManagerErrors;
 use agglayer_rate_limiting::{self, component, Component};
 use agglayer_rpc::error::SignatureVerificationError;
-use agglayer_types::Digest;
+use agglayer_types::{CertificateId, Digest};
 use alloy::{primitives::SignatureError as AlloySignatureError, signers::k256};
 use ethers::{
     providers::ProviderError,
@@ -132,7 +132,7 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 )]
 #[case(
     "cert_notfound",
-    agglayer_rpc::CertificateRetrievalError::NotFound { certificate_id: Digest([0x51; 32]) }
+    agglayer_rpc::CertificateRetrievalError::NotFound { certificate_id: CertificateId::new(Digest([0x51; 32])) }
 )]
 fn rpc_error_rendering(#[case] name: &str, #[case] err: impl Into<Error>) {
     let err: Error = err.into();
