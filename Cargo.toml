@@ -44,12 +44,12 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
+agglayer-bincode = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2"}
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2" }
 
 # Provers
 agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.2" }

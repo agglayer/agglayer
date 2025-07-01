@@ -1,12 +1,12 @@
 ---
 source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
-expression: "SignatureMismatch { detail: \"could not recover transaction signer: Invalid string length\" }"
+expression: "SignatureMismatch { detail: \"could not recover transaction signer: invalid string length\" }"
 ---
 {
   "code": -10002,
   "data": {
     "signature-mismatch": {
-      "detail": "could not recover transaction signer: Invalid string length"
+      "detail": "could not recover transaction signer: invalid string length"
     }
   },
   "message": "Rollup signature verification failed"
