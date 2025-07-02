@@ -1,6 +1,6 @@
-mod alloy_client;
+mod rpc;
 
-pub use alloy_client::RpcSettlementClient;
+pub use rpc::RpcSettlementClient;
 
 #[cfg(test)]
 mod tests;

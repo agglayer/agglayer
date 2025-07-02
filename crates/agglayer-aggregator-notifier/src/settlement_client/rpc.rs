@@ -17,7 +17,8 @@ use tracing::{debug, error, info, instrument, warn};
 
 const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
 
-/// Alloy-based settlement client for L1 certificate settlement
+/// Rpc-based settlement client for L1 certificate settlement.
+/// Using alloy client to interact with the L1 rollup manager contract.
 #[derive(Default, Clone)]
 pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
     state_store: Arc<StateStore>,
@@ -30,7 +31,7 @@ pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupMa
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
     RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 {
-    /// Try to create a new alloy-based settlement client
+    /// Try to create a new rpc-based settlement client
     pub fn try_new(
         config: Arc<OutboundRpcSettleConfig>,
         state_store: Arc<StateStore>,
@@ -92,7 +93,7 @@ where
 {
     type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
 
-    #[instrument(skip(self), fields(network_id, calldata), level = "debug")]
+    #[instrument(skip(self), fields(network_id, settlement_params), level = "debug")]
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
@@ -134,7 +135,7 @@ where
             }
         }
 
-        // Step 3: Get certificate
+        // Step 3: Get certificate from pending store
         let certificate =
             if let Some(certificate) = self.pending_store.get_certificate(network_id, height)? {
                 certificate
@@ -151,7 +152,7 @@ where
             .l1_info_tree_leaf_count()
             .unwrap_or_else(|| self.l1_rpc.default_l1_info_tree_entry().0);
 
-        // Step 4: Prepare the proof
+        // Step 4: Deserialize and prepare the proof
         let (output, proof) =
             if let Some(Proof::SP1(proof)) = self.pending_store.get_proof(certificate_id)? {
                 if let Ok(output) = PessimisticProofOutput::bincode_codec()
@@ -164,7 +165,9 @@ where
                     ));
                 }
             } else {
-                return Err(Error::InternalError("Unable to find the proof".to_string()));
+                return Err(Error::InternalError(
+                    "Unable to find the proof in the pending store".to_string(),
+                ));
             };
 
         // Step 5: Get verifier type and prepare proof
@@ -199,6 +202,19 @@ where
             output.display_to_hex()
         );
 
+        // Record the settlement parameters for tracing
+        let settlement_params = format!(
+            "origin_network: {}, l1_info_tree_leaf_count: {}, new_local_exit_root: 0x{}, \
+             new_pessimistic_root: 0x{}, proof_length: {}, custom_chain_data_length: {}",
+            output.origin_network.to_u32(),
+            l1_info_tree_leaf_count,
+            hex::encode(output.new_local_exit_root),
+            hex::encode(output.new_pessimistic_root),
+            proof_with_selector.len(),
+            certificate.custom_chain_data.len()
+        );
+        tracing::Span::current().record("settlement_params", &settlement_params);
+
         // Step 6: Call the contract settlement function and get the pending transaction
         let pending_tx = match self
             .l1_rpc
@@ -213,10 +229,7 @@ where
             .await
         {
             Ok(pending_tx) => {
-                info!(
-                    "Certificate settlement transaction submitted for {}",
-                    certificate_id
-                );
+                info!("Certificate settlement transaction submitted");
                 pending_tx
             }
             Err(error) => {
@@ -238,10 +251,7 @@ where
 
         // Get the transaction hash from the pending transaction
         let tx_hash = *pending_tx.tx_hash();
-        info!(
-            "Settlement transaction hash: {} for certificate {}",
-            tx_hash, certificate_id
-        );
+        info!("Settlement transaction hash: {}", tx_hash);
 
         Ok(SettlementTxHash::from(tx_hash))
     }
@@ -252,10 +262,7 @@ where
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
-        info!(
-            "RpcSettlementClient: waiting for settlement {}",
-            settlement_tx_hash
-        );
+        info!(%settlement_tx_hash, "Waiting for settlement of tx {settlement_tx_hash}");
 
         // Step 1: Wait for transaction receipt with retries
         let receipt = self
@@ -267,14 +274,14 @@ where
 
         // Step 2: Check transaction status
         if !receipt.status() {
-            warn!("Transaction failed to settle");
+            warn!(%settlement_tx_hash, "Certificate settlement transaction failed to settle");
             return Err(Error::SettlementError {
                 certificate_id,
                 error: "Settlement transaction failed".to_string(),
             });
         }
 
-        info!("Transaction successfully settled");
+        info!(%settlement_tx_hash, "Certificate settlement transaction successfully settled on l1");
 
         // Step 3: Add certificate to epoch with retries
         let mut max_retries = MAX_EPOCH_ASSIGNMENT_RETRIES;
@@ -338,28 +345,26 @@ where
         loop {
             match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
                 Ok(receipt) => {
-                    info!(
-                        "Successfully retrieved transaction receipt for {}",
-                        settlement_tx_hash
-                    );
+                    info!(%settlement_tx_hash, "Successfully retrieved transaction receipt");
                     return Ok(receipt);
                 }
                 Err(_) if retries > 0 => {
                     retries -= 1;
                     debug!(
-                        "Transaction receipt not yet available for {} (retries left: {})",
-                        settlement_tx_hash, retries
+                        %settlement_tx_hash,
+                        "Transaction receipt not yet available for tx (retries left: {retries})"
                     );
                     tokio::time::sleep(self.config.retry_interval).await;
                 }
                 Err(error) => {
                     error!(
-                        "Failed to fetch transaction receipt after all retries: {}",
-                        error
+                        ?error,
+                        %settlement_tx_hash,
+                        "Failed to fetch settlement transaction receipt after all retries"
                     );
                     return Err(Error::SettlementError {
                         certificate_id,
-                        error: format!("Failed to fetch transaction receipt: {error}"),
+                        error: error.to_string(),
                     });
                 }
             }

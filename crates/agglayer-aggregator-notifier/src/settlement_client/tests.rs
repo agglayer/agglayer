@@ -66,6 +66,8 @@ mockall::mock! {
 #[test_log::test(tokio::test)]
 #[ignore = "Complex integration test - requires proper mock setup"]
 async fn epoch_packer_can_settle_one_certificate() {
+    use agglayer_certificate_orchestrator::SettlementClient;
+
     let network_id = 1.into();
     let mut state = Forest::new(vec![]);
 
@@ -137,8 +139,11 @@ async fn epoch_packer_can_settle_one_certificate() {
     // for alloy contract calls and transaction handling. The RpcSettlementClient
     // compiles and works correctly, but comprehensive testing requires a more
     // sophisticated test setup with proper alloy provider mocking.
+    // Problem with mocking alloy contract calls is that alloy client makes
+    // multiple calls to l1 (to assess to gas const etc.), and we need to mock
+    // each of them correctly in the correct order.
 
-    let _epoch_packer = RpcSettlementClient::<_, _, MockPerEpochStore, _>::try_new(
+    let epoch_packer = RpcSettlementClient::<_, _, MockPerEpochStore, _>::try_new(
         config,
         Arc::new(state_store),
         Arc::new(pending_store),
@@ -147,8 +152,15 @@ async fn epoch_packer_can_settle_one_certificate() {
     )
     .unwrap();
 
-    // Test creation succeeds - just verify the client was created
-    // (config field is private, so we can't access it directly)
+    let settlement_tx_hash = epoch_packer
+        .submit_certificate_settlement(certificate_id)
+        .await
+        .unwrap();
+
+    epoch_packer
+        .wait_for_settlement(settlement_tx_hash, certificate_id)
+        .await
+        .unwrap();
 }
 
 #[test]

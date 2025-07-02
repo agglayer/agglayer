@@ -6,7 +6,12 @@ use agglayer_contracts::{aggchain::AggchainVkeyHash, L1RpcError, Settler};
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
-use alloy::contract::Error as ContractError;
+use alloy::{
+    contract::Error as ContractError,
+    network::Ethereum,
+    primitives::{Bytes, FixedBytes},
+    rpc::types::TransactionReceipt,
+};
 use fail::FailScenario;
 use mockall::predicate::{always, eq};
 use pessimistic_proof_test_suite::forest::Forest;
@@ -214,7 +219,7 @@ mockall::mock! {
     L1Rpc {}
     #[async_trait::async_trait]
     impl agglayer_contracts::RollupContract for L1Rpc {
-        type P = alloy::providers::RootProvider<alloy::network::Ethereum>;
+        type P = alloy::providers::RootProvider<Ethereum>;
 
         async fn get_trusted_sequencer_address(
             &self,
@@ -232,7 +237,7 @@ mockall::mock! {
 
     #[async_trait::async_trait]
     impl agglayer_contracts::AggchainContract for L1Rpc {
-        type M = alloy::providers::RootProvider<alloy::network::Ethereum>;
+        type M = alloy::providers::RootProvider<Ethereum>;
 
         async fn get_aggchain_vkey_hash(
             &self,
@@ -243,18 +248,18 @@ mockall::mock! {
         async fn get_aggchain_hash(
             &self,
             rollup_address: agglayer_types::primitives::Address,
-            aggchain_data: alloy::primitives::Bytes,
+            aggchain_data: Bytes,
         ) -> Result<[u8; 32], L1RpcError>;
     }
 
     #[async_trait::async_trait]
     impl agglayer_contracts::L1TransactionFetcher for L1Rpc {
-        async fn fetch_transaction_receipt(&self, tx_hash: alloy::primitives::FixedBytes<32>) -> Result<alloy::rpc::types::TransactionReceipt, L1RpcError>;
+        async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<TransactionReceipt, L1RpcError>;
     }
 
     #[async_trait::async_trait]
     impl Settler for L1Rpc {
-        fn decode_contract_revert(error: &alloy::contract::Error) -> Option<String>;
+        fn decode_contract_revert(error: &ContractError) -> Option<String>;
 
         async fn verify_pessimistic_trusted_aggregator(
             &self,
@@ -262,9 +267,9 @@ mockall::mock! {
             l_1_info_tree_leaf_count: u32,
             new_local_exit_root: [u8; 32],
             new_pessimistic_root: [u8; 32],
-            proof: alloy::primitives::Bytes,
-            custom_chain_data: alloy::primitives::Bytes,
-        ) -> Result<alloy::providers::PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
+            proof: Bytes,
+            custom_chain_data: Bytes,
+        ) -> Result<alloy::providers::PendingTransactionBuilder<Ethereum>, ContractError>;
     }
 }
 

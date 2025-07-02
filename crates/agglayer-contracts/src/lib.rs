@@ -21,6 +21,7 @@ pub use settler::Settler;
 
 #[async_trait::async_trait]
 pub trait L1TransactionFetcher {
+    /// Fetches the transaction receipt for a given transaction hash.
     async fn fetch_transaction_receipt(
         &self,
         tx_hash: B256,
@@ -28,9 +29,11 @@ pub trait L1TransactionFetcher {
 }
 
 pub struct L1RpcClient<RpcProvider> {
+    /// RPC provider to interact with the L1 blockchain.
     rpc: Arc<RpcProvider>,
+    /// Inner client for interacting with the Polygon Rollup Manager contract.
     inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
-    // Address of the PolygonZkEVMGlobalExitRootV2 contract
+    /// Address of the PolygonZkEVMGlobalExitRootV2 contract
     l1_info_tree: Address,
     /// L1 info tree entry used for certificates without imported bridge exits.
     default_l1_info_tree_entry: (u32, [u8; 32]),
