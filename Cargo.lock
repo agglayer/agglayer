@@ -178,7 +178,6 @@ dependencies = [
  "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?rev=52610d01ce7576effd4e3d717e8ce998c7cd7dd2)",
  "agglayer-prover-config",
  "alloy-primitives",
- "dirs",
  "humantime-serde",
  "insta",
  "jsonrpsee",
@@ -199,19 +198,15 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?rev=52610d01ce7576effd4e3d717e8ce998c7cd7dd2)",
  "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?rev=52610d01ce7576effd4e3d717e8ce998c7cd7dd2)",
  "alloy",
  "anyhow",
  "async-trait",
  "fail",
  "hex",
- "mockall",
  "num-derive",
  "num-traits",
  "prover-alloy",
- "sp1-primitives",
- "sp1-zkvm",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -304,7 +299,6 @@ dependencies = [
  "rstest",
  "serde",
  "thiserror 2.0.12",
- "tonic-types 0.12.3",
 ]
 
 [[package]]
@@ -399,24 +393,15 @@ dependencies = [
 name = "agglayer-jsonrpc-api"
 version = "0.1.0"
 dependencies = [
- "agglayer-aggregator-notifier",
- "agglayer-certificate-orchestrator",
- "agglayer-clock",
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-grpc-api",
- "agglayer-grpc-types",
- "agglayer-prover",
  "agglayer-rate-limiting",
  "agglayer-rpc",
- "agglayer-signer",
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
- "agglayer-test-suite",
  "agglayer-types",
  "alloy",
  "anyhow",
- "arc-swap",
  "axum 0.8.4",
  "buildstructor",
  "fail",
@@ -431,8 +416,6 @@ dependencies = [
  "jsonrpsee-test-utils",
  "lazy_static",
  "mockall",
- "pessimistic-proof",
- "pessimistic-proof-test-suite",
  "pin-project 1.1.10",
  "rand 0.9.1",
  "reqwest",
@@ -466,13 +449,11 @@ dependencies = [
  "agglayer-grpc-api",
  "agglayer-grpc-types",
  "agglayer-jsonrpc-api",
- "agglayer-prover",
  "agglayer-rate-limiting",
  "agglayer-rpc",
  "agglayer-signer",
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
- "agglayer-test-suite",
  "agglayer-types",
  "alloy",
  "anyhow",
@@ -486,13 +467,10 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
- "insta",
  "jsonrpsee",
- "jsonrpsee-test-utils",
  "lazy_static",
  "mockall",
  "pessimistic-proof",
- "pessimistic-proof-test-suite",
  "pin-project 1.1.10",
  "rand 0.9.1",
  "reqwest",
@@ -510,7 +488,6 @@ dependencies = [
  "tower 0.4.13",
  "tower-http",
  "tracing",
- "tracing-capture",
  "tracing-subscriber",
 ]
 
@@ -616,7 +593,6 @@ dependencies = [
  "agglayer-contracts",
  "agglayer-rate-limiting",
  "agglayer-storage",
- "agglayer-telemetry 0.1.0",
  "agglayer-types",
  "alloy",
  "futures",
@@ -649,7 +625,6 @@ dependencies = [
  "agglayer-tries 0.6.0 (git+https://github.com/agglayer/interop.git?rev=52610d01ce7576effd4e3d717e8ce998c7cd7dd2)",
  "agglayer-types",
  "alloy-primitives",
- "arc-swap",
  "chrono",
  "criterion",
  "hex",
@@ -714,7 +689,6 @@ dependencies = [
  "agglayer-storage",
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
- "rstest",
 ]
 
 [[package]]
@@ -2459,20 +2433,6 @@ name = "bytemuck"
 version = "1.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9134a6ef01ce4b366b50689c94f82c14bc72bc5d0386829828a2e2752ef7958c"
-dependencies = [
- "bytemuck_derive",
-]
-
-[[package]]
-name = "bytemuck_derive"
-version = "1.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ecc273b49b3205b83d648f0690daa588925572cc5063745bfe547fe7ec8e1a1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.101",
-]
 
 [[package]]
 name = "byteorder"
@@ -3446,7 +3406,6 @@ dependencies = [
  "ff 0.13.1",
  "generic-array 0.14.7",
  "group 0.13.0",
- "hkdf",
  "pem-rfc7468",
  "pkcs8",
  "rand_core 0.6.4",
@@ -4154,15 +4113,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bcaaec4551594c969335c98c903c1397853d4198408ea609190f420500f6be71"
 
 [[package]]
-name = "hkdf"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b5f8eb2ad728638ea2c7d47a21db23b7b58a72ed6a38256b8a1849f15fbbdf7"
-dependencies = [
- "hmac",
-]
-
-[[package]]
 name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4599,9 +4549,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
- "insta",
  "jsonrpsee",
- "jsonrpsee-test-utils",
  "lazy_static",
  "mockall",
  "parking_lot",
@@ -4614,7 +4562,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "test-log",
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
@@ -4623,7 +4570,6 @@ dependencies = [
  "tower 0.4.13",
  "tower-http",
  "tracing",
- "tracing-capture",
  "tracing-subscriber",
 ]
 
@@ -6124,13 +6070,9 @@ dependencies = [
  "hex",
  "hex-literal 0.4.1",
  "rand 0.9.1",
- "rs_merkle",
  "semver 1.0.26",
  "serde",
- "serde_json",
  "serde_with",
- "sp1-primitives",
- "sp1-verifier",
  "sp1-zkvm",
  "thiserror 2.0.12",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
@@ -7984,7 +7926,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03046db52868c1b60e8acffa0777ef6dc11ec1bbbb10b9eb612a871f69c8d3f6"
 dependencies = [
  "bincode",
- "elliptic-curve",
  "serde",
  "sp1-primitives",
 ]
@@ -8271,22 +8212,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp1-verifier"
-version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e981f2f411e948b8965439c5e58d3d2c0e4b511cbe6e92abb1468b851c53f5a0"
-dependencies = [
- "blake3",
- "cfg-if",
- "hex",
- "lazy_static",
- "sha2",
- "sp1-build",
- "substrate-bn-succinct",
- "thiserror 2.0.12",
-]
-
-[[package]]
 name = "sp1-zkvm"
 version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8402,23 +8327,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "substrate-bn-succinct"
-version = "0.6.0-v5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ba32f1b74728f92887c3ad17c42bf82998eb52c9091018f35294e9cd388b0c8"
-dependencies = [
- "bytemuck",
- "byteorder",
- "cfg-if",
- "crunchy",
- "lazy_static",
- "num-bigint 0.4.6",
- "rand 0.8.5",
- "rustc-hex",
- "sp1-lib",
 ]
 
 [[package]]

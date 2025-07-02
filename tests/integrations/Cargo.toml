@@ -18,9 +18,7 @@ hex.workspace = true
 http-body-util = "0.1.2"
 hyper-util = { version = "0.1.10", features = ["client"] }
 hyper.workspace = true
-insta.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.9" }
 lazy_static.workspace = true
 mockall.workspace = true
 parking_lot.workspace = true
@@ -31,7 +29,6 @@ rstest.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with.workspace = true
-test-log.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.17"
@@ -39,7 +36,6 @@ tokio-util.workspace = true
 toml.workspace = true
 tower-http = { version = "0.6.2", features = ["full"] }
 tower.workspace = true
-tracing-capture = "0.1.0"
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 tracing.workspace = true
 

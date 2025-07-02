@@ -5,7 +5,6 @@ edition.workspace = true
 
 [dependencies]
 alloy-primitives.workspace = true
-dirs.workspace = true
 humantime-serde = "1.1.1"
 jsonrpsee.workspace = true
 serde = { workspace = true, features = ["derive"] }
