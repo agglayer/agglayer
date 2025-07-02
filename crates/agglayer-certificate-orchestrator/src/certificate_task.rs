@@ -307,7 +307,7 @@ where
         &self,
         msg: NetworkTaskMessage,
     ) -> Result<(), CertificateStatusError> {
-        trace!(?msg, "Sending message to network task");
+        trace!(message = ?msg, "Sending message to network task");
         self.network_task.send(msg).await.map_err(send_err)
     }
 }
