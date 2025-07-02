@@ -21,7 +21,7 @@ pub trait AggchainContract {
     type M: alloy::providers::Provider;
     async fn get_aggchain_vkey_hash(
         &self,
-        rollup_address: alloy::primitives::Address,
+        rollup_address: Address,
         aggchain_vkey_selector: u16,
     ) -> Result<AggchainVkeyHash, L1RpcError>;
 
@@ -41,7 +41,7 @@ where
 
     async fn get_aggchain_vkey_hash(
         &self,
-        rollup_address: alloy::primitives::Address,
+        rollup_address: Address,
         aggchain_vkey_selector: u16,
     ) -> Result<AggchainVkeyHash, L1RpcError> {
         let aggchain_selector = (((aggchain_vkey_selector as u32) << 16) | 1u32).to_be_bytes();

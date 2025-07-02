@@ -46,8 +46,7 @@ async fn happy_path() {
     let withdrawals = vec![];
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
-
-    let signer = agglayer_types::Address::new(**state.get_signer());
+    let signer = state.get_signer();
     let certificate_id = certificate.hash();
 
     pending_store
@@ -70,7 +69,7 @@ async fn happy_path() {
     l1_rpc
         .expect_get_rollup_contract_address()
         .once()
-        .returning(|_| Ok(alloy::primitives::Address::default()));
+        .returning(|_| Ok(agglayer_types::primitives::Address::default()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -152,7 +151,7 @@ async fn prover_timeout() {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
 
-    let signer = agglayer_types::Address::new(**state.get_signer());
+    let signer = state.get_signer();
     let certificate_id = certificate.hash();
 
     pending_store
@@ -175,7 +174,7 @@ async fn prover_timeout() {
     l1_rpc
         .expect_get_rollup_contract_address()
         .once()
-        .returning(|_| Ok(alloy::primitives::Address::default()));
+        .returning(|_| Ok(agglayer_types::primitives::Address::default()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -243,7 +242,7 @@ mockall::mock! {
 
         async fn get_aggchain_hash(
             &self,
-            rollup_address: alloy::primitives::Address,
+            rollup_address: agglayer_types::primitives::Address,
             aggchain_data: alloy::primitives::Bytes,
         ) -> Result<[u8; 32], L1RpcError>;
     }

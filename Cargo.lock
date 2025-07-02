@@ -201,7 +201,6 @@ version = "0.1.0"
 dependencies = [
  "agglayer-interop 0.6.0 (git+https://github.com/agglayer/interop.git?rev=52610d01ce7576effd4e3d717e8ce998c7cd7dd2)",
  "agglayer-primitives 0.6.0 (git+https://github.com/agglayer/interop.git?rev=52610d01ce7576effd4e3d717e8ce998c7cd7dd2)",
- "agglayer-types",
  "alloy",
  "anyhow",
  "async-trait",

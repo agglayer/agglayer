@@ -206,7 +206,7 @@ impl TestContext {
         P: alloy::providers::Provider + Clone + 'static,
     {
         use agglayer_contracts::contracts::PolygonRollupManager;
-        use alloy::primitives::Address;
+        use agglayer_types::primitives::Address;
 
         let inner = PolygonRollupManager::PolygonRollupManagerInstance::new(
             Address::ZERO, // Use real contract address in production
