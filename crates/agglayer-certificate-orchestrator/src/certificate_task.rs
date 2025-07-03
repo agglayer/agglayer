@@ -9,7 +9,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
 
-use crate::{network_task::NetworkTaskMessage, Certifier};
+use crate::{network_task::NetworkTaskMessage, Certifier, Error};
 
 /// A task that processes a certificate, including certifying it and settling
 /// it.
@@ -36,17 +36,24 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     CertifierClient: Certifier,
 {
-    #[allow(clippy::too_many_arguments)] // TODO: should go away with the next few PRs
     pub fn new(
         certificate: Certificate,
-        header: CertificateHeader,
         network_task: mpsc::Sender<NetworkTaskMessage>,
         state_store: Arc<StateStore>,
         pending_store: Arc<PendingStore>,
         certifier_client: Arc<CertifierClient>,
         cancellation_token: CancellationToken,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Error> {
+        let certificate_id = certificate.hash();
+        let Some(header) = state_store.get_certificate_header(&certificate_id)? else {
+            error!(%certificate_id, "Certificate header not found");
+
+            return Err(Error::InternalError(format!(
+                "Certificate header not found for {certificate_id}"
+            )));
+        };
+
+        Ok(Self {
             certificate,
             header,
             network_task,
@@ -54,7 +61,7 @@ where
             pending_store,
             certifier_client,
             cancellation_token,
-        }
+        })
     }
 
     #[tracing::instrument(
