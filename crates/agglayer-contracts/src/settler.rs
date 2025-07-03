@@ -71,7 +71,10 @@ where
         .unwrap_or(false)
         {
             // Set deliberately low gas to cause failure
-            warn!("Low gas fail point active for rollup_id: {}", rollup_id);
+            warn!(
+                "FAIL POINT ACTIVE: low gas fail point active for rollup_id: {}",
+                rollup_id
+            );
             tx_call = tx_call.gas(30000);
         }
 

@@ -36,10 +36,6 @@ pub type MockProvider = FillProvider<
     alloy::network::Ethereum,
 >;
 
-// Note: We use generics instead of a concrete type alias for HTTP providers
-// This allows the method to work with any provider that implements the
-// necessary traits
-
 pub struct RawRpcContext {
     pub rpc: crate::AgglayerImpl<
         MockProvider,
@@ -216,8 +212,8 @@ impl TestContext {
         L1RpcClient::new(
             provider,
             inner,
-            Address::ZERO,     // Use real L1 info tree address in production
-            (0u32, [0u8; 32]), // Use real default L1 info tree entry in production
+            Address::ZERO,     // Use real L1 info tree address in non-test environments
+            (0u32, [0u8; 32]), // Use real default L1 info tree entry in non-test environments
         )
     }
 
@@ -255,7 +251,7 @@ impl TestContext {
         let pending_store = Arc::new(PendingStore::new(pending_db));
         let debug_store = Arc::new(DebugStore::new(debug_db));
 
-        // Create a mock transport with an asserter
+        // Create mock transport with an asserter
         let asserter = Asserter::new();
         let _transport = MockTransport::new(asserter.clone());
 

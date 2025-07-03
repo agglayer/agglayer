@@ -111,6 +111,7 @@ impl Signer for ConfiguredSigner {
                 // KMS signer doesn't support mutable chain ID changes in the
                 // current implementation This is a limitation
                 // of the KmsSigner wrapper
+                tracing::warn!("KMS signer doesn't support mutable chain ID changes");
             }
         }
     }
@@ -147,7 +148,6 @@ impl ConfiguredSigner {
     pub async fn sign_transaction_typed(&self, tx: &TypedTransaction) -> Result<Signature, Error> {
         match self {
             ConfiguredSigner::Local(wallet) => {
-                // Convert TypedTransaction to signable transaction for local wallet
                 let mut tx_clone = tx.clone();
                 wallet
                     .sign_transaction(&mut tx_clone)

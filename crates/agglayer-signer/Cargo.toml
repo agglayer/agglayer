@@ -11,6 +11,7 @@ thiserror.workspace = true
 alloy.workspace = true
 alloy-primitives.workspace = true
 alloy-signer-local.workspace = true
+tracing.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
 agglayer-gcp-kms = { path = "../agglayer-gcp-kms" }
