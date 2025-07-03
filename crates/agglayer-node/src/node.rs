@@ -1,4 +1,4 @@
-use std::{num::NonZeroU64, sync::Arc};
+use std::{collections::HashSet, num::NonZeroU64, sync::Arc};
 
 use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
@@ -276,17 +276,48 @@ impl Node {
         .start()
         .await?;
 
-        // Bind the core to the RPC server.
-        let json_rpc_router = AgglayerImpl::new(service, rpc_service.clone())
-            .start()
-            .await?;
+        // List the public vs. private networks.
+        let (public_networks, private_networks) = {
+            let private = config
+                .private_networks
+                .as_ref()
+                .map(|n| n.networks.iter().cloned().collect::<HashSet<_>>());
+            let private2 = private.clone();
+            (
+                // Is the incoming network public?
+                move |incoming| match &private {
+                    Some(private) => private.contains(&incoming),
+                    None => true,
+                },
+                // Is the incoming network private?
+                private2.map(|private| move |incoming| private.contains(&incoming)),
+            )
+        };
 
-        let grpc_router = agglayer_grpc_api::Server::with_config(config.clone(), rpc_service)
-            .build()
-            .map_err(|err| {
-                error!("Failed to build gRPC router: {}", err);
-                err
-            })?;
+        // Bind the core to the RPC server.
+        let json_rpc_router =
+            AgglayerImpl::new(service, rpc_service.clone(), public_networks.clone())
+                .start()
+                .await?;
+
+        let private_grpc_router = match private_networks {
+            None => None,
+            Some(pn) => Some(
+                agglayer_grpc_api::Server::with_config(config.clone(), rpc_service.clone(), pn)
+                    .build()
+                    .map_err(|err| {
+                        error!("Failed to build private gRPC router: {}", err);
+                        err
+                    })?,
+            ),
+        };
+        let public_grpc_router =
+            agglayer_grpc_api::Server::with_config(config.clone(), rpc_service, public_networks)
+                .build()
+                .map_err(|err| {
+                    error!("Failed to build public gRPC router: {}", err);
+                    err
+                })?;
 
         let health_router = api::rest::health_router();
 
@@ -295,25 +326,47 @@ impl Node {
             .merge(json_rpc_router);
 
         let readrpc_listener = tokio::net::TcpListener::bind(config.readrpc_addr()).await?;
-        let grpc_listener = tokio::net::TcpListener::bind(config.grpc_addr()).await?;
+        let public_grpc_listener = tokio::net::TcpListener::bind(config.public_grpc_addr()).await?;
+        let private_grpc_listener = match config.private_grpc_addr() {
+            None => None,
+            Some(addr) => Some(tokio::net::TcpListener::bind(addr).await?),
+        };
         let admin_listener = tokio::net::TcpListener::bind(config.admin_rpc_addr()).await?;
         info!(on = %config.readrpc_addr(), "ReadRPC listening");
-        info!(on = %config.grpc_addr(), "gRPC listening");
+        info!(on = %config.public_grpc_addr(), "Public gRPC listening");
+        if let Some(on) = config.private_grpc_addr() {
+            info!(%on, "Private gRPC listening");
+        } else {
+            debug!("No private gRPC server configured.");
+        }
         info!(on = %config.admin_rpc_addr(), "AdminRPC listening");
 
         let readrpc_server = axum::serve(readrpc_listener, readrpc_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
-        let grpc_server = axum::serve(grpc_listener, grpc_router)
+        let public_grpc_server = axum::serve(public_grpc_listener, public_grpc_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
+
+        let private_grpc_server = private_grpc_listener.map(|listener| {
+            // Both options are Some iff the private_networks section is configured.
+            axum::serve(listener, private_grpc_router.unwrap())
+                .with_graceful_shutdown(cancellation_token.clone().cancelled_owned())
+        });
 
         let admin_server = axum::serve(admin_listener, admin_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
         let rpc_handle = tokio::spawn(async move {
+            let private_grpc_server = async move {
+                match private_grpc_server {
+                    Some(server) => Some(server.await),
+                    None => None,
+                }
+            };
             tokio::select! {
                 _ = readrpc_server => {},
-                _ = grpc_server => {},
+                _ = public_grpc_server => {},
+                Some(_) = private_grpc_server => {}, // Stop if there was a private gRPC server and it stopped.
                 _ = admin_server => {},
                 _ = cancellation_token.cancelled() => {
                     debug!("Node RPC shutdown requested.");

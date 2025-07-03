@@ -1,6 +1,6 @@
 use std::{
     future::IntoFuture,
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
 };
 
@@ -25,14 +25,16 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl};
 
+type MockAgglayerImpl = AgglayerImpl<
+    Provider<MockProvider>,
+    L1RpcClient<Provider<MockProvider>>,
+    PendingStore,
+    StateStore,
+    DebugStore,
+    Box<dyn 'static + Send + Sync + Fn(NetworkId) -> bool>,
+>;
 pub(crate) struct RawRpcContext {
-    pub(crate) rpc: AgglayerImpl<
-        Provider<MockProvider>,
-        L1RpcClient<Provider<MockProvider>>,
-        PendingStore,
-        StateStore,
-        DebugStore,
-    >,
+    pub(crate) rpc: MockAgglayerImpl,
     pub(crate) admin_rpc: AdminAgglayerImpl<PendingStore, StateStore, DebugStore>,
     pub(crate) config: Arc<Config>,
     pub(crate) state_store: Arc<StateStore>,
@@ -47,6 +49,7 @@ pub struct TestContext {
     pub pending_store: Arc<PendingStore>,
     pub client: jsonrpsee::http_client::HttpClient,
     pub admin_client: jsonrpsee::http_client::HttpClient,
+    pub private_grpc_client: Option<jsonrpsee::http_client::HttpClient>,
     pub config: Arc<Config>,
     pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
@@ -72,6 +75,10 @@ impl TestContext {
         let admin_url = format!("http://{}/", raw_rpc.config.admin_rpc_addr());
         let client = HttpClientBuilder::default().build(api_url).unwrap();
         let admin_client = HttpClientBuilder::default().build(admin_url).unwrap();
+        let private_grpc_client = raw_rpc.config.private_networks.as_ref().map(|pn| {
+            let private_url = format!("http://{}:{}", pn.host, pn.grpc_port);
+            HttpClientBuilder::default().build(private_url).unwrap()
+        });
 
         let listener_api = tokio::net::TcpListener::bind(raw_rpc.config.readrpc_addr())
             .await
@@ -95,6 +102,7 @@ impl TestContext {
             pending_store: raw_rpc.pending_store,
             client,
             admin_client,
+            private_grpc_client,
             config: raw_rpc.config,
             certificate_receiver: raw_rpc.certificate_receiver,
         }
@@ -125,6 +133,14 @@ impl TestContext {
         }
         config.rpc.readrpc_port = addr.port();
         config.rpc.admin_port = admin_addr.port();
+        if let Some(private_networks) = config.private_networks.as_mut() {
+            let private_addr = next_available_addr();
+            private_networks.host = match private_addr.ip() {
+                IpAddr::V4(ip) => ip,
+                IpAddr::V6(_) => Ipv4Addr::new(127, 0, 0, 1),
+            };
+            private_networks.grpc_port = private_addr.port();
+        };
 
         let config = Arc::new(config);
 
@@ -174,7 +190,15 @@ impl TestContext {
             config.clone(),
         );
 
-        let rpc = AgglayerImpl::new(Arc::new(service), rpc_service);
+        let private_networks = config
+            .private_networks
+            .as_ref()
+            .map(|pn| pn.networks.clone());
+        let allowed_networks = Box::new(move |incoming| match &private_networks {
+            None => true,
+            Some(pn) => !pn.contains(&incoming),
+        }) as _;
+        let rpc = AgglayerImpl::new(Arc::new(service), rpc_service, allowed_networks);
 
         RawRpcContext {
             rpc,

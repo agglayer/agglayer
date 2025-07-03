@@ -26,6 +26,7 @@ pub(crate) mod l1;
 pub(crate) mod l2;
 pub mod log;
 pub mod outbound;
+mod private_networks;
 pub mod rate_limiting;
 pub(crate) mod rpc;
 pub mod shutdown;
@@ -38,6 +39,7 @@ pub use epoch::Epoch;
 pub use l1::L1;
 pub use l2::L2;
 pub use log::Log;
+pub use private_networks::PrivateNetworksConfig;
 use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
@@ -70,6 +72,10 @@ pub struct Config {
     /// The local RPC server configuration.
     #[serde(default)]
     pub rpc: RpcConfig,
+
+    /// The private networks configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_networks: Option<PrivateNetworksConfig>,
 
     /// Rate limiting configuration.
     #[serde(default)]
@@ -163,6 +169,7 @@ impl Config {
             proof_signers: Default::default(),
             log: Default::default(),
             rpc: Default::default(),
+            private_networks: Default::default(),
             rate_limiting: Default::default(),
             outbound: Default::default(),
             l1: Default::default(),
@@ -186,8 +193,15 @@ impl Config {
     }
 
     /// Get the target gRPC socket address from the configuration.
-    pub fn grpc_addr(&self) -> std::net::SocketAddr {
+    pub fn public_grpc_addr(&self) -> std::net::SocketAddr {
         std::net::SocketAddr::from((self.rpc.host, self.rpc.grpc_port))
+    }
+
+    /// Get the private gRPC socket address from the configuration.
+    pub fn private_grpc_addr(&self) -> Option<std::net::SocketAddr> {
+        self.private_networks
+            .as_ref()
+            .map(|pn| std::net::SocketAddr::from((pn.host, pn.grpc_port)))
     }
 
     /// Get the admin RPC socket address from the configuration.
