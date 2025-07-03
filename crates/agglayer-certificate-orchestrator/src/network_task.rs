@@ -322,17 +322,6 @@ where
         };
 
         let certificate_id = certificate.hash();
-        let header =
-            if let Some(header) = self.state_store.get_certificate_header(&certificate_id)? {
-                header
-            } else {
-                error!(
-                    hash = certificate_id.to_string(),
-                    "Certificate header not found for {certificate_id}"
-                );
-
-                return Ok(());
-            };
 
         let (sender, mut receiver) = mpsc::channel(1);
 
@@ -344,13 +333,12 @@ where
         let task = tokio::spawn(
             CertificateTask::new(
                 certificate,
-                header,
                 sender,
                 self.state_store.clone(),
                 self.pending_store.clone(),
                 self.certifier_client.clone(),
                 cancellation_token.clone(),
-            )
+            )?
             .process(),
         );
 
