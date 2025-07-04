@@ -29,6 +29,7 @@ pub(crate) struct NewCertificate {
 #[allow(dead_code)] // TODO: Once we have implemented storage properly, all the fields should become used
 /// Enum listing all the potential messages that can be sent to the network
 /// task.
+#[derive(Debug)]
 pub enum NetworkTaskMessage {
     /// Get the local network state before a given height.
     GetLocalNetworkStateBeforeHeight {
