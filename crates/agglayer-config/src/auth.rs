@@ -11,7 +11,7 @@ use serde_with::{serde_as, NoneAsEmptyString};
 /// values from the canonical environment variables, and if they are not set, it
 /// will fall back to the values specified configuration file.
 ///
-/// The `ethers_gcp_kms_signer` library will attempt to load credentials in
+/// The `alloy-signer` library will attempt to load credentials in
 /// the typical fashion for GCP:
 /// - If the application is running in a k8s cluster, it should automatically
 ///   pick up credentials.

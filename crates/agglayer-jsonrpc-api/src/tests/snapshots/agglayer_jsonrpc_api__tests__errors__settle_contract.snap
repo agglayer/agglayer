@@ -1,13 +1,13 @@
 ---
-source: crates/agglayer-node/src/rpc/tests/errors.rs
-expression: "Settlement(Contract { detail: \"Contract call reverted with data: 0x666f6f\" })"
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "Settlement(Contract { detail: \"Contract transport error\" })"
 ---
 {
   "code": -10004,
   "data": {
     "settlement": {
       "contract": {
-        "detail": "Contract call reverted with data: 0x666f6f"
+        "detail": "Contract transport error"
       }
     }
   },

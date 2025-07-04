@@ -1,10 +1,8 @@
-use ethers::{
-    providers::Middleware,
-    types::{Address, Bytes},
-};
+use agglayer_primitives::Address;
+use alloy::primitives::Bytes;
 use tracing::error;
 
-use crate::{aggchain_base::AggchainBase, L1RpcClient, L1RpcError};
+use crate::{contracts::AggchainBase, L1RpcClient, L1RpcError};
 
 #[derive(PartialEq, Eq)]
 pub struct AggchainVkeyHash([u8; 32]);
@@ -21,7 +19,7 @@ impl AggchainVkeyHash {
 
 #[async_trait::async_trait]
 pub trait AggchainContract {
-    type M: Middleware;
+    type M: alloy::providers::Provider;
     async fn get_aggchain_vkey_hash(
         &self,
         rollup_address: Address,
@@ -38,7 +36,7 @@ pub trait AggchainContract {
 #[async_trait::async_trait]
 impl<RpcProvider> AggchainContract for L1RpcClient<RpcProvider>
 where
-    RpcProvider: Middleware + 'static,
+    RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
     type M = RpcProvider;
 
@@ -49,12 +47,13 @@ where
     ) -> Result<AggchainVkeyHash, L1RpcError> {
         let aggchain_selector = (((aggchain_vkey_selector as u32) << 16) | 1u32).to_be_bytes();
 
-        let client = AggchainBase::new(rollup_address, self.rpc.clone());
+        let client = AggchainBase::new(rollup_address.into(), self.rpc.clone());
 
         client
-            .get_aggchain_v_key(aggchain_selector)
+            .getAggchainVKey(alloy::primitives::FixedBytes(aggchain_selector))
+            .call()
             .await
-            .map(AggchainVkeyHash)
+            .map(|arg0| AggchainVkeyHash::new(arg0.0))
             .map_err(|error| {
                 error!(?error, "Unable to fetch the aggchain vkey");
 
@@ -67,9 +66,11 @@ where
         rollup_address: Address,
         aggchain_data: Bytes,
     ) -> Result<[u8; 32], L1RpcError> {
-        AggchainBase::new(rollup_address, self.rpc.clone())
-            .get_aggchain_hash(aggchain_data)
+        AggchainBase::new(rollup_address.into(), self.rpc.clone())
+            .getAggchainHash(aggchain_data)
+            .call()
             .await
+            .map(Into::into)
             .map_err(|error| {
                 error!(?error, "Unable to fetch the aggchain hash");
 

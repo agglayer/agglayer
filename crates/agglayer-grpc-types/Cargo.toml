@@ -19,7 +19,6 @@ hex.workspace = true
 pbjson = "0.7.0"
 prost.workspace = true
 serde.workspace = true
-tonic-types.workspace = true
 thiserror = { workspace = true, optional = true }
 
 [dev-dependencies]

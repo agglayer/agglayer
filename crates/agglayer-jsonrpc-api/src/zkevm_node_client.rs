@@ -1,5 +1,5 @@
 //! The ZkEVM node JSON RPC client.
-use ethers::types::H256;
+use alloy::primitives::B256;
 use jsonrpsee::{
     core::client::{error::Error, ClientT},
     rpc_params,
@@ -24,8 +24,8 @@ impl<C> ZkevmNodeClient<C> {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BatchByNumberResponse {
-    pub(crate) state_root: H256,
-    pub(crate) local_exit_root: H256,
+    pub(crate) state_root: B256,
+    pub(crate) local_exit_root: B256,
 }
 
 impl<C> ZkevmNodeClient<C>

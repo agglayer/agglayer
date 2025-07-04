@@ -1,14 +1,13 @@
 ---
-source: crates/agglayer-node/src/rpc/tests/errors.rs
-expression: "Validation(DryRun { detail: \"Reverting\" })"
-snapshot_kind: text
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "Validation(DryRun { detail: \"PolygonRollupManager contract error FinalNumBatchBelowLastVerifiedBatch(FinalNumBatchBelowLastVerifiedBatch)\" })"
 ---
 {
   "code": -10003,
   "data": {
     "validation": {
       "dry-run": {
-        "detail": "Reverting"
+        "detail": "PolygonRollupManager contract error FinalNumBatchBelowLastVerifiedBatch(FinalNumBatchBelowLastVerifiedBatch)"
       }
     }
   },

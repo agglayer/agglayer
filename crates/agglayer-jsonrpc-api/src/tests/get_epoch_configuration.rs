@@ -25,7 +25,7 @@ async fn fetch_timeclock_config() {
     let context = TestContext::new_with_config(config).await;
 
     let payload: Result<EpochConfiguration, ClientError> = context
-        .client
+        .api_client
         .request("interop_getEpochConfiguration", rpc_params![])
         .await;
 
@@ -41,7 +41,7 @@ async fn fetch_timeclock_config() {
 #[test_log::test(tokio::test)]
 async fn fetch_block_clock_config(#[future] context: TestContext) {
     let payload: EpochConfiguration = context
-        .client
+        .api_client
         .request("interop_getEpochConfiguration", rpc_params![])
         .await
         .unwrap();
