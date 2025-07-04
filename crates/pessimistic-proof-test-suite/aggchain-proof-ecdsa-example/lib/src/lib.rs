@@ -1,5 +1,5 @@
+use agglayer_primitives::{Address, Signature};
 use agglayer_tries::roots::LocalExitRoot;
-use alloy_primitives::{Address, Signature};
 use serde::{Deserialize, Serialize};
 use unified_bridge::AggchainProofPublicValues;
 
@@ -28,7 +28,7 @@ impl AggchainECDSA {
     /// The eth address of 20bytes is padded to 32bytes.
     pub fn aggchain_params(&self) -> [u8; 32] {
         let mut aggchain_params = [0; 32];
-        aggchain_params[12..32].copy_from_slice(self.signer.0.as_slice());
+        aggchain_params[12..32].copy_from_slice(self.signer.as_slice());
         aggchain_params
     }
 

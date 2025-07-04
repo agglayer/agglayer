@@ -44,18 +44,18 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.1" }
+agglayer-bincode = "0.8.0"
+agglayer-interop = "0.8.0"
+agglayer-interop-types = "0.8.0"
+agglayer-primitives = "0.8.0"
+agglayer-tries = "0.8.0"
+unified-bridge = "0.8.0"
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
@@ -68,7 +68,7 @@ sp1-zkvm = { version = "=5.0.0", default-features = false }
 
 # Core dependencies
 alloy = { version = "0.14.0", features = ["full"] }
-alloy-primitives = { version = "1.1", features = ["serde", "k256"] }
+alloy-primitives = { version = "1.2", features = ["serde", "k256"] }
 anyhow = "1.0"
 arbitrary = { version = "1.4", features = ["derive"] }
 arc-swap = "1.7"
@@ -105,6 +105,7 @@ rstest = "0.22.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_with = "3.12"
+serde-reflection = "0.5"
 test-log = { version = "0.2.16", features = ["trace"] }
 thiserror = "2.0"
 tokio = { version = "1.43", features = ["full"] }
