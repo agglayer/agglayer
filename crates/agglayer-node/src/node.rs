@@ -281,14 +281,19 @@ impl Node {
             let private = config
                 .private_networks
                 .as_ref()
-                .map(|n| n.networks.iter().cloned().collect::<HashSet<_>>());
+                .map(|n| n.networks.iter().cloned().collect::<HashSet<_>>())
+                .inspect(|pn| {
+                    if pn.is_empty() {
+                        warn!(
+                            "No private networks configured, but a port was configured. All \
+                             networks will be considered public."
+                        );
+                    }
+                });
             let private2 = private.clone();
             (
                 // Is the incoming network public?
-                move |incoming| match &private {
-                    Some(private) => private.contains(&incoming),
-                    None => true,
-                },
+                move |incoming| private.as_ref().is_none_or(|p| !p.contains(&incoming)),
                 // Is the incoming network private?
                 private2.map(|private| move |incoming| private.contains(&incoming)),
             )
@@ -305,19 +310,13 @@ impl Node {
             Some(pn) => Some(
                 agglayer_grpc_api::Server::with_config(config.clone(), rpc_service.clone(), pn)
                     .build()
-                    .map_err(|err| {
-                        error!("Failed to build private gRPC router: {}", err);
-                        err
-                    })?,
+                    .inspect_err(|err| error!(?err, "Failed to build private gRPC router"))?,
             ),
         };
         let public_grpc_router =
             agglayer_grpc_api::Server::with_config(config.clone(), rpc_service, public_networks)
                 .build()
-                .map_err(|err| {
-                    error!("Failed to build public gRPC router: {}", err);
-                    err
-                })?;
+                .inspect_err(|err| error!(?err, "Failed to build public gRPC router"))?;
 
         let health_router = api::rest::health_router();
 

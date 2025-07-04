@@ -63,6 +63,7 @@ where
             None => return Err(tonic::Status::invalid_argument("Missing certificate")),
         };
 
+        // Reject certificates for networks that are not allowed on this endpoint.
         if !(self.allowed_networks)(certificate.network_id) {
             error!(network_id=%certificate.network_id, certificate_id=%certificate.hash(), "Certificate submission not allowed");
             return Err(tonic::Status::with_error_details(
