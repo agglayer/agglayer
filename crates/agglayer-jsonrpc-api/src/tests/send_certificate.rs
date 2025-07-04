@@ -68,7 +68,7 @@ async fn send_certificate_with_blocked_networks() {
         .client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
+            rpc_params![Certificate::new_for_test(1.into(), 0)],
         )
         .await;
     info!(?res, "Sending proxied cert to public port");
@@ -81,7 +81,7 @@ async fn send_certificate_with_blocked_networks() {
         .client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(2.into(), Height::ZERO)],
+            rpc_params![Certificate::new_for_test(2.into(), 0)],
         )
         .await;
     info!(?res, "Sending non-proxied cert to public port");
