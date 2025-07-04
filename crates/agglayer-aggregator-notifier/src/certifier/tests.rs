@@ -74,7 +74,7 @@ async fn happy_path() {
     l1_rpc
         .expect_get_rollup_contract_address()
         .once()
-        .returning(|_| Ok(agglayer_types::primitives::Address::default()));
+        .returning(|_| Ok(alloy::primitives::Address::default().into()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -179,7 +179,7 @@ async fn prover_timeout() {
     l1_rpc
         .expect_get_rollup_contract_address()
         .once()
-        .returning(|_| Ok(agglayer_types::primitives::Address::default()));
+        .returning(|_| Ok(alloy::primitives::Address::default().into()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()

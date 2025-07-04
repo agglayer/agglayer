@@ -44,19 +44,19 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2"}
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "52610d01ce7576effd4e3d717e8ce998c7cd7dd2" }
+agglayer-bincode = "0.8.0"
+agglayer-interop = "0.8.0"
+agglayer-interop-types = "0.8.0"
+agglayer-primitives = "0.8.0"
+agglayer-tries = "0.8.0"
+unified-bridge = "0.8.0"
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.2" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.2" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.2" }
-prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.2" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.2" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
@@ -83,6 +83,9 @@ clap = { version = "4.5", features = ["derive", "env"] }
 derive_more = "2.0"
 dirs = "5.0"
 dotenvy = "0.15.7"
+ethers = "2.0"
+ethers-gcp-kms-signer = "0.1.5"
+ethers-signers = "2.0"
 fail = { version = "0.5.1", default-features = false }
 futures = "0.3.31"
 gcloud-sdk = "0.26.4"
@@ -106,6 +109,7 @@ rstest = "0.22.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_with = "3.12"
+serde-reflection = "0.5"
 test-log = { version = "0.2.16", features = ["trace"] }
 thiserror = "2.0"
 tokio = { version = "1.43", features = ["full"] }

@@ -186,7 +186,7 @@ impl Forest {
                 U256::from_limbs(*signature.s().as_limbs()),
                 signature.recid().is_y_odd(),
             ),
-            self.wallet.address().0.into(),
+            (*self.wallet.address().0).into(),
         ))
     }
 
@@ -257,7 +257,7 @@ impl Forest {
         let (aggchain_proof, aggchain_vkey, aggchain_params) =
             compute_aggchain_proof(AggchainECDSA {
                 signer: certificate.signer().unwrap(),
-                signature: signature.into(),
+                signature,
                 commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
                     .commitment(CommitmentVersion::V2)
                     .0,
@@ -271,7 +271,7 @@ impl Forest {
     }
 
     pub fn get_signer(&self) -> Address {
-        self.wallet.address().0.into()
+        (*self.wallet.address().0).into()
     }
 
     /// Check the current state corresponds to given proof output.

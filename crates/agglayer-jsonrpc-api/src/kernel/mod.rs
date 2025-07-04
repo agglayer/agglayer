@@ -8,11 +8,11 @@ use agglayer_contracts::contracts::{
 };
 use agglayer_rate_limiting::RateLimiter;
 use agglayer_rpc::error::SignatureVerificationError;
-use agglayer_types::Certificate;
+use agglayer_types::{Address, Certificate};
 use alloy::{
     contract::Error as ContractError,
     network::Ethereum,
-    primitives::{Address, BlockNumber, B256},
+    primitives::{BlockNumber, B256},
     providers::{PendingTransactionBuilder, PendingTransactionError, Provider},
     rpc::types::TransactionReceipt,
     transports::{RpcError, TransportErrorKind},
@@ -154,7 +154,10 @@ where
     /// The rollup manager contract address is specified by the given
     /// configuration.
     fn get_rollup_manager_contract(&self) -> PolygonRollupManagerInstance<Arc<RpcProvider>> {
-        PolygonRollupManagerInstance::new(self.config.l1.rollup_manager_contract, self.rpc.clone())
+        PolygonRollupManagerInstance::new(
+            self.config.l1.rollup_manager_contract.into(),
+            self.rpc.clone(),
+        )
     }
 }
 
@@ -234,6 +237,7 @@ where
                 .trustedSequencer()
                 .call()
                 .await
+                .map(Into::into)
         }
     }
 
@@ -263,7 +267,7 @@ where
                 signed_tx.tx.new_verified_batch.as_limbs()[0],
                 signed_tx.tx.zkp.new_local_exit_root,
                 signed_tx.tx.zkp.new_state_root,
-                sequencer_address,
+                sequencer_address.into(),
                 signed_tx
                     .tx
                     .zkp
@@ -304,6 +308,7 @@ where
 
     /// Verify that the signer of the given [`Certificate`] is the trusted
     /// sequencer for the rollup id it specified.
+    #[allow(unused)]
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn verify_cert_signature(
         &self,

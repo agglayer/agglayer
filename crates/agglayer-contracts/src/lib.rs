@@ -221,8 +221,8 @@ mod tests {
         let l1_rpc = Arc::new(
             L1RpcClient::try_new(
                 Arc::new(rpc.clone()),
-                contracts::PolygonRollupManager::new(rollup_manager_contract, rpc),
-                ger_contract,
+                contracts::PolygonRollupManager::new(rollup_manager_contract.into(), rpc),
+                ger_contract.into(),
             )
             .await
             .unwrap(),

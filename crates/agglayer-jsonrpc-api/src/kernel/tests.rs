@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
-use agglayer_types::{Certificate, Height};
+use agglayer_types::{Address, Certificate, Height};
 use alloy::{
-    primitives::{Address, Signature, B256, U256, U64},
+    primitives::{Signature, B256, U256, U64},
     providers::{mock::Asserter, ProviderBuilder},
     signers::local::LocalSigner,
 };
@@ -138,9 +138,9 @@ async fn interop_executor_verify_tx_signature_proof_signer() {}
 /// Basic tests for the verify_cert_signature method
 #[tokio::test]
 async fn verify_cert_signature() {
-    let signer1 = Certificate::wallet_for_test(1.into()).address();
-    let signer2 = Certificate::wallet_for_test(2.into()).address();
-    let signer3 = Certificate::wallet_for_test(3.into()).address();
+    let signer1 = Certificate::wallet_for_test(1.into()).address().into();
+    let signer2 = Certificate::wallet_for_test(2.into()).address().into();
+    let signer3 = Certificate::wallet_for_test(3.into()).address().into();
     let mut config = Config::new_for_test();
     // Proof signer for network 1 is ok
     config.proof_signers.insert(1, signer1);

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 agglayer-tries.workspace = true
-alloy-primitives.workspace = true
+agglayer-primitives.workspace = true
 k256 = "0.13.4"
 serde = { version = "1.0.217", features = ["derive"] }
 tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-4.0.0", features = [

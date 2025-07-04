@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
+use agglayer_primitives::Address;
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
-    primitives::{Address, U256},
+    primitives::U256,
     providers::Provider,
     rpc::types::Filter,
     signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
@@ -188,6 +189,7 @@ where
                 .trustedSequencer()
                 .call()
                 .await
+                .map(Into::into)
                 .map_err(|_| L1RpcError::TrustedSequencerRetrievalFailed)
         }
     }
@@ -200,7 +202,7 @@ where
             .await
             .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
 
-        Ok(rollup_data.rollupContract)
+        Ok(rollup_data.rollupContract.into())
     }
     async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError> {
         let rollup_data: RollupDataReturnV2 = self

@@ -16,10 +16,10 @@ tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
-agglayer-config = { path = "../agglayer-config" }
+agglayer-config.workspace = true
 agglayer-types.workspace = true
 agglayer-tries.workspace = true
-pessimistic-proof = { path = "../pessimistic-proof" }
+pessimistic-proof.workspace = true
 
 mockall = { workspace = true, optional = true }
 
@@ -29,13 +29,14 @@ alloy-primitives.workspace = true
 insta.workspace = true
 rand.workspace = true
 rstest.workspace = true
+serde-reflection.workspace = true
 sp1-sdk.workspace = true
 tokio.workspace = true
 
 agglayer-types = { workspace = true, features = ["testutils"] }
-pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
+pessimistic-proof-test-suite.workspace = true
 
-agglayer-storage = { path = ".", features = ["testutils"] }
+agglayer-storage = { workspace = true, features = ["testutils"] }
 
 [[bench]]
 name = "latest_certificate_bench"

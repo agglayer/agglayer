@@ -202,18 +202,18 @@ impl TestContext {
         P: alloy::providers::Provider + Clone + 'static,
     {
         use agglayer_contracts::contracts::PolygonRollupManager;
-        use agglayer_types::primitives::Address;
+        use agglayer_types::Address;
 
         let inner = PolygonRollupManager::PolygonRollupManagerInstance::new(
-            Address::ZERO, // Use real contract address in production
+            Address::ZERO.into(), // Use real contract address in production
             (*provider).clone(),
         );
 
         L1RpcClient::new(
             provider,
             inner,
-            Address::ZERO,     // Use real L1 info tree address in non-test environments
-            (0u32, [0u8; 32]), // Use real default L1 info tree entry in non-test environments
+            Address::ZERO.into(), // Use real L1 info tree address in non-test environments
+            (0u32, [0u8; 32]),    // Use real default L1 info tree entry in non-test environments
         )
     }
 
@@ -223,7 +223,9 @@ impl TestContext {
         for network_id in 0..10 {
             cfg.proof_signers.insert(
                 network_id,
-                Certificate::wallet_for_test(NetworkId::new(network_id)).address(),
+                Certificate::wallet_for_test(NetworkId::new(network_id))
+                    .address()
+                    .into(),
             );
         }
         cfg

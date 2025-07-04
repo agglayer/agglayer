@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use agglayer_rate_limiting::{self, component, Component};
 use agglayer_rpc::error::SignatureVerificationError;
-use agglayer_types::{CertificateId, Digest};
+use agglayer_types::{Address, CertificateId, Digest};
 use alloy::{
     contract::Error as ContractError,
-    primitives::{Address, SignatureError as AlloySignatureError, B256},
+    primitives::{SignatureError as AlloySignatureError, B256},
     signers::k256,
 };
 use jsonrpsee::types::ErrorObjectOwned;

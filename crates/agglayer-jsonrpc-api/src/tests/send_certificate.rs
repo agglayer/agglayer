@@ -14,9 +14,12 @@ use crate::testutils::TestContext;
 #[test_log::test(tokio::test)]
 async fn send_certificate_method_can_be_called_and_succeed() {
     let mut config = TestContext::get_default_config();
-    config
-        .proof_signers
-        .insert(1, Certificate::wallet_for_test(NetworkId::new(1)).address());
+    config.proof_signers.insert(
+        1,
+        Certificate::wallet_for_test(NetworkId::new(1))
+            .address()
+            .into(),
+    );
     let mut context = TestContext::new_with_config(config).await;
     let client = context.api_client.clone();
 
@@ -55,9 +58,12 @@ async fn send_certificate_method_requires_known_signer() {
     let path = TempDBDir::new();
     let mut config = Config::new(&path.path);
     // Willingly insert a signer that is not the one that'll be used down below
-    config
-        .proof_signers
-        .insert(1, Certificate::wallet_for_test(NetworkId::new(2)).address());
+    config.proof_signers.insert(
+        1,
+        Certificate::wallet_for_test(NetworkId::new(2))
+            .address()
+            .into(),
+    );
 
     let context = TestContext::new_with_config(config).await;
     let send_request: Result<CertificateId, _> = context
@@ -76,9 +82,12 @@ async fn pending_certificate_in_error_can_be_replaced() {
     let path = TempDBDir::new();
 
     let mut config = Config::new(&path.path);
-    config
-        .proof_signers
-        .insert(1, Certificate::wallet_for_test(NetworkId::new(1)).address());
+    config.proof_signers.insert(
+        1,
+        Certificate::wallet_for_test(NetworkId::new(1))
+            .address()
+            .into(),
+    );
 
     let context = TestContext::new_with_config(config).await;
     let network_id = 1.into();

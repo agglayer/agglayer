@@ -3,8 +3,8 @@
 use agglayer_contracts::L1RpcError;
 pub use agglayer_storage::error::Error as StorageError;
 pub use agglayer_types::primitives::Digest;
-use agglayer_types::{CertificateId, Height, NetworkId, SignerError};
-use alloy::{contract::Error as ContractError, primitives::Address};
+use agglayer_types::{Address, CertificateId, Height, NetworkId, SignerError};
+use alloy::contract::Error as ContractError;
 
 pub use crate::rate_limiting::RateLimited as RateLimitedError;
 

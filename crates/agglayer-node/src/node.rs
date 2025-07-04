@@ -198,8 +198,8 @@ impl Node {
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
                 rpc.clone(),
-                PolygonRollupManager::new(config.l1.rollup_manager_contract, (*rpc).clone()),
-                config.l1.polygon_zkevm_global_exit_root_v2_contract,
+                PolygonRollupManager::new(config.l1.rollup_manager_contract.into(), (*rpc).clone()),
+                config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
             )
             .await?,
         );

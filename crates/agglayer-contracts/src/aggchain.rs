@@ -1,4 +1,5 @@
-use alloy::primitives::{Address, Bytes};
+use agglayer_primitives::Address;
+use alloy::primitives::Bytes;
 use tracing::error;
 
 use crate::{contracts::AggchainBase, L1RpcClient, L1RpcError};
@@ -46,7 +47,7 @@ where
     ) -> Result<AggchainVkeyHash, L1RpcError> {
         let aggchain_selector = (((aggchain_vkey_selector as u32) << 16) | 1u32).to_be_bytes();
 
-        let client = AggchainBase::new(rollup_address, self.rpc.clone());
+        let client = AggchainBase::new(rollup_address.into(), self.rpc.clone());
 
         client
             .getAggchainVKey(alloy::primitives::FixedBytes(aggchain_selector))
@@ -65,7 +66,7 @@ where
         rollup_address: Address,
         aggchain_data: Bytes,
     ) -> Result<[u8; 32], L1RpcError> {
-        AggchainBase::new(rollup_address, self.rpc.clone())
+        AggchainBase::new(rollup_address.into(), self.rpc.clone())
             .getAggchainHash(aggchain_data)
             .call()
             .await

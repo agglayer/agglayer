@@ -248,6 +248,7 @@ pub struct CertificateHeader {
 }
 
 #[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename = "agglayer_types::Error")]
 pub enum Error {
     /// The imported bridge exits should refer to one and the same L1 info root.
     #[error("Imported bridge exits refer to multiple L1 info root")]
@@ -573,7 +574,7 @@ pub fn compute_signature_info(
         signature.v(),
     );
 
-    (combined_hash, signature, wallet.address())
+    (combined_hash, signature, wallet.address().into())
 }
 
 impl Certificate {
@@ -586,7 +587,7 @@ impl Certificate {
 
     #[cfg(any(test, feature = "testutils"))]
     pub fn get_signer(&self) -> Address {
-        Self::wallet_for_test(self.network_id).address()
+        Self::wallet_for_test(self.network_id).address().into()
     }
 
     #[cfg(any(test, feature = "testutils"))]

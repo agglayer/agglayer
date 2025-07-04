@@ -2,11 +2,12 @@
 //!
 //! Systems that wish to submit proofs to the agglayer must produce a
 //! [`SignedTx`] conforming to the type definitions specified herein.
+use agglayer_types::Address;
 #[cfg(test)]
 use alloy::signers::local::LocalSigner;
 use alloy::{
     hex,
-    primitives::{keccak256, Address, Bytes, Signature, B256, U64},
+    primitives::{keccak256, Bytes, Signature, B256, U64},
 };
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr};
@@ -128,7 +129,9 @@ impl SignedTx {
 
     /// Attempt to recover the address of the signer.
     pub(crate) fn signer(&self) -> Result<Address, alloy::primitives::SignatureError> {
-        self.signature.recover_address_from_msg(self.hash())
+        self.signature
+            .recover_address_from_msg(self.hash())
+            .map(Into::into)
     }
 
     #[cfg(test)]
