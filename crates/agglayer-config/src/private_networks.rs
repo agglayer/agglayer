@@ -23,6 +23,7 @@ pub struct PrivateNetworksConfig {
 
 impl PrivateNetworksConfig {
     /// Create a new `PrivateNetworksConfig` with default values.
+    #[cfg(feature = "testutils")]
     pub fn for_tests(networks: Vec<NetworkId>) -> Self {
         Self {
             networks,
