@@ -112,8 +112,9 @@ dependencies = [
 
 [[package]]
 name = "agglayer-bincode"
-version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0dd1af7229272f576224975c78bb834d97f28362aa1fc72dffe0c23dcbf02497"
 dependencies = [
  "bincode",
  "serde",
@@ -290,8 +291,9 @@ dependencies = [
 
 [[package]]
 name = "agglayer-interop"
-version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f31abd3dc5dcc5bda9b66cef7b8903c3543755f2a5e1a8072998768a0ce382b"
 dependencies = [
  "agglayer-interop-grpc-types",
  "agglayer-interop-types",
@@ -299,12 +301,12 @@ dependencies = [
 
 [[package]]
 name = "agglayer-interop-grpc-types"
-version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44015a4da76263d336c4788609439126d82bbacbc7e62a46f19f70ca8b3cef51"
 dependencies = [
  "agglayer-interop-types",
  "bincode",
- "hex",
  "pbjson",
  "prost 0.13.5",
  "serde",
@@ -314,8 +316,9 @@ dependencies = [
 
 [[package]]
 name = "agglayer-interop-types"
-version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "caafb5ee824e595910508e630a1b6ff94cd8166d71b4322f3a145b404b7e98e8"
 dependencies = [
  "agglayer-bincode",
  "agglayer-primitives",
@@ -323,11 +326,8 @@ dependencies = [
  "arbitrary",
  "bincode",
  "educe",
- "ethers",
  "hex",
- "rand 0.9.1",
  "serde",
- "serde_with",
  "sp1-core-machine",
  "sp1-prover",
  "sp1-sdk",
@@ -458,12 +458,14 @@ dependencies = [
 
 [[package]]
 name = "agglayer-primitives"
-version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bbd87e8535969dada7b4ec4f3afe9e8bdb1a68931e01e3cadb95538a05fb7dd"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
  "byteorder",
+ "derive_more 2.0.1",
  "hex",
  "k256",
  "rand 0.9.1",
@@ -474,7 +476,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
@@ -498,7 +500,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
 dependencies = [
  "prover-config",
  "prover-logger",
@@ -511,7 +513,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
 dependencies = [
  "agglayer-interop",
  "pbjson",
@@ -590,6 +592,7 @@ dependencies = [
  "rocksdb",
  "rstest",
  "serde",
+ "serde-reflection",
  "sp1-sdk",
  "thiserror 2.0.12",
  "tokio",
@@ -647,8 +650,9 @@ dependencies = [
 
 [[package]]
 name = "agglayer-tries"
-version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d48f0e60c8bba7e0d39cfb45ca179bd110ac5f9debf137e1269192ff34c117b"
 dependencies = [
  "agglayer-primitives",
  "hex",
@@ -3412,8 +3416,8 @@ dependencies = [
 name = "ecdsa-proof-lib"
 version = "0.1.0"
 dependencies = [
+ "agglayer-primitives",
  "agglayer-tries",
- "alloy-primitives",
  "k256",
  "serde",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
@@ -3578,6 +3582,15 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "erased-discriminant"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1a6df962265a53221f29081896c412ef325c17fa7d638cd9578febe53d3c82c"
+dependencies = [
+ "typeid",
+]
 
 [[package]]
 name = "errno"
@@ -7330,7 +7343,7 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
 dependencies = [
  "prover-utils",
  "serde",
@@ -7341,7 +7354,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -7360,7 +7373,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
 dependencies = [
  "anyhow",
  "buildstructor",
@@ -7386,7 +7399,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
 dependencies = [
  "serde",
  "tracing",
@@ -7397,7 +7410,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.1.1#bda2267566e73599aade7925afac77b95e673366"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
 dependencies = [
  "humantime-serde",
  "serde",
@@ -8403,6 +8416,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-reflection"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5bef77b40d103fda6c10d29c21f5c78c980e8570e1a290a648a9ff5011f96e1"
+dependencies = [
+ "erased-discriminant",
+ "once_cell",
+ "serde",
+ "thiserror 1.0.69",
+ "typeid",
 ]
 
 [[package]]
@@ -10310,6 +10336,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "typeid"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
+
+[[package]]
 name = "typenum"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10365,8 +10397,9 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "unified-bridge"
-version = "0.6.0"
-source = "git+https://github.com/agglayer/interop.git?tag=v0.7.1#1411f113c891dd2fe9b2dd27cb14e629e8c7279b"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "230b307d57eef18b0d271d2c0283882b7d4ed3e7dccf4e5bfa645745b2fc8b30"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",

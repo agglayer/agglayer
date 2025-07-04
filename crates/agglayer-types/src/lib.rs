@@ -249,6 +249,7 @@ pub struct CertificateHeader {
 }
 
 #[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename = "agglayer_types::Error")]
 pub enum Error {
     /// The imported bridge exits should refer to one and the same L1 info root.
     #[error("Imported bridge exits refer to multiple L1 info root")]
