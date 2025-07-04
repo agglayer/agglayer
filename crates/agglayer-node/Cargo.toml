@@ -20,7 +20,7 @@ hyper.workspace = true
 http.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
 pin-project.workspace = true
-reqwest = "0.12.12"
+reqwest = "0.12.22"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with.workspace = true
