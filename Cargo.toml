@@ -47,6 +47,7 @@ pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 agglayer-bincode = "0.8.0"
 agglayer-interop = "0.8.0"
 agglayer-interop-types = "0.8.0"
+agglayer-elf-build = "0.8.0"
 agglayer-primitives = "0.8.0"
 agglayer-tries = "0.8.0"
 unified-bridge = "0.8.0"
