@@ -3,7 +3,7 @@
 //! The agglayer is configured via its TOML configuration file, `agglayer.toml`
 //! by default, which is deserialized into the [`Config`] struct.
 
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, str::FromStr};
 
 use agglayer_prover_config::GrpcConfig;
 use ethers::types::Address;
@@ -274,4 +274,12 @@ fn is_false(b: &bool) -> bool {
 
 pub(crate) fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     *t == Default::default()
+}
+
+/// Get an environment variable or a default value if it is not set.
+fn from_env_or_default<T: FromStr>(key: &str, default: T) -> T {
+    std::env::var(key)
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(default)
 }

@@ -1,8 +1,10 @@
-use std::{net::Ipv4Addr, str::FromStr};
+use std::net::Ipv4Addr;
 
 use agglayer_types::NetworkId;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::serde_as;
+
+use crate::from_env_or_default;
 
 /// The local RPC server configuration.
 #[serde_as]
@@ -41,12 +43,4 @@ where
     let port = u16::deserialize(deserializer)?;
 
     Ok(from_env_or_default("AGGLAYER_PRIVATE_GRPC_PORT", port))
-}
-
-/// Get an environment variable or a default value if it is not set.
-fn from_env_or_default<T: FromStr>(key: &str, default: T) -> T {
-    std::env::var(key)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(default)
 }

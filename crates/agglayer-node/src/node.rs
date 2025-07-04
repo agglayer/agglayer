@@ -334,7 +334,7 @@ impl Node {
         info!(on = %config.readrpc_addr(), "ReadRPC listening");
         info!(on = %config.public_grpc_addr(), "Public gRPC listening");
         if let Some(on) = config.private_grpc_addr() {
-            info!(%on, "Private gRPC listening");
+            info!(%on, nets=?config.private_networks.as_ref().map(|p| &p.networks), "Private gRPC listening");
         } else {
             debug!("No private gRPC server configured.");
         }
@@ -347,7 +347,8 @@ impl Node {
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
         let private_grpc_server = private_grpc_listener.map(|listener| {
-            // Both options are Some iff the private_networks section is configured.
+            // Both parameters are existing iff the `private_networks` section is
+            // configured.
             axum::serve(listener, private_grpc_router.unwrap())
                 .with_graceful_shutdown(cancellation_token.clone().cancelled_owned())
         });
