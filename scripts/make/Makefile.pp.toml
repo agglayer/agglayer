@@ -7,6 +7,7 @@ description = "Install pessimistic proof ELF file"
 run_task = { name = [
     "pp-elf-build",
     "pp-update-cycle-tracker",
+    "pp-check-vkey-change",
 ] }
 
 [tasks.pp-elf-build]
@@ -33,6 +34,25 @@ args = [
     "--test=cycle-tracker",
 ]
 
+[tasks.pp-check-vkey-change]
+description = "Check vkey and selector snapshost for PP"
+command = "cargo"
+env = { INSTA_UPDATE = "no" }
+args = [
+    "test",
+    "-ppessimistic-proof-test-suite",
+    "--test=vkey_selector",
+]
+
+[tasks.pp-accept-vkey-change]
+description = "Update vkey and selector snapshost for PP without updating selector"
+command = "cargo"
+env = { INSTA_UPDATE = "always" }
+args = [
+    "test",
+    "-ppessimistic-proof-test-suite",
+    "--test=vkey_selector",
+]
 
 [tasks.install-cargo-prove]
 description = "Install the appropriate version of `cargo prove`"
