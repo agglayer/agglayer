@@ -45,7 +45,7 @@ args = [
 ]
 
 [tasks.pp-accept-vkey-change]
-description = "Update vkey and selector snapshost for PP without updating selector"
+description = "Update vkey and selector snapshot for PP without updating selector"
 command = "cargo"
 env = { INSTA_UPDATE = "always" }
 args = [
