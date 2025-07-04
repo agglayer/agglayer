@@ -277,9 +277,9 @@ impl Node {
         .await?;
 
         // List the public vs. private networks.
-        let (public_networks, private_networks) = {
+        let (public_networks, proxied_networks) = {
             let private = config
-                .private_networks
+                .proxied_networks
                 .as_ref()
                 .map(|n| n.networks.iter().cloned().collect::<HashSet<_>>())
                 .inspect(|pn| {
@@ -305,7 +305,7 @@ impl Node {
                 .start()
                 .await?;
 
-        let private_grpc_router = match private_networks {
+        let private_grpc_router = match proxied_networks {
             None => None,
             Some(pn) => Some(
                 agglayer_grpc_api::Server::with_config(config.clone(), rpc_service.clone(), pn)
@@ -334,7 +334,7 @@ impl Node {
         info!(on = %config.readrpc_addr(), "ReadRPC listening");
         info!(on = %config.public_grpc_addr(), "Public gRPC listening");
         if let Some(on) = config.private_grpc_addr() {
-            info!(%on, nets=?config.private_networks.as_ref().map(|p| &p.networks), "Private gRPC listening");
+            info!(%on, nets=?config.proxied_networks.as_ref().map(|p| &p.networks), "Private gRPC listening");
         } else {
             debug!("No private gRPC server configured.");
         }
@@ -347,7 +347,7 @@ impl Node {
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
         let private_grpc_server = private_grpc_listener.map(|listener| {
-            // Both parameters are existing iff the `private_networks` section is
+            // Both parameters are existing iff the `proxied_networks` section is
             // configured.
             axum::serve(listener, private_grpc_router.unwrap())
                 .with_graceful_shutdown(cancellation_token.clone().cancelled_owned())

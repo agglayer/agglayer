@@ -10,7 +10,7 @@ use crate::from_env_or_default;
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub struct PrivateNetworksConfig {
+pub struct ProxiedNetworksConfig {
     /// List of the private networks.
     pub networks: Vec<NetworkId>,
 
@@ -23,8 +23,8 @@ pub struct PrivateNetworksConfig {
     pub host: Ipv4Addr,
 }
 
-impl PrivateNetworksConfig {
-    /// Create a new `PrivateNetworksConfig` with default values.
+impl ProxiedNetworksConfig {
+    /// Create a new `ProxiedNetworksConfig` with default values.
     #[cfg(feature = "testutils")]
     pub fn for_tests(networks: Vec<NetworkId>) -> Self {
         Self {

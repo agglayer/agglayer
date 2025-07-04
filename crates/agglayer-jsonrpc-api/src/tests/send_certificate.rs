@@ -56,7 +56,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
 async fn send_certificate_with_blocked_networks() {
     let path = TempDBDir::new();
     let mut config = Config::new(&path.path);
-    config.private_networks = Some(agglayer_config::PrivateNetworksConfig::for_tests(vec![
+    config.proxied_networks = Some(agglayer_config::ProxiedNetworksConfig::for_tests(vec![
         NetworkId::new(1),
     ]));
     config

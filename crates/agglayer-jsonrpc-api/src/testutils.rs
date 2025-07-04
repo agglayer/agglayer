@@ -75,7 +75,7 @@ impl TestContext {
         let admin_url = format!("http://{}/", raw_rpc.config.admin_rpc_addr());
         let client = HttpClientBuilder::default().build(api_url).unwrap();
         let admin_client = HttpClientBuilder::default().build(admin_url).unwrap();
-        let private_grpc_client = raw_rpc.config.private_networks.as_ref().map(|pn| {
+        let private_grpc_client = raw_rpc.config.proxied_networks.as_ref().map(|pn| {
             let private_url = format!("http://{}:{}", pn.host, pn.grpc_port);
             HttpClientBuilder::default().build(private_url).unwrap()
         });
@@ -133,13 +133,13 @@ impl TestContext {
         }
         config.rpc.readrpc_port = addr.port();
         config.rpc.admin_port = admin_addr.port();
-        if let Some(private_networks) = config.private_networks.as_mut() {
+        if let Some(proxied_networks) = config.proxied_networks.as_mut() {
             let private_addr = next_available_addr();
-            private_networks.host = match private_addr.ip() {
+            proxied_networks.host = match private_addr.ip() {
                 IpAddr::V4(ip) => ip,
                 IpAddr::V6(_) => Ipv4Addr::new(127, 0, 0, 1),
             };
-            private_networks.grpc_port = private_addr.port();
+            proxied_networks.grpc_port = private_addr.port();
         };
 
         let config = Arc::new(config);
@@ -190,11 +190,11 @@ impl TestContext {
             config.clone(),
         );
 
-        let private_networks = config
-            .private_networks
+        let proxied_networks = config
+            .proxied_networks
             .as_ref()
             .map(|pn| pn.networks.clone());
-        let allowed_networks = Box::new(move |incoming| match &private_networks {
+        let allowed_networks = Box::new(move |incoming| match &proxied_networks {
             None => true,
             Some(pn) => !pn.contains(&incoming),
         }) as _;
