@@ -16,6 +16,7 @@ arbitrary = { workspace = true, optional = true }
 hex-literal = "0.4"
 hex.workspace = true
 pessimistic-proof-core.workspace = true
+rkyv.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 serde_with = { version = "3" }

@@ -44,12 +44,19 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = "0.8.0"
-agglayer-interop = "0.8.0"
-agglayer-interop-types = "0.8.0"
-agglayer-primitives = "0.8.0"
-agglayer-tries = "0.8.0"
-unified-bridge = "0.8.0"
+# agglayer-bincode = "0.8.0"
+# agglayer-interop = "0.8.0"
+# agglayer-interop-types = "0.8.0"
+# agglayer-primitives = "0.8.0"
+# agglayer-tries = "0.8.0"
+# unified-bridge = "0.8.0"
+
+agglayer-bincode = { path = "../interop/crates/agglayer-bincode" }
+agglayer-interop = { path = "../interop/crates/agglayer-interop" }
+agglayer-interop-types = { path = "../interop/crates/agglayer-interop-types" }
+agglayer-primitives = { path = "../interop/crates/agglayer-primitives" }
+agglayer-tries = { path = "../interop/crates/agglayer-tries" }
+unified-bridge = { path = "../interop/crates/unified-bridge" }
 
 # Provers
 agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
@@ -101,6 +108,7 @@ parking_lot = "0.12.3"
 pin-project = "1.1"
 prost = "0.13.4"
 rand = "0.9.0"
+rkyv = { version = "0.8", features = ["hashbrown-0_15", "std"] }
 rstest = "0.22.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

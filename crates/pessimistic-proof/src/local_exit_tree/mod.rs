@@ -14,7 +14,7 @@ impl<H, const TREE_DEPTH: usize> TryFrom<&LocalExitTreeData<H, TREE_DEPTH>>
     for LocalExitTree<H, TREE_DEPTH>
 where
     H: Hasher,
-    H::Digest: std::fmt::Debug + Copy + Default + Serialize + DeserializeOwned,
+    H::Digest: std::fmt::Debug + Copy + Default + Serialize + DeserializeOwned + rkyv::Archive,
 {
     type Error = LocalExitTreeError;
 

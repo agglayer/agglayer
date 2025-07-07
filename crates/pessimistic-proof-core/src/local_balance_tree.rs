@@ -16,11 +16,13 @@ pub const LOCAL_BALANCE_TREE_DEPTH: usize = 192;
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, Serialize, Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize,
+)]
 pub struct LocalBalanceTree<H>
 where
     H: Hasher,
-    H::Digest: Serialize + DeserializeOwned,
+    H::Digest: Serialize + DeserializeOwned + rkyv::Archive,
 {
     /// The Merkle Root of the nullifier tree
     #[serde_as(as = "_")]
@@ -32,7 +34,8 @@ pub type LocalBalancePath<H> = SmtMerkleProof<H, LOCAL_BALANCE_TREE_DEPTH>;
 impl<H> LocalBalanceTree<H>
 where
     H: Hasher,
-    H::Digest: Copy + Eq + Hash + Default + Serialize + for<'a> Deserialize<'a> + FromU256,
+    H::Digest:
+        Copy + Eq + Hash + Default + Serialize + for<'a> Deserialize<'a> + FromU256 + rkyv::Archive,
 {
     // TODO: Consider batching the updates per network for efficiency
     pub fn verify_and_update(

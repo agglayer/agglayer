@@ -16,11 +16,13 @@ pub const NULLIFIER_TREE_DEPTH: usize = 64;
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, Serialize, Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize,
+)]
 pub struct NullifierTree<H>
 where
     H: Hasher,
-    H::Digest: Serialize + for<'a> Deserialize<'a>,
+    H::Digest: Serialize + for<'a> Deserialize<'a> + rkyv::Archive,
 {
     /// The Merkle Root of the nullifier tree
     #[serde_as(as = "_")]
@@ -63,7 +65,7 @@ impl ToBits<64> for NullifierKey {
 impl<H> NullifierTree<H>
 where
     H: Hasher,
-    H::Digest: Copy + Eq + Default + Serialize + for<'a> Deserialize<'a> + FromBool,
+    H::Digest: Copy + Eq + Default + Serialize + for<'a> Deserialize<'a> + FromBool + rkyv::Archive,
 {
     // TODO: Consider batching the updates per network for efficiency
     pub fn verify_and_update(

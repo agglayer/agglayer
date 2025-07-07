@@ -17,7 +17,9 @@ pub mod commitment;
 
 /// State representation of one network without the leaves, taken as input by
 /// the prover.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, Serialize, Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize,
+)]
 pub struct NetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
     pub exit_tree: LocalExitTree<Keccak256Hasher>,

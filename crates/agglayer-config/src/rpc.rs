@@ -1,8 +1,10 @@
-use std::{net::Ipv4Addr, str::FromStr, time::Duration};
+use std::{net::Ipv4Addr, time::Duration};
 
 use jsonrpsee::core::TEN_MB_SIZE_BYTES;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::serde_as;
+
+use crate::from_env_or_default;
 
 /// The default port for the local gRPC server.
 const DEFAULT_GRPC_PORT: u16 = 9089;
@@ -154,14 +156,6 @@ where
     let port = u16::deserialize(deserializer)?;
 
     Ok(from_env_or_default("AGGLAYER_ADMIN_PORT", port))
-}
-
-/// Get an environment variable or a default value if it is not set.
-fn from_env_or_default<T: FromStr>(key: &str, default: T) -> T {
-    std::env::var(key)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(default)
 }
 
 fn same_as_default_body_size(size: &u32) -> bool {
