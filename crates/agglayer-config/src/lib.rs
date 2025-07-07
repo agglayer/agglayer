@@ -128,8 +128,9 @@ pub struct Config {
     pub grpc: GrpcConfig,
 
     /// Extra Certificate signer per network.
-    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     #[serde(default)]
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub extra_certificate_signer: HashMap<NetworkId, Address>,
 }
 
