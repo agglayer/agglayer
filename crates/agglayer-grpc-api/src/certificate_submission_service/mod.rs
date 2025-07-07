@@ -12,6 +12,7 @@ use agglayer_storage::stores::{
 };
 use agglayer_types::Signature;
 use error::CertificateSubmissionErrorWrapper;
+use tonic::Status;
 use tonic_types::{ErrorDetails, StatusExt};
 use tracing::instrument;
 
@@ -42,22 +43,8 @@ where
         request: tonic::Request<SubmitCertificateRequest>,
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
         // Retrieve extra signature from query metadata if any
-        let extra_signature: Option<Signature> = {
-            let metadata = request.metadata();
-            if let Some(value) = metadata.get(GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE) {
-                let sig_str = value.to_str().map_err(|e| {
-                    tonic::Status::invalid_argument(format!("invalid signature encoding: {e}"))
-                })?;
-
-                let sig = Signature::from_str(sig_str).map_err(|e| {
-                    tonic::Status::invalid_argument(format!("invalid hex in signature: {e}"))
-                })?;
-
-                Some(sig)
-            } else {
-                None
-            }
-        };
+        let extra_signature: Option<Signature> =
+            get_extra_signature(request.metadata()).map_err(|e| *e)?;
 
         let certificate: agglayer_types::Certificate = match request.into_inner().certificate {
             Some(certificate) => certificate.try_into().map_err(
@@ -87,5 +74,59 @@ where
         Ok(tonic::Response::new(SubmitCertificateResponse {
             certificate_id: Some(certificate_id.into()),
         }))
+    }
+}
+
+pub(crate) fn get_extra_signature(
+    metadata: &tonic::metadata::MetadataMap,
+) -> Result<Option<Signature>, Box<Status>> {
+    if let Some(value) = metadata.get(GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE) {
+        let sig_str = value.to_str().map_err(|e| {
+            tonic::Status::invalid_argument(format!("invalid signature encoding: {e}"))
+        })?;
+
+        let sig = Signature::from_str(sig_str).map_err(|e| {
+            tonic::Status::invalid_argument(format!("invalid hex in signature: {e}"))
+        })?;
+
+        Ok(Some(sig))
+    } else {
+        Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use agglayer_types::{aggchain_proof::AggchainData, Certificate, Height, NetworkId};
+    use ethers::utils::hex;
+    use rstest::rstest;
+
+    use super::{get_extra_signature, GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE};
+
+    #[rstest]
+    #[case("0x")]
+    #[case("")]
+    fn parse_query_metadata(#[case] prefix: String) {
+        let mut metadata = tonic::metadata::MetadataMap::new();
+
+        let expected_signature = {
+            let cert = Certificate::new_for_test(NetworkId::new(10), Height::new(1));
+            let AggchainData::ECDSA { signature } = cert.aggchain_data else {
+                panic!("dummy test certificate changed")
+            };
+
+            signature
+        };
+
+        metadata.insert(
+            GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE,
+            format!("{prefix}{}", hex::encode(expected_signature.as_bytes()))
+                .parse()
+                .unwrap(),
+        );
+
+        assert!(
+            matches!(get_extra_signature(&metadata), Ok(Some(signature)) if signature == expected_signature)
+        );
     }
 }
