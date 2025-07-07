@@ -204,7 +204,7 @@ where
     }
 
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
-        Ok(self.rpc_service.send_certificate(certificate).await?)
+        Ok(self.rpc_service.send_certificate(certificate, None).await?)
     }
 
     async fn get_certificate_header(

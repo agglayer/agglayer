@@ -1,5 +1,4 @@
 //! Error types for the top-level Agglayer service.
-
 use agglayer_contracts::L1RpcError;
 pub use agglayer_storage::error::Error as StorageError;
 pub use agglayer_types::primitives::Digest;
@@ -72,6 +71,23 @@ pub enum SignatureVerificationError<Rpc: Middleware> {
     /// Signature is missing.
     #[error("signature not provided")]
     SignatureMissing,
+
+    /// Extra Certificate signature is missing for the given network.
+    #[error("missing extra signature from {expected_signer} for the network {network_id}")]
+    MissingExtraSignature {
+        network_id: NetworkId,
+        expected_signer: Address,
+    },
+
+    /// The extra signature is not signed from the expected signer, or not
+    /// performed on the right commitment.
+    #[error("wrong signed commitment or invalid extra signer: expected: {expected}, got: {got}")]
+    InvalidExtraSignature {
+        /// The expected extra signer.
+        expected: Address,
+        /// The recovered signer address.
+        got: Address,
+    },
 }
 
 impl<Rpc: Middleware> SignatureVerificationError<Rpc> {

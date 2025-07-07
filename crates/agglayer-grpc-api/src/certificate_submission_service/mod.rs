@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use agglayer_contracts::{L1TransactionFetcher, RollupContract};
 use agglayer_grpc_server::node::v1::certificate_submission_service_server::CertificateSubmissionService;
@@ -10,9 +10,13 @@ use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter,
 };
+use agglayer_types::Signature;
 use error::CertificateSubmissionErrorWrapper;
 use tonic_types::{ErrorDetails, StatusExt};
 use tracing::instrument;
+
+const GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE: &str =
+    "x-agglayer-extra-certificate-signature";
 
 const SUBMIT_CERTIFICATE_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.certificate-submission-service.submit_certificate";
@@ -37,6 +41,24 @@ where
         &self,
         request: tonic::Request<SubmitCertificateRequest>,
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
+        // Retrieve extra signature from query metadata if any
+        let extra_signature: Option<Signature> = {
+            let metadata = request.metadata();
+            if let Some(value) = metadata.get(GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE) {
+                let sig_str = value.to_str().map_err(|e| {
+                    tonic::Status::invalid_argument(format!("invalid signature encoding: {e}"))
+                })?;
+
+                let sig = Signature::from_str(sig_str).map_err(|e| {
+                    tonic::Status::invalid_argument(format!("invalid hex in signature: {e}"))
+                })?;
+
+                Some(sig)
+            } else {
+                None
+            }
+        };
+
         let certificate: agglayer_types::Certificate = match request.into_inner().certificate {
             Some(certificate) => certificate.try_into().map_err(
                 |error: agglayer_grpc_types::compat::v1::Error| {
@@ -56,7 +78,7 @@ where
 
         let certificate_id = self
             .service
-            .send_certificate(certificate)
+            .send_certificate(certificate, extra_signature)
             .await
             .map_err(|error| {
                 CertificateSubmissionErrorWrapper::new(error, SUBMIT_CERTIFICATE_METHOD_PATH)

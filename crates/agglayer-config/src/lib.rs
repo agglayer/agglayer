@@ -14,6 +14,7 @@ use shutdown::ShutdownConfig;
 use url::Url;
 
 pub use self::telemetry::TelemetryConfig;
+use crate::rate_limiting::NetworkId;
 
 pub mod prover;
 
@@ -125,6 +126,11 @@ pub struct Config {
 
     #[serde(default, skip_serializing_if = "crate::is_default")]
     pub grpc: GrpcConfig,
+
+    /// Extra Certificate signer per network.
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
+    #[serde(default)]
+    pub extra_certificate_signer: HashMap<NetworkId, Address>,
 }
 
 impl Config {
@@ -177,6 +183,7 @@ impl Config {
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),
+            extra_certificate_signer: Default::default(),
         }
     }
 
