@@ -11,15 +11,15 @@ use crate::from_env_or_default;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ProxiedNetworksConfig {
-    /// List of the private networks.
+    /// List of the proxied networks.
     pub networks: Vec<NetworkId>,
 
-    /// The port for the local gRPC server for private networks.
-    /// Overridden by `AGGLAYER_PRIVATE_GRPC_PORT` environment variable.
+    /// The port for the local gRPC server for proxied networks.
+    /// Overridden by `AGGLAYER_PROXIED_GRPC_PORT` environment variable.
     #[serde(deserialize_with = "deserialize_grpc_port")]
     pub grpc_port: u16,
 
-    /// The host for the local RPC server for private networks.
+    /// The host for the local RPC server for proxied networks.
     pub host: Ipv4Addr,
 }
 
@@ -42,5 +42,5 @@ where
 {
     let port = u16::deserialize(deserializer)?;
 
-    Ok(from_env_or_default("AGGLAYER_PRIVATE_GRPC_PORT", port))
+    Ok(from_env_or_default("AGGLAYER_PROXIED_GRPC_PORT", port))
 }

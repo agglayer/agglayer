@@ -74,7 +74,7 @@ async fn send_certificate_with_blocked_networks() {
             rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
         )
         .await;
-    info!(?res, "Sending private cert to public port");
+    info!(?res, "Sending proxied cert to public port");
     assert!(
         res.is_err(),
         "Certificate from blocked network should be rejected"
@@ -87,7 +87,7 @@ async fn send_certificate_with_blocked_networks() {
             rpc_params![Certificate::new_for_test(2.into(), Height::ZERO)],
         )
         .await;
-    info!(?res, "Sending non-private cert to public port");
+    info!(?res, "Sending non-proxied cert to public port");
     assert!(
         res.is_ok(),
         "Certificate from non-blocked network should be allowed"

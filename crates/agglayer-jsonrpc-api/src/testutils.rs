@@ -49,7 +49,7 @@ pub struct TestContext {
     pub pending_store: Arc<PendingStore>,
     pub client: jsonrpsee::http_client::HttpClient,
     pub admin_client: jsonrpsee::http_client::HttpClient,
-    pub private_grpc_client: Option<jsonrpsee::http_client::HttpClient>,
+    pub proxied_grpc_client: Option<jsonrpsee::http_client::HttpClient>,
     pub config: Arc<Config>,
     pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
@@ -75,9 +75,9 @@ impl TestContext {
         let admin_url = format!("http://{}/", raw_rpc.config.admin_rpc_addr());
         let client = HttpClientBuilder::default().build(api_url).unwrap();
         let admin_client = HttpClientBuilder::default().build(admin_url).unwrap();
-        let private_grpc_client = raw_rpc.config.proxied_networks.as_ref().map(|pn| {
-            let private_url = format!("http://{}:{}", pn.host, pn.grpc_port);
-            HttpClientBuilder::default().build(private_url).unwrap()
+        let proxied_grpc_client = raw_rpc.config.proxied_networks.as_ref().map(|pn| {
+            let proxied_url = format!("http://{}:{}", pn.host, pn.grpc_port);
+            HttpClientBuilder::default().build(proxied_url).unwrap()
         });
 
         let listener_api = tokio::net::TcpListener::bind(raw_rpc.config.readrpc_addr())
@@ -102,7 +102,7 @@ impl TestContext {
             pending_store: raw_rpc.pending_store,
             client,
             admin_client,
-            private_grpc_client,
+            proxied_grpc_client,
             config: raw_rpc.config,
             certificate_receiver: raw_rpc.certificate_receiver,
         }
@@ -134,12 +134,12 @@ impl TestContext {
         config.rpc.readrpc_port = addr.port();
         config.rpc.admin_port = admin_addr.port();
         if let Some(proxied_networks) = config.proxied_networks.as_mut() {
-            let private_addr = next_available_addr();
-            proxied_networks.host = match private_addr.ip() {
+            let proxied_addr = next_available_addr();
+            proxied_networks.host = match proxied_addr.ip() {
                 IpAddr::V4(ip) => ip,
                 IpAddr::V6(_) => Ipv4Addr::new(127, 0, 0, 1),
             };
-            proxied_networks.grpc_port = private_addr.port();
+            proxied_networks.grpc_port = proxied_addr.port();
         };
 
         let config = Arc::new(config);

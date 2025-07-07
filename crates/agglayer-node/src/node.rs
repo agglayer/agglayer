@@ -276,26 +276,26 @@ impl Node {
         .start()
         .await?;
 
-        // List the public vs. private networks.
+        // List the public vs. proxied networks.
         let (public_networks, proxied_networks) = {
-            let private = config
+            let proxied = config
                 .proxied_networks
                 .as_ref()
                 .map(|n| n.networks.iter().cloned().collect::<HashSet<_>>())
                 .inspect(|pn| {
                     if pn.is_empty() {
                         warn!(
-                            "No private networks configured, but a port was configured. All \
+                            "No proxied networks configured, but a port was configured. All \
                              networks will be considered public."
                         );
                     }
                 });
-            let private2 = private.clone();
+            let proxied2 = proxied.clone();
             (
                 // Is the incoming network public?
-                move |incoming| private.as_ref().is_none_or(|p| !p.contains(&incoming)),
-                // Is the incoming network private?
-                private2.map(|private| move |incoming| private.contains(&incoming)),
+                move |incoming| proxied.as_ref().is_none_or(|p| !p.contains(&incoming)),
+                // Is the incoming network proxied?
+                proxied2.map(|proxied| move |incoming| proxied.contains(&incoming)),
             )
         };
 
@@ -305,12 +305,12 @@ impl Node {
                 .start()
                 .await?;
 
-        let private_grpc_router = match proxied_networks {
+        let proxied_grpc_router = match proxied_networks {
             None => None,
             Some(pn) => Some(
                 agglayer_grpc_api::Server::with_config(config.clone(), rpc_service.clone(), pn)
                     .build()
-                    .inspect_err(|err| error!(?err, "Failed to build private gRPC router"))?,
+                    .inspect_err(|err| error!(?err, "Failed to build proxied gRPC router"))?,
             ),
         };
         let public_grpc_router =
@@ -326,17 +326,17 @@ impl Node {
 
         let readrpc_listener = tokio::net::TcpListener::bind(config.readrpc_addr()).await?;
         let public_grpc_listener = tokio::net::TcpListener::bind(config.public_grpc_addr()).await?;
-        let private_grpc_listener = match config.private_grpc_addr() {
+        let proxied_grpc_listener = match config.proxied_grpc_addr() {
             None => None,
             Some(addr) => Some(tokio::net::TcpListener::bind(addr).await?),
         };
         let admin_listener = tokio::net::TcpListener::bind(config.admin_rpc_addr()).await?;
         info!(on = %config.readrpc_addr(), "ReadRPC listening");
         info!(on = %config.public_grpc_addr(), "Public gRPC listening");
-        if let Some(on) = config.private_grpc_addr() {
-            info!(%on, nets=?config.proxied_networks.as_ref().map(|p| &p.networks), "Private gRPC listening");
+        if let Some(on) = config.proxied_grpc_addr() {
+            info!(%on, nets=?config.proxied_networks.as_ref().map(|p| &p.networks), "Proxied gRPC listening");
         } else {
-            debug!("No private gRPC server configured.");
+            debug!("No proxied gRPC server configured.");
         }
         info!(on = %config.admin_rpc_addr(), "AdminRPC listening");
 
@@ -346,10 +346,10 @@ impl Node {
         let public_grpc_server = axum::serve(public_grpc_listener, public_grpc_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
-        let private_grpc_server = private_grpc_listener.map(|listener| {
+        let proxied_grpc_server = proxied_grpc_listener.map(|listener| {
             // Both parameters are existing iff the `proxied_networks` section is
             // configured.
-            axum::serve(listener, private_grpc_router.unwrap())
+            axum::serve(listener, proxied_grpc_router.unwrap())
                 .with_graceful_shutdown(cancellation_token.clone().cancelled_owned())
         });
 
@@ -357,8 +357,8 @@ impl Node {
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
         let rpc_handle = tokio::spawn(async move {
-            let private_grpc_server = async move {
-                match private_grpc_server {
+            let proxied_grpc_server = async move {
+                match proxied_grpc_server {
                     Some(server) => Some(server.await),
                     None => None,
                 }
@@ -366,7 +366,7 @@ impl Node {
             tokio::select! {
                 _ = readrpc_server => {},
                 _ = public_grpc_server => {},
-                Some(_) = private_grpc_server => {}, // Stop if there was a private gRPC server and it stopped.
+                Some(_) = proxied_grpc_server => {}, // Stop if there was a proxied gRPC server and it stopped.
                 _ = admin_server => {},
                 _ = cancellation_token.cancelled() => {
                     debug!("Node RPC shutdown requested.");

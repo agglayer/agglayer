@@ -73,7 +73,7 @@ pub struct Config {
     #[serde(default)]
     pub rpc: RpcConfig,
 
-    /// The private networks configuration.
+    /// The proxied networks configuration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxied_networks: Option<ProxiedNetworksConfig>,
 
@@ -197,8 +197,8 @@ impl Config {
         std::net::SocketAddr::from((self.rpc.host, self.rpc.grpc_port))
     }
 
-    /// Get the private gRPC socket address from the configuration.
-    pub fn private_grpc_addr(&self) -> Option<std::net::SocketAddr> {
+    /// Get the proxied gRPC socket address from the configuration.
+    pub fn proxied_grpc_addr(&self) -> Option<std::net::SocketAddr> {
         self.proxied_networks
             .as_ref()
             .map(|pn| std::net::SocketAddr::from((pn.host, pn.grpc_port)))
