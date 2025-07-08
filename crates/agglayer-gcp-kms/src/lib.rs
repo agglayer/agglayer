@@ -92,12 +92,18 @@ impl KMS {
         let client =
             GoogleApi::from_function(KeyManagementServiceClient::new, GOOGLE_API_URL, None)
                 .await
-                .map_err(|e| Error::KmsError(e.to_string()))?;
+                .map_err(|e| {
+                    Error::KmsError(
+                        anyhow::Error::new(e).context("Unable to create GoogleApiClient"),
+                    )
+                })?;
 
         // Use GcpSigner::new with the proper client type
         let gcp_signer = GcpSigner::new(client, specifier, Some(self.chain_id))
             .await
-            .map_err(|e| Error::KmsError(e.to_string()))?;
+            .map_err(|e| {
+                Error::KmsError(anyhow::Error::new(e).context("Unable to create GcpSigner"))
+            })?;
 
         Ok(KmsSigner::new(gcp_signer))
     }

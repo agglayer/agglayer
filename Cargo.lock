@@ -227,6 +227,7 @@ dependencies = [
  "agglayer-config",
  "alloy",
  "alloy-primitives",
+ "anyhow",
  "async-trait",
  "gcloud-sdk",
  "serde",
