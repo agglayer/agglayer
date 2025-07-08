@@ -181,12 +181,8 @@ impl Forest {
     pub fn sign(&self, commitment: Digest) -> Result<(Signature, Address), alloy::signers::Error> {
         let signature = self.wallet.sign_hash_sync(&commitment.0.into())?;
         Ok((
-            Signature::new(
-                U256::from_limbs(*signature.r().as_limbs()),
-                U256::from_limbs(*signature.s().as_limbs()),
-                signature.recid().is_y_odd(),
-            ),
-            (*self.wallet.address().0).into(),
+            Signature::new(signature.r(), signature.s(), signature.recid().is_y_odd()),
+            self.wallet.address().into(),
         ))
     }
 
@@ -271,7 +267,7 @@ impl Forest {
     }
 
     pub fn get_signer(&self) -> Address {
-        (*self.wallet.address().0).into()
+        self.wallet.address().into()
     }
 
     /// Check the current state corresponds to given proof output.

@@ -568,11 +568,7 @@ pub fn compute_signature_info(
     let signature = wallet
         .sign_hash_sync(&agglayer_primitives::B256::new(combined_hash.0))
         .expect("valid signature");
-    let signature = Signature::new(
-        U256::from_limbs(*signature.r().as_limbs()),
-        U256::from_limbs(*signature.s().as_limbs()),
-        signature.v(),
-    );
+    let signature = Signature::new(signature.r(), signature.s(), signature.v());
 
     (combined_hash, signature, wallet.address().into())
 }
