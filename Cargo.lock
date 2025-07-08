@@ -177,6 +177,7 @@ name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
  "agglayer-prover-config",
+ "agglayer-types",
  "dirs",
  "ethers",
  "humantime-serde",
