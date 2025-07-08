@@ -14,7 +14,6 @@ use shutdown::ShutdownConfig;
 use url::Url;
 
 pub use self::telemetry::TelemetryConfig;
-use crate::rate_limiting::NetworkId;
 
 pub mod prover;
 
@@ -131,7 +130,7 @@ pub struct Config {
     #[serde(default)]
     #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub extra_certificate_signer: HashMap<NetworkId, Address>,
+    pub extra_certificate_signer: HashMap<u32, Address>,
 }
 
 impl Config {
