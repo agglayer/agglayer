@@ -65,9 +65,7 @@ impl KmsSigner {
 
     /// Sets the chain ID on this signer (mutable version).
     pub fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
-        if let Some(chain_id) = chain_id {
-            self.signer = self.signer.clone().with_chain_id(Some(chain_id));
-        }
+        self.signer = self.signer.clone().with_chain_id(chain_id);
     }
 }
 

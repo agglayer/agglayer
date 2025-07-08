@@ -182,7 +182,7 @@ pub fn get_signer(index: u32) -> PrivateKeySigner {
         .unwrap()
 }
 
-fn get_test_keystore_content() -> &'static str {
+const fn get_test_keystore_content() -> &'static str {
     r#"{
   "crypto": {
     "cipher": "aes-128-ctr",

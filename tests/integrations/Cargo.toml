@@ -39,7 +39,7 @@ tower.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 tracing.workspace = true
 
-agglayer-aggregator-notifier.workspace = true
+agglayer-aggregator-notifier = { workspace = true, features = ["testutils"] }
 agglayer-certificate-orchestrator.workspace = true
 agglayer-clock.workspace = true
 agglayer-config.workspace = true

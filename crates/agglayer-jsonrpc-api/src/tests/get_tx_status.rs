@@ -52,13 +52,8 @@ async fn check_tx_status() {
             debug!("Transaction status: {}", status);
         }
         Err(error) => {
-            // Log the error for debugging but don't fail the test yet
-            // as the implementation might still be incomplete
-            debug!("Error getting transaction status: {}", error);
-
-            // For now, we'll accept errors as the implementation might not be
-            // complete In a complete implementation, this should
-            // succeed
+            // We may be transient error if the transaction is still being processed.
+            tracing::warn!("Error getting transaction status: {}", error);
         }
     }
 

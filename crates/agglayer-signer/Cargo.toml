@@ -7,7 +7,6 @@ edition = "2021"
 async-trait.workspace = true
 thiserror.workspace = true
 
-# Alloy dependencies for the migration from ethers
 alloy.workspace = true
 alloy-primitives.workspace = true
 alloy-signer-local.workspace = true
