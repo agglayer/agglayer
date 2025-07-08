@@ -81,7 +81,7 @@ async fn check_tx_status() {
         rollup_manager,
     );
 
-    let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
+    let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service), |_| true)
         .start()
         .await
         .unwrap();
@@ -160,7 +160,7 @@ async fn check_tx_status_fail() {
         rollup_manager,
     );
 
-    let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service))
+    let router = AgglayerImpl::new(Arc::new(service), Arc::new(rpc_service), |_| true)
         .start()
         .await
         .unwrap();

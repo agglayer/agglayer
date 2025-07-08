@@ -11,6 +11,7 @@ use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter,
 };
+use agglayer_types::NetworkId;
 use certificate_submission_service::CertificateSubmissionServer;
 use configuration_service::ConfigurationServer;
 use http::{Request, Response};
@@ -87,6 +88,7 @@ impl Server {
         rpc_service: Arc<
             agglayer_rpc::AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>,
         >,
+        allowed_networks: impl Fn(NetworkId) -> bool + Send + Sync + 'static,
     ) -> ServerBuilder
     where
         L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
@@ -96,6 +98,7 @@ impl Server {
     {
         let certificate_submission_server = CertificateSubmissionServer {
             service: rpc_service.clone(),
+            allowed_networks,
         };
         let certificate_submission_service =
             CertificateSubmissionServiceServer::new(certificate_submission_server)
