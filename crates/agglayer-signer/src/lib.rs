@@ -58,6 +58,21 @@ impl ConfiguredSigner {
             }
         }
     }
+
+    /// Create a new ConfiguredSigner from a local private key signer.
+    /// This is a more efficient constructor when you already have a local
+    /// signer.
+    #[inline]
+    pub const fn from_local(signer: PrivateKeySigner) -> Self {
+        Self::Local(signer)
+    }
+
+    /// Create a new ConfiguredSigner from a KMS signer.
+    /// This is a more efficient constructor when you already have a KMS signer.
+    #[inline]
+    pub const fn from_kms(signer: KmsSigner) -> Self {
+        Self::Kms(signer)
+    }
 }
 
 /// [`Signer`] implementation for [`ConfiguredSigner`].
@@ -65,17 +80,26 @@ impl ConfiguredSigner {
 /// This implementation simply delegates to the underlying signer.
 #[async_trait]
 impl Signer for ConfiguredSigner {
+    #[inline]
     async fn sign_hash(&self, hash: &B256) -> Result<Signature, alloy::signers::Error> {
+        // Input validation for security.
+        if hash.is_zero() {
+            return Err(alloy::signers::Error::other("Cannot sign zero hash"));
+        }
+
         match self {
-            ConfiguredSigner::Local(wallet) => wallet.sign_hash(hash).await,
-            ConfiguredSigner::Kms(signer) => signer
-                .sign_message(hash.as_slice())
-                .await
-                .map_err(alloy::signers::Error::other),
+            ConfiguredSigner::Local(signer) => signer.sign_hash(hash).await,
+            ConfiguredSigner::Kms(signer) => signer.sign_hash(hash).await,
         }
     }
 
+    #[inline]
     async fn sign_message(&self, message: &[u8]) -> Result<Signature, alloy::signers::Error> {
+        // Input validation for security.
+        if message.is_empty() {
+            return Err(alloy::signers::Error::other("Cannot sign empty message"));
+        }
+
         match self {
             ConfiguredSigner::Local(wallet) => wallet.sign_message(message).await,
             ConfiguredSigner::Kms(signer) => signer
@@ -86,6 +110,7 @@ impl Signer for ConfiguredSigner {
     }
 
     /// Returns the signer's Ethereum Address
+    #[inline]
     fn address(&self) -> Address {
         match self {
             ConfiguredSigner::Local(wallet) => wallet.address(),
@@ -94,6 +119,7 @@ impl Signer for ConfiguredSigner {
     }
 
     /// Returns the signer's chain id
+    #[inline]
     fn chain_id(&self) -> Option<ChainId> {
         match self {
             ConfiguredSigner::Local(wallet) => wallet.chain_id(),
@@ -102,6 +128,7 @@ impl Signer for ConfiguredSigner {
     }
 
     /// Sets the signer's chain id
+    #[inline]
     fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
         match self {
             ConfiguredSigner::Local(wallet) => {
@@ -122,6 +149,7 @@ impl Signer for ConfiguredSigner {
 /// This implementation provides transaction signing functionality.
 #[async_trait]
 impl TxSigner<Signature> for ConfiguredSigner {
+    #[inline]
     fn address(&self) -> Address {
         match self {
             ConfiguredSigner::Local(wallet) => wallet.address(),
@@ -129,6 +157,7 @@ impl TxSigner<Signature> for ConfiguredSigner {
         }
     }
 
+    #[inline]
     async fn sign_transaction(
         &self,
         tx: &mut dyn alloy::consensus::SignableTransaction<Signature>,
@@ -145,6 +174,7 @@ impl ConfiguredSigner {
     ///
     /// This method provides transaction signing functionality that delegates
     /// to the underlying signer implementation.
+    #[inline]
     pub async fn sign_transaction_typed(&self, tx: &TypedTransaction) -> Result<Signature, Error> {
         match self {
             ConfiguredSigner::Local(wallet) => {
@@ -158,6 +188,20 @@ impl ConfiguredSigner {
                 signer.sign_transaction(tx).await.map_err(Error::GcpKms)
             }
         }
+    }
+
+    /// Returns true if this signer is using local (non-KMS) signing.
+    /// This can be used to optimize signing paths for local signers.
+    #[inline]
+    pub const fn is_local(&self) -> bool {
+        matches!(self, ConfiguredSigner::Local(_))
+    }
+
+    /// Returns true if this signer is using KMS signing.
+    /// This can be used to optimize signing paths for KMS signers.
+    #[inline]
+    pub const fn is_kms(&self) -> bool {
+        matches!(self, ConfiguredSigner::Kms(_))
     }
 }
 
