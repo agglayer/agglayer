@@ -236,8 +236,8 @@ where
             .wait_for_transaction_receipt(settlement_tx_hash, certificate_id)
             .await?;
 
-        #[cfg(feature = "testutils")]
         // Apply fail points if they are active for integration testing
+        #[cfg(feature = "testutils")]
         testutils::inject_settle_certificate_fail_points(certificate_id)?;
 
         // Step 2: Check transaction status

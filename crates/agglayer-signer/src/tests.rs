@@ -63,33 +63,10 @@ async fn sign_hash_works(#[case] signer: ConfiguredSigner) {
 #[rstest::rstest]
 #[case(testing_local_wallet())]
 #[tokio::test]
-async fn input_validation_works(#[case] signer: ConfiguredSigner) {
-    // Test zero hash validation
-    let zero_hash = B256::ZERO;
-    let result = signer.sign_hash(&zero_hash).await;
-    assert!(result.is_err());
-
-    // Test empty message validation
-    let empty_message = b"";
-    let result = signer.sign_message(empty_message).await;
-    assert!(result.is_err());
-}
-
-#[rstest::rstest]
-#[case(testing_local_wallet())]
-#[tokio::test]
-async fn utility_methods_work(#[case] signer: ConfiguredSigner) {
-    // Test signer type detection
-    match signer {
-        ConfiguredSigner::Local(_) => {
-            assert!(signer.is_local());
-            assert!(!signer.is_kms());
-        }
-        ConfiguredSigner::Kms(_) => {
-            assert!(signer.is_kms());
-            assert!(!signer.is_local());
-        }
-    }
+async fn local_signer_type_detection(#[case] signer: ConfiguredSigner) {
+    // Test local signer type detection
+    assert!(signer.is_local());
+    assert!(!signer.is_kms());
 }
 
 #[test]

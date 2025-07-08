@@ -27,7 +27,7 @@ pub use error::Error;
 /// [`Signer`] type specified at compile time, and the Signer type is not object
 /// safe, so we cannot use a `Box<dyn Signer>`. As such, we define this enum to
 /// accommodate a runtime configured signer.
-#[derive(Debug)]
+#[derive(Debug, derive_more::IsVariant)]
 pub enum ConfiguredSigner {
     Local(PrivateKeySigner),
     Kms(KmsSigner),
@@ -82,11 +82,6 @@ impl ConfiguredSigner {
 impl Signer for ConfiguredSigner {
     #[inline]
     async fn sign_hash(&self, hash: &B256) -> Result<Signature, alloy::signers::Error> {
-        // Input validation for security.
-        if hash.is_zero() {
-            return Err(alloy::signers::Error::other("Cannot sign zero hash"));
-        }
-
         match self {
             ConfiguredSigner::Local(signer) => signer.sign_hash(hash).await,
             ConfiguredSigner::Kms(signer) => signer.sign_hash(hash).await,
@@ -95,11 +90,6 @@ impl Signer for ConfiguredSigner {
 
     #[inline]
     async fn sign_message(&self, message: &[u8]) -> Result<Signature, alloy::signers::Error> {
-        // Input validation for security.
-        if message.is_empty() {
-            return Err(alloy::signers::Error::other("Cannot sign empty message"));
-        }
-
         match self {
             ConfiguredSigner::Local(wallet) => wallet.sign_message(message).await,
             ConfiguredSigner::Kms(signer) => signer
@@ -188,20 +178,6 @@ impl ConfiguredSigner {
                 signer.sign_transaction(tx).await.map_err(Error::GcpKms)
             }
         }
-    }
-
-    /// Returns true if this signer is using local (non-KMS) signing.
-    /// This can be used to optimize signing paths for local signers.
-    #[inline]
-    pub const fn is_local(&self) -> bool {
-        matches!(self, ConfiguredSigner::Local(_))
-    }
-
-    /// Returns true if this signer is using KMS signing.
-    /// This can be used to optimize signing paths for KMS signers.
-    #[inline]
-    pub const fn is_kms(&self) -> bool {
-        matches!(self, ConfiguredSigner::Kms(_))
     }
 }
 

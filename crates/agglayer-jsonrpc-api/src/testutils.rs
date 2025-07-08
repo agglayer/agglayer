@@ -343,6 +343,11 @@ pub async fn raw_rpc() -> RawRpcContext {
 }
 
 pub fn next_available_addr() -> std::net::SocketAddr {
+    assert!(
+        std::env::var("NEXTEST").is_ok(),
+        "Due to concurrency issues, the rpc tests have to be run under `cargo nextest`",
+    );
+
     std::net::TcpListener::bind("127.0.0.1:0")
         .unwrap()
         .local_addr()
