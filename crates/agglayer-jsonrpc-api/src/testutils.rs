@@ -91,17 +91,8 @@ impl TestContext {
         Self::new_with_provider(config, mock_provider).await
     }
 
-    /// Create a TestContext with a real HTTP provider instead of mocks
-    /// This is useful for testing against real blockchain instances like Anvil
-    pub async fn new_with_real_provider<P>(config: Config, provider: P) -> Self
-    where
-        P: alloy::providers::Provider + Clone + 'static,
-    {
-        Self::new_with_provider(config, provider).await
-    }
-
     /// Common implementation for creating TestContext with any provider
-    async fn new_with_provider<P>(config: Config, provider: P) -> Self
+    pub async fn new_with_provider<P>(config: Config, provider: P) -> Self
     where
         P: alloy::providers::Provider + Clone + 'static,
     {

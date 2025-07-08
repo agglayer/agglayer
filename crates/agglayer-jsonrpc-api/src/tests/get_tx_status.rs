@@ -37,7 +37,7 @@ async fn check_tx_status() {
     let hash = *pending_tx.tx_hash();
 
     // Set up our test context with the real Anvil provider
-    let context = TestContext::new_with_real_provider(config, provider).await;
+    let context = TestContext::new_with_provider(config, provider).await;
 
     // Test with the real transaction hash - should work now!
     let result: Result<String, ClientError> = context
