@@ -33,7 +33,7 @@ sol!(
     #[allow(clippy::too_many_arguments)]
     #[sol(rpc)]
     #[derive(Debug, Eq, PartialEq)]
-    PolygonZkEVM,
+    PolygonZkEvm,
     "src/contracts/PolygonZkEVM.json"
 );
 
@@ -42,7 +42,7 @@ sol!(
     #[allow(clippy::too_many_arguments)]
     #[sol(rpc)]
     #[derive(Debug, Eq, PartialEq)]
-    PolygonZkEVMGlobalExitRootV2,
+    PolygonZkEvmGlobalExitRootV2,
     "src/contracts/PolygonZkEVMGlobalExitRootV2.json"
 );
 
@@ -55,8 +55,8 @@ pub(crate) type AgglayerGatewayRpcClient<RpcProvider> =
 pub(crate) type PolygonRollupManagerRpcClient<RpcProvider> =
     PolygonRollupManager::PolygonRollupManagerInstance<RpcProvider, Ethereum>;
 
-pub(crate) type PolygonZkEVMRpcClient<RpcProvider> =
-    PolygonZkEVM::PolygonZkEVMInstance<RpcProvider, Ethereum>;
+pub(crate) type PolygonZkEvmRpcClient<RpcProvider> =
+    PolygonZkEvm::PolygonZkEvmInstance<RpcProvider, Ethereum>;
 
-pub(crate) type PolygonZkEVMGlobalExitRootV2RpcClient<RpcProvider> =
-    PolygonZkEVMGlobalExitRootV2::PolygonZkEVMGlobalExitRootV2Instance<RpcProvider, Ethereum>;
+pub(crate) type PolygonZkEvmGlobalExitRootV2RpcClient<RpcProvider> =
+    PolygonZkEvmGlobalExitRootV2::PolygonZkEvmGlobalExitRootV2Instance<RpcProvider, Ethereum>;

@@ -12,7 +12,8 @@ pub enum Error {
     /// missing.
     #[error("KMS configuration error: missing key or env {0}")]
     KmsConfig(&'static str),
-    /// An error occurred with the KMS.
+
+    /// An error occurred while interacting with the KMS provider.
     #[error("KMS error: {0}")]
     KmsError(String),
 }

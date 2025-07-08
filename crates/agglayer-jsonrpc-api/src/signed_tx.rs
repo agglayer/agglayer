@@ -135,7 +135,6 @@ impl SignedTx {
     }
 
     #[cfg(test)]
-    #[allow(unused)]
     pub(crate) fn sign(
         &mut self,
         signer: &LocalSigner<alloy::signers::k256::ecdsa::SigningKey>,

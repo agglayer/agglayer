@@ -4,7 +4,7 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use agglayer_contracts::contracts::{
     PolygonRollupManager::{PolygonRollupManagerInstance, RollupDataReturnV2},
-    PolygonZkEVM::PolygonZkEVMInstance,
+    PolygonZkEvm::PolygonZkEvmInstance,
 };
 use agglayer_rate_limiting::RateLimiter;
 use agglayer_rpc::error::SignatureVerificationError;
@@ -205,16 +205,16 @@ where
             .await
     }
 
-    /// Get a [`ContractInstance`], [`PolygonZkEVM`], of the rollup contract at
+    /// Get a [`ContractInstance`], [`PolygonZkEvm`], of the rollup contract at
     /// the given rollup id.
     #[instrument(skip(self), level = "debug")]
     async fn get_rollup_contract_instance(
         &self,
         rollup_id: u32,
-    ) -> Result<PolygonZkEVMInstance<RpcProvider>, ContractError> {
+    ) -> Result<PolygonZkEvmInstance<RpcProvider>, ContractError> {
         let rollup_metadata = self.get_rollup_metadata(rollup_id).await?;
 
-        Ok(PolygonZkEVMInstance::new(
+        Ok(PolygonZkEvmInstance::new(
             rollup_metadata.rollupContract,
             (*self.rpc).clone(),
         ))

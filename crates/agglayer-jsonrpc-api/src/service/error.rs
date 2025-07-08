@@ -1,7 +1,7 @@
 //! Error types for the top-level Agglayer service.
 
 use agglayer_contracts::contracts::{
-    PolygonRollupManager::PolygonRollupManagerErrors, PolygonZkEVM::PolygonZkEVMErrors,
+    PolygonRollupManager::PolygonRollupManagerErrors, PolygonZkEvm::PolygonZkEvmErrors,
 };
 use agglayer_rate_limiting::RateLimited as RateLimitedError;
 use agglayer_rpc::error::SignatureVerificationError;
@@ -40,7 +40,7 @@ pub enum SendTxError {
     RollupNotRegistered { rollup_id: u32 },
 
     #[error("Zkevm error during dry run")]
-    DryRunZkEvm(PolygonZkEVMErrors),
+    DryRunZkEvm(PolygonZkEvmErrors),
 
     #[error("Rollup manager error during dry run")]
     DryRunRollupManager(PolygonRollupManagerErrors),

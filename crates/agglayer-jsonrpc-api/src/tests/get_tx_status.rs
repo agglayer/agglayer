@@ -76,10 +76,7 @@ async fn check_tx_status() {
         Ok(status) => {
             info!("Transaction status after waiting: {}", status);
             // After waiting, it should likely be "done"
-            if status == "done" {
-                // This is the expected outcome
-                assert_eq!(status, "done");
-            }
+            assert_eq!(status, "done");
         }
         Err(error) => {
             error!("Error getting transaction status after waiting: {}", error);

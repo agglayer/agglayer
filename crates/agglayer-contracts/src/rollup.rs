@@ -13,7 +13,7 @@ use num_traits::FromPrimitive;
 use tracing::{debug, error};
 
 use crate::{
-    contracts::{PolygonRollupManager::RollupDataReturnV2, PolygonZkEVM},
+    contracts::{PolygonRollupManager::RollupDataReturnV2, PolygonZkEvm},
     L1RpcClient, L1RpcError,
 };
 
@@ -63,7 +63,7 @@ where
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError> {
         use alloy::sol_types::SolEvent;
 
-        use crate::contracts::PolygonZkEVMGlobalExitRootV2::UpdateL1InfoTreeV2;
+        use crate::contracts::PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2;
 
         // Get `UpdateL1InfoTreeV2` event for the given leaf count from the latest block
         let filter = Filter::new()
@@ -85,7 +85,7 @@ where
                 // Use alloy's direct event decoding
                 if let Ok(decoded_event) = UpdateL1InfoTreeV2::decode_log(&log.clone().into()) {
                     Some((
-                        decoded_event.currentL1InfoRoot.into(), // Convert to [u8; 32]
+                        <[u8; 32]>::from(decoded_event.currentL1InfoRoot),
                         log.block_number?,
                         log.block_hash?,
                     ))
@@ -147,7 +147,7 @@ where
                                  expected event block hash ({:?}).",
                                 retrieved_block_hash, event_block_hash
                             );
-                            return Err(L1RpcError::ReorgDetected(event_block_number.as_isize()));
+                            return Err(L1RpcError::ReorgDetected(event_block_number));
                         }
 
                         break;
@@ -185,7 +185,7 @@ where
                 .await
                 .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
 
-            PolygonZkEVM::new(rollup_data.rollupContract, self.rpc.clone())
+            PolygonZkEvm::new(rollup_data.rollupContract, self.rpc.clone())
                 .trustedSequencer()
                 .call()
                 .await

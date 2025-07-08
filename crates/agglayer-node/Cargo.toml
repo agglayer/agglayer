@@ -54,7 +54,6 @@ pessimistic-proof.workspace = true
 alloy = { workspace = true, features = ["full", "node-bindings"] }
 http-body-util = "0.1.2"
 hyper-util = { version = "0.1.10", features = ["client"] }
-
 fail = { workspace = true, features = ["failpoints"] }
 lazy_static.workspace = true
 mockall.workspace = true

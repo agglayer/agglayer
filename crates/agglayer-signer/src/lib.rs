@@ -111,7 +111,7 @@ impl Signer for ConfiguredSigner {
                 // KMS signer doesn't support mutable chain ID changes in the
                 // current implementation This is a limitation
                 // of the KmsSigner wrapper
-                tracing::warn!("KMS signer doesn't support mutable chain ID changes");
+                panic!("KMS signer doesn't support mutable chain ID changes");
             }
         }
     }

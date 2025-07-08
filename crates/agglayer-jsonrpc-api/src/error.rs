@@ -182,7 +182,7 @@ impl From<SendTxError> for Error {
             }
             E::RollupNotRegistered { rollup_id } => Self::RollupNotRegistered { rollup_id },
             E::DryRunZkEvm(error) => ValidationError::DryRun {
-                detail: format!("PolygonZkEVM contract error: {error:?}"),
+                detail: format!("PolygonZkEvm contract error: {error:?}"),
             }
             .into(),
             E::DryRunRollupManager(error) => ValidationError::DryRun {

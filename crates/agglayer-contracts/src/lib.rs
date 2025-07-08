@@ -58,7 +58,7 @@ pub enum L1RpcError {
     #[error("Timeout exceeded while waiting for block {0} to be finalized.")]
     FinalizationTimeoutExceeded(u64),
     #[error("L1 Reorg detected for block number {0}")]
-    ReorgDetected(isize),
+    ReorgDetected(u64),
     #[error("Cannot get the block hash for the block number {0}")]
     BlockHashNotFound(u64),
     #[error("Unable to fetch transaction receipt for {0}")]
@@ -112,7 +112,7 @@ where
     {
         use alloy::sol_types::SolEvent;
 
-        use crate::contracts::PolygonZkEVMGlobalExitRootV2::InitL1InfoRootMap;
+        use crate::contracts::PolygonZkEvmGlobalExitRootV2::InitL1InfoRootMap;
 
         let default_l1_info_tree_entry = {
             // Create filter for InitL1InfoRootMap events
