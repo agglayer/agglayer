@@ -218,13 +218,13 @@ impl Node {
         let core = Kernel::new(rpc.clone(), config.clone());
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
-        let epoch_packing_aggregator_task = RpcSettlementClient::try_new(
+        let epoch_packing_aggregator_task = RpcSettlementClient::new(
             Arc::new(config.outbound.rpc.settle.clone()),
             state_store.clone(),
             pending_store.clone(),
             Arc::clone(&rollup_manager),
             current_epoch_store.clone(),
-        )?;
+        );
 
         info!("Epoch packing aggregator task created.");
 

@@ -143,14 +143,13 @@ async fn epoch_packer_can_settle_one_certificate() {
     // multiple calls to l1 (to assess to gas const etc.), and we need to mock
     // each of them correctly in the correct order.
 
-    let epoch_packer = RpcSettlementClient::<_, _, MockPerEpochStore, _>::try_new(
+    let epoch_packer = RpcSettlementClient::<_, _, MockPerEpochStore, _>::new(
         config,
         Arc::new(state_store),
         Arc::new(pending_store),
         Arc::new(l1_rpc),
         Arc::new(ArcSwap::new(Arc::new(per_epoch_store))),
-    )
-    .unwrap();
+    );
 
     let settlement_tx_hash = epoch_packer
         .submit_certificate_settlement(certificate_id)
@@ -161,18 +160,4 @@ async fn epoch_packer_can_settle_one_certificate() {
         .wait_for_settlement(settlement_tx_hash, certificate_id)
         .await
         .unwrap();
-}
-
-#[test]
-fn alloy_settlement_client_creation_works() {
-    let config = Arc::new(OutboundRpcSettleConfig::default());
-    let state_store = Arc::new(MockStateStore::new());
-    let pending_store = Arc::new(MockPendingStore::new());
-    let l1_rpc = Arc::new(MockL1Rpc::new());
-    let per_epoch_store = Arc::new(ArcSwap::new(Arc::new(MockPerEpochStore::new())));
-
-    let settlement_client =
-        RpcSettlementClient::try_new(config, state_store, pending_store, l1_rpc, per_epoch_store);
-
-    assert!(settlement_client.is_ok());
 }

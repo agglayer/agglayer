@@ -32,20 +32,20 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
     RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 {
     /// Try to create a new rpc-based settlement client
-    pub fn try_new(
+    pub fn new(
         config: Arc<OutboundRpcSettleConfig>,
         state_store: Arc<StateStore>,
         pending_store: Arc<PendingStore>,
         l1_rpc: Arc<RollupManagerRpc>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             config,
             l1_rpc,
             state_store,
             pending_store,
             current_epoch,
-        })
+        }
     }
 }
 
