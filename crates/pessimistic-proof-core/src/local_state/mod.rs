@@ -20,6 +20,7 @@ pub mod commitment;
 #[derive(
     Clone, Debug, Serialize, Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize,
 )]
+#[repr(C)]
 pub struct NetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
     pub exit_tree: LocalExitTree<Keccak256Hasher>,
