@@ -334,10 +334,10 @@ where
     pub(crate) fn verify_extra_cert_signature(
         &self,
         certificate: &Certificate,
-        maybe_extra_signer: Option<&H160>,
-        maybe_extra_signature: Option<Signature>,
+        extra_signer: Option<&H160>,
+        extra_signature: Option<Signature>,
     ) -> Result<(), SignatureVerificationError<L1Rpc::M>> {
-        match (maybe_extra_signer, maybe_extra_signature) {
+        match (extra_signer, extra_signature) {
             // Extra signature expected and provided
             (Some(&expected_extra_signer), Some(extra_signature)) => {
                 // Retrieve the signer from the extra signature
@@ -377,7 +377,7 @@ where
     pub async fn send_certificate(
         &self,
         certificate: Certificate,
-        maybe_extra_signature: Option<Signature>,
+        extra_signature: Option<Signature>,
     ) -> Result<CertificateId, CertificateSubmissionError<L1Rpc::M>> {
         let hash = certificate.hash();
         let hash_string = hash.to_string();
@@ -404,7 +404,7 @@ where
                 self.config()
                     .extra_certificate_signer
                     .get(&certificate.network_id.to_u32()),
-                maybe_extra_signature,
+                extra_signature,
             )
             .map_err(|e| {
                 error!(error = %e, hash = hash_string, "Failed to verify the extra signature for the
