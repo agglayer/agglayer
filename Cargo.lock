@@ -217,6 +217,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-elf-build"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d49335c01eefe69e0e1f1d98a7b932028eb68a26bf972cdfdf2ae65cbc2c62b"
+dependencies = [
+ "anyhow",
+ "cargo_metadata",
+ "clap",
+ "sp1-build",
+]
+
+[[package]]
 name = "agglayer-gcp-kms"
 version = "0.1.0"
 dependencies = [
@@ -6737,6 +6749,7 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
+ "agglayer-elf-build",
  "agglayer-primitives",
  "agglayer-tries",
  "arbitrary",
