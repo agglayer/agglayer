@@ -36,14 +36,17 @@ pub type MockProvider = FillProvider<
     alloy::network::Ethereum,
 >;
 
+pub type RawRpcClient = crate::AgglayerImpl<
+    MockProvider,
+    L1RpcClient<MockProvider>,
+    PendingStore,
+    StateStore,
+    DebugStore,
+    Box<dyn 'static + Send + Sync + Fn(NetworkId) -> bool>,
+>;
+
 pub struct RawRpcContext {
-    pub rpc: crate::AgglayerImpl<
-        MockProvider,
-        L1RpcClient<MockProvider>,
-        PendingStore,
-        StateStore,
-        DebugStore,
-    >,
+    pub rpc: RawRpcClient,
     pub config: Arc<Config>,
     pub state_store: Arc<StateStore>,
     pub pending_store: Arc<PendingStore>,
@@ -64,6 +67,7 @@ pub struct TestContext {
     pub pending_store: Arc<PendingStore>,
     pub api_client: HttpClient,
     pub admin_client: HttpClient,
+    pub proxied_grpc_client: Option<HttpClient>,
     pub config: Arc<Config>,
     pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
@@ -148,8 +152,18 @@ impl TestContext {
             Arc::new(l1_rpc_client),
         ));
 
-        // Create AgglayerImpl
-        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
+        // Create the allowed_networks function for network filtering
+        let proxied_networks = config
+            .proxied_networks
+            .as_ref()
+            .map(|pn| pn.networks.clone());
+        let allowed_networks = Box::new(move |incoming| match &proxied_networks {
+            None => true,
+            Some(pn) => !pn.contains(&incoming),
+        }) as Box<dyn Fn(NetworkId) -> bool + Send + Sync + 'static>;
+
+        // Create AgglayerImpl with allowed_networks
+        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service, allowed_networks);
 
         // Create the routers
         let router = agglayer_impl.start().await.unwrap();
@@ -170,8 +184,14 @@ impl TestContext {
         let api_url = format!("http://{api_addr}/");
         let admin_url = format!("http://{admin_addr}/");
 
-        let client = HttpClientBuilder::default().build(api_url).unwrap();
+        let api_client = HttpClientBuilder::default().build(api_url).unwrap();
         let admin_client = HttpClientBuilder::default().build(admin_url).unwrap();
+
+        // Create proxied gRPC client if proxied networks are configured
+        let proxied_grpc_client = config.proxied_networks.as_ref().map(|pn| {
+            let proxied_url = format!("http://{}:{}", pn.host, pn.grpc_port);
+            HttpClientBuilder::default().build(proxied_url).unwrap()
+        });
 
         let listener_api = tokio::net::TcpListener::bind(api_addr).await.unwrap();
 
@@ -189,8 +209,9 @@ impl TestContext {
             cancellation_token,
             state_store,
             pending_store,
-            api_client: client,
+            api_client,
             admin_client,
+            proxied_grpc_client,
             config,
             certificate_receiver,
         }
@@ -236,7 +257,17 @@ impl TestContext {
         Self::new_raw_rpc_with_config(config).await
     }
 
-    pub async fn new_raw_rpc_with_config(config: Config) -> RawRpcContext {
+    pub async fn new_raw_rpc_with_config(mut config: Config) -> RawRpcContext {
+        // Set up proxied networks configuration with available addresses
+        if let Some(proxied_networks) = config.proxied_networks.as_mut() {
+            let proxied_addr = Self::next_available_address();
+            proxied_networks.host = match proxied_addr.ip() {
+                std::net::IpAddr::V4(ip) => ip,
+                std::net::IpAddr::V6(_) => std::net::Ipv4Addr::new(127, 0, 0, 1),
+            };
+            proxied_networks.grpc_port = proxied_addr.port();
+        }
+
         let config = Arc::new(config);
 
         let state_db = Arc::new(
@@ -281,8 +312,18 @@ impl TestContext {
             Arc::new(l1_rpc_client),
         ));
 
-        // Create AgglayerImpl
-        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
+        // Create the allowed_networks function for network filtering
+        let proxied_networks = config
+            .proxied_networks
+            .as_ref()
+            .map(|pn| pn.networks.clone());
+        let allowed_networks = Box::new(move |incoming| match &proxied_networks {
+            None => true,
+            Some(pn) => !pn.contains(&incoming),
+        }) as Box<dyn Fn(NetworkId) -> bool + Send + Sync + 'static>;
+
+        // Create AgglayerImpl with allowed_networks
+        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service, allowed_networks);
 
         RawRpcContext {
             rpc: agglayer_impl,
@@ -316,4 +357,3 @@ pub fn next_available_addr() -> std::net::SocketAddr {
         .local_addr()
         .unwrap()
 }
-

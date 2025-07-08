@@ -169,7 +169,9 @@ version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
  "agglayer-prover-config",
+ "agglayer-types",
  "alloy-primitives",
+ "dirs",
  "humantime-serde",
  "insta",
  "jsonrpsee",
