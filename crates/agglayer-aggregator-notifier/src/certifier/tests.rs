@@ -254,7 +254,11 @@ mockall::mock! {
 
     #[async_trait::async_trait]
     impl agglayer_contracts::L1TransactionFetcher for L1Rpc {
+        type Provider = alloy::providers::RootProvider<Ethereum>;
+
         async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<TransactionReceipt, L1RpcError>;
+
+        fn get_provider(&self) -> &<Self as agglayer_contracts::L1TransactionFetcher>::Provider;
     }
 
     #[async_trait::async_trait]

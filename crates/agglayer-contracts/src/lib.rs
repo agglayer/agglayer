@@ -21,11 +21,16 @@ pub use settler::Settler;
 
 #[async_trait::async_trait]
 pub trait L1TransactionFetcher {
+    type Provider: Provider;
+
     /// Fetches the transaction receipt for a given transaction hash.
     async fn fetch_transaction_receipt(
         &self,
         tx_hash: B256,
     ) -> Result<TransactionReceipt, L1RpcError>;
+
+    /// Returns the provider for direct access to watch transactions
+    fn get_provider(&self) -> &Self::Provider;
 }
 
 pub struct L1RpcClient<RpcProvider> {
@@ -175,6 +180,8 @@ impl<RpcProvider> L1TransactionFetcher for L1RpcClient<RpcProvider>
 where
     RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
+    type Provider = RpcProvider;
+
     async fn fetch_transaction_receipt(
         &self,
         tx_hash: B256,
@@ -184,6 +191,10 @@ where
             .await
             .map_err(|_| L1RpcError::UnableToFetchTransactionReceipt(tx_hash.to_string()))?
             .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))
+    }
+
+    fn get_provider(&self) -> &Self::Provider {
+        self.rpc.as_ref()
     }
 }
 

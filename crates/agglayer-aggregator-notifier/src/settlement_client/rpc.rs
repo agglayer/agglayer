@@ -10,7 +10,10 @@ use agglayer_types::{
     CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber,
     ExecutionMode, Proof, SettlementTxHash,
 };
-use alloy::rpc::types::TransactionReceipt;
+use alloy::{
+    providers::{PendingTransactionConfig, Provider},
+    rpc::types::TransactionReceipt,
+};
 use arc_swap::ArcSwap;
 use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
 use tracing::{debug, error, info, instrument, warn};
@@ -308,33 +311,46 @@ where
         certificate_id: CertificateId,
     ) -> Result<TransactionReceipt, Error> {
         let tx_hash = settlement_tx_hash.into();
-        let mut retries = self.config.max_retries;
+        let timeout = self
+            .config
+            .retry_interval
+            .mul_f64(self.config.max_retries as f64);
+        let pending_tx_config = PendingTransactionConfig::new(tx_hash)
+            .with_required_confirmations(self.config.confirmations as u64)
+            .with_timeout(Some(timeout));
 
-        loop {
-            match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
-                Ok(receipt) => {
-                    info!(%settlement_tx_hash, "Successfully retrieved transaction receipt");
-                    return Ok(receipt);
-                }
-                Err(_) if retries > 0 => {
-                    retries -= 1;
-                    debug!(
-                        %settlement_tx_hash,
-                        "Transaction receipt not yet available for tx (retries left: {retries})"
-                    );
-                    tokio::time::sleep(self.config.retry_interval).await;
-                }
-                Err(error) => {
-                    error!(
-                        ?error,
-                        %settlement_tx_hash,
-                        "Failed to fetch settlement transaction receipt after all retries"
-                    );
-                    return Err(Error::SettlementError {
+        let pending_tx = self
+            .l1_rpc
+            .get_provider()
+            .watch_pending_transaction(pending_tx_config)
+            .await
+            .map_err(|e| Error::SettlementError {
+                certificate_id,
+                error: format!("Failed to watch pending settlement transaction: {e}"),
+            })?;
+
+        match pending_tx.await {
+            Ok(confirmed_tx_hash) => {
+                info!(%settlement_tx_hash, "Transaction confirmed, fetching receipt");
+                // Now fetch the actual transaction receipt using the confirmed hash
+                self.l1_rpc
+                    .fetch_transaction_receipt(confirmed_tx_hash)
+                    .await
+                    .map_err(|error| Error::SettlementError {
                         certificate_id,
-                        error: error.to_string(),
-                    });
-                }
+                        error: format!("Failed to fetch settlement transaction receipt: {error}"),
+                    })
+            }
+            Err(error) => {
+                error!(
+                    ?error,
+                    %settlement_tx_hash,
+                    "Failed to wait for the pending settlement transaction confirmation"
+                );
+                Err(Error::SettlementError {
+                    certificate_id,
+                    error: error.to_string(),
+                })
             }
         }
     }
