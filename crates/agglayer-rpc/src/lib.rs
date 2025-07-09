@@ -330,7 +330,7 @@ where
     }
 
     /// Verify the extra [`Certificate`] signature.
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self, certificate), level = "debug")]
     pub(crate) fn verify_extra_cert_signature(
         &self,
         certificate: &Certificate,
@@ -406,18 +406,19 @@ where
                     .get(&certificate.network_id.to_u32()),
                 extra_signature,
             )
-            .map_err(|e| {
-                error!(error = %e, hash = hash_string, "Failed to verify the extra signature for the
-        certificate {hash}: {e}");
-                CertificateSubmissionError::SignatureError(e)
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to verify the extra signature for the certificate"
+                );
+                CertificateSubmissionError::SignatureError(error)
             })?;
 
             self.verify_cert_signature(&certificate)
                 .await
-                .map_err(|e| {
-                    error!(error = %e, hash = hash_string, "Failed to verify the signature of
-        certificate {hash}: {e}");
-                    CertificateSubmissionError::SignatureError(e)
+                .map_err(|error| {
+                    error!(?error, "Failed to verify the signature of certificate");
+                    CertificateSubmissionError::SignatureError(error)
                 })?;
         }
 
