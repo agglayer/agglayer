@@ -1,8 +1,7 @@
-// TODO: split into smaller files
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt,
-};
+// Removed BTreeMap and BTreeSet imports - now using Vec for better SP1
+// performance
+
+use std::fmt;
 
 pub use agglayer_interop_types::{aggchain_proof, bincode, NetworkId};
 use agglayer_interop_types::{
@@ -27,7 +26,7 @@ use pessimistic_proof::{
     keccak::keccak256_combine,
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
     local_state::StateCommitment,
-    multi_batch_header::MultiBatchHeader,
+    multi_batch_header::{MultiBatchHeader, U256Def},
     nullifier_tree::{NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
     LocalNetworkState, ProofError,
 };
@@ -801,7 +800,7 @@ impl LocalNetworkStateData {
             self.exit_tree.add_leaf(e.hash())?;
         }
 
-        let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
+        let balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>))> = {
             // Consider all the imported bridge exits except for the native token
             let imported_bridge_exits = certificate.imported_bridge_exits.iter().filter(|b| {
                 b.bridge_exit.amount_token_info().origin_network != certificate.network_id
@@ -813,78 +812,105 @@ impl LocalNetworkStateData {
                 .iter()
                 .filter(|b| b.amount_token_info().origin_network != certificate.network_id);
 
-            // Set of dedup tokens mutated in the transition
-            let mutated_tokens: BTreeSet<TokenInfo> = {
+            // Collect unique tokens mutated in the transition
+            // OPTIMIZATION: Use Vec instead of BTreeSet for better SP1 cycle performance
+            let mutated_tokens: Vec<TokenInfo> = {
                 let imported_tokens = imported_bridge_exits
                     .clone()
                     .map(|exit| exit.bridge_exit.amount_token_info());
                 let exported_tokens = bridge_exits.clone().map(|exit| exit.amount_token_info());
-                imported_tokens.chain(exported_tokens).collect()
+                let all_tokens: Vec<_> = imported_tokens.chain(exported_tokens).collect();
+
+                // Deduplicate using Vec - more efficient in SP1 than BTreeSet
+                let mut unique_tokens = Vec::with_capacity(all_tokens.len());
+                for token in all_tokens {
+                    if !unique_tokens.contains(&token) {
+                        unique_tokens.push(token);
+                    }
+                }
+                unique_tokens
             };
 
-            let initial_balances: BTreeMap<_, _> = mutated_tokens
-                .iter()
-                .map(|&token| {
-                    let balance =
-                        U256::from_be_bytes(*self.balance_tree.get(token).unwrap_or_default());
-                    (token, balance)
-                })
-                .collect();
+            // OPTIMIZATION: Use Vec instead of BTreeMap for better SP1 cycle performance
+            let mut initial_balances = Vec::with_capacity(mutated_tokens.len());
+            for &token in &mutated_tokens {
+                let balance =
+                    U256::from_be_bytes(*self.balance_tree.get(token).unwrap_or_default());
+                initial_balances.push((token, balance));
+            }
 
-            let mut new_balances: BTreeMap<_, _> = initial_balances
-                .iter()
-                .map(|(&token, &balance)| (token, U512::from(balance)))
-                .collect();
+            let mut new_balances = Vec::with_capacity(initial_balances.len());
+            for &(token, balance) in &initial_balances {
+                new_balances.push((token, U512::from(balance)));
+            }
 
             for imported_bridge_exit in imported_bridge_exits {
                 let token = imported_bridge_exit.bridge_exit.amount_token_info();
-                new_balances.insert(
-                    token,
-                    new_balances[&token]
-                        .checked_add(U512::from(imported_bridge_exit.bridge_exit.amount))
-                        .ok_or(Error::BalanceOverflow(token))?,
-                );
+                // Find and update balance in Vec
+                for (stored_token, balance) in &mut new_balances {
+                    if *stored_token == token {
+                        *balance = balance
+                            .checked_add(U512::from(imported_bridge_exit.bridge_exit.amount))
+                            .ok_or(Error::BalanceOverflow(token))?;
+                        break;
+                    }
+                }
             }
 
             for bridge_exit in bridge_exits {
                 let token = bridge_exit.amount_token_info();
-                new_balances.insert(
-                    token,
-                    new_balances[&token]
-                        .checked_sub(U512::from(bridge_exit.amount))
-                        .ok_or(Error::BalanceUnderflow(token))?,
-                );
+                // Find and update balance in Vec
+                for (stored_token, balance) in &mut new_balances {
+                    if *stored_token == token {
+                        *balance = balance
+                            .checked_sub(U512::from(bridge_exit.amount))
+                            .ok_or(Error::BalanceUnderflow(token))?;
+                        break;
+                    }
+                }
             }
 
             // Get the proof against the initial balance for each token
-            mutated_tokens
-                .into_iter()
-                .map(|token| {
-                    let initial_balance = initial_balances[&token];
+            let mut result = Vec::with_capacity(mutated_tokens.len());
+            for token in mutated_tokens {
+                // Find initial balance
+                let initial_balance = initial_balances
+                    .iter()
+                    .find(|(t, _)| *t == token)
+                    .map(|(_, b)| *b)
+                    .unwrap();
 
-                    let new_balance = U256::uint_try_from(new_balances[&token])
-                        .map_err(|_| Error::BalanceOverflow(token))?;
+                // Find new balance
+                let new_balance_u512 = new_balances
+                    .iter()
+                    .find(|(t, _)| *t == token)
+                    .map(|(_, b)| *b)
+                    .unwrap();
 
-                    let balance_proof_error =
-                        |source| Error::BalanceProofGenerationFailed { source, token };
+                let new_balance = U256::uint_try_from(new_balance_u512)
+                    .map_err(|_| Error::BalanceOverflow(token))?;
 
-                    let path = if initial_balance.is_zero() {
-                        self.balance_tree
-                            .get_inclusion_proof_zero(token)
-                            .map_err(balance_proof_error)?
-                    } else {
-                        self.balance_tree
-                            .get_inclusion_proof(token)
-                            .map_err(balance_proof_error)?
-                    };
+                let balance_proof_error =
+                    |source| Error::BalanceProofGenerationFailed { source, token };
 
+                let path = if initial_balance.is_zero() {
                     self.balance_tree
-                        .update(token, new_balance.to_be_bytes().into())
-                        .map_err(balance_proof_error)?;
+                        .get_inclusion_proof_zero(token)
+                        .map_err(balance_proof_error)?
+                } else {
+                    self.balance_tree
+                        .get_inclusion_proof(token)
+                        .map_err(balance_proof_error)?
+                };
 
-                    Ok((token, (initial_balance, path)))
-                })
-                .collect::<Result<BTreeMap<_, _>, Error>>()?
+                self.balance_tree
+                    .update(token, new_balance.to_be_bytes().into())
+                    .map_err(balance_proof_error)?;
+
+                result.push((token, (initial_balance, path)));
+            }
+
+            result
         };
 
         let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> =
@@ -934,7 +960,12 @@ impl LocalNetworkStateData {
             origin_network: certificate.network_id,
             bridge_exits: certificate.bridge_exits.clone(),
             imported_bridge_exits,
-            balances_proofs,
+            // TODO: This is a hack bc I coudln't figure out how to
+            // serialize Vec<(_, (U256, _))> given that U256 is externally defined.
+            balances_proofs: balances_proofs
+                .into_iter()
+                .map(|(token, (initial_balance, path))| (token, (initial_balance.into(), path)))
+                .collect(),
             l1_info_root,
             aggchain_proof,
             height: certificate.height.0,

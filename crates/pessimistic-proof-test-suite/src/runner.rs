@@ -39,8 +39,19 @@ impl Runner {
     /// Convert inputs to stdin.
     pub fn prepare_stdin(state: &NetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
         let mut stdin = SP1Stdin::new();
-        stdin.write(state);
-        stdin.write(batch_header);
+        println!("asdasd");
+        stdin.write_slice(
+            rkyv::to_bytes::<rkyv::rancor::Error>(state)
+                .expect("Failed to serialize NetworkState")
+                .as_slice(),
+        );
+        println!("asdasd2");
+        stdin.write_slice(
+            rkyv::to_bytes::<rkyv::rancor::Error>(batch_header)
+                .expect("Failed to serialize MultiBatchHeader")
+                .as_slice(),
+        );
+        println!("asdasd3");
         stdin
     }
 

@@ -13,10 +13,14 @@ pub fn main() {
     let initial_state = rkyv::from_bytes::<NetworkState, rkyv::rancor::Error>(&initial_state_bytes)
         .expect("Failed to deserialize witness data.");
     println!("cycle-tracker-report-end: safe_read_network_state");
-    // let initial_state = sp1_zkvm::io::read::<NetworkState>();
-    println!("cycle-tracker-report-start: read_batch_header");
-    let batch_header = sp1_zkvm::io::read::<MultiBatchHeader<Keccak256Hasher>>();
-    println!("cycle-tracker-report-end: read_batch_header");
+
+    println!("cycle-tracker-report-start: safe_read_batch_header");
+    let batch_header_bytes = sp1_zkvm::io::read_vec();
+    let batch_header = rkyv::from_bytes::<MultiBatchHeader<Keccak256Hasher>, rkyv::rancor::Error>(
+        &batch_header_bytes,
+    )
+    .expect("Failed to deserialize batch header.");
+    println!("cycle-tracker-report-end: safe_read_batch_header");
 
     println!("cycle-tracker-report-start: generate_pessimistic_proof");
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header).unwrap();

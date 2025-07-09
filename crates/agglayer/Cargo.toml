@@ -21,6 +21,7 @@ agglayer-prover-config = { workspace = true }
 agglayer-prover.workspace = true
 agglayer-storage = { path = "../agglayer-storage" }
 pessimistic-proof.workspace = true
+fmt = "0.1.0"
 
 [dev-dependencies]
 assert_cmd = "2.0.14"

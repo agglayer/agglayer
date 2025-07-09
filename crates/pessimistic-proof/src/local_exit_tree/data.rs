@@ -34,7 +34,7 @@ where
 impl<H, const TREE_DEPTH: usize> Default for LocalExitTreeData<H, TREE_DEPTH>
 where
     H: Hasher,
-    H::Digest: Copy + Default + Serialize + DeserializeOwned,
+    H::Digest: Copy + Default + Serialize + DeserializeOwned + rkyv::Archive,
 {
     fn default() -> Self {
         Self::new()
@@ -44,7 +44,7 @@ where
 impl<H, const TREE_DEPTH: usize> LocalExitTreeData<H, TREE_DEPTH>
 where
     H: Hasher,
-    H::Digest: Copy + Default + Serialize + DeserializeOwned,
+    H::Digest: Copy + Default + Serialize + DeserializeOwned + rkyv::Archive,
 {
     const MAX_NUM_LEAVES: u32 = ((1u64 << TREE_DEPTH) - 1) as u32;
 

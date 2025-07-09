@@ -21,6 +21,7 @@ ecdsa-proof-lib = { path = "./aggchain-proof-ecdsa-example/lib/" }
 base64.workspace = true
 clap.workspace = true
 ethers-signers.workspace = true
+rkyv.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

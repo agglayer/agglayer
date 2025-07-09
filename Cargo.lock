@@ -63,6 +63,7 @@ dependencies = [
  "clap",
  "dirs",
  "dotenvy",
+ "fmt",
  "hex",
  "insta",
  "pessimistic-proof",
@@ -719,6 +720,7 @@ version = "0.6.0"
 dependencies = [
  "agglayer-primitives 0.6.0",
  "hex",
+ "rkyv",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -4170,6 +4172,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fmt"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09904adae26440d46daeacb5ed7922fee69d43ebf84d31e078cd49652cecd718"
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6888,6 +6896,7 @@ dependencies = [
  "hex-literal 0.4.1",
  "rand 0.9.1",
  "rkyv",
+ "rkyv-with",
  "rs_merkle",
  "semver 1.0.26",
  "serde",
@@ -6921,6 +6930,7 @@ dependencies = [
  "pessimistic-proof",
  "rand 0.9.1",
  "regex",
+ "rkyv",
  "rstest",
  "serde",
  "serde_json",
@@ -8048,6 +8058,17 @@ dependencies = [
  "rkyv_derive",
  "tinyvec",
  "uuid 1.17.0",
+]
+
+[[package]]
+name = "rkyv-with"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3308fa04cf25d994d9f662057b67ef69774f3801d59c723bb644ec9ae83f500"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
 ]
 
 [[package]]

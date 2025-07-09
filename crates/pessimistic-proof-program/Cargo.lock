@@ -55,6 +55,7 @@ version = "0.6.0"
 dependencies = [
  "agglayer-primitives",
  "hex",
+ "rkyv",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -3144,6 +3145,7 @@ dependencies = [
  "hex",
  "hex-literal 0.4.1",
  "rkyv",
+ "rkyv-with",
  "semver 1.0.26",
  "serde",
  "serde_json",
@@ -3788,6 +3790,17 @@ dependencies = [
  "rkyv_derive",
  "tinyvec",
  "uuid",
+]
+
+[[package]]
+name = "rkyv-with"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3308fa04cf25d994d9f662057b67ef69774f3801d59c723bb644ec9ae83f500"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
 ]
 
 [[package]]
