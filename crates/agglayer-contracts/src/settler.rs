@@ -84,7 +84,8 @@ where
             // Apply gas multiplier if it's not the default (100).
             // First estimate gas, then multiply by the factor.
             let gas_estimate = tx_call.estimate_gas().await?;
-            let adjusted_gas = (gas_estimate * self.gas_multiplier_factor as u64) / 100;
+            let adjusted_gas =
+                (gas_estimate.saturating_mul(self.gas_multiplier_factor as u64)) / 100;
             warn!(
                 "Applying gas multiplier factor: {} for rollup_id: {}. Estimated gas: {}, \
                  Adjusted gas: {}",
