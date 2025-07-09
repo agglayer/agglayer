@@ -107,10 +107,10 @@ async fn check_tx_status_fail() {
         }
         ClientError::Transport(_) => {
             // This might occur with our test setup
-            panic!("Transport error (expected in test environment): {}", error);
+            panic!("Transport error (expected in test environment): {error}");
         }
         _ => {
-            panic!("Other error type: {}", error);
+            panic!("Other error type: {error}");
         }
     }
 }

@@ -335,11 +335,11 @@ where
     }
 
     /// Settle the given [`SignedTx`] to the rollup manager.
-    #[instrument(skip(self, _rate_guard), level = "debug")]
+    #[instrument(skip(self, rate_guard), level = "debug")]
     pub(crate) async fn settle(
         &self,
         signed_tx: &SignedTx,
-        _rate_guard: agglayer_rate_limiting::SendTxSlotGuard,
+        rate_guard: agglayer_rate_limiting::SendTxSlotGuard,
     ) -> Result<TransactionReceipt, SettlementError> {
         let hex_hash = signed_tx.hash();
         let hash = format!("{hex_hash:?}");
@@ -357,6 +357,7 @@ where
             .get_receipt()
             .await
             .inspect(|tx_receipt| {
+                rate_guard.record(tokio::time::Instant::now());
                 info!(
                     block_hash = ?tx_receipt.block_hash,
                     block_number = ?tx_receipt.block_number,
