@@ -336,9 +336,19 @@ where
                 self.l1_rpc
                     .fetch_transaction_receipt(confirmed_tx_hash)
                     .await
-                    .map_err(|error| Error::SettlementError {
-                        certificate_id,
-                        error: format!("Failed to fetch settlement transaction receipt: {error}"),
+                    .map_err(|error| {
+                        error!(
+                            ?error,
+                            %settlement_tx_hash,
+                            "Failed to fetch settlement transaction receipt"
+                        );
+
+                        Error::SettlementError {
+                            certificate_id,
+                            error: format!(
+                                "Failed to fetch settlement transaction receipt: {error}"
+                            ),
+                        }
                     })
             }
             Err(error) => {
