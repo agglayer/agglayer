@@ -16,7 +16,7 @@ fn testing_local_wallet() -> ConfiguredSigner {
 #[case(testing_local_wallet())]
 #[tokio::test]
 async fn signer_works(#[case] signer: ConfiguredSigner) {
-    let tx = TxEip1559 {
+    let mut tx = TxEip1559 {
         chain_id: 1337,
         nonce: 123,
         gas_limit: 21000,
@@ -27,7 +27,7 @@ async fn signer_works(#[case] signer: ConfiguredSigner) {
         access_list: Default::default(),
         input: Default::default(),
     };
-    let typed_tx = TypedTransaction::Eip1559(tx);
+    let typed_tx = TypedTransaction::Eip1559(tx.clone());
 
     // Check the signature returned by the signer successfully verifies
     let signature = signer.sign_transaction_typed(&typed_tx).await.unwrap();
@@ -38,6 +38,14 @@ async fn signer_works(#[case] signer: ConfiguredSigner) {
         .recover_address_from_prehash(&typed_tx.signature_hash())
         .unwrap();
     assert_eq!(recovered_address, Signer::address(&signer));
+
+    // Change the tx to and verify that the signature is invalid
+    tx.to = alloy_primitives::TxKind::Call(Address::from([0x22; 20]));
+    let changed_typed_tx = TypedTransaction::Eip1559(tx);
+    let recovered_address = signature
+        .recover_address_from_prehash(&changed_typed_tx.signature_hash())
+        .unwrap();
+    assert_ne!(recovered_address, Signer::address(&signer));
 
     // Test message signing as well
     let message = b"test message";
@@ -60,11 +68,10 @@ async fn sign_hash_works(#[case] signer: ConfiguredSigner) {
     assert_eq!(recovered_address, Signer::address(&signer));
 }
 
-#[rstest::rstest]
-#[case(testing_local_wallet())]
 #[tokio::test]
-async fn local_signer_type_detection(#[case] signer: ConfiguredSigner) {
+async fn local_signer_type_detection() {
     // Test local signer type detection
+    let signer = testing_local_wallet();
     assert!(signer.is_local());
     assert!(!signer.is_kms());
 }

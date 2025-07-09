@@ -100,17 +100,17 @@ async fn check_tx_status_fail() {
     match error {
         ClientError::Call(error_object) => {
             // This would be the expected error format from the RPC
-            debug!("Received expected call error: {}", error_object);
+            info!("Received expected call error: {}", error_object);
         }
         ClientError::RequestTimeout => {
             panic!("Unexpected timeout error");
         }
         ClientError::Transport(_) => {
             // This might occur with our test setup
-            debug!("Transport error (expected in test environment): {}", error);
+            panic!("Transport error (expected in test environment): {}", error);
         }
         _ => {
-            debug!("Other error type: {}", error);
+            panic!("Other error type: {}", error);
         }
     }
 }
