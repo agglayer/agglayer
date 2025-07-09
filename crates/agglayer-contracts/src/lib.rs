@@ -42,6 +42,8 @@ pub struct L1RpcClient<RpcProvider> {
     l1_info_tree: Address,
     /// L1 info tree entry used for certificates without imported bridge exits.
     default_l1_info_tree_entry: (u32, [u8; 32]),
+    /// Gas multiplier factor for transactions.
+    gas_multiplier_factor: u32,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -98,12 +100,14 @@ where
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         l1_info_tree: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
+        gas_multiplier_factor: u32,
     ) -> Self {
         Self {
             rpc,
             inner,
             l1_info_tree,
             default_l1_info_tree_entry,
+            gas_multiplier_factor,
         }
     }
 
@@ -111,6 +115,7 @@ where
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         l1_info_tree: Address,
+        gas_multiplier_factor: u32,
     ) -> Result<Self, L1RpcInitializationError>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
@@ -171,6 +176,7 @@ where
             inner,
             l1_info_tree,
             default_l1_info_tree_entry,
+            gas_multiplier_factor,
         ))
     }
 }
@@ -234,6 +240,7 @@ mod tests {
                 Arc::new(rpc.clone()),
                 contracts::PolygonRollupManager::new(rollup_manager_contract.into(), rpc),
                 ger_contract.into(),
+                100,
             )
             .await
             .unwrap(),

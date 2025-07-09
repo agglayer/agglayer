@@ -226,6 +226,7 @@ impl TestContext {
             inner,
             Address::ZERO.into(), // Use real L1 info tree address in non-test environments
             (0u32, [0u8; 32]),    // Use real default L1 info tree entry in non-test environments
+            100,                  // Default gas multiplier factor
         )
     }
 

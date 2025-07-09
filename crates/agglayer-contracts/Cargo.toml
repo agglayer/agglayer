@@ -20,3 +20,5 @@ url.workspace = true
 agglayer-primitives.workspace = true
 prover-alloy.workspace = true
 
+[features]
+testutils = []

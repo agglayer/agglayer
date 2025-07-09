@@ -64,6 +64,7 @@ where
         );
 
         // Check if the low gas fail point is active and set the low gas if it is
+        #[cfg(feature = "testutils")]
         if fail::eval(
             "notifier::packer::settle_certificate::gas_estimate::low_gas",
             |_| true,
@@ -76,6 +77,20 @@ where
                 rollup_id
             );
             tx_call = tx_call.gas(30000);
+        }
+
+        // Check if a gas multiplier factor is provided
+        if self.gas_multiplier_factor != 100 {
+            // Apply gas multiplier if it's not the default (100).
+            // First estimate gas, then multiply by the factor.
+            let gas_estimate = tx_call.estimate_gas().await?;
+            let adjusted_gas = (gas_estimate * self.gas_multiplier_factor as u64) / 100;
+            warn!(
+                "Applying gas multiplier factor: {} for rollup_id: {}. Estimated gas: {}, \
+                 Adjusted gas: {}",
+                self.gas_multiplier_factor, rollup_id, gas_estimate, adjusted_gas
+            );
+            tx_call = tx_call.gas(adjusted_gas);
         }
 
         tx_call.send().await
