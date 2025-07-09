@@ -3,7 +3,7 @@ use alloy::{
     primitives::Bytes,
     providers::{PendingTransactionBuilder, Provider},
 };
-use tracing::warn;
+use tracing::debug;
 
 use crate::L1RpcClient;
 
@@ -72,7 +72,7 @@ where
         .unwrap_or(false)
         {
             // Set deliberately low gas to cause failure
-            warn!(
+            tracing::warn!(
                 "FAIL POINT ACTIVE: low gas fail point active for rollup_id: {}",
                 rollup_id
             );
@@ -86,7 +86,7 @@ where
             let gas_estimate = tx_call.estimate_gas().await?;
             let adjusted_gas =
                 (gas_estimate.saturating_mul(self.gas_multiplier_factor as u64)) / 100;
-            warn!(
+            debug!(
                 "Applying gas multiplier factor: {} for rollup_id: {}. Estimated gas: {}, \
                  Adjusted gas: {}",
                 self.gas_multiplier_factor, rollup_id, gas_estimate, adjusted_gas
