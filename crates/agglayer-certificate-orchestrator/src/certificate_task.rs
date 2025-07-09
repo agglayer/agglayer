@@ -305,10 +305,10 @@ where
 
     async fn send_to_network_task(
         &self,
-        msg: NetworkTaskMessage,
+        message: NetworkTaskMessage,
     ) -> Result<(), CertificateStatusError> {
-        trace!(?msg, "Sending message to network task");
-        self.network_task.send(msg).await.map_err(send_err)
+        trace!(?message, "Sending message to network task");
+        self.network_task.send(message).await.map_err(send_err)
     }
 }
 
