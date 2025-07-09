@@ -6052,6 +6052,7 @@ dependencies = [
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
+ "agglayer-prover",
  "agglayer-tries",
  "agglayer-types",
  "alloy",
