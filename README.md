@@ -133,9 +133,6 @@ Modifications in PP code will not be automatically reflected in the binary.
 We use docker-based deterministic build to compile the proof.
 Therefore, `docker` has to be present on the system for the build to work if PP rebuild is enabled.
 
-Note: Rust suppresses the output of build scripts by default.
-As a result, the build may appear stuck on the `pessimistic-proof` crate while the PP is being rebuilt.
-
 ### Building PP one-off
 
 The following command rebuilds the PP and updates some snapshot tests that depend on it.
@@ -153,6 +150,9 @@ It is enabled by setting the `AGGLAYER_ELF_BUILD` environment variable to `updat
 ```sh
 export AGGLAYER_ELF_BUILD=update
 ```
+
+Note: Rust suppresses the output of build scripts by default.
+As a result, the build may appear stuck on the `pessimistic-proof` crate while the PP is being rebuilt.
 
 In the `update` mode, the proof will be rebuilt and the cached ELF will be updated.
 There is also the `build` mode which leaves the cached ELF intact.
