@@ -144,11 +144,11 @@ cargo make pp-elf
 
 This option makes the standard commands like `cargo build`, `cargo run` etc. rebuild the PP automatically any time it changes as if it was a normal part of the build. It is enabled by setting an environment variable.
 
-The following will rebuild the proof and update the cached binary:
-
 ```sh
 export AGGLAYER_ELF_BUILD=update
 ```
+
+In the `update` mode, the proof will be rebuilt and the cached ELF will be updated. There is also the `build` mode which leaves the cached ELF intact. It is mostly useful for debugging, the `update` is more suitable for regular development.
 
 To get automatic rebuilds by default, set the variable in the shell init script.
 
