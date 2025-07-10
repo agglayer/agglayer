@@ -165,6 +165,52 @@ where
         }
     }
 
+    async fn recompute_state(&self) -> Result<(), CertificateStatusError> {
+        // TODO: once we store network_id -> height -> state and not just network_id ->
+        // state, we should not need this any longer, because the state will
+        // already be recorded.
+
+        let height = self.header.height;
+        let certificate_id = self.header.certificate_id;
+
+        // Retrieve local network state
+        trace!("Retrieving local network state");
+        let (response, state) = oneshot::channel();
+        self.network_task
+            .send(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight { height, response })
+            .await
+            .map_err(send_err)?;
+        let mut state = state.await.map_err(recv_err)??;
+
+        // Execute the witness generation to retrieve the new local network state
+        debug!("Recomputing new state for already-proven certificate");
+        let _ = self
+                .certifier_client
+                .witness_generation(&self.certificate, &mut state)
+                .await
+                .map_err(|error| {
+                    error!(%certificate_id, ?error, "Failed recomputing the new state for already-proven certificate");
+                    error
+                })?;
+        debug!("Recomputing new state completed");
+
+        // Send the new state to the network task
+        // TODO: Once we update the storage we'll have to remove this! It wouldn't be
+        // valid if we had multiple certificates inflight. Thankfully, until
+        // we update the storage we cannot have multiple certificates
+        // inflight, so we should be fine until then.
+        self.network_task
+            .send(NetworkTaskMessage::CertificateExecuted {
+                height,
+                certificate_id,
+                new_state: state,
+            })
+            .await
+            .map_err(send_err)?;
+
+        Ok(())
+    }
+
     async fn process_from_pending(&mut self) -> Result<(), CertificateStatusError> {
         if self.header.status != CertificateStatus::Pending {
             return Err(CertificateStatusError::InternalError(format!(
@@ -213,52 +259,6 @@ where
             .map_err(send_err)?;
 
         self.process_from_proven().await
-    }
-
-    async fn recompute_state(&self) -> Result<(), CertificateStatusError> {
-        // TODO: once we store network_id -> height -> state and not just network_id ->
-        // state, we should not need this any longer, because the state will
-        // already be recorded.
-
-        let height = self.header.height;
-        let certificate_id = self.header.certificate_id;
-
-        // Retrieve local network state
-        trace!("Retrieving local network state");
-        let (response, state) = oneshot::channel();
-        self.network_task
-            .send(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight { height, response })
-            .await
-            .map_err(send_err)?;
-        let mut state = state.await.map_err(recv_err)??;
-
-        // Execute the witness generation to retrieve the new local network state
-        debug!("Recomputing new state for already-proven certificate");
-        let _ = self
-                .certifier_client
-                .witness_generation(&self.certificate, &mut state)
-                .await
-                .map_err(|error| {
-                    error!(%certificate_id, ?error, "Failed recomputing the new state for already-proven certificate");
-                    error
-                })?;
-        debug!("Recomputing new state completed");
-
-        // Send the new state to the network task
-        // TODO: Once we update the storage we'll have to remove this! It wouldn't be
-        // valid if we had multiple certificates inflight. Thankfully, until
-        // we update the storage we cannot have multiple certificates
-        // inflight, so we should be fine until then.
-        self.network_task
-            .send(NetworkTaskMessage::CertificateExecuted {
-                height,
-                certificate_id,
-                new_state: state,
-            })
-            .await
-            .map_err(send_err)?;
-
-        Ok(())
     }
 
     async fn process_from_proven(&mut self) -> Result<(), CertificateStatusError> {
