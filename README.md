@@ -126,6 +126,32 @@ cargo test --package pessimistic-proof-test-suite
 
 You can find the test inputs here: [`./agglayer/crates/pessimistic-proof-test-suite`](./crates/pessimistic-proof-test-suite/data/)
 
+## Modifying and building the pessimistic proof
+
+By default, the committed pre-compiled ELF binary is used. Modifications in PP code will not be automatically reflected in the binary. We use docker-based deterministic build to compile the proof. Therefore, `docker` has to be present on the system for the build to work if PP rebuild is enabled.
+
+Note: Rust suppresses the output of build scripts by default. As a result, the build may appear stuck when building the `pessimistic-proof` crate while the PP is being rebuilt.
+
+### Building PP one-off
+
+The following command rebuilds the PP and updates some snapshot tests that depend on it. It requires `cargo-make` to be installed:
+
+```sh
+cargo make pp-elf
+```
+
+### Turning on automatic PP rebuild
+
+This option makes the standard commands like `cargo build`, `cargo run` etc. rebuild the PP automatically any time it changes as if it was a normal part of the build. It is enabled by setting an environment variable.
+
+The following will rebuild the proof and update the cached binary:
+
+```sh
+export AGGLAYER_ELF_BUILD=update
+```
+
+To get automatic rebuilds by default, set the variable in the shell init script.
+
 ## Running SP1 Proof Generation Locally (Not Recommended)
 
 The [Succinct Prover Network](#succinct-prover-network) is the best way to generate Pessimistic Proofs for Agglayer. 
