@@ -160,6 +160,19 @@ It is mostly useful for debugging, the `update` is more suitable for regular dev
 
 To get automatic rebuilds by default, set the variable in the shell init script.
 
+### Proof versioning policy
+
+The proof binary to use is uniquely identified by a vkey selector on the L1.
+The selector is derived from the major version of the `pessimistic-proof-program` package.
+This version must be bumped between releases / deployments.
+
+There is a snapshot test that will fail once the proof vkey changes to prompt the developers to consider whether a version bump is needed.
+Once that is determined and the package version is updated (or not updated, as appropriate), the new vkey is accepted by running:
+
+```sh
+cargo make pp-accept-vkey-change
+```
+
 ## Running SP1 Proof Generation Locally (Not Recommended)
 
 The [Succinct Prover Network](#succinct-prover-network) is the best way to generate Pessimistic Proofs for Agglayer. 
