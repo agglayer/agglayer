@@ -21,17 +21,6 @@ pub enum ConsensusType {
 
 pub type Vkey = [u32; 8];
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-#[rkyv(remote = Address)]
-struct AddressDef([u8; 20]);
-
-impl From<AddressDef> for Address {
-    #[inline]
-    fn from(value: AddressDef) -> Self {
-        Address::from_slice(&value.0)
-    }
-}
-
 /// Aggchain Data which is either one ECDSA signature, or one generic proof.
 /// Contains all the necessary data for verification.
 #[derive(
@@ -41,7 +30,6 @@ pub enum AggchainData {
     /// ECDSA signature.
     ECDSA {
         /// Signer committing to the state transition.
-        #[rkyv(with = AddressDef)]
         signer: Address,
         /// Signature committing to the state transition.
         signature: Signature,
