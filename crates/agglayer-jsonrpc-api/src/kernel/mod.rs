@@ -8,7 +8,7 @@ use agglayer_contracts::contracts::{
 };
 use agglayer_rate_limiting::RateLimiter;
 use agglayer_rpc::error::SignatureVerificationError;
-use agglayer_types::{Address, Certificate};
+use agglayer_types::Address;
 use alloy::{
     contract::Error as ContractError,
     network::Ethereum,
@@ -306,34 +306,6 @@ where
         Ok(())
     }
 
-    /// Verify that the signer of the given [`Certificate`] is the trusted
-    /// sequencer for the rollup id it specified.
-    #[allow(unused)]
-    #[instrument(skip(self), level = "debug")]
-    pub(crate) async fn verify_cert_signature(
-        &self,
-        cert: &Certificate,
-    ) -> Result<(), SignatureVerificationError> {
-        let sequencer_address = self
-            .get_trusted_sequencer_address(u32::from(cert.network_id))
-            .await?;
-
-        let signer: Address = cert
-            .signer()
-            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?;
-
-        // ECDSA-k256 signature verification works by recovering the public key from the
-        // signature, and then checking that it is the expected one.
-        if signer != sequencer_address {
-            return Err(SignatureVerificationError::InvalidSigner {
-                signer,
-                trusted_sequencer: sequencer_address,
-            });
-        }
-
-        Ok(())
-    }
-
     /// Settle the given [`SignedTx`] to the rollup manager.
     #[instrument(skip(self, rate_guard), level = "debug")]
     pub(crate) async fn settle(
@@ -366,12 +338,7 @@ where
             })
             .map_err(SettlementError::PendingTransactionError)
     }
-}
 
-impl<RpcProvider> Kernel<RpcProvider>
-where
-    RpcProvider: Provider + Clone + 'static,
-{
     /// Check the status of the given hash.
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn check_tx_status(
@@ -391,5 +358,38 @@ where
             .get_block_number()
             .await
             .map_err(CheckTxStatusError::ProviderError)
+    }
+}
+
+#[cfg(test)]
+impl<RpcProvider> Kernel<RpcProvider>
+where
+    RpcProvider: Provider + Clone + 'static,
+{
+    /// Verify that the signer of the given [`Certificate`] is the trusted
+    /// sequencer for the rollup id it specified.
+    #[instrument(skip(self), level = "debug")]
+    pub(crate) async fn verify_cert_signature(
+        &self,
+        cert: &agglayer_types::Certificate,
+    ) -> Result<(), SignatureVerificationError> {
+        let sequencer_address = self
+            .get_trusted_sequencer_address(u32::from(cert.network_id))
+            .await?;
+
+        let signer: Address = cert
+            .signer()
+            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?;
+
+        // ECDSA-k256 signature verification works by recovering the public key from the
+        // signature, and then checking that it is the expected one.
+        if signer != sequencer_address {
+            return Err(SignatureVerificationError::InvalidSigner {
+                signer,
+                trusted_sequencer: sequencer_address,
+            });
+        }
+
+        Ok(())
     }
 }

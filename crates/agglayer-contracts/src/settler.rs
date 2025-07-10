@@ -63,7 +63,8 @@ where
             custom_chain_data,
         );
 
-        // Check if the low gas fail point is active and set the low gas if it is
+        // This is a fail point for testing purposes, it simulates low gas conditions.
+        // Check if the low gas fail point is active and set the low gas if it is.
         #[cfg(feature = "testutils")]
         if fail::eval(
             "notifier::packer::settle_certificate::gas_estimate::low_gas",
@@ -71,7 +72,6 @@ where
         )
         .unwrap_or(false)
         {
-            // Set deliberately low gas to cause failure
             tracing::warn!(
                 "FAIL POINT ACTIVE: low gas fail point active for rollup_id: {}",
                 rollup_id
