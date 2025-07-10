@@ -5,23 +5,20 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-agglayer-types.workspace = true
-
+alloy.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
-ethers-contract = "2.0.14"
-ethers.workspace = true
+fail.workspace = true
 hex.workspace = true
 num-traits = "0.2"
 num-derive = "0.4"
-sp1-zkvm.workspace = true
-sp1-primitives.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
+url.workspace = true
 
-[dev-dependencies]
-mockall.workspace = true
+agglayer-primitives.workspace = true
+prover-alloy.workspace = true
 
-[build-dependencies]
-ethers-contract = "2.0.14"
+[features]
+testutils = []
