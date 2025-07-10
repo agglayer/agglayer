@@ -144,7 +144,7 @@ where
             self.pending_store.remove_generated_proof(&certificate_id)?;
         }
 
-        return match &self.header.status {
+        match &self.header.status {
             CertificateStatus::Pending => self.process_from_pending().await,
             CertificateStatus::Proven => {
                 self.recompute_state().await?;
@@ -162,7 +162,7 @@ where
                 warn!(error = ?anyhow::Error::from(error.clone()), "Certificate is already in error");
                 Err(error.clone())
             }
-        };
+        }
     }
 
     async fn process_from_pending(&mut self) -> Result<(), CertificateStatusError> {
