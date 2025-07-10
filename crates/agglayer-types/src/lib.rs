@@ -394,12 +394,17 @@ impl Certificate {
     }
 
     pub fn hash(&self) -> CertificateId {
+        tracing::error!("Hashing certificate {self:?}");
+        tracing::error!("- computing BE commitment");
         let commit_bridge_exits =
             keccak256_combine(self.bridge_exits.iter().map(|exit| exit.hash()));
+        tracing::error!("  -> {commit_bridge_exits:?}");
+        tracing::error!("- computing IBE commitment");
         let commit_imported_bridge_exits =
             keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
+        tracing::error!("  -> {commit_imported_bridge_exits:?}");
 
-        keccak256_combine([
+        let res = keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
             self.height.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_slice(),
@@ -407,7 +412,9 @@ impl Certificate {
             commit_bridge_exits.as_slice(),
             commit_imported_bridge_exits.as_slice(),
             self.metadata.as_slice(),
-        ])
+        ]);
+        tracing::error!("-> Resulting Certificate ID: {res:?}");
+        res
     }
 
     /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].

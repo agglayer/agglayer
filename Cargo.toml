@@ -44,11 +44,11 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", tag = "v0.7.0" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git", branch = "ekleog/log-all-hashes" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", branch = "ekleog/log-all-hashes" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", branch = "ekleog/log-all-hashes" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", branch = "ekleog/log-all-hashes" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", branch = "ekleog/log-all-hashes" }
 
 # Provers
 agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.1.1" }
