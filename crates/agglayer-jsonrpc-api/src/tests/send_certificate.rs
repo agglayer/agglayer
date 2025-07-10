@@ -7,7 +7,6 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, Digest, Height, Metadata,
     NetworkId, SettlementTxHash,
 };
-use ethers::signers::Signer as _;
 use jsonrpsee::{core::client::ClientT, rpc_params};
 use tracing::info;
 
@@ -15,24 +14,27 @@ use crate::testutils::TestContext;
 
 #[test_log::test(tokio::test)]
 async fn send_certificate_method_can_be_called_and_succeed() {
-    let db_dir = TempDBDir::new();
-    let mut config = Config::new(&db_dir.path);
-    config
-        .proof_signers
-        .insert(1, Certificate::wallet_for_test(NetworkId::new(1)).address());
-
+    let mut config = TestContext::get_default_config();
+    config.proof_signers.insert(
+        1,
+        Certificate::wallet_for_test(NetworkId::new(1))
+            .address()
+            .into(),
+    );
     let mut context = TestContext::new_with_config(config).await;
+    let client = context.api_client.clone();
 
-    let _: CertificateId = context
-        .client
+    let cert_id: CertificateId = client
         .request(
             "interop_sendCertificate",
             rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
         )
         .await
         .unwrap();
+    let received_cert = context.certificate_receiver.try_recv();
 
-    assert!(context.certificate_receiver.try_recv().is_ok());
+    assert!(received_cert.is_ok());
+    assert_eq!(received_cert.unwrap().2, cert_id);
 }
 
 #[test_log::test(tokio::test)]
@@ -42,7 +44,7 @@ async fn send_certificate_method_can_be_called_and_fail() {
     let context = TestContext::new_with_config(config).await;
 
     let res: Result<(), _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![Certificate::new_for_test(0.into(), Height::ZERO)],
@@ -59,16 +61,22 @@ async fn send_certificate_with_blocked_networks() {
     config.proxied_networks = Some(agglayer_config::ProxiedNetworksConfig::for_tests(vec![
         NetworkId::new(1),
     ]));
-    config
-        .proof_signers
-        .insert(1, Certificate::wallet_for_test(NetworkId::new(1)).address());
-    config
-        .proof_signers
-        .insert(2, Certificate::wallet_for_test(NetworkId::new(2)).address());
+    config.proof_signers.insert(
+        1,
+        Certificate::wallet_for_test(NetworkId::new(1))
+            .address()
+            .into(),
+    );
+    config.proof_signers.insert(
+        2,
+        Certificate::wallet_for_test(NetworkId::new(2))
+            .address()
+            .into(),
+    );
     let context = TestContext::new_with_config(config).await;
 
     let res: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
@@ -81,7 +89,7 @@ async fn send_certificate_with_blocked_networks() {
     );
 
     let res: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![Certificate::new_for_test(2.into(), Height::ZERO)],
@@ -98,14 +106,17 @@ async fn send_certificate_with_blocked_networks() {
 async fn send_certificate_method_requires_known_signer() {
     let path = TempDBDir::new();
     let mut config = Config::new(&path.path);
-    // Willingly insert a signer that is not the one that’ll be used down below
-    config
-        .proof_signers
-        .insert(1, Certificate::wallet_for_test(NetworkId::new(2)).address());
+    // Willingly insert a signer that is not the one that'll be used down below
+    config.proof_signers.insert(
+        1,
+        Certificate::wallet_for_test(NetworkId::new(2))
+            .address()
+            .into(),
+    );
 
     let context = TestContext::new_with_config(config).await;
     let send_request: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
@@ -120,9 +131,12 @@ async fn pending_certificate_in_error_can_be_replaced() {
     let path = TempDBDir::new();
 
     let mut config = Config::new(&path.path);
-    config
-        .proof_signers
-        .insert(1, Certificate::wallet_for_test(NetworkId::new(1)).address());
+    config.proof_signers.insert(
+        1,
+        Certificate::wallet_for_test(NetworkId::new(1))
+            .address()
+            .into(),
+    );
 
     let context = TestContext::new_with_config(config).await;
     let network_id = 1.into();
@@ -142,7 +156,7 @@ async fn pending_certificate_in_error_can_be_replaced() {
         .expect("unable to insert pending certificate");
 
     let res: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![second_pending.clone()],
@@ -162,7 +176,7 @@ async fn pending_certificate_in_error_can_be_replaced() {
         .expect("unable to insert pending certificate header");
 
     let res: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request("interop_sendCertificate", rpc_params![second_pending])
         .await;
 
@@ -201,7 +215,7 @@ async fn pending_certificate_in_error_force_push() {
         .expect("unable to insert pending certificate");
 
     let res: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![pending_certificate.clone()],
@@ -221,7 +235,7 @@ async fn pending_certificate_in_error_force_push() {
         .expect("Unable to update certificate header status");
 
     let res: Result<CertificateId, _> = context
-        .client
+        .api_client
         .request(
             "interop_sendCertificate",
             rpc_params![pending_certificate.clone()],

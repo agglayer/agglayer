@@ -2,37 +2,16 @@
 
 use std::sync::Arc;
 
-use ethers::{prelude::*, providers::Middleware};
-use polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2Events;
+use alloy::{
+    eips::BlockNumberOrTag,
+    primitives::{Address, FixedBytes, B256},
+    providers::Provider,
+    rpc::types::{Filter, TransactionReceipt},
+};
 use tracing::{debug, error};
 
-#[rustfmt::skip]
-#[allow(warnings)]
-#[path = "contracts/aggchain_base.rs"]
-pub mod aggchain_base;
-
-#[rustfmt::skip]
-#[allow(warnings)]
-#[path = "contracts/agglayer_gateway.rs"]
-pub mod agglayer_gateway;
-
-
-#[rustfmt::skip]
-#[allow(warnings)]
-#[path = "contracts/polygon_rollup_manager.rs"]
-pub mod polygon_rollup_manager;
-
-#[rustfmt::skip]
-#[allow(warnings)]
-#[path = "contracts/polygon_zk_evm.rs"]
-pub mod polygon_zk_evm;
-
-#[rustfmt::skip]
-#[allow(warnings)]
-#[path = "contracts/polygon_zkevm_global_exit_root_v2.rs"]
-pub mod polygon_zkevm_global_exit_root_v2;
-
 pub mod aggchain;
+pub mod contracts;
 pub mod rollup;
 pub mod settler;
 
@@ -42,18 +21,29 @@ pub use settler::Settler;
 
 #[async_trait::async_trait]
 pub trait L1TransactionFetcher {
+    type Provider: Provider;
+
+    /// Fetches the transaction receipt for a given transaction hash.
     async fn fetch_transaction_receipt(
         &self,
-        tx_hash: H256,
+        tx_hash: B256,
     ) -> Result<TransactionReceipt, L1RpcError>;
+
+    /// Returns the provider for direct access to watch transactions
+    fn get_provider(&self) -> &Self::Provider;
 }
 
 pub struct L1RpcClient<RpcProvider> {
+    /// RPC provider to interact with the L1 blockchain.
     rpc: Arc<RpcProvider>,
-    inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
-    l1_info_tree: polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2<RpcProvider>,
+    /// Inner client for interacting with the Polygon Rollup Manager contract.
+    inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
+    /// Address of the PolygonZkEVMGlobalExitRootV2 contract
+    l1_info_tree: Address,
     /// L1 info tree entry used for certificates without imported bridge exits.
     default_l1_info_tree_entry: (u32, [u8; 32]),
+    /// Gas multiplier factor for transactions.
+    gas_multiplier_factor: u32,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -103,54 +93,66 @@ pub enum L1RpcError {
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
 where
-    RpcProvider: Middleware + 'static,
+    RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
     pub fn new(
         rpc: Arc<RpcProvider>,
-        inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
-        l1_info_tree: polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2<RpcProvider>,
+        inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
+        l1_info_tree: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
+        gas_multiplier_factor: u32,
     ) -> Self {
         Self {
             rpc,
             inner,
             l1_info_tree,
             default_l1_info_tree_entry,
+            gas_multiplier_factor,
         }
     }
 
     pub async fn try_new(
         rpc: Arc<RpcProvider>,
-        inner: polygon_rollup_manager::PolygonRollupManager<RpcProvider>,
-        l1_info_tree: polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2<RpcProvider>,
-    ) -> Result<Self, L1RpcInitializationError> {
-        let default_l1_info_tree_entry = {
-            let filter = Filter::new()
-                .address(l1_info_tree.address())
-                .event("InitL1InfoRootMap(uint32,bytes32)")
-                .from_block(BlockNumber::Earliest);
+        inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
+        l1_info_tree: Address,
+        gas_multiplier_factor: u32,
+    ) -> Result<Self, L1RpcInitializationError>
+    where
+        RpcProvider: alloy::providers::Provider + Clone + 'static,
+    {
+        use alloy::sol_types::SolEvent;
 
-            let events = l1_info_tree.client().get_logs(&filter).await.map_err(|e| {
+        use crate::contracts::PolygonZkEvmGlobalExitRootV2::InitL1InfoRootMap;
+
+        let default_l1_info_tree_entry = {
+            // Create filter for InitL1InfoRootMap events
+            let filter = Filter::new()
+                .address(l1_info_tree)
+                .event_signature(InitL1InfoRootMap::SIGNATURE_HASH)
+                .from_block(BlockNumberOrTag::Earliest);
+
+            // Get logs from the contract
+            let logs = rpc.get_logs(&filter).await.map_err(|e| {
                 L1RpcInitializationError::InitL1InfoRootMapEventNotFound(e.to_string())
             })?;
 
-            // Get the first l1 info tree leaf from the init event
-            let (l1_leaf_count, l1_info_root) = match events
-                .first()
-                .cloned()
-                .map(|log| PolygonZkEVMGlobalExitRootV2Events::decode_log(&log.into()))
-                .ok_or(L1RpcInitializationError::InitL1InfoRootMapEventNotFound(
-                    String::from("Event InitL1InfoRootMap not found"),
-                ))? {
-                Ok(PolygonZkEVMGlobalExitRootV2Events::InitL1InfoRootMapFilter(event)) => {
-                    (event.leaf_count, event.current_l1_info_root)
-                }
-                _ => {
-                    return Err(L1RpcInitializationError::InitL1InfoRootMapEventNotFound(
+            // Get the first log and decode it
+            let first_log =
+                logs.first()
+                    .ok_or(L1RpcInitializationError::InitL1InfoRootMapEventNotFound(
                         String::from("Event InitL1InfoRootMap not found"),
+                    ))?;
+
+            // Decode the log using alloy's generated event type
+            let decoded_event =
+                InitL1InfoRootMap::decode_log(&first_log.clone().into()).map_err(|_| {
+                    L1RpcInitializationError::InitL1InfoRootMapEventNotFound(String::from(
+                        "Failed to decode InitL1InfoRootMap event",
                     ))
-                }
-            };
+                })?;
+
+            let l1_leaf_count = decoded_event.leafCount;
+            let l1_info_root: [u8; 32] = decoded_event.currentL1InfoRoot.into();
 
             // Check that fetched l1 info root is non-zero
             if l1_info_root == [0u8; 32] {
@@ -162,7 +164,7 @@ where
             debug!(
                 "Retrieved the default L1 Info Tree entry. leaf_count: {}, root: {}",
                 l1_leaf_count,
-                H256::from_slice(l1_info_root.as_slice())
+                FixedBytes::<32>::from(l1_info_root)
             );
 
             // Use this entry as default
@@ -174,6 +176,7 @@ where
             inner,
             l1_info_tree,
             default_l1_info_tree_entry,
+            gas_multiplier_factor,
         ))
     }
 }
@@ -181,11 +184,13 @@ where
 #[async_trait::async_trait]
 impl<RpcProvider> L1TransactionFetcher for L1RpcClient<RpcProvider>
 where
-    RpcProvider: Middleware + 'static,
+    RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
+    type Provider = RpcProvider;
+
     async fn fetch_transaction_receipt(
         &self,
-        tx_hash: H256,
+        tx_hash: B256,
     ) -> Result<TransactionReceipt, L1RpcError> {
         self.rpc
             .get_transaction_receipt(tx_hash)
@@ -193,14 +198,18 @@ where
             .map_err(|_| L1RpcError::UnableToFetchTransactionReceipt(tx_hash.to_string()))?
             .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))
     }
+
+    fn get_provider(&self) -> &Self::Provider {
+        self.rpc.as_ref()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{str::FromStr, sync::Arc};
 
-    use polygon_rollup_manager::PolygonRollupManager;
-    use polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2;
+    use prover_alloy::build_alloy_fill_provider;
+    use url::Url;
 
     use super::*;
     use crate::rollup::RollupContract;
@@ -208,25 +217,30 @@ mod tests {
     #[tokio::test]
     #[ignore = "reaches external endpoint"]
     async fn test_fetch_proper_default_l1_leaf_count() {
-        let rpc = Arc::new(
-            Provider::<Http>::try_from("https://sepolia.gateway.tenderly.co/adEEbh8f3HykepCfd151V")
-                .unwrap(),
-        );
+        let rpc = build_alloy_fill_provider(
+            &Url::from_str("https://sepolia.gateway.tenderly.co/adEEbh8f3HykepCfd151V").unwrap(),
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
+        )
+        .expect("valid alloy provider");
 
         // Cardona contracts
-        let rollup_manager_contract: H160 = "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff" // bali: 0xe2ef6215adc132df6913c8dd16487abf118d1764
-            .parse()
-            .unwrap();
+        let rollup_manager_contract: agglayer_primitives::Address =
+            "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff" // bali: 0xe2ef6215adc132df6913c8dd16487abf118d1764
+                .parse()
+                .unwrap();
 
-        let ger_contract: H160 = "0xAd1490c248c5d3CbAE399Fd529b79B42984277DF" // bali: 0x2968d6d736178f8fe7393cc33c87f29d9c287e78
-            .parse()
-            .unwrap();
+        let ger_contract: agglayer_primitives::Address =
+            "0xAd1490c248c5d3CbAE399Fd529b79B42984277DF" // bali: 0x2968d6d736178f8fe7393cc33c87f29d9c287e78
+                .parse()
+                .unwrap();
 
         let l1_rpc = Arc::new(
             L1RpcClient::try_new(
-                rpc.clone(),
-                PolygonRollupManager::new(rollup_manager_contract, rpc.clone()),
-                PolygonZkEVMGlobalExitRootV2::new(ger_contract, rpc.clone()),
+                Arc::new(rpc.clone()),
+                contracts::PolygonRollupManager::new(rollup_manager_contract.into(), rpc),
+                ger_contract.into(),
+                100,
             )
             .await
             .unwrap(),
@@ -240,8 +254,12 @@ mod tests {
             "default: {default_leaf_count}, expected: {expected_leaf_count}"
         );
 
-        // check that the awaiting for finalization is done as expected
+        // check that the awaiting finalization is done as expected
         let latest_l1_leaf = 73587;
         let _l1_info_root = l1_rpc.get_l1_info_root(latest_l1_leaf).await.unwrap();
+        println!(
+            "L1 info root for leaf count {latest_l1_leaf} is: {}",
+            FixedBytes::<32>::from(_l1_info_root)
+        );
     }
 }

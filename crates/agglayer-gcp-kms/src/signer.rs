@@ -1,27 +1,26 @@
-//! The [`KmsSigner`] struct is a wrapper around [`GcpKmsSigner`] providing
-//! additional functionality for signing messages, transactions, and typed data.
+//! The [`KmsSigner`] struct is a wrapper around [`GcpSigner`] providing
+//! additional functionality for signing messages and transactions.
 
-use ethers::{
-    signers::Signer,
-    types::{
-        transaction::{eip2718::TypedTransaction, eip712::Eip712},
-        Address, Signature,
-    },
+use alloy::{
+    consensus::{SignableTransaction, TypedTransaction},
+    network::TxSigner,
+    signers::{gcp::GcpSigner, Signer},
 };
-use ethers_gcp_kms_signer::GcpKmsSigner;
+use alloy_primitives::{Address, ChainId, Signature, B256};
+use async_trait::async_trait;
 
 use crate::Error;
 
-/// A wrapper around [`GcpKmsSigner`] providing additional functionality
-/// for signing messages, transactions, and typed data.
-#[derive(Debug)]
+/// A wrapper around [`GcpSigner`] providing additional functionality
+/// for signing messages and transactions.
+#[derive(Debug, Clone)]
 pub struct KmsSigner {
-    signer: GcpKmsSigner,
+    signer: GcpSigner,
 }
 
 impl KmsSigner {
     /// Creates a new [`KmsSigner`] instance.
-    pub fn new(signer: GcpKmsSigner) -> Self {
+    pub fn new(signer: GcpSigner) -> Self {
         Self { signer }
     }
 
@@ -31,39 +30,96 @@ impl KmsSigner {
         &self,
         message: S,
     ) -> Result<Signature, Error> {
-        Ok(self.signer.sign_message(message).await?)
+        self.signer
+            .sign_message(message.as_ref())
+            .await
+            .map_err(|e| Error::KmsError(anyhow::Error::new(e).context("Unable to sign message")))
     }
 
     /// Signs a transaction using the internal signer, this method can fail if
     /// the signer fails to create the digest.
     pub async fn sign_transaction(&self, tx: &TypedTransaction) -> Result<Signature, Error> {
-        Ok(self.signer.sign_transaction(tx).await?)
-    }
-
-    /// Signs typed data using internal signer.
-    ///
-    /// This method can fail while trying to encode the payload using EIP-712 or
-    /// during the digest creation.
-    pub async fn sign_typed_data<T: Eip712 + Send + Sync>(
-        &self,
-        payload: &T,
-    ) -> Result<Signature, Error> {
-        Ok(self.signer.sign_typed_data(payload).await?)
+        // Convert the TypedTransaction to a mutable dyn SignableTransaction
+        let mut tx_clone = tx.clone();
+        self.signer
+            .sign_transaction(&mut tx_clone)
+            .await
+            .map_err(|e| {
+                Error::KmsError(anyhow::Error::new(e).context("Unable to sign transaction"))
+            })
     }
 
     /// Returns the address associated with the signer.
     pub fn address(&self) -> Address {
-        self.signer.address()
+        alloy::signers::Signer::address(&self.signer)
     }
 
     /// Returns the chain ID associated with the signer.
-    pub fn chain_id(&self) -> u64 {
+    pub fn chain_id(&self) -> Option<ChainId> {
         self.signer.chain_id()
     }
 
     /// Sets a new chain ID for the signer.
     pub fn with_chain_id<T: Into<u64>>(mut self, chain_id: T) -> Self {
-        self.signer = self.signer.with_chain_id(chain_id);
+        self.signer = self.signer.with_chain_id(Some(chain_id.into()));
         self
+    }
+
+    /// Sets the chain ID on this signer (mutable version).
+    pub fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
+        self.signer = self.signer.clone().with_chain_id(chain_id);
+    }
+}
+
+/// Implementation of alloy's [`Signer`] trait for [`KmsSigner`].
+///
+/// This allows the KmsSigner to be used anywhere an alloy Signer is expected.
+#[async_trait]
+impl Signer for KmsSigner {
+    async fn sign_hash(&self, hash: &B256) -> Result<Signature, alloy::signers::Error> {
+        self.signer
+            .sign_hash(hash)
+            .await
+            .map_err(alloy::signers::Error::other)
+    }
+
+    async fn sign_message(&self, message: &[u8]) -> Result<Signature, alloy::signers::Error> {
+        self.signer
+            .sign_message(message)
+            .await
+            .map_err(alloy::signers::Error::other)
+    }
+
+    fn address(&self) -> Address {
+        alloy::signers::Signer::address(&self.signer)
+    }
+
+    fn chain_id(&self) -> Option<ChainId> {
+        self.signer.chain_id()
+    }
+
+    fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
+        self.set_chain_id(chain_id);
+    }
+}
+
+/// Implementation of alloy's [`TxSigner`] trait for [`KmsSigner`].
+///
+/// This allows the KmsSigner to be used for transaction signing with the
+/// standard alloy interface.
+#[async_trait]
+impl TxSigner<Signature> for KmsSigner {
+    fn address(&self) -> Address {
+        Signer::address(&self.signer)
+    }
+
+    async fn sign_transaction(
+        &self,
+        tx: &mut dyn SignableTransaction<Signature>,
+    ) -> Result<Signature, alloy::signers::Error> {
+        self.signer
+            .sign_transaction(tx)
+            .await
+            .map_err(alloy::signers::Error::other)
     }
 }

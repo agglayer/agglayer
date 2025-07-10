@@ -6,11 +6,10 @@ edition.workspace = true
 [dependencies]
 agglayer-types.workspace = true
 
-alloy.workspace = true
+alloy = { workspace = true, features = ["node-bindings"] }
 async-trait.workspace = true
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-ethers = { workspace = true, features = ["ws"] }
 fail.workspace = true
 futures.workspace = true
 thiserror.workspace = true

@@ -1,19 +1,17 @@
 use std::sync::Arc;
 
-use agglayer_certificate_orchestrator::SettlementClient;
 use agglayer_config::outbound::OutboundRpcSettleConfig;
-use agglayer_contracts::{L1RpcError, Settler};
+use agglayer_contracts::{L1RpcError, L1TransactionFetcher, Settler};
 use agglayer_storage::tests::mocks::{MockPendingStore, MockPerEpochStore, MockStateStore};
 use agglayer_types::{
-    CertificateHeader, CertificateStatus, Height, Metadata, PessimisticRootInput, Proof,
+    Address, CertificateHeader, CertificateStatus, Height, Metadata, PessimisticRootInput, Proof,
+};
+use alloy::{
+    primitives::{Bytes, FixedBytes},
+    providers::PendingTransactionBuilder,
+    rpc::types::TransactionReceipt,
 };
 use arc_swap::ArcSwap;
-use ethers::{
-    contract::{ContractCall, ContractError},
-    middleware::NonceManagerMiddleware,
-    providers::{MockProvider, Provider},
-    types::H160,
-};
 use mockall::predicate::eq;
 use pessimistic_proof::unified_bridge::CommitmentVersion;
 use pessimistic_proof_test_suite::forest::Forest;
@@ -25,15 +23,15 @@ mockall::mock! {
     L1Rpc {}
     #[async_trait::async_trait]
     impl agglayer_contracts::RollupContract for L1Rpc {
-        type M = NonceManagerMiddleware<Provider<MockProvider>>;
+        type P = alloy::providers::RootProvider<alloy::network::Ethereum>;
 
         async fn get_trusted_sequencer_address(
             &self,
             rollup_id: u32,
-            proof_signers: std::collections::HashMap<u32,ethers::types::Address> ,
-        ) -> Result<ethers::types::Address, L1RpcError>;
+            proof_signers: std::collections::HashMap<u32, Address>,
+        ) -> Result<Address, L1RpcError>;
 
-        async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<ethers::types::Address, L1RpcError>;
+        async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<Address, L1RpcError>;
 
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
@@ -42,34 +40,38 @@ mockall::mock! {
         async fn get_verifier_type(&self, rollup_id: u32) -> Result<agglayer_contracts::rollup::VerifierType, L1RpcError>;
     }
 
+    #[async_trait::async_trait]
+    impl L1TransactionFetcher for L1Rpc {
+        type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
+
+        async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<TransactionReceipt, L1RpcError>;
+
+        fn get_provider(&self) -> &<Self as L1TransactionFetcher>::Provider;
+    }
 
     #[async_trait::async_trait]
     impl Settler for L1Rpc {
-        type M = NonceManagerMiddleware<Provider<MockProvider>>;
+        fn decode_contract_revert(error: &alloy::contract::Error) -> Option<String>;
 
-        fn build_pending_transaction(
-            &self,
-            tx_hash: ethers::types::H256,
-        ) -> ethers::providers::PendingTransaction<'_, <NonceManagerMiddleware<Provider<MockProvider>> as ethers::providers::Middleware>::Provider>;
-
-        fn decode_contract_revert(error: &ContractError<NonceManagerMiddleware<Provider<MockProvider>>>) -> Option<String>;
-        fn build_verify_pessimistic_trusted_aggregator_call(
+        async fn verify_pessimistic_trusted_aggregator(
             &self,
             rollup_id: u32,
             l_1_info_tree_leaf_count: u32,
             new_local_exit_root: [u8; 32],
             new_pessimistic_root: [u8; 32],
-            proof: ::ethers::core::types::Bytes,
-            custom_chain_data: ::ethers::core::types::Bytes,
-        ) -> ContractCall<NonceManagerMiddleware<Provider<MockProvider>>, ()>;
+            proof: Bytes,
+            custom_chain_data: Bytes,
+        ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, alloy::contract::Error>;
 
     }
 }
 
 #[rstest]
 #[test_log::test(tokio::test)]
-#[ignore = "Unable to properly test contract with mock"]
+#[ignore = "Complex integration test - requires proper mock setup"]
 async fn epoch_packer_can_settle_one_certificate() {
+    use agglayer_certificate_orchestrator::SettlementClient;
+
     let network_id = 1.into();
     let mut state = Forest::new(vec![]);
 
@@ -120,9 +122,6 @@ async fn epoch_packer_can_settle_one_certificate() {
             }))
         });
 
-    let (mock, _) = Provider::mocked();
-    let _t = NonceManagerMiddleware::new(mock, H160::zero());
-
     let mut l1_rpc = MockL1Rpc::new();
 
     l1_rpc
@@ -140,19 +139,27 @@ async fn epoch_packer_can_settle_one_certificate() {
         .with(eq(certificate_id))
         .returning(move |_| Ok(Some(proof.clone())));
 
-    let epoch_packer = RpcSettlementClient::<_, _, MockPerEpochStore, _>::try_new(
+    // Note: This test is currently ignored because it requires complex mock setup
+    // for alloy contract calls and transaction handling. The RpcSettlementClient
+    // compiles and works correctly, but comprehensive testing requires a more
+    // sophisticated test setup with proper alloy provider mocking.
+    // Problem with mocking alloy contract calls is that alloy client makes
+    // multiple calls to l1 (to assess to gas const etc.), and we need to mock
+    // each of them correctly in the correct order.
+
+    let epoch_packer = RpcSettlementClient::<_, _, MockPerEpochStore, _>::new(
         config,
         Arc::new(state_store),
         Arc::new(pending_store),
         Arc::new(l1_rpc),
         Arc::new(ArcSwap::new(Arc::new(per_epoch_store))),
-    )
-    .unwrap();
+    );
 
     let settlement_tx_hash = epoch_packer
         .submit_certificate_settlement(certificate_id)
         .await
         .unwrap();
+
     epoch_packer
         .wait_for_settlement(settlement_tx_hash, certificate_id)
         .await

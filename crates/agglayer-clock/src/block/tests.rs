@@ -6,10 +6,10 @@ use std::{
 
 use agglayer_types::EpochNumber;
 use alloy::{
+    node_bindings::Anvil,
     providers::{Provider, ProviderBuilder, WsConnect},
     rpc::client::ClientBuilder,
 };
-use ethers::utils::Anvil;
 use fail::FailScenario;
 use futures::StreamExt;
 use rstest::rstest;
