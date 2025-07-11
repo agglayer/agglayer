@@ -208,10 +208,6 @@ jobs:
 
       - uses: taiki-e/install-action@protoc
 
-      - name: Define vKey
-        run: |
-          echo ORIGINAL_VKEY="$(cargo run -p agglayer -- vkey)" >> "$GITHUB_ENV"
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -224,14 +220,10 @@ jobs:
         run: cargo install --debug --locked cargo-make
 
       - name: Build the PP elf
-        run: PATH="/home/runner/.sp1/bin:$PATH" cargo make pp-elf
+        run: cargo make pp-elf
 
       - name: ELF is up to date
         run: diff <(sha256sum crates/pessimistic-proof/elf/riscv32im-succinct-zkvm-elf | awk '{ print $1 }') <( echo $CHECKSUM )
 
       - name: Check vKey
-        run: |
-          CALCULATED_VKEY=$(cargo run -p agglayer -- vkey)
-          echo "Commited vKey=$ORIGINAL_VKEY"
-          echo "Calculated vKey=$CALCULATED_VKEY"
-          diff <(echo $CALCULATED_VKEY) <( echo $ORIGINAL_VKEY )
+        run: cargo make pp-check-vkey-change

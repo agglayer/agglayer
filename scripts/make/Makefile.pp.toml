@@ -29,7 +29,8 @@ args = [
 [tasks.pp-check-vkey-change]
 description = "Check vkey and selector snapshost for PP"
 command = "cargo"
-env = { INSTA_UPDATE = "no" }
+env.AGGLAYER_ELF_BUILD = "build"
+env.INSTA_UPDATE = "no"
 args = [
     "test",
     "-ppessimistic-proof-test-suite",
@@ -39,7 +40,8 @@ args = [
 [tasks.pp-accept-vkey-change]
 description = "Update vkey and selector snapshot for PP without updating selector"
 command = "cargo"
-env = { INSTA_UPDATE = "always" }
+env.AGGLAYER_ELF_BUILD = "update"
+env.INSTA_UPDATE = "always"
 args = [
     "test",
     "-ppessimistic-proof-test-suite",
