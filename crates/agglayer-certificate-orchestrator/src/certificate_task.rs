@@ -102,17 +102,15 @@ where
                 error!(?error, "Failed to update certificate status in database");
             };
 
-            self.network_task
-                .send(NetworkTaskMessage::CertificateErrored {
-                    height: self.header.height,
-                    certificate_id: self.header.certificate_id,
-                    error,
-                })
-                .await
-                .map_err(send_err)
-                .unwrap_or_else(|error| {
-                    error!(?error, "Failed to send certificate error message");
-                });
+            self.send_to_network_task(NetworkTaskMessage::CertificateErrored {
+                height: self.header.height,
+                certificate_id: self.header.certificate_id,
+                error,
+            })
+            .await
+            .unwrap_or_else(|error| {
+                error!(?error, "Failed to send certificate error message");
+            });
         }
     }
 
@@ -162,10 +160,11 @@ where
             // Retrieve local network state
             trace!("Retrieving local network state");
             let (response, state) = oneshot::channel();
-            self.network_task
-                .send(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight { height, response })
-                .await
-                .map_err(send_err)?;
+            self.send_to_network_task(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight {
+                height,
+                response,
+            })
+            .await?;
             let state = state.await.map_err(recv_err)??;
 
             // Actually certify
@@ -178,21 +177,17 @@ where
 
             // Record the certification success
             self.set_status(CertificateStatus::Proven)?;
-            self.network_task
-                .send(NetworkTaskMessage::CertificateExecuted {
-                    height,
-                    certificate_id,
-                    new_state: Box::new(certifier_output.new_state),
-                })
-                .await
-                .map_err(send_err)?;
-            self.network_task
-                .send(NetworkTaskMessage::CertificateProven {
-                    height,
-                    certificate_id,
-                })
-                .await
-                .map_err(send_err)?;
+            self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
+                height,
+                certificate_id,
+                new_state: Box::new(certifier_output.new_state),
+            })
+            .await?;
+            self.send_to_network_task(NetworkTaskMessage::CertificateProven {
+                height,
+                certificate_id,
+            })
+            .await?;
         } else {
             // TODO: once we store network_id -> height -> state and not just network_id ->
             // state, we should not need this any longer, because the state will
@@ -201,10 +196,11 @@ where
             // Retrieve local network state
             trace!("Retrieving local network state");
             let (response, state) = oneshot::channel();
-            self.network_task
-                .send(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight { height, response })
-                .await
-                .map_err(send_err)?;
+            self.send_to_network_task(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight {
+                height,
+                response,
+            })
+            .await?;
             let mut state = state.await.map_err(recv_err)??;
 
             // Execute the witness generation to retrieve the new local network state
@@ -224,14 +220,12 @@ where
             // valid if we had multiple certificates inflight. Thankfully, until
             // we update the storage we cannot have multiple certificates
             // inflight, so we should be fine until then.
-            self.network_task
-                .send(NetworkTaskMessage::CertificateExecuted {
-                    height,
-                    certificate_id,
-                    new_state: state,
-                })
-                .await
-                .map_err(send_err)?;
+            self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
+                height,
+                certificate_id,
+                new_state: state,
+            })
+            .await?;
         }
 
         // Second, submit settlement to L1
@@ -243,14 +237,12 @@ where
         if self.header.status < CertificateStatus::Candidate {
             debug!("Submitting certificate for settlement");
             let (settlement_submitted_notifier, settlement_submitted) = oneshot::channel();
-            self.network_task
-                .send(NetworkTaskMessage::CertificateReadyForSettlement {
-                    height,
-                    certificate_id,
-                    settlement_submitted_notifier,
-                })
-                .await
-                .map_err(send_err)?;
+            self.send_to_network_task(NetworkTaskMessage::CertificateReadyForSettlement {
+                height,
+                certificate_id,
+                settlement_submitted_notifier,
+            })
+            .await?;
 
             let settlement_tx_hash = settlement_submitted.await.map_err(recv_err)??;
             fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
@@ -276,15 +268,13 @@ where
                 )
             })?;
             let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
-            self.network_task
-                .send(NetworkTaskMessage::CertificateWaitingForSettlement {
-                    height,
-                    certificate_id,
-                    settlement_tx_hash,
-                    settlement_complete_notifier,
-                })
-                .await
-                .map_err(send_err)?;
+            self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
+                height,
+                certificate_id,
+                settlement_tx_hash,
+                settlement_complete_notifier,
+            })
+            .await?;
 
             let (epoch_number, certificate_index) =
                 settlement_complete.await.map_err(recv_err)??;
@@ -296,14 +286,12 @@ where
                 ?settled_certificate,
                 "Certificate settlement completed"
             );
-            self.network_task
-                .send(NetworkTaskMessage::CertificateSettled {
-                    height,
-                    certificate_id,
-                    settled_certificate,
-                })
-                .await
-                .map_err(send_err)?;
+            self.send_to_network_task(NetworkTaskMessage::CertificateSettled {
+                height,
+                certificate_id,
+                settled_certificate,
+            })
+            .await?;
         }
 
         if self.header.status != CertificateStatus::Settled {
@@ -320,6 +308,14 @@ where
             .update_certificate_header_status(&self.header.certificate_id, &status)?;
         self.header.status = status;
         Ok(())
+    }
+
+    async fn send_to_network_task(
+        &self,
+        message: NetworkTaskMessage,
+    ) -> Result<(), CertificateStatusError> {
+        trace!(?message, "Sending message to network task");
+        self.network_task.send(message).await.map_err(send_err)
     }
 }
 
