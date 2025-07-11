@@ -221,7 +221,7 @@ where
         {
             warn!(
                 pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
-                "Certificate already exists in pending store for network {} at height {}",
+                "Certificate already exists in store for network {} at height {}",
                 certificate.network_id,
                 certificate.height
             );
@@ -236,7 +236,7 @@ where
                 match settlement_tx_hash {
                     None => {
                         info!(
-                            "Replacing pending certificate {} that is in error",
+                            "Replacing certificate {} that is in error",
                             pre_existing_certificate_id
                         );
                     }
@@ -269,8 +269,8 @@ where
                                 "Replacing pending certificate in error that has already been settled, but transaction receipt status is in failure"
                             );
                         } else {
-                            let message = "Unable to replace a pending certificate in error that \
-                                           has already been settled";
+                            let message = "Unable to replace a certificate in error that has \
+                                           already been settled";
                             warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
 
                             return Err(
@@ -287,7 +287,7 @@ where
                     }
                 }
             } else {
-                let message = "Unable to replace a pending certificate that is not in error";
+                let message = "Unable to replace a certificate that is not in error";
                 info!(%pre_existing_certificate_id, message);
 
                 return Err(

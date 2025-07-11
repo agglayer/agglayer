@@ -4514,7 +4514,6 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
- "insta",
  "jsonrpsee",
  "lazy_static",
  "mockall",

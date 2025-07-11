@@ -146,7 +146,13 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
         .request::<CertificateId, _>("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
         .unwrap_err();
-    insta::assert_debug_snapshot!(second_submission_err);
+    match second_submission_err {
+        jsonrpsee::core::ClientError::Call(error) => {
+            assert_eq!(error.code(), -10_006);
+            assert!(error.message().contains("Unable to replace"));
+        }
+        error => panic!("Unexpected error: {error:?}"),
+    }
 
     // Optional await sufficient time for cert to be processed.
     tokio::time::sleep(Duration::from_secs(10)).await;
