@@ -5,8 +5,13 @@ edition = "2021"
 
 [dependencies]
 async-trait.workspace = true
-ethers.workspace = true
 thiserror.workspace = true
+
+alloy.workspace = true
+alloy-primitives.workspace = true
+alloy-signer-local.workspace = true
+derive_more = {workspace = true, features = ["is_variant"]}
+tracing.workspace = true
 
 agglayer-config = { path = "../agglayer-config" }
 agglayer-gcp-kms = { path = "../agglayer-gcp-kms" }

@@ -119,8 +119,10 @@ pub(crate) fn get_extra_signature(
 
 #[cfg(test)]
 mod tests {
-    use agglayer_types::{aggchain_proof::AggchainData, Certificate, Height, NetworkId};
-    use ethers::utils::hex;
+    use agglayer_types::{
+        aggchain_proof::AggchainData, primitives::alloy_primitives::hex, Certificate, Height,
+        NetworkId,
+    };
     use rstest::rstest;
 
     use super::{get_extra_signature, GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE};

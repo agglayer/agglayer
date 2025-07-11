@@ -56,6 +56,7 @@ unified-bridge = "0.8.0"
 agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
 agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
 agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
 prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
 
 # SP1 dependencies
@@ -70,6 +71,7 @@ sp1-zkvm = { version = "=5.0.0", default-features = false }
 # Core dependencies
 alloy = { version = "0.14.0", features = ["full"] }
 alloy-primitives = { version = "1.2", features = ["serde", "k256"] }
+alloy-signer-local = { version = "0.14.0", features = ["keystore", "mnemonic"] }
 anyhow = "1.0"
 arbitrary = { version = "1.4", features = ["derive"] }
 arc-swap = "1.7"
@@ -85,8 +87,10 @@ dotenvy = "0.15.7"
 ethers = "2.0"
 ethers-gcp-kms-signer = "0.1.5"
 ethers-signers = "2.0"
+eyre = "0.6.12"
 fail = { version = "0.5.1", default-features = false }
 futures = "0.3.31"
+gcloud-sdk = "0.26.4"
 hex = "0.4.3"
 http = "1.2"
 hyper = "1.6"
@@ -102,6 +106,7 @@ parking_lot = "0.12.3"
 pin-project = "1.1"
 prost = "0.13.4"
 rand = "0.9.0"
+reqwest = "0.12.12"
 rstest = "0.22.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

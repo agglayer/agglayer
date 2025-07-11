@@ -1,12 +1,12 @@
 ---
-source: crates/agglayer-node/src/rpc/tests/errors.rs
-expression: "SignatureMismatch { detail: \"contract error: Contract was not deployed\" }"
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "SignatureMismatch { detail: \"contract error: missing `contractAddress` from deployment transaction receipt\" }"
 ---
 {
   "code": -10002,
   "data": {
     "signature-mismatch": {
-      "detail": "contract error: Contract was not deployed"
+      "detail": "contract error: missing `contractAddress` from deployment transaction receipt"
     }
   },
   "message": "Rollup signature verification failed"

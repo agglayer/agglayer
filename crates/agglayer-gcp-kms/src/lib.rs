@@ -3,7 +3,10 @@
 //! Cloud KMS signer.
 
 use agglayer_config::GcpKmsConfig;
-use ethers_gcp_kms_signer::{GcpKeyRingRef, GcpKmsProvider, GcpKmsSigner};
+use alloy::signers::gcp::{GcpKeyRingRef, GcpSigner, KeySpecifier};
+use gcloud_sdk::{
+    google::cloud::kms::v1::key_management_service_client::KeyManagementServiceClient, GoogleApi,
+};
 use serde::Deserialize;
 
 pub(crate) mod error;
@@ -11,6 +14,8 @@ pub(crate) mod signer;
 
 pub use error::Error;
 pub use signer::KmsSigner;
+
+pub const GOOGLE_API_URL: &str = "https://cloudkms.googleapis.com";
 
 #[derive(Deserialize, Debug)]
 pub struct KMS {
@@ -32,7 +37,7 @@ impl KMS {
     /// they are not set, it will fall back to the values specified in the
     /// configuration.
     ///
-    /// The `ethers_gcp_kms_signer` library will attempt to load credentials in
+    /// The `alloy-signer-gcp` library will attempt to load credentials in
     /// the typical fashion for GCP:
     /// - If the application is running in a Kubernetes cluster, it should
     ///   automatically pick up credentials.
@@ -62,7 +67,7 @@ impl KMS {
                 .clone()
                 .ok_or(Error::KmsConfig("GOOGLE_LOCATION"))
         })?;
-        let keyring = std::env::var("GOOGLE_KEYRING").or_else(|_| {
+        let keyring_name = std::env::var("GOOGLE_KEYRING").or_else(|_| {
             self.config
                 .keyring
                 .clone()
@@ -80,10 +85,26 @@ impl KMS {
             .or(self.config.key_version)
             .ok_or(Error::KmsConfig("GOOGLE_KEY_VERSION"))?;
 
-        let keyring = GcpKeyRingRef::new(&project_id, &location, &keyring);
-        let provider = GcpKmsProvider::new(keyring).await?;
-        let gcp_signer =
-            GcpKmsSigner::new(provider, key_name.to_string(), key_version, self.chain_id).await?;
+        let keyring = GcpKeyRingRef::new(&project_id, &location, &keyring_name);
+        let specifier = KeySpecifier::new(keyring, &key_name, key_version);
+
+        // Create the GoogleApi client matching the type expected by GcpSigner
+        let client =
+            GoogleApi::from_function(KeyManagementServiceClient::new, GOOGLE_API_URL, None)
+                .await
+                .map_err(|e| {
+                    Error::KmsError(
+                        anyhow::Error::new(e).context("Unable to create GoogleApiClient"),
+                    )
+                })?;
+
+        // Use GcpSigner::new with the proper client type
+        let gcp_signer = GcpSigner::new(client, specifier, Some(self.chain_id))
+            .await
+            .map_err(|e| {
+                Error::KmsError(anyhow::Error::new(e).context("Unable to create GcpSigner"))
+            })?;
+
         Ok(KmsSigner::new(gcp_signer))
     }
 }

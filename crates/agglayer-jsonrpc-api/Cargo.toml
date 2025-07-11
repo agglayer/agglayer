@@ -9,11 +9,9 @@ agglayer-telemetry = { workspace = true }
 agglayer-config.workspace = true
 agglayer-rate-limiting.workspace = true
 agglayer-types.workspace = true
-agglayer-contracts.workspace = true
 
 alloy = { workspace = true }
 futures = { workspace = true }
-ethers = { workspace = true, features = ["solc"] }
 jsonrpsee = { workspace = true, features = ["full"] }
 hex.workspace = true
 
@@ -26,7 +24,6 @@ tracing.workspace = true
 
 anyhow.workspace = true
 axum = { version = "0.8.1", features = ["tokio", "http1", "http2"] }
-arc-swap.workspace = true
 buildstructor.workspace = true
 hyper.workspace = true
 http.workspace = true
@@ -40,21 +37,14 @@ tower-http = { version = "0.6.2", features = ["full"] }
 tower.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 
-agglayer-aggregator-notifier.workspace = true
-agglayer-certificate-orchestrator.workspace = true
-agglayer-clock.workspace = true
-agglayer-grpc-api.workspace = true
-agglayer-grpc-types.workspace = true
+agglayer-contracts.workspace = true
 agglayer-rpc.workspace = true
-agglayer-signer.workspace = true
 agglayer-storage.workspace = true
-pessimistic-proof.workspace = true
 
 rstest = { workspace = true, optional = true }
 
 [dev-dependencies]
 alloy = { workspace = true, features = ["full", "node-bindings"] }
-ethers.workspace = true
 http-body-util = "0.1.2"
 hyper-util = { version = "0.1.10", features = ["client"] }
 insta.workspace = true
@@ -69,12 +59,9 @@ test-log.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-capture = "0.1.0"
 
-agglayer-test-suite.workspace = true
 agglayer-config = { workspace = true, features = ["testutils"] }
-agglayer-prover = { workspace = true, features = ["testutils"] }
 agglayer-storage = { workspace = true, features = ["testutils"] }
 agglayer-types = { workspace = true, features = ["testutils"] }
-pessimistic-proof-test-suite.workspace = true
 
 [lints]
 workspace = true

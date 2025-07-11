@@ -119,7 +119,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
                 let mut total = Duration::new(0, 0);
 
                 (0..iters).for_each(|_| {
-                    let elapsed = run(dir_path.clone(), 1_000_000);
+                    let elapsed = run(dir_path.clone(), 100_000);
                     total = total.add(elapsed);
                 });
 

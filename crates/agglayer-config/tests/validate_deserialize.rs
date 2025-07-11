@@ -1,8 +1,7 @@
-use std::{path::Path, str::FromStr};
+use std::path::Path;
 
 use agglayer_config::Config;
 use agglayer_prover_config::ProverConfig;
-use ethers::types::H160;
 use insta::assert_toml_snapshot;
 use pretty_assertions::assert_eq;
 
@@ -110,7 +109,11 @@ fn extra_certificate_signers() {
     });
 
     assert_eq!(
-        *config.extra_certificate_signer.get(&1337).unwrap(),
-        H160::from_str("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd").unwrap()
+        *config
+            .extra_certificate_signer
+            .get(&1337)
+            .unwrap()
+            .into_alloy(),
+        alloy_primitives::address!("abcdefabcdefabcdefabcdefabcdefabcdefabcd").0
     );
 }
