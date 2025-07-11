@@ -157,14 +157,14 @@ impl Forest {
             let imported_exit = ImportedBridgeExit {
                 bridge_exit: exit,
                 global_index: GlobalIndex::new(NETWORK_A, index),
-                claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
+                claim_data: Claim::Mainnet(ClaimFromMainnet {
                     proof_leaf_mer: MerkleProof {
                         proof: self.local_exit_tree_data_a.get_proof(index).unwrap(),
                         root: self.local_exit_tree_data_a.get_root(),
                     },
                     proof_ger_l1root: proof_ger_l1root.clone(),
                     l1_leaf: l1_leaf.clone(),
-                })),
+                }),
             };
             res.push(imported_exit);
         }

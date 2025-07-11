@@ -1,7 +1,9 @@
 #![no_main]
 
 use pessimistic_proof_core::{
-    generate_pessimistic_proof, keccak::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
+    generate_pessimistic_proof,
+    keccak::Keccak256Hasher,
+    multi_batch_header::{Foo, MultiBatchHeader},
     NetworkState, PessimisticProofOutput,
 };
 
@@ -14,12 +16,23 @@ pub fn main() {
         .expect("Failed to deserialize witness data.");
     println!("cycle-tracker-report-end: safe_read_network_state");
 
+    let foo_bytes = sp1_zkvm::io::read_vec();
+    println!("foo_bytes: {:?}", foo_bytes);
+    let foo = rkyv::from_bytes::<Foo, rkyv::rancor::Error>(&foo_bytes);
+    println!("foo: {:?}", foo);
+    let foo = foo.expect("Failed to deserialize Foo.");
+    println!("foo: {:?}", foo);
+
     println!("cycle-tracker-report-start: safe_read_batch_header");
     let batch_header_bytes = sp1_zkvm::io::read_vec();
+    println!("batch_header_bytes: {:?}", batch_header_bytes);
     let batch_header = rkyv::from_bytes::<MultiBatchHeader<Keccak256Hasher>, rkyv::rancor::Error>(
         &batch_header_bytes,
-    )
-    .expect("Failed to deserialize batch header.");
+    );
+    println!("batch_header: {:?}", batch_header);
+    let batch_header = batch_header.expect("Failed to deserialize batch header.");
+    panic!("He muerto");
+
     println!("cycle-tracker-report-end: safe_read_batch_header");
 
     println!("cycle-tracker-report-start: generate_pessimistic_proof");

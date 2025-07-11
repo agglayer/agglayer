@@ -1,6 +1,7 @@
 pub use pessimistic_proof::PessimisticProofOutput;
 use pessimistic_proof::{
     keccak::{Hasher, Keccak256Hasher},
+    multi_batch_header::Foo,
     NetworkState,
 };
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
@@ -46,6 +47,33 @@ impl Runner {
                 .as_slice(),
         );
         println!("asdasd2");
+        println!("batch_header.height: {:?}", batch_header.height);
+        println!(
+            "batch_header.height as bytes: {:?}",
+            batch_header.height.to_be_bytes()
+        );
+
+        println!("writting Foo");
+        let foo = Foo { bar: 1, bar64: 0 };
+        println!(
+            "foo serialized: {:?}",
+            rkyv::to_bytes::<rkyv::rancor::Error>(&foo)
+                .expect("Failed to serialize Foo")
+                .as_slice()
+        );
+        println!("Foo layout: {:?}", std::alloc::Layout::new::<Foo>());
+        stdin.write_slice(
+            rkyv::to_bytes::<rkyv::rancor::Error>(&foo)
+                .expect("Failed to serialize Foo")
+                .as_slice(),
+        );
+
+        println!(
+            "batch header serialized: {:?}",
+            rkyv::to_bytes::<rkyv::rancor::Error>(batch_header)
+                .expect("Failed to serialize MultiBatchHeader")
+                .as_slice()
+        );
         stdin.write_slice(
             rkyv::to_bytes::<rkyv::rancor::Error>(batch_header)
                 .expect("Failed to serialize MultiBatchHeader")

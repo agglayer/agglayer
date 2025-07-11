@@ -26,7 +26,7 @@ use pessimistic_proof::{
     keccak::keccak256_combine,
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
     local_state::StateCommitment,
-    multi_batch_header::{MultiBatchHeader, U256Def},
+    multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
     LocalNetworkState, ProofError,
 };
