@@ -11,8 +11,8 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height,
-    NetworkId,
+    Address, Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration,
+    Height, NetworkId, Signature,
 };
 use error::SignatureVerificationError;
 use ethers::types::{TransactionReceipt, H256};
@@ -292,6 +292,7 @@ where
 
         Ok(())
     }
+
     /// Verify that the signer of the given [`Certificate`] is the trusted
     /// sequencer for the rollup id it specified.
     #[instrument(skip(self), level = "debug")]
@@ -327,10 +328,59 @@ where
 
         Ok(())
     }
+
+    /// Verify the extra [`Certificate`] signature.
+    #[instrument(
+        skip(self, certificate, extra_signer, extra_signature),
+        level = "debug"
+    )]
+    pub(crate) fn verify_extra_cert_signature(
+        &self,
+        certificate: &Certificate,
+        extra_signer: Option<&Address>,
+        extra_signature: Option<Signature>,
+    ) -> Result<(), SignatureVerificationError<L1Rpc::M>> {
+        match (extra_signer, extra_signature) {
+            // Extra signature expected and provided
+            (Some(&expected_extra_signer), Some(extra_signature)) => {
+                // Retrieve the signer from the extra signature
+                let retrieved_extra_signer: Address = certificate
+                    .signer_from_signature(extra_signature)
+                    .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
+                    .into_array()
+                    .into();
+
+                // Verify that the signature is performed by the expected authority
+                if retrieved_extra_signer != expected_extra_signer {
+                    return Err(SignatureVerificationError::InvalidExtraSignature {
+                        expected: expected_extra_signer,
+                        got: retrieved_extra_signer,
+                    });
+                }
+            }
+            // Extra signature is expected but missing
+            (Some(&expected_signer), None) => {
+                return Err(SignatureVerificationError::MissingExtraSignature {
+                    network_id: certificate.network_id,
+                    expected_signer,
+                });
+            }
+            // Extra signature provided but not required
+            (None, Some(_)) => {
+                warn!("Unexpected extra signature provided");
+            }
+            // No extra signature provided nor required
+            (None, None) => {}
+        };
+
+        Ok(())
+    }
+
     #[instrument(skip(self, certificate), fields(hash, rollup_id = certificate.network_id.to_u32()), level = "info")]
     pub async fn send_certificate(
         &self,
         certificate: Certificate,
+        extra_signature: Option<Signature>,
     ) -> Result<CertificateId, CertificateSubmissionError<L1Rpc::M>> {
         let hash = certificate.hash();
         let hash_string = hash.to_string();
@@ -341,12 +391,36 @@ where
             "Received certificate {hash} for rollup {} at height {}", certificate.network_id.to_u32(), certificate.height
         );
         self.validate_pre_existing_certificate(&certificate).await?;
+
+        // Verify the involved signatures
+        // TODO: For now both commitments are enforced to be the V2 version.
+        // Ideally we want the aggsender to sign the V3 version.
+        // Consequently, we'll need to
+        //   - return the commitment version of the signed message for both signatures
+        //   - verify that they are both considering the exact same message (and so same
+        //     commitment version)
+        //   - verify that the commitment version is the expected one from the last PP
+        //     root in L1 (same as what is done in the witness generation)
+        self.verify_extra_cert_signature(
+            &certificate,
+            self.config()
+                .extra_certificate_signer
+                .get(&certificate.network_id.to_u32()),
+            extra_signature,
+        )
+        .map_err(|error| {
+            error!(
+                ?error,
+                "Failed to verify the extra signature for the certificate"
+            );
+            CertificateSubmissionError::SignatureError(error)
+        })?;
+
         self.verify_cert_signature(&certificate)
             .await
-            .map_err(|e| {
-                error!(error = %e, hash = hash_string, "Failed to verify the signature of
-        certificate {hash}: {e}");
-                CertificateSubmissionError::SignatureError(e)
+            .map_err(|error| {
+                error!(?error, "Failed to verify the signature of certificate");
+                CertificateSubmissionError::SignatureError(error)
             })?;
 
         // TODO: Batch the different queries.

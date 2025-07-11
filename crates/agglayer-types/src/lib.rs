@@ -445,6 +445,14 @@ impl Certificate {
         }
     }
 
+    pub fn signer_from_signature(&self, signature: Signature) -> Result<Address, SignatureError> {
+        // TODO: Verify for both commitment versions and return the version
+        let version = CommitmentVersion::V2;
+        let commitment = SignatureCommitmentValues::from(self).commitment(version);
+
+        signature.recover_address_from_prehash(&B256::new(commitment.0))
+    }
+
     pub fn signer(&self) -> Result<Option<Address>, SignatureError> {
         match self.aggchain_data {
             AggchainData::ECDSA { signature } => {
