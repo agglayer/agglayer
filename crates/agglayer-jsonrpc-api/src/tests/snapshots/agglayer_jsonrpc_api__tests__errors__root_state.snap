@@ -1,13 +1,13 @@
 ---
-source: crates/agglayer-node/src/rpc/tests/errors.rs
-expression: "Validation(RootVerification { detail: \"invalid state root. expected: 0x5555…5555, got: 0x6666…6666\" })"
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "Validation(RootVerification { detail: \"invalid state root. expected: 0x5555555555555555555555555555555555555555555555555555555555555555, got: 0x6666666666666666666666666666666666666666666666666666666666666666\" })"
 ---
 {
   "code": -10003,
   "data": {
     "validation": {
       "root-verification": {
-        "detail": "invalid state root. expected: 0x5555…5555, got: 0x6666…6666"
+        "detail": "invalid state root. expected: 0x5555555555555555555555555555555555555555555555555555555555555555, got: 0x6666666666666666666666666666666666666666666666666666666666666666"
       }
     }
   },

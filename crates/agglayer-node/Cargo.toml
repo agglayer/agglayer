@@ -13,7 +13,6 @@ anyhow.workspace = true
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }
 arc-swap.workspace = true
 buildstructor.workspace = true
-ethers = { workspace = true, features = ["solc"] }
 futures.workspace = true
 hex.workspace = true
 hyper.workspace = true
@@ -53,12 +52,9 @@ pessimistic-proof.workspace = true
 
 [dev-dependencies]
 alloy = { workspace = true, features = ["full", "node-bindings"] }
-ethers.workspace = true
 http-body-util = "0.1.2"
 hyper-util = { version = "0.1.10", features = ["client"] }
-insta.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
-jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.24.9" }
 lazy_static.workspace = true
 mockall.workspace = true
 rand.workspace = true
@@ -66,15 +62,11 @@ rstest.workspace = true
 serde_json.workspace = true
 test-log.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
-tracing-capture = "0.1.0"
 
-agglayer-test-suite.workspace = true
 agglayer-jsonrpc-api = { workspace = true, features = ["testutils"] }
 agglayer-config = { workspace = true, features = ["testutils"] }
-agglayer-prover = { workspace = true, features = ["testutils"] }
 agglayer-storage = { workspace = true, features = ["testutils"] }
 agglayer-types = { workspace = true, features = ["testutils"] }
-pessimistic-proof-test-suite.workspace = true
 
 [features]
 default = ["sp1"]

@@ -9,10 +9,8 @@ use agglayer_prover_types::v1::{
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    aggchain_proof::AggchainData,
-    bincode,
-    primitives::{keccak::Keccak256Hasher, Address},
-    Certificate, Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
+    aggchain_proof::AggchainData, bincode, primitives::keccak::Keccak256Hasher, Certificate,
+    Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
 };
 use pessimistic_proof::{
     core::{commitment::StateCommitment, generate_pessimistic_proof},
@@ -430,7 +428,6 @@ where
 
         let initial_state = LocalNetworkState::from(state.clone());
 
-        let signer = Address::new(*signer.as_fixed_bytes());
         let multi_batch_header = state
             .apply_certificate(
                 certificate,

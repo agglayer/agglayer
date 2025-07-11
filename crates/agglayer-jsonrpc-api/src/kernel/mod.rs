@@ -2,16 +2,20 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
-use agglayer_contracts::{
-    polygon_rollup_manager::{PolygonRollupManager, RollupIDToRollupDataReturn},
-    polygon_zk_evm::PolygonZkEvm,
+use agglayer_contracts::contracts::{
+    PolygonRollupManager::{PolygonRollupManagerInstance, RollupDataReturnV2},
+    PolygonZkEvm::PolygonZkEvmInstance,
 };
 use agglayer_rate_limiting::RateLimiter;
 use agglayer_rpc::error::SignatureVerificationError;
-use ethers::{
-    contract::{ContractCall, ContractError},
-    providers::{Middleware, ProviderError},
-    types::{Address, TransactionReceipt, H256, U64},
+use agglayer_types::Address;
+use alloy::{
+    contract::Error as ContractError,
+    network::Ethereum,
+    primitives::{BlockNumber, B256},
+    providers::{PendingTransactionBuilder, PendingTransactionError, Provider},
+    rpc::types::TransactionReceipt,
+    transports::{RpcError, TransportErrorKind},
 };
 use thiserror::Error;
 use tracing::{info, instrument, warn};
@@ -20,11 +24,6 @@ use crate::{signed_tx::SignedTx, zkevm_node_client::ZkevmNodeClient};
 
 #[cfg(test)]
 pub(crate) mod tests;
-
-#[cfg(test)]
-use agglayer_types::Certificate;
-#[cfg(test)]
-use ethers::types::H160;
 
 /// The core logic of the agglayer.
 ///
@@ -54,11 +53,11 @@ pub enum ZkevmNodeVerificationError {
     /// The state root in the proof does not match the ZkEVM node's local
     /// record.
     #[error("invalid state root. expected: {expected}, got: {got}")]
-    InvalidStateRoot { expected: H256, got: H256 },
+    InvalidStateRoot { expected: B256, got: B256 },
 
     /// The exit root in the proof does not match the ZkEVM node's local record.
     #[error("invalid exit root. expected: {expected}, got: {got}")]
-    InvalidExitRoot { expected: H256, got: H256 },
+    InvalidExitRoot { expected: B256, got: B256 },
 
     /// Unable to query the state and exit roots.
     #[error("Unable to query exit and state root for batch {batch_no} (network {network_id})")]
@@ -115,9 +114,9 @@ impl<RpcProvider> Kernel<RpcProvider> {
     ) -> Result<(), ZkevmNodeVerificationError> {
         let network_id = signed_tx.tx.rollup_id;
         let client = self.get_zkevm_node_client_for_rollup(network_id)?;
-        let batch_no = signed_tx.tx.new_verified_batch.as_u64();
+        let batch_no: u64 = signed_tx.tx.new_verified_batch.as_limbs()[0];
         let batch = client
-            .batch_by_number(signed_tx.tx.new_verified_batch.as_u64())
+            .batch_by_number(signed_tx.tx.new_verified_batch.as_limbs()[0])
             .await?
             .ok_or(ZkevmNodeVerificationError::RootsNotFound {
                 batch_no,
@@ -144,7 +143,7 @@ impl<RpcProvider> Kernel<RpcProvider> {
 
 impl<RpcProvider> Kernel<RpcProvider>
 where
-    RpcProvider: Middleware,
+    RpcProvider: Provider,
 {
     /// Get a [`ContractInstance`] of the rollup manager contract,
     /// [`PolygonRollupManager`].
@@ -154,39 +153,41 @@ where
     ///
     /// The rollup manager contract address is specified by the given
     /// configuration.
-    fn get_rollup_manager_contract(&self) -> PolygonRollupManager<RpcProvider> {
-        PolygonRollupManager::new(self.config.l1.rollup_manager_contract, self.rpc.clone()).clone()
+    fn get_rollup_manager_contract(&self) -> PolygonRollupManagerInstance<Arc<RpcProvider>> {
+        PolygonRollupManagerInstance::new(
+            self.config.l1.rollup_manager_contract.into(),
+            self.rpc.clone(),
+        )
     }
 }
 
 /// Errors related to settlement process.
 #[derive(Error, Debug)]
-pub enum SettlementError<RpcProvider>
-where
-    RpcProvider: Middleware,
-{
+pub enum SettlementError {
     /// The transaction receipt is missing.
     #[error("no receipt")]
     NoReceipt,
     #[error("provider error: {0}")]
-    ProviderError(ProviderError),
+    ProviderError(alloy::transports::RpcError<TransportErrorKind>),
     #[error("contract error: {0}")]
-    ContractError(ContractError<RpcProvider>),
+    ContractError(ContractError),
     #[error(transparent)]
     RateLimited(#[from] agglayer_rate_limiting::RateLimited),
     #[error("Settlement timed out after {}s", .0.as_secs())]
     Timeout(std::time::Duration),
+    #[error("pending transaction error: {0}")]
+    PendingTransactionError(PendingTransactionError),
 }
 
 #[derive(Error, Debug)]
-pub enum CheckTxStatusError<RpcProvider: Middleware> {
-    #[error("middleware error: {0}")]
-    ProviderError(RpcProvider::Error),
+pub enum CheckTxStatusError {
+    #[error("provider error: {0}")]
+    ProviderError(#[source] RpcError<TransportErrorKind>),
 }
 
 impl<RpcProvider> Kernel<RpcProvider>
 where
-    RpcProvider: Middleware + 'static,
+    RpcProvider: Provider + Clone + 'static,
 {
     /// Get the rollup metadata for the given rollup id.
     ///
@@ -197,27 +198,25 @@ where
     async fn get_rollup_metadata(
         &self,
         rollup_id: u32,
-    ) -> Result<RollupIDToRollupDataReturn, ContractError<RpcProvider>> {
-        let rollup_data = self
-            .get_rollup_manager_contract()
-            .rollup_id_to_rollup_data(rollup_id)
-            .await?;
-
-        Ok(RollupIDToRollupDataReturn { rollup_data })
+    ) -> Result<RollupDataReturnV2, ContractError> {
+        self.get_rollup_manager_contract()
+            .rollupIDToRollupDataV2(rollup_id)
+            .call()
+            .await
     }
 
     /// Get a [`ContractInstance`], [`PolygonZkEvm`], of the rollup contract at
     /// the given rollup id.
     #[instrument(skip(self), level = "debug")]
-    async fn get_rollup_contract(
+    async fn get_rollup_contract_instance(
         &self,
         rollup_id: u32,
-    ) -> Result<PolygonZkEvm<RpcProvider>, ContractError<RpcProvider>> {
+    ) -> Result<PolygonZkEvmInstance<RpcProvider>, ContractError> {
         let rollup_metadata = self.get_rollup_metadata(rollup_id).await?;
 
-        Ok(PolygonZkEvm::new(
-            rollup_metadata.rollup_data.rollup_contract,
-            self.rpc.clone(),
+        Ok(PolygonZkEvmInstance::new(
+            rollup_metadata.rollupContract,
+            (*self.rpc).clone(),
         ))
     }
 
@@ -229,28 +228,30 @@ where
     async fn get_trusted_sequencer_address(
         &self,
         rollup_id: u32,
-    ) -> Result<Address, ContractError<RpcProvider>> {
+    ) -> Result<Address, ContractError> {
         if let Some(addr) = self.config.proof_signers.get(&rollup_id) {
             Ok(*addr)
         } else {
-            self.get_rollup_contract(rollup_id)
+            self.get_rollup_contract_instance(rollup_id)
                 .await?
-                .trusted_sequencer()
+                .trustedSequencer()
+                .call()
                 .await
+                .map(Into::into)
         }
     }
 
-    /// Construct a call to the `verifyBatchesTrustedAggregator` (`0x1489ed10`)
+    /// Execute a call to the `verifyBatchesTrustedAggregator` (`0x1489ed10`)
     /// method on the rollup manager contract for a given [`SignedTx`].
     ///
     /// Note that this does not actually invoke the function, but rather
     /// constructs a [`FunctionCall`] that can be used to create a dry-run
     /// or send a transaction.
     #[instrument(skip(self), level = "debug")]
-    pub(crate) async fn build_verify_batches_trusted_aggregator_call(
+    pub(crate) async fn verify_batches_trusted_aggregator(
         &self,
         signed_tx: &SignedTx,
-    ) -> Result<ContractCall<RpcProvider, ()>, ContractError<RpcProvider>> {
+    ) -> Result<PendingTransactionBuilder<Ethereum>, ContractError> {
         let sequencer_address = self
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
@@ -258,20 +259,24 @@ where
         // TODO: pending state num is not yet supported
         const PENDING_STATE_NUM: u64 = 0;
 
-        let call = self
-            .get_rollup_manager_contract()
-            .verify_batches_trusted_aggregator(
+        self.get_rollup_manager_contract()
+            .verifyBatchesTrustedAggregator(
                 signed_tx.tx.rollup_id,
                 PENDING_STATE_NUM,
-                signed_tx.tx.last_verified_batch.as_u64(),
-                signed_tx.tx.new_verified_batch.as_u64(),
-                signed_tx.tx.zkp.new_local_exit_root.to_fixed_bytes(),
-                signed_tx.tx.zkp.new_state_root.to_fixed_bytes(),
-                sequencer_address,
-                signed_tx.tx.zkp.proof.to_fixed_bytes(),
-            );
-
-        Ok(call)
+                signed_tx.tx.last_verified_batch.as_limbs()[0],
+                signed_tx.tx.new_verified_batch.as_limbs()[0],
+                signed_tx.tx.zkp.new_local_exit_root,
+                signed_tx.tx.zkp.new_state_root,
+                sequencer_address.into(),
+                signed_tx
+                    .tx
+                    .zkp
+                    .proof
+                    .to_fixed_bytes()
+                    .map(|value| value.into()),
+            )
+            .send()
+            .await
     }
 
     /// Verify that the signer of the given [`SignedTx`] is the trusted
@@ -280,7 +285,7 @@ where
     pub(crate) async fn verify_tx_signature(
         &self,
         signed_tx: &SignedTx,
-    ) -> Result<(), SignatureVerificationError<RpcProvider>> {
+    ) -> Result<(), SignatureVerificationError> {
         let sequencer_address = self
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
@@ -301,95 +306,45 @@ where
         Ok(())
     }
 
-    /// Verify that the given [`SignedTx`] does not error during eth_call dry
-    /// run.
-    ///
-    /// This involves a contract call to the rollup manager contract. In
-    /// particular, it calls `verifyBatchesTrustedAggregator` (`0x1489ed10`) on
-    /// the rollup manager contract to assert validitiy of the proof.
-    #[instrument(skip(self), level = "debug")]
-    pub(crate) async fn verify_proof_eth_call(
-        &self,
-        signed_tx: &SignedTx,
-    ) -> Result<(), ContractError<RpcProvider>> {
-        let f = self
-            .build_verify_batches_trusted_aggregator_call(signed_tx)
-            .await?;
-        f.call().await?;
-
-        Ok(())
-    }
-
     /// Settle the given [`SignedTx`] to the rollup manager.
     #[instrument(skip(self, rate_guard), level = "debug")]
     pub(crate) async fn settle(
         &self,
         signed_tx: &SignedTx,
         rate_guard: agglayer_rate_limiting::SendTxSlotGuard,
-    ) -> Result<TransactionReceipt, SettlementError<RpcProvider>> {
+    ) -> Result<TransactionReceipt, SettlementError> {
         let hex_hash = signed_tx.hash();
         let hash = format!("{hex_hash:?}");
 
-        let f = self
-            .build_verify_batches_trusted_aggregator_call(signed_tx)
+        let pending_tx = self
+            .verify_batches_trusted_aggregator(signed_tx)
             .await
             .map_err(SettlementError::ContractError)?;
 
-        if let Ok(Some(tx)) = self.check_tx_status(hex_hash).await {
+        if let Ok(Some(tx)) = self.check_tx_status(*pending_tx.tx_hash()).await {
             warn!(hash, "Transaction already settled: {tx:?}");
         }
 
-        // We submit the transaction in a separate task so we can observe the
-        // settlement process even if the client drops the transaction
-        // submission request. This is needed to correctly record the settlement
-        // rate limiting event in case the client drops the request.
-        let receipt = tokio::spawn({
-            let config = Arc::clone(&self.config);
-            async move {
-                let config = &*config;
-                let hash = &hash;
-
-                let settlement = async move {
-                    f.send()
-                        .await
-                        .inspect(|tx| info!(hash, "Inspect settle transaction: {:?}", tx))
-                        .map_err(SettlementError::ContractError)?
-                        .interval(config.outbound.rpc.settle.retry_interval)
-                        .retries(config.outbound.rpc.settle.max_retries)
-                        .confirmations(config.outbound.rpc.settle.confirmations)
-                        .await
-                        .map_err(SettlementError::ProviderError)?
-                        // The result of `None` means the transaction is no longer in the mempool.
-                        .ok_or(SettlementError::NoReceipt)
-                };
-
-                let settlement_timeout = config.outbound.rpc.settle.settlement_timeout;
-                let receipt = tokio::time::timeout(settlement_timeout, settlement)
-                    .await
-                    .map_err(|_| {
-                        warn!(hash, "Settlement of {hash} timed out");
-                        SettlementError::Timeout(settlement_timeout)
-                    })??;
-
+        pending_tx
+            .get_receipt()
+            .await
+            .inspect(|tx_receipt| {
                 rate_guard.record(tokio::time::Instant::now());
-                Ok(receipt)
-            }
-        });
-
-        receipt.await.map_err(|_| SettlementError::NoReceipt)?
+                info!(
+                    block_hash = ?tx_receipt.block_hash,
+                    block_number = ?tx_receipt.block_number,
+                    "Inspect settle transaction: {}", tx_receipt.transaction_hash
+                )
+            })
+            .map_err(SettlementError::PendingTransactionError)
     }
-}
 
-impl<RpcProvider> Kernel<RpcProvider>
-where
-    RpcProvider: Middleware + 'static,
-{
     /// Check the status of the given hash.
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn check_tx_status(
         &self,
-        hash: H256,
-    ) -> Result<Option<TransactionReceipt>, CheckTxStatusError<RpcProvider>> {
+        hash: B256,
+    ) -> Result<Option<TransactionReceipt>, CheckTxStatusError> {
         self.rpc
             .get_transaction_receipt(hash)
             .await
@@ -398,9 +353,7 @@ where
 
     /// Get the current L1 block height.
     #[instrument(skip(self), level = "debug")]
-    pub(crate) async fn current_l1_block_height(
-        &self,
-    ) -> Result<U64, CheckTxStatusError<RpcProvider>> {
+    pub(crate) async fn current_l1_block_height(&self) -> Result<BlockNumber, CheckTxStatusError> {
         self.rpc
             .get_block_number()
             .await
@@ -411,24 +364,22 @@ where
 #[cfg(test)]
 impl<RpcProvider> Kernel<RpcProvider>
 where
-    RpcProvider: Middleware + 'static,
+    RpcProvider: Provider + Clone + 'static,
 {
     /// Verify that the signer of the given [`Certificate`] is the trusted
     /// sequencer for the rollup id it specified.
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn verify_cert_signature(
         &self,
-        cert: &Certificate,
-    ) -> Result<(), SignatureVerificationError<RpcProvider>> {
+        cert: &agglayer_types::Certificate,
+    ) -> Result<(), SignatureVerificationError> {
         let sequencer_address = self
             .get_trusted_sequencer_address(u32::from(cert.network_id))
             .await?;
 
-        let signer: H160 = cert
+        let signer: Address = cert
             .signer()
-            .map_err(SignatureVerificationError::from_signer_error)?
-            .into_array()
-            .into();
+            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?;
 
         // ECDSA-k256 signature verification works by recovering the public key from the
         // signature, and then checking that it is the expected one.

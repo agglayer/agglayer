@@ -1,12 +1,12 @@
 ---
-source: crates/agglayer-node/src/rpc/tests/errors.rs
-expression: "SignatureMismatch { detail: \"could not recover certificate signer: signature error\" }"
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "SignatureMismatch { detail: \"could not recover certificate signer: Signature recovery error\" }"
 ---
 {
   "code": -10002,
   "data": {
     "signature-mismatch": {
-      "detail": "could not recover certificate signer: signature error"
+      "detail": "could not recover certificate signer: Signature recovery error"
     }
   },
   "message": "Rollup signature verification failed"

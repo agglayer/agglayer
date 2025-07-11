@@ -2,7 +2,7 @@
 
 use agglayer_rate_limiting::RateLimited as RateLimitedError;
 use agglayer_rpc::CertificateSubmissionError;
-use ethers::{middleware::Middleware, types::H256};
+use alloy::primitives::B256;
 use jsonrpsee::types::error::ErrorObjectOwned;
 use serde::Serialize;
 
@@ -75,7 +75,7 @@ impl SettlementError {
 #[serde(rename_all = "kebab-case")]
 pub enum StatusError {
     #[error("Transaction not found")]
-    TxNotFound { hash: H256 },
+    TxNotFound { hash: B256 },
 
     #[error("Failed to get the current L1 block")]
     L1Block { detail: String },
@@ -84,8 +84,8 @@ pub enum StatusError {
     TxStatus { detail: String },
 }
 
-impl<Rpc: 'static + Middleware> From<TxStatusError<Rpc>> for StatusError {
-    fn from(error: TxStatusError<Rpc>) -> Self {
+impl From<TxStatusError> for StatusError {
+    fn from(error: TxStatusError) -> Self {
         use TxStatusError as E;
         match error {
             E::StatusCheck(error) => {
@@ -171,8 +171,8 @@ impl Error {
     }
 }
 
-impl<Rpc: 'static + Middleware> From<SendTxError<Rpc>> for Error {
-    fn from(err: SendTxError<Rpc>) -> Self {
+impl From<SendTxError> for Error {
+    fn from(err: SendTxError) -> Self {
         use SendTxError as E;
         match err {
             E::RateLimited(error) => error.into(),
@@ -181,8 +181,14 @@ impl<Rpc: 'static + Middleware> From<SendTxError<Rpc>> for Error {
                 Self::SignatureMismatch { detail }
             }
             E::RollupNotRegistered { rollup_id } => Self::RollupNotRegistered { rollup_id },
-            E::DryRunZkEvm(error) => ValidationError::dry_run(error).into(),
-            E::DryRunRollupManager(error) => ValidationError::dry_run(error).into(),
+            E::DryRunZkEvm(error) => ValidationError::DryRun {
+                detail: format!("PolygonZkEvm contract error: {error:?}"),
+            }
+            .into(),
+            E::DryRunRollupManager(error) => ValidationError::DryRun {
+                detail: format!("PolygonRollupManager contract error {error:?}"),
+            }
+            .into(),
             E::DryRunOther(error) => ValidationError::dry_run(error).into(),
             E::RootVerification(error) => {
                 let detail = error.to_string();
@@ -200,8 +206,8 @@ impl From<RateLimitedError> for Error {
     }
 }
 
-impl<Rpc: 'static + Middleware> From<service::error::SettlementError<Rpc>> for Error {
-    fn from(error: service::error::SettlementError<Rpc>) -> Self {
+impl From<service::error::SettlementError> for Error {
+    fn from(error: service::error::SettlementError) -> Self {
         use service::error::SettlementError as E;
         match error {
             E::NoReceipt => SettlementError::NoReceipt.into(),
@@ -212,18 +218,19 @@ impl<Rpc: 'static + Middleware> From<service::error::SettlementError<Rpc>> for E
             E::ProviderError(error) => SettlementError::io_error(error).into(),
             E::RateLimited(error) => error.into(),
             error @ E::Timeout(_) => SettlementError::io_error(error).into(),
+            E::PendingTransactionError(error) => SettlementError::io_error(error).into(),
         }
     }
 }
 
-impl<Rpc: 'static + Middleware> From<TxStatusError<Rpc>> for Error {
-    fn from(error: TxStatusError<Rpc>) -> Self {
+impl From<TxStatusError> for Error {
+    fn from(error: TxStatusError) -> Self {
         StatusError::from(error).into()
     }
 }
 
-impl<Rpc: Middleware> From<CertificateSubmissionError<Rpc>> for Error {
-    fn from(error: CertificateSubmissionError<Rpc>) -> Self {
+impl From<CertificateSubmissionError> for Error {
+    fn from(error: CertificateSubmissionError) -> Self {
         let detail = error.to_string();
         Self::SendCertificate { detail }
     }
