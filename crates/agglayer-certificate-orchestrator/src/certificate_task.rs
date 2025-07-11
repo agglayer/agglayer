@@ -276,12 +276,14 @@ where
         .await?;
 
         let settlement_tx_hash = settlement_submitted.await.map_err(recv_err)??;
+        #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
         self.header.settlement_tx_hash = Some(settlement_tx_hash);
         self.state_store
             .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
-        self.header.status = CertificateStatus::Candidate; // No set_status: update_settlement_tx_hash already updates the status in
-                                                           // database
+        // No set_status: update_settlement_tx_hash already updates the status in the
+        // database
+        self.header.status = CertificateStatus::Candidate;
         debug!(settlement_tx_hash = ?self.header.settlement_tx_hash, "Submitted certificate for settlement");
 
         self.process_from_candidate().await

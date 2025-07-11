@@ -385,6 +385,7 @@ where
                         settlement_submitted_notifier
                             .send(result)
                             .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
+                        #[cfg(feature = "testutils")]
                         fail::fail_point!("network_task::make_progress::settlement_submitted");
                         continue;
                     }
