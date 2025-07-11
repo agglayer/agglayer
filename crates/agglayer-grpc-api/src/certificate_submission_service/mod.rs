@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use agglayer_contracts::{L1TransactionFetcher, RollupContract};
 use agglayer_grpc_server::node::v1::certificate_submission_service_server::CertificateSubmissionService;
@@ -10,10 +10,14 @@ use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter,
 };
-use agglayer_types::NetworkId;
+use agglayer_types::{NetworkId, Signature};
 use error::CertificateSubmissionErrorWrapper;
+use tonic::Status;
 use tonic_types::{ErrorDetails, StatusExt};
 use tracing::{error, instrument};
+
+const GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE: &str =
+    "x-agglayer-extra-certificate-signature";
 
 const SUBMIT_CERTIFICATE_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.certificate-submission-service.submit_certificate";
@@ -46,6 +50,10 @@ where
         &self,
         request: tonic::Request<SubmitCertificateRequest>,
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
+        // Retrieve extra signature from query metadata if any
+        let extra_signature: Option<Signature> =
+            get_extra_signature(request.metadata()).map_err(|e| *e)?;
+
         let certificate: agglayer_types::Certificate = match request.into_inner().certificate {
             Some(certificate) => certificate.try_into().map_err(
                 |error: agglayer_grpc_types::compat::v1::Error| {
@@ -79,7 +87,7 @@ where
 
         let certificate_id = self
             .service
-            .send_certificate(certificate)
+            .send_certificate(certificate, extra_signature)
             .await
             .map_err(|error| {
                 CertificateSubmissionErrorWrapper::new(error, SUBMIT_CERTIFICATE_METHOD_PATH)
@@ -88,5 +96,61 @@ where
         Ok(tonic::Response::new(SubmitCertificateResponse {
             certificate_id: Some(certificate_id.into()),
         }))
+    }
+}
+
+pub(crate) fn get_extra_signature(
+    metadata: &tonic::metadata::MetadataMap,
+) -> Result<Option<Signature>, Box<Status>> {
+    if let Some(value) = metadata.get(GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE) {
+        let sig_str = value.to_str().map_err(|e| {
+            tonic::Status::invalid_argument(format!("invalid signature encoding: {e}"))
+        })?;
+
+        let sig = Signature::from_str(sig_str).map_err(|e| {
+            tonic::Status::invalid_argument(format!("invalid hex in signature: {e}"))
+        })?;
+
+        Ok(Some(sig))
+    } else {
+        Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use agglayer_types::{
+        aggchain_proof::AggchainData, primitives::alloy_primitives::hex, Certificate, Height,
+        NetworkId,
+    };
+    use rstest::rstest;
+
+    use super::{get_extra_signature, GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE};
+
+    #[rstest]
+    #[case("0x")]
+    #[case("")]
+    fn parse_query_metadata(#[case] prefix: String) {
+        let mut metadata = tonic::metadata::MetadataMap::new();
+
+        let expected_signature = {
+            let cert = Certificate::new_for_test(NetworkId::new(10), Height::new(1));
+            let AggchainData::ECDSA { signature } = cert.aggchain_data else {
+                panic!("dummy test certificate changed")
+            };
+
+            signature
+        };
+
+        metadata.insert(
+            GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE,
+            format!("{prefix}{}", hex::encode(expected_signature.as_bytes()))
+                .parse()
+                .unwrap(),
+        );
+
+        assert!(
+            matches!(get_extra_signature(&metadata), Ok(Some(signature)) if signature == expected_signature)
+        );
     }
 }

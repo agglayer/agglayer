@@ -89,3 +89,31 @@ fn prover_grpc_max_decoding_message_size() {
 
     assert_eq!(config.grpc.max_decoding_message_size, 100 * 1024 * 1024);
 }
+
+#[test]
+fn extra_certificate_signers() {
+    let input = "./tests/fixtures/valide_config/extra_certificate_signers.toml";
+
+    let config: Config = toml::from_str(&std::fs::read_to_string(input).unwrap()).unwrap();
+
+    assert_toml_snapshot!(config, {
+        ".storage.*" => insta::dynamic_redaction(|value, path| {
+            if path.to_string() != "storage.db-path" {
+                if let insta::internals::Content::String(path) = value {
+                    return insta::internals::Content::String(path.replace(Path::new("./").canonicalize().unwrap().to_str().unwrap(), "/tmp/agglayer"));
+                }
+            }
+
+            value
+        }),
+    });
+
+    assert_eq!(
+        *config
+            .extra_certificate_signer
+            .get(&1337)
+            .unwrap()
+            .into_alloy(),
+        alloy_primitives::address!("abcdefabcdefabcdefabcdefabcdefabcdefabcd").0
+    );
+}

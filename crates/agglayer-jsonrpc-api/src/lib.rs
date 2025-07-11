@@ -11,7 +11,7 @@ use agglayer_storage::stores::{
     StateWriter,
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId,
+    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId, Signature,
 };
 use alloy::{primitives::B256, providers::Provider};
 use error::{Error, RpcResult};
@@ -216,7 +216,16 @@ where
                 certificate.network_id
             )));
         }
-        Ok(self.rpc_service.send_certificate(certificate).await?)
+
+        let extra_signature: Option<Signature> = {
+            // NOTE: Extra certificate signature is not supported on the json rpc api
+            None
+        };
+
+        Ok(self
+            .rpc_service
+            .send_certificate(certificate, extra_signature)
+            .await?)
     }
 
     async fn get_certificate_header(
