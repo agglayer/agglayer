@@ -143,7 +143,7 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
 
     // Send the second certificate, identical to the first and check the error.
     let second_submission_err = client
-        .request::<CertificateId, _>("interop_sndCertificate", rpc_params![certificate.clone()])
+        .request::<CertificateId, _>("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
         .unwrap_err();
     insta::assert_debug_snapshot!(second_submission_err);
