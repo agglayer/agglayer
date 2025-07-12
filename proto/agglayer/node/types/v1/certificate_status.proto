@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package agglayer.node.types.v1;
+
+// Certificate status type.
+enum CertificateStatus {
+  // Unspecified certificate status.
+  CERTIFICATE_STATUS_UNSPECIFIED = 0;
+  // Certificate is pending.
+  CERTIFICATE_STATUS_PENDING = 1;
+  // Certificate is proven.
+  CERTIFICATE_STATUS_PROVEN = 2;
+  // Certificate is candidate.
+  CERTIFICATE_STATUS_CANDIDATE = 3;
+  // Certificate is in error.
+  CERTIFICATE_STATUS_IN_ERROR = 4;
+  // Certificate is settled.
+  CERTIFICATE_STATUS_SETTLED = 5;
+}

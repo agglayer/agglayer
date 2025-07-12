@@ -5,9 +5,14 @@ package agglayer.node.v1;
 import "agglayer/node/types/v1/certificate.proto";
 import "agglayer/node/types/v1/certificate_header.proto";
 import "agglayer/node/types/v1/certificate_id.proto";
+import "agglayer/node/types/v1/certificate_status.proto";
+
 
 // Service for querying node state.
 service NodeStateService {
+  // Method used to get a CertificateStatus for a particular CertificateId.
+  rpc GetCertificateStatus(GetCertificateStatusRequest) returns (GetCertificateStatusResponse);
+
   // Method used to get a CertificateHeader for a particular CertificateId.
   rpc GetCertificateHeader(GetCertificateHeaderRequest) returns (GetCertificateHeaderResponse);
 
@@ -43,6 +48,18 @@ enum GetLatestCertificateHeaderErrorKind {
 
   // Certificate not found.
   GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND = 3;
+}
+
+// Request to get a CertificateStatus for a particular CertificateId.
+message GetCertificateStatusRequest {
+  // The certificate identifier.
+  types.v1.CertificateId certificate_id = 1;
+}
+
+// Response to the CertificateStatus request.
+message GetCertificateStatusResponse {
+  // The certificate status.
+  types.v1.CertificateStatus certificate_status = 1;
 }
 
 // Request to get a CertificateHeader for a particular CertificateId.

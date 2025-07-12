@@ -74,6 +74,11 @@ mock! {
             certificate_id: &CertificateId,
         ) -> Result<Option<CertificateHeader>, Error>;
 
+        fn get_certificate_status(
+            &self,
+            certificate_id: &CertificateId,
+        ) -> Result<Option<CertificateStatus>, Error>;
+
         fn get_certificate_header_by_cursor(
             &self,
             network_id: NetworkId,

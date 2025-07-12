@@ -4,6 +4,7 @@ package agglayer.node.types.v1;
 
 import "agglayer/interop/types/v1/bytes.proto";
 import "agglayer/node/types/v1/certificate_id.proto";
+import "agglayer/node/types/v1/certificate_status.proto";
 
 // Certificate header type.
 message CertificateHeader {
@@ -29,22 +30,6 @@ message CertificateHeader {
   CertificateStatusError error = 10;
   // Settlement transaction hash.
   agglayer.interop.types.v1.FixedBytes32 settlement_tx_hash = 11;
-}
-
-// Certificate status type.
-enum CertificateStatus {
-  // Unspecified certificate status.
-  CERTIFICATE_STATUS_UNSPECIFIED = 0;
-  // Certificate is pending.
-  CERTIFICATE_STATUS_PENDING = 1;
-  // Certificate is proven.
-  CERTIFICATE_STATUS_PROVEN = 2;
-  // Certificate is candidate.
-  CERTIFICATE_STATUS_CANDIDATE = 3;
-  // Certificate is in error.
-  CERTIFICATE_STATUS_IN_ERROR = 4;
-  // Certificate is settled.
-  CERTIFICATE_STATUS_SETTLED = 5;
 }
 
 // Certificate status error type.

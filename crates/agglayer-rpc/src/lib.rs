@@ -182,6 +182,17 @@ where
             .inspect_err(|err| error!("Failed to get certificate header: {err}"))?
             .ok_or(CertificateRetrievalError::NotFound { certificate_id })
     }
+
+    /// Get the certificate status, raising an error if not found.
+    pub fn fetch_certificate_status(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<CertificateStatus, CertificateRetrievalError> {
+        self.state
+            .get_certificate_status(&certificate_id)
+            .inspect_err(|err| error!("Failed to get certificate status: {err}"))?
+            .ok_or(CertificateRetrievalError::NotFound { certificate_id })
+    }
 }
 
 impl<L1Rpc, PendingStore, StateStore, DebugStore>

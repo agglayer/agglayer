@@ -11,7 +11,7 @@ use agglayer_storage::stores::{
     StateWriter,
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, NetworkId,
 };
 use alloy::{primitives::B256, providers::Provider};
 use error::{Error, RpcResult};
@@ -58,6 +58,12 @@ trait Agglayer {
         &self,
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader>;
+
+    #[method(name = "getCertificateStatu")]
+    async fn get_certificate_status(
+        &self,
+        certificate_id: CertificateId,
+    ) -> RpcResult<CertificateStatus>;
 
     #[method(name = "getEpochConfiguration")]
     async fn get_epoch_configuration(&self) -> RpcResult<EpochConfiguration>;
@@ -224,6 +230,13 @@ where
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader> {
         Ok(self.rpc_service.fetch_certificate_header(certificate_id)?)
+    }
+
+    async fn get_certificate_status(
+        &self,
+        certificate_id: CertificateId,
+    ) -> RpcResult<CertificateStatus> {
+        Ok(self.rpc_service.fetch_certificate_status(certificate_id)?)
     }
 
     async fn get_epoch_configuration(&self) -> RpcResult<EpochConfiguration> {

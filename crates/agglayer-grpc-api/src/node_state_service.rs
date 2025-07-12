@@ -5,6 +5,7 @@ use agglayer_grpc_types::{
     compat::v1::Error,
     node::v1::{
         GetCertificateHeaderErrorKind, GetCertificateHeaderRequest, GetCertificateHeaderResponse,
+        GetCertificateStatusRequest, GetCertificateStatusResponse,
         GetLatestCertificateHeaderErrorKind, GetLatestCertificateHeaderRequest,
         GetLatestCertificateHeaderResponse, LatestCertificateRequestType,
     },
@@ -14,6 +15,8 @@ use agglayer_storage::stores::{DebugReader, PendingCertificateReader, StateReade
 use tonic_types::{ErrorDetails, StatusExt as _};
 use tracing::error;
 
+const GET_CERTIFICATE_HEADER_STATUS_PATH: &str =
+    "agglayer-node.grpc-api.v1.node-state-service.get_certificate_status";
 const GET_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_certificate_header";
 const GET_LATEST_CERTIFICATE_HEADER_METHOD_PATH: &str =
@@ -32,6 +35,52 @@ where
     DebugStore: DebugReader + 'static,
     L1Rpc: Send + Sync + 'static,
 {
+    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty))]
+    async fn get_certificate_status(
+        &self,
+        request: tonic::Request<GetCertificateStatusRequest>,
+    ) -> Result<tonic::Response<GetCertificateStatusResponse>, tonic::Status> {
+        let request_id = uuid::Uuid::new_v4().to_string();
+        tracing::Span::current().record("request_id", &request_id);
+        let request = request.into_inner();
+
+        let certificate_id: agglayer_types::CertificateId = request
+            .certificate_id
+            .ok_or_else(|| Error::missing_field("certificate_id"))
+            .and_then(|c| c.try_into())
+            .map_err(|error| {
+                tonic::Status::with_error_details(
+                    tonic::Code::InvalidArgument,
+                    "Invalid certificate ID",
+                    ErrorDetails::with_error_info(
+                        GetCertificateHeaderErrorKind::from(error.kind()).as_str_name(),
+                        GET_CERTIFICATE_HEADER_METHOD_PATH,
+                        [("error".into(), format!("{error:?}"))],
+                    ),
+                )
+            })?;
+
+        match self.service.fetch_certificate_status(certificate_id) {
+            Err(agglayer_rpc::CertificateRetrievalError::Storage(error)) => {
+                error!(?error, "returning internal storage error to RPC");
+                Err(tonic::Status::internal("Internal storage error"))
+            }
+            Err(agglayer_rpc::CertificateRetrievalError::NotFound { .. }) => {
+                Err(tonic::Status::with_error_details(
+                    tonic::Code::NotFound,
+                    "Certificate not found",
+                    ErrorDetails::with_error_info(
+                        GetCertificateHeaderErrorKind::NotFound.as_str_name(),
+                        GET_CERTIFICATE_HEADER_STATUS_PATH,
+                        [],
+                    ),
+                ))
+            }
+            Ok(header) => Ok(tonic::Response::new(GetCertificateStatusResponse {
+                certificate_status: header.as_i32(),
+            })),
+        }
+    }
     #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty))]
     async fn get_certificate_header(
         &self,
