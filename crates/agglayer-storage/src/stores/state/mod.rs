@@ -487,6 +487,13 @@ impl StateReader for StateStore {
         Ok(self.db.get::<CertificateHeaderColumn>(certificate_id)?)
     }
 
+    fn get_certificate_status(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<CertificateStatus>, Error> {
+        Ok(self.db.get::<CertificateHeaderColumn>(certificate_id)?.map(|certificate| certificate.status))
+    }
+
     fn get_certificate_header_by_cursor(
         &self,
         network_id: NetworkId,

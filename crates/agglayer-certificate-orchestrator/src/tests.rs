@@ -123,6 +123,18 @@ impl StateReader for DummyPendingStore {
         todo!()
     }
 
+    fn get_certificate_status(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<CertificateStatus>, agglayer_storage::error::Error> {
+        Ok(self
+            .certificate_headers
+            .read()
+            .unwrap()
+            .get(certificate_id)
+            .map(|certificate| certificate.status.clone()))
+    }
+
     fn get_certificate_header(
         &self,
         certificate_id: &CertificateId,

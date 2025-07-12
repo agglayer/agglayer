@@ -260,6 +260,192 @@ impl<'de> serde::Deserialize<'de> for GetCertificateHeaderResponse {
         deserializer.deserialize_struct("agglayer.node.v1.GetCertificateHeaderResponse", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for GetCertificateStatusRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.certificate_id.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetCertificateStatusRequest", len)?;
+        if let Some(v) = self.certificate_id.as_ref() {
+            struct_ser.serialize_field("certificateId", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetCertificateStatusRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "certificate_id",
+            "certificateId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            CertificateId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "certificateId" | "certificate_id" => Ok(GeneratedField::CertificateId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetCertificateStatusRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.node.v1.GetCertificateStatusRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetCertificateStatusRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut certificate_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::CertificateId => {
+                            if certificate_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("certificateId"));
+                            }
+                            certificate_id__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(GetCertificateStatusRequest {
+                    certificate_id: certificate_id__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.node.v1.GetCertificateStatusRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GetCertificateStatusResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.certificate_status != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetCertificateStatusResponse", len)?;
+        if self.certificate_status != 0 {
+            let v = super::types::v1::CertificateStatus::try_from(self.certificate_status)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.certificate_status)))?;
+            struct_ser.serialize_field("certificateStatus", &v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetCertificateStatusResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "certificate_status",
+            "certificateStatus",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            CertificateStatus,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "certificateStatus" | "certificate_status" => Ok(GeneratedField::CertificateStatus),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetCertificateStatusResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.node.v1.GetCertificateStatusResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetCertificateStatusResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut certificate_status__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::CertificateStatus => {
+                            if certificate_status__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("certificateStatus"));
+                            }
+                            certificate_status__ = Some(map_.next_value::<super::types::v1::CertificateStatus>()? as i32);
+                        }
+                    }
+                }
+                Ok(GetCertificateStatusResponse {
+                    certificate_status: certificate_status__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.node.v1.GetCertificateStatusResponse", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for GetEpochConfigurationErrorKind {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>

@@ -336,6 +336,35 @@ pub mod node_state_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
+        pub async fn get_certificate_status(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetCertificateStatusRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetCertificateStatusResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/agglayer.node.v1.NodeStateService/GetCertificateStatus",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "agglayer.node.v1.NodeStateService",
+                        "GetCertificateStatus",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn get_certificate_header(
             &mut self,
             request: impl tonic::IntoRequest<super::GetCertificateHeaderRequest>,
