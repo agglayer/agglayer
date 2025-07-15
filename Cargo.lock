@@ -115,6 +115,7 @@ dependencies = [
 name = "agglayer-certificate-orchestrator"
 version = "0.1.0"
 dependencies = [
+ "agglayer-certificate-orchestrator",
  "agglayer-clock",
  "agglayer-config",
  "agglayer-contracts",

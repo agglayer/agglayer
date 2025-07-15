@@ -29,6 +29,7 @@ pub(crate) struct NewCertificate {
 #[allow(dead_code)] // TODO: Once we have implemented storage properly, all the fields should become used
 /// Enum listing all the potential messages that can be sent to the network
 /// task.
+#[derive(Debug)]
 pub enum NetworkTaskMessage {
     /// Get the local network state before a given height.
     GetLocalNetworkStateBeforeHeight {
@@ -384,6 +385,7 @@ where
                         settlement_submitted_notifier
                             .send(result)
                             .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
+                        #[cfg(feature = "testutils")]
                         fail::fail_point!("network_task::make_progress::settlement_submitted");
                         continue;
                     }
