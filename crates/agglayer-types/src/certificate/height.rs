@@ -42,4 +42,3 @@ impl Height {
             .expect("Subtracting to negative values")
     }
 }
-

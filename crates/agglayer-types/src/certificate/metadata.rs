@@ -30,4 +30,3 @@ impl Metadata {
         &self.0
     }
 }
-
