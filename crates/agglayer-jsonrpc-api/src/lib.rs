@@ -11,7 +11,7 @@ use agglayer_storage::stores::{
     StateWriter,
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId, Signature,
+    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId,
 };
 use alloy::{primitives::B256, providers::Provider};
 use error::{Error, RpcResult};
@@ -217,10 +217,8 @@ where
             )));
         }
 
-        let extra_signature: Option<Signature> = {
-            // NOTE: Extra certificate signature is not supported on the json rpc api
-            None
-        };
+        // NOTE: Extra certificate signature is not supported on the json rpc api
+        let extra_signature = None;
 
         Ok(self
             .rpc_service
