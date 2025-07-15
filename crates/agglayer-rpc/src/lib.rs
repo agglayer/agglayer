@@ -328,10 +328,7 @@ where
     }
 
     /// Verify the extra [`Certificate`] signature.
-    #[instrument(
-        skip(self, certificate, extra_signer, extra_signature),
-        level = "debug"
-    )]
+    #[instrument(skip_all, level = "debug")]
     pub(crate) fn verify_extra_cert_signature(
         &self,
         certificate: &Certificate,
