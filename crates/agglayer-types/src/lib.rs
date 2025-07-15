@@ -430,9 +430,7 @@ pub enum CertificateStatus {
     /// Note that a certificate can be InError in agglayer but settled on L1,
     /// eg. if there was an error in agglayer but the certificate was valid
     /// and settled on L1.
-    // TODO: SHOULD BE A SEPARATE PR: MAKING A BOX HERE WOULD DIVIDE BY ~10 THE SIZE OF
-    // CERTIFICATESTATUS
-    InError { error: CertificateStatusError },
+    InError { error: Box<CertificateStatusError> },
 
     /// Transaction to settle the certificate was completed successfully on L1.
     Settled,
