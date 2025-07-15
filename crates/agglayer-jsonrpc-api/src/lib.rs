@@ -216,7 +216,14 @@ where
                 certificate.network_id
             )));
         }
-        Ok(self.rpc_service.send_certificate(certificate).await?)
+
+        // NOTE: Extra certificate signature is not supported on the json rpc api
+        let extra_signature = None;
+
+        Ok(self
+            .rpc_service
+            .send_certificate(certificate, extra_signature)
+            .await?)
     }
 
     async fn get_certificate_header(
