@@ -564,7 +564,7 @@ async fn retries() {
         .with(
             eq(certificate_id),
             eq(CertificateStatus::InError {
-                error: CertificateStatusError::InternalError(String::new()),
+                error: Box::new(CertificateStatusError::InternalError(String::new())),
             }),
         )
         .returning(|_, _| Ok(()));
@@ -1009,7 +1009,7 @@ async fn timeout_certifier() {
         .with(
             eq(certificate_id),
             eq(CertificateStatus::InError {
-                error: CertificateStatusError::InternalError(expected_error),
+                error: Box::new(CertificateStatusError::InternalError(expected_error)),
             }),
         )
         .returning(|_, _| Ok(()));

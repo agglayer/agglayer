@@ -306,7 +306,7 @@ async fn debug_get_certificate_after_overwrite() {
         .update_certificate_header_status(
             &id,
             &CertificateStatus::InError {
-                error: CertificateStatusError::InternalError("testing".to_string()),
+                error: Box::new(CertificateStatusError::InternalError("testing".to_string())),
             },
         )
         .expect("unable to update certificate header status");
@@ -384,7 +384,7 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
         .update_certificate_header_status(
             &id,
             &CertificateStatus::InError {
-                error: CertificateStatusError::InternalError("testing".to_string()),
+                error: Box::new(CertificateStatusError::InternalError("testing".to_string())),
             },
         )
         .expect("unable to update certificate header status");

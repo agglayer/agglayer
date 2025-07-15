@@ -96,7 +96,7 @@ where
             if let Err(error) = self.state_store.update_certificate_header_status(
                 &self.header.certificate_id,
                 &CertificateStatus::InError {
-                    error: error.clone(),
+                    error: Box::new(error.clone()),
                 },
             ) {
                 error!(?error, "Failed to update certificate status in database");
@@ -158,7 +158,7 @@ where
             }
             CertificateStatus::InError { error } => {
                 warn!(error = ?anyhow::Error::from(error.clone()), "Certificate is already in error");
-                Err(error.clone())
+                Err(*error.clone())
             }
         }
     }
