@@ -1,10 +1,9 @@
 //! Error types for the top-level Agglayer service.
-
 use agglayer_contracts::L1RpcError;
 pub use agglayer_storage::error::Error as StorageError;
 pub use agglayer_types::primitives::Digest;
-use agglayer_types::NetworkId;
-use ethers::{contract::ContractError, providers::Middleware, types::Address};
+use agglayer_types::{Address, NetworkId};
+use ethers::{contract::ContractError, providers::Middleware};
 
 pub use crate::rate_limiting::RateLimited as RateLimitedError;
 
@@ -56,9 +55,9 @@ pub enum SignatureVerificationError<Rpc: Middleware> {
     #[error("invalid signer: expected {trusted_sequencer}, got {signer}")]
     InvalidSigner {
         /// The recovered signer address.
-        signer: Address,
+        signer: ethers::types::Address,
         /// The trusted sequencer address.
-        trusted_sequencer: Address,
+        trusted_sequencer: ethers::types::Address,
     },
 
     #[error("unable to retrieve trusted sequencer address")]
@@ -72,4 +71,25 @@ pub enum SignatureVerificationError<Rpc: Middleware> {
     /// SP1-based Aggchain proof not yet supported.
     #[error("SP1-based Aggchain proof not yet supported")]
     SP1AggchainProofUnsupported,
+
+    /// Signature is missing.
+    #[error("signature not provided")]
+    SignatureMissing,
+
+    /// Extra Certificate signature is missing for the given network.
+    #[error("missing extra signature from {expected_signer} for the network {network_id}")]
+    MissingExtraSignature {
+        network_id: NetworkId,
+        expected_signer: Address,
+    },
+
+    /// The extra signature is not signed from the expected signer, or not
+    /// performed on the right commitment.
+    #[error("wrong signed commitment or invalid extra signer: expected: {expected}, got: {got}")]
+    InvalidExtraSignature {
+        /// The expected extra signer.
+        expected: Address,
+        /// The recovered signer address.
+        got: Address,
+    },
 }
