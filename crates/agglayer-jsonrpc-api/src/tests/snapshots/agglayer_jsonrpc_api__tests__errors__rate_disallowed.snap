@@ -8,7 +8,7 @@ expression: "RateLimited { detail: \"The `sendTx` settlement disabled by rate li
     "rate-limited": {
       "detail": "The `sendTx` settlement disabled by rate limiter",
       "error": {
-        "send-tx-diabled": {}
+        "send-tx-disabled": {}
       }
     }
   },
