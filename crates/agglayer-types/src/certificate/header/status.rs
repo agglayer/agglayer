@@ -1,23 +1,6 @@
 use std::fmt;
 
-use crate::{
-    CertificateId, CertificateIndex, CertificateStatusError, Digest, EpochNumber, Height,
-    LocalExitRoot, Metadata, NetworkId, B256,
-};
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct CertificateHeader {
-    pub network_id: NetworkId,
-    pub height: Height,
-    pub epoch_number: Option<EpochNumber>,
-    pub certificate_index: Option<CertificateIndex>,
-    pub certificate_id: CertificateId,
-    pub prev_local_exit_root: LocalExitRoot,
-    pub new_local_exit_root: LocalExitRoot,
-    pub metadata: Metadata,
-    pub status: CertificateStatus,
-    pub settlement_tx_hash: Option<SettlementTxHash>,
-}
+use crate::CertificateStatusError;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum CertificateStatus {
@@ -71,40 +54,3 @@ impl fmt::Display for CertificateStatus {
     }
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    PartialEq,
-    derive_more::AsRef,
-    derive_more::Display,
-    derive_more::From,
-    derive_more::Into,
-    serde::Deserialize,
-    serde::Serialize,
-)]
-#[serde(transparent)]
-pub struct SettlementTxHash(Digest);
-
-impl SettlementTxHash {
-    pub const fn for_tests() -> Self {
-        SettlementTxHash(Digest::ZERO)
-    }
-
-    pub const fn new(hash: Digest) -> Self {
-        SettlementTxHash(hash)
-    }
-}
-
-impl From<B256> for SettlementTxHash {
-    fn from(hash: B256) -> Self {
-        SettlementTxHash(Digest::from(hash))
-    }
-}
-
-impl From<SettlementTxHash> for B256 {
-    fn from(tx_hash: SettlementTxHash) -> Self {
-        tx_hash.0.as_bytes().into()
-    }
-}
