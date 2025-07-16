@@ -1,3 +1,4 @@
+use agglayer_types::aggchain_proof;
 pub use pessimistic_proof::PessimisticProofOutput;
 use pessimistic_proof::{
     keccak::{Hasher, Keccak256Hasher},
@@ -12,6 +13,8 @@ use crate::PESSIMISTIC_PROOF_ELF;
 pub type KeccakHasher = Keccak256Hasher;
 pub type Digest = <KeccakHasher as Hasher>::Digest;
 pub type MultiBatchHeader = pessimistic_proof::multi_batch_header::MultiBatchHeader<KeccakHasher>;
+
+use std::alloc::alloc;
 
 pub struct ProofOutput {}
 
@@ -40,45 +43,30 @@ impl Runner {
     /// Convert inputs to stdin.
     pub fn prepare_stdin(state: &NetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
         let mut stdin = SP1Stdin::new();
-        println!("asdasd");
+        println!("network state: {:?}", state);
+        println!("batch_header: {:?}", batch_header);
+
         stdin.write_slice(
-            rkyv::to_bytes::<rkyv::rancor::Error>(state)
-                .expect("Failed to serialize NetworkState")
-                .as_slice(),
+            &rkyv::to_bytes::<rkyv::rancor::Error>(state)
+                .expect("Failed to serialize NetworkState"),
         );
         println!("asdasd2");
+
         println!("batch_header.height: {:?}", batch_header.height);
         println!(
             "batch_header.height as bytes: {:?}",
             batch_header.height.to_be_bytes()
         );
 
-        println!("writting Foo");
-        let foo = Foo { bar: 1, bar64: 0 };
-        println!(
-            "foo serialized: {:?}",
-            rkyv::to_bytes::<rkyv::rancor::Error>(&foo)
-                .expect("Failed to serialize Foo")
-                .as_slice()
-        );
-        println!("Foo layout: {:?}", std::alloc::Layout::new::<Foo>());
-        stdin.write_slice(
-            rkyv::to_bytes::<rkyv::rancor::Error>(&foo)
-                .expect("Failed to serialize Foo")
-                .as_slice(),
-        );
+        let batch_header_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(batch_header)
+            .expect("Failed to serialize MultiBatchHeader");
+        println!("batch header serialized: {:?}", batch_header_bytes);
+        let batch_header_deserialized =
+            rkyv::from_bytes::<MultiBatchHeader, rkyv::rancor::Error>(&batch_header_bytes)
+                .expect("Failed to deserialize MultiBatchHeader");
+        println!("batch_header deserialized: {:?}", batch_header_deserialized);
 
-        println!(
-            "batch header serialized: {:?}",
-            rkyv::to_bytes::<rkyv::rancor::Error>(batch_header)
-                .expect("Failed to serialize MultiBatchHeader")
-                .as_slice()
-        );
-        stdin.write_slice(
-            rkyv::to_bytes::<rkyv::rancor::Error>(batch_header)
-                .expect("Failed to serialize MultiBatchHeader")
-                .as_slice(),
-        );
+        stdin.write_slice(&batch_header_bytes);
         println!("asdasd3");
         stdin
     }

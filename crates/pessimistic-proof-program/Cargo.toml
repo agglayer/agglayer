@@ -7,7 +7,12 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 pessimistic-proof-core = { path = "../pessimistic-proof-core", default-features = false }
 sp1-zkvm = { version = "=5.0.0", features = ["verify"] }
-rkyv = { version = "0.8", features = ["hashbrown-0_15", "std", "bytecheck"] }
+rkyv = { version = "0.8", features = [
+    "hashbrown-0_15",
+    "std",
+    "bytecheck",
+    "unaligned",
+] }
 
 [build-dependencies]
 sp1-cli = "=5.0.0"

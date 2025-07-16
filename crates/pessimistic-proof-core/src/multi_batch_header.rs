@@ -53,33 +53,25 @@ where
     H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + rkyv::Archive,
 {
     /// Network that emitted this [`MultiBatchHeader`].
-    // #[rkyv(with = rkyv::with::Skip)]
     pub origin_network: NetworkId,
     /// Current certificate height of the L2 chain.
-    // #[rkyv(with = rkyv::with::Skip)]
     pub height: u64,
     /// Previous pessimistic root.
     #[serde_as(as = "_")]
-    #[rkyv(with = rkyv::with::Skip)]
     pub prev_pessimistic_root: H::Digest,
     /// List of bridge exits created in this batch.
-    #[rkyv(with = rkyv::with::Skip)]
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits claimed in this batch.
-    #[rkyv(with = rkyv::with::Skip)]
     pub imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<H>)>,
     /// L1 info root used to import bridge exits.
     #[serde_as(as = "_")]
-    // #[rkyv(with = rkyv::with::Skip)]
     pub l1_info_root: H::Digest,
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
     /// Optimized for SP1: Using Vec instead of BTreeMap for better cycle
     /// performance.
-    #[rkyv(with = rkyv::with::Skip)]
     pub balances_proofs: Vec<(TokenInfo, (U256Def, LocalBalancePath<H>))>,
     /// Aggchain proof.
-    #[rkyv(with = rkyv::with::Skip)]
     pub aggchain_proof: AggchainData,
 }
 

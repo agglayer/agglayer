@@ -109,7 +109,12 @@ parking_lot = "0.12.3"
 pin-project = "1.1"
 prost = "0.13.4"
 rand = "0.9.0"
-rkyv = { version = "0.8", features = ["hashbrown-0_15", "std", "bytecheck"] }
+rkyv = { version = "0.8", features = [
+    "hashbrown-0_15",
+    "std",
+    "bytecheck",
+    "unaligned",
+] }
 rstest = "0.22.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
