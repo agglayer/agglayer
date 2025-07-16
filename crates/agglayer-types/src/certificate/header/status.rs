@@ -53,4 +53,3 @@ impl fmt::Display for CertificateStatus {
         }
     }
 }
-
