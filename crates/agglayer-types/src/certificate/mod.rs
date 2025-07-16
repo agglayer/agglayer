@@ -1,5 +1,5 @@
 use agglayer_interop_types::{aggchain_proof::AggchainData, LocalExitRoot};
-use agglayer_primitives::{Address, Hashable, B256};
+use agglayer_primitives::{Address, Hashable, Signature, B256};
 use pessimistic_proof::{core::commitment::SignatureCommitmentValues, keccak::keccak256_combine};
 use unified_bridge::{
     BridgeExit, CommitmentVersion, ImportedBridgeExit, ImportedBridgeExitCommitmentValues,
@@ -114,6 +114,17 @@ impl Certificate {
         } else {
             Err(Error::MultipleL1InfoRoot)
         }
+    }
+
+    /// Retrieve the signer from the provided signature.
+    pub fn signer_from_signature(&self, signature: Signature) -> Result<Address, SignerError> {
+        // TODO: Verify for both commitment versions and return the version
+        let version = CommitmentVersion::V2;
+        let commitment = SignatureCommitmentValues::from(self).commitment(version);
+
+        signature
+            .recover_address_from_prehash(&B256::new(commitment.0))
+            .map_err(SignerError::Recovery)
     }
 
     pub fn signer(&self) -> Result<Address, SignerError> {
