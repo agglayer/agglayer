@@ -252,6 +252,7 @@ where
     }
 
     async fn recv_block(stream: &mut Subscription<Header>) -> Result<Header, BlockClockError> {
+        fail::fail_point!("block_clock::BlockClock::recv_block::before");
         loop {
             match stream.recv().await {
                 Ok(block) => break Ok(block),
