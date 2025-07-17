@@ -448,6 +448,14 @@ impl fmt::Display for CertificateStatus {
     }
 }
 
+impl CertificateStatus {
+    pub fn error(err: CertificateStatusError) -> Self {
+        CertificateStatus::InError {
+            error: Box::new(err),
+        }
+    }
+}
+
 /// Represents the data submitted by the chains to the AggLayer.
 ///
 /// The bridge exits plus the imported bridge exits define

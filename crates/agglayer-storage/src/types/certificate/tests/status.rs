@@ -8,7 +8,7 @@ type Cse = CertificateStatusError;
 type Pve = ProofVerificationError;
 
 fn err(error: CertificateStatusError) -> CertificateStatus {
-    CertificateStatus::InError { error: Box::new(error) }
+    CertificateStatus::error(error)
 }
 
 fn proof_err(source: ProofError) -> CertificateStatus {

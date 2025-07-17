@@ -169,11 +169,9 @@ async fn pending_certificate_in_error_can_be_replaced() {
         .state_store
         .insert_certificate_header(
             &pending_certificate,
-            CertificateStatus::InError {
-                error: Box::new(agglayer_types::CertificateStatusError::InternalError(
-                    "testing".to_string(),
-                )),
-            },
+            CertificateStatus::error(agglayer_types::CertificateStatusError::InternalError(
+                "testing".to_string(),
+            )),
         )
         .expect("unable to insert pending certificate header");
 
@@ -230,11 +228,9 @@ async fn pending_certificate_in_error_force_push() {
         .state_store
         .update_certificate_header_status(
             &certificate_id,
-            &CertificateStatus::InError {
-                error: Box::new(agglayer_types::CertificateStatusError::InternalError(
-                    "testing".to_string(),
-                )),
-            },
+            &CertificateStatus::error(agglayer_types::CertificateStatusError::InternalError(
+                "testing".to_string(),
+            )),
         )
         .expect("Unable to update certificate header status");
 

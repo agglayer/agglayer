@@ -95,9 +95,7 @@ where
             // Then record it to the database
             if let Err(error) = self.state_store.update_certificate_header_status(
                 &self.header.certificate_id,
-                &CertificateStatus::InError {
-                    error: Box::new(error.clone()),
-                },
+                &CertificateStatus::error(error.clone()),
             ) {
                 error!(?error, "Failed to update certificate status in database");
             };
