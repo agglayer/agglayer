@@ -450,35 +450,6 @@ impl fmt::Display for CertificateStatus {
     }
 }
 
-impl PartialOrd for CertificateStatus {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl CertificateStatus {
-    // Only ever used as implementation for Ord, feel free to change it
-    // TODO: now that certificatetask handles settling properly, we should be able
-    // to refactor it to no longer require Ord here Then we can delete this
-    // function
-    fn as_order_number(&self) -> usize {
-        use CertificateStatus::*;
-        match self {
-            Pending => 0,
-            Proven => 1,
-            Candidate => 2,
-            Settled => 3,
-            InError { .. } => 4,
-        }
-    }
-}
-
-impl Ord for CertificateStatus {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.as_order_number().cmp(&other.as_order_number())
-    }
-}
-
 /// Represents the data submitted by the chains to the AggLayer.
 ///
 /// The bridge exits plus the imported bridge exits define
@@ -664,6 +635,17 @@ impl Certificate {
         } else {
             Err(Error::MultipleL1InfoRoot)
         }
+    }
+
+    /// Retrieve the signer from the provided signature.
+    pub fn signer_from_signature(&self, signature: Signature) -> Result<Address, SignerError> {
+        // TODO: Verify for both commitment versions and return the version
+        let version = CommitmentVersion::V2;
+        let commitment = SignatureCommitmentValues::from(self).commitment(version);
+
+        signature
+            .recover_address_from_prehash(&B256::new(commitment.0))
+            .map_err(SignerError::Recovery)
     }
 
     pub fn signer(&self) -> Result<Address, SignerError> {

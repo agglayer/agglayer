@@ -115,6 +115,7 @@ dependencies = [
 name = "agglayer-certificate-orchestrator"
 version = "0.1.0"
 dependencies = [
+ "agglayer-certificate-orchestrator",
  "agglayer-clock",
  "agglayer-config",
  "agglayer-contracts",
@@ -264,6 +265,7 @@ dependencies = [
  "axum 0.8.4",
  "http",
  "prost",
+ "rstest",
  "serde",
  "serde_json",
  "tokio",
