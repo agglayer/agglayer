@@ -36,12 +36,6 @@ impl From<U256> for U256Def {
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Debug, Clone)]
-pub struct Foo {
-    pub bar: u32,
-    pub bar64: u64,
-}
-
 /// Represents the chain state transition for the pessimistic proof.
 #[serde_as]
 #[derive(

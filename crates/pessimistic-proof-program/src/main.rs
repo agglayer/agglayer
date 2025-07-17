@@ -14,15 +14,14 @@ pub fn main() {
     let batch_header_bytes = sp1_zkvm::io::read_vec();
     let batch_header = rkyv::from_bytes::<MultiBatchHeader<Keccak256Hasher>, rkyv::rancor::Error>(
         &batch_header_bytes,
-    );
-    let batch_header = batch_header.expect("Failed to deserialize batch header.");
+    )
+    .expect("Failed to deserialize batch header.");
 
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header).unwrap();
 
     let pp_inputs = PessimisticProofOutput::bincode_codec()
         .serialize(&outputs)
         .unwrap();
-    println!("cycle-tracker-report-end: serialize_pessimistic_proof_output");
 
     sp1_zkvm::io::commit_slice(&pp_inputs);
 }

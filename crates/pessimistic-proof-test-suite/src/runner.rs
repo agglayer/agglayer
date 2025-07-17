@@ -43,11 +43,10 @@ impl Runner {
             &rkyv::to_bytes::<rkyv::rancor::Error>(state)
                 .expect("Failed to serialize NetworkState"),
         );
-
-        let batch_header_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(batch_header)
-            .expect("Failed to serialize MultiBatchHeader");
-
-        stdin.write_slice(&batch_header_bytes);
+        stdin.write_slice(
+            &rkyv::to_bytes::<rkyv::rancor::Error>(batch_header)
+                .expect("Failed to serialize MultiBatchHeader"),
+        );
         stdin
     }
 

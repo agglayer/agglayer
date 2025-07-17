@@ -43,15 +43,6 @@ pub enum AggchainData {
     },
 }
 
-impl Default for AggchainData {
-    fn default() -> Self {
-        AggchainData::Generic {
-            aggchain_params: Digest::default(),
-            aggchain_vkey: [0u32; 8],
-        }
-    }
-}
-
 impl AggchainData {
     /// Returns the aggchain hash
     pub fn aggchain_hash(&self) -> Digest {
