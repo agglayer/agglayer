@@ -406,9 +406,9 @@ async fn can_catchup_on_disconnection() {
 #[rstest::rstest]
 // Anvil bounds its broadcast channel size to 16 by default.
 // At one block per second, we need over 16 seconds for it to start lagging.
-#[case("1*sleep(20000)")]
+#[case("1*return(20)")]
 // This one is fine during initialization but lags later on.
-#[case("3*off->1*sleep(20000)")]
+#[case("4*off->1*return(20)")]
 // Limit the total running time.
 #[timeout(Duration::from_secs(60))]
 #[test_log::test(tokio::test)]

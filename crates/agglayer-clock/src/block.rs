@@ -252,7 +252,22 @@ where
     }
 
     async fn recv_block(stream: &mut Subscription<Header>) -> Result<Header, BlockClockError> {
-        fail::fail_point!("block_clock::BlockClock::recv_block::before");
+        #[cfg(test)]
+        {
+            // The default sleep fail point directive issues a blocking sleep.
+            // That does not play nice with code that is meant to be executed
+            // in an async runtime. Here, we abuse the return value injection
+            // to specify the timeout and use the tokio sleep instead.
+            fn get_delay() -> Duration {
+                fail::fail_point!("block_clock::BlockClock::recv_block::before", |d| {
+                    d.map(|d| Duration::from_secs(d.parse().unwrap()))
+                        .unwrap_or_default()
+                });
+                Duration::default()
+            }
+            tokio::time::sleep(get_delay()).await;
+        }
+
         loop {
             match stream.recv().await {
                 Ok(block) => break Ok(block),
