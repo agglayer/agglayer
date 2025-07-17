@@ -438,6 +438,18 @@ pub enum CertificateStatus {
     Settled,
 }
 
+impl CertificateStatus {
+    pub fn as_i32(&self) -> i32 {
+        match self {
+            CertificateStatus::Pending => 1,
+            CertificateStatus::Proven => 2,
+            CertificateStatus::Candidate => 3,
+            CertificateStatus::InError { .. } => 4,
+            CertificateStatus::Settled => 5,
+        }
+    }
+}
+
 impl fmt::Display for CertificateStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

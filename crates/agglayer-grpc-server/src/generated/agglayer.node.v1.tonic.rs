@@ -384,6 +384,13 @@ pub mod node_state_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with NodeStateServiceServer.
     #[async_trait]
     pub trait NodeStateService: std::marker::Send + std::marker::Sync + 'static {
+        async fn get_certificate_status(
+            &self,
+            request: tonic::Request<super::GetCertificateStatusRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetCertificateStatusResponse>,
+            tonic::Status,
+        >;
         async fn get_certificate_header(
             &self,
             request: tonic::Request<super::GetCertificateHeaderRequest>,
@@ -475,6 +482,55 @@ pub mod node_state_service_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
+                "/agglayer.node.v1.NodeStateService/GetCertificateStatus" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetCertificateStatusSvc<T: NodeStateService>(pub Arc<T>);
+                    impl<
+                        T: NodeStateService,
+                    > tonic::server::UnaryService<super::GetCertificateStatusRequest>
+                    for GetCertificateStatusSvc<T> {
+                        type Response = super::GetCertificateStatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetCertificateStatusRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as NodeStateService>::get_certificate_status(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetCertificateStatusSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 "/agglayer.node.v1.NodeStateService/GetCertificateHeader" => {
                     #[allow(non_camel_case_types)]
                     struct GetCertificateHeaderSvc<T: NodeStateService>(pub Arc<T>);
