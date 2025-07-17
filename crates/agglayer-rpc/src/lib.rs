@@ -11,11 +11,10 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height,
-    NetworkId,
+    Address, Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration,
+    Height, NetworkId, Signature,
 };
 use error::SignatureVerificationError;
-use ethers::types::TransactionReceipt;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -197,7 +196,7 @@ where
     async fn validate_pre_existing_certificate(
         &self,
         certificate: &Certificate,
-    ) -> Result<(), CertificateSubmissionError<L1Rpc::M>> {
+    ) -> Result<(), CertificateSubmissionError> {
         let new_certificate_id = certificate.hash();
         // Get pre-existing certificate in pending
         if let Some(certificate) = self
@@ -247,8 +246,7 @@ where
                                 }
                             })?;
 
-                        if matches!(l1_transaction, TransactionReceipt { status: Some(status), .. } if status.as_u64() == 0)
-                        {
+                        if !l1_transaction.status() {
                             info!(
                                 %pre_existing_certificate_id,
                                 %tx_hash,
@@ -292,13 +290,14 @@ where
 
         Ok(())
     }
+
     /// Verify that the signer of the given [`Certificate`] is the trusted
     /// sequencer for the rollup id it specified.
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn verify_cert_signature(
         &self,
         cert: &Certificate,
-    ) -> Result<(), SignatureVerificationError<L1Rpc::M>> {
+    ) -> Result<(), SignatureVerificationError> {
         let sequencer_address = self
             .l1_rpc_provider
             .get_trusted_sequencer_address(
@@ -327,11 +326,57 @@ where
 
         Ok(())
     }
+
+    /// Verify the extra [`Certificate`] signature.
+    #[instrument(skip_all, level = "debug")]
+    pub(crate) fn verify_extra_cert_signature(
+        &self,
+        certificate: &Certificate,
+        extra_signer: Option<&Address>,
+        extra_signature: Option<Signature>,
+    ) -> Result<(), SignatureVerificationError> {
+        match (extra_signer, extra_signature) {
+            // Extra signature expected and provided
+            (Some(&expected_extra_signer), Some(extra_signature)) => {
+                // Retrieve the signer from the extra signature
+                let retrieved_extra_signer = certificate
+                    .signer_from_signature(extra_signature)
+                    .map_err(SignatureVerificationError::from_signer_error)?
+                    .into_array()
+                    .into();
+
+                // Verify that the signature is performed by the expected authority
+                if retrieved_extra_signer != expected_extra_signer {
+                    return Err(SignatureVerificationError::InvalidExtraSignature {
+                        expected: expected_extra_signer,
+                        got: retrieved_extra_signer,
+                    });
+                }
+            }
+            // Extra signature is expected but missing
+            (Some(&expected_signer), None) => {
+                return Err(SignatureVerificationError::MissingExtraSignature {
+                    network_id: certificate.network_id,
+                    expected_signer,
+                });
+            }
+            // Extra signature provided but not required
+            (None, Some(_)) => {
+                warn!("Unexpected extra signature provided");
+            }
+            // No extra signature provided nor required
+            (None, None) => {}
+        };
+
+        Ok(())
+    }
+
     #[instrument(skip(self, certificate), fields(hash, rollup_id = certificate.network_id.to_u32()), level = "info")]
     pub async fn send_certificate(
         &self,
         certificate: Certificate,
-    ) -> Result<CertificateId, CertificateSubmissionError<L1Rpc::M>> {
+        extra_signature: Option<Signature>,
+    ) -> Result<CertificateId, CertificateSubmissionError> {
         let hash = certificate.hash();
         let hash_string = hash.to_string();
         tracing::Span::current().record("hash", &hash_string);
@@ -341,12 +386,36 @@ where
             "Received certificate {hash} for rollup {} at height {}", certificate.network_id.to_u32(), certificate.height
         );
         self.validate_pre_existing_certificate(&certificate).await?;
+
+        // Verify the involved signatures
+        // TODO: For now both commitments are enforced to be the V2 version.
+        // Ideally we want the aggsender to sign the V3 version.
+        // Consequently, we'll need to
+        //   - return the commitment version of the signed message for both signatures
+        //   - verify that they are both considering the exact same message (and so same
+        //     commitment version)
+        //   - verify that the commitment version is the expected one from the last PP
+        //     root in L1 (same as what is done in the witness generation)
+        self.verify_extra_cert_signature(
+            &certificate,
+            self.config()
+                .extra_certificate_signer
+                .get(&certificate.network_id.to_u32()),
+            extra_signature,
+        )
+        .map_err(|error| {
+            error!(
+                ?error,
+                "Failed to verify the extra signature for the certificate"
+            );
+            CertificateSubmissionError::SignatureError(error)
+        })?;
+
         self.verify_cert_signature(&certificate)
             .await
-            .map_err(|e| {
-                error!(error = %e, hash = hash_string, "Failed to verify the signature of
-        certificate {hash}: {e}");
-                CertificateSubmissionError::SignatureError(e)
+            .map_err(|error| {
+                error!(?error, "Failed to verify the signature of certificate");
+                CertificateSubmissionError::SignatureError(error)
             })?;
 
         // TODO: Batch the different queries.

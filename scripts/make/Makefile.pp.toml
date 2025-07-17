@@ -1,26 +1,19 @@
-[env]
-SP1_DOCKER_TAG = "v5.0.0@sha256:52d9e522d1dcbc4062edee950391173aed752793c33361fb2cad44272027a68c"
-CARGO_PROVE_VERSION="v5.0.0"
-
 [tasks.pp-elf]
 description = "Install pessimistic proof ELF file"
 run_task = { name = [
     "pp-elf-build",
     "pp-update-cycle-tracker",
+    "pp-check-vkey-change",
 ] }
 
 [tasks.pp-elf-build]
 description = "Compile pessimistic proof ELF file"
-cwd = "crates/pessimistic-proof-program"
+env = { AGGLAYER_ELF_BUILD = "update" }
 command = "cargo"
 args = [
-    "prove",
     "build",
-    "--docker",
-    "--tag=${SP1_DOCKER_TAG}",
-    "--workspace-directory=../../",
-    "--output-directory=elf/",
-    "--elf-name=riscv32im-succinct-zkvm-elf",
+    "-vv",
+    "-ppessimistic-proof",
 ]
 
 [tasks.pp-update-cycle-tracker]
@@ -33,8 +26,24 @@ args = [
     "--test=cycle-tracker",
 ]
 
+[tasks.pp-check-vkey-change]
+description = "Check vkey and selector snapshost for PP"
+command = "cargo"
+env.AGGLAYER_ELF_BUILD = "build"
+env.INSTA_UPDATE = "no"
+args = [
+    "test",
+    "-ppessimistic-proof-test-suite",
+    "--test=vkey_selector",
+]
 
-[tasks.install-cargo-prove]
-description = "Install the appropriate version of `cargo prove`"
-command = "${HOME}/.sp1/bin/sp1up"
-args = [ "--version", "${CARGO_PROVE_VERSION}" ]
+[tasks.pp-accept-vkey-change]
+description = "Update vkey and selector snapshot for PP without updating selector"
+command = "cargo"
+env.AGGLAYER_ELF_BUILD = "update"
+env.INSTA_UPDATE = "always"
+args = [
+    "test",
+    "-ppessimistic-proof-test-suite",
+    "--test=vkey_selector",
+]

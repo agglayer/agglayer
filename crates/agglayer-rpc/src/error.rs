@@ -1,10 +1,9 @@
 //! Error types for the top-level Agglayer service.
-
 use agglayer_contracts::L1RpcError;
 pub use agglayer_storage::error::Error as StorageError;
 pub use agglayer_types::primitives::Digest;
-use agglayer_types::{CertificateId, Height, NetworkId};
-use ethers::{contract::ContractError, providers::Middleware, types::Address};
+use agglayer_types::{Address, CertificateId, Height, NetworkId, SignerError};
+use alloy::contract::Error as ContractError;
 
 pub use crate::rate_limiting::RateLimited as RateLimitedError;
 
@@ -18,7 +17,7 @@ pub enum CertificateRetrievalError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum CertificateSubmissionError<Rpc: Middleware> {
+pub enum CertificateSubmissionError {
     #[error(transparent)]
     Storage(#[from] StorageError),
 
@@ -26,7 +25,7 @@ pub enum CertificateSubmissionError<Rpc: Middleware> {
     OrchestratorNotResponsive,
 
     #[error("Failed to validate certificate signature: {0}")]
-    SignatureError(#[source] SignatureVerificationError<Rpc>),
+    SignatureError(#[source] SignatureVerificationError),
 
     #[error("Unable to replace pending certificate at height {height} for network {network_id}")]
     UnableToReplacePendingCertificate {
@@ -42,14 +41,14 @@ pub enum CertificateSubmissionError<Rpc: Middleware> {
 
 /// Errors related to signature verification process.
 #[derive(thiserror::Error, Debug)]
-pub enum SignatureVerificationError<Rpc: Middleware> {
+pub enum SignatureVerificationError {
     /// FEP (0.1): The signer could not be recovered from the [`SignedTx`].
     #[error("could not recover transaction signer: {0}")]
-    CouldNotRecoverTxSigner(#[source] ethers::types::SignatureError),
+    CouldNotRecoverTxSigner(#[source] alloy::primitives::SignatureError),
 
     /// The signer could not be recovered from the certificate signature.
     #[error("could not recover certificate signer: {0}")]
-    CouldNotRecoverCertSigner(#[source] alloy::primitives::SignatureError),
+    CouldNotRecoverCertSigner(#[source] SignerError),
 
     /// The signer of the proof is not the trusted sequencer for the given
     /// rollup id.
@@ -67,18 +66,37 @@ pub enum SignatureVerificationError<Rpc: Middleware> {
     /// Generic network error when attempting to retrieve the trusted sequencer
     /// address from the rollup contract.
     #[error("contract error: {0}")]
-    ContractError(#[from] ContractError<Rpc>),
+    ContractError(#[from] ContractError),
 
     /// Signature is missing.
     #[error("signature not provided")]
     SignatureMissing,
+
+    /// Extra Certificate signature is missing for the given network.
+    #[error("missing extra signature from {expected_signer} for the network {network_id}")]
+    MissingExtraSignature {
+        network_id: NetworkId,
+        expected_signer: Address,
+    },
+
+    /// The extra signature is not signed from the expected signer, or not
+    /// performed on the right commitment.
+    #[error("wrong signed commitment or invalid extra signer: expected: {expected}, got: {got}")]
+    InvalidExtraSignature {
+        /// The expected extra signer.
+        expected: Address,
+        /// The recovered signer address.
+        got: Address,
+    },
 }
 
-impl<Rpc: Middleware> SignatureVerificationError<Rpc> {
+impl SignatureVerificationError {
     pub fn from_signer_error(e: agglayer_types::SignerError) -> Self {
         match e {
             agglayer_types::SignerError::Missing => Self::SignatureMissing,
-            agglayer_types::SignerError::Recovery(e) => Self::CouldNotRecoverCertSigner(e),
+            agglayer_types::SignerError::Recovery(e) => {
+                Self::CouldNotRecoverCertSigner(agglayer_types::SignerError::Recovery(e))
+            }
         }
     }
 }

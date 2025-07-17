@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use ethers::types::Address;
+use agglayer_primitives::Address;
 use serde::{Deserialize, Serialize};
 use url::Url;
 

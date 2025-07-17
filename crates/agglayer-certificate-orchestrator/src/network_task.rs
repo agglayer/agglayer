@@ -29,6 +29,7 @@ pub(crate) struct NewCertificate {
 #[allow(dead_code)] // TODO: Once we have implemented storage properly, all the fields should become used
 /// Enum listing all the potential messages that can be sent to the network
 /// task.
+#[derive(Debug)]
 pub enum NetworkTaskMessage {
     /// Get the local network state before a given height.
     GetLocalNetworkStateBeforeHeight {
@@ -322,17 +323,6 @@ where
         };
 
         let certificate_id = certificate.hash();
-        let header =
-            if let Some(header) = self.state_store.get_certificate_header(&certificate_id)? {
-                header
-            } else {
-                error!(
-                    hash = certificate_id.to_string(),
-                    "Certificate header not found for {certificate_id}"
-                );
-
-                return Ok(());
-            };
 
         let (sender, mut receiver) = mpsc::channel(1);
 
@@ -344,13 +334,12 @@ where
         let task = tokio::spawn(
             CertificateTask::new(
                 certificate,
-                header,
                 sender,
                 self.state_store.clone(),
                 self.pending_store.clone(),
                 self.certifier_client.clone(),
                 cancellation_token.clone(),
-            )
+            )?
             .process(),
         );
 
@@ -396,6 +385,7 @@ where
                         settlement_submitted_notifier
                             .send(result)
                             .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
+                        #[cfg(feature = "testutils")]
                         fail::fail_point!("network_task::make_progress::settlement_submitted");
                         continue;
                     }

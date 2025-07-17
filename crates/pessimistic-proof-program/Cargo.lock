@@ -31,6 +31,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 [[package]]
 name = "agglayer-bincode"
 version = "0.8.0"
+source = "git+https://github.com/4l0n50/interop.git?branch=alonso%2Frkyv#1e0a886b0e60b0e1a2cc5b6ae0be7e48e26adb11"
 dependencies = [
  "bincode",
  "serde",
@@ -39,6 +40,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.8.0"
+source = "git+https://github.com/4l0n50/interop.git?branch=alonso%2Frkyv#1e0a886b0e60b0e1a2cc5b6ae0be7e48e26adb11"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -53,6 +55,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.8.0"
+source = "git+https://github.com/4l0n50/interop.git?branch=alonso%2Frkyv#1e0a886b0e60b0e1a2cc5b6ae0be7e48e26adb11"
 dependencies = [
  "agglayer-primitives",
  "hex",
@@ -661,20 +664,6 @@ name = "bytemuck"
 version = "1.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c76a5792e44e4abe34d3abf15636779261d45a7450612059293d1d2cfc63422"
-dependencies = [
- "bytemuck_derive",
-]
-
-[[package]]
-name = "bytemuck_derive"
-version = "1.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ecc273b49b3205b83d648f0690daa588925572cc5063745bfe547fe7ec8e1a1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.104",
-]
 
 [[package]]
 name = "byteorder"
@@ -3149,10 +3138,7 @@ dependencies = [
  "rkyv-with",
  "semver 1.0.26",
  "serde",
- "serde_json",
  "serde_with",
- "sp1-primitives",
- "sp1-verifier",
  "sp1-zkvm",
  "thiserror 2.0.12",
  "tiny-keccak",
@@ -3163,7 +3149,7 @@ dependencies = [
 
 [[package]]
 name = "pessimistic-proof-program"
-version = "6.0.0"
+version = "6.1.0"
 dependencies = [
  "pessimistic-proof-core",
  "rkyv",
@@ -4882,22 +4868,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp1-verifier"
-version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e981f2f411e948b8965439c5e58d3d2c0e4b511cbe6e92abb1468b851c53f5a0"
-dependencies = [
- "blake3",
- "cfg-if",
- "hex",
- "lazy_static",
- "sha2",
- "sp1-build",
- "substrate-bn-succinct",
- "thiserror 2.0.12",
-]
-
-[[package]]
 name = "sp1-zkvm"
 version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4981,23 +4951,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "substrate-bn-succinct"
-version = "0.6.0-v5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ba32f1b74728f92887c3ad17c42bf82998eb52c9091018f35294e9cd388b0c8"
-dependencies = [
- "bytemuck",
- "byteorder",
- "cfg-if",
- "crunchy",
- "lazy_static",
- "num-bigint 0.4.6",
- "rand 0.8.5",
- "rustc-hex",
- "sp1-lib",
 ]
 
 [[package]]
@@ -5618,6 +5571,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.8.0"
+source = "git+https://github.com/4l0n50/interop.git?branch=alonso%2Frkyv#1e0a886b0e60b0e1a2cc5b6ae0be7e48e26adb11"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",

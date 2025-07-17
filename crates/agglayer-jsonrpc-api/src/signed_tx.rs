@@ -2,7 +2,13 @@
 //!
 //! Systems that wish to submit proofs to the agglayer must produce a
 //! [`SignedTx`] conforming to the type definitions specified herein.
-use ethers::{prelude::*, utils::keccak256};
+use agglayer_types::Address;
+#[cfg(test)]
+use alloy::signers::local::LocalSigner;
+use alloy::{
+    hex,
+    primitives::{keccak256, Bytes, Signature, B256, U64},
+};
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr};
 use thiserror::Error;
@@ -73,8 +79,8 @@ impl<'de> Deserialize<'de> for Proof {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Zkp {
-    pub(crate) new_state_root: H256,
-    pub(crate) new_local_exit_root: H256,
+    pub(crate) new_state_root: B256,
+    pub(crate) new_local_exit_root: B256,
     pub(crate) proof: Proof,
 }
 
@@ -104,35 +110,37 @@ pub struct SignedTx {
 
 impl SignedTx {
     /// Generate a hash that uniquely identifies this proof.
-    pub(crate) fn hash(&self) -> H256 {
-        let last_verified_batch_hex = format!("0x{:x}", self.tx.last_verified_batch.as_u64());
-        let new_verified_batch_hex = format!("0x{:x}", self.tx.new_verified_batch.as_u64());
+    pub(crate) fn hash(&self) -> B256 {
+        let last_verified_batch_hex = format!("0x{:x}", self.tx.last_verified_batch.as_limbs()[0]);
+        let new_verified_batch_hex = format!("0x{:x}", self.tx.new_verified_batch.as_limbs()[0]);
         let proof_hex = format!("0x{}", hex::encode(self.tx.zkp.proof.as_bytes()));
 
         let data = [
             last_verified_batch_hex.as_bytes(),
             new_verified_batch_hex.as_bytes(),
-            &self.tx.zkp.new_state_root[..],
-            &self.tx.zkp.new_local_exit_root[..],
+            self.tx.zkp.new_state_root.as_slice(),
+            self.tx.zkp.new_local_exit_root.as_slice(),
             proof_hex.as_bytes(),
         ]
         .concat();
 
-        keccak256(data).into()
+        keccak256(data)
     }
 
     /// Attempt to recover the address of the signer.
-    pub(crate) fn signer(&self) -> Result<Address, SignatureError> {
-        self.signature.recover(self.hash())
+    pub(crate) fn signer(&self) -> Result<Address, alloy::primitives::SignatureError> {
+        self.signature
+            .recover_address_from_msg(self.hash())
+            .map(Into::into)
     }
 
     #[cfg(test)]
     pub(crate) fn sign(
         &mut self,
-        signer: &Wallet<k256::ecdsa::SigningKey>,
-    ) -> Result<(), SignatureError> {
-        self.signature = signer.sign_hash(self.hash()).unwrap();
-
+        signer: &LocalSigner<alloy::signers::k256::ecdsa::SigningKey>,
+    ) -> Result<(), alloy::signers::Error> {
+        use alloy::signers::SignerSync;
+        self.signature = signer.sign_hash_sync(&self.hash())?;
         Ok(())
     }
 }

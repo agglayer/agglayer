@@ -16,7 +16,7 @@ agglayer-types.workspace = true
 
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }
 anyhow = { workspace = true }
-ethers.workspace = true
+alloy.workspace = true
 http.workspace = true
 prost.workspace = true
 serde.workspace = true
@@ -32,7 +32,13 @@ uuid = { version = "1.15", features = ["v4"] }
 agglayer-grpc-client.workspace = true
 agglayer-storage = { workspace = true, features = ["testutils"] }
 
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "sync"] }
+rstest.workspace = true
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "net",
+    "sync",
+] }
 
 [lints]
 workspace = true

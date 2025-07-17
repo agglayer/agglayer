@@ -5,8 +5,8 @@ use agglayer_types::{
     primitives::{keccak::keccak256, Hashable},
     Address, Certificate, Digest, Height, LocalNetworkStateData, Signature, U256,
 };
+use alloy::signers::{local::PrivateKeySigner, SignerSync};
 use ecdsa_proof_lib::AggchainECDSA;
-use ethers_signers::{LocalWallet, Signer, WalletError};
 use pessimistic_proof::{
     core::commitment::SignatureCommitmentValues,
     keccak::{keccak256_combine, Keccak256Hasher},
@@ -45,10 +45,10 @@ pub fn compute_aggchain_proof(
 }
 
 /// Trees for the network B, as well as the LET for network A.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Forest {
     pub network_id: NetworkId,
-    pub wallet: LocalWallet,
+    pub wallet: PrivateKeySigner,
     pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
     pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
     pub state_b: LocalNetworkStateData,
@@ -63,7 +63,8 @@ impl Default for Forest {
 impl Forest {
     pub fn with_signer_seed(mut self, seed: u32) -> Self {
         let fake_priv_key = keccak256_combine([b"FAKEKEY:", seed.to_be_bytes().as_slice()]);
-        self.wallet = LocalWallet::from_bytes(fake_priv_key.as_bytes()).unwrap();
+        self.wallet =
+            PrivateKeySigner::from_slice(fake_priv_key.as_slice()).expect("valid fake private key");
 
         self
     }
@@ -75,7 +76,7 @@ impl Forest {
         self
     }
 
-    pub fn with_signer(mut self, signer: LocalWallet) -> Self {
+    pub fn with_signer(mut self, signer: PrivateKeySigner) -> Self {
         self.wallet = signer;
         self
     }
@@ -177,15 +178,11 @@ impl Forest {
         LocalNetworkState::from(self.state_b.clone())
     }
 
-    pub fn sign(&self, commitment: Digest) -> Result<(Signature, Address), WalletError> {
-        let signature = self.wallet.sign_hash(commitment.0.into())?;
+    pub fn sign(&self, commitment: Digest) -> Result<(Signature, Address), alloy::signers::Error> {
+        let signature = self.wallet.sign_hash_sync(&commitment.0.into())?;
         Ok((
-            Signature::new(
-                U256::from_limbs(signature.r.0),
-                U256::from_limbs(signature.s.0),
-                signature.recovery_id().unwrap().is_y_odd(),
-            ),
-            self.wallet.address().0.into(),
+            Signature::new(signature.r(), signature.s(), signature.recid().is_y_odd()),
+            self.wallet.address().into(),
         ))
     }
 
@@ -270,7 +267,7 @@ impl Forest {
     }
 
     pub fn get_signer(&self) -> Address {
-        self.wallet.address().0.into()
+        self.wallet.address().into()
     }
 
     /// Check the current state corresponds to given proof output.

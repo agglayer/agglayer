@@ -18,9 +18,9 @@ unified-bridge.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 ecdsa-proof-lib = { path = "./aggchain-proof-ecdsa-example/lib/" }
 
+alloy.workspace = true
 base64.workspace = true
 clap.workspace = true
-ethers-signers.workspace = true
 rkyv.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -37,6 +37,7 @@ uuid = { version = "1.13.1", features = ["v4", "fast-rng"] }
 regex = "1.11"
 
 [dev-dependencies]
+agglayer-prover.workspace = true
 insta.workspace = true
 rstest.workspace = true
 tracing.workspace = true

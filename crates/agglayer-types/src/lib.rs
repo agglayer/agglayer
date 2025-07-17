@@ -14,7 +14,6 @@ use agglayer_primitives::{
 };
 pub use agglayer_primitives::{Address, Digest, Signature, B256, U256, U512};
 use agglayer_tries::{error::SmtError, roots::LocalExitRoot, smt::Smt};
-use ethers::types::H256;
 pub use pessimistic_proof::proof::Proof;
 use pessimistic_proof::{
     core::{
@@ -450,35 +449,6 @@ impl fmt::Display for CertificateStatus {
     }
 }
 
-impl PartialOrd for CertificateStatus {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl CertificateStatus {
-    // Only ever used as implementation for Ord, feel free to change it
-    // TODO: now that certificatetask handles settling properly, we should be able
-    // to refactor it to no longer require Ord here Then we can delete this
-    // function
-    fn as_order_number(&self) -> usize {
-        use CertificateStatus::*;
-        match self {
-            Pending => 0,
-            Proven => 1,
-            Candidate => 2,
-            Settled => 3,
-            InError { .. } => 4,
-        }
-    }
-}
-
-impl Ord for CertificateStatus {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.as_order_number().cmp(&other.as_order_number())
-    }
-}
-
 /// Represents the data submitted by the chains to the AggLayer.
 ///
 /// The bridge exits plus the imported bridge exits define
@@ -548,11 +518,10 @@ impl Default for Certificate {
 pub fn compute_signature_info(
     new_local_exit_root: LocalExitRoot,
     imported_bridge_exits: &[ImportedBridgeExit],
-    wallet: &ethers::signers::LocalWallet,
+    wallet: &alloy::signers::local::PrivateKeySigner,
     height: Height,
 ) -> (Digest, Signature, Address) {
-    use ethers::signers::Signer;
-
+    use alloy::signers::SignerSync;
     let version = CommitmentVersion::V2;
     let combined_hash = SignatureCommitmentValues {
         new_local_exit_root,
@@ -562,31 +531,29 @@ pub fn compute_signature_info(
                 .map(|exit| exit.to_indexed_exit_hash())
                 .collect(),
         },
-        height: height.0,
+        height: height.as_u64(),
     }
     .commitment(version);
 
-    let signature = wallet.sign_hash(combined_hash.0.into()).unwrap();
-    let signature = Signature::new(
-        U256::from_limbs(signature.r.0),
-        U256::from_limbs(signature.s.0),
-        signature.recovery_id().unwrap().is_y_odd(),
-    );
+    let signature = wallet
+        .sign_hash_sync(&agglayer_primitives::B256::new(combined_hash.0))
+        .expect("valid signature");
+    let signature = Signature::new(signature.r(), signature.s(), signature.v());
 
-    (combined_hash, signature, wallet.address().0.into())
+    (combined_hash, signature, wallet.address().into())
 }
 
 impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
-    pub fn wallet_for_test(network_id: NetworkId) -> ethers::signers::LocalWallet {
+    pub fn wallet_for_test(network_id: NetworkId) -> alloy::signers::local::PrivateKeySigner {
         let fake_priv_key = keccak256_combine([b"FAKEKEY:", network_id.to_be_bytes().as_slice()]);
-        ethers::signers::LocalWallet::from_bytes(fake_priv_key.as_bytes()).unwrap()
+        alloy::signers::local::PrivateKeySigner::from_slice(fake_priv_key.as_bytes())
+            .expect("valid fake private key")
     }
 
     #[cfg(any(test, feature = "testutils"))]
     pub fn get_signer(&self) -> Address {
-        use ethers::signers::Signer;
-        Self::wallet_for_test(self.network_id).address().0.into()
+        Self::wallet_for_test(self.network_id).address().into()
     }
 
     #[cfg(any(test, feature = "testutils"))]
@@ -625,7 +592,7 @@ impl Certificate {
 
         CertificateId(keccak256_combine([
             self.network_id.to_be_bytes().as_slice(),
-            self.height.as_u64().to_be_bytes().as_slice(),
+            self.height.0.to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_ref(),
             self.new_local_exit_root.as_ref(),
             commit_bridge_exits.as_slice(),
@@ -667,6 +634,17 @@ impl Certificate {
         } else {
             Err(Error::MultipleL1InfoRoot)
         }
+    }
+
+    /// Retrieve the signer from the provided signature.
+    pub fn signer_from_signature(&self, signature: Signature) -> Result<Address, SignerError> {
+        // TODO: Verify for both commitment versions and return the version
+        let version = CommitmentVersion::V2;
+        let commitment = SignatureCommitmentValues::from(self).commitment(version);
+
+        signature
+            .recover_address_from_prehash(&B256::new(commitment.0))
+            .map_err(SignerError::Recovery)
     }
 
     pub fn signer(&self) -> Result<Address, SignerError> {
@@ -1028,13 +1006,13 @@ impl SettlementTxHash {
     }
 }
 
-impl From<H256> for SettlementTxHash {
-    fn from(hash: H256) -> Self {
-        SettlementTxHash(Digest::from(*hash.as_fixed_bytes()))
+impl From<B256> for SettlementTxHash {
+    fn from(hash: B256) -> Self {
+        SettlementTxHash(Digest::from(hash))
     }
 }
 
-impl From<SettlementTxHash> for H256 {
+impl From<SettlementTxHash> for B256 {
     fn from(tx_hash: SettlementTxHash) -> Self {
         tx_hash.0.as_bytes().into()
     }

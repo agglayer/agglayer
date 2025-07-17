@@ -4,8 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-ethers-gcp-kms-signer.workspace = true
-ethers.workspace = true
+alloy = {workspace = true, features = ["signers", "signer-local", "signer-gcp"]}
+alloy-primitives.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+gcloud-sdk.workspace = true
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 
