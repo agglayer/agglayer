@@ -14,8 +14,8 @@ use alloy::{
         fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
         Identity, Provider, ProviderBuilder, RootProvider, WsConnect,
     },
-    pubsub::{ConnectionHandle, PubSubConnect},
-    rpc::client::ClientBuilder,
+    pubsub::{ConnectionHandle, PubSubConnect, Subscription},
+    rpc::{client::ClientBuilder, types::Header},
     transports::{impl_future, TransportErrorKind, TransportResult},
 };
 use backoff::ExponentialBackoff;
@@ -137,8 +137,8 @@ pub enum BlockClockError {
     UnableToNotifyStart,
     #[error("Transport initialization: {0}")]
     Transport(#[from] alloy::transports::RpcError<TransportErrorKind>),
-    #[error("Transport error: {0}")]
-    TransportError(#[from] tokio::sync::broadcast::error::RecvError),
+    #[error("L1 block channel unexpectedly closed")]
+    L1BlockChannelClosed,
 }
 
 impl<P> BlockClock<P>
@@ -174,7 +174,7 @@ where
         debug!("Successfully subscribed to the L1 Block stream");
 
         while self.latest_seen_block < self.genesis_block {
-            let header = stream.recv().await?;
+            let header = Self::recv_block(&mut stream).await?;
             self.latest_seen_block = header.number;
 
             debug!("Current L1 Block number: {}", self.latest_seen_block);
@@ -218,7 +218,7 @@ where
                     warn!("Clock task cancelled");
                     break;
                 }
-                block_result = stream.recv() => {
+                block_result = Self::recv_block(&mut stream) => {
                     let block = block_result?;
                     if block.number <= self.latest_seen_block {
                         trace!("Skipping block: number={}, latest_seen_block={}", block.number, self.latest_seen_block);
@@ -249,6 +249,36 @@ where
         debug!("Clock task stopped");
 
         Ok(())
+    }
+
+    async fn recv_block(stream: &mut Subscription<Header>) -> Result<Header, BlockClockError> {
+        #[cfg(test)]
+        {
+            // The default sleep fail point directive issues a blocking sleep.
+            // That does not play nice with code that is meant to be executed
+            // in an async runtime. Here, we abuse the return value injection
+            // to specify the timeout and use the tokio sleep instead.
+            fn get_delay() -> Duration {
+                fail::fail_point!("block_clock::BlockClock::recv_block::before", |d| {
+                    d.map(|d| Duration::from_secs(d.parse().unwrap()))
+                        .unwrap_or_default()
+                });
+                Duration::default()
+            }
+            tokio::time::sleep(get_delay()).await;
+        }
+
+        loop {
+            match stream.recv().await {
+                Ok(block) => break Ok(block),
+                Err(broadcast::error::RecvError::Closed) => {
+                    break Err(BlockClockError::L1BlockChannelClosed)
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    warn!("Block clock L1 block subscription lagged by {n} messages");
+                }
+            }
+        }
     }
 
     fn update_and_notify(
