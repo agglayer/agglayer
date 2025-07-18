@@ -677,6 +677,7 @@ dependencies = [
  "hex",
  "pessimistic-proof",
  "rand 0.9.1",
+ "rstest",
  "serde",
  "serde_with",
  "sp1-core-machine",

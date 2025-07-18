@@ -116,21 +116,90 @@ impl Certificate {
         }
     }
 
-    /// Retrieve the signer from the provided signature.
-    pub fn signer_from_signature(&self, signature: Signature) -> Result<Address, SignerError> {
-        // TODO: Verify for both commitment versions and return the version
-        let version = CommitmentVersion::V2;
-        let commitment = SignatureCommitmentValues::from(self).commitment(version);
+    /// Computes the commitment used to verify the extra signature on the
+    /// agglayer only.
+    /// The commitment is expected to be on the certificate id and the optional
+    /// l1 info tree leaf count.
+    fn extra_signature_commitment(&self) -> Digest {
+        let certificate_id = self.hash();
 
-        signature
-            .recover_address_from_prehash(&B256::new(commitment.0))
-            .map_err(SignerError::Recovery)
+        match self.l1_info_tree_leaf_count {
+            Some(leaf_count) => keccak256_combine([
+                certificate_id.as_digest().as_slice(),
+                leaf_count.to_le_bytes().as_slice(),
+            ]),
+            None => *certificate_id,
+        }
     }
 
+    /// Verify the extra certificate signature.
+    pub fn verify_extra_signature(
+        &self,
+        expected_signer: Address,
+        signature: Signature,
+    ) -> Result<(), SignerError> {
+        let expected_commitment = self.extra_signature_commitment();
+
+        let retrieved_signer = signature
+            .recover_address_from_prehash(&B256::new(expected_commitment.0))
+            .map_err(SignerError::Recovery)?;
+
+        (expected_signer == retrieved_signer)
+            .then_some(())
+            .ok_or(SignerError::InvalidExtraSignature { expected_signer })
+    }
+
+    /// Verify the signature on the PP commitment and returns the [`Address`]
+    /// upon success.
+    pub fn verify_cert_signature(&self, expected_signer: Address) -> Result<(), SignerError> {
+        let pp_commitment_values = SignatureCommitmentValues::from(self);
+
+        let recovered_expected_signer = match &self.aggchain_data {
+            // Verify if one of the commitment version is signed.
+            // NOTE: The legitimacy of the version is verified during the witness generation,
+            // especially in order to forbid version rollback by the chain.
+            AggchainData::ECDSA { signature } => [CommitmentVersion::V3, CommitmentVersion::V2]
+                .iter()
+                .any(|version| {
+                    let commitment = B256::new(pp_commitment_values.commitment(*version).0);
+                    match signature.recover_address_from_prehash(&commitment) {
+                        Ok(recovered) => recovered == expected_signer,
+                        Err(_) => false,
+                    }
+                }),
+            AggchainData::Generic {
+                signature,
+                aggchain_params,
+                ..
+            } => {
+                let signature = signature.as_ref().ok_or(SignerError::Missing)?;
+                let commitment = B256::new(
+                    pp_commitment_values
+                        .aggchain_proof_commitment(aggchain_params)
+                        .0,
+                );
+                let recovered = signature
+                    .recover_address_from_prehash(&commitment)
+                    .map_err(SignerError::Recovery)?;
+
+                recovered == expected_signer
+            }
+        };
+
+        recovered_expected_signer
+            .then_some(())
+            .ok_or(SignerError::InvalidPessimisticProofSignature { expected_signer })
+    }
+
+    #[deprecated(since = "0.1.0", note = "use retrieve signer")]
     pub fn signer(&self) -> Result<Address, SignerError> {
+        self.retrieve_signer(CommitmentVersion::V2)
+    }
+
+    /// Retrieve the signer from the certificate signature.
+    pub fn retrieve_signer(&self, version: CommitmentVersion) -> Result<Address, SignerError> {
         let (signature, commitment) = match &self.aggchain_data {
             AggchainData::ECDSA { signature } => {
-                let version = CommitmentVersion::V2;
                 let commitment = SignatureCommitmentValues::from(self).commitment(version);
                 (signature, commitment)
             }
