@@ -87,7 +87,7 @@ impl ClockRef {
     }
 
     /// Returns the current Block height.
-    pub fn current_block_height(&self) -> u64 {
+    fn current_block_height(&self) -> u64 {
         self.block_height.load(Ordering::Acquire)
     }
 }
