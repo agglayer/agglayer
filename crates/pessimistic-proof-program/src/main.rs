@@ -1,14 +1,14 @@
 #![no_main]
 
 use pessimistic_proof_core::{
-    generate_pessimistic_proof, keccak::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
-    NetworkState, PessimisticProofOutput,
+    generate_pessimistic_proof, multi_batch_header::MultiBatchHeader, NetworkState,
+    PessimisticProofOutput,
 };
 
 sp1_zkvm::entrypoint!(main);
 pub fn main() {
     let initial_state = sp1_zkvm::io::read::<NetworkState>();
-    let batch_header = sp1_zkvm::io::read::<MultiBatchHeader<Keccak256Hasher>>();
+    let batch_header = sp1_zkvm::io::read::<MultiBatchHeader>();
 
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header).unwrap();
 
