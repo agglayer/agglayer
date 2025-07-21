@@ -386,3 +386,56 @@ async fn can_catchup_on_disconnection() {
     .expect("Timeout");
     scenario.teardown();
 }
+
+#[rstest::rstest]
+// The test should still work without a lag.
+#[case("off")]
+// Anvil bounds its broadcast channel size to 16 by default.
+// At one block per second, we need over 16 seconds for it to start lagging.
+#[case("1*return(20)")]
+// This one is fine during initialization but lags later on.
+#[case("4*off->1*return(20)")]
+// Limit the total running time.
+#[timeout(Duration::from_secs(60))]
+#[test_log::test(tokio::test)]
+async fn skipped_blocks_are_handled(#[case] lag_cfg: &str) {
+    let scenario = FailScenario::setup();
+
+    fail::cfg("block_clock::BlockClock::recv_block::before", lag_cfg).unwrap();
+
+    let anvil = Anvil::new().block_time(1u64).spawn();
+    let ws = WsConnect::new(anvil.ws_endpoint());
+
+    let clock = BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
+        .await
+        .unwrap();
+    let token = CancellationToken::new();
+
+    let start = tokio::time::Instant::now();
+    let clock_ref = clock.spawn(token.clone()).await.unwrap();
+    let mut recv = clock_ref.subscribe().unwrap();
+
+    tokio::time::sleep_until(start + Duration::from_secs(25)).await;
+
+    let Event::EpochEnded(last_epoch) = {
+        let mut last_epoch = None;
+        loop {
+            match recv.try_recv() {
+                Ok(epoch) => last_epoch = Some(epoch),
+                Err(broadcast::error::TryRecvError::Lagged(_)) => (),
+                Err(broadcast::error::TryRecvError::Empty) => {
+                    break last_epoch.expect("Nothing in the epoch broadcast channel")
+                }
+                Err(broadcast::error::TryRecvError::Closed) => {
+                    panic!("Clock channel unexpectedly closed; the clock is probably dead")
+                }
+            }
+        }
+    };
+
+    // After 25 seconds, we should be at epoch 7. This should be independent
+    // of the lag as the clock should have recovered from it by this point.
+    assert_eq!(last_epoch, 7);
+
+    scenario.teardown();
+}
