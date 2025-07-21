@@ -435,7 +435,7 @@ async fn skipped_blocks_are_handled(#[case] lag_cfg: &str) {
 
     // After 25 seconds, we should be at epoch 7. This should be independent
     // of the lag as the clock should have recovered from it by this point.
-    assert_eq!(last_epoch, EpochNumber::new(7));
+    assert_eq!(last_epoch, 7);
 
     scenario.teardown();
 }
