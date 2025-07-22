@@ -89,8 +89,10 @@ impl NetworkStateZeroCopy {
     /// Safely transmute a byte slice to this struct.
     /// This is only safe if the data was originally a NetworkStateZeroCopy.
     pub unsafe fn from_bytes(data: &[u8]) -> Option<&Self> {
-        if Self::check_size(data) {
-            // SAFETY: We've checked the size and assume the caller ensures
+        let align = std::mem::align_of::<Self>();
+        let ptr = data.as_ptr() as usize;
+        if Self::check_size(data) && (ptr % align == 0) {
+            // SAFETY: We've checked size and alignment, and assume the caller ensures
             // the data was originally a NetworkStateZeroCopy
             Some(&*(data.as_ptr() as *const Self))
         } else {
