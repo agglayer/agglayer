@@ -1,0 +1,24 @@
+[package]
+name = "aggregation-proof-program"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+aggregation-proof-core = { path = "../aggregation-proof-core" }
+sp1-zkvm = { version = "=5.0.0", features = ["verify"] }
+
+[build-dependencies]
+sp1-cli = "=5.0.0"
+
+[profile.release]
+panic = "abort"
+lto = "fat"
+codegen-units = 1
+overflow-checks = true
+
+[patch.crates-io]
+k256 = { git = "https://github.com/sp1-patches/elliptic-curves", tag = "patch-k256-13.4-sp1-5.0.0" }
+p256 = { git = "https://github.com/sp1-patches/elliptic-curves", tag = "patch-p256-13.2-sp1-5.0.0" }
+ecdsa-core = { git = "https://github.com/sp1-patches/signatures", package = "ecdsa", tag = "patch-16.9-sp1-4.1.0" }
+tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-4.0.0" }

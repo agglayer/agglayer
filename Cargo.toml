@@ -42,6 +42,7 @@ agglayer-test-suite = { path = "crates/agglayer-test-suite" }
 pessimistic-proof = { path = "crates/pessimistic-proof" }
 pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
+aggregation-proof-core = { path = "crates/aggregation-proof-core" }
 
 # Interop
 agglayer-bincode = "0.10.0"
