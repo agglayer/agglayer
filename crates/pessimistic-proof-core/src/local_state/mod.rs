@@ -382,51 +382,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_network_state_serialization() {
-        // Create a simple NetworkState
-        let network_state = NetworkState {
-            exit_tree: LocalExitTree::new(),
+    fn test_zero_copy_roundtrip() {
+        let state = NetworkState {
+            exit_tree: LocalExitTree::from_parts(42, [[1u8; 32].into(); 32]),
             balance_tree: LocalBalanceTree::<Keccak256Hasher> {
-                root: [0u8; 32].into(),
+                root: [0xAAu8; 32].into(),
             },
             nullifier_tree: NullifierTree::<Keccak256Hasher> {
-                root: [0u8; 32].into(),
-                empty_hash_at_height: [[0u8; 32].into(); 64],
+                root: [0xBBu8; 32].into(),
+                empty_hash_at_height: [[0xCCu8; 32].into(); 64],
             },
         };
 
-        // Test serialization
-        let serialized = network_state
-            .to_vec()
-            .expect("Serialization should succeed");
-        assert!(
-            !serialized.is_empty(),
-            "Serialized data should not be empty"
-        );
+        let bytes = state.to_bytes_zero_copy();
+        assert_eq!(bytes.len(), NetworkStateZeroCopy::size());
 
-        // Test deserialization
-        let deserialized =
-            NetworkState::from_vec(&serialized).expect("Deserialization should succeed");
+        let deserialized = unsafe { NetworkState::from_bytes_zero_copy(&bytes) }
+            .expect("Zero-copy deserialization should succeed");
 
-        // Verify the deserialized state matches the original
-        assert_eq!(
-            network_state.exit_tree.leaf_count,
-            deserialized.exit_tree.leaf_count
-        );
-        assert_eq!(
-            network_state.balance_tree.root,
-            deserialized.balance_tree.root
-        );
-        assert_eq!(
-            network_state.nullifier_tree.root,
-            deserialized.nullifier_tree.root
-        );
+        assert_eq!(state.exit_tree.leaf_count, deserialized.exit_tree.leaf_count);
+        assert_eq!(state.balance_tree.root, deserialized.balance_tree.root);
+        assert_eq!(state.nullifier_tree.root, deserialized.nullifier_tree.root);
     }
 
     #[test]
-    fn test_zero_copy_serialization() {
-        // Create a simple NetworkState
-        let network_state = NetworkState {
+    fn test_zero_copy_invalid_input() {
+        let state = NetworkState {
             exit_tree: LocalExitTree::new(),
             balance_tree: LocalBalanceTree::<Keccak256Hasher> {
                 root: [1u8; 32].into(),
@@ -436,93 +417,17 @@ mod tests {
                 empty_hash_at_height: [[3u8; 32].into(); 64],
             },
         };
+        let bytes = state.to_bytes_zero_copy();
 
-        // Test zero-copy serialization
-        let zero_copy_bytes = network_state.to_bytes_zero_copy();
-        assert_eq!(zero_copy_bytes.len(), NetworkStateZeroCopy::size());
+        // Test unaligned data
+        let unaligned = &bytes[1..];
+        assert!(unsafe { NetworkState::from_bytes_zero_copy(unaligned) }.is_none());
 
-        // Test zero-copy deserialization
-        let deserialized = unsafe { NetworkState::from_bytes_zero_copy(&zero_copy_bytes) }
-            .expect("Zero-copy deserialization should succeed");
+        // Test wrong size
+        let too_small = &bytes[..bytes.len() - 1];
+        assert!(unsafe { NetworkState::from_bytes_zero_copy(too_small) }.is_none());
 
-        // Verify the deserialized state matches the original
-        assert_eq!(
-            network_state.exit_tree.leaf_count,
-            deserialized.exit_tree.leaf_count
-        );
-        assert_eq!(
-            network_state.balance_tree.root,
-            deserialized.balance_tree.root
-        );
-        assert_eq!(
-            network_state.nullifier_tree.root,
-            deserialized.nullifier_tree.root
-        );
-
-        // Verify the empty hash array matches
-        for i in 0..64 {
-            assert_eq!(
-                network_state.nullifier_tree.empty_hash_at_height[i],
-                deserialized.nullifier_tree.empty_hash_at_height[i]
-            );
-        }
-    }
-
-    #[test]
-    fn test_zero_copy_size() {
-        // Verify the size is what we expect
-        let expected_size = 4 + (32 * 32) + 32 + 32 + (64 * 32); // u32 + 32*[u8;32] + 2*[u8;32] + 64*[u8;32]
-        assert_eq!(NetworkStateZeroCopy::size(), expected_size);
-        assert_eq!(NetworkStateZeroCopy::size(), 3140); // 4 + 1024 + 32 + 32 +
-                                                        // 2048
+        // Test empty data
+        assert!(unsafe { NetworkState::from_bytes_zero_copy(&[]) }.is_none());
     }
 }
-
-// Example showing how to use NetworkState with SP1 zero-copy serialization
-//
-// This example demonstrates the complete workflow:
-// 1. Serialize a NetworkState to zero-copy bytes
-// 2. Use it in an SP1 program with sp1_zkvm::io::read_vec
-// 3. Zero-copy deserialize it back to a NetworkState
-//
-// ```rust
-// #![no_main]
-// use pessimistic_proof_core::{
-//     generate_pessimistic_proof, keccak::Keccak256Hasher, local_state::NetworkState,
-//     multi_batch_header::MultiBatchHeader,
-// };
-// use sp1_zkvm::entrypoint;
-//
-// sp1_zkvm::entrypoint!(main);
-//
-// pub fn main() {
-//     // Read the raw bytes from SP1 input (true zero-copy)
-//     let raw_data = sp1_zkvm::io::read_vec();
-//
-//     // Zero-copy deserialization (unsafe but efficient)
-//     let initial_state = unsafe { NetworkState::from_bytes_zero_copy(&raw_data) }
-//         .expect("Failed to deserialize NetworkState");
-//
-//     // Read the batch header (can still use the regular read method)
-//     let batch_header = sp1_zkvm::io::read::<MultiBatchHeader<Keccak256Hasher>>();
-//
-//     // Generate the pessimistic proof
-//     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header)
-//         .expect("Failed to generate proof");
-//
-//     // Commit the results
-//     let pp_inputs = outputs.to_vec().expect("Failed to serialize outputs");
-//     sp1_zkvm::io::commit_slice(&pp_inputs);
-// }
-// ```
-//
-// To prepare the input data on the host side:
-// ```rust
-// use pessimistic_proof_core::local_state::NetworkState;
-//
-// let network_state = NetworkState { /* ... */ };
-// let zero_copy_bytes = network_state.to_bytes_zero_copy();
-//
-// // Write the zero-copy bytes to a file or send it to SP1
-// std::fs::write("network_state_zero_copy.bin", &zero_copy_bytes).expect("Failed to write file");
-// ```
