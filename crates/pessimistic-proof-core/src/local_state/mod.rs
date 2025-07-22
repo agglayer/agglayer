@@ -140,90 +140,25 @@ impl NetworkState {
         zero_copy.to_network_state()
     }
 
-    /// Serialize the NetworkState to a vector of bytes for zero-copy reading.
+    /// Serialize the NetworkState to a vector of bytes using bincode.
     /// This is compatible with `sp1_zkvm::io::read_vec`.
-    ///
-    /// # Example
-    /// ```rust
-    /// use agglayer_primitives::keccak::Keccak256Hasher;
-    /// use pessimistic_proof_core::{
-    ///     local_balance_tree::LocalBalanceTree, local_state::NetworkState,
-    ///     nullifier_tree::NullifierTree,
-    /// };
-    /// use unified_bridge::LocalExitTree;
-    ///
-    /// let network_state = NetworkState {
-    ///     exit_tree: LocalExitTree::new(),
-    ///     balance_tree: LocalBalanceTree::<Keccak256Hasher> {
-    ///         root: [0u8; 32].into(),
-    ///     },
-    ///     nullifier_tree: NullifierTree::<Keccak256Hasher> {
-    ///         root: [0u8; 32].into(),
-    ///         empty_hash_at_height: [[0u8; 32].into(); 64],
-    ///     },
-    /// };
-    ///
-    /// let serialized = network_state.to_vec().expect("Serialization failed");
-    /// // Use with sp1_zkvm::io::read_vec in your SP1 program
-    /// ```
     pub fn to_vec(&self) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
         use agglayer_bincode as bincode;
         bincode::contracts().serialize(self).map_err(|e| e.into())
     }
 
-    /// Deserialize the NetworkState from a vector of bytes.
+    /// Deserialize the NetworkState from a vector of bytes using bincode.
     /// This is compatible with `sp1_zkvm::io::read_vec`.
-    ///
-    /// # Example
-    /// ```rust
-    /// #![no_main]
-    /// use pessimistic_proof_core::local_state::NetworkState;
-    /// use sp1_zkvm::entrypoint;
-    ///
-    /// sp1_zkvm::entrypoint!(main);
-    ///
-    /// pub fn main() {
-    ///     // Read the serialized NetworkState from SP1 input
-    ///     let serialized_data = sp1_zkvm::io::read_vec();
-    ///
-    ///     // Deserialize the NetworkState
-    ///     let network_state =
-    ///         NetworkState::from_vec(&serialized_data).expect("Deserialization failed");
-    ///
-    ///     // Use the network_state in your proof generation
-    /// }
-    /// ```
     pub fn from_vec(data: &[u8]) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use agglayer_bincode as bincode;
         bincode::contracts().deserialize(data).map_err(|e| e.into())
     }
 
-    /// Zero-copy deserialization from bytes.
-    /// This is the true zero-copy approach using transmute.
+    /// Zero-copy deserialization from bytes using transmute.
     ///
     /// # Safety
     /// This function is unsafe because it assumes the input data was originally
     /// a `NetworkStateZeroCopy` struct. The caller must ensure this invariant.
-    ///
-    /// # Example
-    /// ```rust
-    /// #![no_main]
-    /// use pessimistic_proof_core::local_state::NetworkState;
-    /// use sp1_zkvm::entrypoint;
-    ///
-    /// sp1_zkvm::entrypoint!(main);
-    ///
-    /// pub fn main() {
-    ///     // Read the raw bytes from SP1 input
-    ///     let raw_data = sp1_zkvm::io::read_vec();
-    ///
-    ///     // Zero-copy deserialization (unsafe but efficient)
-    ///     let network_state =
-    ///         unsafe { NetworkState::from_bytes_zero_copy(&raw_data) }.expect("Invalid data size");
-    ///
-    ///     // Use the network_state in your proof generation
-    /// }
-    /// ```
     pub unsafe fn from_bytes_zero_copy(data: &[u8]) -> Option<Self> {
         NetworkStateZeroCopy::from_bytes(data).map(|zc| Self::from_zero_copy(zc))
     }
@@ -400,7 +335,10 @@ mod tests {
         let deserialized = unsafe { NetworkState::from_bytes_zero_copy(&bytes) }
             .expect("Zero-copy deserialization should succeed");
 
-        assert_eq!(state.exit_tree.leaf_count, deserialized.exit_tree.leaf_count);
+        assert_eq!(
+            state.exit_tree.leaf_count,
+            deserialized.exit_tree.leaf_count
+        );
         assert_eq!(state.balance_tree.root, deserialized.balance_tree.root);
         assert_eq!(state.nullifier_tree.root, deserialized.nullifier_tree.root);
     }
