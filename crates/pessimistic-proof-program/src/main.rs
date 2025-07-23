@@ -8,7 +8,7 @@ use pessimistic_proof_core::{
 sp1_zkvm::entrypoint!(main);
 pub fn main() {
     let raw_data = sp1_zkvm::io::read_vec();
-    let initial_state = unsafe { NetworkState::from_bytes_zero_copy(&raw_data) }.unwrap();
+    let initial_state = NetworkState::from_bytes_zero_copy(&raw_data).unwrap();
     
     let batch_header = sp1_zkvm::io::read::<MultiBatchHeader<Keccak256Hasher>>();
 
