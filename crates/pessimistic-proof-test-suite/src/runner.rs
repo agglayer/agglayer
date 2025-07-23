@@ -5,6 +5,7 @@ use pessimistic_proof::{
 };
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin, SP1VerifyingKey};
+use serde::{Deserialize, Serialize};
 
 use crate::PESSIMISTIC_PROOF_ELF;
 
@@ -39,10 +40,16 @@ impl Runner {
     /// Convert inputs to stdin.
     pub fn prepare_stdin(state: &NetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
         let mut stdin = SP1Stdin::new();
-        // Use true zero-copy serialization for NetworkState
+        
+        // Use zero-copy for NetworkState and regular bincode for MultiBatchHeader
         let zero_copy_bytes = state.to_bytes_zero_copy();
+        println!("Writing NetworkState bytes: {} bytes", zero_copy_bytes.len());
         stdin.write_vec(zero_copy_bytes);
+        
+        println!("Writing MultiBatchHeader");
         stdin.write(batch_header);
+        
+        println!("Stdin prepared");
         stdin
     }
 

@@ -22,7 +22,7 @@ unified-bridge.workspace = true
 
 alloy-primitives.workspace = true
 arbitrary = { workspace = true, optional = true }
-bytemuck = { version = "1.15", features = ["derive"] }
+bytemuck = { version = "1.15", features = ["derive", "extern_crate_alloc"] }
 hex = "0.4.3"
 hex-literal = "0.4"
 tracing = "0.1.41"
