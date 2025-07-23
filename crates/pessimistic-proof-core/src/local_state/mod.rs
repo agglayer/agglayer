@@ -81,6 +81,9 @@ impl NetworkStateZeroCopy {
 
     /// Safely deserialize from bytes using bytemuck.
     pub fn from_bytes(data: &[u8]) -> Result<&Self, bytemuck::PodCastError> {
+        if data.len() != Self::size() {
+            return Err(bytemuck::PodCastError::SizeMismatch);
+        }
         bytemuck::try_from_bytes(data)
     }
 
@@ -144,7 +147,8 @@ impl NetworkState {
     }
 
     /// Zero-copy deserialization from bytes using bytemuck.
-    /// This function safely deserializes the data if it has the correct size and alignment.
+    /// This function safely deserializes the data if it has the correct size
+    /// and alignment.
     pub fn from_bytes_zero_copy(data: &[u8]) -> Result<Self, bytemuck::PodCastError> {
         NetworkStateZeroCopy::from_bytes(data).map(|zc| Self::from_zero_copy(zc))
     }
