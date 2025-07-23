@@ -12,6 +12,7 @@ name = "convertor"
 path = "src/bin/convertor.rs"
 
 [dependencies]
+agglayer-bincode.workspace = true
 agglayer-tries.workspace = true
 agglayer-types = { workspace = true, features = ["testutils"] }
 unified-bridge.workspace = true
@@ -34,6 +35,7 @@ hex.workspace = true
 tracing.workspace = true
 uuid = { version = "1.13.1", features = ["v4", "fast-rng"] }
 regex = "1.11"
+bytemuck = { version = "1.14", features = ["extern_crate_alloc"] }
 
 [dev-dependencies]
 agglayer-prover.workspace = true

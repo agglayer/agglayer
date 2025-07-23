@@ -6070,12 +6070,14 @@ dependencies = [
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
+ "agglayer-bincode",
  "agglayer-prover",
  "agglayer-tries",
  "agglayer-types",
  "alloy",
  "anyhow",
  "base64 0.22.1",
+ "bytemuck",
  "clap",
  "ecdsa-proof-lib",
  "hex",

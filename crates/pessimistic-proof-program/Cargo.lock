@@ -3122,9 +3122,13 @@ dependencies = [
 name = "pessimistic-proof-program"
 version = "6.1.0"
 dependencies = [
+ "agglayer-primitives",
+ "agglayer-tries",
+ "bytemuck",
  "pessimistic-proof-core",
  "sp1-cli",
  "sp1-zkvm",
+ "unified-bridge",
 ]
 
 [[package]]
