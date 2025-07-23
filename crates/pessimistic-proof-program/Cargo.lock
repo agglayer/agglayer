@@ -3122,6 +3122,7 @@ dependencies = [
 name = "pessimistic-proof-program"
 version = "6.1.0"
 dependencies = [
+ "agglayer-bincode",
  "agglayer-primitives",
  "agglayer-tries",
  "bytemuck",
