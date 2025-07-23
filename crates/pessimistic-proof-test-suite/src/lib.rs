@@ -1,6 +1,5 @@
 //! A collection of shared testing utilities.
 
-pub mod aggregation;
 pub mod event_data;
 pub mod forest;
 pub mod runner;
