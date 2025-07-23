@@ -12,6 +12,134 @@ use crate::{
     nullifier_tree::NullifierPath,
 };
 
+/// Zero-copy compatible BridgeExit for bytemuck operations.
+/// This is a fixed-size version that can be safely transmuted.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BridgeExitZeroCopy {
+    /// Leaf type (u8: 0=Transfer, 1=Message)
+    pub leaf_type: u8,
+    /// Origin network (u32)
+    pub origin_network: u32,
+    /// Origin token address (20 bytes)
+    pub origin_token_address: [u8; 20],
+    /// Destination network (u32)
+    pub dest_network: u32,
+    /// Destination address (20 bytes)
+    pub dest_address: [u8; 20],
+    /// Amount (32 bytes)
+    pub amount: [u8; 32],
+    /// Metadata hash (32 bytes, 0 if None)
+    pub metadata_hash: [u8; 32],
+    /// Padding to ensure proper alignment
+    pub _padding: [u8; 3],
+}
+
+// SAFETY: This struct has a stable C-compatible memory layout
+unsafe impl Pod for BridgeExitZeroCopy {}
+unsafe impl Zeroable for BridgeExitZeroCopy {}
+
+impl BridgeExitZeroCopy {
+    /// Get the size of this struct in bytes.
+    pub const fn size() -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Convert from BridgeExit to BridgeExitZeroCopy
+    pub fn from_bridge_exit(bridge_exit: &unified_bridge::BridgeExit) -> Self {
+        Self {
+            leaf_type: bridge_exit.leaf_type as u8,
+            origin_network: bridge_exit.token_info.origin_network.to_u32(),
+            origin_token_address: bridge_exit.token_info.origin_token_address.as_slice().try_into().unwrap(),
+            dest_network: bridge_exit.dest_network.to_u32(),
+            dest_address: bridge_exit.dest_address.as_slice().try_into().unwrap(),
+            amount: bridge_exit.amount.to_be_bytes(),
+            metadata_hash: bridge_exit.metadata.unwrap_or_default().0,
+            _padding: [0; 3],
+        }
+    }
+
+    /// Convert from BridgeExitZeroCopy to BridgeExit
+    pub fn to_bridge_exit(&self) -> unified_bridge::BridgeExit {
+        unified_bridge::BridgeExit {
+            leaf_type: self.leaf_type.try_into().unwrap_or(unified_bridge::LeafType::Transfer),
+            token_info: unified_bridge::TokenInfo {
+                origin_network: unified_bridge::NetworkId::new(self.origin_network),
+                origin_token_address: agglayer_primitives::Address::new(self.origin_token_address),
+            },
+            dest_network: unified_bridge::NetworkId::new(self.dest_network),
+            dest_address: agglayer_primitives::Address::from(self.dest_address),
+            amount: agglayer_primitives::U256::from_be_bytes(self.amount),
+            metadata: if self.metadata_hash == [0; 32] {
+                None
+            } else {
+                Some(agglayer_primitives::Digest(self.metadata_hash))
+            },
+        }
+    }
+}
+
+/// Zero-copy compatible TokenInfo for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TokenInfoZeroCopy {
+    /// Origin network (u32)
+    pub origin_network: u32,
+    /// Origin token address (20 bytes)
+    pub origin_token_address: [u8; 20],
+}
+
+// SAFETY: This struct has a stable C-compatible memory layout
+unsafe impl Pod for TokenInfoZeroCopy {}
+unsafe impl Zeroable for TokenInfoZeroCopy {}
+
+impl TokenInfoZeroCopy {
+    /// Get the size of this struct in bytes.
+    pub const fn size() -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Convert from TokenInfo to TokenInfoZeroCopy
+    pub fn from_token_info(token_info: &unified_bridge::TokenInfo) -> Self {
+        Self {
+            origin_network: token_info.origin_network.to_u32(),
+            origin_token_address: token_info.origin_token_address.as_slice().try_into().unwrap(),
+        }
+    }
+
+    /// Convert from TokenInfoZeroCopy to TokenInfo
+    pub fn to_token_info(&self) -> unified_bridge::TokenInfo {
+        unified_bridge::TokenInfo {
+            origin_network: unified_bridge::NetworkId::new(self.origin_network),
+            origin_token_address: agglayer_primitives::Address::from(self.origin_token_address),
+        }
+    }
+}
+
+/// Zero-copy compatible balance proof entry for bytemuck operations.
+/// Note: This only captures the fixed-size parts, Merkle proofs would need separate handling.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BalanceProofEntryZeroCopy {
+    /// Token info (24 bytes)
+    pub token_info: TokenInfoZeroCopy,
+    /// Balance amount (32 bytes)
+    pub balance: [u8; 32],
+    /// Padding to ensure proper alignment
+    pub _padding: [u8; 8],
+}
+
+// SAFETY: This struct has a stable C-compatible memory layout
+unsafe impl Pod for BalanceProofEntryZeroCopy {}
+unsafe impl Zeroable for BalanceProofEntryZeroCopy {}
+
+impl BalanceProofEntryZeroCopy {
+    /// Get the size of this struct in bytes.
+    pub const fn size() -> usize {
+        std::mem::size_of::<Self>()
+    }
+}
+
 /// Zero-copy representation of MultiBatchHeader for safe transmute.
 /// This struct has a stable C-compatible memory layout with fixed-size fields
 /// and offsets to variable-length data.
