@@ -512,9 +512,9 @@ pub struct MultiBatchHeaderZeroCopy {
     /// L1 info root used to import bridge exits (32 bytes)
     pub l1_info_root: [u8; 32],
     /// Aggchain proof data (variable size, but we'll use a fixed buffer)
-    /// For ECDSA: 64 bytes signature (truncated)
-    /// For Generic: 32 bytes aggchain_params + 32 bytes vkey
-    pub aggchain_proof_data: [u8; 64],
+    /// For ECDSA: 20 bytes signer + 65 bytes signature = 85 bytes
+    /// For Generic: 32 bytes aggchain_params + 32 bytes vkey = 64 bytes
+    pub aggchain_proof_data: [u8; 85],
     /// Aggchain proof type (u8: 0=ECDSA, 1=Generic)
     pub aggchain_proof_type: u8,
     /// Padding to ensure proper alignment
@@ -525,7 +525,7 @@ pub struct MultiBatchHeaderZeroCopy {
 // - #[repr(C)] ensures C-compatible layout
 // - Fields are ordered by alignment (u64 first, then u32, then arrays, then u8)
 // - Explicit padding field ensures proper alignment without internal padding
-// - Total size is 160 bytes: 8+4+4+4+4+32+32+64+1+7 = 160
+// - Total size is 181 bytes: 8+4+4+4+4+32+32+85+1+7 = 181
 // - Cannot use derive due to complex field layout and explicit padding
 //   requirements
 unsafe impl Pod for MultiBatchHeaderZeroCopy {}
@@ -608,12 +608,13 @@ where
             AggchainData::Generic { .. } => 1u8,
         };
 
-        let mut aggchain_proof_data = [0u8; 64];
+        let mut aggchain_proof_data = [0u8; 85];
         match &self.aggchain_proof {
-            AggchainData::ECDSA { signature, .. } => {
-                // Copy signature bytes (64 bytes, truncating if needed)
+            AggchainData::ECDSA { signer, signature } => {
+                // Copy signer address (20 bytes) + signature bytes (65 bytes)
+                aggchain_proof_data[..20].copy_from_slice(signer.as_slice());
                 let sig_bytes = signature.as_bytes();
-                aggchain_proof_data[..64].copy_from_slice(&sig_bytes[..64]);
+                aggchain_proof_data[20..85].copy_from_slice(&sig_bytes[..65]);
             }
             AggchainData::Generic {
                 aggchain_params,
@@ -658,19 +659,20 @@ where
 
         let aggchain_proof = match zero_copy.aggchain_proof_type {
             0 => {
-                // ECDSA - we can't reconstruct the full signature from 64 bytes, so we'll use a
-                // placeholder In a real implementation, you'd need to serialize
-                // the full signature separately
-                let signature = agglayer_primitives::Signature::new(
-                    agglayer_primitives::U256::default(),
-                    agglayer_primitives::U256::default(),
-                    false,
+                // ECDSA - reconstruct signer (20 bytes) + signature (65 bytes)
+                let signer = agglayer_primitives::Address::from(
+                    <[u8; 20]>::try_from(&zero_copy.aggchain_proof_data[..20]).unwrap(),
                 );
-                AggchainData::ECDSA {
-                    signer: agglayer_primitives::Address::new([0; 20]), /* Would need to be
-                                                                         * provided separately */
-                    signature,
-                }
+                let signature = agglayer_primitives::Signature::new(
+                    agglayer_primitives::U256::from_be_bytes(
+                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[20..52]).unwrap(),
+                    ),
+                    agglayer_primitives::U256::from_be_bytes(
+                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[52..84]).unwrap(),
+                    ),
+                    zero_copy.aggchain_proof_data[84] != 0, // Extract v byte (parity)
+                );
+                AggchainData::ECDSA { signer, signature }
             }
             1 => {
                 // Generic
@@ -1055,7 +1057,7 @@ mod tests {
             )],
             aggchain_proof: AggchainData::ECDSA {
                 signer: Address::new([17u8; 20]),
-                signature: Signature::new(U256::from(18u64), U256::from(19u64), false),
+                signature: Signature::new(U256::from(18u64), U256::from(19u64), true),
             },
         }
     }
@@ -1247,16 +1249,10 @@ mod tests {
             .map(|(_, (_, path))| SmtMerkleProofZeroCopy::from_smt_merkle_proof(path))
             .collect();
 
-        // Simulate reading the aggchain_proof separately (since zero-copy truncates it)
-        let aggchain_proof = original.aggchain_proof.clone();
-
         // Simulate the reconstruction process (like in SP1 zkvm)
         let mut reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
             MultiBatchHeader::from_zero_copy(&header_zero_copy)
                 .expect("Failed to reconstruct MultiBatchHeader");
-
-        // Set the aggchain_proof from the separately read data
-        reconstructed.aggchain_proof = aggchain_proof;
 
         // Convert bridge_exits back to original format
         reconstructed.bridge_exits = bridge_exits_zero_copy
@@ -1345,16 +1341,10 @@ mod tests {
             .map(|(_, (_, path))| SmtMerkleProofZeroCopy::from_smt_merkle_proof(path))
             .collect();
 
-        // Simulate reading the aggchain_proof separately (since zero-copy truncates it)
-        let aggchain_proof = original.aggchain_proof.clone();
-
         // Simulate the reconstruction process (like in SP1 zkvm)
         let mut reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
             MultiBatchHeader::from_zero_copy(&header_zero_copy)
                 .expect("Failed to reconstruct MultiBatchHeader");
-
-        // Set the aggchain_proof from the separately read data
-        reconstructed.aggchain_proof = aggchain_proof;
 
         // Convert bridge_exits back to original format
         reconstructed.bridge_exits = bridge_exits_zero_copy
