@@ -133,6 +133,8 @@ pub struct ImportedBridgeExitZeroCopy {
     pub global_index_rollup: u32,
     /// Bridge exit data (120 bytes)
     pub bridge_exit: BridgeExitZeroCopy,
+    /// Claim data (2288 bytes)
+    pub claim_data: ClaimFromMainnetZeroCopy,
 }
 
 impl ImportedBridgeExitZeroCopy {
@@ -145,6 +147,13 @@ impl ImportedBridgeExitZeroCopy {
     pub fn from_imported_bridge_exit(
         imported_bridge_exit: &unified_bridge::ImportedBridgeExit,
     ) -> Self {
+        let claim_data = match &imported_bridge_exit.claim_data {
+            unified_bridge::Claim::Mainnet(claim) => {
+                ClaimFromMainnetZeroCopy::from_claim_from_mainnet(claim)
+            }
+            _ => panic!("Expected Mainnet claim type"),
+        };
+
         Self {
             global_index_index: imported_bridge_exit.global_index.leaf_index() as u64,
             global_index_rollup: imported_bridge_exit
@@ -153,6 +162,7 @@ impl ImportedBridgeExitZeroCopy {
                 .unwrap()
                 .to_u32(),
             bridge_exit: BridgeExitZeroCopy::from_bridge_exit(&imported_bridge_exit.bridge_exit),
+            claim_data,
         }
     }
 
@@ -161,30 +171,7 @@ impl ImportedBridgeExitZeroCopy {
         unified_bridge::ImportedBridgeExit {
             bridge_exit: self.bridge_exit.to_bridge_exit(),
             claim_data: unified_bridge::Claim::Mainnet(Box::new(
-                unified_bridge::ClaimFromMainnet {
-                    proof_leaf_mer: unified_bridge::MerkleProof {
-                        proof: unified_bridge::LETMerkleProof {
-                            siblings: [agglayer_primitives::Digest([0u8; 32]); 32],
-                        },
-                        root: agglayer_primitives::Digest([0u8; 32]),
-                    },
-                    proof_ger_l1root: unified_bridge::MerkleProof {
-                        proof: unified_bridge::LETMerkleProof {
-                            siblings: [agglayer_primitives::Digest([0u8; 32]); 32],
-                        },
-                        root: agglayer_primitives::Digest([0u8; 32]),
-                    },
-                    l1_leaf: unified_bridge::L1InfoTreeLeaf {
-                        l1_info_tree_index: 0,
-                        rer: agglayer_primitives::Digest::default(),
-                        mer: agglayer_primitives::Digest::default(),
-                        inner: unified_bridge::L1InfoTreeLeafInner {
-                            block_hash: agglayer_primitives::Digest::default(),
-                            timestamp: 0,
-                            global_exit_root: agglayer_primitives::Digest::default(),
-                        },
-                    },
-                },
+                self.claim_data.to_claim_from_mainnet(),
             )),
             global_index: unified_bridge::GlobalIndex::new(
                 unified_bridge::NetworkId::new(self.global_index_rollup),
@@ -294,6 +281,192 @@ impl SmtNonInclusionProofZeroCopy {
             .map(|s| agglayer_primitives::Digest(*s))
             .collect();
         agglayer_tries::proof::SmtNonInclusionProof { siblings }
+    }
+}
+
+/// Zero-copy compatible LETMerkleProof for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct LETMerkleProofZeroCopy {
+    /// Siblings array (32 * 32 = 1024 bytes)
+    pub siblings: [[u8; 32]; 32],
+}
+
+impl LETMerkleProofZeroCopy {
+    /// Get the size of this struct in bytes.
+    pub const fn size() -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Convert from LETMerkleProof to LETMerkleProofZeroCopy
+    pub fn from_let_merkle_proof(
+        proof: &unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher>,
+    ) -> Self {
+        let mut siblings = [[0u8; 32]; 32];
+        for (i, sibling) in proof.siblings.iter().enumerate() {
+            siblings[i] = sibling.0;
+        }
+        Self { siblings }
+    }
+
+    /// Convert from LETMerkleProofZeroCopy to LETMerkleProof
+    pub fn to_let_merkle_proof(
+        &self,
+    ) -> unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher> {
+        let siblings: [agglayer_primitives::Digest; 32] =
+            self.siblings.map(|s| agglayer_primitives::Digest(s));
+        unified_bridge::LETMerkleProof { siblings }
+    }
+}
+
+/// Zero-copy compatible MerkleProof for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct MerkleProofZeroCopy {
+    /// Proof data (1024 bytes)
+    pub proof: LETMerkleProofZeroCopy,
+    /// Root (32 bytes)
+    pub root: [u8; 32],
+}
+
+impl MerkleProofZeroCopy {
+    /// Get the size of this struct in bytes.
+    pub const fn size() -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Convert from MerkleProof to MerkleProofZeroCopy
+    pub fn from_merkle_proof(proof: &unified_bridge::MerkleProof) -> Self {
+        Self {
+            proof: LETMerkleProofZeroCopy::from_let_merkle_proof(&proof.proof),
+            root: proof.root.0,
+        }
+    }
+
+    /// Convert from MerkleProofZeroCopy to MerkleProof
+    pub fn to_merkle_proof(&self) -> unified_bridge::MerkleProof {
+        unified_bridge::MerkleProof {
+            proof: self.proof.to_let_merkle_proof(),
+            root: agglayer_primitives::Digest(self.root),
+        }
+    }
+}
+
+/// Zero-copy compatible L1InfoTreeLeafInner for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct L1InfoTreeLeafInnerZeroCopy {
+    /// Block hash (32 bytes)
+    pub block_hash: [u8; 32],
+    /// Timestamp (u64)
+    pub timestamp: u64,
+    /// Global exit root (32 bytes)
+    pub global_exit_root: [u8; 32],
+}
+
+impl L1InfoTreeLeafInnerZeroCopy {
+    /// Get the size of this struct in bytes.
+    pub const fn size() -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Convert from L1InfoTreeLeafInner to L1InfoTreeLeafInnerZeroCopy
+    pub fn from_l1_info_tree_leaf_inner(inner: &unified_bridge::L1InfoTreeLeafInner) -> Self {
+        Self {
+            block_hash: inner.block_hash.0,
+            timestamp: inner.timestamp,
+            global_exit_root: inner.global_exit_root.0,
+        }
+    }
+
+    /// Convert from L1InfoTreeLeafInnerZeroCopy to L1InfoTreeLeafInner
+    pub fn to_l1_info_tree_leaf_inner(&self) -> unified_bridge::L1InfoTreeLeafInner {
+        unified_bridge::L1InfoTreeLeafInner {
+            block_hash: agglayer_primitives::Digest(self.block_hash),
+            timestamp: self.timestamp,
+            global_exit_root: agglayer_primitives::Digest(self.global_exit_root),
+        }
+    }
+}
+
+/// Zero-copy compatible L1InfoTreeLeaf for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct L1InfoTreeLeafZeroCopy {
+    /// L1 info tree index (u32)
+    pub l1_info_tree_index: u32,
+    /// Padding to ensure proper alignment for inner struct
+    pub _padding: [u8; 4],
+    /// RER (32 bytes)
+    pub rer: [u8; 32],
+    /// MER (32 bytes)
+    pub mer: [u8; 32],
+    /// Inner data (72 bytes)
+    pub inner: L1InfoTreeLeafInnerZeroCopy,
+}
+
+impl L1InfoTreeLeafZeroCopy {
+    /// Get the size of this struct in bytes.
+    pub const fn size() -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Convert from L1InfoTreeLeaf to L1InfoTreeLeafZeroCopy
+    pub fn from_l1_info_tree_leaf(leaf: &unified_bridge::L1InfoTreeLeaf) -> Self {
+        Self {
+            l1_info_tree_index: leaf.l1_info_tree_index,
+            _padding: [0; 4],
+            rer: leaf.rer.0,
+            mer: leaf.mer.0,
+            inner: L1InfoTreeLeafInnerZeroCopy::from_l1_info_tree_leaf_inner(&leaf.inner),
+        }
+    }
+
+    /// Convert from L1InfoTreeLeafZeroCopy to L1InfoTreeLeaf
+    pub fn to_l1_info_tree_leaf(&self) -> unified_bridge::L1InfoTreeLeaf {
+        unified_bridge::L1InfoTreeLeaf {
+            l1_info_tree_index: self.l1_info_tree_index,
+            rer: agglayer_primitives::Digest(self.rer),
+            mer: agglayer_primitives::Digest(self.mer),
+            inner: self.inner.to_l1_info_tree_leaf_inner(),
+        }
+    }
+}
+
+/// Zero-copy compatible ClaimFromMainnet for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct ClaimFromMainnetZeroCopy {
+    /// Proof leaf MER (1056 bytes)
+    pub proof_leaf_mer: MerkleProofZeroCopy,
+    /// Proof GER L1 root (1056 bytes)
+    pub proof_ger_l1root: MerkleProofZeroCopy,
+    /// L1 leaf (176 bytes)
+    pub l1_leaf: L1InfoTreeLeafZeroCopy,
+}
+
+impl ClaimFromMainnetZeroCopy {
+    /// Get the size of this struct in bytes.
+    pub const fn size() -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Convert from ClaimFromMainnet to ClaimFromMainnetZeroCopy
+    pub fn from_claim_from_mainnet(claim: &unified_bridge::ClaimFromMainnet) -> Self {
+        Self {
+            proof_leaf_mer: MerkleProofZeroCopy::from_merkle_proof(&claim.proof_leaf_mer),
+            proof_ger_l1root: MerkleProofZeroCopy::from_merkle_proof(&claim.proof_ger_l1root),
+            l1_leaf: L1InfoTreeLeafZeroCopy::from_l1_info_tree_leaf(&claim.l1_leaf),
+        }
+    }
+
+    /// Convert from ClaimFromMainnetZeroCopy to ClaimFromMainnet
+    pub fn to_claim_from_mainnet(&self) -> unified_bridge::ClaimFromMainnet {
+        unified_bridge::ClaimFromMainnet {
+            proof_leaf_mer: self.proof_leaf_mer.to_merkle_proof(),
+            proof_ger_l1root: self.proof_ger_l1root.to_merkle_proof(),
+            l1_leaf: self.l1_leaf.to_l1_info_tree_leaf(),
+        }
     }
 }
 
@@ -934,6 +1107,30 @@ mod tests {
         assert_eq!(
             SmtNonInclusionProofZeroCopy::size(),
             std::mem::size_of::<SmtNonInclusionProofZeroCopy>()
+        );
+        assert_eq!(
+            LETMerkleProofZeroCopy::size(),
+            std::mem::size_of::<LETMerkleProofZeroCopy>()
+        );
+        assert_eq!(
+            MerkleProofZeroCopy::size(),
+            std::mem::size_of::<MerkleProofZeroCopy>()
+        );
+        assert_eq!(
+            L1InfoTreeLeafInnerZeroCopy::size(),
+            std::mem::size_of::<L1InfoTreeLeafInnerZeroCopy>()
+        );
+        assert_eq!(
+            L1InfoTreeLeafZeroCopy::size(),
+            std::mem::size_of::<L1InfoTreeLeafZeroCopy>()
+        );
+        assert_eq!(
+            ClaimFromMainnetZeroCopy::size(),
+            std::mem::size_of::<ClaimFromMainnetZeroCopy>()
+        );
+        assert_eq!(
+            BalanceProofEntryZeroCopy::size(),
+            std::mem::size_of::<BalanceProofEntryZeroCopy>()
         );
         assert_eq!(
             MultiBatchHeaderZeroCopy::size(),
