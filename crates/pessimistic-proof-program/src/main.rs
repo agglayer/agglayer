@@ -10,7 +10,11 @@ pub fn main() {
     let raw_data = sp1_zkvm::io::read_vec();
     let initial_state = NetworkState::from_bytes_zero_copy(&raw_data).unwrap();
     
-    let batch_header = sp1_zkvm::io::read::<MultiBatchHeader<Keccak256Hasher>>();
+    // Note: This zero-copy approach only captures the fixed-size header data.
+    // The variable-length data (bridge_exits, imported_bridge_exits, balances_proofs)
+    // would need to be serialized separately for a complete solution.
+    let batch_header_bytes = sp1_zkvm::io::read_vec();
+    let batch_header = MultiBatchHeader::<Keccak256Hasher>::from_bytes_zero_copy(&batch_header_bytes).unwrap();
 
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header).unwrap();
 
