@@ -350,9 +350,14 @@ mod tests {
         let unaligned = &bytes[1..];
         assert!(NetworkState::from_bytes_zero_copy(unaligned).is_err());
 
-        // Test wrong size
+        // Test wrong size (too small)
         let too_small = &bytes[..bytes.len() - 1];
         assert!(NetworkState::from_bytes_zero_copy(too_small).is_err());
+
+        // Test wrong size (too large)
+        let mut too_large = bytes.clone();
+        too_large.push(0);
+        assert!(NetworkState::from_bytes_zero_copy(&too_large).is_err());
 
         // Test empty data
         assert!(NetworkState::from_bytes_zero_copy(&[]).is_err());
