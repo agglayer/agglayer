@@ -1,5 +1,5 @@
 #![allow(clippy::too_many_arguments)]
-use std::{collections::BTreeMap, hash::Hash};
+use std::hash::Hash;
 
 use agglayer_primitives::{keccak::Hasher, U256};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -95,7 +95,8 @@ where
     pub l1_info_root: H::Digest,
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
-    pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<H>)>,
+    /// Using Vec instead of BTreeMap for better zero-copy compatibility.
+    pub balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath<H>))>,
     /// Aggchain proof.
     pub aggchain_proof: AggchainData,
 }
@@ -195,7 +196,7 @@ where
             bridge_exits: Vec::new(), // Would need to be deserialized separately
             imported_bridge_exits: Vec::new(), // Would need to be deserialized separately
             l1_info_root,
-            balances_proofs: BTreeMap::new(), // Would need to be deserialized separately
+            balances_proofs: Vec::new(), // Would need to be deserialized separately
             aggchain_proof,
         })
     }
@@ -229,7 +230,7 @@ mod tests {
             bridge_exits: vec![],
             imported_bridge_exits: vec![],
             l1_info_root: agglayer_primitives::Digest::default(),
-            balances_proofs: BTreeMap::new(),
+            balances_proofs: Vec::new(),
             aggchain_proof: AggchainData::ECDSA {
                 signer: agglayer_primitives::Address::new([0; 20]),
                 signature: agglayer_primitives::Signature::new(
@@ -259,7 +260,7 @@ mod tests {
             bridge_exits: vec![],
             imported_bridge_exits: vec![],
             l1_info_root: agglayer_primitives::Digest::default(),
-            balances_proofs: BTreeMap::new(),
+            balances_proofs: Vec::new(),
             aggchain_proof: AggchainData::ECDSA {
                 signer: agglayer_primitives::Address::new([0; 20]),
                 signature: agglayer_primitives::Signature::new(
