@@ -235,8 +235,6 @@ mockall::mock! {
 
     #[async_trait::async_trait]
     impl agglayer_contracts::AggchainContract for L1Rpc {
-        type M = alloy::providers::RootProvider<Ethereum>;
-
         async fn get_aggchain_vkey_hash(
             &self,
             rollup_address: agglayer_types::Address,
