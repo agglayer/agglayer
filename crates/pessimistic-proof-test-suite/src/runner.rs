@@ -89,7 +89,7 @@ impl Runner {
         println!("Writing balances_proofs: {} bytes", balances_proofs_bytes.len());
         stdin.write_vec(balances_proofs_bytes.to_vec());
         
-        // Use zero-copy for balance proof Merkle paths
+        // Use zero-copy for balance Merkle paths (zero-copy)
         let balance_merkle_paths_zero_copy: Vec<pessimistic_proof::multi_batch_header::SmtMerkleProofZeroCopy> = 
             batch_header.balances_proofs.iter().map(|(_, (_, path))| {
                 pessimistic_proof::multi_batch_header::SmtMerkleProofZeroCopy::from_smt_merkle_proof(path)
@@ -97,6 +97,10 @@ impl Runner {
         let balance_merkle_paths_bytes = bytemuck::cast_slice(&balance_merkle_paths_zero_copy);
         println!("Writing balance_merkle_paths: {} bytes", balance_merkle_paths_bytes.len());
         stdin.write_vec(balance_merkle_paths_bytes.to_vec());
+        
+        // Write aggchain_proof separately using bincode (since zero-copy truncates it)
+        println!("Writing aggchain_proof using bincode");
+        stdin.write(&batch_header.aggchain_proof);
         
         println!("Stdin prepared");
         stdin
