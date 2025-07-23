@@ -81,6 +81,26 @@ impl Forest {
         self
     }
 
+    pub fn with_initial_balances(
+        mut self,
+        initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>,
+    ) -> Self {
+        let mut local_balance_tree = Smt::new();
+        for (token, balance) in initial_balances {
+            local_balance_tree
+                .insert(token, balance.to_be_bytes().into())
+                .unwrap();
+        }
+
+        self.state_b.balance_tree = local_balance_tree;
+        self
+    }
+
+    pub fn with_local_exit_tree(mut self, local_exit_tree: LocalExitTree<Keccak256Hasher>) -> Self {
+        self.state_b.exit_tree = local_exit_tree;
+        self
+    }
+
     /// Create a new forest based on given initial balances.
     pub fn new(initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>) -> Self {
         Self::new_with_local_exit_tree(initial_balances, LocalExitTree::new())
