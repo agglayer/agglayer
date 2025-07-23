@@ -2,6 +2,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use agglayer_primitives::{keccak::Keccak256Hasher, ruint::UintTryFrom, Hashable, U256, U512};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
+use bytemuck::{Pod, Zeroable};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
 use unified_bridge::{Error, LocalExitTree, NetworkId, L1_ETH};
@@ -18,7 +19,7 @@ pub mod commitment;
 /// Zero-copy representation of NetworkState for safe transmute.
 /// This struct has a stable C-compatible memory layout.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct NetworkStateZeroCopy {
     /// Leaf count of the exit tree (u32)
     pub exit_tree_leaf_count: u32,
@@ -81,28 +82,15 @@ impl NetworkStateZeroCopy {
         std::mem::size_of::<Self>()
     }
 
-    /// Check if the given byte slice has the correct size for this struct.
-    pub fn check_size(data: &[u8]) -> bool {
-        data.len() == Self::size()
-    }
-
-    /// Safely transmute a byte slice to this struct.
+    /// Safely transmute a byte slice to this struct using bytemuck.
     /// This is only safe if the data was originally a NetworkStateZeroCopy.
-    pub unsafe fn from_bytes(data: &[u8]) -> Option<&Self> {
-        let align = std::mem::align_of::<Self>();
-        let ptr = data.as_ptr() as usize;
-        if Self::check_size(data) && (ptr % align == 0) {
-            // SAFETY: We've checked size and alignment, and assume the caller ensures
-            // the data was originally a NetworkStateZeroCopy
-            Some(&*(data.as_ptr() as *const Self))
-        } else {
-            None
-        }
+    pub fn from_bytes(data: &[u8]) -> Result<&Self, bytemuck::PodCastError> {
+        bytemuck::try_from_bytes(data)
     }
 
     /// Convert this struct to a byte slice.
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self as *const Self as *const u8, Self::size()) }
+        bytemuck::bytes_of(self)
     }
 }
 
@@ -154,12 +142,9 @@ impl NetworkState {
         bincode::contracts().deserialize(data).map_err(|e| e.into())
     }
 
-    /// Zero-copy deserialization from bytes using transmute.
-    ///
-    /// # Safety
-    /// This function is unsafe because it assumes the input data was originally
-    /// a `NetworkStateZeroCopy` struct. The caller must ensure this invariant.
-    pub unsafe fn from_bytes_zero_copy(data: &[u8]) -> Option<Self> {
+    /// Zero-copy deserialization from bytes using bytemuck.
+    /// This function safely deserializes the data if it has the correct size and alignment.
+    pub fn from_bytes_zero_copy(data: &[u8]) -> Result<Self, bytemuck::PodCastError> {
         NetworkStateZeroCopy::from_bytes(data).map(|zc| Self::from_zero_copy(zc))
     }
 
@@ -332,7 +317,7 @@ mod tests {
         let bytes = state.to_bytes_zero_copy();
         assert_eq!(bytes.len(), NetworkStateZeroCopy::size());
 
-        let deserialized = unsafe { NetworkState::from_bytes_zero_copy(&bytes) }
+        let deserialized = NetworkState::from_bytes_zero_copy(&bytes)
             .expect("Zero-copy deserialization should succeed");
 
         assert_eq!(
@@ -359,13 +344,13 @@ mod tests {
 
         // Test unaligned data
         let unaligned = &bytes[1..];
-        assert!(unsafe { NetworkState::from_bytes_zero_copy(unaligned) }.is_none());
+        assert!(NetworkState::from_bytes_zero_copy(unaligned).is_err());
 
         // Test wrong size
         let too_small = &bytes[..bytes.len() - 1];
-        assert!(unsafe { NetworkState::from_bytes_zero_copy(too_small) }.is_none());
+        assert!(NetworkState::from_bytes_zero_copy(too_small).is_err());
 
         // Test empty data
-        assert!(unsafe { NetworkState::from_bytes_zero_copy(&[]) }.is_none());
+        assert!(NetworkState::from_bytes_zero_copy(&[]).is_err());
     }
 }
