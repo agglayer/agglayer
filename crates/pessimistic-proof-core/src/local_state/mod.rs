@@ -50,19 +50,16 @@ impl NetworkStateZeroCopy {
 
     /// Convert back to a regular NetworkState.
     pub fn to_network_state(&self) -> NetworkState {
-        // Reconstruct the exit tree with frontier
         let exit_tree = LocalExitTree::from_parts(
             self.exit_tree_leaf_count,
             self.exit_tree_frontier
                 .map(|h| agglayer_primitives::Digest::from(h)),
         );
 
-        // Reconstruct the balance tree
         let balance_tree = LocalBalanceTree::<Keccak256Hasher> {
             root: agglayer_primitives::Digest::from(self.balance_tree_root),
         };
 
-        // Reconstruct the nullifier tree
         let nullifier_tree = NullifierTree::<Keccak256Hasher> {
             root: agglayer_primitives::Digest::from(self.nullifier_tree_root),
             empty_hash_at_height: self
@@ -82,8 +79,7 @@ impl NetworkStateZeroCopy {
         std::mem::size_of::<Self>()
     }
 
-    /// Safely transmute a byte slice to this struct using bytemuck.
-    /// This is only safe if the data was originally a NetworkStateZeroCopy.
+    /// Safely deserialize from bytes using bytemuck.
     pub fn from_bytes(data: &[u8]) -> Result<&Self, bytemuck::PodCastError> {
         bytemuck::try_from_bytes(data)
     }
@@ -91,6 +87,11 @@ impl NetworkStateZeroCopy {
     /// Convert this struct to a byte slice.
     pub fn as_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
+    }
+
+    /// Convert this struct to a owned byte vector.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.as_bytes().to_vec()
     }
 }
 
@@ -151,8 +152,7 @@ impl NetworkState {
     /// Serialize to zero-copy bytes.
     /// This creates a byte representation that can be safely transmuted back.
     pub fn to_bytes_zero_copy(&self) -> Vec<u8> {
-        let zero_copy = self.to_zero_copy();
-        zero_copy.as_bytes().to_vec()
+        self.to_zero_copy().to_bytes()
     }
 
     /// Apply the [`MultiBatchHeader`] on the current [`LocalNetworkState`].
