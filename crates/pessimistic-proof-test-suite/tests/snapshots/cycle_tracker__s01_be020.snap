@@ -4,7 +4,7 @@ expression: stats
 snapshot_kind: text
 ---
 gas: 3319777
-opcode counts (837333 total instructions):
+opcode counts (837336 total instructions):
     227633 add
     139361 sw
     106161 lw
@@ -30,8 +30,8 @@ opcode counts (837333 total instructions):
        572 sh
        289 lb
        108 sra
+        23 bge
         22 lhu
-        20 bge
          7 blt
          3 lh
 syscall counts (2151 total syscall instructions):
