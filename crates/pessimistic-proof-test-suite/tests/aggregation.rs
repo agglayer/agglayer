@@ -1,8 +1,12 @@
 use std::collections::BTreeMap;
 
-use agglayer_types::PessimisticRootInput;
+use agglayer_types::{PessimisticRootInput, U256};
 use pessimistic_proof::{NetworkState, ELF as PESSIMISTIC_PROOF_ELF};
-use pessimistic_proof_test_suite::{forest::Forest, sample_data as data, AGGREGATION_PROOF_ELF};
+use pessimistic_proof_test_suite::{
+    forest::Forest,
+    sample_data::{self as data, ETH, USDC},
+    AGGREGATION_PROOF_ELF,
+};
 use sp1_sdk::{ProverClient, SP1Proof, SP1Stdin};
 use unified_bridge::{CommitmentVersion, NetworkId};
 
@@ -51,9 +55,11 @@ pub fn generate_pp_for_chain(_origin_network: NetworkId, _nb_proofs: usize) -> V
 
 /// Generate a set of PP per network
 pub fn generate_aggregation_data() -> Result<AggregationData, ()> {
+    let large_amount = U256::MAX.checked_div(U256::from(2u64)).unwrap(); // not max to allow importing bridge exits
+    let balances = [(ETH, large_amount), (USDC, large_amount)];
     let mut forest_a = Forest::default()
         .with_network_id(18)
-        .with_initial_balances([]);
+        .with_initial_balances(balances);
 
     let nb_exits = 1;
     let pp = generate_pp(&mut forest_a, nb_exits);
