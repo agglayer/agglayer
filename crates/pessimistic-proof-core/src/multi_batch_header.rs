@@ -1,6 +1,5 @@
 #![allow(clippy::too_many_arguments)]
 use std::hash::Hash;
-
 use agglayer_primitives::{keccak::Hasher, U256};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::serde_as;
