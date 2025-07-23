@@ -41,6 +41,7 @@ impl Runner {
     fn write_zero_copy_data<T: bytemuck::Pod>(stdin: &mut SP1Stdin, data: &[T], name: &str) {
         let bytes = bytemuck::cast_slice(data);
         println!("Writing {}: {} bytes", name, bytes.len());
+        // Use as_bytes() for zero-copy, then convert to Vec only when needed for stdin
         stdin.write_vec(bytes.to_vec());
     }
 
@@ -58,12 +59,13 @@ impl Runner {
 
         // Use zero-copy for MultiBatchHeader header
         let header_zero_copy = batch_header.to_zero_copy();
-        let header_bytes = header_zero_copy.to_bytes();
+        // Use as_bytes() for true zero-copy, then convert to Vec only when needed
+        let header_bytes = header_zero_copy.as_bytes();
         println!(
             "Writing MultiBatchHeader header: {} bytes",
             header_bytes.len()
         );
-        stdin.write_vec(header_bytes);
+        stdin.write_vec(header_bytes.to_vec());
 
         // Use zero-copy for bridge_exits
         let bridge_exits_zero_copy: Vec<pessimistic_proof::multi_batch_header::BridgeExitZeroCopy> =
