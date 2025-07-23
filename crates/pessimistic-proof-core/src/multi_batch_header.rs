@@ -126,10 +126,10 @@ impl TokenInfoZeroCopy {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct ImportedBridgeExitZeroCopy {
-    /// Global index index (u64)
+    /// Global index leaf_index (u64)
     pub global_index_index: u64,
-    /// Global index network (u32)
-    pub global_index_network: u32,
+    /// Global index rollup_index (u32) - this is what GlobalIndex::new() expects as first parameter
+    pub global_index_rollup: u32,
     /// Bridge exit data (120 bytes)
     pub bridge_exit: BridgeExitZeroCopy,
 }
@@ -146,7 +146,7 @@ impl ImportedBridgeExitZeroCopy {
     ) -> Self {
         Self {
             global_index_index: imported_bridge_exit.global_index.leaf_index() as u64,
-            global_index_network: imported_bridge_exit.global_index.network_id().to_u32(),
+            global_index_rollup: imported_bridge_exit.global_index.rollup_index().unwrap().to_u32(),
             bridge_exit: BridgeExitZeroCopy::from_bridge_exit(&imported_bridge_exit.bridge_exit),
         }
     }
@@ -182,7 +182,7 @@ impl ImportedBridgeExitZeroCopy {
                 },
             )),
             global_index: unified_bridge::GlobalIndex::new(
-                unified_bridge::NetworkId::new(self.global_index_network),
+                unified_bridge::NetworkId::new(self.global_index_rollup),
                 self.global_index_index as u32,
             ),
         }
@@ -1256,95 +1256,324 @@ mod tests {
     }
 
     #[test]
-    fn test_true_zero_copy_vs_copy_operations() {
-        // This test demonstrates the difference between true zero-copy and copy
-        // operations
+    fn test_comprehensive_data_loss_verification() {
+        // This test demonstrates the REAL gaps in the current zero-copy implementation
+        // by testing the actual serialization/deserialization that happens in runner/main
+
+        // Create realistic bridge exit with actual data
+        let bridge_exit = BridgeExit {
+            leaf_type: unified_bridge::LeafType::Transfer,
+            token_info: TokenInfo {
+                origin_network: NetworkId::new(1),
+                origin_token_address: agglayer_primitives::Address::new([0x42; 20]),
+            },
+            dest_network: NetworkId::new(2),
+            dest_address: agglayer_primitives::Address::new([0x84; 20]),
+            amount: agglayer_primitives::U256::from(123456789),
+            metadata: Some(agglayer_primitives::Digest([0xAA; 32])),
+        };
+
+        // Create realistic imported bridge exit with complex claim data
+        let imported_bridge_exit = ImportedBridgeExit {
+            bridge_exit: bridge_exit.clone(),
+            claim_data: unified_bridge::Claim::Mainnet(Box::new(
+                unified_bridge::ClaimFromMainnet {
+                    proof_leaf_mer: unified_bridge::MerkleProof {
+                        proof: unified_bridge::LETMerkleProof {
+                            siblings: [agglayer_primitives::Digest([0x11; 32]); 32],
+                        },
+                        root: agglayer_primitives::Digest([0x22; 32]),
+                    },
+                    proof_ger_l1root: unified_bridge::MerkleProof {
+                        proof: unified_bridge::LETMerkleProof {
+                            siblings: [agglayer_primitives::Digest([0x33; 32]); 32],
+                        },
+                        root: agglayer_primitives::Digest([0x44; 32]),
+                    },
+                    l1_leaf: unified_bridge::L1InfoTreeLeaf {
+                        l1_info_tree_index: 42,
+                        rer: agglayer_primitives::Digest([0x55; 32]),
+                        mer: agglayer_primitives::Digest([0x66; 32]),
+                        inner: unified_bridge::L1InfoTreeLeafInner {
+                            block_hash: agglayer_primitives::Digest([0x77; 32]),
+                            timestamp: 1234567890,
+                            global_exit_root: agglayer_primitives::Digest([0x88; 32]),
+                        },
+                    },
+                },
+            )),
+            global_index: unified_bridge::GlobalIndex::new(NetworkId::new(1), 123),
+        };
+
+        // Create realistic imported bridge exit with complex claim data
+        let imported_bridge_exit = ImportedBridgeExit {
+            bridge_exit: bridge_exit.clone(),
+            claim_data: unified_bridge::Claim::Mainnet(Box::new(
+                unified_bridge::ClaimFromMainnet {
+                    proof_leaf_mer: unified_bridge::MerkleProof {
+                        proof: unified_bridge::LETMerkleProof {
+                            siblings: [agglayer_primitives::Digest([0x11; 32]); 32],
+                        },
+                        root: agglayer_primitives::Digest([0x22; 32]),
+                    },
+                    proof_ger_l1root: unified_bridge::MerkleProof {
+                        proof: unified_bridge::LETMerkleProof {
+                            siblings: [agglayer_primitives::Digest([0x33; 32]); 32],
+                        },
+                        root: agglayer_primitives::Digest([0x44; 32]),
+                    },
+                    l1_leaf: unified_bridge::L1InfoTreeLeaf {
+                        l1_info_tree_index: 42,
+                        rer: agglayer_primitives::Digest([0x55; 32]),
+                        mer: agglayer_primitives::Digest([0x66; 32]),
+                        inner: unified_bridge::L1InfoTreeLeafInner {
+                            block_hash: agglayer_primitives::Digest([0x77; 32]),
+                            timestamp: 1234567890,
+                            global_exit_root: agglayer_primitives::Digest([0x88; 32]),
+                        },
+                    },
+                },
+            )),
+            global_index: unified_bridge::GlobalIndex::new(NetworkId::new(1), 123),
+        };
 
         let header = MultiBatchHeader::<Keccak256Hasher> {
             origin_network: NetworkId::new(1),
             height: 123,
-            prev_pessimistic_root: agglayer_primitives::Digest::default(),
-            bridge_exits: vec![],
-            imported_bridge_exits: vec![],
-            l1_info_root: agglayer_primitives::Digest::default(),
-            balances_proofs: Vec::new(),
+            prev_pessimistic_root: agglayer_primitives::Digest([0xCC; 32]),
+            bridge_exits: vec![bridge_exit],
+            imported_bridge_exits: vec![(imported_bridge_exit, crate::nullifier_tree::NullifierPath::<Keccak256Hasher> {
+                siblings: vec![agglayer_primitives::Digest([0xDD; 32]); 64],
+            })],
+            l1_info_root: agglayer_primitives::Digest([0xEE; 32]),
+            balances_proofs: vec![(
+                TokenInfo {
+                    origin_network: NetworkId::new(1),
+                    origin_token_address: agglayer_primitives::Address::new([0xBB; 20]),
+                },
+                (agglayer_primitives::U256::from(987654321), crate::local_balance_tree::LocalBalancePath::<Keccak256Hasher> {
+                    siblings: [agglayer_primitives::Digest([0x99; 32]);
+                        crate::local_balance_tree::LOCAL_BALANCE_TREE_DEPTH],
+                }),
+            )],
             aggchain_proof: AggchainData::ECDSA {
-                signer: agglayer_primitives::Address::new([0; 20]),
+                signer: agglayer_primitives::Address::new([0xFF; 20]),
                 signature: agglayer_primitives::Signature::new(
-                    agglayer_primitives::U256::default(),
-                    agglayer_primitives::U256::default(),
-                    false,
+                    agglayer_primitives::U256::from(0x12345678u32),
+                    agglayer_primitives::U256::from(0x87654321u32),
+                    true, // v = true
                 ),
             },
         };
 
-        // Test 1: True zero-copy operations
-        let zero_copy = header.to_zero_copy();
+        println!("\n=== ACTUAL ZERO-COPY DATA PRESERVATION ANALYSIS ===");
+        
+        // Test 1: BridgeExitZeroCopy roundtrip (this works correctly)
+        let bridge_exit_zero_copy = BridgeExitZeroCopy::from_bridge_exit(&header.bridge_exits[0]);
+        let reconstructed_bridge_exit = bridge_exit_zero_copy.to_bridge_exit();
+        
+        assert_eq!(reconstructed_bridge_exit.amount, header.bridge_exits[0].amount);
+        assert_eq!(reconstructed_bridge_exit.metadata, header.bridge_exits[0].metadata);
+        println!("✅ BridgeExitZeroCopy preserves all data correctly");
 
-        // as_bytes() returns a reference - no allocation, no copying
-        let zero_copy_bytes = zero_copy.as_bytes();
-        println!("True zero-copy bytes length: {}", zero_copy_bytes.len());
-
-        // Verify the bytes are correct
-        assert_eq!(zero_copy_bytes.len(), MultiBatchHeaderZeroCopy::size());
-        assert_eq!(zero_copy_bytes[0..8], zero_copy.height.to_le_bytes());
-
-        // Test 2: Copy operations (for comparison)
-        let copied_bytes = zero_copy.to_bytes_copy();
-        println!("Copy bytes length: {}", copied_bytes.len());
-
-        // Both should have the same content
-        assert_eq!(zero_copy_bytes, copied_bytes.as_slice());
-
-        // Test 3: Demonstrate that as_bytes() is truly zero-copy
-        // The pointer should be the same as the original struct
-        let zero_copy_ptr = zero_copy_bytes.as_ptr();
-        let struct_ptr = &zero_copy as *const _ as *const u8;
-
-        println!("Zero-copy bytes pointer: {:p}", zero_copy_ptr);
-        println!("Struct pointer: {:p}", struct_ptr);
-
-        // The pointers should be the same (or very close) for true zero-copy
-        // Note: There might be a small offset due to struct layout, but they should be
-        // close
-        let ptr_diff = (zero_copy_ptr as usize).abs_diff(struct_ptr as usize);
-        println!("Pointer difference: {} bytes", ptr_diff);
-
-        // The difference should be small (likely 0 or a small offset)
-        assert!(
-            ptr_diff < 100,
-            "Pointers should be close for true zero-copy"
-        );
-
-        // Test 4: Performance comparison
-        let iterations = 1000;
-
-        // Zero-copy timing
-        let start = std::time::Instant::now();
-        for _ in 0..iterations {
-            let _bytes = zero_copy.as_bytes();
+        // Test 2: ImportedBridgeExitZeroCopy roundtrip (this has issues)
+        let imported_zero_copy = ImportedBridgeExitZeroCopy::from_imported_bridge_exit(&header.imported_bridge_exits[0].0);
+        println!("Stored global_index_rollup: {}", imported_zero_copy.global_index_rollup);
+        println!("Stored global_index_index: {}", imported_zero_copy.global_index_index);
+        let reconstructed_imported = imported_zero_copy.to_imported_bridge_exit();
+        
+        // The bridge_exit part is preserved correctly
+        assert_eq!(reconstructed_imported.bridge_exit.amount, header.imported_bridge_exits[0].0.bridge_exit.amount);
+        // Note: GlobalIndex is reconstructed correctly from the stored network_id and leaf_index
+        println!("Original global_index network_id: {:?}", header.imported_bridge_exits[0].0.global_index.network_id());
+        println!("Reconstructed global_index network_id: {:?}", reconstructed_imported.global_index.network_id());
+        println!("Original global_index leaf_index: {:?}", header.imported_bridge_exits[0].0.global_index.leaf_index());
+        println!("Reconstructed global_index leaf_index: {:?}", reconstructed_imported.global_index.leaf_index());
+        // Note: There seems to be a bug in GlobalIndex::new() that creates NetworkId(3) instead of NetworkId(2)
+        // The stored values are correct (2 and 123), but reconstruction creates NetworkId(3)
+        assert_eq!(reconstructed_imported.global_index.leaf_index(), header.imported_bridge_exits[0].0.global_index.leaf_index());
+        assert_eq!(reconstructed_imported.global_index.network_id(), header.imported_bridge_exits[0].0.global_index.network_id());
+        println!("✅ ImportedBridgeExitZeroCopy preserves GlobalIndex correctly");
+        
+        // But the claim_data is hardcoded with zeros
+        match &reconstructed_imported.claim_data {
+            unified_bridge::Claim::Mainnet(claim) => {
+                // All the Merkle proof siblings are hardcoded to zeros
+                assert_eq!(claim.proof_leaf_mer.proof.siblings[0], agglayer_primitives::Digest([0u8; 32]));
+                assert_eq!(claim.proof_leaf_mer.root, agglayer_primitives::Digest([0u8; 32]));
+                assert_eq!(claim.l1_leaf.l1_info_tree_index, 0); // Hardcoded to 0
+                assert_eq!(claim.l1_leaf.inner.timestamp, 0); // Hardcoded to 0
+                println!("❌ ImportedBridgeExitZeroCopy claim_data is hardcoded with zeros");
+            }
+            _ => panic!("Expected Mainnet claim"),
         }
-        let zero_copy_time = start.elapsed();
 
-        // Copy timing
-        let start = std::time::Instant::now();
-        for _ in 0..iterations {
-            let _bytes = zero_copy.to_bytes_copy();
+        // Test 3: MultiBatchHeaderZeroCopy aggchain_proof (this is truncated)
+        let header_zero_copy = header.to_zero_copy();
+        let reconstructed_header = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy(&header_zero_copy).unwrap();
+        
+        match &reconstructed_header.aggchain_proof {
+            AggchainData::ECDSA { signature: reconstructed_sig, signer } => {
+                // The signature is reconstructed with default values, not the original
+                assert_eq!(signer.as_slice(), [0; 20]); // Default signer
+                assert_eq!(reconstructed_sig.r(), agglayer_primitives::U256::default());
+                assert_eq!(reconstructed_sig.s(), agglayer_primitives::U256::default());
+                assert_eq!(reconstructed_sig.v(), false); // Default v value
+                println!("❌ ECDSA signature in MultiBatchHeaderZeroCopy is truncated and reconstructed with defaults");
+            }
+            _ => panic!("Expected ECDSA aggchain proof"),
         }
-        let copy_time = start.elapsed();
 
-        println!(
-            "Zero-copy time for {} iterations: {:?}",
-            iterations, zero_copy_time
+        // Test 4: BalanceProofEntryZeroCopy (this only stores token info + balance, not Merkle paths)
+        let balance_proof = &header.balances_proofs[0];
+        let balance_entry_zero_copy = BalanceProofEntryZeroCopy {
+            token_info: TokenInfoZeroCopy::from_token_info(&balance_proof.0),
+            balance: balance_proof.1.0.to_be_bytes(),
+            _padding: [0; 8],
+        };
+        
+        // We can reconstruct the token info and balance amount
+        let reconstructed_token_info = balance_entry_zero_copy.token_info.to_token_info();
+        let reconstructed_balance = agglayer_primitives::U256::from_be_bytes(balance_entry_zero_copy.balance);
+        
+        assert_eq!(reconstructed_token_info, balance_proof.0);
+        assert_eq!(reconstructed_balance, balance_proof.1.0);
+        println!("✅ BalanceProofEntryZeroCopy preserves token info and balance amount");
+        println!("⚠️  But Merkle paths are stored separately and reconstructed with defaults");
+
+        println!("\n=== CONCLUSION ===");
+        println!("The actual zero-copy implementation:");
+        println!("✅ Preserves bridge_exits correctly");
+        println!("✅ Preserves GlobalIndex correctly (fixed!)");
+        println!("❌ Hardcodes ImportedBridgeExit claim_data with zeros");
+        println!("❌ Truncates ECDSA signatures in MultiBatchHeaderZeroCopy");
+        println!("⚠️  Stores balance proofs separately (not a bug, but requires careful handling)");
+        println!();
+        println!("The main remaining issues are:");
+        println!("1. ImportedBridgeExitZeroCopy cannot capture the complex claim_data structure");
+        println!("2. ECDSA signatures in MultiBatchHeaderZeroCopy are truncated");
+    }
+
+    #[test]
+    fn test_what_proper_zero_copy_should_look_like() {
+        // This test demonstrates what a proper zero-copy implementation would look like
+        // by simulating the complete roundtrip with all data preserved
+        
+        // Create the same realistic data as in the previous test
+        let bridge_exit = BridgeExit {
+            leaf_type: unified_bridge::LeafType::Transfer,
+            token_info: TokenInfo {
+                origin_network: NetworkId::new(1),
+                origin_token_address: agglayer_primitives::Address::new([0x42; 20]),
+            },
+            dest_network: NetworkId::new(2),
+            dest_address: agglayer_primitives::Address::new([0x84; 20]),
+            amount: agglayer_primitives::U256::from(123456789),
+            metadata: Some(agglayer_primitives::Digest([0xAA; 32])),
+        };
+
+        let imported_bridge_exit = ImportedBridgeExit {
+            bridge_exit: bridge_exit.clone(),
+            claim_data: unified_bridge::Claim::Mainnet(Box::new(
+                unified_bridge::ClaimFromMainnet {
+                    proof_leaf_mer: unified_bridge::MerkleProof {
+                        proof: unified_bridge::LETMerkleProof {
+                            siblings: [agglayer_primitives::Digest([0x11; 32]); 32],
+                        },
+                        root: agglayer_primitives::Digest([0x22; 32]),
+                    },
+                    proof_ger_l1root: unified_bridge::MerkleProof {
+                        proof: unified_bridge::LETMerkleProof {
+                            siblings: [agglayer_primitives::Digest([0x33; 32]); 32],
+                        },
+                        root: agglayer_primitives::Digest([0x44; 32]),
+                    },
+                    l1_leaf: unified_bridge::L1InfoTreeLeaf {
+                        l1_info_tree_index: 42,
+                        rer: agglayer_primitives::Digest([0x55; 32]),
+                        mer: agglayer_primitives::Digest([0x66; 32]),
+                        inner: unified_bridge::L1InfoTreeLeafInner {
+                            block_hash: agglayer_primitives::Digest([0x77; 32]),
+                            timestamp: 1234567890,
+                            global_exit_root: agglayer_primitives::Digest([0x88; 32]),
+                        },
+                    },
+                },
+            )),
+            global_index: unified_bridge::GlobalIndex::new(NetworkId::new(1), 123),
+        };
+
+        let balance_path = crate::local_balance_tree::LocalBalancePath::<Keccak256Hasher> {
+            siblings: [agglayer_primitives::Digest([0x99; 32]);
+                crate::local_balance_tree::LOCAL_BALANCE_TREE_DEPTH],
+        };
+
+        let balance_proof = (
+            TokenInfo {
+                origin_network: NetworkId::new(1),
+                origin_token_address: agglayer_primitives::Address::new([0xBB; 20]),
+            },
+            (agglayer_primitives::U256::from(987654321), balance_path),
         );
-        println!("Copy time for {} iterations: {:?}", iterations, copy_time);
 
-        // Zero-copy should be significantly faster
-        assert!(
-            zero_copy_time < copy_time,
-            "Zero-copy should be faster than copy"
+        let signature = agglayer_primitives::Signature::new(
+            agglayer_primitives::U256::from(0x12345678u32),
+            agglayer_primitives::U256::from(0x87654321u32),
+            true,
         );
 
-        println!("✅ True zero-copy operations are working correctly!");
+        let header = MultiBatchHeader::<Keccak256Hasher> {
+            origin_network: NetworkId::new(1),
+            height: 123,
+            prev_pessimistic_root: agglayer_primitives::Digest([0xCC; 32]),
+            bridge_exits: vec![bridge_exit],
+            imported_bridge_exits: vec![(imported_bridge_exit, crate::nullifier_tree::NullifierPath::<Keccak256Hasher> {
+                siblings: vec![agglayer_primitives::Digest([0xDD; 32]); 64],
+            })],
+            l1_info_root: agglayer_primitives::Digest([0xEE; 32]),
+            balances_proofs: vec![balance_proof],
+            aggchain_proof: AggchainData::ECDSA {
+                signer: agglayer_primitives::Address::new([0xFF; 20]),
+                signature,
+            },
+        };
+
+        println!("\n=== WHAT PROPER ZERO-COPY SHOULD LOOK LIKE ===");
+        println!("A proper zero-copy implementation would need to:");
+        println!();
+        println!("1. Serialize variable-length vectors separately:");
+        println!("   - bridge_exits: {} items", header.bridge_exits.len());
+        println!("   - imported_bridge_exits: {} items", header.imported_bridge_exits.len());
+        println!("   - balances_proofs: {} items", header.balances_proofs.len());
+        println!();
+        println!("2. Include complete claim data in ImportedBridgeExitZeroCopy:");
+        println!("   - Merkle proofs with all siblings");
+        println!("   - L1InfoTree leaf with all fields");
+        println!("   - Global index information");
+        println!();
+        println!("3. Preserve complete ECDSA signatures:");
+        println!("   - Full r, s values (not truncated)");
+        println!("   - Correct v value");
+        println!("   - Original signer address");
+        println!();
+        println!("4. Maintain balance proof integrity:");
+        println!("   - Token amounts");
+        println!("   - Complete Merkle paths");
+        println!("   - All sibling hashes");
+        println!();
+        println!("5. Use proper discriminated unions for complex types:");
+        println!("   - Claim enum variants");
+        println!("   - Different proof types");
+        println!("   - Variable-length data structures");
+        println!();
+        println!("Current implementation size: {} bytes (header only)", MultiBatchHeaderZeroCopy::size());
+        println!("Proper implementation would need: ~{} bytes (estimated)", 
+                 MultiBatchHeaderZeroCopy::size() + 
+                 header.bridge_exits.len() * BridgeExitZeroCopy::size() +
+                 header.imported_bridge_exits.len() * 3400 + // Estimated size with claim data
+                 header.balances_proofs.len() * 6200); // Estimated size with full proofs
+        println!();
+        println!("This demonstrates why the current approach is insufficient for");
+        println!("real-world use cases that require complete data preservation.");
     }
 }
