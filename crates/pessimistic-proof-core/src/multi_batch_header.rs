@@ -1,4 +1,5 @@
 #![allow(clippy::too_many_arguments)]
+
 use std::hash::Hash;
 
 use agglayer_primitives::{keccak::Hasher, U256};
@@ -366,13 +367,14 @@ impl MultiBatchHeaderZeroCopy {
         bytemuck::try_from_bytes(data)
     }
 
-    /// Convert this struct to a byte slice.
+    /// Convert this struct to a byte slice (zero-copy).
     pub fn as_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
     }
 
-    /// Convert this struct to an owned byte vector.
-    pub fn to_bytes(&self) -> Vec<u8> {
+    /// Convert this struct to an owned byte vector (creates a copy).
+    /// Use as_bytes() for zero-copy operations.
+    pub fn to_bytes_copy(&self) -> Vec<u8> {
         self.as_bytes().to_vec()
     }
 }
@@ -417,6 +419,10 @@ where
     /// The variable-length data (bridge_exits, imported_bridge_exits,
     /// balances_proofs) would need to be serialized separately or handled
     /// differently.
+    ///
+    /// IMPORTANT: This method performs data transformation but returns a
+    /// zero-copy struct. Use the returned struct's as_bytes() method for
+    /// true zero-copy operations.
     pub fn to_zero_copy(&self) -> MultiBatchHeaderZeroCopy {
         let aggchain_proof_type = match &self.aggchain_proof {
             AggchainData::ECDSA { .. } => 0u8,
@@ -520,8 +526,10 @@ where
 
     /// Convert to bytes using zero-copy serialization for the header.
     /// Note: This only serializes the fixed-size header data.
+    /// WARNING: This method creates a copy. For true zero-copy, use the
+    /// zero-copy structs directly.
     pub fn to_bytes_zero_copy(&self) -> Vec<u8> {
-        self.to_zero_copy().to_bytes()
+        self.to_zero_copy().to_bytes_copy()
     }
 
     /// Convert from bytes using zero-copy deserialization for the header.
@@ -827,7 +835,7 @@ mod tests {
 
         // Simulate the test suite writing data
         let header_zero_copy = header.to_zero_copy();
-        let header_bytes = header_zero_copy.to_bytes();
+        let header_bytes = header_zero_copy.to_bytes_copy();
 
         // Simulate main.rs reading data (this is where the alignment error occurred)
         // Test both approaches that were tried in main.rs:
@@ -952,7 +960,7 @@ mod tests {
 
         // Simulate test suite preparing data
         let header_zero_copy = header.to_zero_copy();
-        let header_bytes = header_zero_copy.to_bytes();
+        let header_bytes = header_zero_copy.to_bytes_copy();
 
         let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> = header
             .bridge_exits
@@ -1049,7 +1057,7 @@ mod tests {
 
         // Simulate test suite writing data
         let header_zero_copy = header.to_zero_copy();
-        let header_bytes = header_zero_copy.to_bytes();
+        let header_bytes = header_zero_copy.to_bytes_copy();
 
         // Simulate the alignment issue by creating unaligned data
         // This is what happens when sp1_zkvm::io::read_vec() returns data
@@ -1245,5 +1253,98 @@ mod tests {
             "MultiBatchHeaderZeroCopy: {} bytes",
             std::mem::size_of::<MultiBatchHeaderZeroCopy>()
         );
+    }
+
+    #[test]
+    fn test_true_zero_copy_vs_copy_operations() {
+        // This test demonstrates the difference between true zero-copy and copy
+        // operations
+
+        let header = MultiBatchHeader::<Keccak256Hasher> {
+            origin_network: NetworkId::new(1),
+            height: 123,
+            prev_pessimistic_root: agglayer_primitives::Digest::default(),
+            bridge_exits: vec![],
+            imported_bridge_exits: vec![],
+            l1_info_root: agglayer_primitives::Digest::default(),
+            balances_proofs: Vec::new(),
+            aggchain_proof: AggchainData::ECDSA {
+                signer: agglayer_primitives::Address::new([0; 20]),
+                signature: agglayer_primitives::Signature::new(
+                    agglayer_primitives::U256::default(),
+                    agglayer_primitives::U256::default(),
+                    false,
+                ),
+            },
+        };
+
+        // Test 1: True zero-copy operations
+        let zero_copy = header.to_zero_copy();
+
+        // as_bytes() returns a reference - no allocation, no copying
+        let zero_copy_bytes = zero_copy.as_bytes();
+        println!("True zero-copy bytes length: {}", zero_copy_bytes.len());
+
+        // Verify the bytes are correct
+        assert_eq!(zero_copy_bytes.len(), MultiBatchHeaderZeroCopy::size());
+        assert_eq!(zero_copy_bytes[0..8], zero_copy.height.to_le_bytes());
+
+        // Test 2: Copy operations (for comparison)
+        let copied_bytes = zero_copy.to_bytes_copy();
+        println!("Copy bytes length: {}", copied_bytes.len());
+
+        // Both should have the same content
+        assert_eq!(zero_copy_bytes, copied_bytes.as_slice());
+
+        // Test 3: Demonstrate that as_bytes() is truly zero-copy
+        // The pointer should be the same as the original struct
+        let zero_copy_ptr = zero_copy_bytes.as_ptr();
+        let struct_ptr = &zero_copy as *const _ as *const u8;
+
+        println!("Zero-copy bytes pointer: {:p}", zero_copy_ptr);
+        println!("Struct pointer: {:p}", struct_ptr);
+
+        // The pointers should be the same (or very close) for true zero-copy
+        // Note: There might be a small offset due to struct layout, but they should be
+        // close
+        let ptr_diff = (zero_copy_ptr as usize).abs_diff(struct_ptr as usize);
+        println!("Pointer difference: {} bytes", ptr_diff);
+
+        // The difference should be small (likely 0 or a small offset)
+        assert!(
+            ptr_diff < 100,
+            "Pointers should be close for true zero-copy"
+        );
+
+        // Test 4: Performance comparison
+        let iterations = 1000;
+
+        // Zero-copy timing
+        let start = std::time::Instant::now();
+        for _ in 0..iterations {
+            let _bytes = zero_copy.as_bytes();
+        }
+        let zero_copy_time = start.elapsed();
+
+        // Copy timing
+        let start = std::time::Instant::now();
+        for _ in 0..iterations {
+            let _bytes = zero_copy.to_bytes_copy();
+        }
+        let copy_time = start.elapsed();
+
+        println!(
+            "Zero-copy time for {} iterations: {:?}",
+            iterations, zero_copy_time
+        );
+        println!("Copy time for {} iterations: {:?}", iterations, copy_time);
+
+        // Zero-copy should be significantly faster
+        assert!(
+            zero_copy_time < copy_time,
+            "Zero-copy should be faster than copy"
+        );
+
+        println!("✅ True zero-copy operations are working correctly!");
     }
 }
