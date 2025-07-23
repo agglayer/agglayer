@@ -422,9 +422,9 @@ where
     /// Convert to zero-copy representation.
     /// Note: This only captures the fixed-size header data.
     /// The variable-length data (bridge_exits, imported_bridge_exits,
-    /// balances_proofs) should be serialized separately for full data integrity.
-    /// See the test_full_recovery_from_zero_copy_components_* tests for the
-    /// complete pattern that achieves 100% data integrity.
+    /// balances_proofs) should be serialized separately for full data
+    /// integrity. See the test_full_recovery_from_zero_copy_components_*
+    /// tests for the complete pattern that achieves 100% data integrity.
     ///
     /// IMPORTANT: This method performs data transformation but returns a
     /// zero-copy struct. Use the returned struct's as_bytes() method for
@@ -472,9 +472,9 @@ where
 
     /// Convert from zero-copy representation.
     /// Note: This only reconstructs the fixed-size header data.
-    /// The variable-length data should be deserialized separately for full data integrity.
-    /// See the test_full_recovery_from_zero_copy_components_* tests for the
-    /// complete pattern that achieves 100% data integrity.
+    /// The variable-length data should be deserialized separately for full data
+    /// integrity. See the test_full_recovery_from_zero_copy_components_*
+    /// tests for the complete pattern that achieves 100% data integrity.
     pub fn from_zero_copy(
         zero_copy: &MultiBatchHeaderZeroCopy,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
@@ -525,9 +525,11 @@ where
             height: zero_copy.height,
             prev_pessimistic_root,
             bridge_exits: Vec::new(), // Should be deserialized separately for full data integrity
-            imported_bridge_exits: Vec::new(), // Should be deserialized separately for full data integrity
+            imported_bridge_exits: Vec::new(), /* Should be deserialized separately for full data
+                                                * integrity */
             l1_info_root,
-            balances_proofs: Vec::new(), // Should be deserialized separately for full data integrity
+            balances_proofs: Vec::new(), /* Should be deserialized separately for full data
+                                          * integrity */
             aggchain_proof,
         })
     }
@@ -572,9 +574,219 @@ impl From<TokenInfoZeroCopy> for unified_bridge::TokenInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use agglayer_primitives::{Address, Digest, Signature, U256};
-    use unified_bridge::{GlobalIndex, LeafType, L1InfoTreeLeaf, L1InfoTreeLeafInner, MerkleProof, LETMerkleProof};
+    use unified_bridge::{
+        GlobalIndex, L1InfoTreeLeaf, L1InfoTreeLeafInner, LETMerkleProof, LeafType, MerkleProof,
+    };
+
+    use super::*;
+
+    /// Deep comparison function to check for lossy conversions
+    /// This function compares all fields including nested structures
+    fn deep_equals<H>(original: &MultiBatchHeader<H>, reconstructed: &MultiBatchHeader<H>) -> bool
+    where
+        H: Hasher,
+        H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
+    {
+        // Compare basic fields
+        if original.origin_network != reconstructed.origin_network
+            || original.height != reconstructed.height
+            || original.prev_pessimistic_root != reconstructed.prev_pessimistic_root
+            || original.l1_info_root != reconstructed.l1_info_root
+        {
+            return false;
+        }
+
+        // Compare bridge_exits
+        if original.bridge_exits.len() != reconstructed.bridge_exits.len() {
+            return false;
+        }
+        for (orig, rec) in original
+            .bridge_exits
+            .iter()
+            .zip(reconstructed.bridge_exits.iter())
+        {
+            if orig.leaf_type != rec.leaf_type
+                || orig.token_info.origin_network != rec.token_info.origin_network
+                || orig.token_info.origin_token_address != rec.token_info.origin_token_address
+                || orig.dest_network != rec.dest_network
+                || orig.dest_address != rec.dest_address
+                || orig.amount != rec.amount
+                || orig.metadata != rec.metadata
+            {
+                return false;
+            }
+        }
+
+        // Compare imported_bridge_exits
+        if original.imported_bridge_exits.len() != reconstructed.imported_bridge_exits.len() {
+            return false;
+        }
+        for (orig, rec) in original
+            .imported_bridge_exits
+            .iter()
+            .zip(reconstructed.imported_bridge_exits.iter())
+        {
+            // Compare bridge_exit part
+            let orig_be = &orig.0.bridge_exit;
+            let rec_be = &rec.0.bridge_exit;
+            if orig_be.leaf_type != rec_be.leaf_type
+                || orig_be.token_info.origin_network != rec_be.token_info.origin_network
+                || orig_be.token_info.origin_token_address != rec_be.token_info.origin_token_address
+                || orig_be.dest_network != rec_be.dest_network
+                || orig_be.dest_address != rec_be.dest_address
+                || orig_be.amount != rec_be.amount
+                || orig_be.metadata != rec_be.metadata
+            {
+                return false;
+            }
+
+            // Compare global_index
+            if orig.0.global_index.network_id() != rec.0.global_index.network_id()
+                || orig.0.global_index.leaf_index() != rec.0.global_index.leaf_index()
+            {
+                return false;
+            }
+
+            // Compare claim_data - this is where we expect to find lossy conversions
+            match (&orig.0.claim_data, &rec.0.claim_data) {
+                (
+                    unified_bridge::Claim::Mainnet(orig_claim),
+                    unified_bridge::Claim::Mainnet(rec_claim),
+                ) => {
+                    // Compare all the nested fields in claim_data
+                    if orig_claim.proof_leaf_mer.proof.siblings
+                        != rec_claim.proof_leaf_mer.proof.siblings
+                    {
+                        println!("❌ claim_data.proof_leaf_mer.proof.siblings mismatch");
+                        println!(
+                            "  Original: {:?}",
+                            orig_claim.proof_leaf_mer.proof.siblings[0]
+                        );
+                        println!(
+                            "  Reconstructed: {:?}",
+                            rec_claim.proof_leaf_mer.proof.siblings[0]
+                        );
+                        return false;
+                    }
+                    if orig_claim.proof_leaf_mer.root != rec_claim.proof_leaf_mer.root {
+                        println!("❌ claim_data.proof_leaf_mer.root mismatch");
+                        println!("  Original: {:?}", orig_claim.proof_leaf_mer.root);
+                        println!("  Reconstructed: {:?}", rec_claim.proof_leaf_mer.root);
+                        return false;
+                    }
+                    if orig_claim.proof_ger_l1root.proof.siblings
+                        != rec_claim.proof_ger_l1root.proof.siblings
+                    {
+                        println!("❌ claim_data.proof_ger_l1root.proof.siblings mismatch");
+                        return false;
+                    }
+                    if orig_claim.proof_ger_l1root.root != rec_claim.proof_ger_l1root.root {
+                        println!("❌ claim_data.proof_ger_l1root.root mismatch");
+                        return false;
+                    }
+                    if orig_claim.l1_leaf.l1_info_tree_index != rec_claim.l1_leaf.l1_info_tree_index
+                    {
+                        println!("❌ claim_data.l1_leaf.l1_info_tree_index mismatch");
+                        println!("  Original: {}", orig_claim.l1_leaf.l1_info_tree_index);
+                        println!("  Reconstructed: {}", rec_claim.l1_leaf.l1_info_tree_index);
+                        return false;
+                    }
+                    if orig_claim.l1_leaf.rer != rec_claim.l1_leaf.rer {
+                        println!("❌ claim_data.l1_leaf.rer mismatch");
+                        return false;
+                    }
+                    if orig_claim.l1_leaf.mer != rec_claim.l1_leaf.mer {
+                        println!("❌ claim_data.l1_leaf.mer mismatch");
+                        return false;
+                    }
+                    if orig_claim.l1_leaf.inner.block_hash != rec_claim.l1_leaf.inner.block_hash {
+                        println!("❌ claim_data.l1_leaf.inner.block_hash mismatch");
+                        return false;
+                    }
+                    if orig_claim.l1_leaf.inner.timestamp != rec_claim.l1_leaf.inner.timestamp {
+                        println!("❌ claim_data.l1_leaf.inner.timestamp mismatch");
+                        println!("  Original: {}", orig_claim.l1_leaf.inner.timestamp);
+                        println!("  Reconstructed: {}", rec_claim.l1_leaf.inner.timestamp);
+                        return false;
+                    }
+                    if orig_claim.l1_leaf.inner.global_exit_root
+                        != rec_claim.l1_leaf.inner.global_exit_root
+                    {
+                        println!("❌ claim_data.l1_leaf.inner.global_exit_root mismatch");
+                        return false;
+                    }
+                }
+                _ => return false, // Different claim types
+            }
+
+            // Compare nullifier paths
+            if orig.1.siblings != rec.1.siblings {
+                return false;
+            }
+        }
+
+        // Compare balances_proofs
+        if original.balances_proofs.len() != reconstructed.balances_proofs.len() {
+            return false;
+        }
+        for (orig, rec) in original
+            .balances_proofs
+            .iter()
+            .zip(reconstructed.balances_proofs.iter())
+        {
+            if orig.0.origin_network != rec.0.origin_network
+                || orig.0.origin_token_address != rec.0.origin_token_address
+                || orig.1 .0 != rec.1 .0
+            {
+                // balance
+                return false;
+            }
+            // Compare Merkle paths
+            if orig.1 .1.siblings != rec.1 .1.siblings {
+                return false;
+            }
+        }
+
+        // Compare aggchain_proof
+        match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
+            (
+                AggchainData::ECDSA {
+                    signer: orig_signer,
+                    signature: orig_sig,
+                },
+                AggchainData::ECDSA {
+                    signer: rec_signer,
+                    signature: rec_sig,
+                },
+            ) => {
+                if orig_signer != rec_signer
+                    || orig_sig.r() != rec_sig.r()
+                    || orig_sig.s() != rec_sig.s()
+                    || orig_sig.v() != rec_sig.v()
+                {
+                    return false;
+                }
+            }
+            (
+                AggchainData::Generic {
+                    aggchain_params: orig_params,
+                    aggchain_vkey: orig_vkey,
+                },
+                AggchainData::Generic {
+                    aggchain_params: rec_params,
+                    aggchain_vkey: rec_vkey,
+                },
+            ) => {
+                if orig_params != rec_params || orig_vkey != rec_vkey {
+                    return false;
+                }
+            }
+            _ => return false, // Different aggchain proof types
+        }
+
+        true
+    }
 
     /// Test helper to create a sample BridgeExit
     fn create_sample_bridge_exit() -> unified_bridge::BridgeExit {
@@ -621,10 +833,7 @@ mod tests {
                     },
                 },
             )),
-            global_index: GlobalIndex::new(
-                unified_bridge::NetworkId::new(3),
-                123,
-            ),
+            global_index: GlobalIndex::new(unified_bridge::NetworkId::new(3), 123),
         }
     }
 
@@ -637,27 +846,26 @@ mod tests {
     }
 
     /// Test helper to create a sample SmtMerkleProof
-    fn create_sample_smt_merkle_proof() -> agglayer_tries::proof::SmtMerkleProof<
-        agglayer_primitives::keccak::Keccak256Hasher,
-        192,
-    > {
+    fn create_sample_smt_merkle_proof(
+    ) -> agglayer_tries::proof::SmtMerkleProof<agglayer_primitives::keccak::Keccak256Hasher, 192>
+    {
         agglayer_tries::proof::SmtMerkleProof {
             siblings: [Digest([13u8; 32]); 192],
         }
     }
 
     /// Test helper to create a sample SmtNonInclusionProof
-    fn create_sample_smt_non_inclusion_proof() -> agglayer_tries::proof::SmtNonInclusionProof<
-        agglayer_primitives::keccak::Keccak256Hasher,
-        64,
-    > {
+    fn create_sample_smt_non_inclusion_proof(
+    ) -> agglayer_tries::proof::SmtNonInclusionProof<agglayer_primitives::keccak::Keccak256Hasher, 64>
+    {
         agglayer_tries::proof::SmtNonInclusionProof {
             siblings: vec![Digest([14u8; 32]); 64],
         }
     }
 
     /// Test helper to create a sample MultiBatchHeader
-    fn create_sample_multi_batch_header() -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+    fn create_sample_multi_batch_header(
+    ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         MultiBatchHeader {
             origin_network: unified_bridge::NetworkId::new(5),
             height: 1000,
@@ -674,17 +882,15 @@ mod tests {
             )],
             aggchain_proof: AggchainData::ECDSA {
                 signer: Address::new([17u8; 20]),
-                signature: Signature::new(
-                    U256::from(18u64),
-                    U256::from(19u64),
-                    false,
-                ),
+                signature: Signature::new(U256::from(18u64), U256::from(19u64), false),
             },
         }
     }
 
-    /// Test helper to create a sample MultiBatchHeader with Generic aggchain proof
-    fn create_sample_multi_batch_header_generic() -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+    /// Test helper to create a sample MultiBatchHeader with Generic aggchain
+    /// proof
+    fn create_sample_multi_batch_header_generic(
+    ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         MultiBatchHeader {
             origin_network: unified_bridge::NetworkId::new(6),
             height: 2000,
@@ -714,8 +920,14 @@ mod tests {
 
         // Test that all fields are preserved
         assert_eq!(original.leaf_type, reconstructed.leaf_type);
-        assert_eq!(original.token_info.origin_network, reconstructed.token_info.origin_network);
-        assert_eq!(original.token_info.origin_token_address, reconstructed.token_info.origin_token_address);
+        assert_eq!(
+            original.token_info.origin_network,
+            reconstructed.token_info.origin_network
+        );
+        assert_eq!(
+            original.token_info.origin_token_address,
+            reconstructed.token_info.origin_token_address
+        );
         assert_eq!(original.dest_network, reconstructed.dest_network);
         assert_eq!(original.dest_address, reconstructed.dest_address);
         assert_eq!(original.amount, reconstructed.amount);
@@ -739,7 +951,10 @@ mod tests {
         let reconstructed = zero_copy.to_token_info();
 
         assert_eq!(original.origin_network, reconstructed.origin_network);
-        assert_eq!(original.origin_token_address, reconstructed.origin_token_address);
+        assert_eq!(
+            original.origin_token_address,
+            reconstructed.origin_token_address
+        );
     }
 
     #[test]
@@ -749,20 +964,48 @@ mod tests {
         let reconstructed = zero_copy.to_imported_bridge_exit();
 
         // Test that the bridge exit data is preserved
-        assert_eq!(original.bridge_exit.leaf_type, reconstructed.bridge_exit.leaf_type);
-        assert_eq!(original.bridge_exit.token_info.origin_network, reconstructed.bridge_exit.token_info.origin_network);
-        assert_eq!(original.bridge_exit.token_info.origin_token_address, reconstructed.bridge_exit.token_info.origin_token_address);
-        assert_eq!(original.bridge_exit.dest_network, reconstructed.bridge_exit.dest_network);
-        assert_eq!(original.bridge_exit.dest_address, reconstructed.bridge_exit.dest_address);
-        assert_eq!(original.bridge_exit.amount, reconstructed.bridge_exit.amount);
-        assert_eq!(original.bridge_exit.metadata, reconstructed.bridge_exit.metadata);
+        assert_eq!(
+            original.bridge_exit.leaf_type,
+            reconstructed.bridge_exit.leaf_type
+        );
+        assert_eq!(
+            original.bridge_exit.token_info.origin_network,
+            reconstructed.bridge_exit.token_info.origin_network
+        );
+        assert_eq!(
+            original.bridge_exit.token_info.origin_token_address,
+            reconstructed.bridge_exit.token_info.origin_token_address
+        );
+        assert_eq!(
+            original.bridge_exit.dest_network,
+            reconstructed.bridge_exit.dest_network
+        );
+        assert_eq!(
+            original.bridge_exit.dest_address,
+            reconstructed.bridge_exit.dest_address
+        );
+        assert_eq!(
+            original.bridge_exit.amount,
+            reconstructed.bridge_exit.amount
+        );
+        assert_eq!(
+            original.bridge_exit.metadata,
+            reconstructed.bridge_exit.metadata
+        );
 
         // Test that the global index is preserved
-        assert_eq!(original.global_index.network_id(), reconstructed.global_index.network_id());
-        assert_eq!(original.global_index.leaf_index(), reconstructed.global_index.leaf_index());
+        assert_eq!(
+            original.global_index.network_id(),
+            reconstructed.global_index.network_id()
+        );
+        assert_eq!(
+            original.global_index.leaf_index(),
+            reconstructed.global_index.leaf_index()
+        );
 
-        // Note: The claim_data is not preserved in the zero-copy version - this is expected
-        // as it contains complex nested structures that are not captured in the zero-copy format
+        // Note: The claim_data is not preserved in the zero-copy version - this
+        // is expected as it contains complex nested structures that are
+        // not captured in the zero-copy format
     }
 
     #[test]
@@ -787,69 +1030,102 @@ mod tests {
     fn test_multi_batch_header_zero_copy_round_trip_ecdsa() {
         let original = create_sample_multi_batch_header();
         let zero_copy = original.to_zero_copy();
-        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> = MultiBatchHeader::from_zero_copy(&zero_copy).unwrap();
+        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
+            MultiBatchHeader::from_zero_copy(&zero_copy).unwrap();
 
         // Test that the fixed-size header fields are preserved
         assert_eq!(original.origin_network, reconstructed.origin_network);
         assert_eq!(original.height, reconstructed.height);
-        assert_eq!(original.prev_pessimistic_root, reconstructed.prev_pessimistic_root);
+        assert_eq!(
+            original.prev_pessimistic_root,
+            reconstructed.prev_pessimistic_root
+        );
         assert_eq!(original.l1_info_root, reconstructed.l1_info_root);
 
         // Test that the counts are preserved
-        assert_eq!(original.bridge_exits.len() as u32, zero_copy.bridge_exits_count);
-        assert_eq!(original.imported_bridge_exits.len() as u32, zero_copy.imported_bridge_exits_count);
-        assert_eq!(original.balances_proofs.len() as u32, zero_copy.balances_proofs_count);
+        assert_eq!(
+            original.bridge_exits.len() as u32,
+            zero_copy.bridge_exits_count
+        );
+        assert_eq!(
+            original.imported_bridge_exits.len() as u32,
+            zero_copy.imported_bridge_exits_count
+        );
+        assert_eq!(
+            original.balances_proofs.len() as u32,
+            zero_copy.balances_proofs_count
+        );
 
         // Test that the aggchain proof type is preserved
         assert_eq!(zero_copy.aggchain_proof_type, 0); // ECDSA
 
-        // Note: The variable-length data (bridge_exits, imported_bridge_exits, balances_proofs)
-        // is not preserved in the header-only zero-copy conversion - this is expected.
-        // For full data integrity, use the pattern shown in test_full_recovery_from_zero_copy_components_*
+        // Note: The variable-length data (bridge_exits, imported_bridge_exits,
+        // balances_proofs) is not preserved in the header-only zero-copy
+        // conversion - this is expected. For full data integrity, use the
+        // pattern shown in test_full_recovery_from_zero_copy_components_*
         assert!(reconstructed.bridge_exits.is_empty());
         assert!(reconstructed.imported_bridge_exits.is_empty());
         assert!(reconstructed.balances_proofs.is_empty());
 
-        // Note: The signature data is truncated in the header-only zero-copy conversion.
-        // For full data integrity, read the aggchain_proof separately as shown in the full recovery tests.
+        // Note: The signature data is truncated in the header-only zero-copy
+        // conversion. For full data integrity, read the aggchain_proof
+        // separately as shown in the full recovery tests.
     }
 
     #[test]
     fn test_multi_batch_header_zero_copy_round_trip_generic() {
         let original = create_sample_multi_batch_header_generic();
         let zero_copy = original.to_zero_copy();
-        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> = MultiBatchHeader::from_zero_copy(&zero_copy).unwrap();
+        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
+            MultiBatchHeader::from_zero_copy(&zero_copy).unwrap();
 
         // Test that the fixed-size header fields are preserved
         assert_eq!(original.origin_network, reconstructed.origin_network);
         assert_eq!(original.height, reconstructed.height);
-        assert_eq!(original.prev_pessimistic_root, reconstructed.prev_pessimistic_root);
+        assert_eq!(
+            original.prev_pessimistic_root,
+            reconstructed.prev_pessimistic_root
+        );
         assert_eq!(original.l1_info_root, reconstructed.l1_info_root);
 
         // Test that the counts are preserved
-        assert_eq!(original.bridge_exits.len() as u32, zero_copy.bridge_exits_count);
-        assert_eq!(original.imported_bridge_exits.len() as u32, zero_copy.imported_bridge_exits_count);
-        assert_eq!(original.balances_proofs.len() as u32, zero_copy.balances_proofs_count);
+        assert_eq!(
+            original.bridge_exits.len() as u32,
+            zero_copy.bridge_exits_count
+        );
+        assert_eq!(
+            original.imported_bridge_exits.len() as u32,
+            zero_copy.imported_bridge_exits_count
+        );
+        assert_eq!(
+            original.balances_proofs.len() as u32,
+            zero_copy.balances_proofs_count
+        );
 
         // Test that the aggchain proof type is preserved
         assert_eq!(zero_copy.aggchain_proof_type, 1); // Generic
 
         // Test that the aggchain proof data is preserved for Generic type
         match &reconstructed.aggchain_proof {
-            AggchainData::Generic { aggchain_params, aggchain_vkey } => {
-                match &original.aggchain_proof {
-                    AggchainData::Generic { aggchain_params: orig_params, aggchain_vkey: orig_vkey } => {
-                        assert_eq!(*aggchain_params, *orig_params);
-                        assert_eq!(*aggchain_vkey, *orig_vkey);
-                    }
-                    _ => panic!("Expected Generic aggchain proof in original"),
+            AggchainData::Generic {
+                aggchain_params,
+                aggchain_vkey,
+            } => match &original.aggchain_proof {
+                AggchainData::Generic {
+                    aggchain_params: orig_params,
+                    aggchain_vkey: orig_vkey,
+                } => {
+                    assert_eq!(*aggchain_params, *orig_params);
+                    assert_eq!(*aggchain_vkey, *orig_vkey);
                 }
-            }
+                _ => panic!("Expected Generic aggchain proof in original"),
+            },
             _ => panic!("Expected Generic aggchain proof"),
         }
 
-        // Note: The variable-length data is not preserved in the header-only zero-copy conversion.
-        // For full data integrity, use the pattern shown in test_full_recovery_from_zero_copy_components_*
+        // Note: The variable-length data is not preserved in the header-only zero-copy
+        // conversion. For full data integrity, use the pattern shown in
+        // test_full_recovery_from_zero_copy_components_*
         assert!(reconstructed.bridge_exits.is_empty());
         assert!(reconstructed.imported_bridge_exits.is_empty());
         assert!(reconstructed.balances_proofs.is_empty());
@@ -861,12 +1137,17 @@ mod tests {
         let zero_copy = original.to_zero_copy();
         let bytes = zero_copy.to_bytes_copy();
         let reconstructed_zero_copy = MultiBatchHeaderZeroCopy::from_bytes(&bytes).unwrap();
-        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> = MultiBatchHeader::from_zero_copy(reconstructed_zero_copy).unwrap();
+        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
+            MultiBatchHeader::from_zero_copy(reconstructed_zero_copy).unwrap();
 
-        // Test that the fixed-size header fields are preserved through byte serialization
+        // Test that the fixed-size header fields are preserved through byte
+        // serialization
         assert_eq!(original.origin_network, reconstructed.origin_network);
         assert_eq!(original.height, reconstructed.height);
-        assert_eq!(original.prev_pessimistic_root, reconstructed.prev_pessimistic_root);
+        assert_eq!(
+            original.prev_pessimistic_root,
+            reconstructed.prev_pessimistic_root
+        );
         assert_eq!(original.l1_info_root, reconstructed.l1_info_root);
     }
 
@@ -876,25 +1157,34 @@ mod tests {
         let zero_copy = original.to_zero_copy();
         let bytes = zero_copy.to_bytes_copy();
         let reconstructed_zero_copy = MultiBatchHeaderZeroCopy::from_bytes(&bytes).unwrap();
-        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> = MultiBatchHeader::from_zero_copy(reconstructed_zero_copy).unwrap();
+        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
+            MultiBatchHeader::from_zero_copy(reconstructed_zero_copy).unwrap();
 
-        // Test that the fixed-size header fields are preserved through byte serialization
+        // Test that the fixed-size header fields are preserved through byte
+        // serialization
         assert_eq!(original.origin_network, reconstructed.origin_network);
         assert_eq!(original.height, reconstructed.height);
-        assert_eq!(original.prev_pessimistic_root, reconstructed.prev_pessimistic_root);
+        assert_eq!(
+            original.prev_pessimistic_root,
+            reconstructed.prev_pessimistic_root
+        );
         assert_eq!(original.l1_info_root, reconstructed.l1_info_root);
 
         // Test that the aggchain proof data is preserved for Generic type
         match &reconstructed.aggchain_proof {
-            AggchainData::Generic { aggchain_params, aggchain_vkey } => {
-                match &original.aggchain_proof {
-                    AggchainData::Generic { aggchain_params: orig_params, aggchain_vkey: orig_vkey } => {
-                        assert_eq!(*aggchain_params, *orig_params);
-                        assert_eq!(*aggchain_vkey, *orig_vkey);
-                    }
-                    _ => panic!("Expected Generic aggchain proof in original"),
+            AggchainData::Generic {
+                aggchain_params,
+                aggchain_vkey,
+            } => match &original.aggchain_proof {
+                AggchainData::Generic {
+                    aggchain_params: orig_params,
+                    aggchain_vkey: orig_vkey,
+                } => {
+                    assert_eq!(*aggchain_params, *orig_params);
+                    assert_eq!(*aggchain_vkey, *orig_vkey);
                 }
-            }
+                _ => panic!("Expected Generic aggchain proof in original"),
+            },
             _ => panic!("Expected Generic aggchain proof"),
         }
     }
@@ -902,12 +1192,30 @@ mod tests {
     #[test]
     fn test_zero_copy_struct_sizes() {
         // Test that the size calculations are correct
-        assert_eq!(BridgeExitZeroCopy::size(), std::mem::size_of::<BridgeExitZeroCopy>());
-        assert_eq!(TokenInfoZeroCopy::size(), std::mem::size_of::<TokenInfoZeroCopy>());
-        assert_eq!(ImportedBridgeExitZeroCopy::size(), std::mem::size_of::<ImportedBridgeExitZeroCopy>());
-        assert_eq!(SmtMerkleProofZeroCopy::size(), std::mem::size_of::<SmtMerkleProofZeroCopy>());
-        assert_eq!(SmtNonInclusionProofZeroCopy::size(), std::mem::size_of::<SmtNonInclusionProofZeroCopy>());
-        assert_eq!(MultiBatchHeaderZeroCopy::size(), std::mem::size_of::<MultiBatchHeaderZeroCopy>());
+        assert_eq!(
+            BridgeExitZeroCopy::size(),
+            std::mem::size_of::<BridgeExitZeroCopy>()
+        );
+        assert_eq!(
+            TokenInfoZeroCopy::size(),
+            std::mem::size_of::<TokenInfoZeroCopy>()
+        );
+        assert_eq!(
+            ImportedBridgeExitZeroCopy::size(),
+            std::mem::size_of::<ImportedBridgeExitZeroCopy>()
+        );
+        assert_eq!(
+            SmtMerkleProofZeroCopy::size(),
+            std::mem::size_of::<SmtMerkleProofZeroCopy>()
+        );
+        assert_eq!(
+            SmtNonInclusionProofZeroCopy::size(),
+            std::mem::size_of::<SmtNonInclusionProofZeroCopy>()
+        );
+        assert_eq!(
+            MultiBatchHeaderZeroCopy::size(),
+            std::mem::size_of::<MultiBatchHeaderZeroCopy>()
+        );
     }
 
     #[test]
@@ -916,13 +1224,19 @@ mod tests {
         let zero_copy = BridgeExitZeroCopy::from_bridge_exit(&bridge_exit);
         let converted: unified_bridge::BridgeExit = zero_copy.into();
         assert_eq!(bridge_exit.leaf_type, converted.leaf_type);
-        assert_eq!(bridge_exit.token_info.origin_network, converted.token_info.origin_network);
+        assert_eq!(
+            bridge_exit.token_info.origin_network,
+            converted.token_info.origin_network
+        );
 
         let token_info = create_sample_token_info();
         let zero_copy = TokenInfoZeroCopy::from_token_info(&token_info);
         let converted: unified_bridge::TokenInfo = zero_copy.into();
         assert_eq!(token_info.origin_network, converted.origin_network);
-        assert_eq!(token_info.origin_token_address, converted.origin_token_address);
+        assert_eq!(
+            token_info.origin_token_address,
+            converted.origin_token_address
+        );
     }
 
     #[test]
@@ -931,10 +1245,10 @@ mod tests {
         let mut bridge_exit = create_sample_bridge_exit();
         bridge_exit.amount = U256::MAX;
         bridge_exit.metadata = Some(Digest([0xFFu8; 32]));
-        
+
         let zero_copy = BridgeExitZeroCopy::from_bridge_exit(&bridge_exit);
         let reconstructed = zero_copy.to_bridge_exit();
-        
+
         assert_eq!(bridge_exit.amount, reconstructed.amount);
         assert_eq!(bridge_exit.metadata, reconstructed.metadata);
 
@@ -942,10 +1256,10 @@ mod tests {
         let mut bridge_exit = create_sample_bridge_exit();
         bridge_exit.amount = U256::ZERO;
         bridge_exit.metadata = None;
-        
+
         let zero_copy = BridgeExitZeroCopy::from_bridge_exit(&bridge_exit);
         let reconstructed = zero_copy.to_bridge_exit();
-        
+
         assert_eq!(bridge_exit.amount, reconstructed.amount);
         assert_eq!(bridge_exit.metadata, reconstructed.metadata);
     }
@@ -954,10 +1268,14 @@ mod tests {
     fn test_invalid_aggchain_proof_type() {
         let mut zero_copy = create_sample_multi_batch_header().to_zero_copy();
         zero_copy.aggchain_proof_type = 255; // Invalid type
-        
-        let result: Result<MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>, _> = MultiBatchHeader::from_zero_copy(&zero_copy);
+
+        let result: Result<MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>, _> =
+            MultiBatchHeader::from_zero_copy(&zero_copy);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid aggchain proof type"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid aggchain proof type"));
     }
 
     #[test]
@@ -966,76 +1284,90 @@ mod tests {
         let wrong_size_data = vec![0u8; 100]; // Wrong size
         let result = MultiBatchHeaderZeroCopy::from_bytes(&wrong_size_data);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), bytemuck::PodCastError::SizeMismatch));
+        assert!(matches!(
+            result.unwrap_err(),
+            bytemuck::PodCastError::SizeMismatch
+        ));
 
         // Test with empty data
         let empty_data = vec![];
         let result = MultiBatchHeaderZeroCopy::from_bytes(&empty_data);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), bytemuck::PodCastError::SizeMismatch));
+        assert!(matches!(
+            result.unwrap_err(),
+            bytemuck::PodCastError::SizeMismatch
+        ));
     }
 
-
-
-
-
-    /// Test demonstrating full recovery of MultiBatchHeader from zero-copy components
-    /// This simulates the pattern used in the SP1 zkvm environment
+    /// Test demonstrating full recovery of MultiBatchHeader from zero-copy
+    /// components This simulates the pattern used in the SP1 zkvm
+    /// environment
     #[test]
     fn test_full_recovery_from_zero_copy_components_ecdsa() {
         let original = create_sample_multi_batch_header();
-        
+
         // Simulate the zero-copy serialization process
         let header_zero_copy = original.to_zero_copy();
-        
+
         // Convert bridge_exits to zero-copy format
-        let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> = original.bridge_exits.iter()
+        let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> = original
+            .bridge_exits
+            .iter()
             .map(|be| BridgeExitZeroCopy::from_bridge_exit(be))
             .collect();
-        
+
         // Convert imported_bridge_exits to zero-copy format
-        let imported_bridge_exits_zero_copy: Vec<ImportedBridgeExitZeroCopy> = original.imported_bridge_exits.iter()
+        let imported_bridge_exits_zero_copy: Vec<ImportedBridgeExitZeroCopy> = original
+            .imported_bridge_exits
+            .iter()
             .map(|(ibe, _)| ImportedBridgeExitZeroCopy::from_imported_bridge_exit(ibe))
             .collect();
-        
+
         // Extract nullifier paths
-        let nullifier_paths_zero_copy: Vec<SmtNonInclusionProofZeroCopy> = original.imported_bridge_exits.iter()
+        let nullifier_paths_zero_copy: Vec<SmtNonInclusionProofZeroCopy> = original
+            .imported_bridge_exits
+            .iter()
             .map(|(_, path)| SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(path))
             .collect();
-        
+
         // Convert balances_proofs to zero-copy format
-        let balances_proofs_zero_copy: Vec<BalanceProofEntryZeroCopy> = original.balances_proofs.iter()
-            .map(|(token_info, (balance, _))| {
-                BalanceProofEntryZeroCopy {
-                    token_info: TokenInfoZeroCopy::from_token_info(token_info),
-                    balance: balance.to_be_bytes(),
-                    _padding: [0; 8],
-                }
+        let balances_proofs_zero_copy: Vec<BalanceProofEntryZeroCopy> = original
+            .balances_proofs
+            .iter()
+            .map(|(token_info, (balance, _))| BalanceProofEntryZeroCopy {
+                token_info: TokenInfoZeroCopy::from_token_info(token_info),
+                balance: balance.to_be_bytes(),
+                _padding: [0; 8],
             })
             .collect();
-        
+
         // Extract balance Merkle paths
-        let balance_merkle_paths_zero_copy: Vec<SmtMerkleProofZeroCopy> = original.balances_proofs.iter()
+        let balance_merkle_paths_zero_copy: Vec<SmtMerkleProofZeroCopy> = original
+            .balances_proofs
+            .iter()
             .map(|(_, (_, path))| SmtMerkleProofZeroCopy::from_smt_merkle_proof(path))
             .collect();
-        
+
         // Simulate reading the aggchain_proof separately (since zero-copy truncates it)
         let aggchain_proof = original.aggchain_proof.clone();
-        
+
         // Simulate the reconstruction process (like in SP1 zkvm)
-        let mut reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> = 
-            MultiBatchHeader::from_zero_copy(&header_zero_copy).expect("Failed to reconstruct MultiBatchHeader");
-        
+        let mut reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
+            MultiBatchHeader::from_zero_copy(&header_zero_copy)
+                .expect("Failed to reconstruct MultiBatchHeader");
+
         // Set the aggchain_proof from the separately read data
         reconstructed.aggchain_proof = aggchain_proof;
-        
+
         // Convert bridge_exits back to original format
-        reconstructed.bridge_exits = bridge_exits_zero_copy.iter()
+        reconstructed.bridge_exits = bridge_exits_zero_copy
+            .iter()
             .map(|be| be.to_bridge_exit())
             .collect();
-        
+
         // Convert imported_bridge_exits back to original format
-        reconstructed.imported_bridge_exits = imported_bridge_exits_zero_copy.iter()
+        reconstructed.imported_bridge_exits = imported_bridge_exits_zero_copy
+            .iter()
             .zip(nullifier_paths_zero_copy.iter())
             .map(|(ibe, path)| {
                 let imported_bridge_exit = ibe.to_imported_bridge_exit();
@@ -1043,9 +1375,10 @@ mod tests {
                 (imported_bridge_exit, nullifier_path)
             })
             .collect();
-        
+
         // Convert balances_proofs back to original format
-        reconstructed.balances_proofs = balances_proofs_zero_copy.iter()
+        reconstructed.balances_proofs = balances_proofs_zero_copy
+            .iter()
             .zip(balance_merkle_paths_zero_copy.iter())
             .map(|(bp, path)| {
                 let token_info = bp.token_info.to_token_info();
@@ -1054,51 +1387,107 @@ mod tests {
                 (token_info, (balance, merkle_path))
             })
             .collect();
-        
+
         // Verify full recovery - all fields should be identical
         assert_eq!(original.origin_network, reconstructed.origin_network);
         assert_eq!(original.height, reconstructed.height);
-        assert_eq!(original.prev_pessimistic_root, reconstructed.prev_pessimistic_root);
+        assert_eq!(
+            original.prev_pessimistic_root,
+            reconstructed.prev_pessimistic_root
+        );
         assert_eq!(original.l1_info_root, reconstructed.l1_info_root);
-        assert_eq!(original.bridge_exits.len(), reconstructed.bridge_exits.len());
-        assert_eq!(original.imported_bridge_exits.len(), reconstructed.imported_bridge_exits.len());
-        assert_eq!(original.balances_proofs.len(), reconstructed.balances_proofs.len());
-        
+        assert_eq!(
+            original.bridge_exits.len(),
+            reconstructed.bridge_exits.len()
+        );
+        assert_eq!(
+            original.imported_bridge_exits.len(),
+            reconstructed.imported_bridge_exits.len()
+        );
+        assert_eq!(
+            original.balances_proofs.len(),
+            reconstructed.balances_proofs.len()
+        );
+
         // Verify bridge_exits are fully recovered
-        for (orig, rec) in original.bridge_exits.iter().zip(reconstructed.bridge_exits.iter()) {
+        for (orig, rec) in original
+            .bridge_exits
+            .iter()
+            .zip(reconstructed.bridge_exits.iter())
+        {
             assert_eq!(orig.leaf_type, rec.leaf_type);
-            assert_eq!(orig.token_info.origin_network, rec.token_info.origin_network);
-            assert_eq!(orig.token_info.origin_token_address, rec.token_info.origin_token_address);
+            assert_eq!(
+                orig.token_info.origin_network,
+                rec.token_info.origin_network
+            );
+            assert_eq!(
+                orig.token_info.origin_token_address,
+                rec.token_info.origin_token_address
+            );
             assert_eq!(orig.dest_network, rec.dest_network);
             assert_eq!(orig.dest_address, rec.dest_address);
             assert_eq!(orig.amount, rec.amount);
             assert_eq!(orig.metadata, rec.metadata);
         }
-        
+
         // Verify imported_bridge_exits are fully recovered
-        for (orig, rec) in original.imported_bridge_exits.iter().zip(reconstructed.imported_bridge_exits.iter()) {
-            assert_eq!(orig.0.global_index.network_id(), rec.0.global_index.network_id());
-            assert_eq!(orig.0.global_index.leaf_index(), rec.0.global_index.leaf_index());
+        for (orig, rec) in original
+            .imported_bridge_exits
+            .iter()
+            .zip(reconstructed.imported_bridge_exits.iter())
+        {
+            assert_eq!(
+                orig.0.global_index.network_id(),
+                rec.0.global_index.network_id()
+            );
+            assert_eq!(
+                orig.0.global_index.leaf_index(),
+                rec.0.global_index.leaf_index()
+            );
             assert_eq!(orig.0.bridge_exit.leaf_type, rec.0.bridge_exit.leaf_type);
-            assert_eq!(orig.0.bridge_exit.token_info.origin_network, rec.0.bridge_exit.token_info.origin_network);
-            assert_eq!(orig.0.bridge_exit.token_info.origin_token_address, rec.0.bridge_exit.token_info.origin_token_address);
-            assert_eq!(orig.0.bridge_exit.dest_network, rec.0.bridge_exit.dest_network);
-            assert_eq!(orig.0.bridge_exit.dest_address, rec.0.bridge_exit.dest_address);
+            assert_eq!(
+                orig.0.bridge_exit.token_info.origin_network,
+                rec.0.bridge_exit.token_info.origin_network
+            );
+            assert_eq!(
+                orig.0.bridge_exit.token_info.origin_token_address,
+                rec.0.bridge_exit.token_info.origin_token_address
+            );
+            assert_eq!(
+                orig.0.bridge_exit.dest_network,
+                rec.0.bridge_exit.dest_network
+            );
+            assert_eq!(
+                orig.0.bridge_exit.dest_address,
+                rec.0.bridge_exit.dest_address
+            );
             assert_eq!(orig.0.bridge_exit.amount, rec.0.bridge_exit.amount);
             assert_eq!(orig.0.bridge_exit.metadata, rec.0.bridge_exit.metadata);
         }
-        
+
         // Verify balances_proofs are fully recovered
-        for (orig, rec) in original.balances_proofs.iter().zip(reconstructed.balances_proofs.iter()) {
+        for (orig, rec) in original
+            .balances_proofs
+            .iter()
+            .zip(reconstructed.balances_proofs.iter())
+        {
             assert_eq!(orig.0.origin_network, rec.0.origin_network);
             assert_eq!(orig.0.origin_token_address, rec.0.origin_token_address);
-            assert_eq!(orig.1.0, rec.1.0); // balance
+            assert_eq!(orig.1 .0, rec.1 .0); // balance
         }
-        
+
         // Verify aggchain_proof is fully recovered
         match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
-            (AggchainData::ECDSA { signer: orig_signer, signature: orig_sig }, 
-             AggchainData::ECDSA { signer: rec_signer, signature: rec_sig }) => {
+            (
+                AggchainData::ECDSA {
+                    signer: orig_signer,
+                    signature: orig_sig,
+                },
+                AggchainData::ECDSA {
+                    signer: rec_signer,
+                    signature: rec_sig,
+                },
+            ) => {
                 assert_eq!(orig_signer, rec_signer);
                 assert_eq!(orig_sig.r(), rec_sig.r());
                 assert_eq!(orig_sig.s(), rec_sig.s());
@@ -1106,66 +1495,84 @@ mod tests {
             }
             _ => panic!("Expected ECDSA aggchain proof"),
         }
-        
+
         println!("✓ Full recovery from zero-copy components successful for ECDSA");
+
+        // CRITICAL: Direct deep comparison to catch any lossy conversions
+        assert!(
+            deep_equals(&original, &reconstructed),
+            "Deep comparison failed - there are lossy conversions!"
+        );
     }
 
-    /// Test demonstrating full recovery of MultiBatchHeader from zero-copy components with Generic aggchain proof
+    /// Test demonstrating full recovery of MultiBatchHeader from zero-copy
+    /// components with Generic aggchain proof
     #[test]
     fn test_full_recovery_from_zero_copy_components_generic() {
         let original = create_sample_multi_batch_header_generic();
-        
+
         // Simulate the zero-copy serialization process
         let header_zero_copy = original.to_zero_copy();
-        
+
         // Convert bridge_exits to zero-copy format
-        let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> = original.bridge_exits.iter()
+        let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> = original
+            .bridge_exits
+            .iter()
             .map(|be| BridgeExitZeroCopy::from_bridge_exit(be))
             .collect();
-        
+
         // Convert imported_bridge_exits to zero-copy format
-        let imported_bridge_exits_zero_copy: Vec<ImportedBridgeExitZeroCopy> = original.imported_bridge_exits.iter()
+        let imported_bridge_exits_zero_copy: Vec<ImportedBridgeExitZeroCopy> = original
+            .imported_bridge_exits
+            .iter()
             .map(|(ibe, _)| ImportedBridgeExitZeroCopy::from_imported_bridge_exit(ibe))
             .collect();
-        
+
         // Extract nullifier paths
-        let nullifier_paths_zero_copy: Vec<SmtNonInclusionProofZeroCopy> = original.imported_bridge_exits.iter()
+        let nullifier_paths_zero_copy: Vec<SmtNonInclusionProofZeroCopy> = original
+            .imported_bridge_exits
+            .iter()
             .map(|(_, path)| SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(path))
             .collect();
-        
+
         // Convert balances_proofs to zero-copy format
-        let balances_proofs_zero_copy: Vec<BalanceProofEntryZeroCopy> = original.balances_proofs.iter()
-            .map(|(token_info, (balance, _))| {
-                BalanceProofEntryZeroCopy {
-                    token_info: TokenInfoZeroCopy::from_token_info(token_info),
-                    balance: balance.to_be_bytes(),
-                    _padding: [0; 8],
-                }
+        let balances_proofs_zero_copy: Vec<BalanceProofEntryZeroCopy> = original
+            .balances_proofs
+            .iter()
+            .map(|(token_info, (balance, _))| BalanceProofEntryZeroCopy {
+                token_info: TokenInfoZeroCopy::from_token_info(token_info),
+                balance: balance.to_be_bytes(),
+                _padding: [0; 8],
             })
             .collect();
-        
+
         // Extract balance Merkle paths
-        let balance_merkle_paths_zero_copy: Vec<SmtMerkleProofZeroCopy> = original.balances_proofs.iter()
+        let balance_merkle_paths_zero_copy: Vec<SmtMerkleProofZeroCopy> = original
+            .balances_proofs
+            .iter()
             .map(|(_, (_, path))| SmtMerkleProofZeroCopy::from_smt_merkle_proof(path))
             .collect();
-        
+
         // Simulate reading the aggchain_proof separately (since zero-copy truncates it)
         let aggchain_proof = original.aggchain_proof.clone();
-        
+
         // Simulate the reconstruction process (like in SP1 zkvm)
-        let mut reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> = 
-            MultiBatchHeader::from_zero_copy(&header_zero_copy).expect("Failed to reconstruct MultiBatchHeader");
-        
+        let mut reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
+            MultiBatchHeader::from_zero_copy(&header_zero_copy)
+                .expect("Failed to reconstruct MultiBatchHeader");
+
         // Set the aggchain_proof from the separately read data
         reconstructed.aggchain_proof = aggchain_proof;
-        
+
         // Convert bridge_exits back to original format
-        reconstructed.bridge_exits = bridge_exits_zero_copy.iter()
+        reconstructed.bridge_exits = bridge_exits_zero_copy
+            .iter()
             .map(|be| be.to_bridge_exit())
             .collect();
-        
+
         // Convert imported_bridge_exits back to original format
-        reconstructed.imported_bridge_exits = imported_bridge_exits_zero_copy.iter()
+        reconstructed.imported_bridge_exits = imported_bridge_exits_zero_copy
+            .iter()
             .zip(nullifier_paths_zero_copy.iter())
             .map(|(ibe, path)| {
                 let imported_bridge_exit = ibe.to_imported_bridge_exit();
@@ -1173,9 +1580,10 @@ mod tests {
                 (imported_bridge_exit, nullifier_path)
             })
             .collect();
-        
+
         // Convert balances_proofs back to original format
-        reconstructed.balances_proofs = balances_proofs_zero_copy.iter()
+        reconstructed.balances_proofs = balances_proofs_zero_copy
+            .iter()
             .zip(balance_merkle_paths_zero_copy.iter())
             .map(|(bp, path)| {
                 let token_info = bp.token_info.to_token_info();
@@ -1184,52 +1592,84 @@ mod tests {
                 (token_info, (balance, merkle_path))
             })
             .collect();
-        
+
         // Verify full recovery - all fields should be identical
         assert_eq!(original.origin_network, reconstructed.origin_network);
         assert_eq!(original.height, reconstructed.height);
-        assert_eq!(original.prev_pessimistic_root, reconstructed.prev_pessimistic_root);
+        assert_eq!(
+            original.prev_pessimistic_root,
+            reconstructed.prev_pessimistic_root
+        );
         assert_eq!(original.l1_info_root, reconstructed.l1_info_root);
-        assert_eq!(original.bridge_exits.len(), reconstructed.bridge_exits.len());
-        assert_eq!(original.imported_bridge_exits.len(), reconstructed.imported_bridge_exits.len());
-        assert_eq!(original.balances_proofs.len(), reconstructed.balances_proofs.len());
-        
+        assert_eq!(
+            original.bridge_exits.len(),
+            reconstructed.bridge_exits.len()
+        );
+        assert_eq!(
+            original.imported_bridge_exits.len(),
+            reconstructed.imported_bridge_exits.len()
+        );
+        assert_eq!(
+            original.balances_proofs.len(),
+            reconstructed.balances_proofs.len()
+        );
+
         // Verify aggchain_proof is fully recovered for Generic type
         match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
-            (AggchainData::Generic { aggchain_params: orig_params, aggchain_vkey: orig_vkey }, 
-             AggchainData::Generic { aggchain_params: rec_params, aggchain_vkey: rec_vkey }) => {
+            (
+                AggchainData::Generic {
+                    aggchain_params: orig_params,
+                    aggchain_vkey: orig_vkey,
+                },
+                AggchainData::Generic {
+                    aggchain_params: rec_params,
+                    aggchain_vkey: rec_vkey,
+                },
+            ) => {
                 assert_eq!(orig_params, rec_params);
                 assert_eq!(orig_vkey, rec_vkey);
             }
             _ => panic!("Expected Generic aggchain proof"),
         }
-        
+
         println!("✓ Full recovery from zero-copy components successful for Generic");
+
+        // CRITICAL: Direct deep comparison to catch any lossy conversions
+        assert!(
+            deep_equals(&original, &reconstructed),
+            "Deep comparison failed - there are lossy conversions!"
+        );
     }
 
-    /// Test demonstrating byte-level zero-copy serialization and deserialization
+    /// Test demonstrating byte-level zero-copy serialization and
+    /// deserialization
     #[test]
     fn test_byte_level_zero_copy_serialization() {
         let original = create_sample_multi_batch_header();
-        
+
         // Serialize to bytes using zero-copy
         let header_bytes = original.to_zero_copy().to_bytes_copy();
-        
+
         // Simulate reading from aligned buffer (like in SP1 zkvm)
         let mut aligned_header_buffer = [0u8; std::mem::size_of::<MultiBatchHeaderZeroCopy>()];
         aligned_header_buffer.copy_from_slice(&header_bytes);
-        let header_zero_copy = bytemuck::from_bytes::<MultiBatchHeaderZeroCopy>(&aligned_header_buffer);
-        
+        let header_zero_copy =
+            bytemuck::from_bytes::<MultiBatchHeaderZeroCopy>(&aligned_header_buffer);
+
         // Reconstruct the header
-        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> = 
-            MultiBatchHeader::from_zero_copy(header_zero_copy).expect("Failed to reconstruct from bytes");
-        
+        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
+            MultiBatchHeader::from_zero_copy(header_zero_copy)
+                .expect("Failed to reconstruct from bytes");
+
         // Verify the fixed-size fields are preserved
         assert_eq!(original.origin_network, reconstructed.origin_network);
         assert_eq!(original.height, reconstructed.height);
-        assert_eq!(original.prev_pessimistic_root, reconstructed.prev_pessimistic_root);
+        assert_eq!(
+            original.prev_pessimistic_root,
+            reconstructed.prev_pessimistic_root
+        );
         assert_eq!(original.l1_info_root, reconstructed.l1_info_root);
-        
+
         println!("✓ Byte-level zero-copy serialization successful");
     }
 }
