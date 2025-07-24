@@ -364,6 +364,7 @@ impl PubSubConnect for WsConnectWithRetries {
         backoff::future::retry(
             ExponentialBackoff {
                 max_interval: self.1,
+                max_elapsed_time: Some(Duration::from_secs(600)),
                 ..Default::default()
             },
             || async {
@@ -372,9 +373,16 @@ impl PubSubConnect for WsConnectWithRetries {
                 // progress when the client is disconnected
                 fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
 
-                Ok(self.0.try_reconnect().await?)
+                let handle = self
+                    .0
+                    .try_reconnect()
+                    .await
+                    .inspect_err(|err| debug!(?err, "Failed to reconnect to the L1 node"))?;
+
+                Ok(handle)
             },
         )
         .await
+        .inspect_err(|err| error!(?err, "Failed to reconnect to the L1 node"))
     }
 }
