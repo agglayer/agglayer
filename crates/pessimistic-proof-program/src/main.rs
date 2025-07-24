@@ -37,7 +37,8 @@ pub fn main() {
     ).expect("Failed to reconstruct MultiBatchHeaderRef");
 
     // Convert to owned MultiBatchHeader for the proof generation
-    let batch_header = batch_header_ref.to_owned_keccak();
+    let batch_header = batch_header_ref.to_owned_keccak()
+        .expect("Failed to convert MultiBatchHeaderRef to owned");
 
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header)
         .expect("Failed to generate pessimistic proof");

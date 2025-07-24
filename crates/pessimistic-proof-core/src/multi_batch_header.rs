@@ -126,7 +126,8 @@ impl TokenInfoZeroCopy {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct ImportedBridgeExitZeroCopy {
-    /// Global index leaf_index (u64)
+    /// Global index leaf_index (u64) - stored as u64 for compatibility,
+    /// validated on reconstruction
     pub global_index_index: u64,
     /// Global index rollup_index (u32) - this is what GlobalIndex::new()
     /// expects as first parameter
@@ -146,32 +147,43 @@ impl ImportedBridgeExitZeroCopy {
     /// Convert from ImportedBridgeExit to ImportedBridgeExitZeroCopy
     pub fn from_imported_bridge_exit(
         imported_bridge_exit: &unified_bridge::ImportedBridgeExit,
-    ) -> Self {
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let claim_data = ClaimZeroCopy::from_claim(&imported_bridge_exit.claim_data);
 
-        Self {
+        let rollup_index = imported_bridge_exit.global_index.rollup_index().ok_or(
+            "GlobalIndex rollup_index is None - this should not happen in rollup contexts",
+        )?;
+
+        Ok(Self {
             global_index_index: imported_bridge_exit.global_index.leaf_index() as u64,
-            global_index_rollup: imported_bridge_exit
-                .global_index
-                .rollup_index()
-                .unwrap()
-                .to_u32(),
+            global_index_rollup: rollup_index.to_u32(),
             bridge_exit: BridgeExitZeroCopy::from_bridge_exit(&imported_bridge_exit.bridge_exit),
             claim_data,
-        }
+        })
     }
 
     /// Convert from ImportedBridgeExitZeroCopy to ImportedBridgeExit
-    pub fn to_imported_bridge_exit(&self) -> unified_bridge::ImportedBridgeExit {
-        let claim = self.claim_data.to_claim().unwrap();
-        unified_bridge::ImportedBridgeExit {
+    pub fn to_imported_bridge_exit(
+        &self,
+    ) -> Result<unified_bridge::ImportedBridgeExit, Box<dyn std::error::Error + Send + Sync>> {
+        // Validate that global_index_index fits in u32 to prevent silent truncation
+        if self.global_index_index > u32::MAX as u64 {
+            return Err(format!(
+                "Global index index {} exceeds u32::MAX",
+                self.global_index_index
+            )
+            .into());
+        }
+
+        let claim = self.claim_data.to_claim()?;
+        Ok(unified_bridge::ImportedBridgeExit {
             bridge_exit: self.bridge_exit.to_bridge_exit(),
             claim_data: claim,
             global_index: unified_bridge::GlobalIndex::new(
                 unified_bridge::NetworkId::new(self.global_index_rollup),
                 self.global_index_index as u32,
             ),
-        }
+        })
     }
 }
 
@@ -928,15 +940,18 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
     /// This returns all the components needed for zero-copy serialization.
     pub fn to_zero_copy_components(
         &self,
-    ) -> (
-        Vec<u8>,      // header_bytes
-        Vec<u8>,      // bridge_exits_bytes
-        Vec<u8>,      // imported_bridge_exits_bytes
-        Vec<u8>,      // nullifier_paths_bytes
-        Vec<u8>,      // balances_proofs_bytes
-        Vec<u8>,      // balance_merkle_paths_bytes
-        AggchainData, // aggchain_proof (separate since it's variable size)
-    ) {
+    ) -> Result<
+        (
+            Vec<u8>,      // header_bytes
+            Vec<u8>,      // bridge_exits_bytes
+            Vec<u8>,      // imported_bridge_exits_bytes
+            Vec<u8>,      // nullifier_paths_bytes
+            Vec<u8>,      // balances_proofs_bytes
+            Vec<u8>,      // balance_merkle_paths_bytes
+            AggchainData, // aggchain_proof (separate since it's variable size)
+        ),
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
         // Convert header to zero-copy
         let header_zero_copy = self.to_zero_copy();
         let header_bytes = bytemuck::bytes_of(&header_zero_copy).to_vec();
@@ -954,7 +969,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
             .imported_bridge_exits
             .iter()
             .map(|(ibe, _)| ImportedBridgeExitZeroCopy::from_imported_bridge_exit(ibe))
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
         let imported_bridge_exits_bytes =
             bytemuck::cast_slice(&imported_bridge_exits_zero_copy).to_vec();
 
@@ -987,7 +1002,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         let balance_merkle_paths_bytes =
             bytemuck::cast_slice(&balance_merkle_paths_zero_copy).to_vec();
 
-        (
+        Ok((
             header_bytes,
             bridge_exits_bytes,
             imported_bridge_exits_bytes,
@@ -995,7 +1010,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
             self.aggchain_proof.clone(),
-        )
+        ))
     }
 }
 
@@ -1046,7 +1061,10 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
     /// conflicts.
     pub fn to_owned_keccak(
         &self,
-    ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+    ) -> Result<
+        MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>,
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
         // Convert bridge_exits
         let bridge_exits: Vec<BridgeExit> = self
             .bridge_exits
@@ -1063,11 +1081,14 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
             .iter()
             .zip(self.nullifier_paths.iter())
             .map(|(ibe, path)| {
-                let imported_bridge_exit = ibe.to_imported_bridge_exit();
+                let imported_bridge_exit = ibe.to_imported_bridge_exit()?;
                 let nullifier_path = path.to_smt_non_inclusion_proof();
-                (imported_bridge_exit, nullifier_path)
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>((
+                    imported_bridge_exit,
+                    nullifier_path,
+                ))
             })
-            .collect();
+            .collect::<Result<Vec<_>, Box<dyn std::error::Error + Send + Sync>>>()?;
 
         // Convert balances_proofs and balance_merkle_paths
         let balances_proofs: Vec<(
@@ -1088,7 +1109,7 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
             })
             .collect();
 
-        MultiBatchHeader {
+        Ok(MultiBatchHeader {
             origin_network: self.origin_network,
             height: self.height,
             prev_pessimistic_root: self.prev_pessimistic_root,
@@ -1097,7 +1118,7 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
             l1_info_root: self.l1_info_root,
             balances_proofs,
             aggchain_proof: self.aggchain_proof.clone(),
-        }
+        })
     }
 }
 
@@ -1676,7 +1697,9 @@ mod tests {
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
             aggchain_proof,
-        ) = original.to_zero_copy_components();
+        ) = original
+            .to_zero_copy_components()
+            .expect("Failed to convert to zero-copy components");
 
         // Test with misaligned data by adding a single byte
         let mut misaligned_bridge_exits = vec![0u8];
@@ -1712,7 +1735,9 @@ mod tests {
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
             aggchain_proof,
-        ) = original.to_zero_copy_components();
+        ) = original
+            .to_zero_copy_components()
+            .expect("Failed to convert to zero-copy components");
 
         // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
         let borrowed_view = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components(
@@ -1726,7 +1751,9 @@ mod tests {
         ).expect("Failed to reconstruct MultiBatchHeaderRef");
 
         // Convert to owned for deep comparison
-        let reconstructed = borrowed_view.to_owned_keccak();
+        let reconstructed = borrowed_view
+            .to_owned_keccak()
+            .expect("Failed to convert to owned");
 
         // Verify full recovery using comprehensive deep comparison
         // This will catch any lossy conversions in any field
@@ -1750,7 +1777,9 @@ mod tests {
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
             aggchain_proof,
-        ) = original.to_zero_copy_components();
+        ) = original
+            .to_zero_copy_components()
+            .expect("Failed to convert to zero-copy components");
 
         // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
         let borrowed_view = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components(
@@ -1764,7 +1793,9 @@ mod tests {
         ).expect("Failed to reconstruct MultiBatchHeaderRef");
 
         // Convert to owned and verify full recovery
-        let reconstructed = borrowed_view.to_owned_keccak();
+        let reconstructed = borrowed_view
+            .to_owned_keccak()
+            .expect("Failed to convert to owned");
 
         // Verify full recovery using comprehensive deep comparison
         // This will catch any lossy conversions in any field
@@ -1928,5 +1959,28 @@ mod tests {
             }
             _ => panic!("Expected ECDSA signatures"),
         }
+    }
+
+    /// Test that global_index_index bounds checking works correctly.
+    #[test]
+    fn test_global_index_bounds_checking() {
+        // Create a sample ImportedBridgeExitZeroCopy with valid u32 value
+        let valid_imported_exit = create_sample_imported_bridge_exit();
+        let valid_zero_copy =
+            ImportedBridgeExitZeroCopy::from_imported_bridge_exit(&valid_imported_exit)
+                .expect("Failed to create zero-copy from valid imported bridge exit");
+
+        // This should succeed
+        let reconstructed = valid_zero_copy.to_imported_bridge_exit();
+        assert!(reconstructed.is_ok());
+
+        // Create a corrupted zero-copy struct with value exceeding u32::MAX
+        let mut corrupted_zero_copy = valid_zero_copy;
+        corrupted_zero_copy.global_index_index = u32::MAX as u64 + 1;
+
+        // This should fail with bounds checking error
+        let result = corrupted_zero_copy.to_imported_bridge_exit();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("exceeds u32::MAX"));
     }
 }
