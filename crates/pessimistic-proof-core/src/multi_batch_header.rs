@@ -225,20 +225,23 @@ impl SmtMerkleProofZeroCopy {
 }
 
 /// Zero-copy compatible SmtNonInclusionProof for bytemuck operations.
-/// This captures the variable-length siblings as a fixed-size array.
+/// This captures the variable-length siblings as a fixed-size array with length tracking.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SmtNonInclusionProofZeroCopy {
+    /// Number of actual siblings (u8, max 64)
+    pub num_siblings: u8,
+    /// Padding to ensure proper alignment
+    pub _padding: [u8; 3],
     /// Siblings array (64 * 32 = 2048 bytes)
     pub siblings: [[u8; 32]; 64],
 }
 
 // SAFETY: This struct has a stable C-compatible memory layout
 // - #[repr(C)] ensures C-compatible layout
-// - All fields are fixed-size arrays of u8, which are Pod and Zeroable
-// - The total size is 2048 bytes with no padding
-// - Cannot use derive due to large array size (2048 bytes exceeds bytemuck's
-//   derive limits)
+// - Fields are ordered by alignment (u8 first, then padding, then array)
+// - Total size is 2052 bytes: 1+3+2048 = 2052
+// - Cannot use derive due to large array size and explicit padding requirements
 unsafe impl Pod for SmtNonInclusionProofZeroCopy {}
 unsafe impl Zeroable for SmtNonInclusionProofZeroCopy {}
 
@@ -256,12 +259,19 @@ impl SmtNonInclusionProofZeroCopy {
         >,
     ) -> Self {
         let mut siblings = [[0u8; 32]; 64];
+        let num_siblings = proof.siblings.len().min(64) as u8;
+        
         for (i, sibling) in proof.siblings.iter().enumerate() {
             if i < 64 {
                 siblings[i] = sibling.0;
             }
         }
-        Self { siblings }
+        
+        Self { 
+            num_siblings,
+            _padding: [0; 3],
+            siblings 
+        }
     }
 
     /// Convert from SmtNonInclusionProofZeroCopy to SmtNonInclusionProof
@@ -269,9 +279,11 @@ impl SmtNonInclusionProofZeroCopy {
         &self,
     ) -> agglayer_tries::proof::SmtNonInclusionProof<agglayer_primitives::keccak::Keccak256Hasher, 64>
     {
+        let num_siblings = self.num_siblings.min(64) as usize;
         let siblings: Vec<agglayer_primitives::Digest> = self
             .siblings
             .iter()
+            .take(num_siblings)
             .map(|s| agglayer_primitives::Digest(*s))
             .collect();
         agglayer_tries::proof::SmtNonInclusionProof { siblings }
@@ -1387,6 +1399,15 @@ mod tests {
         }
     }
 
+    /// Test helper to create a sample SmtNonInclusionProof with fewer siblings
+    fn create_sample_smt_non_inclusion_proof_partial(
+    ) -> agglayer_tries::proof::SmtNonInclusionProof<agglayer_primitives::keccak::Keccak256Hasher, 64>
+    {
+        agglayer_tries::proof::SmtNonInclusionProof {
+            siblings: vec![Digest([15u8; 32]); 32], // Only 32 siblings instead of 64
+        }
+    }
+
     /// Test helper to create a sample MultiBatchHeader
     fn create_sample_multi_batch_header(
     ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
@@ -1830,5 +1851,30 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Invalid claim type"));
+    }
+
+    /// Test that SmtNonInclusionProofZeroCopy correctly handles variable-length siblings.
+    #[test]
+    fn test_smt_non_inclusion_proof_variable_length() {
+        // Test with full-length proof (64 siblings)
+        let full_proof = create_sample_smt_non_inclusion_proof();
+        let full_zero_copy = SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(&full_proof);
+        let reconstructed_full = full_zero_copy.to_smt_non_inclusion_proof();
+        
+        assert_eq!(full_proof.siblings.len(), reconstructed_full.siblings.len());
+        assert_eq!(full_proof.siblings, reconstructed_full.siblings);
+        assert_eq!(full_zero_copy.num_siblings, 64);
+
+        // Test with partial-length proof (32 siblings)
+        let partial_proof = create_sample_smt_non_inclusion_proof_partial();
+        let partial_zero_copy = SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(&partial_proof);
+        let reconstructed_partial = partial_zero_copy.to_smt_non_inclusion_proof();
+        
+        assert_eq!(partial_proof.siblings.len(), reconstructed_partial.siblings.len());
+        assert_eq!(partial_proof.siblings, reconstructed_partial.siblings);
+        assert_eq!(partial_zero_copy.num_siblings, 32);
+
+        // Verify that the zero-copy struct has the correct size
+        assert_eq!(SmtNonInclusionProofZeroCopy::size(), 2052);
     }
 }
