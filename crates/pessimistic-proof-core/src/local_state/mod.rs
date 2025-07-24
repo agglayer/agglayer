@@ -5,7 +5,7 @@ use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
 use bytemuck::{Pod, Zeroable};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
-use unified_bridge::{Error, LocalExitTree, NetworkId, L1_ETH};
+use unified_bridge::{Error, LocalExitTree, NetworkId, TokenInfo, L1_ETH};
 
 use crate::{
     local_balance_tree::LocalBalanceTree,
@@ -228,8 +228,10 @@ impl NetworkState {
             let amount = imported_bridge_exit.bridge_exit.amount;
             let entry = new_balances.entry(token_info);
             match entry {
-                Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
-                Entry::Occupied(mut entry) => {
+                Entry::<TokenInfo, U512>::Vacant(_) => {
+                    return Err(ProofError::MissingTokenBalanceProof(token_info))
+                }
+                Entry::<TokenInfo, U512>::Occupied(mut entry) => {
                     *entry.get_mut() = entry
                         .get()
                         .checked_add(U512::from(amount))
@@ -273,8 +275,10 @@ impl NetworkState {
             let amount = bridge_exit.amount;
             let entry = new_balances.entry(token_info);
             match entry {
-                Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
-                Entry::Occupied(mut entry) => {
+                Entry::<TokenInfo, U512>::Vacant(_) => {
+                    return Err(ProofError::MissingTokenBalanceProof(token_info))
+                }
+                Entry::<TokenInfo, U512>::Occupied(mut entry) => {
                     *entry.get_mut() = entry
                         .get()
                         .checked_sub(U512::from(amount))
