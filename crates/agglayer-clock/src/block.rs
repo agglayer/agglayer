@@ -113,7 +113,7 @@ impl BlockClock<BlockProvider> {
         epoch_duration: NonZeroU64,
         max_reconnection_elapsed_time: Duration,
     ) -> Result<Self, BlockClockError> {
-        let ws = WsConnectWithRetries(ws, Some(max_reconnection_elapsed_time));
+        let ws = WsConnectWithRetries(ws, max_reconnection_elapsed_time);
         let client = ClientBuilder::default().pubsub(ws).await?;
         let provider = ProviderBuilder::new().on_client(client);
 
@@ -349,7 +349,7 @@ where
     }
 }
 
-struct WsConnectWithRetries(WsConnect, Option<Duration>);
+struct WsConnectWithRetries(WsConnect, Duration);
 
 impl PubSubConnect for WsConnectWithRetries {
     fn is_local(&self) -> bool {
@@ -363,7 +363,7 @@ impl PubSubConnect for WsConnectWithRetries {
     async fn try_reconnect(&self) -> TransportResult<ConnectionHandle> {
         backoff::future::retry(
             ExponentialBackoff {
-                max_elapsed_time: self.1,
+                max_interval: self.1,
                 ..Default::default()
             },
             || async {
