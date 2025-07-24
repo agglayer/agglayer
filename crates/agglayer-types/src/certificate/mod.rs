@@ -191,11 +191,6 @@ impl Certificate {
             .ok_or(SignerError::InvalidPessimisticProofSignature { expected_signer })
     }
 
-    #[deprecated(since = "0.1.0", note = "use retrieve signer")]
-    pub fn signer(&self) -> Result<Address, SignerError> {
-        self.retrieve_signer(CommitmentVersion::V2)
-    }
-
     /// Retrieve the signer from the certificate signature.
     pub fn retrieve_signer(&self, version: CommitmentVersion) -> Result<Address, SignerError> {
         let (signature, commitment) = match &self.aggchain_data {
