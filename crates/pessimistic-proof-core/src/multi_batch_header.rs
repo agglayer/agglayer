@@ -1934,6 +1934,7 @@ mod tests {
         assert_eq!(std::mem::size_of::<ClaimZeroCopy>(), 3352);
         assert_eq!(std::mem::size_of::<MultiBatchHeaderZeroCopy>(), 184);
         assert_eq!(std::mem::size_of::<BalanceProofEntryZeroCopy>(), 64);
+        assert_eq!(std::mem::size_of::<AggchainDataZeroCopy>(), 93);
 
         // Verify alignments
         assert_eq!(std::mem::align_of::<BridgeExitZeroCopy>(), 4);
@@ -1942,6 +1943,7 @@ mod tests {
         assert_eq!(std::mem::align_of::<ClaimZeroCopy>(), 1);
         assert_eq!(std::mem::align_of::<MultiBatchHeaderZeroCopy>(), 8);
         assert_eq!(std::mem::align_of::<BalanceProofEntryZeroCopy>(), 4);
+        assert_eq!(std::mem::align_of::<AggchainDataZeroCopy>(), 1);
     }
 
     /// Test that large structs with manual unsafe impls have correct layouts.
@@ -1997,18 +1999,155 @@ mod tests {
         };
         assert_eq!(std::mem::size_of_val(&header), 184);
         assert_eq!(std::mem::align_of_val(&header), 8);
+    }
 
-        // Verify that these structs can be safely transmuted using bytemuck
-        let smt_proof_bytes = bytemuck::bytes_of(&smt_proof);
-        assert_eq!(smt_proof_bytes.len(), 6144);
+    /// Test that Generic aggchain data serialization and deserialization work
+    /// correctly.
+    #[test]
+    fn test_generic_aggchain_data_serialization() {
+        // Create a sample MultiBatchHeader with Generic aggchain proof
+        let original = create_sample_multi_batch_header_generic();
 
-        let smt_non_inclusion_proof_bytes = bytemuck::bytes_of(&smt_non_inclusion_proof);
-        assert_eq!(smt_non_inclusion_proof_bytes.len(), 2052);
+        // Convert to zero-copy and back
+        let zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
+        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
+            MultiBatchHeader::try_from(&zero_copy).unwrap();
 
-        let claim_bytes = bytemuck::bytes_of(&claim);
-        assert_eq!(claim_bytes.len(), 3352);
+        // Verify that the generic data was reconstructed correctly
+        match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
+            (
+                AggchainData::Generic {
+                    aggchain_params: orig_params,
+                    aggchain_vkey: orig_vkey,
+                },
+                AggchainData::Generic {
+                    aggchain_params: rec_params,
+                    aggchain_vkey: rec_vkey,
+                },
+            ) => {
+                assert_eq!(orig_params, rec_params);
+                assert_eq!(orig_vkey, rec_vkey);
+            }
+            _ => panic!("Expected Generic aggchain data"),
+        }
+    }
 
-        let header_bytes = bytemuck::bytes_of(&header);
-        assert_eq!(header_bytes.len(), 184);
+    /// Test edge cases and padding for AggchainDataZeroCopy.
+    #[test]
+    fn test_aggchain_data_zero_copy_edge_cases() {
+        // Test with maximum values for ECDSA
+        let max_ecdsa = AggchainData::ECDSA {
+            signer: agglayer_primitives::Address::new([0xFFu8; 20]),
+            signature: agglayer_primitives::Signature::new(
+                agglayer_primitives::U256::MAX,
+                agglayer_primitives::U256::MAX,
+                true,
+            ),
+        };
+
+        let zero_copy = AggchainDataZeroCopy::from(&max_ecdsa);
+        let reconstructed = AggchainData::try_from(&zero_copy).unwrap();
+
+        match (&max_ecdsa, &reconstructed) {
+            (
+                AggchainData::ECDSA {
+                    signer: orig_signer,
+                    signature: orig_sig,
+                },
+                AggchainData::ECDSA {
+                    signer: rec_signer,
+                    signature: rec_sig,
+                },
+            ) => {
+                assert_eq!(orig_signer, rec_signer);
+                assert_eq!(orig_sig.r(), rec_sig.r());
+                assert_eq!(orig_sig.s(), rec_sig.s());
+                assert_eq!(orig_sig.v(), rec_sig.v());
+            }
+            _ => panic!("Expected ECDSA variants"),
+        }
+
+        // Test with maximum values for Generic
+        let max_generic = AggchainData::Generic {
+            aggchain_params: agglayer_primitives::Digest([0xFFu8; 32]),
+            aggchain_vkey: [u32::MAX; 8],
+        };
+
+        let zero_copy = AggchainDataZeroCopy::from(&max_generic);
+        let reconstructed = AggchainData::try_from(&zero_copy).unwrap();
+
+        match (&max_generic, &reconstructed) {
+            (
+                AggchainData::Generic {
+                    aggchain_params: orig_params,
+                    aggchain_vkey: orig_vkey,
+                },
+                AggchainData::Generic {
+                    aggchain_params: rec_params,
+                    aggchain_vkey: rec_vkey,
+                },
+            ) => {
+                assert_eq!(orig_params, rec_params);
+                assert_eq!(orig_vkey, rec_vkey);
+            }
+            _ => panic!("Expected Generic variants"),
+        }
+
+        // Test with zero values
+        let zero_ecdsa = AggchainData::ECDSA {
+            signer: agglayer_primitives::Address::new([0u8; 20]),
+            signature: agglayer_primitives::Signature::new(
+                agglayer_primitives::U256::ZERO,
+                agglayer_primitives::U256::ZERO,
+                false,
+            ),
+        };
+
+        let zero_copy = AggchainDataZeroCopy::from(&zero_ecdsa);
+        let reconstructed = AggchainData::try_from(&zero_copy).unwrap();
+
+        match (&zero_ecdsa, &reconstructed) {
+            (
+                AggchainData::ECDSA {
+                    signer: orig_signer,
+                    signature: orig_sig,
+                },
+                AggchainData::ECDSA {
+                    signer: rec_signer,
+                    signature: rec_sig,
+                },
+            ) => {
+                assert_eq!(orig_signer, rec_signer);
+                assert_eq!(orig_sig.r(), rec_sig.r());
+                assert_eq!(orig_sig.s(), rec_sig.s());
+                assert_eq!(orig_sig.v(), rec_sig.v());
+            }
+            _ => panic!("Expected ECDSA variants"),
+        }
+
+        // Test that padding doesn't interfere with data
+        let mut zero_copy_with_padding = AggchainDataZeroCopy::from(&max_ecdsa);
+        zero_copy_with_padding._padding = [0xAAu8; 7]; // Set padding to non-zero values
+
+        let reconstructed = AggchainData::try_from(&zero_copy_with_padding).unwrap();
+
+        match (&max_ecdsa, &reconstructed) {
+            (
+                AggchainData::ECDSA {
+                    signer: orig_signer,
+                    signature: orig_sig,
+                },
+                AggchainData::ECDSA {
+                    signer: rec_signer,
+                    signature: rec_sig,
+                },
+            ) => {
+                assert_eq!(orig_signer, rec_signer);
+                assert_eq!(orig_sig.r(), rec_sig.r());
+                assert_eq!(orig_sig.s(), rec_sig.s());
+                assert_eq!(orig_sig.v(), rec_sig.v());
+            }
+            _ => panic!("Expected ECDSA variants"),
+        }
     }
 }
