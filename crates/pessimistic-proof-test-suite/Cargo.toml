@@ -34,8 +34,6 @@ hex-literal = "0.4"
 hex.workspace = true
 tracing.workspace = true
 uuid = { version = "1.13.1", features = ["v4", "fast-rng"] }
-regex = "1.11"
-bytemuck = { version = "1.14", features = ["extern_crate_alloc"] }
 
 [dev-dependencies]
 agglayer-prover.workspace = true
