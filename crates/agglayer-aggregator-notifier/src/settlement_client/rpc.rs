@@ -158,8 +158,7 @@ where
                     "Unsupported verifier type".to_string(),
                 ));
             }
-            VerifierType::Pessimistic => proof,
-            VerifierType::ALGateway => {
+            VerifierType::ALGateway | VerifierType::Pessimistic => {
                 let mut proof_with_selector =
                     pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR.to_vec();
                 proof_with_selector.extend(&proof);
