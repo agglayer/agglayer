@@ -706,33 +706,10 @@ where
 
 // Specific implementation for Keccak256Hasher with zero-copy component helpers
 impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
-    /// Reconstruct a MultiBatchHeader from zero-copy components.
-    /// This is the complete reconstruction pattern used in SP1 zkvm environments.
-    pub fn from_zero_copy_components(
-        header_bytes: &[u8],
-        bridge_exits_bytes: &[u8],
-        imported_bridge_exits_bytes: &[u8],
-        nullifier_paths_bytes: &[u8],
-        balances_proofs_bytes: &[u8],
-        balance_merkle_paths_bytes: &[u8],
-        aggchain_proof: AggchainData,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        // Use the borrowed view and convert to owned
-        let borrowed_view = Self::from_zero_copy_components_ref(
-            header_bytes,
-            bridge_exits_bytes,
-            imported_bridge_exits_bytes,
-            nullifier_paths_bytes,
-            balances_proofs_bytes,
-            balance_merkle_paths_bytes,
-            aggchain_proof,
-        )?;
-        Ok(borrowed_view.to_owned_keccak())
-    }
-
     /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy components.
-    /// This avoids allocations by using borrowed slices.
-    pub fn from_zero_copy_components_ref<'a>(
+    /// This is the complete reconstruction pattern used in SP1 zkvm environments.
+    /// Returns a borrowed view to avoid allocations for variable fields.
+    pub fn from_zero_copy_components<'a>(
         header_bytes: &'a [u8],
         bridge_exits_bytes: &'a [u8],
         imported_bridge_exits_bytes: &'a [u8],
@@ -746,7 +723,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         aligned_header_buffer.copy_from_slice(header_bytes);
         let header_zero_copy = bytemuck::from_bytes::<MultiBatchHeaderZeroCopy>(&aligned_header_buffer);
         
-        // Create borrowed slices for zero-copy components
+        // Create borrowed slices for zero-copy components using try_cast_slice
         let bridge_exits: &'a [BridgeExitZeroCopy] = if bridge_exits_bytes.is_empty() {
             &[]
         } else {
@@ -799,6 +776,29 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
             balance_merkle_paths,
             aggchain_proof,
         })
+    }
+
+    /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy components.
+    /// This avoids allocations by using borrowed slices.
+    /// @deprecated Use from_zero_copy_components instead
+    pub fn from_zero_copy_components_ref<'a>(
+        header_bytes: &'a [u8],
+        bridge_exits_bytes: &'a [u8],
+        imported_bridge_exits_bytes: &'a [u8],
+        nullifier_paths_bytes: &'a [u8],
+        balances_proofs_bytes: &'a [u8],
+        balance_merkle_paths_bytes: &'a [u8],
+        aggchain_proof: AggchainData,
+    ) -> Result<MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher>, Box<dyn std::error::Error + Send + Sync>> {
+        Self::from_zero_copy_components(
+            header_bytes,
+            bridge_exits_bytes,
+            imported_bridge_exits_bytes,
+            nullifier_paths_bytes,
+            balances_proofs_bytes,
+            balance_merkle_paths_bytes,
+            aggchain_proof,
+        )
     }
 
     /// Prepare zero-copy components for serialization.
@@ -1397,6 +1397,38 @@ mod tests {
         test_borrowed_view_recovery(&original_generic);
     }
 
+    /// Test that alignment errors are handled correctly when using try_cast_slice.
+    #[test]
+    fn test_alignment_error_handling() {
+        let original = create_sample_multi_batch_header();
+        let (
+            header_bytes,
+            bridge_exits_bytes,
+            imported_bridge_exits_bytes,
+            nullifier_paths_bytes,
+            balances_proofs_bytes,
+            balance_merkle_paths_bytes,
+            aggchain_proof,
+        ) = original.to_zero_copy_components();
+
+        // Test with misaligned data by adding a single byte
+        let mut misaligned_bridge_exits = vec![0u8];
+        misaligned_bridge_exits.extend_from_slice(&bridge_exits_bytes);
+
+        let result = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components(
+            &header_bytes,
+            &misaligned_bridge_exits,
+            &imported_bridge_exits_bytes,
+            &nullifier_paths_bytes,
+            &balances_proofs_bytes,
+            &balance_merkle_paths_bytes,
+            aggchain_proof,
+        );
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Failed to cast bridge_exits_bytes"));
+    }
+
     /// Helper function to test zero-copy recovery for a given MultiBatchHeader
     fn test_zero_copy_recovery(original: &MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>) {
         // Use the new helper function to get all zero-copy components
@@ -1410,8 +1442,8 @@ mod tests {
             aggchain_proof,
         ) = original.to_zero_copy_components();
 
-        // Reconstruct the MultiBatchHeader from zero-copy components using the helper function
-        let reconstructed = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components(
+        // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
+        let borrowed_view = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components(
             &header_bytes,
             &bridge_exits_bytes,
             &imported_bridge_exits_bytes,
@@ -1419,7 +1451,10 @@ mod tests {
             &balances_proofs_bytes,
             &balance_merkle_paths_bytes,
             aggchain_proof,
-        ).expect("Failed to reconstruct MultiBatchHeader");
+        ).expect("Failed to reconstruct MultiBatchHeaderRef");
+
+        // Convert to owned for deep comparison
+        let reconstructed = borrowed_view.to_owned_keccak();
 
         // Verify full recovery using comprehensive deep comparison
         // This will catch any lossy conversions in any field
@@ -1443,7 +1478,7 @@ mod tests {
         ) = original.to_zero_copy_components();
 
         // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
-        let borrowed_view = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components_ref(
+        let borrowed_view = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components(
             &header_bytes,
             &bridge_exits_bytes,
             &imported_bridge_exits_bytes,

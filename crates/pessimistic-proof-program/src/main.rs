@@ -25,8 +25,8 @@ pub fn main() {
     // Read aggchain_proof separately using bincode (since zero-copy truncates it)
     let aggchain_proof = sp1_zkvm::io::read::<pessimistic_proof_core::aggchain_proof::AggchainData>();
     
-    // Reconstruct the MultiBatchHeader from zero-copy components using the helper function
-    let batch_header = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
+    // Reconstruct the MultiBatchHeaderRef from zero-copy components using the helper function
+    let batch_header_ref = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
         &header_bytes,
         &bridge_exits_bytes,
         &imported_bridge_exits_bytes,
@@ -34,7 +34,10 @@ pub fn main() {
         &balances_proofs_bytes,
         &balance_merkle_paths_bytes,
         aggchain_proof,
-    ).expect("Failed to reconstruct MultiBatchHeader");
+    ).expect("Failed to reconstruct MultiBatchHeaderRef");
+
+    // Convert to owned MultiBatchHeader for the proof generation
+    let batch_header = batch_header_ref.to_owned_keccak();
 
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header)
         .expect("Failed to generate pessimistic proof");
