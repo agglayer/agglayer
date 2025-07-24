@@ -21,7 +21,7 @@ fn u(x: u64) -> U256 {
     x.try_into().unwrap()
 }
 
-pub struct VersionConsistencyChecker {
+struct VersionConsistencyChecker {
     /// Initial state
     initial_state: LocalNetworkStateData,
     /// Certificate
