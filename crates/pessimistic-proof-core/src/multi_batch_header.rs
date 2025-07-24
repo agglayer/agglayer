@@ -225,7 +225,8 @@ impl SmtMerkleProofZeroCopy {
 }
 
 /// Zero-copy compatible SmtNonInclusionProof for bytemuck operations.
-/// This captures the variable-length siblings as a fixed-size array with length tracking.
+/// This captures the variable-length siblings as a fixed-size array with length
+/// tracking.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SmtNonInclusionProofZeroCopy {
@@ -260,17 +261,17 @@ impl SmtNonInclusionProofZeroCopy {
     ) -> Self {
         let mut siblings = [[0u8; 32]; 64];
         let num_siblings = proof.siblings.len().min(64) as u8;
-        
+
         for (i, sibling) in proof.siblings.iter().enumerate() {
             if i < 64 {
                 siblings[i] = sibling.0;
             }
         }
-        
-        Self { 
+
+        Self {
             num_siblings,
             _padding: [0; 3],
-            siblings 
+            siblings,
         }
     }
 
@@ -787,7 +788,9 @@ where
                     agglayer_primitives::U256::from_be_bytes(
                         <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[52..84]).unwrap(),
                     ),
-                    zero_copy.aggchain_proof_data[84] != 0, // Extract v byte (parity)
+                    // Extract v byte and convert from Ethereum format (27/28) to boolean
+                    // v = 27 means even parity (false), v = 28 means odd parity (true)
+                    zero_copy.aggchain_proof_data[84] == 28,
                 );
                 AggchainData::ECDSA { signer, signature }
             }
@@ -1109,12 +1112,13 @@ mod tests {
 
     /// Deep comparison function to check for lossy conversions
     /// This function compares all fields including nested structures
+    /// Uses Eq where available, manual comparison where needed
     fn deep_equals<H>(original: &MultiBatchHeader<H>, reconstructed: &MultiBatchHeader<H>) -> bool
     where
         H: Hasher,
         H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
     {
-        // Compare basic fields
+        // Compare basic fields (all have Eq)
         if original.origin_network != reconstructed.origin_network
             || original.height != reconstructed.height
             || original.prev_pessimistic_root != reconstructed.prev_pessimistic_root
@@ -1123,7 +1127,7 @@ mod tests {
             return false;
         }
 
-        // Compare bridge_exits
+        // Compare bridge_exits (manual comparison to be safe)
         if original.bridge_exits.len() != reconstructed.bridge_exits.len() {
             return false;
         }
@@ -1144,7 +1148,7 @@ mod tests {
             }
         }
 
-        // Compare imported_bridge_exits
+        // Compare imported_bridge_exits (manual comparison to be safe)
         if original.imported_bridge_exits.len() != reconstructed.imported_bridge_exits.len() {
             return false;
         }
@@ -1180,9 +1184,13 @@ mod tests {
                     unified_bridge::Claim::Mainnet(orig_claim),
                     unified_bridge::Claim::Mainnet(rec_claim),
                 ) => {
-                    // Compare key fields in claim_data (skip siblings for performance)
+                    // Compare ALL fields in claim_data including Merkle proof siblings
                     if orig_claim.proof_leaf_mer.root != rec_claim.proof_leaf_mer.root
+                        || orig_claim.proof_leaf_mer.proof.siblings
+                            != rec_claim.proof_leaf_mer.proof.siblings
                         || orig_claim.proof_ger_l1root.root != rec_claim.proof_ger_l1root.root
+                        || orig_claim.proof_ger_l1root.proof.siblings
+                            != rec_claim.proof_ger_l1root.proof.siblings
                         || orig_claim.l1_leaf.l1_info_tree_index
                             != rec_claim.l1_leaf.l1_info_tree_index
                         || orig_claim.l1_leaf.rer != rec_claim.l1_leaf.rer
@@ -1199,10 +1207,16 @@ mod tests {
                     unified_bridge::Claim::Rollup(orig_claim),
                     unified_bridge::Claim::Rollup(rec_claim),
                 ) => {
-                    // Compare key fields in claim_data (skip siblings for performance)
+                    // Compare ALL fields in claim_data including Merkle proof siblings
                     if orig_claim.proof_leaf_ler.root != rec_claim.proof_leaf_ler.root
+                        || orig_claim.proof_leaf_ler.proof.siblings
+                            != rec_claim.proof_leaf_ler.proof.siblings
                         || orig_claim.proof_ler_rer.root != rec_claim.proof_ler_rer.root
+                        || orig_claim.proof_ler_rer.proof.siblings
+                            != rec_claim.proof_ler_rer.proof.siblings
                         || orig_claim.proof_ger_l1root.root != rec_claim.proof_ger_l1root.root
+                        || orig_claim.proof_ger_l1root.proof.siblings
+                            != rec_claim.proof_ger_l1root.proof.siblings
                         || orig_claim.l1_leaf.l1_info_tree_index
                             != rec_claim.l1_leaf.l1_info_tree_index
                         || orig_claim.l1_leaf.rer != rec_claim.l1_leaf.rer
@@ -1224,7 +1238,7 @@ mod tests {
             }
         }
 
-        // Compare balances_proofs
+        // Compare balances_proofs (manual comparison to be safe)
         if original.balances_proofs.len() != reconstructed.balances_proofs.len() {
             return false;
         }
@@ -1237,7 +1251,6 @@ mod tests {
                 || orig.0.origin_token_address != rec.0.origin_token_address
                 || orig.1 .0 != rec.1 .0
             {
-                // balance
                 return false;
             }
             // Compare Merkle paths
@@ -1246,7 +1259,7 @@ mod tests {
             }
         }
 
-        // Compare aggchain_proof
+        // Compare aggchain_proof (manual comparison since AggchainData doesn't have Eq)
         match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
             (
                 AggchainData::ECDSA {
@@ -1853,28 +1866,67 @@ mod tests {
             .contains("Invalid claim type"));
     }
 
-    /// Test that SmtNonInclusionProofZeroCopy correctly handles variable-length siblings.
+    /// Test that SmtNonInclusionProofZeroCopy correctly handles variable-length
+    /// siblings.
     #[test]
     fn test_smt_non_inclusion_proof_variable_length() {
         // Test with full-length proof (64 siblings)
         let full_proof = create_sample_smt_non_inclusion_proof();
-        let full_zero_copy = SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(&full_proof);
+        let full_zero_copy =
+            SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(&full_proof);
         let reconstructed_full = full_zero_copy.to_smt_non_inclusion_proof();
-        
+
         assert_eq!(full_proof.siblings.len(), reconstructed_full.siblings.len());
         assert_eq!(full_proof.siblings, reconstructed_full.siblings);
         assert_eq!(full_zero_copy.num_siblings, 64);
 
         // Test with partial-length proof (32 siblings)
         let partial_proof = create_sample_smt_non_inclusion_proof_partial();
-        let partial_zero_copy = SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(&partial_proof);
+        let partial_zero_copy =
+            SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(&partial_proof);
         let reconstructed_partial = partial_zero_copy.to_smt_non_inclusion_proof();
-        
-        assert_eq!(partial_proof.siblings.len(), reconstructed_partial.siblings.len());
+
+        assert_eq!(
+            partial_proof.siblings.len(),
+            reconstructed_partial.siblings.len()
+        );
         assert_eq!(partial_proof.siblings, reconstructed_partial.siblings);
         assert_eq!(partial_zero_copy.num_siblings, 32);
 
         // Verify that the zero-copy struct has the correct size
         assert_eq!(SmtNonInclusionProofZeroCopy::size(), 2052);
+    }
+
+    /// Test that signature reconstruction correctly handles Ethereum v values
+    /// (27/28).
+    #[test]
+    fn test_signature_reconstruction_ethereum_v() {
+        // Create a sample MultiBatchHeader with ECDSA signature
+        let original = create_sample_multi_batch_header();
+
+        // Convert to zero-copy and back
+        let zero_copy = original.to_zero_copy();
+        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
+            MultiBatchHeader::from_zero_copy(&zero_copy).unwrap();
+
+        // Verify that the signature was reconstructed correctly
+        match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
+            (
+                AggchainData::ECDSA {
+                    signer: orig_signer,
+                    signature: orig_sig,
+                },
+                AggchainData::ECDSA {
+                    signer: rec_signer,
+                    signature: rec_sig,
+                },
+            ) => {
+                assert_eq!(orig_signer, rec_signer);
+                assert_eq!(orig_sig.r(), rec_sig.r());
+                assert_eq!(orig_sig.s(), rec_sig.s());
+                assert_eq!(orig_sig.v(), rec_sig.v());
+            }
+            _ => panic!("Expected ECDSA signatures"),
+        }
     }
 }
