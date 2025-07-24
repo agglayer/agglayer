@@ -53,7 +53,9 @@ impl Runner {
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
             aggchain_proof,
-        ) = batch_header.to_zero_copy_components();
+        ) = batch_header
+            .to_zero_copy_components()
+            .expect("Failed to convert to zero-copy components");
 
         // Write all components to stdin
         stdin.write_vec(header_bytes);
