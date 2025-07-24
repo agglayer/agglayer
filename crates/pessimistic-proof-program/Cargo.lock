@@ -3103,16 +3103,13 @@ dependencies = [
  "agglayer-bincode",
  "agglayer-primitives",
  "agglayer-tries",
- "alloy-primitives",
  "bytemuck",
- "hex",
  "hex-literal 0.4.1",
  "semver 1.0.26",
  "serde",
  "serde_with",
  "sp1-zkvm",
  "thiserror 2.0.12",
- "tiny-keccak",
  "toml",
  "tracing",
  "unified-bridge",
@@ -3122,14 +3119,9 @@ dependencies = [
 name = "pessimistic-proof-program"
 version = "6.1.0"
 dependencies = [
- "agglayer-bincode",
- "agglayer-primitives",
- "agglayer-tries",
- "bytemuck",
  "pessimistic-proof-core",
  "sp1-cli",
  "sp1-zkvm",
- "unified-bridge",
 ]
 
 [[package]]

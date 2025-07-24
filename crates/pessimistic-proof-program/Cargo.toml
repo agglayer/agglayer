@@ -7,11 +7,6 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 pessimistic-proof-core = { path = "../pessimistic-proof-core", default-features = false }
 sp1-zkvm = { version = "=5.0.0", features = ["verify"] }
-bytemuck = { version = "1.14", features = ["extern_crate_alloc"] }
-agglayer-bincode = "0.8.0"
-unified-bridge = "0.8.0"
-agglayer-primitives = "0.8.0"
-agglayer-tries = "0.8.0"
 
 [build-dependencies]
 sp1-cli = "=5.0.0"
