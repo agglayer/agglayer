@@ -134,7 +134,7 @@ pub struct ImportedBridgeExitZeroCopy {
     /// Bridge exit data (120 bytes)
     pub bridge_exit: BridgeExitZeroCopy,
     /// Claim data (2288 bytes)
-    pub claim_data: ClaimFromMainnetZeroCopy,
+    pub claim_data: ClaimZeroCopy,
 }
 
 impl ImportedBridgeExitZeroCopy {
@@ -147,12 +147,7 @@ impl ImportedBridgeExitZeroCopy {
     pub fn from_imported_bridge_exit(
         imported_bridge_exit: &unified_bridge::ImportedBridgeExit,
     ) -> Self {
-        let claim_data = match &imported_bridge_exit.claim_data {
-            unified_bridge::Claim::Mainnet(claim) => {
-                ClaimFromMainnetZeroCopy::from_claim_from_mainnet(claim)
-            }
-            _ => panic!("Expected Mainnet claim type"),
-        };
+        let claim_data = ClaimZeroCopy::from_claim(&imported_bridge_exit.claim_data);
 
         Self {
             global_index_index: imported_bridge_exit.global_index.leaf_index() as u64,
@@ -168,11 +163,10 @@ impl ImportedBridgeExitZeroCopy {
 
     /// Convert from ImportedBridgeExitZeroCopy to ImportedBridgeExit
     pub fn to_imported_bridge_exit(&self) -> unified_bridge::ImportedBridgeExit {
+        let claim = self.claim_data.to_claim().unwrap();
         unified_bridge::ImportedBridgeExit {
             bridge_exit: self.bridge_exit.to_bridge_exit(),
-            claim_data: unified_bridge::Claim::Mainnet(Box::new(
-                self.claim_data.to_claim_from_mainnet(),
-            )),
+            claim_data: claim,
             global_index: unified_bridge::GlobalIndex::new(
                 unified_bridge::NetworkId::new(self.global_index_rollup),
                 self.global_index_index as u32,
@@ -466,6 +460,136 @@ impl ClaimFromMainnetZeroCopy {
             proof_leaf_mer: self.proof_leaf_mer.to_merkle_proof(),
             proof_ger_l1root: self.proof_ger_l1root.to_merkle_proof(),
             l1_leaf: self.l1_leaf.to_l1_info_tree_leaf(),
+        }
+    }
+}
+
+/// Zero-copy compatible ClaimFromRollup for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct ClaimFromRollupZeroCopy {
+    /// Proof from bridge exit leaf to LER (1056 bytes)
+    pub proof_leaf_ler: MerkleProofZeroCopy,
+    /// Proof from LER to RER (1056 bytes)
+    pub proof_ler_rer: MerkleProofZeroCopy,
+    /// Proof from GER to L1Root (1056 bytes)
+    pub proof_ger_l1root: MerkleProofZeroCopy,
+    /// L1 leaf (176 bytes)
+    pub l1_leaf: L1InfoTreeLeafZeroCopy,
+}
+
+impl ClaimFromRollupZeroCopy {
+    /// Get the size of this struct in bytes.
+    pub const fn size() -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Convert from ClaimFromRollup to ClaimFromRollupZeroCopy
+    pub fn from_claim_from_rollup(claim: &unified_bridge::ClaimFromRollup) -> Self {
+        Self {
+            proof_leaf_ler: MerkleProofZeroCopy::from_merkle_proof(&claim.proof_leaf_ler),
+            proof_ler_rer: MerkleProofZeroCopy::from_merkle_proof(&claim.proof_ler_rer),
+            proof_ger_l1root: MerkleProofZeroCopy::from_merkle_proof(&claim.proof_ger_l1root),
+            l1_leaf: L1InfoTreeLeafZeroCopy::from_l1_info_tree_leaf(&claim.l1_leaf),
+        }
+    }
+
+    /// Convert from ClaimFromRollupZeroCopy to ClaimFromRollup
+    pub fn to_claim_from_rollup(&self) -> unified_bridge::ClaimFromRollup {
+        unified_bridge::ClaimFromRollup {
+            proof_leaf_ler: self.proof_leaf_ler.to_merkle_proof(),
+            proof_ler_rer: self.proof_ler_rer.to_merkle_proof(),
+            proof_ger_l1root: self.proof_ger_l1root.to_merkle_proof(),
+            l1_leaf: self.l1_leaf.to_l1_info_tree_leaf(),
+        }
+    }
+}
+
+/// Zero-copy compatible Claim for bytemuck operations.
+/// This union-like structure can hold either Mainnet or Rollup claim data.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClaimZeroCopy {
+    /// Claim type (u8: 0=Mainnet, 1=Rollup)
+    pub claim_type: u8,
+    /// Padding to ensure proper alignment
+    pub _padding: [u8; 7],
+    /// Union of claim data - size matches the larger of the two claim types
+    /// Mainnet: 2288 bytes, Rollup: 3344 bytes, so we use 3344 bytes
+    pub claim_data: [u8; 3344],
+}
+
+// SAFETY: This struct has a stable C-compatible memory layout
+// - #[repr(C)] ensures C-compatible layout
+// - Fields are ordered by alignment (u8 first, then padding, then array)
+// - Total size is 3352 bytes: 1+7+3344 = 3352
+// - Cannot use derive due to complex field layout and explicit padding
+//   requirements
+unsafe impl Pod for ClaimZeroCopy {}
+unsafe impl Zeroable for ClaimZeroCopy {}
+
+impl ClaimZeroCopy {
+    /// Get the size of this struct in bytes.
+    pub const fn size() -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Convert from Claim to ClaimZeroCopy
+    pub fn from_claim(claim: &unified_bridge::Claim) -> Self {
+        match claim {
+            unified_bridge::Claim::Mainnet(mainnet_claim) => {
+                let mainnet_zero_copy =
+                    ClaimFromMainnetZeroCopy::from_claim_from_mainnet(mainnet_claim);
+                let mainnet_bytes = bytemuck::bytes_of(&mainnet_zero_copy);
+                let mut claim_data = [0u8; 3344];
+                claim_data[..mainnet_bytes.len()].copy_from_slice(mainnet_bytes);
+
+                Self {
+                    claim_type: 0,
+                    _padding: [0; 7],
+                    claim_data,
+                }
+            }
+            unified_bridge::Claim::Rollup(rollup_claim) => {
+                let rollup_zero_copy =
+                    ClaimFromRollupZeroCopy::from_claim_from_rollup(rollup_claim);
+                let rollup_bytes = bytemuck::bytes_of(&rollup_zero_copy);
+                let mut claim_data = [0u8; 3344];
+                claim_data[..rollup_bytes.len()].copy_from_slice(rollup_bytes);
+
+                Self {
+                    claim_type: 1,
+                    _padding: [0; 7],
+                    claim_data,
+                }
+            }
+        }
+    }
+
+    /// Convert from ClaimZeroCopy to Claim
+    pub fn to_claim(
+        &self,
+    ) -> Result<unified_bridge::Claim, Box<dyn std::error::Error + Send + Sync>> {
+        match self.claim_type {
+            0 => {
+                // Mainnet claim
+                let mainnet_size = ClaimFromMainnetZeroCopy::size();
+                let mainnet_zero_copy: &ClaimFromMainnetZeroCopy =
+                    bytemuck::from_bytes(&self.claim_data[..mainnet_size]);
+                Ok(unified_bridge::Claim::Mainnet(Box::new(
+                    mainnet_zero_copy.to_claim_from_mainnet(),
+                )))
+            }
+            1 => {
+                // Rollup claim
+                let rollup_size = ClaimFromRollupZeroCopy::size();
+                let rollup_zero_copy: &ClaimFromRollupZeroCopy =
+                    bytemuck::from_bytes(&self.claim_data[..rollup_size]);
+                Ok(unified_bridge::Claim::Rollup(Box::new(
+                    rollup_zero_copy.to_claim_from_rollup(),
+                )))
+            }
+            _ => Err("Invalid claim type".into()),
         }
     }
 }
@@ -785,32 +909,6 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         })
     }
 
-    /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy
-    /// components. This avoids allocations by using borrowed slices.
-    /// @deprecated Use from_zero_copy_components instead
-    pub fn from_zero_copy_components_ref<'a>(
-        header_bytes: &'a [u8],
-        bridge_exits_bytes: &'a [u8],
-        imported_bridge_exits_bytes: &'a [u8],
-        nullifier_paths_bytes: &'a [u8],
-        balances_proofs_bytes: &'a [u8],
-        balance_merkle_paths_bytes: &'a [u8],
-        aggchain_proof: AggchainData,
-    ) -> Result<
-        MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher>,
-        Box<dyn std::error::Error + Send + Sync>,
-    > {
-        Self::from_zero_copy_components(
-            header_bytes,
-            bridge_exits_bytes,
-            imported_bridge_exits_bytes,
-            nullifier_paths_bytes,
-            balances_proofs_bytes,
-            balance_merkle_paths_bytes,
-            aggchain_proof,
-        )
-    }
-
     /// Prepare zero-copy components for serialization.
     /// This returns all the components needed for zero-copy serialization.
     pub fn to_zero_copy_components(
@@ -1070,41 +1168,37 @@ mod tests {
                     unified_bridge::Claim::Mainnet(orig_claim),
                     unified_bridge::Claim::Mainnet(rec_claim),
                 ) => {
-                    // Compare all the nested fields in claim_data
-                    if orig_claim.proof_leaf_mer.proof.siblings
-                        != rec_claim.proof_leaf_mer.proof.siblings
+                    // Compare key fields in claim_data (skip siblings for performance)
+                    if orig_claim.proof_leaf_mer.root != rec_claim.proof_leaf_mer.root
+                        || orig_claim.proof_ger_l1root.root != rec_claim.proof_ger_l1root.root
+                        || orig_claim.l1_leaf.l1_info_tree_index
+                            != rec_claim.l1_leaf.l1_info_tree_index
+                        || orig_claim.l1_leaf.rer != rec_claim.l1_leaf.rer
+                        || orig_claim.l1_leaf.mer != rec_claim.l1_leaf.mer
+                        || orig_claim.l1_leaf.inner.block_hash != rec_claim.l1_leaf.inner.block_hash
+                        || orig_claim.l1_leaf.inner.timestamp != rec_claim.l1_leaf.inner.timestamp
+                        || orig_claim.l1_leaf.inner.global_exit_root
+                            != rec_claim.l1_leaf.inner.global_exit_root
                     {
                         return false;
                     }
-                    if orig_claim.proof_leaf_mer.root != rec_claim.proof_leaf_mer.root {
-                        return false;
-                    }
-                    if orig_claim.proof_ger_l1root.proof.siblings
-                        != rec_claim.proof_ger_l1root.proof.siblings
-                    {
-                        return false;
-                    }
-                    if orig_claim.proof_ger_l1root.root != rec_claim.proof_ger_l1root.root {
-                        return false;
-                    }
-                    if orig_claim.l1_leaf.l1_info_tree_index != rec_claim.l1_leaf.l1_info_tree_index
-                    {
-                        return false;
-                    }
-                    if orig_claim.l1_leaf.rer != rec_claim.l1_leaf.rer {
-                        return false;
-                    }
-                    if orig_claim.l1_leaf.mer != rec_claim.l1_leaf.mer {
-                        return false;
-                    }
-                    if orig_claim.l1_leaf.inner.block_hash != rec_claim.l1_leaf.inner.block_hash {
-                        return false;
-                    }
-                    if orig_claim.l1_leaf.inner.timestamp != rec_claim.l1_leaf.inner.timestamp {
-                        return false;
-                    }
-                    if orig_claim.l1_leaf.inner.global_exit_root
-                        != rec_claim.l1_leaf.inner.global_exit_root
+                }
+                (
+                    unified_bridge::Claim::Rollup(orig_claim),
+                    unified_bridge::Claim::Rollup(rec_claim),
+                ) => {
+                    // Compare key fields in claim_data (skip siblings for performance)
+                    if orig_claim.proof_leaf_ler.root != rec_claim.proof_leaf_ler.root
+                        || orig_claim.proof_ler_rer.root != rec_claim.proof_ler_rer.root
+                        || orig_claim.proof_ger_l1root.root != rec_claim.proof_ger_l1root.root
+                        || orig_claim.l1_leaf.l1_info_tree_index
+                            != rec_claim.l1_leaf.l1_info_tree_index
+                        || orig_claim.l1_leaf.rer != rec_claim.l1_leaf.rer
+                        || orig_claim.l1_leaf.mer != rec_claim.l1_leaf.mer
+                        || orig_claim.l1_leaf.inner.block_hash != rec_claim.l1_leaf.inner.block_hash
+                        || orig_claim.l1_leaf.inner.timestamp != rec_claim.l1_leaf.inner.timestamp
+                        || orig_claim.l1_leaf.inner.global_exit_root
+                            != rec_claim.l1_leaf.inner.global_exit_root
                     {
                         return false;
                     }
@@ -1229,6 +1323,44 @@ mod tests {
         }
     }
 
+    /// Test helper to create a sample ImportedBridgeExit with Rollup claim
+    fn create_sample_imported_bridge_exit_rollup() -> unified_bridge::ImportedBridgeExit {
+        unified_bridge::ImportedBridgeExit {
+            bridge_exit: create_sample_bridge_exit(),
+            claim_data: unified_bridge::Claim::Rollup(Box::new(unified_bridge::ClaimFromRollup {
+                proof_leaf_ler: MerkleProof {
+                    proof: LETMerkleProof {
+                        siblings: [Digest([12u8; 32]); 32],
+                    },
+                    root: Digest([13u8; 32]),
+                },
+                proof_ler_rer: MerkleProof {
+                    proof: LETMerkleProof {
+                        siblings: [Digest([14u8; 32]); 32],
+                    },
+                    root: Digest([15u8; 32]),
+                },
+                proof_ger_l1root: MerkleProof {
+                    proof: LETMerkleProof {
+                        siblings: [Digest([16u8; 32]); 32],
+                    },
+                    root: Digest([17u8; 32]),
+                },
+                l1_leaf: L1InfoTreeLeaf {
+                    l1_info_tree_index: 43,
+                    rer: Digest([18u8; 32]),
+                    mer: Digest([19u8; 32]),
+                    inner: L1InfoTreeLeafInner {
+                        block_hash: Digest([20u8; 32]),
+                        timestamp: 1234567891,
+                        global_exit_root: Digest([21u8; 32]),
+                    },
+                },
+            })),
+            global_index: GlobalIndex::new(unified_bridge::NetworkId::new(4), 124),
+        }
+    }
+
     /// Test helper to create a sample TokenInfo
     fn create_sample_token_info() -> unified_bridge::TokenInfo {
         unified_bridge::TokenInfo {
@@ -1304,6 +1436,60 @@ mod tests {
         }
     }
 
+    /// Test helper to create a sample MultiBatchHeader with Rollup claims
+    fn create_sample_multi_batch_header_rollup(
+    ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+        MultiBatchHeader {
+            origin_network: unified_bridge::NetworkId::new(7),
+            height: 3000,
+            prev_pessimistic_root: Digest([30u8; 32]),
+            bridge_exits: vec![create_sample_bridge_exit()],
+            imported_bridge_exits: vec![(
+                create_sample_imported_bridge_exit_rollup(),
+                create_sample_smt_non_inclusion_proof(),
+            )],
+            l1_info_root: Digest([31u8; 32]),
+            balances_proofs: vec![(
+                create_sample_token_info(),
+                (U256::from(8000u64), create_sample_smt_merkle_proof()),
+            )],
+            aggchain_proof: AggchainData::ECDSA {
+                signer: Address::new([32u8; 20]),
+                signature: Signature::new(U256::from(33u64), U256::from(34u64), false),
+            },
+        }
+    }
+
+    /// Test helper to create a sample MultiBatchHeader with mixed claims
+    fn create_sample_multi_batch_header_mixed(
+    ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+        MultiBatchHeader {
+            origin_network: unified_bridge::NetworkId::new(8),
+            height: 4000,
+            prev_pessimistic_root: Digest([40u8; 32]),
+            bridge_exits: vec![create_sample_bridge_exit()],
+            imported_bridge_exits: vec![
+                (
+                    create_sample_imported_bridge_exit(),
+                    create_sample_smt_non_inclusion_proof(),
+                ),
+                (
+                    create_sample_imported_bridge_exit_rollup(),
+                    create_sample_smt_non_inclusion_proof(),
+                ),
+            ],
+            l1_info_root: Digest([41u8; 32]),
+            balances_proofs: vec![(
+                create_sample_token_info(),
+                (U256::from(9000u64), create_sample_smt_merkle_proof()),
+            )],
+            aggchain_proof: AggchainData::Generic {
+                aggchain_params: Digest([42u8; 32]),
+                aggchain_vkey: [43u32, 44u32, 45u32, 46u32, 47u32, 48u32, 49u32, 50u32],
+            },
+        }
+    }
+
     #[test]
     fn test_zero_copy_struct_sizes() {
         // Test that the size calculations are correct
@@ -1347,6 +1533,11 @@ mod tests {
             ClaimFromMainnetZeroCopy::size(),
             std::mem::size_of::<ClaimFromMainnetZeroCopy>()
         );
+        assert_eq!(
+            ClaimFromRollupZeroCopy::size(),
+            std::mem::size_of::<ClaimFromRollupZeroCopy>()
+        );
+        assert_eq!(ClaimZeroCopy::size(), std::mem::size_of::<ClaimZeroCopy>());
         assert_eq!(
             BalanceProofEntryZeroCopy::size(),
             std::mem::size_of::<BalanceProofEntryZeroCopy>()
@@ -1397,31 +1588,45 @@ mod tests {
     }
 
     /// Test demonstrating full recovery of MultiBatchHeader from zero-copy
-    /// components. This simulates the pattern used in the SP1 zkvm
-    /// environment.
+    /// components for all claim types and aggchain proof types.
     #[test]
     fn test_full_recovery_from_zero_copy_components() {
-        // Test with ECDSA aggchain proof
+        // Test with ECDSA aggchain proof and Mainnet claims
         let original_ecdsa = create_sample_multi_batch_header();
         test_zero_copy_recovery(&original_ecdsa);
 
-        // Test with Generic aggchain proof
+        // Test with Generic aggchain proof and Mainnet claims
         let original_generic = create_sample_multi_batch_header_generic();
         test_zero_copy_recovery(&original_generic);
+
+        // Test with Rollup claims
+        let original_rollup = create_sample_multi_batch_header_rollup();
+        test_zero_copy_recovery(&original_rollup);
+
+        // Test with mixed Mainnet and Rollup claims
+        let original_mixed = create_sample_multi_batch_header_mixed();
+        test_zero_copy_recovery(&original_mixed);
     }
 
-    /// Test demonstrating zero-copy borrowed view functionality.
-    /// This verifies that MultiBatchHeaderRef works correctly without
-    /// allocations.
+    /// Test demonstrating zero-copy borrowed view functionality for all claim
+    /// types.
     #[test]
     fn test_zero_copy_borrowed_view() {
-        // Test with ECDSA aggchain proof
+        // Test with ECDSA aggchain proof and Mainnet claims
         let original_ecdsa = create_sample_multi_batch_header();
         test_borrowed_view_recovery(&original_ecdsa);
 
-        // Test with Generic aggchain proof
+        // Test with Generic aggchain proof and Mainnet claims
         let original_generic = create_sample_multi_batch_header_generic();
         test_borrowed_view_recovery(&original_generic);
+
+        // Test with Rollup claims
+        let original_rollup = create_sample_multi_batch_header_rollup();
+        test_borrowed_view_recovery(&original_rollup);
+
+        // Test with mixed Mainnet and Rollup claims
+        let original_mixed = create_sample_multi_batch_header_mixed();
+        test_borrowed_view_recovery(&original_mixed);
     }
 
     /// Test that alignment errors are handled correctly when using
@@ -1564,5 +1769,66 @@ mod tests {
             original.prev_pessimistic_root
         );
         assert_eq!(borrowed_view.l1_info_root, original.l1_info_root);
+    }
+
+    /// Test that ClaimZeroCopy correctly handles both Mainnet and Rollup
+    /// claims.
+    #[test]
+    fn test_claim_zero_copy_conversion() {
+        // Test Mainnet claim
+        let mainnet_imported_exit = create_sample_imported_bridge_exit();
+        let mainnet_claim_zero_copy = ClaimZeroCopy::from_claim(&mainnet_imported_exit.claim_data);
+        let reconstructed_mainnet_claim = mainnet_claim_zero_copy.to_claim().unwrap();
+
+        match (
+            &mainnet_imported_exit.claim_data,
+            &reconstructed_mainnet_claim,
+        ) {
+            (unified_bridge::Claim::Mainnet(orig), unified_bridge::Claim::Mainnet(rec)) => {
+                assert_eq!(orig.proof_leaf_mer.root, rec.proof_leaf_mer.root);
+                assert_eq!(orig.proof_ger_l1root.root, rec.proof_ger_l1root.root);
+                assert_eq!(
+                    orig.l1_leaf.l1_info_tree_index,
+                    rec.l1_leaf.l1_info_tree_index
+                );
+            }
+            _ => panic!("Expected Mainnet claims"),
+        }
+
+        // Test Rollup claim
+        let rollup_imported_exit = create_sample_imported_bridge_exit_rollup();
+        let rollup_claim_zero_copy = ClaimZeroCopy::from_claim(&rollup_imported_exit.claim_data);
+        let reconstructed_rollup_claim = rollup_claim_zero_copy.to_claim().unwrap();
+
+        match (
+            &rollup_imported_exit.claim_data,
+            &reconstructed_rollup_claim,
+        ) {
+            (unified_bridge::Claim::Rollup(orig), unified_bridge::Claim::Rollup(rec)) => {
+                assert_eq!(orig.proof_leaf_ler.root, rec.proof_leaf_ler.root);
+                assert_eq!(orig.proof_ler_rer.root, rec.proof_ler_rer.root);
+                assert_eq!(orig.proof_ger_l1root.root, rec.proof_ger_l1root.root);
+                assert_eq!(
+                    orig.l1_leaf.l1_info_tree_index,
+                    rec.l1_leaf.l1_info_tree_index
+                );
+            }
+            _ => panic!("Expected Rollup claims"),
+        }
+    }
+
+    /// Test that invalid claim types are handled correctly.
+    #[test]
+    fn test_invalid_claim_type() {
+        let mut claim_zero_copy =
+            ClaimZeroCopy::from_claim(&create_sample_imported_bridge_exit().claim_data);
+        claim_zero_copy.claim_type = 255; // Invalid type
+
+        let result = claim_zero_copy.to_claim();
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid claim type"));
     }
 }
