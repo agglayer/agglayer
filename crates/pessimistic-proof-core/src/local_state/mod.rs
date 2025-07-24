@@ -74,14 +74,9 @@ impl NetworkStateZeroCopy {
         }
     }
 
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-
     /// Safely deserialize from bytes using bytemuck.
     pub fn from_bytes(data: &[u8]) -> Result<&Self, bytemuck::PodCastError> {
-        if data.len() != Self::size() {
+        if data.len() != std::mem::size_of::<Self>() {
             return Err(bytemuck::PodCastError::SizeMismatch);
         }
         bytemuck::try_from_bytes(data)
@@ -323,7 +318,7 @@ mod tests {
         };
 
         let bytes = state.to_bytes_zero_copy();
-        assert_eq!(bytes.len(), NetworkStateZeroCopy::size());
+        assert_eq!(bytes.len(), std::mem::size_of::<NetworkStateZeroCopy>());
 
         let deserialized = NetworkState::from_bytes_zero_copy(&bytes)
             .expect("Zero-copy deserialization should succeed");
