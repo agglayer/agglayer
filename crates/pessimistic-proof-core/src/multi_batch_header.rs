@@ -536,25 +536,6 @@ impl MultiBatchHeaderZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
-
-    /// Safely deserialize from bytes using bytemuck.
-    pub fn from_bytes(data: &[u8]) -> Result<&Self, bytemuck::PodCastError> {
-        if data.len() != Self::size() {
-            return Err(bytemuck::PodCastError::SizeMismatch);
-        }
-        bytemuck::try_from_bytes(data)
-    }
-
-    /// Convert this struct to a byte slice (zero-copy).
-    pub fn as_bytes(&self) -> &[u8] {
-        bytemuck::bytes_of(self)
-    }
-
-    /// Convert this struct to an owned byte vector (creates a copy).
-    /// Use as_bytes() for zero-copy operations.
-    pub fn to_bytes_copy(&self) -> Vec<u8> {
-        self.as_bytes().to_vec()
-    }
 }
 
 /// Represents the chain state transition for the pessimistic proof.
@@ -709,43 +690,144 @@ where
         })
     }
 
-    /// Convert to bytes using zero-copy serialization for the header.
-    /// Note: This only serializes the fixed-size header data.
-    /// For full data integrity, serialize variable-length data separately.
-    /// See the test_full_recovery_from_zero_copy_components_* tests for the
-    /// complete pattern that achieves 100% data integrity.
-    /// WARNING: This method creates a copy. For true zero-copy, use the
-    /// zero-copy structs directly.
-    pub fn to_bytes_zero_copy(&self) -> Vec<u8> {
-        self.to_zero_copy().to_bytes_copy()
-    }
 
-    /// Convert from bytes using zero-copy deserialization for the header.
-    /// Note: This only deserializes the fixed-size header data.
-    /// For full data integrity, deserialize variable-length data separately.
-    /// See the test_full_recovery_from_zero_copy_components_* tests for the
-    /// complete pattern that achieves 100% data integrity.
-    pub fn from_bytes_zero_copy(
-        data: &[u8],
+
+    /// Helper function to safely deserialize zero-copy data with proper alignment
+    pub fn deserialize_zero_copy<T: bytemuck::Pod>(data: &[u8]) -> Vec<T> {
+        if data.is_empty() {
+            return vec![];
+        }
+        // Copy to aligned buffer to fix alignment issue
+        let mut aligned_buffer = vec![0u8; data.len()];
+        aligned_buffer.copy_from_slice(data);
+        bytemuck::cast_slice(&aligned_buffer).to_vec()
+    }
+}
+
+// Specific implementation for Keccak256Hasher with zero-copy component helpers
+impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+    /// Reconstruct a MultiBatchHeader from zero-copy components.
+    /// This is the complete reconstruction pattern used in SP1 zkvm environments.
+    pub fn from_zero_copy_components(
+        header_bytes: &[u8],
+        bridge_exits_bytes: &[u8],
+        imported_bridge_exits_bytes: &[u8],
+        nullifier_paths_bytes: &[u8],
+        balances_proofs_bytes: &[u8],
+        balance_merkle_paths_bytes: &[u8],
+        aggchain_proof: AggchainData,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let zero_copy = MultiBatchHeaderZeroCopy::from_bytes(data)
-            .map_err(|e| format!("Failed to deserialize zero-copy data: {:?}", e))?;
-        Self::from_zero_copy(zero_copy)
+        // Deserialize header with proper alignment
+        let mut aligned_header_buffer = [0u8; std::mem::size_of::<MultiBatchHeaderZeroCopy>()];
+        aligned_header_buffer.copy_from_slice(header_bytes);
+        let header_zero_copy = bytemuck::from_bytes::<MultiBatchHeaderZeroCopy>(&aligned_header_buffer);
+        
+        // Deserialize zero-copy components
+        let bridge_exits: Vec<BridgeExitZeroCopy> = Self::deserialize_zero_copy(bridge_exits_bytes);
+        let imported_bridge_exits: Vec<ImportedBridgeExitZeroCopy> = Self::deserialize_zero_copy(imported_bridge_exits_bytes);
+        let nullifier_paths: Vec<SmtNonInclusionProofZeroCopy> = Self::deserialize_zero_copy(nullifier_paths_bytes);
+        let balances_proofs: Vec<BalanceProofEntryZeroCopy> = Self::deserialize_zero_copy(balances_proofs_bytes);
+        let balance_merkle_paths: Vec<SmtMerkleProofZeroCopy> = Self::deserialize_zero_copy(balance_merkle_paths_bytes);
+        
+        // Reconstruct the MultiBatchHeader from zero-copy components
+        let mut batch_header = Self::from_zero_copy(header_zero_copy)?;
+        
+        // Set the aggchain_proof from the separately provided data
+        batch_header.aggchain_proof = aggchain_proof;
+        
+        // Convert bridge_exits back to original format
+        batch_header.bridge_exits = bridge_exits.iter().map(|be| be.to_bridge_exit()).collect();
+        
+        // Convert imported_bridge_exits back to original format
+        batch_header.imported_bridge_exits = imported_bridge_exits.iter().zip(nullifier_paths.iter()).map(|(ibe, path)| {
+            let imported_bridge_exit = ibe.to_imported_bridge_exit();
+            let nullifier_path = path.to_smt_non_inclusion_proof();
+            (imported_bridge_exit, nullifier_path)
+        }).collect();
+        
+        // Convert balances_proofs back to original format
+        batch_header.balances_proofs = balances_proofs.iter().zip(balance_merkle_paths.iter()).map(|(bp, path)| {
+            let token_info = bp.token_info.to_token_info();
+            let balance = U256::from_be_bytes(bp.balance);
+            let merkle_path = path.to_smt_merkle_proof();
+            (token_info, (balance, merkle_path))
+        }).collect();
+
+        Ok(batch_header)
+    }
+
+    /// Prepare zero-copy components for serialization.
+    /// This returns all the components needed for zero-copy serialization.
+    pub fn to_zero_copy_components(&self) -> (
+        Vec<u8>, // header_bytes
+        Vec<u8>, // bridge_exits_bytes
+        Vec<u8>, // imported_bridge_exits_bytes
+        Vec<u8>, // nullifier_paths_bytes
+        Vec<u8>, // balances_proofs_bytes
+        Vec<u8>, // balance_merkle_paths_bytes
+        AggchainData, // aggchain_proof (separate since it's variable size)
+    ) {
+        // Convert header to zero-copy
+        let header_zero_copy = self.to_zero_copy();
+        let header_bytes = bytemuck::bytes_of(&header_zero_copy).to_vec();
+        
+        // Convert bridge_exits to zero-copy
+        let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> = self
+            .bridge_exits
+            .iter()
+            .map(|be| BridgeExitZeroCopy::from_bridge_exit(be))
+            .collect();
+        let bridge_exits_bytes = bytemuck::cast_slice(&bridge_exits_zero_copy).to_vec();
+        
+        // Convert imported_bridge_exits to zero-copy
+        let imported_bridge_exits_zero_copy: Vec<ImportedBridgeExitZeroCopy> = self
+            .imported_bridge_exits
+            .iter()
+            .map(|(ibe, _)| ImportedBridgeExitZeroCopy::from_imported_bridge_exit(ibe))
+            .collect();
+        let imported_bridge_exits_bytes = bytemuck::cast_slice(&imported_bridge_exits_zero_copy).to_vec();
+        
+        // Extract nullifier paths
+        let nullifier_paths_zero_copy: Vec<SmtNonInclusionProofZeroCopy> = self
+            .imported_bridge_exits
+            .iter()
+            .map(|(_, path)| SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(path))
+            .collect();
+        let nullifier_paths_bytes = bytemuck::cast_slice(&nullifier_paths_zero_copy).to_vec();
+        
+        // Convert balances_proofs to zero-copy
+        let balances_proofs_zero_copy: Vec<BalanceProofEntryZeroCopy> = self
+            .balances_proofs
+            .iter()
+            .map(|(token_info, (balance, _))| BalanceProofEntryZeroCopy {
+                token_info: TokenInfoZeroCopy::from_token_info(token_info),
+                balance: balance.to_be_bytes(),
+                _padding: [0; 8],
+            })
+            .collect();
+        let balances_proofs_bytes = bytemuck::cast_slice(&balances_proofs_zero_copy).to_vec();
+        
+        // Extract balance Merkle paths
+        let balance_merkle_paths_zero_copy: Vec<SmtMerkleProofZeroCopy> = self
+            .balances_proofs
+            .iter()
+            .map(|(_, (_, path))| SmtMerkleProofZeroCopy::from_smt_merkle_proof(path))
+            .collect();
+        let balance_merkle_paths_bytes = bytemuck::cast_slice(&balance_merkle_paths_zero_copy).to_vec();
+        
+        (
+            header_bytes,
+            bridge_exits_bytes,
+            imported_bridge_exits_bytes,
+            nullifier_paths_bytes,
+            balances_proofs_bytes,
+            balance_merkle_paths_bytes,
+            self.aggchain_proof.clone(),
+        )
     }
 }
 
-// Implement From trait for zero-copy structs to enable .into() conversions
-impl From<BridgeExitZeroCopy> for unified_bridge::BridgeExit {
-    fn from(zero_copy: BridgeExitZeroCopy) -> Self {
-        zero_copy.to_bridge_exit()
-    }
-}
 
-impl From<TokenInfoZeroCopy> for unified_bridge::TokenInfo {
-    fn from(zero_copy: TokenInfoZeroCopy) -> Self {
-        zero_copy.to_token_info()
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -833,62 +915,38 @@ mod tests {
                     if orig_claim.proof_leaf_mer.proof.siblings
                         != rec_claim.proof_leaf_mer.proof.siblings
                     {
-                        println!("❌ claim_data.proof_leaf_mer.proof.siblings mismatch");
-                        println!(
-                            "  Original: {:?}",
-                            orig_claim.proof_leaf_mer.proof.siblings[0]
-                        );
-                        println!(
-                            "  Reconstructed: {:?}",
-                            rec_claim.proof_leaf_mer.proof.siblings[0]
-                        );
                         return false;
                     }
                     if orig_claim.proof_leaf_mer.root != rec_claim.proof_leaf_mer.root {
-                        println!("❌ claim_data.proof_leaf_mer.root mismatch");
-                        println!("  Original: {:?}", orig_claim.proof_leaf_mer.root);
-                        println!("  Reconstructed: {:?}", rec_claim.proof_leaf_mer.root);
                         return false;
                     }
                     if orig_claim.proof_ger_l1root.proof.siblings
                         != rec_claim.proof_ger_l1root.proof.siblings
                     {
-                        println!("❌ claim_data.proof_ger_l1root.proof.siblings mismatch");
                         return false;
                     }
                     if orig_claim.proof_ger_l1root.root != rec_claim.proof_ger_l1root.root {
-                        println!("❌ claim_data.proof_ger_l1root.root mismatch");
                         return false;
                     }
                     if orig_claim.l1_leaf.l1_info_tree_index != rec_claim.l1_leaf.l1_info_tree_index
                     {
-                        println!("❌ claim_data.l1_leaf.l1_info_tree_index mismatch");
-                        println!("  Original: {}", orig_claim.l1_leaf.l1_info_tree_index);
-                        println!("  Reconstructed: {}", rec_claim.l1_leaf.l1_info_tree_index);
                         return false;
                     }
                     if orig_claim.l1_leaf.rer != rec_claim.l1_leaf.rer {
-                        println!("❌ claim_data.l1_leaf.rer mismatch");
                         return false;
                     }
                     if orig_claim.l1_leaf.mer != rec_claim.l1_leaf.mer {
-                        println!("❌ claim_data.l1_leaf.mer mismatch");
                         return false;
                     }
                     if orig_claim.l1_leaf.inner.block_hash != rec_claim.l1_leaf.inner.block_hash {
-                        println!("❌ claim_data.l1_leaf.inner.block_hash mismatch");
                         return false;
                     }
                     if orig_claim.l1_leaf.inner.timestamp != rec_claim.l1_leaf.inner.timestamp {
-                        println!("❌ claim_data.l1_leaf.inner.timestamp mismatch");
-                        println!("  Original: {}", orig_claim.l1_leaf.inner.timestamp);
-                        println!("  Reconstructed: {}", rec_claim.l1_leaf.inner.timestamp);
                         return false;
                     }
                     if orig_claim.l1_leaf.inner.global_exit_root
                         != rec_claim.l1_leaf.inner.global_exit_root
                     {
-                        println!("❌ claim_data.l1_leaf.inner.global_exit_root mismatch");
                         return false;
                     }
                 }
@@ -1179,209 +1237,50 @@ mod tests {
             .contains("Invalid aggchain proof type"));
     }
 
-    #[test]
-    fn test_byte_serialization_errors() {
-        // Test with wrong size data
-        let wrong_size_data = vec![0u8; 100]; // Wrong size
-        let result = MultiBatchHeaderZeroCopy::from_bytes(&wrong_size_data);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            bytemuck::PodCastError::SizeMismatch
-        ));
 
-        // Test with empty data
-        let empty_data = vec![];
-        let result = MultiBatchHeaderZeroCopy::from_bytes(&empty_data);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            bytemuck::PodCastError::SizeMismatch
-        ));
+
+    /// Test demonstrating full recovery of MultiBatchHeader from zero-copy components.
+    /// This simulates the pattern used in the SP1 zkvm environment.
+    #[test]
+    fn test_full_recovery_from_zero_copy_components() {
+        // Test with ECDSA aggchain proof
+        let original_ecdsa = create_sample_multi_batch_header();
+        test_zero_copy_recovery(&original_ecdsa);
+
+        // Test with Generic aggchain proof
+        let original_generic = create_sample_multi_batch_header_generic();
+        test_zero_copy_recovery(&original_generic);
     }
 
-    /// Test demonstrating full recovery of MultiBatchHeader from zero-copy
-    /// components This simulates the pattern used in the SP1 zkvm
-    /// environment
-    #[test]
-    fn test_full_recovery_from_zero_copy_components_ecdsa() {
-        let original = create_sample_multi_batch_header();
+    /// Helper function to test zero-copy recovery for a given MultiBatchHeader
+    fn test_zero_copy_recovery(original: &MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>) {
+        // Use the new helper function to get all zero-copy components
+        let (
+            header_bytes,
+            bridge_exits_bytes,
+            imported_bridge_exits_bytes,
+            nullifier_paths_bytes,
+            balances_proofs_bytes,
+            balance_merkle_paths_bytes,
+            aggchain_proof,
+        ) = original.to_zero_copy_components();
 
-        // Simulate the zero-copy serialization process
-        let header_zero_copy = original.to_zero_copy();
-
-        // Convert bridge_exits to zero-copy format
-        let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> = original
-            .bridge_exits
-            .iter()
-            .map(|be| BridgeExitZeroCopy::from_bridge_exit(be))
-            .collect();
-
-        // Convert imported_bridge_exits to zero-copy format
-        let imported_bridge_exits_zero_copy: Vec<ImportedBridgeExitZeroCopy> = original
-            .imported_bridge_exits
-            .iter()
-            .map(|(ibe, _)| ImportedBridgeExitZeroCopy::from_imported_bridge_exit(ibe))
-            .collect();
-
-        // Extract nullifier paths
-        let nullifier_paths_zero_copy: Vec<SmtNonInclusionProofZeroCopy> = original
-            .imported_bridge_exits
-            .iter()
-            .map(|(_, path)| SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(path))
-            .collect();
-
-        // Convert balances_proofs to zero-copy format
-        let balances_proofs_zero_copy: Vec<BalanceProofEntryZeroCopy> = original
-            .balances_proofs
-            .iter()
-            .map(|(token_info, (balance, _))| BalanceProofEntryZeroCopy {
-                token_info: TokenInfoZeroCopy::from_token_info(token_info),
-                balance: balance.to_be_bytes(),
-                _padding: [0; 8],
-            })
-            .collect();
-
-        // Extract balance Merkle paths
-        let balance_merkle_paths_zero_copy: Vec<SmtMerkleProofZeroCopy> = original
-            .balances_proofs
-            .iter()
-            .map(|(_, (_, path))| SmtMerkleProofZeroCopy::from_smt_merkle_proof(path))
-            .collect();
-
-        // Simulate the reconstruction process (like in SP1 zkvm)
-        let mut reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
-            MultiBatchHeader::from_zero_copy(&header_zero_copy)
-                .expect("Failed to reconstruct MultiBatchHeader");
-
-        // Convert bridge_exits back to original format
-        reconstructed.bridge_exits = bridge_exits_zero_copy
-            .iter()
-            .map(|be| be.to_bridge_exit())
-            .collect();
-
-        // Convert imported_bridge_exits back to original format
-        reconstructed.imported_bridge_exits = imported_bridge_exits_zero_copy
-            .iter()
-            .zip(nullifier_paths_zero_copy.iter())
-            .map(|(ibe, path)| {
-                let imported_bridge_exit = ibe.to_imported_bridge_exit();
-                let nullifier_path = path.to_smt_non_inclusion_proof();
-                (imported_bridge_exit, nullifier_path)
-            })
-            .collect();
-
-        // Convert balances_proofs back to original format
-        reconstructed.balances_proofs = balances_proofs_zero_copy
-            .iter()
-            .zip(balance_merkle_paths_zero_copy.iter())
-            .map(|(bp, path)| {
-                let token_info = bp.token_info.to_token_info();
-                let balance = U256::from_be_bytes(bp.balance);
-                let merkle_path = path.to_smt_merkle_proof();
-                (token_info, (balance, merkle_path))
-            })
-            .collect();
+        // Reconstruct the MultiBatchHeader from zero-copy components using the helper function
+        let reconstructed = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components(
+            &header_bytes,
+            &bridge_exits_bytes,
+            &imported_bridge_exits_bytes,
+            &nullifier_paths_bytes,
+            &balances_proofs_bytes,
+            &balance_merkle_paths_bytes,
+            aggchain_proof,
+        ).expect("Failed to reconstruct MultiBatchHeader");
 
         // Verify full recovery using comprehensive deep comparison
         // This will catch any lossy conversions in any field
         assert!(
-            deep_equals(&original, &reconstructed),
+            deep_equals(original, &reconstructed),
             "Deep comparison failed - there are lossy conversions!"
         );
-
-        println!("✓ Full recovery from zero-copy components successful for ECDSA");
-    }
-
-    /// Test demonstrating full recovery of MultiBatchHeader from zero-copy
-    /// components with Generic aggchain proof
-    #[test]
-    fn test_full_recovery_from_zero_copy_components_generic() {
-        let original = create_sample_multi_batch_header_generic();
-
-        // Simulate the zero-copy serialization process
-        let header_zero_copy = original.to_zero_copy();
-
-        // Convert bridge_exits to zero-copy format
-        let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> = original
-            .bridge_exits
-            .iter()
-            .map(|be| BridgeExitZeroCopy::from_bridge_exit(be))
-            .collect();
-
-        // Convert imported_bridge_exits to zero-copy format
-        let imported_bridge_exits_zero_copy: Vec<ImportedBridgeExitZeroCopy> = original
-            .imported_bridge_exits
-            .iter()
-            .map(|(ibe, _)| ImportedBridgeExitZeroCopy::from_imported_bridge_exit(ibe))
-            .collect();
-
-        // Extract nullifier paths
-        let nullifier_paths_zero_copy: Vec<SmtNonInclusionProofZeroCopy> = original
-            .imported_bridge_exits
-            .iter()
-            .map(|(_, path)| SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(path))
-            .collect();
-
-        // Convert balances_proofs to zero-copy format
-        let balances_proofs_zero_copy: Vec<BalanceProofEntryZeroCopy> = original
-            .balances_proofs
-            .iter()
-            .map(|(token_info, (balance, _))| BalanceProofEntryZeroCopy {
-                token_info: TokenInfoZeroCopy::from_token_info(token_info),
-                balance: balance.to_be_bytes(),
-                _padding: [0; 8],
-            })
-            .collect();
-
-        // Extract balance Merkle paths
-        let balance_merkle_paths_zero_copy: Vec<SmtMerkleProofZeroCopy> = original
-            .balances_proofs
-            .iter()
-            .map(|(_, (_, path))| SmtMerkleProofZeroCopy::from_smt_merkle_proof(path))
-            .collect();
-
-        // Simulate the reconstruction process (like in SP1 zkvm)
-        let mut reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
-            MultiBatchHeader::from_zero_copy(&header_zero_copy)
-                .expect("Failed to reconstruct MultiBatchHeader");
-
-        // Convert bridge_exits back to original format
-        reconstructed.bridge_exits = bridge_exits_zero_copy
-            .iter()
-            .map(|be| be.to_bridge_exit())
-            .collect();
-
-        // Convert imported_bridge_exits back to original format
-        reconstructed.imported_bridge_exits = imported_bridge_exits_zero_copy
-            .iter()
-            .zip(nullifier_paths_zero_copy.iter())
-            .map(|(ibe, path)| {
-                let imported_bridge_exit = ibe.to_imported_bridge_exit();
-                let nullifier_path = path.to_smt_non_inclusion_proof();
-                (imported_bridge_exit, nullifier_path)
-            })
-            .collect();
-
-        // Convert balances_proofs back to original format
-        reconstructed.balances_proofs = balances_proofs_zero_copy
-            .iter()
-            .zip(balance_merkle_paths_zero_copy.iter())
-            .map(|(bp, path)| {
-                let token_info = bp.token_info.to_token_info();
-                let balance = U256::from_be_bytes(bp.balance);
-                let merkle_path = path.to_smt_merkle_proof();
-                (token_info, (balance, merkle_path))
-            })
-            .collect();
-
-        // Verify full recovery using comprehensive deep comparison
-        // This will catch any lossy conversions in any field
-        assert!(
-            deep_equals(&original, &reconstructed),
-            "Deep comparison failed - there are lossy conversions!"
-        );
-
-        println!("✓ Full recovery from zero-copy components successful for Generic");
     }
 }

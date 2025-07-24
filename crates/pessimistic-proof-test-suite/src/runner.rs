@@ -1,4 +1,4 @@
-use bytemuck;
+
 pub use pessimistic_proof::PessimisticProofOutput;
 use pessimistic_proof::{
     keccak::{Hasher, Keccak256Hasher},
@@ -37,13 +37,7 @@ impl Runner {
         Self { client }
     }
 
-    /// Helper function to serialize zero-copy data and write to stdin
-    fn write_zero_copy_data<T: bytemuck::Pod>(stdin: &mut SP1Stdin, data: &[T], name: &str) {
-        let bytes = bytemuck::cast_slice(data);
-        println!("Writing {}: {} bytes", name, bytes.len());
-        // Use as_bytes() for zero-copy, then convert to Vec only when needed for stdin
-        stdin.write_vec(bytes.to_vec());
-    }
+
 
     /// Convert inputs to stdin.
     pub fn prepare_stdin(state: &NetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
@@ -51,101 +45,31 @@ impl Runner {
 
         // Use zero-copy for NetworkState
         let zero_copy_bytes = state.to_bytes_zero_copy();
-        println!(
-            "Writing NetworkState bytes: {} bytes",
-            zero_copy_bytes.len()
-        );
         stdin.write_vec(zero_copy_bytes);
 
-        // Use zero-copy for MultiBatchHeader header
-        let header_zero_copy = batch_header.to_zero_copy();
-        // Use as_bytes() for true zero-copy, then convert to Vec only when needed
-        let header_bytes = header_zero_copy.as_bytes();
-        println!(
-            "Writing MultiBatchHeader header: {} bytes",
-            header_bytes.len()
-        );
-        stdin.write_vec(header_bytes.to_vec());
+        // Use the new helper function to get all zero-copy components
+        let (
+            header_bytes,
+            bridge_exits_bytes,
+            imported_bridge_exits_bytes,
+            nullifier_paths_bytes,
+            balances_proofs_bytes,
+            balance_merkle_paths_bytes,
+            aggchain_proof,
+        ) = batch_header.to_zero_copy_components();
 
-        // Use zero-copy for bridge_exits
-        let bridge_exits_zero_copy: Vec<pessimistic_proof::multi_batch_header::BridgeExitZeroCopy> =
-            batch_header
-                .bridge_exits
-                .iter()
-                .map(|be| {
-                    pessimistic_proof::multi_batch_header::BridgeExitZeroCopy::from_bridge_exit(be)
-                })
-                .collect();
-        Self::write_zero_copy_data(&mut stdin, &bridge_exits_zero_copy, "bridge_exits");
-
-        // Use zero-copy for imported_bridge_exits
-        let imported_bridge_exits_zero_copy: Vec<
-            pessimistic_proof::multi_batch_header::ImportedBridgeExitZeroCopy,
-        > = batch_header
-            .imported_bridge_exits
-            .iter()
-            .map(|(ibe, _)| {
-                pessimistic_proof::multi_batch_header::ImportedBridgeExitZeroCopy::from_imported_bridge_exit(ibe)
-            })
-            .collect();
-        Self::write_zero_copy_data(
-            &mut stdin,
-            &imported_bridge_exits_zero_copy,
-            "imported_bridge_exits",
-        );
-
-        // Use zero-copy for imported bridge exit nullifier paths
-        let nullifier_paths_zero_copy: Vec<
-            pessimistic_proof::multi_batch_header::SmtNonInclusionProofZeroCopy,
-        > = batch_header
-            .imported_bridge_exits
-            .iter()
-            .map(|(_, path)| {
-                pessimistic_proof::multi_batch_header::SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(path)
-            })
-            .collect();
-        Self::write_zero_copy_data(&mut stdin, &nullifier_paths_zero_copy, "nullifier_paths");
-
-        // Use zero-copy for balances_proofs (TokenInfo + balance amount)
-        let balances_proofs_zero_copy: Vec<
-            pessimistic_proof::multi_batch_header::BalanceProofEntryZeroCopy,
-        > = batch_header
-            .balances_proofs
-            .iter()
-            .map(|(ti, (balance, _))| {
-                pessimistic_proof::multi_batch_header::BalanceProofEntryZeroCopy {
-                    token_info:
-                        pessimistic_proof::multi_batch_header::TokenInfoZeroCopy::from_token_info(
-                            ti,
-                        ),
-                    balance: balance.to_be_bytes(),
-                    _padding: [0; 8],
-                }
-            })
-            .collect();
-        Self::write_zero_copy_data(&mut stdin, &balances_proofs_zero_copy, "balances_proofs");
-
-        // Use zero-copy for balance Merkle paths (zero-copy)
-        let balance_merkle_paths_zero_copy: Vec<
-            pessimistic_proof::multi_batch_header::SmtMerkleProofZeroCopy,
-        > = batch_header
-            .balances_proofs
-            .iter()
-            .map(|(_, (_, path))| {
-                pessimistic_proof::multi_batch_header::SmtMerkleProofZeroCopy::from_smt_merkle_proof(path)
-            })
-            .collect();
-        Self::write_zero_copy_data(
-            &mut stdin,
-            &balance_merkle_paths_zero_copy,
-            "balance_merkle_paths",
-        );
+        // Write all components to stdin
+        stdin.write_vec(header_bytes);
+        
+        // Write zero-copy components directly as bytes
+        stdin.write_vec(bridge_exits_bytes);
+        stdin.write_vec(imported_bridge_exits_bytes);
+        stdin.write_vec(nullifier_paths_bytes);
+        stdin.write_vec(balances_proofs_bytes);
+        stdin.write_vec(balance_merkle_paths_bytes);
 
         // Write aggchain_proof separately using bincode (since zero-copy truncates it)
-        println!("Writing aggchain_proof using bincode");
-        stdin.write(&batch_header.aggchain_proof);
-
-        println!("Stdin prepared");
+        stdin.write(&aggchain_proof);
         stdin
     }
 
