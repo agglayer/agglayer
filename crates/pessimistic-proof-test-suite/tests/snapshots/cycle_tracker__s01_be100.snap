@@ -4,24 +4,24 @@ expression: stats
 snapshot_kind: text
 ---
 gas: 4568783
-opcode counts (1609492 total instructions):
-    434140 add
-    256907 sw
-    191533 lw
-    187127 lbu
-    103381 bne
+opcode counts (1609507 total instructions):
+    434092 add
+    256867 sw
+    191473 lw
+    187203 lbu
+    103376 bne
      96511 sb
      81441 xor
-     66833 bltu
-     34441 and
-     28879 beq
-     22152 or
-     20626 jalr
-     17050 sll
-     14268 sltu
+     66821 bltu
+     34434 and
+     28877 beq
+     22208 or
+     20624 jalr
+     17112 sll
+     14266 sltu
      14100 sub
      12562 srl
-     10317 auipc
+     10316 auipc
       3949 bgeu
       3338 jal
       2864 mul

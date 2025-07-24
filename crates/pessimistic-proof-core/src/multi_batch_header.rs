@@ -599,8 +599,9 @@ impl ClaimZeroCopy {
             0 => {
                 // Mainnet claim
                 let mainnet_size = ClaimFromMainnetZeroCopy::size();
-                let mainnet_zero_copy: &ClaimFromMainnetZeroCopy =
-                    bytemuck::from_bytes(&self.claim_data[..mainnet_size]);
+                let mainnet_zero_copy = bytemuck::pod_read_unaligned::<ClaimFromMainnetZeroCopy>(
+                    &self.claim_data[..mainnet_size],
+                );
                 Ok(unified_bridge::Claim::Mainnet(Box::new(
                     mainnet_zero_copy.to_claim_from_mainnet(),
                 )))
@@ -608,8 +609,9 @@ impl ClaimZeroCopy {
             1 => {
                 // Rollup claim
                 let rollup_size = ClaimFromRollupZeroCopy::size();
-                let rollup_zero_copy: &ClaimFromRollupZeroCopy =
-                    bytemuck::from_bytes(&self.claim_data[..rollup_size]);
+                let rollup_zero_copy = bytemuck::pod_read_unaligned::<ClaimFromRollupZeroCopy>(
+                    &self.claim_data[..rollup_size],
+                );
                 Ok(unified_bridge::Claim::Rollup(Box::new(
                     rollup_zero_copy.to_claim_from_rollup(),
                 )))
@@ -791,14 +793,17 @@ where
             0 => {
                 // ECDSA - reconstruct signer (20 bytes) + signature (65 bytes)
                 let signer = agglayer_primitives::Address::from(
-                    <[u8; 20]>::try_from(&zero_copy.aggchain_proof_data[..20]).unwrap(),
+                    <[u8; 20]>::try_from(&zero_copy.aggchain_proof_data[..20])
+                        .map_err(|e| format!("Failed to convert signer bytes: {}", e))?,
                 );
                 let signature = agglayer_primitives::Signature::new(
                     agglayer_primitives::U256::from_be_bytes(
-                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[20..52]).unwrap(),
+                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[20..52])
+                            .map_err(|e| format!("Failed to convert signature r bytes: {}", e))?,
                     ),
                     agglayer_primitives::U256::from_be_bytes(
-                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[52..84]).unwrap(),
+                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[52..84])
+                            .map_err(|e| format!("Failed to convert signature s bytes: {}", e))?,
                     ),
                     // Extract v byte and convert from Ethereum format (27/28) to boolean
                     // v = 27 means even parity (false), v = 28 means odd parity (true)
@@ -809,7 +814,8 @@ where
             1 => {
                 // Generic
                 let aggchain_params = agglayer_primitives::Digest::from(
-                    <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[..32]).unwrap(),
+                    <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[..32])
+                        .map_err(|e| format!("Failed to convert aggchain_params bytes: {}", e))?,
                 );
                 // Reconstruct vkey from bytes
                 let mut aggchain_vkey = [0u32; 8];
@@ -817,7 +823,11 @@ where
                     let start = 32 + i * 4;
                     let end = start + 4;
                     let bytes = &zero_copy.aggchain_proof_data[start..end];
-                    aggchain_vkey[i] = u32::from_be_bytes(bytes.try_into().unwrap());
+                    aggchain_vkey[i] = u32::from_be_bytes(
+                        bytes
+                            .try_into()
+                            .map_err(|e| format!("Failed to convert vkey byte {}: {}", i, e))?,
+                    );
                 }
                 AggchainData::Generic {
                     aggchain_params,
@@ -872,11 +882,10 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher>,
         Box<dyn std::error::Error + Send + Sync>,
     > {
-        // Deserialize header with proper alignment
-        let mut aligned_header_buffer = [0u8; std::mem::size_of::<MultiBatchHeaderZeroCopy>()];
-        aligned_header_buffer.copy_from_slice(header_bytes);
+        // Deserialize header using pod_read_unaligned for robustness against alignment
+        // issues
         let header_zero_copy =
-            bytemuck::from_bytes::<MultiBatchHeaderZeroCopy>(&aligned_header_buffer);
+            bytemuck::pod_read_unaligned::<MultiBatchHeaderZeroCopy>(header_bytes);
 
         // Create borrowed slices for zero-copy components using try_cast_slice
         let bridge_exits: &'a [BridgeExitZeroCopy] = if bridge_exits_bytes.is_empty() {
