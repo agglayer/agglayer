@@ -690,9 +690,8 @@ where
         })
     }
 
-
-
-    /// Helper function to safely deserialize zero-copy data with proper alignment
+    /// Helper function to safely deserialize zero-copy data with proper
+    /// alignment
     pub fn deserialize_zero_copy<T: bytemuck::Pod>(data: &[u8]) -> Vec<T> {
         if data.is_empty() {
             return vec![];
@@ -706,9 +705,10 @@ where
 
 // Specific implementation for Keccak256Hasher with zero-copy component helpers
 impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
-    /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy components.
-    /// This is the complete reconstruction pattern used in SP1 zkvm environments.
-    /// Returns a borrowed view to avoid allocations for variable fields.
+    /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy
+    /// components. This is the complete reconstruction pattern used in SP1
+    /// zkvm environments. Returns a borrowed view to avoid allocations for
+    /// variable fields.
     pub fn from_zero_copy_components<'a>(
         header_bytes: &'a [u8],
         bridge_exits_bytes: &'a [u8],
@@ -717,12 +717,16 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         balances_proofs_bytes: &'a [u8],
         balance_merkle_paths_bytes: &'a [u8],
         aggchain_proof: AggchainData,
-    ) -> Result<MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<
+        MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher>,
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
         // Deserialize header with proper alignment
         let mut aligned_header_buffer = [0u8; std::mem::size_of::<MultiBatchHeaderZeroCopy>()];
         aligned_header_buffer.copy_from_slice(header_bytes);
-        let header_zero_copy = bytemuck::from_bytes::<MultiBatchHeaderZeroCopy>(&aligned_header_buffer);
-        
+        let header_zero_copy =
+            bytemuck::from_bytes::<MultiBatchHeaderZeroCopy>(&aligned_header_buffer);
+
         // Create borrowed slices for zero-copy components using try_cast_slice
         let bridge_exits: &'a [BridgeExitZeroCopy] = if bridge_exits_bytes.is_empty() {
             &[]
@@ -731,19 +735,21 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
                 .map_err(|e| format!("Failed to cast bridge_exits_bytes: {}", e))?
         };
 
-        let imported_bridge_exits: &'a [ImportedBridgeExitZeroCopy] = if imported_bridge_exits_bytes.is_empty() {
-            &[]
-        } else {
-            bytemuck::try_cast_slice(imported_bridge_exits_bytes)
-                .map_err(|e| format!("Failed to cast imported_bridge_exits_bytes: {}", e))?
-        };
+        let imported_bridge_exits: &'a [ImportedBridgeExitZeroCopy] =
+            if imported_bridge_exits_bytes.is_empty() {
+                &[]
+            } else {
+                bytemuck::try_cast_slice(imported_bridge_exits_bytes)
+                    .map_err(|e| format!("Failed to cast imported_bridge_exits_bytes: {}", e))?
+            };
 
-        let nullifier_paths: &'a [SmtNonInclusionProofZeroCopy] = if nullifier_paths_bytes.is_empty() {
-            &[]
-        } else {
-            bytemuck::try_cast_slice(nullifier_paths_bytes)
-                .map_err(|e| format!("Failed to cast nullifier_paths_bytes: {}", e))?
-        };
+        let nullifier_paths: &'a [SmtNonInclusionProofZeroCopy] =
+            if nullifier_paths_bytes.is_empty() {
+                &[]
+            } else {
+                bytemuck::try_cast_slice(nullifier_paths_bytes)
+                    .map_err(|e| format!("Failed to cast nullifier_paths_bytes: {}", e))?
+            };
 
         let balances_proofs: &'a [BalanceProofEntryZeroCopy] = if balances_proofs_bytes.is_empty() {
             &[]
@@ -752,13 +758,14 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
                 .map_err(|e| format!("Failed to cast balances_proofs_bytes: {}", e))?
         };
 
-        let balance_merkle_paths: &'a [SmtMerkleProofZeroCopy] = if balance_merkle_paths_bytes.is_empty() {
-            &[]
-        } else {
-            bytemuck::try_cast_slice(balance_merkle_paths_bytes)
-                .map_err(|e| format!("Failed to cast balance_merkle_paths_bytes: {}", e))?
-        };
-        
+        let balance_merkle_paths: &'a [SmtMerkleProofZeroCopy] =
+            if balance_merkle_paths_bytes.is_empty() {
+                &[]
+            } else {
+                bytemuck::try_cast_slice(balance_merkle_paths_bytes)
+                    .map_err(|e| format!("Failed to cast balance_merkle_paths_bytes: {}", e))?
+            };
+
         // Reconstruct the MultiBatchHeaderRef from zero-copy components
         let origin_network = NetworkId::new(header_zero_copy.origin_network);
         let prev_pessimistic_root = <<agglayer_primitives::keccak::Keccak256Hasher as agglayer_primitives::keccak::Hasher>::Digest as From<[u8; 32]>>::from(header_zero_copy.prev_pessimistic_root);
@@ -778,8 +785,8 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         })
     }
 
-    /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy components.
-    /// This avoids allocations by using borrowed slices.
+    /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy
+    /// components. This avoids allocations by using borrowed slices.
     /// @deprecated Use from_zero_copy_components instead
     pub fn from_zero_copy_components_ref<'a>(
         header_bytes: &'a [u8],
@@ -789,7 +796,10 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         balances_proofs_bytes: &'a [u8],
         balance_merkle_paths_bytes: &'a [u8],
         aggchain_proof: AggchainData,
-    ) -> Result<MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<
+        MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher>,
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
         Self::from_zero_copy_components(
             header_bytes,
             bridge_exits_bytes,
@@ -803,19 +813,21 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
 
     /// Prepare zero-copy components for serialization.
     /// This returns all the components needed for zero-copy serialization.
-    pub fn to_zero_copy_components(&self) -> (
-        Vec<u8>, // header_bytes
-        Vec<u8>, // bridge_exits_bytes
-        Vec<u8>, // imported_bridge_exits_bytes
-        Vec<u8>, // nullifier_paths_bytes
-        Vec<u8>, // balances_proofs_bytes
-        Vec<u8>, // balance_merkle_paths_bytes
+    pub fn to_zero_copy_components(
+        &self,
+    ) -> (
+        Vec<u8>,      // header_bytes
+        Vec<u8>,      // bridge_exits_bytes
+        Vec<u8>,      // imported_bridge_exits_bytes
+        Vec<u8>,      // nullifier_paths_bytes
+        Vec<u8>,      // balances_proofs_bytes
+        Vec<u8>,      // balance_merkle_paths_bytes
         AggchainData, // aggchain_proof (separate since it's variable size)
     ) {
         // Convert header to zero-copy
         let header_zero_copy = self.to_zero_copy();
         let header_bytes = bytemuck::bytes_of(&header_zero_copy).to_vec();
-        
+
         // Convert bridge_exits to zero-copy
         let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> = self
             .bridge_exits
@@ -823,15 +835,16 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
             .map(|be| BridgeExitZeroCopy::from_bridge_exit(be))
             .collect();
         let bridge_exits_bytes = bytemuck::cast_slice(&bridge_exits_zero_copy).to_vec();
-        
+
         // Convert imported_bridge_exits to zero-copy
         let imported_bridge_exits_zero_copy: Vec<ImportedBridgeExitZeroCopy> = self
             .imported_bridge_exits
             .iter()
             .map(|(ibe, _)| ImportedBridgeExitZeroCopy::from_imported_bridge_exit(ibe))
             .collect();
-        let imported_bridge_exits_bytes = bytemuck::cast_slice(&imported_bridge_exits_zero_copy).to_vec();
-        
+        let imported_bridge_exits_bytes =
+            bytemuck::cast_slice(&imported_bridge_exits_zero_copy).to_vec();
+
         // Extract nullifier paths
         let nullifier_paths_zero_copy: Vec<SmtNonInclusionProofZeroCopy> = self
             .imported_bridge_exits
@@ -839,7 +852,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
             .map(|(_, path)| SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(path))
             .collect();
         let nullifier_paths_bytes = bytemuck::cast_slice(&nullifier_paths_zero_copy).to_vec();
-        
+
         // Convert balances_proofs to zero-copy
         let balances_proofs_zero_copy: Vec<BalanceProofEntryZeroCopy> = self
             .balances_proofs
@@ -851,15 +864,16 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
             })
             .collect();
         let balances_proofs_bytes = bytemuck::cast_slice(&balances_proofs_zero_copy).to_vec();
-        
+
         // Extract balance Merkle paths
         let balance_merkle_paths_zero_copy: Vec<SmtMerkleProofZeroCopy> = self
             .balances_proofs
             .iter()
             .map(|(_, (_, path))| SmtMerkleProofZeroCopy::from_smt_merkle_proof(path))
             .collect();
-        let balance_merkle_paths_bytes = bytemuck::cast_slice(&balance_merkle_paths_zero_copy).to_vec();
-        
+        let balance_merkle_paths_bytes =
+            bytemuck::cast_slice(&balance_merkle_paths_zero_copy).to_vec();
+
         (
             header_bytes,
             bridge_exits_bytes,
@@ -872,8 +886,9 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
     }
 }
 
-/// Zero-copy borrowed view of MultiBatchHeader that avoids allocations for variable fields.
-/// This struct holds borrowed slices for large variable-length data while keeping small fields owned.
+/// Zero-copy borrowed view of MultiBatchHeader that avoids allocations for
+/// variable fields. This struct holds borrowed slices for large variable-length
+/// data while keeping small fields owned.
 #[derive(Debug, Clone)]
 pub struct MultiBatchHeaderRef<'a, H>
 where
@@ -894,7 +909,8 @@ where
     pub nullifier_paths: &'a [SmtNonInclusionProofZeroCopy],
     /// L1 info root used to import bridge exits.
     pub l1_info_root: H::Digest,
-    /// Token balances of the origin network before processing bridge events (borrowed).
+    /// Token balances of the origin network before processing bridge events
+    /// (borrowed).
     pub balances_proofs: &'a [BalanceProofEntryZeroCopy],
     /// Balance Merkle paths (borrowed).
     pub balance_merkle_paths: &'a [SmtMerkleProofZeroCopy],
@@ -913,8 +929,11 @@ where
 // Specific implementation for Keccak256Hasher
 impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
     /// Convert to owned MultiBatchHeader by cloning all borrowed data.
-    /// This is a specialized version for Keccak256Hasher to avoid type conflicts.
-    pub fn to_owned_keccak(&self) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+    /// This is a specialized version for Keccak256Hasher to avoid type
+    /// conflicts.
+    pub fn to_owned_keccak(
+        &self,
+    ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         // Convert bridge_exits
         let bridge_exits: Vec<BridgeExit> = self
             .bridge_exits
@@ -923,7 +942,10 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
             .collect();
 
         // Convert imported_bridge_exits and nullifier_paths
-        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<agglayer_primitives::keccak::Keccak256Hasher>)> = self
+        let imported_bridge_exits: Vec<(
+            ImportedBridgeExit,
+            NullifierPath<agglayer_primitives::keccak::Keccak256Hasher>,
+        )> = self
             .imported_bridge_exits
             .iter()
             .zip(self.nullifier_paths.iter())
@@ -935,7 +957,13 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
             .collect();
 
         // Convert balances_proofs and balance_merkle_paths
-        let balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath<agglayer_primitives::keccak::Keccak256Hasher>))> = self
+        let balances_proofs: Vec<(
+            TokenInfo,
+            (
+                U256,
+                LocalBalancePath<agglayer_primitives::keccak::Keccak256Hasher>,
+            ),
+        )> = self
             .balances_proofs
             .iter()
             .zip(self.balance_merkle_paths.iter())
@@ -959,7 +987,6 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1369,10 +1396,9 @@ mod tests {
             .contains("Invalid aggchain proof type"));
     }
 
-
-
-    /// Test demonstrating full recovery of MultiBatchHeader from zero-copy components.
-    /// This simulates the pattern used in the SP1 zkvm environment.
+    /// Test demonstrating full recovery of MultiBatchHeader from zero-copy
+    /// components. This simulates the pattern used in the SP1 zkvm
+    /// environment.
     #[test]
     fn test_full_recovery_from_zero_copy_components() {
         // Test with ECDSA aggchain proof
@@ -1385,7 +1411,8 @@ mod tests {
     }
 
     /// Test demonstrating zero-copy borrowed view functionality.
-    /// This verifies that MultiBatchHeaderRef works correctly without allocations.
+    /// This verifies that MultiBatchHeaderRef works correctly without
+    /// allocations.
     #[test]
     fn test_zero_copy_borrowed_view() {
         // Test with ECDSA aggchain proof
@@ -1397,7 +1424,8 @@ mod tests {
         test_borrowed_view_recovery(&original_generic);
     }
 
-    /// Test that alignment errors are handled correctly when using try_cast_slice.
+    /// Test that alignment errors are handled correctly when using
+    /// try_cast_slice.
     #[test]
     fn test_alignment_error_handling() {
         let original = create_sample_multi_batch_header();
@@ -1426,11 +1454,16 @@ mod tests {
         );
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Failed to cast bridge_exits_bytes"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to cast bridge_exits_bytes"));
     }
 
     /// Helper function to test zero-copy recovery for a given MultiBatchHeader
-    fn test_zero_copy_recovery(original: &MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>) {
+    fn test_zero_copy_recovery(
+        original: &MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>,
+    ) {
         // Use the new helper function to get all zero-copy components
         let (
             header_bytes,
@@ -1464,8 +1497,11 @@ mod tests {
         );
     }
 
-    /// Helper function to test borrowed view recovery for a given MultiBatchHeader
-    fn test_borrowed_view_recovery(original: &MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>) {
+    /// Helper function to test borrowed view recovery for a given
+    /// MultiBatchHeader
+    fn test_borrowed_view_recovery(
+        original: &MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>,
+    ) {
         // Use the new helper function to get all zero-copy components
         let (
             header_bytes,
@@ -1499,16 +1535,34 @@ mod tests {
         );
 
         // Verify that the borrowed view has the correct counts
-        assert_eq!(borrowed_view.bridge_exits.len(), original.bridge_exits.len());
-        assert_eq!(borrowed_view.imported_bridge_exits.len(), original.imported_bridge_exits.len());
-        assert_eq!(borrowed_view.nullifier_paths.len(), original.imported_bridge_exits.len());
-        assert_eq!(borrowed_view.balances_proofs.len(), original.balances_proofs.len());
-        assert_eq!(borrowed_view.balance_merkle_paths.len(), original.balances_proofs.len());
+        assert_eq!(
+            borrowed_view.bridge_exits.len(),
+            original.bridge_exits.len()
+        );
+        assert_eq!(
+            borrowed_view.imported_bridge_exits.len(),
+            original.imported_bridge_exits.len()
+        );
+        assert_eq!(
+            borrowed_view.nullifier_paths.len(),
+            original.imported_bridge_exits.len()
+        );
+        assert_eq!(
+            borrowed_view.balances_proofs.len(),
+            original.balances_proofs.len()
+        );
+        assert_eq!(
+            borrowed_view.balance_merkle_paths.len(),
+            original.balances_proofs.len()
+        );
 
         // Verify that the borrowed view has the correct basic fields
         assert_eq!(borrowed_view.origin_network, original.origin_network);
         assert_eq!(borrowed_view.height, original.height);
-        assert_eq!(borrowed_view.prev_pessimistic_root, original.prev_pessimistic_root);
+        assert_eq!(
+            borrowed_view.prev_pessimistic_root,
+            original.prev_pessimistic_root
+        );
         assert_eq!(borrowed_view.l1_info_root, original.l1_info_root);
     }
 }

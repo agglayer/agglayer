@@ -1,4 +1,3 @@
-
 pub use pessimistic_proof::PessimisticProofOutput;
 use pessimistic_proof::{
     keccak::{Hasher, Keccak256Hasher},
@@ -37,8 +36,6 @@ impl Runner {
         Self { client }
     }
 
-
-
     /// Convert inputs to stdin.
     pub fn prepare_stdin(state: &NetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
         let mut stdin = SP1Stdin::new();
@@ -60,7 +57,7 @@ impl Runner {
 
         // Write all components to stdin
         stdin.write_vec(header_bytes);
-        
+
         // Write zero-copy components directly as bytes
         stdin.write_vec(bridge_exits_bytes);
         stdin.write_vec(imported_bridge_exits_bytes);
