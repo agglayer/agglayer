@@ -629,6 +629,126 @@ pub struct BalanceProofEntryZeroCopy {
     pub _padding: [u8; 8],
 }
 
+/// Zero-copy compatible AggchainData for bytemuck operations.
+/// This captures the fixed-size data from AggchainData variants.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AggchainDataZeroCopy {
+    /// Aggchain proof type (u8: 0=ECDSA, 1=Generic)
+    pub aggchain_proof_type: u8,
+    /// Padding to ensure proper alignment
+    pub _padding: [u8; 7],
+    /// Aggchain proof data (variable size, but we'll use a fixed buffer)
+    /// For ECDSA: 20 bytes signer + 65 bytes signature = 85 bytes
+    /// For Generic: 32 bytes aggchain_params + 32 bytes vkey = 64 bytes
+    pub aggchain_proof_data: [u8; 85],
+}
+
+// SAFETY: This struct has a stable C-compatible memory layout
+// - #[repr(C)] ensures C-compatible layout
+// - Fields are ordered by alignment (u8 first, then padding, then array)
+// - Total size is 93 bytes: 1+7+85 = 93
+// - Cannot use derive due to [u8; 85] not being supported by bytemuck derive
+unsafe impl Pod for AggchainDataZeroCopy {}
+unsafe impl Zeroable for AggchainDataZeroCopy {}
+
+impl From<&AggchainData> for AggchainDataZeroCopy {
+    fn from(aggchain_data: &AggchainData) -> Self {
+        match aggchain_data {
+            AggchainData::ECDSA { signer, signature } => {
+                let mut aggchain_proof_data = [0u8; 85];
+                // Copy signer address (20 bytes) + signature bytes (65 bytes)
+                aggchain_proof_data[..20].copy_from_slice(signer.as_slice());
+                let sig_bytes = signature.as_bytes();
+                aggchain_proof_data[20..85].copy_from_slice(&sig_bytes[..65]);
+
+                Self {
+                    aggchain_proof_type: 0,
+                    _padding: [0; 7],
+                    aggchain_proof_data,
+                }
+            }
+            AggchainData::Generic {
+                aggchain_params,
+                aggchain_vkey,
+            } => {
+                let mut aggchain_proof_data = [0u8; 85];
+                // Copy aggchain_params (32 bytes) + vkey (32 bytes)
+                aggchain_proof_data[..32].copy_from_slice(aggchain_params.as_slice());
+                // Convert vkey from [u32; 8] to bytes
+                for (i, &val) in aggchain_vkey.iter().enumerate() {
+                    let bytes = val.to_be_bytes();
+                    aggchain_proof_data[32 + i * 4..36 + i * 4].copy_from_slice(&bytes);
+                }
+
+                Self {
+                    aggchain_proof_type: 1,
+                    _padding: [0; 7],
+                    aggchain_proof_data,
+                }
+            }
+        }
+    }
+}
+
+impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(zero_copy: &AggchainDataZeroCopy) -> Result<Self, Self::Error> {
+        match zero_copy.aggchain_proof_type {
+            0 => {
+                // ECDSA - reconstruct signer (20 bytes) + signature (65 bytes)
+                let signer = agglayer_primitives::Address::from(
+                    <[u8; 20]>::try_from(&zero_copy.aggchain_proof_data[..20])
+                        .map_err(|e| format!("Failed to convert signer bytes: {}", e))?,
+                );
+                let signature = agglayer_primitives::Signature::new(
+                    agglayer_primitives::U256::from_be_bytes(
+                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[20..52])
+                            .map_err(|e| format!("Failed to convert signature r bytes: {}", e))?,
+                    ),
+                    agglayer_primitives::U256::from_be_bytes(
+                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[52..84])
+                            .map_err(|e| format!("Failed to convert signature s bytes: {}", e))?,
+                    ),
+                    // Extract v byte and convert from Ethereum format (27/28) to boolean
+                    // v = 27 means even parity (false), v = 28 means odd parity (true)
+                    zero_copy.aggchain_proof_data[84] == 28,
+                );
+                Ok(AggchainData::ECDSA { signer, signature })
+            }
+            1 => {
+                // Generic
+                let aggchain_params = agglayer_primitives::Digest::from(
+                    <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[..32])
+                        .map_err(|e| format!("Failed to convert aggchain_params bytes: {}", e))?,
+                );
+                // Reconstruct vkey from bytes
+                let mut aggchain_vkey = [0u32; 8];
+                for i in 0..8 {
+                    let start = 32 + i * 4;
+                    let end = start + 4;
+                    let bytes = &zero_copy.aggchain_proof_data[start..end];
+                    aggchain_vkey[i] = u32::from_be_bytes(
+                        bytes
+                            .try_into()
+                            .map_err(|e| format!("Failed to convert vkey byte {}: {}", i, e))?,
+                    );
+                }
+                Ok(AggchainData::Generic {
+                    aggchain_params,
+                    aggchain_vkey,
+                })
+            }
+            _ => Err(format!(
+                "Invalid aggchain proof type: {}",
+                zero_copy.aggchain_proof_type
+            )
+            .into()),
+        }
+    }
+}
+
 /// Zero-copy representation of MultiBatchHeader for safe transmute.
 /// This struct has a stable C-compatible memory layout with fixed-size fields
 /// and offsets to variable-length data.
@@ -649,22 +769,17 @@ pub struct MultiBatchHeaderZeroCopy {
     pub prev_pessimistic_root: [u8; 32],
     /// L1 info root used to import bridge exits (32 bytes)
     pub l1_info_root: [u8; 32],
-    /// Aggchain proof data (variable size, but we'll use a fixed buffer)
-    /// For ECDSA: 20 bytes signer + 65 bytes signature = 85 bytes
-    /// For Generic: 32 bytes aggchain_params + 32 bytes vkey = 64 bytes
-    pub aggchain_proof_data: [u8; 85],
-    /// Aggchain proof type (u8: 0=ECDSA, 1=Generic)
-    pub aggchain_proof_type: u8,
-    /// Padding to ensure proper alignment
-    pub _padding: [u8; 7],
+    /// Aggchain proof data (zero-copy struct)
+    pub aggchain_proof: AggchainDataZeroCopy,
 }
 
 // SAFETY: This struct has a stable C-compatible memory layout
 // - #[repr(C)] ensures C-compatible layout
-// - Fields are ordered by alignment (u64 first, then u32, then arrays, then u8)
-// - Explicit padding field ensures proper alignment without internal padding
+// - Fields are ordered by alignment (u64 first, then u32, then arrays, then
+//   struct)
 // - Total size is 184 bytes (includes internal padding)
-// - Cannot use derive due to [u8; 85] not being supported by bytemuck derive
+// - Cannot use derive due to AggchainDataZeroCopy not being supported by
+//   bytemuck derive
 // - Safety verified by comprehensive runtime tests
 unsafe impl Pod for MultiBatchHeaderZeroCopy {}
 unsafe impl Zeroable for MultiBatchHeaderZeroCopy {}
@@ -703,33 +818,6 @@ where
     H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
 {
     fn from(self_: &MultiBatchHeader<H>) -> Self {
-        let aggchain_proof_type = match &self_.aggchain_proof {
-            AggchainData::ECDSA { .. } => 0u8,
-            AggchainData::Generic { .. } => 1u8,
-        };
-
-        let mut aggchain_proof_data = [0u8; 85];
-        match &self_.aggchain_proof {
-            AggchainData::ECDSA { signer, signature } => {
-                // Copy signer address (20 bytes) + signature bytes (65 bytes)
-                aggchain_proof_data[..20].copy_from_slice(signer.as_slice());
-                let sig_bytes = signature.as_bytes();
-                aggchain_proof_data[20..85].copy_from_slice(&sig_bytes[..65]);
-            }
-            AggchainData::Generic {
-                aggchain_params,
-                aggchain_vkey,
-            } => {
-                // Copy aggchain_params (32 bytes) + vkey (32 bytes)
-                aggchain_proof_data[..32].copy_from_slice(aggchain_params.as_slice());
-                // Convert vkey from [u32; 8] to bytes
-                for (i, &val) in aggchain_vkey.iter().enumerate() {
-                    let bytes = val.to_be_bytes();
-                    aggchain_proof_data[32 + i * 4..36 + i * 4].copy_from_slice(&bytes);
-                }
-            }
-        }
-
         MultiBatchHeaderZeroCopy {
             height: self_.height,
             origin_network: self_.origin_network.to_u32(),
@@ -738,9 +826,7 @@ where
             balances_proofs_count: self_.balances_proofs.len() as u32,
             prev_pessimistic_root: self_.prev_pessimistic_root.as_ref().try_into().unwrap(),
             l1_info_root: self_.l1_info_root.as_ref().try_into().unwrap(),
-            aggchain_proof_data,
-            aggchain_proof_type,
-            _padding: [0; 7],
+            aggchain_proof: (&self_.aggchain_proof).into(),
         }
     }
 }
@@ -758,53 +844,7 @@ where
             <H::Digest as From<[u8; 32]>>::from(zero_copy.prev_pessimistic_root);
         let l1_info_root = <H::Digest as From<[u8; 32]>>::from(zero_copy.l1_info_root);
 
-        let aggchain_proof = match zero_copy.aggchain_proof_type {
-            0 => {
-                // ECDSA - reconstruct signer (20 bytes) + signature (65 bytes)
-                let signer = agglayer_primitives::Address::from(
-                    <[u8; 20]>::try_from(&zero_copy.aggchain_proof_data[..20])
-                        .map_err(|e| format!("Failed to convert signer bytes: {}", e))?,
-                );
-                let signature = agglayer_primitives::Signature::new(
-                    agglayer_primitives::U256::from_be_bytes(
-                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[20..52])
-                            .map_err(|e| format!("Failed to convert signature r bytes: {}", e))?,
-                    ),
-                    agglayer_primitives::U256::from_be_bytes(
-                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[52..84])
-                            .map_err(|e| format!("Failed to convert signature s bytes: {}", e))?,
-                    ),
-                    // Extract v byte and convert from Ethereum format (27/28) to boolean
-                    // v = 27 means even parity (false), v = 28 means odd parity (true)
-                    zero_copy.aggchain_proof_data[84] == 28,
-                );
-                AggchainData::ECDSA { signer, signature }
-            }
-            1 => {
-                // Generic
-                let aggchain_params = agglayer_primitives::Digest::from(
-                    <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[..32])
-                        .map_err(|e| format!("Failed to convert aggchain_params bytes: {}", e))?,
-                );
-                // Reconstruct vkey from bytes
-                let mut aggchain_vkey = [0u32; 8];
-                for i in 0..8 {
-                    let start = 32 + i * 4;
-                    let end = start + 4;
-                    let bytes = &zero_copy.aggchain_proof_data[start..end];
-                    aggchain_vkey[i] = u32::from_be_bytes(
-                        bytes
-                            .try_into()
-                            .map_err(|e| format!("Failed to convert vkey byte {}: {}", i, e))?,
-                    );
-                }
-                AggchainData::Generic {
-                    aggchain_params,
-                    aggchain_vkey,
-                }
-            }
-            _ => return Err("Invalid aggchain proof type".into()),
-        };
+        let aggchain_proof = AggchainData::try_from(&zero_copy.aggchain_proof)?;
 
         Ok(MultiBatchHeader {
             origin_network,
@@ -834,7 +874,6 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         nullifier_paths_bytes: &'a [u8],
         balances_proofs_bytes: &'a [u8],
         balance_merkle_paths_bytes: &'a [u8],
-        aggchain_proof: AggchainData,
     ) -> Result<
         MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher>,
         Box<dyn std::error::Error + Send + Sync>,
@@ -883,6 +922,9 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
                     .map_err(|e| format!("Failed to cast balance_merkle_paths_bytes: {}", e))?
             };
 
+        // Extract aggchain_proof from header
+        let aggchain_proof = AggchainData::try_from(&header_zero_copy.aggchain_proof)?;
+
         // Reconstruct the MultiBatchHeaderRef from zero-copy components
         let origin_network = NetworkId::new(header_zero_copy.origin_network);
         let prev_pessimistic_root = <<agglayer_primitives::keccak::Keccak256Hasher as agglayer_primitives::keccak::Hasher>::Digest as From<[u8; 32]>>::from(header_zero_copy.prev_pessimistic_root);
@@ -908,13 +950,12 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         &self,
     ) -> Result<
         (
-            Vec<u8>,      // header_bytes
-            Vec<u8>,      // bridge_exits_bytes
-            Vec<u8>,      // imported_bridge_exits_bytes
-            Vec<u8>,      // nullifier_paths_bytes
-            Vec<u8>,      // balances_proofs_bytes
-            Vec<u8>,      // balance_merkle_paths_bytes
-            AggchainData, // aggchain_proof (separate since it's variable size)
+            Vec<u8>, // header_bytes
+            Vec<u8>, // bridge_exits_bytes
+            Vec<u8>, // imported_bridge_exits_bytes
+            Vec<u8>, // nullifier_paths_bytes
+            Vec<u8>, // balances_proofs_bytes
+            Vec<u8>, // balance_merkle_paths_bytes
         ),
         Box<dyn std::error::Error + Send + Sync>,
     > {
@@ -972,7 +1013,6 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
             nullifier_paths_bytes,
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
-            self.aggchain_proof.clone(),
         ))
     }
 }
@@ -1531,7 +1571,7 @@ mod tests {
     fn test_invalid_aggchain_proof_type() {
         let original = create_sample_multi_batch_header();
         let mut zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
-        zero_copy.aggchain_proof_type = 255; // Invalid type
+        zero_copy.aggchain_proof.aggchain_proof_type = 255; // Invalid type
 
         let result: Result<MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>, _> =
             MultiBatchHeader::try_from(&zero_copy);
@@ -1596,7 +1636,6 @@ mod tests {
             nullifier_paths_bytes,
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
-            aggchain_proof,
         ) = original
             .to_zero_copy_components()
             .expect("Failed to convert to zero-copy components");
@@ -1612,7 +1651,6 @@ mod tests {
             &nullifier_paths_bytes,
             &balances_proofs_bytes,
             &balance_merkle_paths_bytes,
-            aggchain_proof,
         );
 
         assert!(result.is_err());
@@ -1634,7 +1672,6 @@ mod tests {
             nullifier_paths_bytes,
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
-            aggchain_proof,
         ) = original
             .to_zero_copy_components()
             .expect("Failed to convert to zero-copy components");
@@ -1647,7 +1684,6 @@ mod tests {
             &nullifier_paths_bytes,
             &balances_proofs_bytes,
             &balance_merkle_paths_bytes,
-            aggchain_proof,
         ).expect("Failed to reconstruct MultiBatchHeaderRef");
 
         // Convert to owned for deep comparison
@@ -1676,7 +1712,6 @@ mod tests {
             nullifier_paths_bytes,
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
-            aggchain_proof,
         ) = original
             .to_zero_copy_components()
             .expect("Failed to convert to zero-copy components");
@@ -1689,7 +1724,6 @@ mod tests {
             &nullifier_paths_bytes,
             &balances_proofs_bytes,
             &balance_merkle_paths_bytes,
-            aggchain_proof,
         ).expect("Failed to reconstruct MultiBatchHeaderRef");
 
         // Convert to owned and verify full recovery
@@ -1945,8 +1979,8 @@ mod tests {
         assert_eq!(std::mem::align_of_val(&claim), 1);
 
         // Test MultiBatchHeaderZeroCopy - complex structure (184 bytes)
-        // This struct cannot use derive due to [u8; 85] not being supported by bytemuck
-        // derive
+        // This struct cannot use derive due to AggchainDataZeroCopy not being supported
+        // by bytemuck derive
         let header = MultiBatchHeaderZeroCopy {
             height: 0,
             origin_network: 0,
@@ -1955,9 +1989,11 @@ mod tests {
             balances_proofs_count: 0,
             prev_pessimistic_root: [0u8; 32],
             l1_info_root: [0u8; 32],
-            aggchain_proof_data: [0u8; 85],
-            aggchain_proof_type: 0,
-            _padding: [0; 7],
+            aggchain_proof: AggchainDataZeroCopy {
+                aggchain_proof_type: 0,
+                _padding: [0; 7],
+                aggchain_proof_data: [0u8; 85],
+            },
         };
         assert_eq!(std::mem::size_of_val(&header), 184);
         assert_eq!(std::mem::align_of_val(&header), 8);
