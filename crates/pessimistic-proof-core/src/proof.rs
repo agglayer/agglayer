@@ -280,17 +280,17 @@ pub fn verify_consensus(
             };
 
             let target_pp_root_version = {
-                if *signer
-                    == verify_signature(
+                if signer
+                    == &verify_signature(
                         signature_commitment.commitment(CommitmentVersion::V3),
-                        signature,
+                        &signature,
                     )?
                 {
                     CommitmentVersion::V3
-                } else if *signer
-                    == verify_signature(
+                } else if signer
+                    == &verify_signature(
                         signature_commitment.commitment(CommitmentVersion::V2),
-                        signature,
+                        &signature,
                     )?
                 {
                     CommitmentVersion::V2

@@ -4,9 +4,9 @@ use std::hash::Hash;
 
 use agglayer_primitives::{keccak::Hasher, U256};
 use bytemuck::{Pod, Zeroable};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use serde_with::serde_as;
-use unified_bridge::{BridgeExit, ImportedBridgeExit, NetworkId, TokenInfo};
+use unified_bridge::{BridgeExit, Claim, ImportedBridgeExit, NetworkId, TokenInfo};
 
 use crate::{
     aggchain_proof::AggchainData, local_balance_tree::LocalBalancePath,
@@ -41,9 +41,10 @@ impl BridgeExitZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from BridgeExit to BridgeExitZeroCopy
-    pub fn from_bridge_exit(bridge_exit: &unified_bridge::BridgeExit) -> Self {
+impl From<&BridgeExit> for BridgeExitZeroCopy {
+    fn from(bridge_exit: &BridgeExit) -> Self {
         Self {
             origin_network: bridge_exit.token_info.origin_network.to_u32(),
             dest_network: bridge_exit.dest_network.to_u32(),
@@ -60,25 +61,26 @@ impl BridgeExitZeroCopy {
             _padding: [0; 3],
         }
     }
+}
 
-    /// Convert from BridgeExitZeroCopy to BridgeExit
-    pub fn to_bridge_exit(&self) -> unified_bridge::BridgeExit {
+impl From<&BridgeExitZeroCopy> for BridgeExit {
+    fn from(zc: &BridgeExitZeroCopy) -> Self {
         unified_bridge::BridgeExit {
-            leaf_type: self
+            leaf_type: zc
                 .leaf_type
                 .try_into()
                 .unwrap_or(unified_bridge::LeafType::Transfer),
             token_info: unified_bridge::TokenInfo {
-                origin_network: unified_bridge::NetworkId::new(self.origin_network),
-                origin_token_address: agglayer_primitives::Address::new(self.origin_token_address),
+                origin_network: unified_bridge::NetworkId::new(zc.origin_network),
+                origin_token_address: agglayer_primitives::Address::new(zc.origin_token_address),
             },
-            dest_network: unified_bridge::NetworkId::new(self.dest_network),
-            dest_address: agglayer_primitives::Address::from(self.dest_address),
-            amount: agglayer_primitives::U256::from_be_bytes(self.amount),
-            metadata: if self.metadata_hash == [0; 32] {
+            dest_network: unified_bridge::NetworkId::new(zc.dest_network),
+            dest_address: agglayer_primitives::Address::from(zc.dest_address),
+            amount: agglayer_primitives::U256::from_be_bytes(zc.amount),
+            metadata: if zc.metadata_hash == [0; 32] {
                 None
             } else {
-                Some(agglayer_primitives::Digest(self.metadata_hash))
+                Some(agglayer_primitives::Digest(zc.metadata_hash))
             },
         }
     }
@@ -99,9 +101,10 @@ impl TokenInfoZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from TokenInfo to TokenInfoZeroCopy
-    pub fn from_token_info(token_info: &unified_bridge::TokenInfo) -> Self {
+impl From<&TokenInfo> for TokenInfoZeroCopy {
+    fn from(token_info: &TokenInfo) -> Self {
         Self {
             origin_network: token_info.origin_network.to_u32(),
             origin_token_address: token_info
@@ -111,12 +114,13 @@ impl TokenInfoZeroCopy {
                 .unwrap(),
         }
     }
+}
 
-    /// Convert from TokenInfoZeroCopy to TokenInfo
-    pub fn to_token_info(&self) -> unified_bridge::TokenInfo {
+impl From<&TokenInfoZeroCopy> for TokenInfo {
+    fn from(zc: &TokenInfoZeroCopy) -> Self {
         unified_bridge::TokenInfo {
-            origin_network: unified_bridge::NetworkId::new(self.origin_network),
-            origin_token_address: agglayer_primitives::Address::from(self.origin_token_address),
+            origin_network: unified_bridge::NetworkId::new(zc.origin_network),
+            origin_token_address: agglayer_primitives::Address::from(zc.origin_token_address),
         }
     }
 }
@@ -143,12 +147,13 @@ impl ImportedBridgeExitZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from ImportedBridgeExit to ImportedBridgeExitZeroCopy
-    pub fn from_imported_bridge_exit(
-        imported_bridge_exit: &unified_bridge::ImportedBridgeExit,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let claim_data = ClaimZeroCopy::from_claim(&imported_bridge_exit.claim_data);
+impl TryFrom<&ImportedBridgeExit> for ImportedBridgeExitZeroCopy {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(imported_bridge_exit: &ImportedBridgeExit) -> Result<Self, Self::Error> {
+        let claim_data = ClaimZeroCopy::from(&imported_bridge_exit.claim_data);
 
         let rollup_index = imported_bridge_exit.global_index.rollup_index().ok_or(
             "GlobalIndex rollup_index is None - this should not happen in rollup contexts",
@@ -157,31 +162,32 @@ impl ImportedBridgeExitZeroCopy {
         Ok(Self {
             global_index_index: imported_bridge_exit.global_index.leaf_index() as u64,
             global_index_rollup: rollup_index.to_u32(),
-            bridge_exit: BridgeExitZeroCopy::from_bridge_exit(&imported_bridge_exit.bridge_exit),
+            bridge_exit: (&imported_bridge_exit.bridge_exit).into(),
             claim_data,
         })
     }
+}
 
-    /// Convert from ImportedBridgeExitZeroCopy to ImportedBridgeExit
-    pub fn to_imported_bridge_exit(
-        &self,
-    ) -> Result<unified_bridge::ImportedBridgeExit, Box<dyn std::error::Error + Send + Sync>> {
+impl TryFrom<&ImportedBridgeExitZeroCopy> for ImportedBridgeExit {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(zc: &ImportedBridgeExitZeroCopy) -> Result<Self, Self::Error> {
         // Validate that global_index_index fits in u32 to prevent silent truncation
-        if self.global_index_index > u32::MAX as u64 {
+        if zc.global_index_index > u32::MAX as u64 {
             return Err(format!(
                 "Global index index {} exceeds u32::MAX",
-                self.global_index_index
+                zc.global_index_index
             )
             .into());
         }
 
-        let claim = self.claim_data.to_claim()?;
+        let claim = Claim::try_from(&zc.claim_data)?;
         Ok(unified_bridge::ImportedBridgeExit {
-            bridge_exit: self.bridge_exit.to_bridge_exit(),
+            bridge_exit: (&zc.bridge_exit).into(),
             claim_data: claim,
             global_index: unified_bridge::GlobalIndex::new(
-                unified_bridge::NetworkId::new(self.global_index_rollup),
-                self.global_index_index as u32,
+                unified_bridge::NetworkId::new(zc.global_index_rollup),
+                zc.global_index_index as u32,
             ),
         })
     }
@@ -201,7 +207,7 @@ pub struct SmtMerkleProofZeroCopy {
 // - All fields are fixed-size arrays of u8, which are Pod and Zeroable
 // - The total size is 6144 bytes with no padding
 // - Cannot use derive due to large array size (6144 bytes exceeds bytemuck's
-//   derive limits)
+// derive limits)
 unsafe impl Pod for SmtMerkleProofZeroCopy {}
 unsafe impl Zeroable for SmtMerkleProofZeroCopy {}
 
@@ -210,9 +216,12 @@ impl SmtMerkleProofZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from SmtMerkleProof to SmtMerkleProofZeroCopy
-    pub fn from_smt_merkle_proof(
+impl From<&agglayer_tries::proof::SmtMerkleProof<agglayer_primitives::keccak::Keccak256Hasher, 192>>
+    for SmtMerkleProofZeroCopy
+{
+    fn from(
         proof: &agglayer_tries::proof::SmtMerkleProof<
             agglayer_primitives::keccak::Keccak256Hasher,
             192,
@@ -224,14 +233,14 @@ impl SmtMerkleProofZeroCopy {
         }
         Self { siblings }
     }
+}
 
-    /// Convert from SmtMerkleProofZeroCopy to SmtMerkleProof
-    pub fn to_smt_merkle_proof(
-        &self,
-    ) -> agglayer_tries::proof::SmtMerkleProof<agglayer_primitives::keccak::Keccak256Hasher, 192>
-    {
+impl From<&SmtMerkleProofZeroCopy>
+    for agglayer_tries::proof::SmtMerkleProof<agglayer_primitives::keccak::Keccak256Hasher, 192>
+{
+    fn from(zc: &SmtMerkleProofZeroCopy) -> Self {
         let siblings: [agglayer_primitives::Digest; 192] =
-            self.siblings.map(|s| agglayer_primitives::Digest(s));
+            zc.siblings.map(|s| agglayer_primitives::Digest(s));
         agglayer_tries::proof::SmtMerkleProof { siblings }
     }
 }
@@ -263,9 +272,17 @@ impl SmtNonInclusionProofZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from SmtNonInclusionProof to SmtNonInclusionProofZeroCopy
-    pub fn from_smt_non_inclusion_proof(
+impl
+    From<
+        &agglayer_tries::proof::SmtNonInclusionProof<
+            agglayer_primitives::keccak::Keccak256Hasher,
+            64,
+        >,
+    > for SmtNonInclusionProofZeroCopy
+{
+    fn from(
         proof: &agglayer_tries::proof::SmtNonInclusionProof<
             agglayer_primitives::keccak::Keccak256Hasher,
             64,
@@ -286,14 +303,17 @@ impl SmtNonInclusionProofZeroCopy {
             siblings,
         }
     }
+}
 
-    /// Convert from SmtNonInclusionProofZeroCopy to SmtNonInclusionProof
-    pub fn to_smt_non_inclusion_proof(
-        &self,
-    ) -> agglayer_tries::proof::SmtNonInclusionProof<agglayer_primitives::keccak::Keccak256Hasher, 64>
-    {
-        let num_siblings = self.num_siblings.min(64) as usize;
-        let siblings: Vec<agglayer_primitives::Digest> = self
+impl From<&SmtNonInclusionProofZeroCopy>
+    for agglayer_tries::proof::SmtNonInclusionProof<
+        agglayer_primitives::keccak::Keccak256Hasher,
+        64,
+    >
+{
+    fn from(zc: &SmtNonInclusionProofZeroCopy) -> Self {
+        let num_siblings = zc.num_siblings.min(64) as usize;
+        let siblings: Vec<agglayer_primitives::Digest> = zc
             .siblings
             .iter()
             .take(num_siblings)
@@ -316,9 +336,12 @@ impl LETMerkleProofZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from LETMerkleProof to LETMerkleProofZeroCopy
-    pub fn from_let_merkle_proof(
+impl From<&unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher>>
+    for LETMerkleProofZeroCopy
+{
+    fn from(
         proof: &unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher>,
     ) -> Self {
         let mut siblings = [[0u8; 32]; 32];
@@ -327,13 +350,14 @@ impl LETMerkleProofZeroCopy {
         }
         Self { siblings }
     }
+}
 
-    /// Convert from LETMerkleProofZeroCopy to LETMerkleProof
-    pub fn to_let_merkle_proof(
-        &self,
-    ) -> unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher> {
+impl From<&LETMerkleProofZeroCopy>
+    for unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher>
+{
+    fn from(zc: &LETMerkleProofZeroCopy) -> Self {
         let siblings: [agglayer_primitives::Digest; 32] =
-            self.siblings.map(|s| agglayer_primitives::Digest(s));
+            zc.siblings.map(|s| agglayer_primitives::Digest(s));
         unified_bridge::LETMerkleProof { siblings }
     }
 }
@@ -353,20 +377,22 @@ impl MerkleProofZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from MerkleProof to MerkleProofZeroCopy
-    pub fn from_merkle_proof(proof: &unified_bridge::MerkleProof) -> Self {
+impl From<&unified_bridge::MerkleProof> for MerkleProofZeroCopy {
+    fn from(proof: &unified_bridge::MerkleProof) -> Self {
         Self {
-            proof: LETMerkleProofZeroCopy::from_let_merkle_proof(&proof.proof),
+            proof: (&proof.proof).into(),
             root: proof.root.0,
         }
     }
+}
 
-    /// Convert from MerkleProofZeroCopy to MerkleProof
-    pub fn to_merkle_proof(&self) -> unified_bridge::MerkleProof {
+impl From<&MerkleProofZeroCopy> for unified_bridge::MerkleProof {
+    fn from(zc: &MerkleProofZeroCopy) -> Self {
         unified_bridge::MerkleProof {
-            proof: self.proof.to_let_merkle_proof(),
-            root: agglayer_primitives::Digest(self.root),
+            proof: (&zc.proof).into(),
+            root: agglayer_primitives::Digest(zc.root),
         }
     }
 }
@@ -388,22 +414,24 @@ impl L1InfoTreeLeafInnerZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from L1InfoTreeLeafInner to L1InfoTreeLeafInnerZeroCopy
-    pub fn from_l1_info_tree_leaf_inner(inner: &unified_bridge::L1InfoTreeLeafInner) -> Self {
+impl From<&unified_bridge::L1InfoTreeLeafInner> for L1InfoTreeLeafInnerZeroCopy {
+    fn from(inner: &unified_bridge::L1InfoTreeLeafInner) -> Self {
         Self {
             block_hash: inner.block_hash.0,
             timestamp: inner.timestamp,
             global_exit_root: inner.global_exit_root.0,
         }
     }
+}
 
-    /// Convert from L1InfoTreeLeafInnerZeroCopy to L1InfoTreeLeafInner
-    pub fn to_l1_info_tree_leaf_inner(&self) -> unified_bridge::L1InfoTreeLeafInner {
+impl From<&L1InfoTreeLeafInnerZeroCopy> for unified_bridge::L1InfoTreeLeafInner {
+    fn from(zc: &L1InfoTreeLeafInnerZeroCopy) -> Self {
         unified_bridge::L1InfoTreeLeafInner {
-            block_hash: agglayer_primitives::Digest(self.block_hash),
-            timestamp: self.timestamp,
-            global_exit_root: agglayer_primitives::Digest(self.global_exit_root),
+            block_hash: agglayer_primitives::Digest(zc.block_hash),
+            timestamp: zc.timestamp,
+            global_exit_root: agglayer_primitives::Digest(zc.global_exit_root),
         }
     }
 }
@@ -429,25 +457,27 @@ impl L1InfoTreeLeafZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from L1InfoTreeLeaf to L1InfoTreeLeafZeroCopy
-    pub fn from_l1_info_tree_leaf(leaf: &unified_bridge::L1InfoTreeLeaf) -> Self {
+impl From<&unified_bridge::L1InfoTreeLeaf> for L1InfoTreeLeafZeroCopy {
+    fn from(leaf: &unified_bridge::L1InfoTreeLeaf) -> Self {
         Self {
             l1_info_tree_index: leaf.l1_info_tree_index,
             _padding: [0; 4],
             rer: leaf.rer.0,
             mer: leaf.mer.0,
-            inner: L1InfoTreeLeafInnerZeroCopy::from_l1_info_tree_leaf_inner(&leaf.inner),
+            inner: (&leaf.inner).into(),
         }
     }
+}
 
-    /// Convert from L1InfoTreeLeafZeroCopy to L1InfoTreeLeaf
-    pub fn to_l1_info_tree_leaf(&self) -> unified_bridge::L1InfoTreeLeaf {
+impl From<&L1InfoTreeLeafZeroCopy> for unified_bridge::L1InfoTreeLeaf {
+    fn from(zc: &L1InfoTreeLeafZeroCopy) -> Self {
         unified_bridge::L1InfoTreeLeaf {
-            l1_info_tree_index: self.l1_info_tree_index,
-            rer: agglayer_primitives::Digest(self.rer),
-            mer: agglayer_primitives::Digest(self.mer),
-            inner: self.inner.to_l1_info_tree_leaf_inner(),
+            l1_info_tree_index: zc.l1_info_tree_index,
+            rer: agglayer_primitives::Digest(zc.rer),
+            mer: agglayer_primitives::Digest(zc.mer),
+            inner: (&zc.inner).into(),
         }
     }
 }
@@ -469,22 +499,24 @@ impl ClaimFromMainnetZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from ClaimFromMainnet to ClaimFromMainnetZeroCopy
-    pub fn from_claim_from_mainnet(claim: &unified_bridge::ClaimFromMainnet) -> Self {
+impl From<&unified_bridge::ClaimFromMainnet> for ClaimFromMainnetZeroCopy {
+    fn from(claim: &unified_bridge::ClaimFromMainnet) -> Self {
         Self {
-            proof_leaf_mer: MerkleProofZeroCopy::from_merkle_proof(&claim.proof_leaf_mer),
-            proof_ger_l1root: MerkleProofZeroCopy::from_merkle_proof(&claim.proof_ger_l1root),
-            l1_leaf: L1InfoTreeLeafZeroCopy::from_l1_info_tree_leaf(&claim.l1_leaf),
+            proof_leaf_mer: (&claim.proof_leaf_mer).into(),
+            proof_ger_l1root: (&claim.proof_ger_l1root).into(),
+            l1_leaf: (&claim.l1_leaf).into(),
         }
     }
+}
 
-    /// Convert from ClaimFromMainnetZeroCopy to ClaimFromMainnet
-    pub fn to_claim_from_mainnet(&self) -> unified_bridge::ClaimFromMainnet {
+impl From<&ClaimFromMainnetZeroCopy> for unified_bridge::ClaimFromMainnet {
+    fn from(zc: &ClaimFromMainnetZeroCopy) -> Self {
         unified_bridge::ClaimFromMainnet {
-            proof_leaf_mer: self.proof_leaf_mer.to_merkle_proof(),
-            proof_ger_l1root: self.proof_ger_l1root.to_merkle_proof(),
-            l1_leaf: self.l1_leaf.to_l1_info_tree_leaf(),
+            proof_leaf_mer: (&zc.proof_leaf_mer).into(),
+            proof_ger_l1root: (&zc.proof_ger_l1root).into(),
+            l1_leaf: (&zc.l1_leaf).into(),
         }
     }
 }
@@ -508,24 +540,26 @@ impl ClaimFromRollupZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from ClaimFromRollup to ClaimFromRollupZeroCopy
-    pub fn from_claim_from_rollup(claim: &unified_bridge::ClaimFromRollup) -> Self {
+impl From<&unified_bridge::ClaimFromRollup> for ClaimFromRollupZeroCopy {
+    fn from(claim: &unified_bridge::ClaimFromRollup) -> Self {
         Self {
-            proof_leaf_ler: MerkleProofZeroCopy::from_merkle_proof(&claim.proof_leaf_ler),
-            proof_ler_rer: MerkleProofZeroCopy::from_merkle_proof(&claim.proof_ler_rer),
-            proof_ger_l1root: MerkleProofZeroCopy::from_merkle_proof(&claim.proof_ger_l1root),
-            l1_leaf: L1InfoTreeLeafZeroCopy::from_l1_info_tree_leaf(&claim.l1_leaf),
+            proof_leaf_ler: (&claim.proof_leaf_ler).into(),
+            proof_ler_rer: (&claim.proof_ler_rer).into(),
+            proof_ger_l1root: (&claim.proof_ger_l1root).into(),
+            l1_leaf: (&claim.l1_leaf).into(),
         }
     }
+}
 
-    /// Convert from ClaimFromRollupZeroCopy to ClaimFromRollup
-    pub fn to_claim_from_rollup(&self) -> unified_bridge::ClaimFromRollup {
+impl From<&ClaimFromRollupZeroCopy> for unified_bridge::ClaimFromRollup {
+    fn from(zc: &ClaimFromRollupZeroCopy) -> Self {
         unified_bridge::ClaimFromRollup {
-            proof_leaf_ler: self.proof_leaf_ler.to_merkle_proof(),
-            proof_ler_rer: self.proof_ler_rer.to_merkle_proof(),
-            proof_ger_l1root: self.proof_ger_l1root.to_merkle_proof(),
-            l1_leaf: self.l1_leaf.to_l1_info_tree_leaf(),
+            proof_leaf_ler: (&zc.proof_leaf_ler).into(),
+            proof_ler_rer: (&zc.proof_ler_rer).into(),
+            proof_ger_l1root: (&zc.proof_ger_l1root).into(),
+            l1_leaf: (&zc.l1_leaf).into(),
         }
     }
 }
@@ -549,7 +583,7 @@ pub struct ClaimZeroCopy {
 // - Fields are ordered by alignment (u8 first, then padding, then array)
 // - Total size is 3352 bytes: 1+7+3344 = 3352
 // - Cannot use derive due to complex field layout and explicit padding
-//   requirements
+// requirements
 unsafe impl Pod for ClaimZeroCopy {}
 unsafe impl Zeroable for ClaimZeroCopy {}
 
@@ -558,13 +592,13 @@ impl ClaimZeroCopy {
     pub const fn size() -> usize {
         std::mem::size_of::<Self>()
     }
+}
 
-    /// Convert from Claim to ClaimZeroCopy
-    pub fn from_claim(claim: &unified_bridge::Claim) -> Self {
+impl From<&unified_bridge::Claim> for ClaimZeroCopy {
+    fn from(claim: &unified_bridge::Claim) -> Self {
         match claim {
             unified_bridge::Claim::Mainnet(mainnet_claim) => {
-                let mainnet_zero_copy =
-                    ClaimFromMainnetZeroCopy::from_claim_from_mainnet(mainnet_claim);
+                let mainnet_zero_copy = ClaimFromMainnetZeroCopy::from(&**mainnet_claim);
                 let mainnet_bytes = bytemuck::bytes_of(&mainnet_zero_copy);
                 let mut claim_data = [0u8; 3344];
                 claim_data[..mainnet_bytes.len()].copy_from_slice(mainnet_bytes);
@@ -576,8 +610,7 @@ impl ClaimZeroCopy {
                 }
             }
             unified_bridge::Claim::Rollup(rollup_claim) => {
-                let rollup_zero_copy =
-                    ClaimFromRollupZeroCopy::from_claim_from_rollup(rollup_claim);
+                let rollup_zero_copy = ClaimFromRollupZeroCopy::from(&**rollup_claim);
                 let rollup_bytes = bytemuck::bytes_of(&rollup_zero_copy);
                 let mut claim_data = [0u8; 3344];
                 claim_data[..rollup_bytes.len()].copy_from_slice(rollup_bytes);
@@ -590,30 +623,31 @@ impl ClaimZeroCopy {
             }
         }
     }
+}
 
-    /// Convert from ClaimZeroCopy to Claim
-    pub fn to_claim(
-        &self,
-    ) -> Result<unified_bridge::Claim, Box<dyn std::error::Error + Send + Sync>> {
-        match self.claim_type {
+impl TryFrom<&ClaimZeroCopy> for unified_bridge::Claim {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(zc: &ClaimZeroCopy) -> Result<Self, Self::Error> {
+        match zc.claim_type {
             0 => {
                 // Mainnet claim
                 let mainnet_size = ClaimFromMainnetZeroCopy::size();
                 let mainnet_zero_copy = bytemuck::pod_read_unaligned::<ClaimFromMainnetZeroCopy>(
-                    &self.claim_data[..mainnet_size],
+                    &zc.claim_data[..mainnet_size],
                 );
                 Ok(unified_bridge::Claim::Mainnet(Box::new(
-                    mainnet_zero_copy.to_claim_from_mainnet(),
+                    (&mainnet_zero_copy).into(),
                 )))
             }
             1 => {
                 // Rollup claim
                 let rollup_size = ClaimFromRollupZeroCopy::size();
                 let rollup_zero_copy = bytemuck::pod_read_unaligned::<ClaimFromRollupZeroCopy>(
-                    &self.claim_data[..rollup_size],
+                    &zc.claim_data[..rollup_size],
                 );
                 Ok(unified_bridge::Claim::Rollup(Box::new(
-                    rollup_zero_copy.to_claim_from_rollup(),
+                    (&rollup_zero_copy).into(),
                 )))
             }
             _ => Err("Invalid claim type".into()),
@@ -678,7 +712,7 @@ pub struct MultiBatchHeaderZeroCopy {
 // - Explicit padding field ensures proper alignment without internal padding
 // - Total size is 181 bytes: 8+4+4+4+4+32+32+85+1+7 = 181
 // - Cannot use derive due to complex field layout and explicit padding
-//   requirements
+// requirements
 unsafe impl Pod for MultiBatchHeaderZeroCopy {}
 unsafe impl Zeroable for MultiBatchHeaderZeroCopy {}
 
@@ -691,25 +725,23 @@ impl MultiBatchHeaderZeroCopy {
 
 /// Represents the chain state transition for the pessimistic proof.
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct MultiBatchHeader<H>
 where
     H: Hasher,
     H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned,
 {
-    /// Network that emitted this [`MultiBatchHeader`].
+    /// Network that emitted this [MultiBatchHeader].
     pub origin_network: NetworkId,
     /// Current certificate height of the L2 chain.
     pub height: u64,
     /// Previous pessimistic root.
-    #[serde_as(as = "_")]
     pub prev_pessimistic_root: H::Digest,
     /// List of bridge exits created in this batch.
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits claimed in this batch.
     pub imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<H>)>,
     /// L1 info root used to import bridge exits.
-    #[serde_as(as = "_")]
     pub l1_info_root: H::Digest,
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
@@ -724,24 +756,21 @@ where
     H: Hasher,
     H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
 {
-    /// Convert to zero-copy representation.
-    /// Note: This only captures the fixed-size header data.
-    /// The variable-length data (bridge_exits, imported_bridge_exits,
-    /// balances_proofs) should be serialized separately for full data
-    /// integrity. See the test_full_recovery_from_zero_copy_components_*
-    /// tests for the complete pattern that achieves 100% data integrity.
-    ///
-    /// IMPORTANT: This method performs data transformation but returns a
-    /// zero-copy struct. Use the returned struct's as_bytes() method for
-    /// true zero-copy operations.
-    pub fn to_zero_copy(&self) -> MultiBatchHeaderZeroCopy {
-        let aggchain_proof_type = match &self.aggchain_proof {
+}
+
+impl<H> From<&MultiBatchHeader<H>> for MultiBatchHeaderZeroCopy
+where
+    H: Hasher,
+    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
+{
+    fn from(self_: &MultiBatchHeader<H>) -> Self {
+        let aggchain_proof_type = match &self_.aggchain_proof {
             AggchainData::ECDSA { .. } => 0u8,
             AggchainData::Generic { .. } => 1u8,
         };
 
         let mut aggchain_proof_data = [0u8; 85];
-        match &self.aggchain_proof {
+        match &self_.aggchain_proof {
             AggchainData::ECDSA { signer, signature } => {
                 // Copy signer address (20 bytes) + signature bytes (65 bytes)
                 aggchain_proof_data[..20].copy_from_slice(signer.as_slice());
@@ -763,27 +792,28 @@ where
         }
 
         MultiBatchHeaderZeroCopy {
-            height: self.height,
-            origin_network: self.origin_network.to_u32(),
-            bridge_exits_count: self.bridge_exits.len() as u32,
-            imported_bridge_exits_count: self.imported_bridge_exits.len() as u32,
-            balances_proofs_count: self.balances_proofs.len() as u32,
-            prev_pessimistic_root: self.prev_pessimistic_root.as_ref().try_into().unwrap(),
-            l1_info_root: self.l1_info_root.as_ref().try_into().unwrap(),
+            height: self_.height,
+            origin_network: self_.origin_network.to_u32(),
+            bridge_exits_count: self_.bridge_exits.len() as u32,
+            imported_bridge_exits_count: self_.imported_bridge_exits.len() as u32,
+            balances_proofs_count: self_.balances_proofs.len() as u32,
+            prev_pessimistic_root: self_.prev_pessimistic_root.as_ref().try_into().unwrap(),
+            l1_info_root: self_.l1_info_root.as_ref().try_into().unwrap(),
             aggchain_proof_data,
             aggchain_proof_type,
             _padding: [0; 7],
         }
     }
+}
 
-    /// Convert from zero-copy representation.
-    /// Note: This only reconstructs the fixed-size header data.
-    /// The variable-length data should be deserialized separately for full data
-    /// integrity. See the test_full_recovery_from_zero_copy_components_*
-    /// tests for the complete pattern that achieves 100% data integrity.
-    pub fn from_zero_copy(
-        zero_copy: &MultiBatchHeaderZeroCopy,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+impl<H> TryFrom<&MultiBatchHeaderZeroCopy> for MultiBatchHeader<H>
+where
+    H: Hasher,
+    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
+{
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(zero_copy: &MultiBatchHeaderZeroCopy) -> Result<Self, Self::Error> {
         let origin_network = NetworkId::new(zero_copy.origin_network);
         let prev_pessimistic_root =
             <H::Digest as From<[u8; 32]>>::from(zero_copy.prev_pessimistic_root);
@@ -850,18 +880,18 @@ where
             aggchain_proof,
         })
     }
+}
 
-    /// Helper function to safely deserialize zero-copy data with proper
-    /// alignment
-    pub fn deserialize_zero_copy<T: bytemuck::Pod>(data: &[u8]) -> Vec<T> {
-        if data.is_empty() {
-            return vec![];
-        }
-        // Copy to aligned buffer to fix alignment issue
-        let mut aligned_buffer = vec![0u8; data.len()];
-        aligned_buffer.copy_from_slice(data);
-        bytemuck::cast_slice(&aligned_buffer).to_vec()
+/// Helper function to safely deserialize zero-copy data with proper
+/// alignment
+pub fn deserialize_zero_copy<T: bytemuck::Pod>(data: &[u8]) -> Vec<T> {
+    if data.is_empty() {
+        return vec![];
     }
+    // Copy to aligned buffer to fix alignment issue
+    let mut aligned_buffer = vec![0u8; data.len()];
+    aligned_buffer.copy_from_slice(data);
+    bytemuck::cast_slice(&aligned_buffer).to_vec()
 }
 
 // Specific implementation for Keccak256Hasher with zero-copy component helpers
@@ -962,22 +992,19 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         Box<dyn std::error::Error + Send + Sync>,
     > {
         // Convert header to zero-copy
-        let header_zero_copy = self.to_zero_copy();
+        let header_zero_copy: MultiBatchHeaderZeroCopy = (&*self).into();
         let header_bytes = bytemuck::bytes_of(&header_zero_copy).to_vec();
 
         // Convert bridge_exits to zero-copy
-        let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> = self
-            .bridge_exits
-            .iter()
-            .map(|be| BridgeExitZeroCopy::from_bridge_exit(be))
-            .collect();
+        let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> =
+            self.bridge_exits.iter().map(|be| (&*be).into()).collect();
         let bridge_exits_bytes = bytemuck::cast_slice(&bridge_exits_zero_copy).to_vec();
 
         // Convert imported_bridge_exits to zero-copy
         let imported_bridge_exits_zero_copy: Vec<ImportedBridgeExitZeroCopy> = self
             .imported_bridge_exits
             .iter()
-            .map(|(ibe, _)| ImportedBridgeExitZeroCopy::from_imported_bridge_exit(ibe))
+            .map(|(ibe, _)| ImportedBridgeExitZeroCopy::try_from(&*ibe))
             .collect::<Result<Vec<_>, _>>()?;
         let imported_bridge_exits_bytes =
             bytemuck::cast_slice(&imported_bridge_exits_zero_copy).to_vec();
@@ -986,7 +1013,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         let nullifier_paths_zero_copy: Vec<SmtNonInclusionProofZeroCopy> = self
             .imported_bridge_exits
             .iter()
-            .map(|(_, path)| SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(path))
+            .map(|(_, path)| (&*path).into())
             .collect();
         let nullifier_paths_bytes = bytemuck::cast_slice(&nullifier_paths_zero_copy).to_vec();
 
@@ -995,7 +1022,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
             .balances_proofs
             .iter()
             .map(|(token_info, (balance, _))| BalanceProofEntryZeroCopy {
-                token_info: TokenInfoZeroCopy::from_token_info(token_info),
+                token_info: (&*token_info).into(),
                 balance: balance.to_be_bytes(),
                 _padding: [0; 8],
             })
@@ -1006,7 +1033,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         let balance_merkle_paths_zero_copy: Vec<SmtMerkleProofZeroCopy> = self
             .balances_proofs
             .iter()
-            .map(|(_, (_, path))| SmtMerkleProofZeroCopy::from_smt_merkle_proof(path))
+            .map(|(_, (_, path))| (&*path).into())
             .collect();
         let balance_merkle_paths_bytes =
             bytemuck::cast_slice(&balance_merkle_paths_zero_copy).to_vec();
@@ -1032,7 +1059,7 @@ where
     H: Hasher,
     H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
 {
-    /// Network that emitted this [`MultiBatchHeaderRef`].
+    /// Network that emitted this [MultiBatchHeaderRef].
     pub origin_network: NetworkId,
     /// Current certificate height of the L2 chain.
     pub height: u64,
@@ -1075,11 +1102,8 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
         Box<dyn std::error::Error + Send + Sync>,
     > {
         // Convert bridge_exits
-        let bridge_exits: Vec<BridgeExit> = self
-            .bridge_exits
-            .iter()
-            .map(|be| be.to_bridge_exit())
-            .collect();
+        let bridge_exits: Vec<BridgeExit> =
+            self.bridge_exits.iter().map(|be| (&*be).into()).collect();
 
         // Convert imported_bridge_exits and nullifier_paths
         let imported_bridge_exits: Vec<(
@@ -1090,14 +1114,11 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
             .iter()
             .zip(self.nullifier_paths.iter())
             .map(|(ibe, path)| {
-                let imported_bridge_exit = ibe.to_imported_bridge_exit()?;
-                let nullifier_path = path.to_smt_non_inclusion_proof();
-                Ok::<_, Box<dyn std::error::Error + Send + Sync>>((
-                    imported_bridge_exit,
-                    nullifier_path,
-                ))
+                let imported_bridge_exit = ImportedBridgeExit::try_from(&*ibe)?;
+                let nullifier_path = (&*path).into();
+                Ok((imported_bridge_exit, nullifier_path))
             })
-            .collect::<Result<Vec<_>, Box<dyn std::error::Error + Send + Sync>>>()?;
+            .collect::<Result<_, Box<dyn std::error::Error + Send + Sync>>>()?;
 
         // Convert balances_proofs and balance_merkle_paths
         let balances_proofs: Vec<(
@@ -1111,9 +1132,9 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
             .iter()
             .zip(self.balance_merkle_paths.iter())
             .map(|(bp, path)| {
-                let token_info = bp.token_info.to_token_info();
+                let token_info = (&bp.token_info).into();
                 let balance = U256::from_be_bytes(bp.balance);
-                let merkle_path = path.to_smt_merkle_proof();
+                let merkle_path = (&*path).into();
                 (token_info, (balance, merkle_path))
             })
             .collect();
@@ -1619,8 +1640,8 @@ mod tests {
         bridge_exit.amount = U256::MAX;
         bridge_exit.metadata = Some(Digest([0xFFu8; 32]));
 
-        let zero_copy = BridgeExitZeroCopy::from_bridge_exit(&bridge_exit);
-        let reconstructed = zero_copy.to_bridge_exit();
+        let zero_copy: BridgeExitZeroCopy = (&bridge_exit).into();
+        let reconstructed: BridgeExit = (&zero_copy).into();
 
         assert_eq!(bridge_exit.amount, reconstructed.amount);
         assert_eq!(bridge_exit.metadata, reconstructed.metadata);
@@ -1630,8 +1651,8 @@ mod tests {
         bridge_exit.amount = U256::ZERO;
         bridge_exit.metadata = None;
 
-        let zero_copy = BridgeExitZeroCopy::from_bridge_exit(&bridge_exit);
-        let reconstructed = zero_copy.to_bridge_exit();
+        let zero_copy: BridgeExitZeroCopy = (&bridge_exit).into();
+        let reconstructed: BridgeExit = (&zero_copy).into();
 
         assert_eq!(bridge_exit.amount, reconstructed.amount);
         assert_eq!(bridge_exit.metadata, reconstructed.metadata);
@@ -1639,11 +1660,12 @@ mod tests {
 
     #[test]
     fn test_invalid_aggchain_proof_type() {
-        let mut zero_copy = create_sample_multi_batch_header().to_zero_copy();
+        let original = create_sample_multi_batch_header();
+        let mut zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
         zero_copy.aggchain_proof_type = 255; // Invalid type
 
         let result: Result<MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>, _> =
-            MultiBatchHeader::from_zero_copy(&zero_copy);
+            MultiBatchHeader::try_from(&zero_copy);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -1851,8 +1873,9 @@ mod tests {
     fn test_claim_zero_copy_conversion() {
         // Test Mainnet claim
         let mainnet_imported_exit = create_sample_imported_bridge_exit();
-        let mainnet_claim_zero_copy = ClaimZeroCopy::from_claim(&mainnet_imported_exit.claim_data);
-        let reconstructed_mainnet_claim = mainnet_claim_zero_copy.to_claim().unwrap();
+        let mainnet_claim_zero_copy = ClaimZeroCopy::from(&mainnet_imported_exit.claim_data);
+        let reconstructed_mainnet_claim =
+            unified_bridge::Claim::try_from(&mainnet_claim_zero_copy).unwrap();
 
         match (
             &mainnet_imported_exit.claim_data,
@@ -1871,8 +1894,9 @@ mod tests {
 
         // Test Rollup claim
         let rollup_imported_exit = create_sample_imported_bridge_exit_rollup();
-        let rollup_claim_zero_copy = ClaimZeroCopy::from_claim(&rollup_imported_exit.claim_data);
-        let reconstructed_rollup_claim = rollup_claim_zero_copy.to_claim().unwrap();
+        let rollup_claim_zero_copy = ClaimZeroCopy::from(&rollup_imported_exit.claim_data);
+        let reconstructed_rollup_claim =
+            unified_bridge::Claim::try_from(&rollup_claim_zero_copy).unwrap();
 
         match (
             &rollup_imported_exit.claim_data,
@@ -1895,10 +1919,10 @@ mod tests {
     #[test]
     fn test_invalid_claim_type() {
         let mut claim_zero_copy =
-            ClaimZeroCopy::from_claim(&create_sample_imported_bridge_exit().claim_data);
+            ClaimZeroCopy::from(&create_sample_imported_bridge_exit().claim_data);
         claim_zero_copy.claim_type = 255; // Invalid type
 
-        let result = claim_zero_copy.to_claim();
+        let result = unified_bridge::Claim::try_from(&claim_zero_copy);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -1912,9 +1936,8 @@ mod tests {
     fn test_smt_non_inclusion_proof_variable_length() {
         // Test with full-length proof (64 siblings)
         let full_proof = create_sample_smt_non_inclusion_proof();
-        let full_zero_copy =
-            SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(&full_proof);
-        let reconstructed_full = full_zero_copy.to_smt_non_inclusion_proof();
+        let full_zero_copy = SmtNonInclusionProofZeroCopy::from(&full_proof);
+        let reconstructed_full = (&full_zero_copy).into();
 
         assert_eq!(full_proof.siblings.len(), reconstructed_full.siblings.len());
         assert_eq!(full_proof.siblings, reconstructed_full.siblings);
@@ -1922,9 +1945,8 @@ mod tests {
 
         // Test with partial-length proof (32 siblings)
         let partial_proof = create_sample_smt_non_inclusion_proof_partial();
-        let partial_zero_copy =
-            SmtNonInclusionProofZeroCopy::from_smt_non_inclusion_proof(&partial_proof);
-        let reconstructed_partial = partial_zero_copy.to_smt_non_inclusion_proof();
+        let partial_zero_copy = SmtNonInclusionProofZeroCopy::from(&partial_proof);
+        let reconstructed_partial = (&partial_zero_copy).into();
 
         assert_eq!(
             partial_proof.siblings.len(),
@@ -1945,9 +1967,9 @@ mod tests {
         let original = create_sample_multi_batch_header();
 
         // Convert to zero-copy and back
-        let zero_copy = original.to_zero_copy();
+        let zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
         let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
-            MultiBatchHeader::from_zero_copy(&zero_copy).unwrap();
+            MultiBatchHeader::try_from(&zero_copy).unwrap();
 
         // Verify that the signature was reconstructed correctly
         match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
@@ -1975,12 +1997,11 @@ mod tests {
     fn test_global_index_bounds_checking() {
         // Create a sample ImportedBridgeExitZeroCopy with valid u32 value
         let valid_imported_exit = create_sample_imported_bridge_exit();
-        let valid_zero_copy =
-            ImportedBridgeExitZeroCopy::from_imported_bridge_exit(&valid_imported_exit)
-                .expect("Failed to create zero-copy from valid imported bridge exit");
+        let valid_zero_copy = ImportedBridgeExitZeroCopy::try_from(&valid_imported_exit)
+            .expect("Failed to create zero-copy from valid imported bridge exit");
 
         // This should succeed
-        let reconstructed = valid_zero_copy.to_imported_bridge_exit();
+        let reconstructed = ImportedBridgeExit::try_from(&valid_zero_copy);
         assert!(reconstructed.is_ok());
 
         // Create a corrupted zero-copy struct with value exceeding u32::MAX
@@ -1988,7 +2009,7 @@ mod tests {
         corrupted_zero_copy.global_index_index = u32::MAX as u64 + 1;
 
         // This should fail with bounds checking error
-        let result = corrupted_zero_copy.to_imported_bridge_exit();
+        let result = ImportedBridgeExit::try_from(&corrupted_zero_copy);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("exceeds u32::MAX"));
     }
