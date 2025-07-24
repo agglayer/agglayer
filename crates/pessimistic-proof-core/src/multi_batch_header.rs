@@ -36,13 +36,6 @@ pub struct BridgeExitZeroCopy {
     pub _padding: [u8; 3],
 }
 
-impl BridgeExitZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
 impl From<&BridgeExit> for BridgeExitZeroCopy {
     fn from(bridge_exit: &BridgeExit) -> Self {
         Self {
@@ -96,13 +89,6 @@ pub struct TokenInfoZeroCopy {
     pub origin_token_address: [u8; 20],
 }
 
-impl TokenInfoZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
 impl From<&TokenInfo> for TokenInfoZeroCopy {
     fn from(token_info: &TokenInfo) -> Self {
         Self {
@@ -140,13 +126,6 @@ pub struct ImportedBridgeExitZeroCopy {
     pub bridge_exit: BridgeExitZeroCopy,
     /// Claim data (2288 bytes)
     pub claim_data: ClaimZeroCopy,
-}
-
-impl ImportedBridgeExitZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
 }
 
 impl TryFrom<&ImportedBridgeExit> for ImportedBridgeExitZeroCopy {
@@ -211,13 +190,6 @@ pub struct SmtMerkleProofZeroCopy {
 unsafe impl Pod for SmtMerkleProofZeroCopy {}
 unsafe impl Zeroable for SmtMerkleProofZeroCopy {}
 
-impl SmtMerkleProofZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
 impl From<&agglayer_tries::proof::SmtMerkleProof<agglayer_primitives::keccak::Keccak256Hasher, 192>>
     for SmtMerkleProofZeroCopy
 {
@@ -266,13 +238,6 @@ pub struct SmtNonInclusionProofZeroCopy {
 // - Cannot use derive due to large array size and explicit padding requirements
 unsafe impl Pod for SmtNonInclusionProofZeroCopy {}
 unsafe impl Zeroable for SmtNonInclusionProofZeroCopy {}
-
-impl SmtNonInclusionProofZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
 
 impl
     From<
@@ -331,13 +296,6 @@ pub struct LETMerkleProofZeroCopy {
     pub siblings: [[u8; 32]; 32],
 }
 
-impl LETMerkleProofZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
 impl From<&unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher>>
     for LETMerkleProofZeroCopy
 {
@@ -372,13 +330,6 @@ pub struct MerkleProofZeroCopy {
     pub root: [u8; 32],
 }
 
-impl MerkleProofZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
 impl From<&unified_bridge::MerkleProof> for MerkleProofZeroCopy {
     fn from(proof: &unified_bridge::MerkleProof) -> Self {
         Self {
@@ -407,13 +358,6 @@ pub struct L1InfoTreeLeafInnerZeroCopy {
     pub timestamp: u64,
     /// Global exit root (32 bytes)
     pub global_exit_root: [u8; 32],
-}
-
-impl L1InfoTreeLeafInnerZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
 }
 
 impl From<&unified_bridge::L1InfoTreeLeafInner> for L1InfoTreeLeafInnerZeroCopy {
@@ -452,13 +396,6 @@ pub struct L1InfoTreeLeafZeroCopy {
     pub inner: L1InfoTreeLeafInnerZeroCopy,
 }
 
-impl L1InfoTreeLeafZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
 impl From<&unified_bridge::L1InfoTreeLeaf> for L1InfoTreeLeafZeroCopy {
     fn from(leaf: &unified_bridge::L1InfoTreeLeaf) -> Self {
         Self {
@@ -494,13 +431,6 @@ pub struct ClaimFromMainnetZeroCopy {
     pub l1_leaf: L1InfoTreeLeafZeroCopy,
 }
 
-impl ClaimFromMainnetZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
 impl From<&unified_bridge::ClaimFromMainnet> for ClaimFromMainnetZeroCopy {
     fn from(claim: &unified_bridge::ClaimFromMainnet) -> Self {
         Self {
@@ -533,13 +463,6 @@ pub struct ClaimFromRollupZeroCopy {
     pub proof_ger_l1root: MerkleProofZeroCopy,
     /// L1 leaf (176 bytes)
     pub l1_leaf: L1InfoTreeLeafZeroCopy,
-}
-
-impl ClaimFromRollupZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
 }
 
 impl From<&unified_bridge::ClaimFromRollup> for ClaimFromRollupZeroCopy {
@@ -587,13 +510,6 @@ pub struct ClaimZeroCopy {
 unsafe impl Pod for ClaimZeroCopy {}
 unsafe impl Zeroable for ClaimZeroCopy {}
 
-impl ClaimZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
 impl From<&unified_bridge::Claim> for ClaimZeroCopy {
     fn from(claim: &unified_bridge::Claim) -> Self {
         match claim {
@@ -632,7 +548,7 @@ impl TryFrom<&ClaimZeroCopy> for unified_bridge::Claim {
         match zc.claim_type {
             0 => {
                 // Mainnet claim
-                let mainnet_size = ClaimFromMainnetZeroCopy::size();
+                let mainnet_size = std::mem::size_of::<ClaimFromMainnetZeroCopy>();
                 let mainnet_zero_copy = bytemuck::pod_read_unaligned::<ClaimFromMainnetZeroCopy>(
                     &zc.claim_data[..mainnet_size],
                 );
@@ -642,7 +558,7 @@ impl TryFrom<&ClaimZeroCopy> for unified_bridge::Claim {
             }
             1 => {
                 // Rollup claim
-                let rollup_size = ClaimFromRollupZeroCopy::size();
+                let rollup_size = std::mem::size_of::<ClaimFromRollupZeroCopy>();
                 let rollup_zero_copy = bytemuck::pod_read_unaligned::<ClaimFromRollupZeroCopy>(
                     &zc.claim_data[..rollup_size],
                 );
@@ -667,13 +583,6 @@ pub struct BalanceProofEntryZeroCopy {
     pub balance: [u8; 32],
     /// Padding to ensure proper alignment
     pub _padding: [u8; 8],
-}
-
-impl BalanceProofEntryZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
 }
 
 /// Zero-copy representation of MultiBatchHeader for safe transmute.
@@ -715,13 +624,6 @@ pub struct MultiBatchHeaderZeroCopy {
 // requirements
 unsafe impl Pod for MultiBatchHeaderZeroCopy {}
 unsafe impl Zeroable for MultiBatchHeaderZeroCopy {}
-
-impl MultiBatchHeaderZeroCopy {
-    /// Get the size of this struct in bytes.
-    pub const fn size() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
 
 /// Represents the chain state transition for the pessimistic proof.
 #[serde_as]
@@ -1576,64 +1478,6 @@ mod tests {
     }
 
     #[test]
-    fn test_zero_copy_struct_sizes() {
-        // Test that the size calculations are correct
-        assert_eq!(
-            BridgeExitZeroCopy::size(),
-            std::mem::size_of::<BridgeExitZeroCopy>()
-        );
-        assert_eq!(
-            TokenInfoZeroCopy::size(),
-            std::mem::size_of::<TokenInfoZeroCopy>()
-        );
-        assert_eq!(
-            ImportedBridgeExitZeroCopy::size(),
-            std::mem::size_of::<ImportedBridgeExitZeroCopy>()
-        );
-        assert_eq!(
-            SmtMerkleProofZeroCopy::size(),
-            std::mem::size_of::<SmtMerkleProofZeroCopy>()
-        );
-        assert_eq!(
-            SmtNonInclusionProofZeroCopy::size(),
-            std::mem::size_of::<SmtNonInclusionProofZeroCopy>()
-        );
-        assert_eq!(
-            LETMerkleProofZeroCopy::size(),
-            std::mem::size_of::<LETMerkleProofZeroCopy>()
-        );
-        assert_eq!(
-            MerkleProofZeroCopy::size(),
-            std::mem::size_of::<MerkleProofZeroCopy>()
-        );
-        assert_eq!(
-            L1InfoTreeLeafInnerZeroCopy::size(),
-            std::mem::size_of::<L1InfoTreeLeafInnerZeroCopy>()
-        );
-        assert_eq!(
-            L1InfoTreeLeafZeroCopy::size(),
-            std::mem::size_of::<L1InfoTreeLeafZeroCopy>()
-        );
-        assert_eq!(
-            ClaimFromMainnetZeroCopy::size(),
-            std::mem::size_of::<ClaimFromMainnetZeroCopy>()
-        );
-        assert_eq!(
-            ClaimFromRollupZeroCopy::size(),
-            std::mem::size_of::<ClaimFromRollupZeroCopy>()
-        );
-        assert_eq!(ClaimZeroCopy::size(), std::mem::size_of::<ClaimZeroCopy>());
-        assert_eq!(
-            BalanceProofEntryZeroCopy::size(),
-            std::mem::size_of::<BalanceProofEntryZeroCopy>()
-        );
-        assert_eq!(
-            MultiBatchHeaderZeroCopy::size(),
-            std::mem::size_of::<MultiBatchHeaderZeroCopy>()
-        );
-    }
-
-    #[test]
     fn test_edge_cases() {
         // Test with maximum values
         let mut bridge_exit = create_sample_bridge_exit();
@@ -1937,7 +1781,10 @@ mod tests {
         // Test with full-length proof (64 siblings)
         let full_proof = create_sample_smt_non_inclusion_proof();
         let full_zero_copy = SmtNonInclusionProofZeroCopy::from(&full_proof);
-        let reconstructed_full = (&full_zero_copy).into();
+        let reconstructed_full: agglayer_tries::proof::SmtNonInclusionProof<
+            agglayer_primitives::keccak::Keccak256Hasher,
+            64,
+        > = (&full_zero_copy).into();
 
         assert_eq!(full_proof.siblings.len(), reconstructed_full.siblings.len());
         assert_eq!(full_proof.siblings, reconstructed_full.siblings);
@@ -1946,7 +1793,10 @@ mod tests {
         // Test with partial-length proof (32 siblings)
         let partial_proof = create_sample_smt_non_inclusion_proof_partial();
         let partial_zero_copy = SmtNonInclusionProofZeroCopy::from(&partial_proof);
-        let reconstructed_partial = (&partial_zero_copy).into();
+        let reconstructed_partial: agglayer_tries::proof::SmtNonInclusionProof<
+            agglayer_primitives::keccak::Keccak256Hasher,
+            64,
+        > = (&partial_zero_copy).into();
 
         assert_eq!(
             partial_proof.siblings.len(),
@@ -1956,7 +1806,7 @@ mod tests {
         assert_eq!(partial_zero_copy.num_siblings, 32);
 
         // Verify that the zero-copy struct has the correct size
-        assert_eq!(SmtNonInclusionProofZeroCopy::size(), 2052);
+        assert_eq!(std::mem::size_of::<SmtNonInclusionProofZeroCopy>(), 2052);
     }
 
     /// Test that signature reconstruction correctly handles Ethereum v values
