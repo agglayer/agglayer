@@ -52,7 +52,6 @@ impl Runner {
             nullifier_paths_bytes,
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
-            aggchain_proof,
         ) = batch_header
             .to_zero_copy_components()
             .expect("Failed to convert to zero-copy components");
@@ -66,9 +65,6 @@ impl Runner {
         stdin.write_vec(nullifier_paths_bytes);
         stdin.write_vec(balances_proofs_bytes);
         stdin.write_vec(balance_merkle_paths_bytes);
-
-        // Write aggchain_proof separately using bincode (since zero-copy truncates it)
-        stdin.write(&aggchain_proof);
         stdin
     }
 
