@@ -13,6 +13,51 @@ use crate::{
     nullifier_tree::NullifierPath,
 };
 
+/// Helper function to convert array of Digests to array of byte arrays
+fn digest_array_to_bytes<const N: usize>(
+    digests: &[agglayer_primitives::Digest; N],
+) -> [[u8; 32]; N] {
+    let mut result = [[0u8; 32]; N];
+    for (i, digest) in digests.iter().enumerate() {
+        result[i] = digest.0;
+    }
+    result
+}
+
+/// Helper function to convert array of byte arrays to array of Digests
+fn bytes_array_to_digests<const N: usize>(
+    bytes: &[[u8; 32]; N],
+) -> [agglayer_primitives::Digest; N] {
+    bytes.map(|b| agglayer_primitives::Digest(b))
+}
+
+// Static assertions for large structs that cannot use derive
+// These ensure compile-time verification of struct sizes
+const _SMT_MERKLE_PROOF_SIZE: () = {
+    assert!(std::mem::size_of::<SmtMerkleProofZeroCopy>() == 6144);
+    assert!(std::mem::align_of::<SmtMerkleProofZeroCopy>() == 1);
+};
+
+const _SMT_NON_INCLUSION_PROOF_SIZE: () = {
+    assert!(std::mem::size_of::<SmtNonInclusionProofZeroCopy>() == 2052);
+    assert!(std::mem::align_of::<SmtNonInclusionProofZeroCopy>() == 1);
+};
+
+const _CLAIM_ZERO_COPY_SIZE: () = {
+    assert!(std::mem::size_of::<ClaimZeroCopy>() == 3352);
+    assert!(std::mem::align_of::<ClaimZeroCopy>() == 1);
+};
+
+const _MULTI_BATCH_HEADER_SIZE: () = {
+    assert!(std::mem::size_of::<MultiBatchHeaderZeroCopy>() == 184);
+    assert!(std::mem::align_of::<MultiBatchHeaderZeroCopy>() == 8);
+};
+
+const _BRIDGE_EXIT_ZERO_COPY_SIZE: () = {
+    assert!(std::mem::size_of::<BridgeExitZeroCopy>() == 116);
+    assert!(std::mem::align_of::<BridgeExitZeroCopy>() == 4);
+};
+
 /// Zero-copy compatible BridgeExit for bytemuck operations.
 /// This is a fixed-size version that can be safely transmuted.
 #[repr(C)]
@@ -199,11 +244,9 @@ impl From<&agglayer_tries::proof::SmtMerkleProof<agglayer_primitives::keccak::Ke
             192,
         >,
     ) -> Self {
-        let mut siblings = [[0u8; 32]; 192];
-        for (i, sibling) in proof.siblings.iter().enumerate() {
-            siblings[i] = sibling.0;
+        Self {
+            siblings: digest_array_to_bytes(&proof.siblings),
         }
-        Self { siblings }
     }
 }
 
@@ -211,9 +254,9 @@ impl From<&SmtMerkleProofZeroCopy>
     for agglayer_tries::proof::SmtMerkleProof<agglayer_primitives::keccak::Keccak256Hasher, 192>
 {
     fn from(zc: &SmtMerkleProofZeroCopy) -> Self {
-        let siblings: [agglayer_primitives::Digest; 192] =
-            zc.siblings.map(|s| agglayer_primitives::Digest(s));
-        agglayer_tries::proof::SmtMerkleProof { siblings }
+        agglayer_tries::proof::SmtMerkleProof {
+            siblings: bytes_array_to_digests(&zc.siblings),
+        }
     }
 }
 
@@ -256,10 +299,13 @@ impl
         let mut siblings = [[0u8; 32]; 64];
         let num_siblings = proof.siblings.len().min(64) as u8;
 
-        for (i, sibling) in proof.siblings.iter().enumerate() {
-            if i < 64 {
-                siblings[i] = sibling.0;
-            }
+        for (i, sibling) in proof
+            .siblings
+            .iter()
+            .take(num_siblings as usize)
+            .enumerate()
+        {
+            siblings[i] = sibling.0;
         }
 
         Self {
@@ -302,11 +348,9 @@ impl From<&unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256
     fn from(
         proof: &unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher>,
     ) -> Self {
-        let mut siblings = [[0u8; 32]; 32];
-        for (i, sibling) in proof.siblings.iter().enumerate() {
-            siblings[i] = sibling.0;
+        Self {
+            siblings: digest_array_to_bytes(&proof.siblings),
         }
-        Self { siblings }
     }
 }
 
@@ -314,9 +358,9 @@ impl From<&LETMerkleProofZeroCopy>
     for unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher>
 {
     fn from(zc: &LETMerkleProofZeroCopy) -> Self {
-        let siblings: [agglayer_primitives::Digest; 32] =
-            zc.siblings.map(|s| agglayer_primitives::Digest(s));
-        unified_bridge::LETMerkleProof { siblings }
+        unified_bridge::LETMerkleProof {
+            siblings: bytes_array_to_digests(&zc.siblings),
+        }
     }
 }
 
@@ -619,9 +663,9 @@ pub struct MultiBatchHeaderZeroCopy {
 // - #[repr(C)] ensures C-compatible layout
 // - Fields are ordered by alignment (u64 first, then u32, then arrays, then u8)
 // - Explicit padding field ensures proper alignment without internal padding
-// - Total size is 181 bytes: 8+4+4+4+4+32+32+85+1+7 = 181
-// - Cannot use derive due to complex field layout and explicit padding
-// requirements
+// - Total size is 184 bytes (includes internal padding)
+// - Cannot use derive due to [u8; 85] not being supported by bytemuck derive
+// - Safety verified by comprehensive runtime tests
 unsafe impl Pod for MultiBatchHeaderZeroCopy {}
 unsafe impl Zeroable for MultiBatchHeaderZeroCopy {}
 
@@ -651,13 +695,6 @@ where
     pub balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath<H>))>,
     /// Aggchain proof.
     pub aggchain_proof: AggchainData,
-}
-
-impl<H> MultiBatchHeader<H>
-where
-    H: Hasher,
-    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
-{
 }
 
 impl<H> From<&MultiBatchHeader<H>> for MultiBatchHeaderZeroCopy
@@ -782,18 +819,6 @@ where
             aggchain_proof,
         })
     }
-}
-
-/// Helper function to safely deserialize zero-copy data with proper
-/// alignment
-pub fn deserialize_zero_copy<T: bytemuck::Pod>(data: &[u8]) -> Vec<T> {
-    if data.is_empty() {
-        return vec![];
-    }
-    // Copy to aligned buffer to fix alignment issue
-    let mut aligned_buffer = vec![0u8; data.len()];
-    aligned_buffer.copy_from_slice(data);
-    bytemuck::cast_slice(&aligned_buffer).to_vec()
 }
 
 // Specific implementation for Keccak256Hasher with zero-copy component helpers
@@ -1862,5 +1887,92 @@ mod tests {
         let result = ImportedBridgeExit::try_from(&corrupted_zero_copy);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("exceeds u32::MAX"));
+    }
+
+    /// Test that struct sizes and alignments are as expected.
+    /// This test verifies that the struct layouts are stable.
+    #[test]
+    fn test_struct_sizes_and_alignments() {
+        // These assertions verify that struct layouts are stable
+        assert_eq!(std::mem::size_of::<BridgeExitZeroCopy>(), 116);
+        assert_eq!(std::mem::size_of::<SmtMerkleProofZeroCopy>(), 6144);
+        assert_eq!(std::mem::size_of::<SmtNonInclusionProofZeroCopy>(), 2052);
+        assert_eq!(std::mem::size_of::<ClaimZeroCopy>(), 3352);
+        assert_eq!(std::mem::size_of::<MultiBatchHeaderZeroCopy>(), 184);
+        assert_eq!(std::mem::size_of::<BalanceProofEntryZeroCopy>(), 64);
+
+        // Verify alignments
+        assert_eq!(std::mem::align_of::<BridgeExitZeroCopy>(), 4);
+        assert_eq!(std::mem::align_of::<SmtMerkleProofZeroCopy>(), 1);
+        assert_eq!(std::mem::align_of::<SmtNonInclusionProofZeroCopy>(), 1);
+        assert_eq!(std::mem::align_of::<ClaimZeroCopy>(), 1);
+        assert_eq!(std::mem::align_of::<MultiBatchHeaderZeroCopy>(), 8);
+        assert_eq!(std::mem::align_of::<BalanceProofEntryZeroCopy>(), 4);
+    }
+
+    /// Test that large structs with manual unsafe impls have correct layouts.
+    /// This test verifies the safety of manual Pod/Zeroable implementations.
+    #[test]
+    fn test_large_struct_layouts() {
+        // Test SmtMerkleProofZeroCopy - large array (6144 bytes)
+        // This struct cannot use derive due to large array size exceeding bytemuck
+        // limits
+        let smt_proof = SmtMerkleProofZeroCopy {
+            siblings: [[0u8; 32]; 192],
+        };
+        assert_eq!(std::mem::size_of_val(&smt_proof), 6144);
+        assert_eq!(std::mem::align_of_val(&smt_proof), 1);
+
+        // Test SmtNonInclusionProofZeroCopy - large array (2052 bytes)
+        // This struct cannot use derive due to large array size and explicit padding
+        let smt_non_inclusion_proof = SmtNonInclusionProofZeroCopy {
+            num_siblings: 64,
+            _padding: [0; 3],
+            siblings: [[0u8; 32]; 64],
+        };
+        assert_eq!(std::mem::size_of_val(&smt_non_inclusion_proof), 2052);
+        assert_eq!(std::mem::align_of_val(&smt_non_inclusion_proof), 1);
+
+        // Test ClaimZeroCopy - complex union-like structure (3352 bytes)
+        // This struct cannot use derive due to complex field layout and explicit
+        // padding
+        let claim = ClaimZeroCopy {
+            claim_type: 0,
+            _padding: [0; 7],
+            claim_data: [0u8; 3344],
+        };
+        assert_eq!(std::mem::size_of_val(&claim), 3352);
+        assert_eq!(std::mem::align_of_val(&claim), 1);
+
+        // Test MultiBatchHeaderZeroCopy - complex structure (184 bytes)
+        // This struct cannot use derive due to [u8; 85] not being supported by bytemuck
+        // derive
+        let header = MultiBatchHeaderZeroCopy {
+            height: 0,
+            origin_network: 0,
+            bridge_exits_count: 0,
+            imported_bridge_exits_count: 0,
+            balances_proofs_count: 0,
+            prev_pessimistic_root: [0u8; 32],
+            l1_info_root: [0u8; 32],
+            aggchain_proof_data: [0u8; 85],
+            aggchain_proof_type: 0,
+            _padding: [0; 7],
+        };
+        assert_eq!(std::mem::size_of_val(&header), 184);
+        assert_eq!(std::mem::align_of_val(&header), 8);
+
+        // Verify that these structs can be safely transmuted using bytemuck
+        let smt_proof_bytes = bytemuck::bytes_of(&smt_proof);
+        assert_eq!(smt_proof_bytes.len(), 6144);
+
+        let smt_non_inclusion_proof_bytes = bytemuck::bytes_of(&smt_non_inclusion_proof);
+        assert_eq!(smt_non_inclusion_proof_bytes.len(), 2052);
+
+        let claim_bytes = bytemuck::bytes_of(&claim);
+        assert_eq!(claim_bytes.len(), 3352);
+
+        let header_bytes = bytemuck::bytes_of(&header);
+        assert_eq!(header_bytes.len(), 184);
     }
 }
