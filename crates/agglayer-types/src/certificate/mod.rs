@@ -149,8 +149,7 @@ impl Certificate {
             .ok_or(SignerError::InvalidExtraSignature { expected_signer })
     }
 
-    /// Verify the signature on the PP commitment and returns the [`Address`]
-    /// upon success.
+    /// Verify the signature on the PP commitment.
     pub fn verify_cert_signature(&self, expected_signer: Address) -> Result<(), SignerError> {
         let pp_commitment_values = SignatureCommitmentValues::from(self);
 
