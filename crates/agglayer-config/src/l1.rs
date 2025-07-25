@@ -13,6 +13,11 @@ pub struct L1 {
     #[serde(default = "default_ws_node_url")]
     pub ws_node_url: Url,
     #[serde(
+        default = "default_reconnect_attempt_timeout",
+        with = "crate::with::HumanDuration"
+    )]
+    pub reconnect_attempt_timeout: Duration,
+    #[serde(
         default = "default_reconnect_attempt_interval",
         with = "crate::with::HumanDuration"
     )]
@@ -45,6 +50,7 @@ impl Default for L1 {
             chain_id: 1337,
             node_url: "http://zkevm-mock-l1-network:8545".parse().unwrap(),
             total_reconnect_timeout: default_total_reconnect_timeout(),
+            reconnect_attempt_timeout: default_reconnect_attempt_timeout(),
             reconnect_attempt_interval: default_reconnect_attempt_interval(),
             ws_node_url: default_ws_node_url(),
             rollup_manager_contract: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
@@ -69,4 +75,8 @@ const fn default_total_reconnect_timeout() -> Duration {
 
 const fn default_reconnect_attempt_interval() -> Duration {
     Duration::from_secs(10)
+}
+
+const fn default_reconnect_attempt_timeout() -> Duration {
+    Duration::from_secs(4)
 }

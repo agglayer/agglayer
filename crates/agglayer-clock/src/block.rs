@@ -114,13 +114,15 @@ impl BlockClock<BlockProvider> {
         connection: WsConnect,
         genesis_block: u64,
         epoch_duration: NonZeroU64,
+        reconnect_attempt_timeout: Duration,
         reconnect_attempt_interval: Duration,
         total_reconnect_timeout: Duration,
     ) -> Result<Self, BlockClockError> {
         let ws = WsConnectWithRetries {
             connection,
-            total_reconnect_timeout,
+            reconnect_attempt_timeout,
             reconnect_attempt_interval,
+            total_reconnect_timeout,
         };
         info!(
             genesis_block = genesis_block,
@@ -429,6 +431,7 @@ where
 
 struct WsConnectWithRetries {
     connection: WsConnect,
+    reconnect_attempt_timeout: Duration,
     reconnect_attempt_interval: Duration,
     total_reconnect_timeout: Duration,
 }
@@ -462,7 +465,7 @@ impl PubSubConnect for WsConnectWithRetries {
                 fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
 
                 let handle =
-                    tokio::time::timeout(Duration::from_secs(3), self.connection.connect())
+                    tokio::time::timeout(self.reconnect_attempt_timeout, self.connection.connect())
                         .await
                         .map_or_else(
                             |_| {
