@@ -18,7 +18,6 @@ use alloy::{
     rpc::{client::ClientBuilder, types::Header},
     transports::{TransportErrorKind, TransportResult},
 };
-use backoff::ExponentialBackoff;
 use tokio::sync::{broadcast, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, trace, warn};
@@ -115,14 +114,10 @@ impl BlockClock<BlockProvider> {
         genesis_block: u64,
         epoch_duration: NonZeroU64,
         connect_attempt_timeout: Duration,
-        reconnect_attempt_interval: Duration,
-        total_reconnect_timeout: Duration,
     ) -> Result<Self, BlockClockError> {
         let ws = WsConnectWithRetries {
             connection,
             connect_attempt_timeout,
-            reconnect_attempt_interval,
-            total_reconnect_timeout,
         };
         info!(
             genesis_block = genesis_block,
@@ -432,8 +427,6 @@ where
 struct WsConnectWithRetries {
     connection: WsConnect,
     connect_attempt_timeout: Duration,
-    reconnect_attempt_interval: Duration,
-    total_reconnect_timeout: Duration,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, thiserror::Error)]
@@ -466,21 +459,11 @@ impl PubSubConnect for WsConnectWithRetries {
     async fn try_reconnect(&self) -> TransportResult<ConnectionHandle> {
         agglayer_telemetry::clock::record_reconnection_attempt();
 
-        backoff::future::retry(
-            ExponentialBackoff {
-                max_interval: self.reconnect_attempt_interval,
-                max_elapsed_time: Some(self.total_reconnect_timeout),
-                ..Default::default()
-            },
-            || async {
-                info!("Attempting to reconnect to L1 WebSocket");
-                // This fail point is used to insert delay in the reconnection to make the block
-                // progress when the client is disconnected
-                fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
+        info!("Attempting to reconnect to L1 WebSocket");
+        // This fail point is used to insert delay in the reconnection to make the block
+        // progress when the client is disconnected
+        fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
 
-                Ok(self.connect().await?)
-            },
-        )
-        .await
+        Ok(self.connect().await?)
     }
 }

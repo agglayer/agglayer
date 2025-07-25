@@ -29,8 +29,6 @@ impl BlockClock<BlockProvider> {
             epoch_duration.try_into().unwrap(),
             // note: high value for compatibility with existing tests
             Duration::from_secs(90),
-            Duration::from_millis(450),
-            Duration::from_secs(1),
         )
         .await
         .expect("Failed to create BlockClock")
@@ -291,8 +289,6 @@ async fn regression_block_disconnection() {
         0,
         NonZeroU64::new(3).unwrap(),
         Duration::from_secs(90),
-        Duration::from_secs(1),
-        Duration::from_secs(10),
     )
     .await
     .unwrap();
@@ -366,8 +362,6 @@ async fn can_catchup_on_disconnection() {
         0,
         NonZeroU64::new(1).unwrap(),
         Duration::from_secs(90),
-        Duration::from_secs(1),
-        Duration::from_secs(10),
     )
     .await
     .unwrap();
