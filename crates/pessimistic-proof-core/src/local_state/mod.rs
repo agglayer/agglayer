@@ -53,7 +53,7 @@ impl NetworkStateZeroCopy {
         let exit_tree = LocalExitTree::from_parts(
             self.exit_tree_leaf_count,
             self.exit_tree_frontier
-                .map(|h| agglayer_primitives::Digest::from(h)),
+                .map(agglayer_primitives::Digest::from),
         );
 
         let balance_tree = LocalBalanceTree::<Keccak256Hasher> {
@@ -64,7 +64,7 @@ impl NetworkStateZeroCopy {
             root: agglayer_primitives::Digest::from(self.nullifier_tree_root),
             empty_hash_at_height: self
                 .nullifier_empty_hash_at_height
-                .map(|h| agglayer_primitives::Digest::from(h)),
+                .map(agglayer_primitives::Digest::from),
         };
 
         NetworkState {
@@ -145,7 +145,7 @@ impl NetworkState {
     /// This function safely deserializes the data if it has the correct size
     /// and alignment.
     pub fn from_bytes_zero_copy(data: &[u8]) -> Result<Self, bytemuck::PodCastError> {
-        NetworkStateZeroCopy::from_bytes(data).map(|zc| Self::from_zero_copy(zc))
+        NetworkStateZeroCopy::from_bytes(data).map(Self::from_zero_copy)
     }
 
     /// Serialize to zero-copy bytes.
