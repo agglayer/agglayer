@@ -9,7 +9,6 @@ agglayer-types.workspace = true
 
 alloy = { workspace = true, features = ["node-bindings"] }
 async-trait.workspace = true
-backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 fail.workspace = true
 futures.workspace = true

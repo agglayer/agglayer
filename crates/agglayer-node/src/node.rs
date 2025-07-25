@@ -142,8 +142,6 @@ impl Node {
                     cfg.genesis_block,
                     cfg.epoch_duration,
                     config.l1.connect_attempt_timeout,
-                    config.l1.reconnect_attempt_interval,
-                    config.l1.total_reconnect_timeout,
                 )
                 .await
                 .inspect_err(|e| {

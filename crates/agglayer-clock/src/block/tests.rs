@@ -29,8 +29,6 @@ impl BlockClock<BlockProvider> {
             epoch_duration.try_into().unwrap(),
             // note: high value for compatibility with existing tests
             Duration::from_secs(90),
-            Duration::from_millis(450),
-            Duration::from_secs(1),
         )
         .await
         .expect("Failed to create BlockClock")
@@ -286,16 +284,10 @@ async fn regression_block_disconnection() {
     let port = anvil.port();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock = BlockClock::new_with_ws(
-        ws,
-        0,
-        NonZeroU64::new(3).unwrap(),
-        Duration::from_secs(90),
-        Duration::from_secs(1),
-        Duration::from_secs(10),
-    )
-    .await
-    .unwrap();
+    let clock =
+        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(90))
+            .await
+            .unwrap();
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
 
@@ -361,16 +353,10 @@ async fn can_catchup_on_disconnection() {
     let port = anvil.port();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock = BlockClock::new_with_ws(
-        ws,
-        0,
-        NonZeroU64::new(1).unwrap(),
-        Duration::from_secs(90),
-        Duration::from_secs(1),
-        Duration::from_secs(10),
-    )
-    .await
-    .unwrap();
+    let clock =
+        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(1).unwrap(), Duration::from_secs(90))
+            .await
+            .unwrap();
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
 
