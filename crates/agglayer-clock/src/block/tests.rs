@@ -21,6 +21,20 @@ use crate::{
     BlockClock, Clock, ClockRef, Event, BROADCAST_CHANNEL_SIZE,
 };
 
+impl BlockClock<BlockProvider> {
+    async fn default_for_test(ws: WsConnect, genesis_block: u64, epoch_duration: u64) -> Self {
+        BlockClock::new_with_ws(
+            ws,
+            genesis_block,
+            epoch_duration.try_into().unwrap(),
+            Duration::from_millis(450),
+            Duration::from_secs(1),
+        )
+        .await
+        .expect("Failed to create BlockClock")
+    }
+}
+
 #[test]
 fn test_block_calculation() {
     assert_eq!(
@@ -46,9 +60,7 @@ async fn test_block_clock() {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock = BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 0, 3).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -66,9 +78,7 @@ async fn test_block_clock_with_genesis() {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let ws = WsConnect::new(anvil.ws_endpoint());
     tokio::time::sleep(Duration::from_secs(3)).await;
-    let clock = BlockClock::new_with_ws(ws, 2, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 2, 3).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -86,10 +96,7 @@ async fn test_block_clock_with_genesis_in_future() {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock =
-        BlockClock::new_with_ws(ws, 10, NonZeroU64::new(2).unwrap(), Duration::from_secs(1))
-            .await
-            .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 10, 2).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -108,9 +115,7 @@ async fn test_block_clock_starting_with_genesis_in_future_should_trigger_epoch_0
     let ws = WsConnect::new(anvil.ws_endpoint());
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let clock = BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 0, 3).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -138,10 +143,7 @@ async fn test_block_clock_starting_with_genesis() {
     let test_client = client.clone();
     let mut subscribe = test_client.subscribe_blocks().await.unwrap().into_stream();
 
-    let clock =
-        BlockClock::new_with_ws(ws, 10, NonZeroU64::new(1).unwrap(), Duration::from_secs(1))
-            .await
-            .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 10, 1).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -173,9 +175,7 @@ async fn test_block_clock_starting_with_genesis_already_passed() {
 
     tokio::time::sleep(Duration::from_secs(10)).await;
     let ws = WsConnect::new(anvil.ws_endpoint());
-    let clock = BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 0, 3).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -195,10 +195,7 @@ async fn test_block_clock_overflow() {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let mut clock =
-        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-            .await
-            .expect("Failed to create BlockClock");
+    let mut clock = BlockClock::default_for_test(ws, 0, 3).await;
     let blocks = clock.block_height.clone();
     let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
 
@@ -235,10 +232,7 @@ async fn test_block_clock_overflow_epoch() {
 
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let mut clock =
-        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-            .await
-            .expect("Failed to create BlockClock");
+    let mut clock = BlockClock::default_for_test(ws, 0, 3).await;
     let epoch = clock.current_epoch.clone();
     let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
 
@@ -290,10 +284,15 @@ async fn regression_block_disconnection() {
     let port = anvil.port();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock =
-        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(10))
-            .await
-            .unwrap();
+    let clock = BlockClock::new_with_ws(
+        ws,
+        0,
+        NonZeroU64::new(3).unwrap(),
+        Duration::from_secs(1),
+        Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
 
@@ -327,9 +326,7 @@ async fn disconnection_with_timeout() {
     let port = anvil.port();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock = BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .unwrap();
+    let clock = BlockClock::default_for_test(ws, 0, 3).await;
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token.clone()).await.unwrap();
 
@@ -361,10 +358,15 @@ async fn can_catchup_on_disconnection() {
     let port = anvil.port();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock =
-        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(1).unwrap(), Duration::from_secs(10))
-            .await
-            .unwrap();
+    let clock = BlockClock::new_with_ws(
+        ws,
+        0,
+        NonZeroU64::new(1).unwrap(),
+        Duration::from_secs(1),
+        Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
 
@@ -422,9 +424,7 @@ async fn skipped_blocks_are_handled(#[case] lag_cfg: &str) {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock = BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .unwrap();
+    let clock = BlockClock::default_for_test(ws, 0, 3).await;
     let token = CancellationToken::new();
 
     let start = tokio::time::Instant::now();

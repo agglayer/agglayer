@@ -108,12 +108,17 @@ impl<P> BlockClock<P> {
 
 impl BlockClock<BlockProvider> {
     pub async fn new_with_ws(
-        ws: WsConnect,
+        connection: WsConnect,
         genesis_block: u64,
         epoch_duration: NonZeroU64,
-        max_reconnection_elapsed_time: Duration,
+        reconnect_attempt_interval: Duration,
+        total_reconnect_timeout: Duration,
     ) -> Result<Self, BlockClockError> {
-        let ws = WsConnectWithRetries(ws, Some(max_reconnection_elapsed_time));
+        let ws = WsConnectWithRetries {
+            connection,
+            total_reconnect_timeout,
+            reconnect_attempt_interval,
+        };
         let client = ClientBuilder::default().pubsub(ws).await?;
         let provider = ProviderBuilder::new().on_client(client);
 
@@ -349,21 +354,26 @@ where
     }
 }
 
-struct WsConnectWithRetries(WsConnect, Option<Duration>);
+struct WsConnectWithRetries {
+    connection: WsConnect,
+    reconnect_attempt_interval: Duration,
+    total_reconnect_timeout: Duration,
+}
 
 impl PubSubConnect for WsConnectWithRetries {
     fn is_local(&self) -> bool {
-        self.0.is_local()
+        self.connection.is_local()
     }
 
     fn connect(&self) -> impl_future!(<Output = TransportResult<ConnectionHandle>>) {
-        self.0.connect()
+        self.connection.connect()
     }
 
     async fn try_reconnect(&self) -> TransportResult<ConnectionHandle> {
         backoff::future::retry(
             ExponentialBackoff {
-                max_elapsed_time: self.1,
+                max_interval: self.reconnect_attempt_interval,
+                max_elapsed_time: Some(self.total_reconnect_timeout),
                 ..Default::default()
             },
             || async {
@@ -372,9 +382,16 @@ impl PubSubConnect for WsConnectWithRetries {
                 // progress when the client is disconnected
                 fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
 
-                Ok(self.0.try_reconnect().await?)
+                let handle = self
+                    .connection
+                    .try_reconnect()
+                    .await
+                    .inspect_err(|err| debug!(?err, "Failed to reconnect to the L1 node"))?;
+
+                Ok(handle)
             },
         )
         .await
+        .inspect_err(|err| error!(?err, "Failed to reconnect to the L1 node"))
     }
 }
