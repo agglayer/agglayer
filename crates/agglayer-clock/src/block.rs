@@ -16,7 +16,7 @@ use alloy::{
     },
     pubsub::{ConnectionHandle, PubSubConnect, Subscription},
     rpc::{client::ClientBuilder, types::Header},
-    transports::{impl_future, TransportErrorKind, TransportResult},
+    transports::{TransportErrorKind, TransportResult},
 };
 use backoff::ExponentialBackoff;
 use tokio::sync::{broadcast, oneshot};
@@ -114,13 +114,15 @@ impl BlockClock<BlockProvider> {
         connection: WsConnect,
         genesis_block: u64,
         epoch_duration: NonZeroU64,
+        connect_attempt_timeout: Duration,
         reconnect_attempt_interval: Duration,
         total_reconnect_timeout: Duration,
     ) -> Result<Self, BlockClockError> {
         let ws = WsConnectWithRetries {
             connection,
-            total_reconnect_timeout,
+            connect_attempt_timeout,
             reconnect_attempt_interval,
+            total_reconnect_timeout,
         };
         info!(
             genesis_block = genesis_block,
@@ -429,17 +431,36 @@ where
 
 struct WsConnectWithRetries {
     connection: WsConnect,
+    connect_attempt_timeout: Duration,
     reconnect_attempt_interval: Duration,
     total_reconnect_timeout: Duration,
 }
+
+#[derive(PartialEq, Eq, Clone, Debug, thiserror::Error)]
+#[error("Attempt to establish L1 connection timed out")]
+struct ConnectionTimeout;
 
 impl PubSubConnect for WsConnectWithRetries {
     fn is_local(&self) -> bool {
         self.connection.is_local()
     }
 
-    fn connect(&self) -> impl_future!(<Output = TransportResult<ConnectionHandle>>) {
-        self.connection.connect()
+    async fn connect(&self) -> TransportResult<ConnectionHandle> {
+        tokio::time::timeout(self.connect_attempt_timeout, self.connection.connect())
+            .await
+            .unwrap_or_else(|_| {
+                let err = Box::new(ConnectionTimeout);
+                let err = alloy::transports::TransportErrorKind::Custom(err);
+                Err(err.into())
+            })
+            .inspect(|_| {
+                info!("Successfully connected to L1 WebSocket");
+                agglayer_telemetry::clock::record_connection_established();
+            })
+            .inspect_err(|e| {
+                warn!(error = %e, "Failed to connect to L1 WebSocket");
+                agglayer_telemetry::clock::record_connection_lost();
+            })
     }
 
     async fn try_reconnect(&self) -> TransportResult<ConnectionHandle> {
@@ -457,18 +478,7 @@ impl PubSubConnect for WsConnectWithRetries {
                 // progress when the client is disconnected
                 fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
 
-                Ok(self
-                    .connection
-                    .try_reconnect()
-                    .await
-                    .inspect(|_| {
-                        info!("Successfully reconnected to L1 WebSocket");
-                        agglayer_telemetry::clock::record_connection_established();
-                    })
-                    .inspect_err(|e| {
-                        warn!(error = %e, "Failed to reconnect to L1 WebSocket");
-                        agglayer_telemetry::clock::record_connection_lost();
-                    })?)
+                Ok(self.connect().await?)
             },
         )
         .await
