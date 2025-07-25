@@ -445,8 +445,22 @@ impl PubSubConnect for WsConnectWithRetries {
         self.connection.is_local()
     }
 
-    fn connect(&self) -> impl_future!(<Output = TransportResult<ConnectionHandle>>) {
-        self.connection.connect()
+    async fn connect(&self) -> TransportResult<ConnectionHandle> {
+        tokio::time::timeout(self.reconnect_attempt_timeout, self.connection.connect())
+            .await
+            .unwrap_or_else(|_| {
+                let err = Box::new(ConnectionTimeout);
+                let err = alloy::transports::TransportErrorKind::Custom(err);
+                Err(err.into())
+            })
+            .inspect(|_| {
+                info!("Successfully connected to L1 WebSocket");
+                agglayer_telemetry::clock::record_connection_established();
+            })
+            .inspect_err(|e| {
+                warn!(error = %e, "Failed to connect to L1 WebSocket");
+                agglayer_telemetry::clock::record_connection_lost();
+            })
     }
 
     async fn try_reconnect(&self) -> TransportResult<ConnectionHandle> {
@@ -464,24 +478,7 @@ impl PubSubConnect for WsConnectWithRetries {
                 // progress when the client is disconnected
                 fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
 
-                let handle =
-                    tokio::time::timeout(self.reconnect_attempt_timeout, self.connection.connect())
-                        .await
-                        .unwrap_or_else(|_| {
-                            let err = Box::new(ConnectionTimeout);
-                            let err = alloy::transports::TransportErrorKind::Custom(err);
-                            Err(err.into())
-                        })
-                        .inspect(|_| {
-                            info!("Successfully reconnected to L1 WebSocket");
-                            agglayer_telemetry::clock::record_connection_established();
-                        })
-                        .inspect_err(|e| {
-                            warn!(error = %e, "Failed to reconnect to L1 WebSocket");
-                            agglayer_telemetry::clock::record_connection_lost();
-                        })?;
-
-                Ok(handle)
+                Ok(self.connect().await?)
             },
         )
         .await
