@@ -90,6 +90,9 @@ impl<P> BlockClock<P> {
     /// Create a new [`BlockClock`] instance based on a genesis block number and
     /// an Epoch duration.
     pub fn new(provider: P, genesis_block: u64, epoch_duration: NonZeroU64) -> Self {
+        // Initialize metrics for clock startup
+        agglayer_telemetry::clock::record_clock_startup();
+
         Self {
             provider: Arc::new(provider),
             genesis_block,
@@ -119,8 +122,17 @@ impl BlockClock<BlockProvider> {
             total_reconnect_timeout,
             reconnect_attempt_interval,
         };
+        info!(
+            genesis_block = genesis_block,
+            epoch_duration = epoch_duration.get(),
+            "Creating BlockClock with WebSocket connection"
+        );
+
         let client = ClientBuilder::default().pubsub(ws).await?;
         let provider = ProviderBuilder::new().on_client(client);
+
+        // Mark connection as successful
+        agglayer_telemetry::clock::record_connection_established();
 
         Ok(Self::new(provider, genesis_block, epoch_duration))
     }
@@ -157,35 +169,55 @@ where
         start_sender: oneshot::Sender<()>,
         cancellation_token: CancellationToken,
     ) -> Result<(), BlockClockError> {
-        info!("Starting the BlockClock task");
+        info!(
+            genesis_block = self.genesis_block,
+            epoch_duration = self.epoch_duration.get(),
+            "Starting BlockClock task"
+        );
+
         // Start by setting the current Block height based on the current L1 Block
         // number. If the current L1 Block number is less than the genesis block
         // number, we walk the L1 block stream until reaching the genesis block.
-        self.latest_seen_block = self
-            .provider
-            .get_block_number()
-            .await
-            .map_err(|_| BlockClockError::GetBlockNumber)?;
+        self.latest_seen_block = self.provider.get_block_number().await.map_err(|e| {
+            error!(error = %e, "Failed to get initial block number from L1");
+            agglayer_telemetry::clock::record_connection_lost();
+            BlockClockError::GetBlockNumber
+        })?;
 
-        debug!("Current L1 Block number: {}", self.latest_seen_block);
+        info!(
+            current_l1_block = self.latest_seen_block,
+            genesis_block = self.genesis_block,
+            "Retrieved current L1 block number"
+        );
+
         let provider = self.provider.clone();
 
         // Subscribe to the L1 Block stream.
-        let mut stream = provider
-            .subscribe_blocks()
-            .await
-            .map_err(|_| BlockClockError::SubscribeBlocks)?;
+        let mut stream = provider.subscribe_blocks().await.map_err(|e| {
+            error!(error = %e, "Failed to subscribe to L1 block stream");
+            agglayer_telemetry::clock::record_connection_lost();
+            BlockClockError::SubscribeBlocks
+        })?;
 
-        debug!("Successfully subscribed to the L1 Block stream");
+        info!("Successfully subscribed to L1 block stream");
+        agglayer_telemetry::clock::record_connection_established();
 
+        // Wait for genesis block if needed
         while self.latest_seen_block < self.genesis_block {
             let header = Self::recv_block(&mut stream).await?;
             self.latest_seen_block = header.number;
 
-            debug!("Current L1 Block number: {}", self.latest_seen_block);
+            debug!(
+                current_block = self.latest_seen_block,
+                genesis_block = self.genesis_block,
+                "Waiting for genesis block"
+            );
         }
 
-        info!("Node reached the genesis L1 block {}", self.genesis_block);
+        info!(
+            genesis_block = self.genesis_block,
+            "Reached genesis L1 block, starting epoch tracking"
+        );
 
         // Calculate the local Block height based on the current L1 Block number.
         let current_block = self.calculate_block_number(self.latest_seen_block);
@@ -202,8 +234,17 @@ where
             Ordering::Relaxed,
         ) {
             Ok(0) => {
-                debug!("The current block height was set to: {}", current_block);
+                let current_epoch = self.current_epoch.load(Ordering::Acquire);
+                info!(
+                    initial_block_height = current_block,
+                    initial_epoch = current_epoch,
+                    "Initialized block clock state"
+                );
                 self.reinitialize_epoch_number(current_block);
+
+                // Update initial metrics
+                agglayer_telemetry::clock::CURRENT_BLOCK_HEIGHT.record(current_block, &[]);
+                agglayer_telemetry::clock::CURRENT_EPOCH.record(current_epoch, &[]);
             }
             Ok(block) => {
                 return Err(BlockClockError::BlockHeightAlreadySet(block));
@@ -224,16 +265,27 @@ where
                     break;
                 }
                 block_result = Self::recv_block(&mut stream) => {
-                    let block = block_result?;
+                    let block = block_result.map_err(|e| {
+                        error!(error = %e, "Failed to receive block from stream");
+                        agglayer_telemetry::clock::record_connection_lost();
+                        e
+                    })?;
+
                     if block.number <= self.latest_seen_block {
-                        trace!("Skipping block: number={}, latest_seen_block={}", block.number, self.latest_seen_block);
+                        trace!(
+                            block_number = block.number,
+                            latest_seen = self.latest_seen_block,
+                            "Skipping already processed block"
+                        );
                         continue;
                     }
-                    trace!(
-                        "L1 Block received: timestamp={}, number={}, hash={}",
-                        block.timestamp,
-                        block.number,
-                        block.hash
+
+                    debug!(
+                        block_number = block.number,
+                        block_hash = %block.hash,
+                        timestamp = block.timestamp,
+                        blocks_to_process = block.number - self.latest_seen_block,
+                        "Received new L1 block"
                     );
 
                     // Overwrite the block number to simulate an overflow
@@ -241,17 +293,22 @@ where
                     // code.
                     fail::fail_point!("block_clock::BlockClock::run::overwrite_block_number_on_new_block");
 
-                    // looping until we catch up
+                    // Process all blocks up to the received one
                     while self.latest_seen_block < block.number {
                         self.latest_seen_block += 1;
-                        trace!("Updated the latest_seen_block: latest_seen_block={}, latest_received_block={}", self.latest_seen_block, block.number);
+                        trace!(
+                            processing_block = self.latest_seen_block,
+                            target_block = block.number,
+                            "Processing block"
+                        );
                         self.update_and_notify(&sender)?;
                     }
                 }
             }
         }
 
-        debug!("Clock task stopped");
+        info!("BlockClock task stopped");
+        agglayer_telemetry::clock::record_clock_shutdown();
 
         Ok(())
     }
@@ -280,7 +337,11 @@ where
                     break Err(BlockClockError::L1BlockChannelClosed)
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
-                    warn!("Block clock L1 block subscription lagged by {n} messages");
+                    warn!(
+                        lagged_messages = n,
+                        "Block subscription lagged behind, some blocks may have been missed"
+                    );
+                    agglayer_telemetry::clock::record_subscription_lag(n);
                 }
             }
         }
@@ -297,6 +358,9 @@ where
             .fetch_add(1, Ordering::Release)
             .checked_add(1)
         {
+            // Record block processing metrics
+            agglayer_telemetry::clock::CURRENT_BLOCK_HEIGHT.record(current_block, &[]);
+
             // If the current Block height is a multiple of the Epoch duration, the current
             // Epoch has ended. In this case, we need to update the new Epoch number and
             // send an `EpochEnded` event to the subscribers.
@@ -306,7 +370,16 @@ where
                         return Err(BlockClockError::SetEpochNumber(previous, expected));
                     }
                     Ok(epoch_ended) => {
-                        info!("Clock detected the end of the Epoch: {epoch_ended}");
+                        info!(
+                            epoch_number = epoch_ended.as_u64(),
+                            block_height = current_block,
+                            epoch_duration = self.epoch_duration.get(),
+                            "Epoch ended, broadcasting event"
+                        );
+
+                        // Record new current epoch (the epoch we just entered)
+                        agglayer_telemetry::clock::record_current_epoch(epoch_ended.as_u64() + 1);
+
                         _ = sender.send(Event::EpochEnded(epoch_ended));
                     }
                 }
@@ -370,6 +443,8 @@ impl PubSubConnect for WsConnectWithRetries {
     }
 
     async fn try_reconnect(&self) -> TransportResult<ConnectionHandle> {
+        agglayer_telemetry::clock::record_reconnection_attempt();
+
         backoff::future::retry(
             ExponentialBackoff {
                 max_interval: self.reconnect_attempt_interval,
@@ -377,21 +452,25 @@ impl PubSubConnect for WsConnectWithRetries {
                 ..Default::default()
             },
             || async {
-                debug!("Trying to reconnect to the L1 node");
+                info!("Attempting to reconnect to L1 WebSocket");
                 // This fail point is used to insert delay in the reconnection to make the block
                 // progress when the client is disconnected
                 fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
 
-                let handle = self
+                Ok(self
                     .connection
                     .try_reconnect()
                     .await
-                    .inspect_err(|err| debug!(?err, "Failed to reconnect to the L1 node"))?;
-
-                Ok(handle)
+                    .inspect(|_| {
+                        info!("Successfully reconnected to L1 WebSocket");
+                        agglayer_telemetry::clock::record_connection_established();
+                    })
+                    .inspect_err(|e| {
+                        warn!(error = %e, "Failed to reconnect to L1 WebSocket");
+                        agglayer_telemetry::clock::record_connection_lost();
+                    })?)
             },
         )
         .await
-        .inspect_err(|err| error!(?err, "Failed to reconnect to the L1 node"))
     }
 }
