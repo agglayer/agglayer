@@ -39,8 +39,32 @@ impl Runner {
     /// Convert inputs to stdin.
     pub fn prepare_stdin(state: &NetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
         let mut stdin = SP1Stdin::new();
-        stdin.write(state);
-        stdin.write(batch_header);
+
+        // Use zero-copy for NetworkState
+        let zero_copy_bytes = state.to_bytes_zero_copy();
+        stdin.write_vec(zero_copy_bytes);
+
+        // Use the new helper function to get all zero-copy components
+        let (
+            header_bytes,
+            bridge_exits_bytes,
+            imported_bridge_exits_bytes,
+            nullifier_paths_bytes,
+            balances_proofs_bytes,
+            balance_merkle_paths_bytes,
+        ) = batch_header
+            .to_zero_copy_components()
+            .expect("Failed to convert to zero-copy components");
+
+        // Write all components to stdin
+        stdin.write_vec(header_bytes);
+
+        // Write zero-copy components directly as bytes
+        stdin.write_vec(bridge_exits_bytes);
+        stdin.write_vec(imported_bridge_exits_bytes);
+        stdin.write_vec(nullifier_paths_bytes);
+        stdin.write_vec(balances_proofs_bytes);
+        stdin.write_vec(balance_merkle_paths_bytes);
         stdin
     }
 

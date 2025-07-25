@@ -2,9 +2,10 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use agglayer_primitives::{keccak::Keccak256Hasher, ruint::UintTryFrom, Hashable, U256, U512};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
+use bytemuck::{Pod, Zeroable};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
-use unified_bridge::{Error, LocalExitTree, NetworkId, L1_ETH};
+use unified_bridge::{Error, LocalExitTree, NetworkId, TokenInfo, L1_ETH};
 
 use crate::{
     local_balance_tree::LocalBalanceTree,
@@ -14,6 +15,83 @@ use crate::{
 };
 
 pub mod commitment;
+
+/// Zero-copy representation of NetworkState for safe transmute.
+/// This struct has a stable C-compatible memory layout.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct NetworkStateZeroCopy {
+    /// Leaf count of the exit tree (u32)
+    pub exit_tree_leaf_count: u32,
+    /// Frontier of the exit tree (32 * 32 = 1024 bytes)
+    pub exit_tree_frontier: [[u8; 32]; 32],
+    /// Root of the balance tree (32 bytes)
+    pub balance_tree_root: [u8; 32],
+    /// Root of the nullifier tree (32 bytes)
+    pub nullifier_tree_root: [u8; 32],
+    /// Empty hash array for nullifier tree (64 * 32 = 2048 bytes)
+    pub nullifier_empty_hash_at_height: [[u8; 32]; 64],
+}
+
+impl NetworkStateZeroCopy {
+    /// Create a zero-copy representation from a regular NetworkState.
+    pub fn from_network_state(state: &NetworkState) -> Self {
+        Self {
+            exit_tree_leaf_count: state.exit_tree.leaf_count,
+            exit_tree_frontier: state.exit_tree.frontier().map(|h| *h.as_bytes()),
+            balance_tree_root: *state.balance_tree.root.as_bytes(),
+            nullifier_tree_root: *state.nullifier_tree.root.as_bytes(),
+            nullifier_empty_hash_at_height: state
+                .nullifier_tree
+                .empty_hash_at_height
+                .map(|h| *h.as_bytes()),
+        }
+    }
+
+    /// Convert back to a regular NetworkState.
+    pub fn to_network_state(&self) -> NetworkState {
+        let exit_tree = LocalExitTree::from_parts(
+            self.exit_tree_leaf_count,
+            self.exit_tree_frontier
+                .map(agglayer_primitives::Digest::from),
+        );
+
+        let balance_tree = LocalBalanceTree::<Keccak256Hasher> {
+            root: agglayer_primitives::Digest::from(self.balance_tree_root),
+        };
+
+        let nullifier_tree = NullifierTree::<Keccak256Hasher> {
+            root: agglayer_primitives::Digest::from(self.nullifier_tree_root),
+            empty_hash_at_height: self
+                .nullifier_empty_hash_at_height
+                .map(agglayer_primitives::Digest::from),
+        };
+
+        NetworkState {
+            exit_tree,
+            balance_tree,
+            nullifier_tree,
+        }
+    }
+
+    /// Safely deserialize from bytes using bytemuck.
+    pub fn from_bytes(data: &[u8]) -> Result<&Self, bytemuck::PodCastError> {
+        if data.len() != std::mem::size_of::<Self>() {
+            return Err(bytemuck::PodCastError::SizeMismatch);
+        }
+        bytemuck::try_from_bytes(data)
+    }
+
+    /// Convert this struct to a byte slice.
+    pub fn as_bytes(&self) -> &[u8] {
+        bytemuck::bytes_of(self)
+    }
+
+    /// Convert this struct to a owned byte vector.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.as_bytes().to_vec()
+    }
+}
 
 /// State representation of one network without the leaves, taken as input by
 /// the prover.
@@ -37,6 +115,43 @@ impl NetworkState {
             balance_root: LocalBalanceRoot::new(self.balance_tree.root),
             nullifier_root: LocalNullifierRoot::new(self.nullifier_tree.root),
         }
+    }
+
+    /// Convert to zero-copy representation for safe transmute.
+    pub fn to_zero_copy(&self) -> NetworkStateZeroCopy {
+        NetworkStateZeroCopy::from_network_state(self)
+    }
+
+    /// Create from zero-copy representation.
+    pub fn from_zero_copy(zero_copy: &NetworkStateZeroCopy) -> Self {
+        zero_copy.to_network_state()
+    }
+
+    /// Serialize the NetworkState to a vector of bytes using bincode.
+    /// This is compatible with `sp1_zkvm::io::read_vec`.
+    pub fn to_vec(&self) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+        use agglayer_bincode as bincode;
+        bincode::contracts().serialize(self).map_err(|e| e.into())
+    }
+
+    /// Deserialize the NetworkState from a vector of bytes using bincode.
+    /// This is compatible with `sp1_zkvm::io::read_vec`.
+    pub fn from_vec(data: &[u8]) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        use agglayer_bincode as bincode;
+        bincode::contracts().deserialize(data).map_err(|e| e.into())
+    }
+
+    /// Zero-copy deserialization from bytes using bytemuck.
+    /// This function safely deserializes the data if it has the correct size
+    /// and alignment.
+    pub fn from_bytes_zero_copy(data: &[u8]) -> Result<Self, bytemuck::PodCastError> {
+        NetworkStateZeroCopy::from_bytes(data).map(Self::from_zero_copy)
+    }
+
+    /// Serialize to zero-copy bytes.
+    /// This creates a byte representation that can be safely transmuted back.
+    pub fn to_bytes_zero_copy(&self) -> Vec<u8> {
+        self.to_zero_copy().to_bytes()
     }
 
     /// Apply the [`MultiBatchHeader`] on the current [`LocalNetworkState`].
@@ -108,8 +223,10 @@ impl NetworkState {
             let amount = imported_bridge_exit.bridge_exit.amount;
             let entry = new_balances.entry(token_info);
             match entry {
-                Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
-                Entry::Occupied(mut entry) => {
+                Entry::<TokenInfo, U512>::Vacant(_) => {
+                    return Err(ProofError::MissingTokenBalanceProof(token_info))
+                }
+                Entry::<TokenInfo, U512>::Occupied(mut entry) => {
                     *entry.get_mut() = entry
                         .get()
                         .checked_add(U512::from(amount))
@@ -153,8 +270,10 @@ impl NetworkState {
             let amount = bridge_exit.amount;
             let entry = new_balances.entry(token_info);
             match entry {
-                Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
-                Entry::Occupied(mut entry) => {
+                Entry::<TokenInfo, U512>::Vacant(_) => {
+                    return Err(ProofError::MissingTokenBalanceProof(token_info))
+                }
+                Entry::<TokenInfo, U512>::Occupied(mut entry) => {
                     *entry.get_mut() = entry
                         .get()
                         .checked_sub(U512::from(amount))
@@ -175,5 +294,71 @@ impl NetworkState {
         }
 
         Ok(self.get_state_commitment())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use agglayer_primitives::keccak::Keccak256Hasher;
+    use unified_bridge::LocalExitTree;
+
+    use super::*;
+
+    #[test]
+    fn test_zero_copy_roundtrip() {
+        let state = NetworkState {
+            exit_tree: LocalExitTree::from_parts(42, [[1u8; 32].into(); 32]),
+            balance_tree: LocalBalanceTree::<Keccak256Hasher> {
+                root: [0xAAu8; 32].into(),
+            },
+            nullifier_tree: NullifierTree::<Keccak256Hasher> {
+                root: [0xBBu8; 32].into(),
+                empty_hash_at_height: [[0xCCu8; 32].into(); 64],
+            },
+        };
+
+        let bytes = state.to_bytes_zero_copy();
+        assert_eq!(bytes.len(), std::mem::size_of::<NetworkStateZeroCopy>());
+
+        let deserialized = NetworkState::from_bytes_zero_copy(&bytes)
+            .expect("Zero-copy deserialization should succeed");
+
+        assert_eq!(
+            state.exit_tree.leaf_count,
+            deserialized.exit_tree.leaf_count
+        );
+        assert_eq!(state.balance_tree.root, deserialized.balance_tree.root);
+        assert_eq!(state.nullifier_tree.root, deserialized.nullifier_tree.root);
+    }
+
+    #[test]
+    fn test_zero_copy_invalid_input() {
+        let state = NetworkState {
+            exit_tree: LocalExitTree::new(),
+            balance_tree: LocalBalanceTree::<Keccak256Hasher> {
+                root: [1u8; 32].into(),
+            },
+            nullifier_tree: NullifierTree::<Keccak256Hasher> {
+                root: [2u8; 32].into(),
+                empty_hash_at_height: [[3u8; 32].into(); 64],
+            },
+        };
+        let bytes = state.to_bytes_zero_copy();
+
+        // Test unaligned data
+        let unaligned = &bytes[1..];
+        assert!(NetworkState::from_bytes_zero_copy(unaligned).is_err());
+
+        // Test wrong size (too small)
+        let too_small = &bytes[..bytes.len() - 1];
+        assert!(NetworkState::from_bytes_zero_copy(too_small).is_err());
+
+        // Test wrong size (too large)
+        let mut too_large = bytes.clone();
+        too_large.push(0);
+        assert!(NetworkState::from_bytes_zero_copy(&too_large).is_err());
+
+        // Test empty data
+        assert!(NetworkState::from_bytes_zero_copy(&[]).is_err());
     }
 }
