@@ -464,6 +464,6 @@ impl PubSubConnect for WsConnectWithRetries {
         // progress when the client is disconnected
         fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
 
-        Ok(self.connect().await?)
+        self.connect().await
     }
 }
