@@ -40,28 +40,10 @@ lazy_static! {
         .with_description("Current health status of the block clock")
         .build();
 
-    /// Gauge for seconds since last block received (for health monitoring)
-    pub static ref SECONDS_SINCE_LAST_BLOCK: Gauge<u64> = global::meter(AGGLAYER_CLOCK_OTEL_SCOPE_NAME)
-        .u64_gauge("seconds_since_last_block")
-        .with_description("Seconds since the last block was received")
-        .build();
-
-    /// Gauge for seconds since last epoch event (for health monitoring)
-    pub static ref SECONDS_SINCE_LAST_EPOCH: Gauge<u64> = global::meter(AGGLAYER_CLOCK_OTEL_SCOPE_NAME)
-        .u64_gauge("seconds_since_last_epoch")
-        .with_description("Seconds since the last epoch event was sent")
-        .build();
-
     /// Counter for subscription lag events
     pub static ref SUBSCRIPTION_LAG: Counter<u64> = global::meter(AGGLAYER_CLOCK_OTEL_SCOPE_NAME)
-        .u64_counter("subscription_lag_total")
+        .u64_counter("blocks_subscription_lag_total")
         .with_description("Total number of subscription lag events")
-        .build();
-
-    /// Gauge for epoch progress (0.0 to 1.0)
-    pub static ref EPOCH_PROGRESS: Gauge<f64> = global::meter(AGGLAYER_CLOCK_OTEL_SCOPE_NAME)
-        .f64_gauge("epoch_progress")
-        .with_description("Progress through current epoch (0.0 to 1.0)")
         .build();
 
     /// Counter for connection errors
@@ -69,48 +51,49 @@ lazy_static! {
         .u64_counter("connection_errors_total")
         .with_description("Total number of connection errors")
         .build();
-
-    /// Gauge for time since clock started (uptime in seconds)
-    pub static ref UPTIME_SECONDS: Gauge<u64> = global::meter(AGGLAYER_CLOCK_OTEL_SCOPE_NAME)
-        .u64_gauge("uptime_seconds")
-        .with_description("Time since the clock started in seconds")
-        .build();
 }
 
 /// Helper function to record clock startup
+#[inline]
 pub fn record_clock_startup() {
     HEALTH_STATUS.record(0.5, &[]); // Starting status
     CONNECTION_STATUS.record(0, &[]); // Initially disconnected
 }
 
 /// Helper function to record successful connection
+#[inline]
 pub fn record_connection_established() {
     CONNECTION_STATUS.record(1, &[]);
     HEALTH_STATUS.record(1.0, &[]); // Healthy status
 }
 
 /// Helper function to record connection lost
+#[inline]
 pub fn record_connection_lost() {
     CONNECTION_STATUS.record(0, &[]);
     CONNECTION_ERRORS.add(1, &[]);
 }
 
 /// Helper function to record reconnection attempt
+#[inline]
 pub fn record_reconnection_attempt() {
     RECONNECTION_ATTEMPTS.add(1, &[]);
 }
 
 /// Helper function to record current epoch
+#[inline]
 pub fn record_current_epoch(epoch_number: u64) {
     CURRENT_EPOCH.record(epoch_number, &[]);
 }
 
 /// Helper function to record subscription lag
+#[inline]
 pub fn record_subscription_lag(lagged_count: u64) {
     SUBSCRIPTION_LAG.add(lagged_count, &[]);
 }
 
 /// Helper function to record clock shutdown
+#[inline]
 pub fn record_clock_shutdown() {
     CONNECTION_STATUS.record(0, &[]);
     HEALTH_STATUS.record(0.0, &[]); // Unhealthy status
