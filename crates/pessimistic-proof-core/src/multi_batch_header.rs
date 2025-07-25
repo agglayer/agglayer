@@ -28,7 +28,7 @@ fn digest_array_to_bytes<const N: usize>(
 fn bytes_array_to_digests<const N: usize>(
     bytes: &[[u8; 32]; N],
 ) -> [agglayer_primitives::Digest; N] {
-    bytes.map(|b| agglayer_primitives::Digest(b))
+    bytes.map(agglayer_primitives::Digest)
 }
 
 // Static assertions for large structs that cannot use derive
@@ -725,11 +725,11 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
                 );
                 // Reconstruct vkey from bytes
                 let mut aggchain_vkey = [0u32; 8];
-                for i in 0..8 {
+                for (i, val) in aggchain_vkey.iter_mut().enumerate() {
                     let start = 32 + i * 4;
                     let end = start + 4;
                     let bytes = &zero_copy.aggchain_proof_data[start..end];
-                    aggchain_vkey[i] = u32::from_be_bytes(
+                    *val = u32::from_be_bytes(
                         bytes
                             .try_into()
                             .map_err(|e| format!("Failed to convert vkey byte {}: {}", i, e))?,
@@ -861,6 +861,16 @@ where
     }
 }
 
+/// Type alias for zero-copy components tuple to reduce type complexity
+pub type ZeroCopyComponents = (
+    Vec<u8>, // header_bytes
+    Vec<u8>, // bridge_exits_bytes
+    Vec<u8>, // imported_bridge_exits_bytes
+    Vec<u8>, // nullifier_paths_bytes
+    Vec<u8>, // balances_proofs_bytes
+    Vec<u8>, // balance_merkle_paths_bytes
+);
+
 // Specific implementation for Keccak256Hasher with zero-copy component helpers
 impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
     /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy
@@ -948,31 +958,21 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
     /// This returns all the components needed for zero-copy serialization.
     pub fn to_zero_copy_components(
         &self,
-    ) -> Result<
-        (
-            Vec<u8>, // header_bytes
-            Vec<u8>, // bridge_exits_bytes
-            Vec<u8>, // imported_bridge_exits_bytes
-            Vec<u8>, // nullifier_paths_bytes
-            Vec<u8>, // balances_proofs_bytes
-            Vec<u8>, // balance_merkle_paths_bytes
-        ),
-        Box<dyn std::error::Error + Send + Sync>,
-    > {
+    ) -> Result<ZeroCopyComponents, Box<dyn std::error::Error + Send + Sync>> {
         // Convert header to zero-copy
-        let header_zero_copy: MultiBatchHeaderZeroCopy = (&*self).into();
+        let header_zero_copy: MultiBatchHeaderZeroCopy = self.into();
         let header_bytes = bytemuck::bytes_of(&header_zero_copy).to_vec();
 
         // Convert bridge_exits to zero-copy
         let bridge_exits_zero_copy: Vec<BridgeExitZeroCopy> =
-            self.bridge_exits.iter().map(|be| (&*be).into()).collect();
+            self.bridge_exits.iter().map(|be| be.into()).collect();
         let bridge_exits_bytes = bytemuck::cast_slice(&bridge_exits_zero_copy).to_vec();
 
         // Convert imported_bridge_exits to zero-copy
         let imported_bridge_exits_zero_copy: Vec<ImportedBridgeExitZeroCopy> = self
             .imported_bridge_exits
             .iter()
-            .map(|(ibe, _)| ImportedBridgeExitZeroCopy::try_from(&*ibe))
+            .map(|(ibe, _)| ImportedBridgeExitZeroCopy::try_from(ibe))
             .collect::<Result<Vec<_>, _>>()?;
         let imported_bridge_exits_bytes =
             bytemuck::cast_slice(&imported_bridge_exits_zero_copy).to_vec();
@@ -981,7 +981,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         let nullifier_paths_zero_copy: Vec<SmtNonInclusionProofZeroCopy> = self
             .imported_bridge_exits
             .iter()
-            .map(|(_, path)| (&*path).into())
+            .map(|(_, path)| path.into())
             .collect();
         let nullifier_paths_bytes = bytemuck::cast_slice(&nullifier_paths_zero_copy).to_vec();
 
@@ -990,7 +990,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
             .balances_proofs
             .iter()
             .map(|(token_info, (balance, _))| BalanceProofEntryZeroCopy {
-                token_info: (&*token_info).into(),
+                token_info: token_info.into(),
                 balance: balance.to_be_bytes(),
                 _padding: [0; 8],
             })
@@ -1001,7 +1001,7 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         let balance_merkle_paths_zero_copy: Vec<SmtMerkleProofZeroCopy> = self
             .balances_proofs
             .iter()
-            .map(|(_, (_, path))| (&*path).into())
+            .map(|(_, (_, path))| path.into())
             .collect();
         let balance_merkle_paths_bytes =
             bytemuck::cast_slice(&balance_merkle_paths_zero_copy).to_vec();
@@ -1049,7 +1049,7 @@ where
     pub aggchain_proof: AggchainData,
 }
 
-impl<'a, H> MultiBatchHeaderRef<'a, H>
+impl<H> MultiBatchHeaderRef<'_, H>
 where
     H: Hasher,
     H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
@@ -1058,7 +1058,7 @@ where
 }
 
 // Specific implementation for Keccak256Hasher
-impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
+impl MultiBatchHeaderRef<'_, agglayer_primitives::keccak::Keccak256Hasher> {
     /// Convert to owned MultiBatchHeader by cloning all borrowed data.
     /// This is a specialized version for Keccak256Hasher to avoid type
     /// conflicts.
@@ -1069,8 +1069,7 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
         Box<dyn std::error::Error + Send + Sync>,
     > {
         // Convert bridge_exits
-        let bridge_exits: Vec<BridgeExit> =
-            self.bridge_exits.iter().map(|be| (&*be).into()).collect();
+        let bridge_exits: Vec<BridgeExit> = self.bridge_exits.iter().map(|be| be.into()).collect();
 
         // Convert imported_bridge_exits and nullifier_paths
         let imported_bridge_exits: Vec<(
@@ -1081,8 +1080,8 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
             .iter()
             .zip(self.nullifier_paths.iter())
             .map(|(ibe, path)| {
-                let imported_bridge_exit = ImportedBridgeExit::try_from(&*ibe)?;
-                let nullifier_path = (&*path).into();
+                let imported_bridge_exit = ImportedBridgeExit::try_from(ibe)?;
+                let nullifier_path = path.into();
                 Ok((imported_bridge_exit, nullifier_path))
             })
             .collect::<Result<_, Box<dyn std::error::Error + Send + Sync>>>()?;
@@ -1101,7 +1100,7 @@ impl<'a> MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher> {
             .map(|(bp, path)| {
                 let token_info = (&bp.token_info).into();
                 let balance = U256::from_be_bytes(bp.balance);
-                let merkle_path = (&*path).into();
+                let merkle_path = path.into();
                 (token_info, (balance, merkle_path))
             })
             .collect();

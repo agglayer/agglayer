@@ -283,14 +283,14 @@ pub fn verify_consensus(
                 if signer
                     == &verify_signature(
                         signature_commitment.commitment(CommitmentVersion::V3),
-                        &signature,
+                        signature,
                     )?
                 {
                     CommitmentVersion::V3
                 } else if signer
                     == &verify_signature(
                         signature_commitment.commitment(CommitmentVersion::V2),
-                        &signature,
+                        signature,
                     )?
                 {
                     CommitmentVersion::V2
