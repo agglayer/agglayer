@@ -16,7 +16,7 @@ use alloy::{
     },
     pubsub::{ConnectionHandle, PubSubConnect, Subscription},
     rpc::{client::ClientBuilder, types::Header},
-    transports::{impl_future, TransportErrorKind, TransportResult},
+    transports::{TransportErrorKind, TransportResult},
 };
 use backoff::ExponentialBackoff;
 use tokio::sync::{broadcast, oneshot};
@@ -114,13 +114,13 @@ impl BlockClock<BlockProvider> {
         connection: WsConnect,
         genesis_block: u64,
         epoch_duration: NonZeroU64,
-        reconnect_attempt_timeout: Duration,
+        connect_attempt_timeout: Duration,
         reconnect_attempt_interval: Duration,
         total_reconnect_timeout: Duration,
     ) -> Result<Self, BlockClockError> {
         let ws = WsConnectWithRetries {
             connection,
-            reconnect_attempt_timeout,
+            connect_attempt_timeout,
             reconnect_attempt_interval,
             total_reconnect_timeout,
         };
@@ -431,7 +431,7 @@ where
 
 struct WsConnectWithRetries {
     connection: WsConnect,
-    reconnect_attempt_timeout: Duration,
+    connect_attempt_timeout: Duration,
     reconnect_attempt_interval: Duration,
     total_reconnect_timeout: Duration,
 }
@@ -446,7 +446,7 @@ impl PubSubConnect for WsConnectWithRetries {
     }
 
     async fn connect(&self) -> TransportResult<ConnectionHandle> {
-        tokio::time::timeout(self.reconnect_attempt_timeout, self.connection.connect())
+        tokio::time::timeout(self.connect_attempt_timeout, self.connection.connect())
             .await
             .unwrap_or_else(|_| {
                 let err = Box::new(ConnectionTimeout);
