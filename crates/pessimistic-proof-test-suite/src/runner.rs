@@ -1,16 +1,9 @@
-pub use pessimistic_proof::PessimisticProofOutput;
-use pessimistic_proof::{
-    keccak::{Hasher, Keccak256Hasher},
-    NetworkState,
-};
+use pessimistic_proof::NetworkState;
+pub use pessimistic_proof::{multi_batch_header::MultiBatchHeader, PessimisticProofOutput};
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin, SP1VerifyingKey};
 
 use crate::PESSIMISTIC_PROOF_ELF;
-
-pub type KeccakHasher = Keccak256Hasher;
-pub type Digest = <KeccakHasher as Hasher>::Digest;
-pub type MultiBatchHeader = pessimistic_proof::multi_batch_header::MultiBatchHeader<KeccakHasher>;
 
 pub struct ProofOutput {}
 

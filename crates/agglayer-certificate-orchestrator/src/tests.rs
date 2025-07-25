@@ -33,8 +33,7 @@ use arc_swap::ArcSwap;
 use futures_util::poll;
 use mocks::MockCertifier;
 use pessimistic_proof::{
-    keccak::Keccak256Hasher, multi_batch_header::MultiBatchHeader, LocalNetworkState,
-    PessimisticProofOutput,
+    multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
 };
 use rstest::fixture;
 use tokio::sync::{broadcast, mpsc};
@@ -936,14 +935,8 @@ impl Certifier for Check {
         &self,
         _certificate: &agglayer_types::Certificate,
         _state: &mut LocalNetworkStateData,
-    ) -> Result<
-        (
-            MultiBatchHeader<Keccak256Hasher>,
-            LocalNetworkState,
-            PessimisticProofOutput,
-        ),
-        CertificationError,
-    > {
+    ) -> Result<(MultiBatchHeader, LocalNetworkState, PessimisticProofOutput), CertificationError>
+    {
         Err(CertificationError::InternalError(
             "unimplemented".to_string(),
         ))
