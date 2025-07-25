@@ -467,14 +467,11 @@ impl PubSubConnect for WsConnectWithRetries {
                 let handle =
                     tokio::time::timeout(self.reconnect_attempt_timeout, self.connection.connect())
                         .await
-                        .map_or_else(
-                            |_| {
-                                let err = Box::new(ConnectionTimeout);
-                                let err = alloy::transports::TransportErrorKind::Custom(err);
-                                Err(err.into())
-                            },
-                            |res| res,
-                        )
+                        .unwrap_or_else(|_| {
+                            let err = Box::new(ConnectionTimeout);
+                            let err = alloy::transports::TransportErrorKind::Custom(err);
+                            Err(err.into())
+                        })
                         .inspect(|_| {
                             info!("Successfully reconnected to L1 WebSocket");
                             agglayer_telemetry::clock::record_connection_established();
