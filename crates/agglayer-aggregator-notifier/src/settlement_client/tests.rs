@@ -21,10 +21,9 @@ use crate::settlement_client::RpcSettlementClient;
 
 mockall::mock! {
     L1Rpc {}
+
     #[async_trait::async_trait]
     impl agglayer_contracts::RollupContract for L1Rpc {
-        type P = alloy::providers::RootProvider<alloy::network::Ethereum>;
-
         async fn get_trusted_sequencer_address(
             &self,
             rollup_id: u32,
