@@ -42,7 +42,6 @@ pub type RawRpcClient = crate::AgglayerImpl<
     PendingStore,
     StateStore,
     DebugStore,
-    Box<dyn 'static + Send + Sync + Fn(NetworkId) -> bool>,
 >;
 
 pub struct RawRpcContext {
@@ -142,12 +141,8 @@ impl TestContext {
             Arc::new(l1_rpc_client),
         ));
 
-        // Create the allowed_networks function for network filtering
-        let allowed_networks = Box::new(move |_incoming| true)
-            as Box<dyn Fn(NetworkId) -> bool + Send + Sync + 'static>;
-
-        // Create AgglayerImpl with allowed_networks
-        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service, allowed_networks);
+        // Create AgglayerImpl
+        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
 
         // Create the routers
         let router = agglayer_impl.start().await.unwrap();
@@ -280,12 +275,8 @@ impl TestContext {
             Arc::new(l1_rpc_client),
         ));
 
-        // Create the allowed_networks function for network filtering
-        let allowed_networks = Box::new(move |_incoming| true)
-            as Box<dyn Fn(NetworkId) -> bool + Send + Sync + 'static>;
-
-        // Create AgglayerImpl with allowed_networks
-        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service, allowed_networks);
+        // Create AgglayerImpl
+        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
 
         RawRpcContext {
             rpc: agglayer_impl,

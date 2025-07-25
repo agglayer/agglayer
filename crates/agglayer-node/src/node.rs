@@ -270,16 +270,13 @@ impl Node {
         .start()
         .await?;
 
-        // List the public vs. proxied networks.
-        let public_networks = move |_incoming| true;
-
         // Bind the core to the RPC server.
-        let json_rpc_router = AgglayerImpl::new(service, rpc_service.clone(), public_networks)
+        let json_rpc_router = AgglayerImpl::new(service, rpc_service.clone())
             .start()
             .await?;
 
         let public_grpc_router =
-            agglayer_grpc_api::Server::with_config(config.clone(), rpc_service, public_networks)
+            agglayer_grpc_api::Server::with_config(config.clone(), rpc_service)
                 .build()
                 .inspect_err(|err| error!(?err, "Failed to build public gRPC router"))?;
 
