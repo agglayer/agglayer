@@ -10,11 +10,11 @@ use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter,
 };
-use agglayer_types::{NetworkId, Signature};
+use agglayer_types::Signature;
 use error::CertificateSubmissionErrorWrapper;
 use tonic::Status;
 use tonic_types::{ErrorDetails, StatusExt};
-use tracing::{error, instrument};
+use tracing::instrument;
 
 const GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE: &str =
     "x-agglayer-extra-certificate-signature";
@@ -22,28 +22,20 @@ const GRPC_METADATA_NAME_EXTRA_CERTIFICATE_SIGNATURE: &str =
 const SUBMIT_CERTIFICATE_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.certificate-submission-service.submit_certificate";
 
-pub struct CertificateSubmissionServer<
-    L1Rpc,
-    PendingStore,
-    StateStore,
-    DebugStore,
-    AllowedNetworksCb,
-> {
+pub struct CertificateSubmissionServer<L1Rpc, PendingStore, StateStore, DebugStore> {
     pub(crate) service: Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>>,
-    pub(crate) allowed_networks: AllowedNetworksCb,
 }
 
 mod error;
 
 #[tonic::async_trait]
-impl<L1Rpc, PendingStore, StateStore, DebugStore, AllowedNetworksCb> CertificateSubmissionService
-    for CertificateSubmissionServer<L1Rpc, PendingStore, StateStore, DebugStore, AllowedNetworksCb>
+impl<L1Rpc, PendingStore, StateStore, DebugStore> CertificateSubmissionService
+    for CertificateSubmissionServer<L1Rpc, PendingStore, StateStore, DebugStore>
 where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
-    AllowedNetworksCb: Fn(NetworkId) -> bool + Send + Sync + 'static,
 {
     #[instrument(skip(self, request), level = "debug", fields(certificate_id = tracing::field::Empty))]
     async fn submit_certificate(
@@ -70,20 +62,6 @@ where
             )?,
             None => return Err(tonic::Status::invalid_argument("Missing certificate")),
         };
-
-        // Reject certificates for networks that are not allowed on this endpoint.
-        if !(self.allowed_networks)(certificate.network_id) {
-            error!(network_id=%certificate.network_id, certificate_id=%certificate.hash(), "Certificate submission not allowed");
-            return Err(tonic::Status::with_error_details(
-                tonic::Code::PermissionDenied,
-                "Certificate submission is not allowed for this network",
-                ErrorDetails::with_error_info(
-                    SubmitCertificateErrorKind::InvalidData,
-                    SUBMIT_CERTIFICATE_METHOD_PATH,
-                    [("network_id".into(), certificate.network_id.to_string())],
-                ),
-            ));
-        }
 
         let certificate_id = self
             .service
