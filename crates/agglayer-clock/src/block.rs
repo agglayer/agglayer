@@ -433,6 +433,10 @@ struct WsConnectWithRetries {
     total_reconnect_timeout: Duration,
 }
 
+#[derive(PartialEq, Eq, Clone, Debug, thiserror::Error)]
+#[error("Attempt to establish L1 connection timed out")]
+struct ConnectionTimeout;
+
 impl PubSubConnect for WsConnectWithRetries {
     fn is_local(&self) -> bool {
         self.connection.is_local()
@@ -457,18 +461,25 @@ impl PubSubConnect for WsConnectWithRetries {
                 // progress when the client is disconnected
                 fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
 
-                Ok(self
-                    .connection
-                    .try_reconnect()
-                    .await
-                    .inspect(|_| {
-                        info!("Successfully reconnected to L1 WebSocket");
-                        agglayer_telemetry::clock::record_connection_established();
-                    })
-                    .inspect_err(|e| {
-                        warn!(error = %e, "Failed to reconnect to L1 WebSocket");
-                        agglayer_telemetry::clock::record_connection_lost();
-                    })?)
+                let handle =
+                    tokio::time::timeout(Duration::from_secs(3), self.connection.connect())
+                        .await
+                        .map_err(|_| {
+                            let err = Box::new(ConnectionTimeout);
+                            let err = alloy::transports::TransportErrorKind::Custom(err);
+                            err.into()
+                        })
+                        .and_then(|res| res)
+                        .inspect(|_| {
+                            info!("Successfully reconnected to L1 WebSocket");
+                            agglayer_telemetry::clock::record_connection_established();
+                        })
+                        .inspect_err(|e| {
+                            warn!(error = %e, "Failed to reconnect to L1 WebSocket");
+                            agglayer_telemetry::clock::record_connection_lost();
+                        })?;
+
+                Ok(handle)
             },
         )
         .await
