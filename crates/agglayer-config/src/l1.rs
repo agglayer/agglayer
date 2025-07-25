@@ -78,5 +78,5 @@ const fn default_reconnect_attempt_interval() -> Duration {
 }
 
 const fn default_reconnect_attempt_timeout() -> Duration {
-    Duration::from_secs(4)
+    Duration::from_secs(3)
 }
