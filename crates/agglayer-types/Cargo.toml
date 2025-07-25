@@ -29,3 +29,4 @@ rand.workspace = true
 
 [dev-dependencies]
 agglayer-types = { path = ".", features = ["testutils"] }
+rstest.workspace = true

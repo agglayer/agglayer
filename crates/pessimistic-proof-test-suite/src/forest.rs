@@ -191,6 +191,7 @@ impl Forest {
         &mut self,
         imported_bridge_events: impl IntoIterator<Item = (TokenInfo, U256)>,
         bridge_exits: impl IntoIterator<Item = BridgeExit>,
+        version: CommitmentVersion,
     ) -> Certificate {
         let prev_local_exit_root = self.state_b.exit_tree.get_root().into();
 
@@ -210,6 +211,7 @@ impl Forest {
             &imported_bridge_exits,
             &self.wallet,
             height,
+            version,
         );
 
         Certificate {
@@ -232,9 +234,19 @@ impl Forest {
         imported_bridge_events: &[(TokenInfo, U256)],
         bridge_events: &[(TokenInfo, U256)],
     ) -> Certificate {
+        self.apply_events_with_version(imported_bridge_events, bridge_events, CommitmentVersion::V2)
+    }
+
+    /// Apply a sequence of events and return the corresponding [`Certificate`].
+    pub fn apply_events_with_version(
+        &mut self,
+        imported_bridge_events: &[(TokenInfo, U256)],
+        bridge_events: &[(TokenInfo, U256)],
+        version: CommitmentVersion,
+    ) -> Certificate {
         let imported_bridge_events = imported_bridge_events.iter().cloned();
         let bridge_exits = bridge_events.iter().map(|(tok, amt)| exit_to_a(*tok, *amt));
-        self.apply_bridge_exits(imported_bridge_events, bridge_exits)
+        self.apply_bridge_exits(imported_bridge_events, bridge_exits, version)
     }
 
     /// Apply a sequence of events and return the corresponding [`Certificate`].
@@ -252,7 +264,7 @@ impl Forest {
 
         let (aggchain_proof, aggchain_vkey, aggchain_params) =
             compute_aggchain_proof(AggchainECDSA {
-                signer: certificate.signer().unwrap(),
+                signer: certificate.retrieve_signer(CommitmentVersion::V2).unwrap(),
                 signature,
                 commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
                     .commitment(CommitmentVersion::V2)

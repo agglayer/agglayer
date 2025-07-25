@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use agglayer_types::primitives::Hashable as _;
-use agglayer_types::{Certificate, CertificateId, CertificateIndex, Digest, EpochNumber, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput};
-use pessimistic_proof::unified_bridge::CommitmentVersion;
-use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
+use agglayer_types::{
+    primitives::Hashable as _, Certificate, CertificateId, CertificateIndex, Digest, EpochNumber,
+    Height, LocalNetworkStateData, NetworkId, PessimisticRootInput,
+};
+use pessimistic_proof::{
+    core::generate_pessimistic_proof, unified_bridge::CommitmentVersion, LocalNetworkState,
+};
 use rstest::{fixture, rstest};
 use tracing::info;
 
@@ -28,7 +31,12 @@ fn can_retrieve_list_of_network() {
 
     db.put::<LatestSettledCertificatePerNetworkColumn>(
         &1.into(),
-        &SettledCertificate(CertificateId::new([0; 32].into()), Height::ZERO, EpochNumber::ZERO, CertificateIndex::ZERO),
+        &SettledCertificate(
+            CertificateId::new([0; 32].into()),
+            Height::ZERO,
+            EpochNumber::ZERO,
+            CertificateIndex::ZERO,
+        ),
     )
     .expect("Unable to put certificate into storage");
     assert!(store.get_active_networks().unwrap().len() == 1);
@@ -166,7 +174,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
             certificate.bridge_exits.len(),
         );
 
-        let signer = certificate.signer().unwrap();
+        let signer = certificate.retrieve_signer(CommitmentVersion::V2).unwrap();
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
         let multi_batch_header = lns
@@ -262,7 +270,7 @@ fn import_native_tokens() {
             certificate.bridge_exits.len(),
         );
 
-        let signer = certificate.signer().unwrap();
+        let signer = certificate.retrieve_signer(CommitmentVersion::V2).unwrap();
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
         let multi_batch_header = lns

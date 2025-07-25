@@ -1,5 +1,5 @@
 use agglayer_interop_types::LocalExitRoot;
-use agglayer_primitives::SignatureError;
+use agglayer_primitives::{Address, SignatureError};
 use agglayer_tries::error::SmtError;
 use pessimistic_proof::{error::ProofVerificationError, ProofError};
 use serde::{Deserialize, Serialize};
@@ -141,4 +141,16 @@ pub enum SignerError {
 
     #[error("Signature recovery error")]
     Recovery(#[source] SignatureError),
+
+    #[error(
+        "Invalid extra signature either due to wrong signer or commitment. expected signer: \
+         {expected_signer}"
+    )]
+    InvalidExtraSignature { expected_signer: Address },
+
+    #[error(
+        "Invalid PP signature either due to wrong signer or commitment. expected signer: \
+         {expected_signer}"
+    )]
+    InvalidPessimisticProofSignature { expected_signer: Address },
 }

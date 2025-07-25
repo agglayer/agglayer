@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
-use agglayer_types::{Address, Certificate, Height};
+use agglayer_types::{Address, Certificate, Height, SignerError};
 use alloy::{
     primitives::{Signature, B256, U256, U64},
     providers::{mock::Asserter, ProviderBuilder},
@@ -139,7 +139,6 @@ async fn interop_executor_verify_tx_signature_proof_signer() {}
 #[tokio::test]
 async fn verify_cert_signature() {
     let signer1 = Certificate::wallet_for_test(1.into()).address().into();
-    let signer2 = Certificate::wallet_for_test(2.into()).address().into();
     let signer3 = Certificate::wallet_for_test(3.into()).address().into();
     let mut config = Config::new_for_test();
     // Proof signer for network 1 is ok
@@ -164,8 +163,12 @@ async fn verify_cert_signature() {
         let signed_cert = Certificate::new_for_test(2.into(), Height::ZERO);
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
-            Err(agglayer_rpc::error::SignatureVerificationError::InvalidSigner { signer, trusted_sequencer })
-            if signer == signer2 && trusted_sequencer == signer3
+            Err(
+                agglayer_rpc::error::SignatureVerificationError::InvalidPessimisticProofSignature(
+                    SignerError::InvalidPessimisticProofSignature { expected_signer }
+                )
+            )
+            if expected_signer == signer3
         ));
     }
 
@@ -188,8 +191,12 @@ async fn verify_cert_signature() {
         signed_cert.new_local_exit_root.as_mut()[0] += 1;
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
-            Err(agglayer_rpc::error::SignatureVerificationError::InvalidSigner { signer: _, trusted_sequencer })
-            if trusted_sequencer == signer1
+            Err(
+                agglayer_rpc::error::SignatureVerificationError::InvalidPessimisticProofSignature(
+                    SignerError::InvalidPessimisticProofSignature { expected_signer }
+                )
+            )
+            if expected_signer == signer1
         ));
     }
 }
