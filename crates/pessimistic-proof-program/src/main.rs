@@ -20,9 +20,9 @@ pub fn main() {
     let balances_proofs_bytes = sp1_zkvm::io::read_vec();
     let balance_merkle_paths_bytes = sp1_zkvm::io::read_vec();
 
-    // Reconstruct the MultiBatchHeaderRef from zero-copy components using the
+    // Reconstruct the MultiBatchHeader from zero-copy components using the
     // helper function
-    let batch_header_ref = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
+    let batch_header = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
         &header_bytes,
         &bridge_exits_bytes,
         &imported_bridge_exits_bytes,
@@ -30,12 +30,7 @@ pub fn main() {
         &balances_proofs_bytes,
         &balance_merkle_paths_bytes,
     )
-    .expect("Failed to reconstruct MultiBatchHeaderRef");
-
-    // Convert to owned MultiBatchHeader for the proof generation
-    let batch_header = batch_header_ref
-        .to_owned_keccak()
-        .expect("Failed to convert MultiBatchHeaderRef to owned");
+    .expect("Failed to reconstruct MultiBatchHeader");
 
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header)
         .expect("Failed to generate pessimistic proof");
