@@ -160,9 +160,8 @@ impl From<&TokenInfoZeroCopy> for TokenInfo {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct ImportedBridgeExitZeroCopy {
-    /// Global index leaf_index (u64) - stored as u64 for compatibility,
-    /// validated on reconstruction
-    pub global_index_index: u64,
+    /// Global index leaf_index (u32)
+    pub global_index_index: u32,
     /// Global index rollup_index (u32) - this is what GlobalIndex::new()
     /// expects as first parameter
     pub global_index_rollup: u32,
@@ -183,7 +182,7 @@ impl TryFrom<&ImportedBridgeExit> for ImportedBridgeExitZeroCopy {
         )?;
 
         Ok(Self {
-            global_index_index: imported_bridge_exit.global_index.leaf_index() as u64,
+            global_index_index: imported_bridge_exit.global_index.leaf_index(),
             global_index_rollup: rollup_index.to_u32(),
             bridge_exit: (&imported_bridge_exit.bridge_exit).into(),
             claim_data,
@@ -195,22 +194,13 @@ impl TryFrom<&ImportedBridgeExitZeroCopy> for ImportedBridgeExit {
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
     fn try_from(zc: &ImportedBridgeExitZeroCopy) -> Result<Self, Self::Error> {
-        // Validate that global_index_index fits in u32 to prevent silent truncation
-        if zc.global_index_index > u32::MAX as u64 {
-            return Err(format!(
-                "Global index index {} exceeds u32::MAX",
-                zc.global_index_index
-            )
-            .into());
-        }
-
         let claim = Claim::try_from(&zc.claim_data)?;
         Ok(unified_bridge::ImportedBridgeExit {
             bridge_exit: (&zc.bridge_exit).into(),
             claim_data: claim,
             global_index: unified_bridge::GlobalIndex::new(
                 unified_bridge::NetworkId::new(zc.global_index_rollup),
-                zc.global_index_index as u32,
+                zc.global_index_index,
             ),
         })
     }
@@ -1701,28 +1691,6 @@ mod tests {
             }
             _ => panic!("Expected ECDSA signatures"),
         }
-    }
-
-    /// Test that global_index_index bounds checking works correctly.
-    #[test]
-    fn test_global_index_bounds_checking() {
-        // Create a sample ImportedBridgeExitZeroCopy with valid u32 value
-        let valid_imported_exit = create_sample_imported_bridge_exit();
-        let valid_zero_copy = ImportedBridgeExitZeroCopy::try_from(&valid_imported_exit)
-            .expect("Failed to create zero-copy from valid imported bridge exit");
-
-        // This should succeed
-        let reconstructed = ImportedBridgeExit::try_from(&valid_zero_copy);
-        assert!(reconstructed.is_ok());
-
-        // Create a corrupted zero-copy struct with value exceeding u32::MAX
-        let mut corrupted_zero_copy = valid_zero_copy;
-        corrupted_zero_copy.global_index_index = u32::MAX as u64 + 1;
-
-        // This should fail with bounds checking error
-        let result = ImportedBridgeExit::try_from(&corrupted_zero_copy);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("exceeds u32::MAX"));
     }
 
     /// Test that struct sizes and alignments are as expected.
