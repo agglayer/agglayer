@@ -5,5 +5,5 @@ snapshot_kind: text
 ---
 # If this test fails, it means the PP vkey has changed.
 # When that happens, consider updating the selector by bumping the PP version.
-| PP_VKEY          | 0x00da8fa27c470c5de7805f6e7612e9cc8686a81f417b2ce6184790cd58425130 |
+| PP_VKEY          | 0x00d9c3d7a222e0f659d44c27b22b015ffa93f447f159afb86300ce4b3b1bbd1f |
 | PP_VKEY_SELECTOR | 0x00000006                                                         |

@@ -76,7 +76,9 @@ pub struct BridgeExitZeroCopy {
     pub metadata_hash: [u8; 32],
     /// Leaf type (u8: 0=Transfer, 1=Message)
     pub leaf_type: u8,
-    /// Padding to ensure proper alignment
+    /// Padding to ensure proper alignment for 4-byte boundaries.
+    /// The leaf_type field is 1 byte, so we need 3 bytes of padding
+    /// to align the struct to 4-byte boundaries for optimal memory access.
     pub _padding: [u8; 3],
 }
 
@@ -169,6 +171,11 @@ pub struct ImportedBridgeExitZeroCopy {
     pub bridge_exit: BridgeExitZeroCopy,
     /// Claim data (2288 bytes)
     pub claim_data: ClaimZeroCopy,
+    /// End padding to ensure the struct size is a multiple of 8 bytes.
+    /// This ensures proper alignment when the struct is used in arrays or
+    /// as part of larger structures. The total size becomes 3480 bytes
+    /// (4+4+116+3352+4).
+    pub _end_padding: [u8; 4],
 }
 
 impl TryFrom<&ImportedBridgeExit> for ImportedBridgeExitZeroCopy {
@@ -186,6 +193,7 @@ impl TryFrom<&ImportedBridgeExit> for ImportedBridgeExitZeroCopy {
             global_index_rollup: rollup_index.to_u32(),
             bridge_exit: (&imported_bridge_exit.bridge_exit).into(),
             claim_data,
+            _end_padding: [0; 4],
         })
     }
 }
@@ -218,7 +226,8 @@ pub struct SmtMerkleProofZeroCopy {
 // SAFETY: This struct has a stable C-compatible memory layout
 // - #[repr(C)] ensures C-compatible layout
 // - All fields are fixed-size arrays of u8, which are Pod and Zeroable
-// - The total size is 6144 bytes with no padding
+// - The total size is 6144 bytes with no padding (all fields are naturally
+//   aligned)
 // - Cannot use derive due to large array size (6144 bytes exceeds bytemuck's
 // derive limits)
 unsafe impl Pod for SmtMerkleProofZeroCopy {}
@@ -248,7 +257,10 @@ impl From<&SmtMerkleProofZeroCopy> for agglayer_tries::proof::SmtMerkleProof<Kec
 pub struct SmtNonInclusionProofZeroCopy {
     /// Number of actual siblings (u8, max 64)
     pub num_siblings: u8,
-    /// Padding to ensure proper alignment
+    /// Padding to ensure proper alignment for 4-byte boundaries.
+    /// The num_siblings field is 1 byte, so we need 3 bytes of padding
+    /// to align the siblings array to 4-byte boundaries for optimal memory
+    /// access.
     pub _padding: [u8; 3],
     /// Siblings array (64 * 32 = 2048 bytes)
     pub siblings: [[u8; 32]; 64],
@@ -258,6 +270,7 @@ pub struct SmtNonInclusionProofZeroCopy {
 // - #[repr(C)] ensures C-compatible layout
 // - Fields are ordered by alignment (u8 first, then padding, then array)
 // - Total size is 2052 bytes: 1+3+2048 = 2052
+// - Padding ensures 4-byte alignment for the siblings array
 // - Cannot use derive due to large array size and explicit padding requirements
 unsafe impl Pod for SmtNonInclusionProofZeroCopy {}
 unsafe impl Zeroable for SmtNonInclusionProofZeroCopy {}
@@ -391,7 +404,10 @@ impl From<&L1InfoTreeLeafInnerZeroCopy> for unified_bridge::L1InfoTreeLeafInner 
 pub struct L1InfoTreeLeafZeroCopy {
     /// L1 info tree index (u32)
     pub l1_info_tree_index: u32,
-    /// Padding to ensure proper alignment for inner struct
+    /// Padding to ensure proper alignment for the inner struct.
+    /// The L1InfoTreeLeafInnerZeroCopy contains a u64 timestamp field which
+    /// requires 8-byte alignment. This 4-byte padding ensures the inner struct
+    /// starts at an 8-byte boundary for optimal memory access.
     pub _padding: [u8; 4],
     /// RER (32 bytes)
     pub rer: [u8; 32],
@@ -499,7 +515,11 @@ impl From<&ClaimFromRollupZeroCopy> for unified_bridge::ClaimFromRollup {
 pub struct ClaimZeroCopy {
     /// Claim type (u8: 0=Mainnet, 1=Rollup)
     pub claim_type: u8,
-    /// Padding to ensure proper alignment
+    /// Padding to ensure proper alignment for 8-byte boundaries.
+    /// The claim_type field is 1 byte, so we need 7 bytes of padding
+    /// to align the claim_data array to 8-byte boundaries for optimal memory
+    /// access. This is particularly important for the large claim_data
+    /// array (3344 bytes).
     pub _padding: [u8; 7],
     /// Union of claim data - size matches the larger of the two claim types
     /// Mainnet: 2288 bytes, Rollup: 3344 bytes, so we use 3344 bytes
@@ -510,6 +530,7 @@ pub struct ClaimZeroCopy {
 // - #[repr(C)] ensures C-compatible layout
 // - Fields are ordered by alignment (u8 first, then padding, then array)
 // - Total size is 3352 bytes: 1+7+3344 = 3352
+// - Padding ensures 8-byte alignment for the large claim_data array
 // - Cannot use derive due to complex field layout and explicit padding
 // requirements
 unsafe impl Pod for ClaimZeroCopy {}
@@ -586,7 +607,10 @@ pub struct BalanceProofEntryZeroCopy {
     pub token_info: TokenInfoZeroCopy,
     /// Balance amount (32 bytes)
     pub balance: [u8; 32],
-    /// Padding to ensure proper alignment
+    /// Padding to ensure proper alignment for 8-byte boundaries.
+    /// The token_info is 24 bytes and balance is 32 bytes, totaling 56 bytes.
+    /// We need 8 bytes of padding to align the struct to 8-byte boundaries
+    /// for optimal memory access and to maintain consistent alignment.
     pub _padding: [u8; 8],
 }
 
@@ -597,18 +621,29 @@ pub struct BalanceProofEntryZeroCopy {
 pub struct AggchainDataZeroCopy {
     /// Aggchain proof type (u8: 0=ECDSA, 1=Generic)
     pub aggchain_proof_type: u8,
-    /// Padding to ensure proper alignment
+    /// Padding to ensure proper alignment for 8-byte boundaries.
+    /// The aggchain_proof_type field is 1 byte, so we need 7 bytes of padding
+    /// to align the aggchain_proof_data array to 8-byte boundaries for optimal
+    /// memory access. This is important for the large proof data array (85
+    /// bytes).
     pub _padding: [u8; 7],
     /// Aggchain proof data (variable size, but we'll use a fixed buffer)
     /// For ECDSA: 20 bytes signer + 65 bytes signature = 85 bytes
     /// For Generic: 32 bytes aggchain_params + 32 bytes vkey = 64 bytes
     pub aggchain_proof_data: [u8; 85],
+    /// End padding to ensure the struct size is a multiple of 8 bytes.
+    /// This ensures proper alignment when the struct is used in arrays or
+    /// as part of larger structures. The total size becomes 96 bytes
+    /// (1+7+85+3).
+    pub _end_padding: [u8; 3],
 }
 
 // SAFETY: This struct has a stable C-compatible memory layout
 // - #[repr(C)] ensures C-compatible layout
-// - Fields are ordered by alignment (u8 first, then padding, then array)
-// - Total size is 93 bytes: 1+7+85 = 93
+// - Fields are ordered by alignment (u8 first, then padding, then array, then
+//   end padding)
+// - Total size is 96 bytes: 1+7+85+3 = 96 (multiple of 8 for optimal array
+//   alignment)
 // - Cannot use derive due to [u8; 85] not being supported by bytemuck derive
 unsafe impl Pod for AggchainDataZeroCopy {}
 unsafe impl Zeroable for AggchainDataZeroCopy {}
@@ -627,6 +662,7 @@ impl From<&AggchainData> for AggchainDataZeroCopy {
                     aggchain_proof_type: 0,
                     _padding: [0; 7],
                     aggchain_proof_data,
+                    _end_padding: [0; 3],
                 }
             }
             AggchainData::Generic {
@@ -646,6 +682,7 @@ impl From<&AggchainData> for AggchainDataZeroCopy {
                     aggchain_proof_type: 1,
                     _padding: [0; 7],
                     aggchain_proof_data,
+                    _end_padding: [0; 3],
                 }
             }
         }
@@ -738,7 +775,7 @@ pub struct MultiBatchHeaderZeroCopy {
 // - #[repr(C)] ensures C-compatible layout
 // - Fields are ordered by alignment (u64 first, then u32, then arrays, then
 //   struct)
-// - Total size is 184 bytes (includes internal padding)
+// - Total size is 184 bytes (includes internal padding for optimal alignment)
 // - Cannot use derive due to AggchainDataZeroCopy not being supported by
 //   bytemuck derive
 // - Safety verified by comprehensive runtime tests
@@ -1704,7 +1741,7 @@ mod tests {
         assert_eq!(std::mem::size_of::<ClaimZeroCopy>(), 3352);
         assert_eq!(std::mem::size_of::<MultiBatchHeaderZeroCopy>(), 184);
         assert_eq!(std::mem::size_of::<BalanceProofEntryZeroCopy>(), 64);
-        assert_eq!(std::mem::size_of::<AggchainDataZeroCopy>(), 93);
+        assert_eq!(std::mem::size_of::<AggchainDataZeroCopy>(), 96);
 
         // Compile-time alignment assertions
         assert_eq!(std::mem::align_of::<BridgeExitZeroCopy>(), 4);
@@ -1750,6 +1787,7 @@ mod tests {
                 aggchain_proof_type: 0,
                 _padding: [0; 7],
                 aggchain_proof_data: [0u8; 85],
+                _end_padding: [0; 3],
             },
         };
         assert_eq!(std::mem::size_of_val(&header), 184);
@@ -1843,7 +1881,7 @@ mod tests {
 
         // Test that padding doesn't interfere with data
         let mut zero_copy_with_padding = AggchainDataZeroCopy::from(&max_ecdsa);
-        zero_copy_with_padding._padding = [0xAAu8; 7]; // Set padding to non-zero values
+        zero_copy_with_padding._padding = [0xAAu8; 7]; // Set padding to non-zero values to verify it's ignored
 
         let reconstructed = AggchainData::try_from(&zero_copy_with_padding).unwrap();
 
