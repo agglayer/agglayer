@@ -1140,6 +1140,7 @@ mod tests {
             || original.height != reconstructed.height
             || original.prev_pessimistic_root != reconstructed.prev_pessimistic_root
             || original.l1_info_root != reconstructed.l1_info_root
+            || original.aggchain_proof != reconstructed.aggchain_proof
         {
             return false;
         }
@@ -1196,57 +1197,8 @@ mod tests {
             }
 
             // Compare claim_data - this is where we expect to find lossy conversions
-            match (&orig.0.claim_data, &rec.0.claim_data) {
-                (
-                    unified_bridge::Claim::Mainnet(orig_claim),
-                    unified_bridge::Claim::Mainnet(rec_claim),
-                ) => {
-                    // Compare ALL fields in claim_data including Merkle proof siblings
-                    if orig_claim.proof_leaf_mer.root != rec_claim.proof_leaf_mer.root
-                        || orig_claim.proof_leaf_mer.proof.siblings
-                            != rec_claim.proof_leaf_mer.proof.siblings
-                        || orig_claim.proof_ger_l1root.root != rec_claim.proof_ger_l1root.root
-                        || orig_claim.proof_ger_l1root.proof.siblings
-                            != rec_claim.proof_ger_l1root.proof.siblings
-                        || orig_claim.l1_leaf.l1_info_tree_index
-                            != rec_claim.l1_leaf.l1_info_tree_index
-                        || orig_claim.l1_leaf.rer != rec_claim.l1_leaf.rer
-                        || orig_claim.l1_leaf.mer != rec_claim.l1_leaf.mer
-                        || orig_claim.l1_leaf.inner.block_hash != rec_claim.l1_leaf.inner.block_hash
-                        || orig_claim.l1_leaf.inner.timestamp != rec_claim.l1_leaf.inner.timestamp
-                        || orig_claim.l1_leaf.inner.global_exit_root
-                            != rec_claim.l1_leaf.inner.global_exit_root
-                    {
-                        return false;
-                    }
-                }
-                (
-                    unified_bridge::Claim::Rollup(orig_claim),
-                    unified_bridge::Claim::Rollup(rec_claim),
-                ) => {
-                    // Compare ALL fields in claim_data including Merkle proof siblings
-                    if orig_claim.proof_leaf_ler.root != rec_claim.proof_leaf_ler.root
-                        || orig_claim.proof_leaf_ler.proof.siblings
-                            != rec_claim.proof_leaf_ler.proof.siblings
-                        || orig_claim.proof_ler_rer.root != rec_claim.proof_ler_rer.root
-                        || orig_claim.proof_ler_rer.proof.siblings
-                            != rec_claim.proof_ler_rer.proof.siblings
-                        || orig_claim.proof_ger_l1root.root != rec_claim.proof_ger_l1root.root
-                        || orig_claim.proof_ger_l1root.proof.siblings
-                            != rec_claim.proof_ger_l1root.proof.siblings
-                        || orig_claim.l1_leaf.l1_info_tree_index
-                            != rec_claim.l1_leaf.l1_info_tree_index
-                        || orig_claim.l1_leaf.rer != rec_claim.l1_leaf.rer
-                        || orig_claim.l1_leaf.mer != rec_claim.l1_leaf.mer
-                        || orig_claim.l1_leaf.inner.block_hash != rec_claim.l1_leaf.inner.block_hash
-                        || orig_claim.l1_leaf.inner.timestamp != rec_claim.l1_leaf.inner.timestamp
-                        || orig_claim.l1_leaf.inner.global_exit_root
-                            != rec_claim.l1_leaf.inner.global_exit_root
-                    {
-                        return false;
-                    }
-                }
-                _ => return false, // Different claim types
+            if orig.0.claim_data != rec.0.claim_data {
+                return false;
             }
 
             // Compare nullifier paths
@@ -1274,43 +1226,6 @@ mod tests {
             if orig.1 .1.siblings != rec.1 .1.siblings {
                 return false;
             }
-        }
-
-        // Compare aggchain_proof (manual comparison since AggchainData doesn't have Eq)
-        match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
-            (
-                AggchainData::ECDSA {
-                    signer: orig_signer,
-                    signature: orig_sig,
-                },
-                AggchainData::ECDSA {
-                    signer: rec_signer,
-                    signature: rec_sig,
-                },
-            ) => {
-                if orig_signer != rec_signer
-                    || orig_sig.r() != rec_sig.r()
-                    || orig_sig.s() != rec_sig.s()
-                    || orig_sig.v() != rec_sig.v()
-                {
-                    return false;
-                }
-            }
-            (
-                AggchainData::Generic {
-                    aggchain_params: orig_params,
-                    aggchain_vkey: orig_vkey,
-                },
-                AggchainData::Generic {
-                    aggchain_params: rec_params,
-                    aggchain_vkey: rec_vkey,
-                },
-            ) => {
-                if orig_params != rec_params || orig_vkey != rec_vkey {
-                    return false;
-                }
-            }
-            _ => return false, // Different aggchain proof types
         }
 
         true

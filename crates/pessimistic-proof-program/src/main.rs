@@ -21,7 +21,7 @@ pub fn main() {
     let balance_merkle_paths_bytes = sp1_zkvm::io::read_vec();
 
     // Reconstruct the MultiBatchHeaderRef from zero-copy components using the
-    // helper function (aggchain_proof is now embedded in header_bytes)
+    // helper function
     let batch_header_ref = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
         &header_bytes,
         &bridge_exits_bytes,
