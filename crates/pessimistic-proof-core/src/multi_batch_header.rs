@@ -57,6 +57,11 @@ const _BRIDGE_EXIT_ZERO_COPY_SIZE: () = {
     assert!(std::mem::align_of::<BridgeExitZeroCopy>() == 4);
 };
 
+const _AGGCHAIN_DATA_ZERO_COPY_SIZE: () = {
+    assert!(std::mem::size_of::<AggchainDataZeroCopy>() == 96);
+    assert!(std::mem::align_of::<AggchainDataZeroCopy>() == 1);
+};
+
 /// Zero-copy compatible BridgeExit for bytemuck operations.
 /// This is a fixed-size version that can be safely transmuted.
 #[repr(C)]
@@ -76,10 +81,13 @@ pub struct BridgeExitZeroCopy {
     pub metadata_hash: [u8; 32],
     /// Leaf type (u8: 0=Transfer, 1=Message)
     pub leaf_type: u8,
+    /// Whether metadata is present (u8: 0=No metadata, 1=Has metadata)
+    pub has_metadata: u8,
     /// Padding to ensure proper alignment for 4-byte boundaries.
-    /// The leaf_type field is 1 byte, so we need 3 bytes of padding
-    /// to align the struct to 4-byte boundaries for optimal memory access.
-    pub _padding: [u8; 3],
+    /// The leaf_type and has_metadata fields are 1 byte each, so we need 2
+    /// bytes of padding to align the struct to 4-byte boundaries for
+    /// optimal memory access.
+    pub _padding: [u8; 2],
 }
 
 impl From<&BridgeExit> for BridgeExitZeroCopy {
@@ -97,7 +105,8 @@ impl From<&BridgeExit> for BridgeExitZeroCopy {
             amount: bridge_exit.amount.to_be_bytes(),
             metadata_hash: bridge_exit.metadata.unwrap_or_default().0,
             leaf_type: bridge_exit.leaf_type as u8,
-            _padding: [0; 3],
+            has_metadata: if bridge_exit.metadata.is_some() { 1 } else { 0 },
+            _padding: [0; 2],
         }
     }
 }
@@ -116,10 +125,10 @@ impl From<&BridgeExitZeroCopy> for BridgeExit {
             dest_network: unified_bridge::NetworkId::new(zc.dest_network),
             dest_address: Address::from(zc.dest_address),
             amount: U256::from_be_bytes(zc.amount),
-            metadata: if zc.metadata_hash == [0; 32] {
-                None
-            } else {
+            metadata: if zc.has_metadata != 0 {
                 Some(Digest(zc.metadata_hash))
+            } else {
+                None
             },
         }
     }
@@ -1406,6 +1415,7 @@ mod tests {
 
         assert_eq!(bridge_exit.amount, reconstructed.amount);
         assert_eq!(bridge_exit.metadata, reconstructed.metadata);
+        assert_eq!(zero_copy.has_metadata, 1);
 
         // Test with zero values
         let mut bridge_exit = create_sample_bridge_exit();
@@ -1417,6 +1427,18 @@ mod tests {
 
         assert_eq!(bridge_exit.amount, reconstructed.amount);
         assert_eq!(bridge_exit.metadata, reconstructed.metadata);
+        assert_eq!(zero_copy.has_metadata, 0);
+
+        // Test with zero metadata hash but has_metadata = 1 (should preserve the hash)
+        let mut bridge_exit = create_sample_bridge_exit();
+        bridge_exit.metadata = Some(Digest([0u8; 32])); // Zero hash
+
+        let zero_copy: BridgeExitZeroCopy = (&bridge_exit).into();
+        let reconstructed: BridgeExit = (&zero_copy).into();
+
+        assert_eq!(bridge_exit.metadata, reconstructed.metadata);
+        assert_eq!(zero_copy.has_metadata, 1);
+        assert_eq!(zero_copy.metadata_hash, [0u8; 32]);
     }
 
     #[test]
