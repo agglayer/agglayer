@@ -1145,28 +1145,13 @@ mod tests {
             return false;
         }
 
-        // Compare bridge_exits (manual comparison to be safe)
-        if original.bridge_exits.len() != reconstructed.bridge_exits.len() {
+        // Compare bridge_exits (all fields have Eq)
+        if original.bridge_exits != reconstructed.bridge_exits {
             return false;
         }
-        for (orig, rec) in original
-            .bridge_exits
-            .iter()
-            .zip(reconstructed.bridge_exits.iter())
-        {
-            if orig.leaf_type != rec.leaf_type
-                || orig.token_info.origin_network != rec.token_info.origin_network
-                || orig.token_info.origin_token_address != rec.token_info.origin_token_address
-                || orig.dest_network != rec.dest_network
-                || orig.dest_address != rec.dest_address
-                || orig.amount != rec.amount
-                || orig.metadata != rec.metadata
-            {
-                return false;
-            }
-        }
 
-        // Compare imported_bridge_exits (manual comparison to be safe)
+        // Compare imported_bridge_exits (most fields have Eq, only nullifier paths need
+        // manual comparison)
         if original.imported_bridge_exits.len() != reconstructed.imported_bridge_exits.len() {
             return false;
         }
@@ -1175,39 +1160,18 @@ mod tests {
             .iter()
             .zip(reconstructed.imported_bridge_exits.iter())
         {
-            // Compare bridge_exit part
-            let orig_be = &orig.0.bridge_exit;
-            let rec_be = &rec.0.bridge_exit;
-            if orig_be.leaf_type != rec_be.leaf_type
-                || orig_be.token_info.origin_network != rec_be.token_info.origin_network
-                || orig_be.token_info.origin_token_address != rec_be.token_info.origin_token_address
-                || orig_be.dest_network != rec_be.dest_network
-                || orig_be.dest_address != rec_be.dest_address
-                || orig_be.amount != rec_be.amount
-                || orig_be.metadata != rec_be.metadata
-            {
+            // Compare ImportedBridgeExit (has Eq)
+            if orig.0 != rec.0 {
                 return false;
             }
-
-            // Compare global_index
-            if orig.0.global_index.network_id() != rec.0.global_index.network_id()
-                || orig.0.global_index.leaf_index() != rec.0.global_index.leaf_index()
-            {
-                return false;
-            }
-
-            // Compare claim_data - this is where we expect to find lossy conversions
-            if orig.0.claim_data != rec.0.claim_data {
-                return false;
-            }
-
-            // Compare nullifier paths
+            // Compare nullifier paths manually (SmtNonInclusionProof doesn't have Eq)
             if orig.1.siblings != rec.1.siblings {
                 return false;
             }
         }
 
-        // Compare balances_proofs (manual comparison to be safe)
+        // Compare balances_proofs (most fields have Eq, only merkle paths need manual
+        // comparison)
         if original.balances_proofs.len() != reconstructed.balances_proofs.len() {
             return false;
         }
@@ -1216,13 +1180,11 @@ mod tests {
             .iter()
             .zip(reconstructed.balances_proofs.iter())
         {
-            if orig.0.origin_network != rec.0.origin_network
-                || orig.0.origin_token_address != rec.0.origin_token_address
-                || orig.1 .0 != rec.1 .0
-            {
+            // Compare TokenInfo and U256 (both have Eq)
+            if orig.0 != rec.0 || orig.1 .0 != rec.1 .0 {
                 return false;
             }
-            // Compare Merkle paths
+            // Compare merkle paths manually (SmtMerkleProof doesn't have Eq)
             if orig.1 .1.siblings != rec.1 .1.siblings {
                 return false;
             }
