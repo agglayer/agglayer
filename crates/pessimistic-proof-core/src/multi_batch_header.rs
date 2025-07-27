@@ -865,15 +865,23 @@ where
     }
 }
 
-/// Type alias for zero-copy components tuple to reduce type complexity
-pub type ZeroCopyComponents = (
-    Vec<u8>, // header_bytes
-    Vec<u8>, // bridge_exits_bytes
-    Vec<u8>, // imported_bridge_exits_bytes
-    Vec<u8>, // nullifier_paths_bytes
-    Vec<u8>, // balances_proofs_bytes
-    Vec<u8>, // balance_merkle_paths_bytes
-);
+/// This struct contains all the byte arrays needed for zero-copy
+/// serialization of a MultiBatchHeader.
+#[derive(Debug, Clone)]
+pub struct ZeroCopyComponents {
+    /// Serialized header bytes
+    pub header_bytes: Vec<u8>,
+    /// Serialized bridge exits bytes
+    pub bridge_exits_bytes: Vec<u8>,
+    /// Serialized imported bridge exits bytes
+    pub imported_bridge_exits_bytes: Vec<u8>,
+    /// Serialized nullifier paths bytes
+    pub nullifier_paths_bytes: Vec<u8>,
+    /// Serialized balance proofs bytes
+    pub balances_proofs_bytes: Vec<u8>,
+    /// Serialized balance merkle paths bytes
+    pub balance_merkle_paths_bytes: Vec<u8>,
+}
 
 // Specific implementation for Keccak256Hasher with zero-copy component helpers
 impl MultiBatchHeader<Keccak256Hasher> {
@@ -1012,14 +1020,14 @@ impl MultiBatchHeader<Keccak256Hasher> {
         let balance_merkle_paths_bytes =
             bytemuck::cast_slice(&balance_merkle_paths_zero_copy).to_vec();
 
-        Ok((
+        Ok(ZeroCopyComponents {
             header_bytes,
             bridge_exits_bytes,
             imported_bridge_exits_bytes,
             nullifier_paths_bytes,
             balances_proofs_bytes,
             balance_merkle_paths_bytes,
-        ))
+        })
     }
 }
 
@@ -1465,28 +1473,21 @@ mod tests {
     #[test]
     fn test_alignment_error_handling() {
         let original = create_sample_multi_batch_header();
-        let (
-            header_bytes,
-            bridge_exits_bytes,
-            imported_bridge_exits_bytes,
-            nullifier_paths_bytes,
-            balances_proofs_bytes,
-            balance_merkle_paths_bytes,
-        ) = original
+        let components = original
             .to_zero_copy_components()
             .expect("Failed to convert to zero-copy components");
 
         // Test with misaligned data by adding a single byte
         let mut misaligned_bridge_exits = vec![0u8];
-        misaligned_bridge_exits.extend_from_slice(&bridge_exits_bytes);
+        misaligned_bridge_exits.extend_from_slice(&components.bridge_exits_bytes);
 
         let result = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
-            &header_bytes,
+            &components.header_bytes,
             &misaligned_bridge_exits,
-            &imported_bridge_exits_bytes,
-            &nullifier_paths_bytes,
-            &balances_proofs_bytes,
-            &balance_merkle_paths_bytes,
+            &components.imported_bridge_exits_bytes,
+            &components.nullifier_paths_bytes,
+            &components.balances_proofs_bytes,
+            &components.balance_merkle_paths_bytes,
         );
 
         assert!(result.is_err());
@@ -1499,25 +1500,18 @@ mod tests {
     /// Helper function to test zero-copy recovery for a given MultiBatchHeader
     fn test_zero_copy_recovery(original: &MultiBatchHeader<Keccak256Hasher>) {
         // Use the new helper function to get all zero-copy components
-        let (
-            header_bytes,
-            bridge_exits_bytes,
-            imported_bridge_exits_bytes,
-            nullifier_paths_bytes,
-            balances_proofs_bytes,
-            balance_merkle_paths_bytes,
-        ) = original
+        let components = original
             .to_zero_copy_components()
             .expect("Failed to convert to zero-copy components");
 
         // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
         let borrowed_view = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
-            &header_bytes,
-            &bridge_exits_bytes,
-            &imported_bridge_exits_bytes,
-            &nullifier_paths_bytes,
-            &balances_proofs_bytes,
-            &balance_merkle_paths_bytes,
+            &components.header_bytes,
+            &components.bridge_exits_bytes,
+            &components.imported_bridge_exits_bytes,
+            &components.nullifier_paths_bytes,
+            &components.balances_proofs_bytes,
+            &components.balance_merkle_paths_bytes,
         )
         .expect("Failed to reconstruct MultiBatchHeaderRef");
 
@@ -1538,25 +1532,18 @@ mod tests {
     /// MultiBatchHeader
     fn test_borrowed_view_recovery(original: &MultiBatchHeader<Keccak256Hasher>) {
         // Use the new helper function to get all zero-copy components
-        let (
-            header_bytes,
-            bridge_exits_bytes,
-            imported_bridge_exits_bytes,
-            nullifier_paths_bytes,
-            balances_proofs_bytes,
-            balance_merkle_paths_bytes,
-        ) = original
+        let components = original
             .to_zero_copy_components()
             .expect("Failed to convert to zero-copy components");
 
         // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
         let borrowed_view = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
-            &header_bytes,
-            &bridge_exits_bytes,
-            &imported_bridge_exits_bytes,
-            &nullifier_paths_bytes,
-            &balances_proofs_bytes,
-            &balance_merkle_paths_bytes,
+            &components.header_bytes,
+            &components.bridge_exits_bytes,
+            &components.imported_bridge_exits_bytes,
+            &components.nullifier_paths_bytes,
+            &components.balances_proofs_bytes,
+            &components.balance_merkle_paths_bytes,
         )
         .expect("Failed to reconstruct MultiBatchHeaderRef");
 
