@@ -2,7 +2,10 @@
 
 use std::hash::Hash;
 
-use agglayer_primitives::{keccak::Hasher, U256};
+use agglayer_primitives::{
+    keccak::{Hasher, Keccak256Hasher},
+    Address, Digest, Signature, U256,
+};
 use bytemuck::{Pod, Zeroable};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_with::serde_as;
@@ -14,9 +17,7 @@ use crate::{
 };
 
 /// Helper function to convert array of Digests to array of byte arrays
-fn digest_array_to_bytes<const N: usize>(
-    digests: &[agglayer_primitives::Digest; N],
-) -> [[u8; 32]; N] {
+fn digest_array_to_bytes<const N: usize>(digests: &[Digest; N]) -> [[u8; 32]; N] {
     let mut result = [[0u8; 32]; N];
     for (i, digest) in digests.iter().enumerate() {
         result[i] = digest.0;
@@ -25,10 +26,8 @@ fn digest_array_to_bytes<const N: usize>(
 }
 
 /// Helper function to convert array of byte arrays to array of Digests
-fn bytes_array_to_digests<const N: usize>(
-    bytes: &[[u8; 32]; N],
-) -> [agglayer_primitives::Digest; N] {
-    bytes.map(agglayer_primitives::Digest)
+fn bytes_array_to_digests<const N: usize>(bytes: &[[u8; 32]; N]) -> [Digest; N] {
+    bytes.map(Digest)
 }
 
 // Static assertions for large structs that cannot use derive
@@ -110,15 +109,15 @@ impl From<&BridgeExitZeroCopy> for BridgeExit {
                 .unwrap_or(unified_bridge::LeafType::Transfer),
             token_info: unified_bridge::TokenInfo {
                 origin_network: unified_bridge::NetworkId::new(zc.origin_network),
-                origin_token_address: agglayer_primitives::Address::new(zc.origin_token_address),
+                origin_token_address: Address::new(zc.origin_token_address),
             },
             dest_network: unified_bridge::NetworkId::new(zc.dest_network),
-            dest_address: agglayer_primitives::Address::from(zc.dest_address),
-            amount: agglayer_primitives::U256::from_be_bytes(zc.amount),
+            dest_address: Address::from(zc.dest_address),
+            amount: U256::from_be_bytes(zc.amount),
             metadata: if zc.metadata_hash == [0; 32] {
                 None
             } else {
-                Some(agglayer_primitives::Digest(zc.metadata_hash))
+                Some(Digest(zc.metadata_hash))
             },
         }
     }
@@ -151,7 +150,7 @@ impl From<&TokenInfoZeroCopy> for TokenInfo {
     fn from(zc: &TokenInfoZeroCopy) -> Self {
         unified_bridge::TokenInfo {
             origin_network: unified_bridge::NetworkId::new(zc.origin_network),
-            origin_token_address: agglayer_primitives::Address::from(zc.origin_token_address),
+            origin_token_address: Address::from(zc.origin_token_address),
         }
     }
 }
@@ -235,24 +234,15 @@ pub struct SmtMerkleProofZeroCopy {
 unsafe impl Pod for SmtMerkleProofZeroCopy {}
 unsafe impl Zeroable for SmtMerkleProofZeroCopy {}
 
-impl From<&agglayer_tries::proof::SmtMerkleProof<agglayer_primitives::keccak::Keccak256Hasher, 192>>
-    for SmtMerkleProofZeroCopy
-{
-    fn from(
-        proof: &agglayer_tries::proof::SmtMerkleProof<
-            agglayer_primitives::keccak::Keccak256Hasher,
-            192,
-        >,
-    ) -> Self {
+impl From<&agglayer_tries::proof::SmtMerkleProof<Keccak256Hasher, 192>> for SmtMerkleProofZeroCopy {
+    fn from(proof: &agglayer_tries::proof::SmtMerkleProof<Keccak256Hasher, 192>) -> Self {
         Self {
             siblings: digest_array_to_bytes(&proof.siblings),
         }
     }
 }
 
-impl From<&SmtMerkleProofZeroCopy>
-    for agglayer_tries::proof::SmtMerkleProof<agglayer_primitives::keccak::Keccak256Hasher, 192>
-{
+impl From<&SmtMerkleProofZeroCopy> for agglayer_tries::proof::SmtMerkleProof<Keccak256Hasher, 192> {
     fn from(zc: &SmtMerkleProofZeroCopy) -> Self {
         agglayer_tries::proof::SmtMerkleProof {
             siblings: bytes_array_to_digests(&zc.siblings),
@@ -282,20 +272,10 @@ pub struct SmtNonInclusionProofZeroCopy {
 unsafe impl Pod for SmtNonInclusionProofZeroCopy {}
 unsafe impl Zeroable for SmtNonInclusionProofZeroCopy {}
 
-impl
-    From<
-        &agglayer_tries::proof::SmtNonInclusionProof<
-            agglayer_primitives::keccak::Keccak256Hasher,
-            64,
-        >,
-    > for SmtNonInclusionProofZeroCopy
+impl From<&agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64>>
+    for SmtNonInclusionProofZeroCopy
 {
-    fn from(
-        proof: &agglayer_tries::proof::SmtNonInclusionProof<
-            agglayer_primitives::keccak::Keccak256Hasher,
-            64,
-        >,
-    ) -> Self {
+    fn from(proof: &agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64>) -> Self {
         let mut siblings = [[0u8; 32]; 64];
         let num_siblings = proof.siblings.len().min(64) as u8;
 
@@ -317,18 +297,15 @@ impl
 }
 
 impl From<&SmtNonInclusionProofZeroCopy>
-    for agglayer_tries::proof::SmtNonInclusionProof<
-        agglayer_primitives::keccak::Keccak256Hasher,
-        64,
-    >
+    for agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64>
 {
     fn from(zc: &SmtNonInclusionProofZeroCopy) -> Self {
         let num_siblings = zc.num_siblings.min(64) as usize;
-        let siblings: Vec<agglayer_primitives::Digest> = zc
+        let siblings: Vec<Digest> = zc
             .siblings
             .iter()
             .take(num_siblings)
-            .map(|s| agglayer_primitives::Digest(*s))
+            .map(|s| Digest(*s))
             .collect();
         agglayer_tries::proof::SmtNonInclusionProof { siblings }
     }
@@ -342,21 +319,15 @@ pub struct LETMerkleProofZeroCopy {
     pub siblings: [[u8; 32]; 32],
 }
 
-impl From<&unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher>>
-    for LETMerkleProofZeroCopy
-{
-    fn from(
-        proof: &unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher>,
-    ) -> Self {
+impl From<&unified_bridge::LETMerkleProof<Keccak256Hasher>> for LETMerkleProofZeroCopy {
+    fn from(proof: &unified_bridge::LETMerkleProof<Keccak256Hasher>) -> Self {
         Self {
             siblings: digest_array_to_bytes(&proof.siblings),
         }
     }
 }
 
-impl From<&LETMerkleProofZeroCopy>
-    for unified_bridge::LETMerkleProof<agglayer_primitives::keccak::Keccak256Hasher>
-{
+impl From<&LETMerkleProofZeroCopy> for unified_bridge::LETMerkleProof<Keccak256Hasher> {
     fn from(zc: &LETMerkleProofZeroCopy) -> Self {
         unified_bridge::LETMerkleProof {
             siblings: bytes_array_to_digests(&zc.siblings),
@@ -387,7 +358,7 @@ impl From<&MerkleProofZeroCopy> for unified_bridge::MerkleProof {
     fn from(zc: &MerkleProofZeroCopy) -> Self {
         unified_bridge::MerkleProof {
             proof: (&zc.proof).into(),
-            root: agglayer_primitives::Digest(zc.root),
+            root: Digest(zc.root),
         }
     }
 }
@@ -417,9 +388,9 @@ impl From<&unified_bridge::L1InfoTreeLeafInner> for L1InfoTreeLeafInnerZeroCopy 
 impl From<&L1InfoTreeLeafInnerZeroCopy> for unified_bridge::L1InfoTreeLeafInner {
     fn from(zc: &L1InfoTreeLeafInnerZeroCopy) -> Self {
         unified_bridge::L1InfoTreeLeafInner {
-            block_hash: agglayer_primitives::Digest(zc.block_hash),
+            block_hash: Digest(zc.block_hash),
             timestamp: zc.timestamp,
-            global_exit_root: agglayer_primitives::Digest(zc.global_exit_root),
+            global_exit_root: Digest(zc.global_exit_root),
         }
     }
 }
@@ -456,8 +427,8 @@ impl From<&L1InfoTreeLeafZeroCopy> for unified_bridge::L1InfoTreeLeaf {
     fn from(zc: &L1InfoTreeLeafZeroCopy) -> Self {
         unified_bridge::L1InfoTreeLeaf {
             l1_info_tree_index: zc.l1_info_tree_index,
-            rer: agglayer_primitives::Digest(zc.rer),
-            mer: agglayer_primitives::Digest(zc.mer),
+            rer: Digest(zc.rer),
+            mer: Digest(zc.mer),
             inner: (&zc.inner).into(),
         }
     }
@@ -698,16 +669,16 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
         match zero_copy.aggchain_proof_type {
             0 => {
                 // ECDSA - reconstruct signer (20 bytes) + signature (65 bytes)
-                let signer = agglayer_primitives::Address::from(
+                let signer = Address::from(
                     <[u8; 20]>::try_from(&zero_copy.aggchain_proof_data[..20])
                         .map_err(|e| format!("Failed to convert signer bytes: {}", e))?,
                 );
-                let signature = agglayer_primitives::Signature::new(
-                    agglayer_primitives::U256::from_be_bytes(
+                let signature = Signature::new(
+                    U256::from_be_bytes(
                         <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[20..52])
                             .map_err(|e| format!("Failed to convert signature r bytes: {}", e))?,
                     ),
-                    agglayer_primitives::U256::from_be_bytes(
+                    U256::from_be_bytes(
                         <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[52..84])
                             .map_err(|e| format!("Failed to convert signature s bytes: {}", e))?,
                     ),
@@ -719,7 +690,7 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
             }
             1 => {
                 // Generic
-                let aggchain_params = agglayer_primitives::Digest::from(
+                let aggchain_params = Digest::from(
                     <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[..32])
                         .map_err(|e| format!("Failed to convert aggchain_params bytes: {}", e))?,
                 );
@@ -872,7 +843,7 @@ pub type ZeroCopyComponents = (
 );
 
 // Specific implementation for Keccak256Hasher with zero-copy component helpers
-impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+impl MultiBatchHeader<Keccak256Hasher> {
     /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy
     /// components. This is the complete reconstruction pattern used in SP1
     /// zkvm environments. Returns a borrowed view to avoid allocations for
@@ -884,10 +855,8 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
         nullifier_paths_bytes: &'a [u8],
         balances_proofs_bytes: &'a [u8],
         balance_merkle_paths_bytes: &'a [u8],
-    ) -> Result<
-        MultiBatchHeaderRef<'a, agglayer_primitives::keccak::Keccak256Hasher>,
-        Box<dyn std::error::Error + Send + Sync>,
-    > {
+    ) -> Result<MultiBatchHeaderRef<'a, Keccak256Hasher>, Box<dyn std::error::Error + Send + Sync>>
+    {
         // Deserialize header using pod_read_unaligned for robustness against alignment
         // issues
         let header_zero_copy =
@@ -937,8 +906,12 @@ impl MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
 
         // Reconstruct the MultiBatchHeaderRef from zero-copy components
         let origin_network = NetworkId::new(header_zero_copy.origin_network);
-        let prev_pessimistic_root = <<agglayer_primitives::keccak::Keccak256Hasher as agglayer_primitives::keccak::Hasher>::Digest as From<[u8; 32]>>::from(header_zero_copy.prev_pessimistic_root);
-        let l1_info_root = <<agglayer_primitives::keccak::Keccak256Hasher as agglayer_primitives::keccak::Hasher>::Digest as From<[u8; 32]>>::from(header_zero_copy.l1_info_root);
+        let prev_pessimistic_root = <<Keccak256Hasher as Hasher>::Digest as From<[u8; 32]>>::from(
+            header_zero_copy.prev_pessimistic_root,
+        );
+        let l1_info_root = <<Keccak256Hasher as Hasher>::Digest as From<[u8; 32]>>::from(
+            header_zero_copy.l1_info_root,
+        );
 
         Ok(MultiBatchHeaderRef {
             origin_network,
@@ -1058,24 +1031,18 @@ where
 }
 
 // Specific implementation for Keccak256Hasher
-impl MultiBatchHeaderRef<'_, agglayer_primitives::keccak::Keccak256Hasher> {
+impl MultiBatchHeaderRef<'_, Keccak256Hasher> {
     /// Convert to owned MultiBatchHeader by cloning all borrowed data.
     /// This is a specialized version for Keccak256Hasher to avoid type
     /// conflicts.
     pub fn to_owned_keccak(
         &self,
-    ) -> Result<
-        MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>,
-        Box<dyn std::error::Error + Send + Sync>,
-    > {
+    ) -> Result<MultiBatchHeader<Keccak256Hasher>, Box<dyn std::error::Error + Send + Sync>> {
         // Convert bridge_exits
         let bridge_exits: Vec<BridgeExit> = self.bridge_exits.iter().map(|be| be.into()).collect();
 
         // Convert imported_bridge_exits and nullifier_paths
-        let imported_bridge_exits: Vec<(
-            ImportedBridgeExit,
-            NullifierPath<agglayer_primitives::keccak::Keccak256Hasher>,
-        )> = self
+        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> = self
             .imported_bridge_exits
             .iter()
             .zip(self.nullifier_paths.iter())
@@ -1087,13 +1054,7 @@ impl MultiBatchHeaderRef<'_, agglayer_primitives::keccak::Keccak256Hasher> {
             .collect::<Result<_, Box<dyn std::error::Error + Send + Sync>>>()?;
 
         // Convert balances_proofs and balance_merkle_paths
-        let balances_proofs: Vec<(
-            TokenInfo,
-            (
-                U256,
-                LocalBalancePath<agglayer_primitives::keccak::Keccak256Hasher>,
-            ),
-        )> = self
+        let balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>))> = self
             .balances_proofs
             .iter()
             .zip(self.balance_merkle_paths.iter())
@@ -1120,7 +1081,6 @@ impl MultiBatchHeaderRef<'_, agglayer_primitives::keccak::Keccak256Hasher> {
 
 #[cfg(test)]
 mod tests {
-    use agglayer_primitives::{Address, Digest, Signature, U256};
     use unified_bridge::{
         GlobalIndex, L1InfoTreeLeaf, L1InfoTreeLeafInner, LETMerkleProof, LeafType, MerkleProof,
     };
@@ -1139,14 +1099,10 @@ mod tests {
         if original.origin_network != reconstructed.origin_network
             || original.height != reconstructed.height
             || original.prev_pessimistic_root != reconstructed.prev_pessimistic_root
+            || original.bridge_exits != reconstructed.bridge_exits
             || original.l1_info_root != reconstructed.l1_info_root
             || original.aggchain_proof != reconstructed.aggchain_proof
         {
-            return false;
-        }
-
-        // Compare bridge_exits (all fields have Eq)
-        if original.bridge_exits != reconstructed.bridge_exits {
             return false;
         }
 
@@ -1196,7 +1152,7 @@ mod tests {
     /// Test helper to create a sample BridgeExit
     fn create_sample_bridge_exit() -> unified_bridge::BridgeExit {
         unified_bridge::BridgeExit {
-            leaf_type: LeafType::Transfer,
+            leaf_type: LeafType::Message,
             token_info: unified_bridge::TokenInfo {
                 origin_network: unified_bridge::NetworkId::new(1),
                 origin_token_address: Address::new([1u8; 20]),
@@ -1290,8 +1246,7 @@ mod tests {
 
     /// Test helper to create a sample SmtMerkleProof
     fn create_sample_smt_merkle_proof(
-    ) -> agglayer_tries::proof::SmtMerkleProof<agglayer_primitives::keccak::Keccak256Hasher, 192>
-    {
+    ) -> agglayer_tries::proof::SmtMerkleProof<Keccak256Hasher, 192> {
         agglayer_tries::proof::SmtMerkleProof {
             siblings: [Digest([13u8; 32]); 192],
         }
@@ -1299,8 +1254,7 @@ mod tests {
 
     /// Test helper to create a sample SmtNonInclusionProof
     fn create_sample_smt_non_inclusion_proof(
-    ) -> agglayer_tries::proof::SmtNonInclusionProof<agglayer_primitives::keccak::Keccak256Hasher, 64>
-    {
+    ) -> agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64> {
         agglayer_tries::proof::SmtNonInclusionProof {
             siblings: vec![Digest([14u8; 32]); 64],
         }
@@ -1308,16 +1262,14 @@ mod tests {
 
     /// Test helper to create a sample SmtNonInclusionProof with fewer siblings
     fn create_sample_smt_non_inclusion_proof_partial(
-    ) -> agglayer_tries::proof::SmtNonInclusionProof<agglayer_primitives::keccak::Keccak256Hasher, 64>
-    {
+    ) -> agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64> {
         agglayer_tries::proof::SmtNonInclusionProof {
             siblings: vec![Digest([15u8; 32]); 32], // Only 32 siblings instead of 64
         }
     }
 
     /// Test helper to create a sample MultiBatchHeader
-    fn create_sample_multi_batch_header(
-    ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+    fn create_sample_multi_batch_header() -> MultiBatchHeader<Keccak256Hasher> {
         MultiBatchHeader {
             origin_network: unified_bridge::NetworkId::new(5),
             height: 1000,
@@ -1341,8 +1293,7 @@ mod tests {
 
     /// Test helper to create a sample MultiBatchHeader with Generic aggchain
     /// proof
-    fn create_sample_multi_batch_header_generic(
-    ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+    fn create_sample_multi_batch_header_generic() -> MultiBatchHeader<Keccak256Hasher> {
         MultiBatchHeader {
             origin_network: unified_bridge::NetworkId::new(6),
             height: 2000,
@@ -1365,8 +1316,7 @@ mod tests {
     }
 
     /// Test helper to create a sample MultiBatchHeader with Rollup claims
-    fn create_sample_multi_batch_header_rollup(
-    ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+    fn create_sample_multi_batch_header_rollup() -> MultiBatchHeader<Keccak256Hasher> {
         MultiBatchHeader {
             origin_network: unified_bridge::NetworkId::new(7),
             height: 3000,
@@ -1389,8 +1339,7 @@ mod tests {
     }
 
     /// Test helper to create a sample MultiBatchHeader with mixed claims
-    fn create_sample_multi_batch_header_mixed(
-    ) -> MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> {
+    fn create_sample_multi_batch_header_mixed() -> MultiBatchHeader<Keccak256Hasher> {
         MultiBatchHeader {
             origin_network: unified_bridge::NetworkId::new(8),
             height: 4000,
@@ -1419,7 +1368,7 @@ mod tests {
     }
 
     #[test]
-    fn test_edge_cases() {
+    fn test_bridge_exit_zero_copy_edge_cases() {
         // Test with maximum values
         let mut bridge_exit = create_sample_bridge_exit();
         bridge_exit.amount = U256::MAX;
@@ -1449,7 +1398,7 @@ mod tests {
         let mut zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
         zero_copy.aggchain_proof.aggchain_proof_type = 255; // Invalid type
 
-        let result: Result<MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>, _> =
+        let result: Result<MultiBatchHeader<Keccak256Hasher>, _> =
             MultiBatchHeader::try_from(&zero_copy);
         assert!(result.is_err());
         assert!(result
@@ -1458,46 +1407,27 @@ mod tests {
             .contains("Invalid aggchain proof type"));
     }
 
-    /// Test demonstrating full recovery of MultiBatchHeader from zero-copy
-    /// components for all claim types and aggchain proof types.
+    /// Test demonstrating full recovery and borrowed view functionality for all
+    /// claim types and aggchain proof types.
     #[test]
-    fn test_full_recovery_from_zero_copy_components() {
-        // Test with ECDSA aggchain proof and Mainnet claims
-        let original_ecdsa = create_sample_multi_batch_header();
-        test_zero_copy_recovery(&original_ecdsa);
+    fn test_zero_copy_recovery_and_borrowed_view() {
+        let test_cases = vec![
+            ("ECDSA + Mainnet", create_sample_multi_batch_header()),
+            (
+                "Generic + Mainnet",
+                create_sample_multi_batch_header_generic(),
+            ),
+            ("ECDSA + Rollup", create_sample_multi_batch_header_rollup()),
+            ("Generic + Mixed", create_sample_multi_batch_header_mixed()),
+        ];
 
-        // Test with Generic aggchain proof and Mainnet claims
-        let original_generic = create_sample_multi_batch_header_generic();
-        test_zero_copy_recovery(&original_generic);
+        for (_case_name, original) in test_cases {
+            // Test full recovery
+            test_zero_copy_recovery(&original);
 
-        // Test with Rollup claims
-        let original_rollup = create_sample_multi_batch_header_rollup();
-        test_zero_copy_recovery(&original_rollup);
-
-        // Test with mixed Mainnet and Rollup claims
-        let original_mixed = create_sample_multi_batch_header_mixed();
-        test_zero_copy_recovery(&original_mixed);
-    }
-
-    /// Test demonstrating zero-copy borrowed view functionality for all claim
-    /// types.
-    #[test]
-    fn test_zero_copy_borrowed_view() {
-        // Test with ECDSA aggchain proof and Mainnet claims
-        let original_ecdsa = create_sample_multi_batch_header();
-        test_borrowed_view_recovery(&original_ecdsa);
-
-        // Test with Generic aggchain proof and Mainnet claims
-        let original_generic = create_sample_multi_batch_header_generic();
-        test_borrowed_view_recovery(&original_generic);
-
-        // Test with Rollup claims
-        let original_rollup = create_sample_multi_batch_header_rollup();
-        test_borrowed_view_recovery(&original_rollup);
-
-        // Test with mixed Mainnet and Rollup claims
-        let original_mixed = create_sample_multi_batch_header_mixed();
-        test_borrowed_view_recovery(&original_mixed);
+            // Test borrowed view recovery
+            test_borrowed_view_recovery(&original);
+        }
     }
 
     /// Test that alignment errors are handled correctly when using
@@ -1520,7 +1450,7 @@ mod tests {
         let mut misaligned_bridge_exits = vec![0u8];
         misaligned_bridge_exits.extend_from_slice(&bridge_exits_bytes);
 
-        let result = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components(
+        let result = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
             &header_bytes,
             &misaligned_bridge_exits,
             &imported_bridge_exits_bytes,
@@ -1537,9 +1467,7 @@ mod tests {
     }
 
     /// Helper function to test zero-copy recovery for a given MultiBatchHeader
-    fn test_zero_copy_recovery(
-        original: &MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>,
-    ) {
+    fn test_zero_copy_recovery(original: &MultiBatchHeader<Keccak256Hasher>) {
         // Use the new helper function to get all zero-copy components
         let (
             header_bytes,
@@ -1553,14 +1481,15 @@ mod tests {
             .expect("Failed to convert to zero-copy components");
 
         // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
-        let borrowed_view = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components(
+        let borrowed_view = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
             &header_bytes,
             &bridge_exits_bytes,
             &imported_bridge_exits_bytes,
             &nullifier_paths_bytes,
             &balances_proofs_bytes,
             &balance_merkle_paths_bytes,
-        ).expect("Failed to reconstruct MultiBatchHeaderRef");
+        )
+        .expect("Failed to reconstruct MultiBatchHeaderRef");
 
         // Convert to owned for deep comparison
         let reconstructed = borrowed_view
@@ -1577,9 +1506,7 @@ mod tests {
 
     /// Helper function to test borrowed view recovery for a given
     /// MultiBatchHeader
-    fn test_borrowed_view_recovery(
-        original: &MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher>,
-    ) {
+    fn test_borrowed_view_recovery(original: &MultiBatchHeader<Keccak256Hasher>) {
         // Use the new helper function to get all zero-copy components
         let (
             header_bytes,
@@ -1593,14 +1520,15 @@ mod tests {
             .expect("Failed to convert to zero-copy components");
 
         // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
-        let borrowed_view = MultiBatchHeader::<agglayer_primitives::keccak::Keccak256Hasher>::from_zero_copy_components(
+        let borrowed_view = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
             &header_bytes,
             &bridge_exits_bytes,
             &imported_bridge_exits_bytes,
             &nullifier_paths_bytes,
             &balances_proofs_bytes,
             &balance_merkle_paths_bytes,
-        ).expect("Failed to reconstruct MultiBatchHeaderRef");
+        )
+        .expect("Failed to reconstruct MultiBatchHeaderRef");
 
         // Convert to owned and verify full recovery
         let reconstructed = borrowed_view
@@ -1716,10 +1644,8 @@ mod tests {
         // Test with full-length proof (64 siblings)
         let full_proof = create_sample_smt_non_inclusion_proof();
         let full_zero_copy = SmtNonInclusionProofZeroCopy::from(&full_proof);
-        let reconstructed_full: agglayer_tries::proof::SmtNonInclusionProof<
-            agglayer_primitives::keccak::Keccak256Hasher,
-            64,
-        > = (&full_zero_copy).into();
+        let reconstructed_full: agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64> =
+            (&full_zero_copy).into();
 
         assert_eq!(full_proof.siblings.len(), reconstructed_full.siblings.len());
         assert_eq!(full_proof.siblings, reconstructed_full.siblings);
@@ -1729,7 +1655,7 @@ mod tests {
         let partial_proof = create_sample_smt_non_inclusion_proof_partial();
         let partial_zero_copy = SmtNonInclusionProofZeroCopy::from(&partial_proof);
         let reconstructed_partial: agglayer_tries::proof::SmtNonInclusionProof<
-            agglayer_primitives::keccak::Keccak256Hasher,
+            Keccak256Hasher,
             64,
         > = (&partial_zero_copy).into();
 
@@ -1753,7 +1679,7 @@ mod tests {
 
         // Convert to zero-copy and back
         let zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
-        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
+        let reconstructed: MultiBatchHeader<Keccak256Hasher> =
             MultiBatchHeader::try_from(&zero_copy).unwrap();
 
         // Verify that the signature was reconstructed correctly
@@ -1800,10 +1726,10 @@ mod tests {
     }
 
     /// Test that struct sizes and alignments are as expected.
-    /// This test verifies that the struct layouts are stable.
+    /// This test verifies both compile-time and runtime struct layouts.
     #[test]
     fn test_struct_sizes_and_alignments() {
-        // These assertions verify that struct layouts are stable
+        // Compile-time size and alignment assertions
         assert_eq!(std::mem::size_of::<BridgeExitZeroCopy>(), 116);
         assert_eq!(std::mem::size_of::<SmtMerkleProofZeroCopy>(), 6144);
         assert_eq!(std::mem::size_of::<SmtNonInclusionProofZeroCopy>(), 2052);
@@ -1812,7 +1738,7 @@ mod tests {
         assert_eq!(std::mem::size_of::<BalanceProofEntryZeroCopy>(), 64);
         assert_eq!(std::mem::size_of::<AggchainDataZeroCopy>(), 93);
 
-        // Verify alignments
+        // Compile-time alignment assertions
         assert_eq!(std::mem::align_of::<BridgeExitZeroCopy>(), 4);
         assert_eq!(std::mem::align_of::<SmtMerkleProofZeroCopy>(), 1);
         assert_eq!(std::mem::align_of::<SmtNonInclusionProofZeroCopy>(), 1);
@@ -1820,23 +1746,14 @@ mod tests {
         assert_eq!(std::mem::align_of::<MultiBatchHeaderZeroCopy>(), 8);
         assert_eq!(std::mem::align_of::<BalanceProofEntryZeroCopy>(), 4);
         assert_eq!(std::mem::align_of::<AggchainDataZeroCopy>(), 1);
-    }
 
-    /// Test that large structs with manual unsafe impls have correct layouts.
-    /// This test verifies the safety of manual Pod/Zeroable implementations.
-    #[test]
-    fn test_large_struct_layouts() {
-        // Test SmtMerkleProofZeroCopy - large array (6144 bytes)
-        // This struct cannot use derive due to large array size exceeding bytemuck
-        // limits
+        // Runtime size and alignment verification for large structs
         let smt_proof = SmtMerkleProofZeroCopy {
             siblings: [[0u8; 32]; 192],
         };
         assert_eq!(std::mem::size_of_val(&smt_proof), 6144);
         assert_eq!(std::mem::align_of_val(&smt_proof), 1);
 
-        // Test SmtNonInclusionProofZeroCopy - large array (2052 bytes)
-        // This struct cannot use derive due to large array size and explicit padding
         let smt_non_inclusion_proof = SmtNonInclusionProofZeroCopy {
             num_siblings: 64,
             _padding: [0; 3],
@@ -1845,9 +1762,6 @@ mod tests {
         assert_eq!(std::mem::size_of_val(&smt_non_inclusion_proof), 2052);
         assert_eq!(std::mem::align_of_val(&smt_non_inclusion_proof), 1);
 
-        // Test ClaimZeroCopy - complex union-like structure (3352 bytes)
-        // This struct cannot use derive due to complex field layout and explicit
-        // padding
         let claim = ClaimZeroCopy {
             claim_type: 0,
             _padding: [0; 7],
@@ -1856,9 +1770,6 @@ mod tests {
         assert_eq!(std::mem::size_of_val(&claim), 3352);
         assert_eq!(std::mem::align_of_val(&claim), 1);
 
-        // Test MultiBatchHeaderZeroCopy - complex structure (184 bytes)
-        // This struct cannot use derive due to AggchainDataZeroCopy not being supported
-        // by bytemuck derive
         let header = MultiBatchHeaderZeroCopy {
             height: 0,
             origin_network: 0,
@@ -1877,48 +1788,13 @@ mod tests {
         assert_eq!(std::mem::align_of_val(&header), 8);
     }
 
-    /// Test that Generic aggchain data serialization and deserialization work
-    /// correctly.
-    #[test]
-    fn test_generic_aggchain_data_serialization() {
-        // Create a sample MultiBatchHeader with Generic aggchain proof
-        let original = create_sample_multi_batch_header_generic();
-
-        // Convert to zero-copy and back
-        let zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
-        let reconstructed: MultiBatchHeader<agglayer_primitives::keccak::Keccak256Hasher> =
-            MultiBatchHeader::try_from(&zero_copy).unwrap();
-
-        // Verify that the generic data was reconstructed correctly
-        match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
-            (
-                AggchainData::Generic {
-                    aggchain_params: orig_params,
-                    aggchain_vkey: orig_vkey,
-                },
-                AggchainData::Generic {
-                    aggchain_params: rec_params,
-                    aggchain_vkey: rec_vkey,
-                },
-            ) => {
-                assert_eq!(orig_params, rec_params);
-                assert_eq!(orig_vkey, rec_vkey);
-            }
-            _ => panic!("Expected Generic aggchain data"),
-        }
-    }
-
-    /// Test edge cases and padding for AggchainDataZeroCopy.
+    /// Test edge cases and serialization for AggchainDataZeroCopy.
     #[test]
     fn test_aggchain_data_zero_copy_edge_cases() {
         // Test with maximum values for ECDSA
         let max_ecdsa = AggchainData::ECDSA {
-            signer: agglayer_primitives::Address::new([0xFFu8; 20]),
-            signature: agglayer_primitives::Signature::new(
-                agglayer_primitives::U256::MAX,
-                agglayer_primitives::U256::MAX,
-                true,
-            ),
+            signer: Address::new([0xFFu8; 20]),
+            signature: Signature::new(U256::MAX, U256::MAX, true),
         };
 
         let zero_copy = AggchainDataZeroCopy::from(&max_ecdsa);
@@ -1945,7 +1821,7 @@ mod tests {
 
         // Test with maximum values for Generic
         let max_generic = AggchainData::Generic {
-            aggchain_params: agglayer_primitives::Digest([0xFFu8; 32]),
+            aggchain_params: Digest([0xFFu8; 32]),
             aggchain_vkey: [u32::MAX; 8],
         };
 
@@ -1971,12 +1847,8 @@ mod tests {
 
         // Test with zero values
         let zero_ecdsa = AggchainData::ECDSA {
-            signer: agglayer_primitives::Address::new([0u8; 20]),
-            signature: agglayer_primitives::Signature::new(
-                agglayer_primitives::U256::ZERO,
-                agglayer_primitives::U256::ZERO,
-                false,
-            ),
+            signer: Address::new([0u8; 20]),
+            signature: Signature::new(U256::ZERO, U256::ZERO, false),
         };
 
         let zero_copy = AggchainDataZeroCopy::from(&zero_ecdsa);
@@ -2024,6 +1896,29 @@ mod tests {
                 assert_eq!(orig_sig.v(), rec_sig.v());
             }
             _ => panic!("Expected ECDSA variants"),
+        }
+
+        // Test Generic serialization through MultiBatchHeader
+        let original = create_sample_multi_batch_header_generic();
+        let zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
+        let reconstructed: MultiBatchHeader<Keccak256Hasher> =
+            MultiBatchHeader::try_from(&zero_copy).unwrap();
+
+        match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
+            (
+                AggchainData::Generic {
+                    aggchain_params: orig_params,
+                    aggchain_vkey: orig_vkey,
+                },
+                AggchainData::Generic {
+                    aggchain_params: rec_params,
+                    aggchain_vkey: rec_vkey,
+                },
+            ) => {
+                assert_eq!(orig_params, rec_params);
+                assert_eq!(orig_vkey, rec_vkey);
+            }
+            _ => panic!("Expected Generic aggchain data"),
         }
     }
 }
