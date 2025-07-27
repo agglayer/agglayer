@@ -6,6 +6,7 @@ use agglayer_primitives::{
     keccak::{Hasher, Keccak256Hasher},
     Address, Digest, Signature, U256,
 };
+use agglayer_tries::proof::{SmtMerkleProof, SmtNonInclusionProof};
 use bytemuck::{Pod, Zeroable};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_with::serde_as;
@@ -22,7 +23,7 @@ use crate::{
 
 /// Type aliases for semantic clarity and type safety
 /// These make the code more readable by giving meaning to raw byte arrays
-
+///
 /// A 32-byte hash/digest value (same as Digest, but for zero-copy
 /// compatibility) Used for hashes, roots, siblings, metadata hashes
 pub type Hash256 = [u8; 32];
@@ -30,6 +31,10 @@ pub type Hash256 = [u8; 32];
 /// A 32-byte U256 value (for token amounts, balances)
 /// This is the big-endian byte representation of a U256
 pub type U256Bytes = [u8; 32];
+
+/// Type aliases for agglayer_tries proof types to improve readability
+pub type BalanceMerkleProof = SmtMerkleProof<Keccak256Hasher, 192>;
+pub type NullifierNonInclusionProof = SmtNonInclusionProof<Keccak256Hasher, 64>;
 
 /// Helper function to convert array of Digests to array of byte arrays
 fn digest_array_to_bytes<const N: usize>(digests: &[Digest; N]) -> [[u8; 32]; N] {
@@ -237,7 +242,7 @@ impl TryFrom<&ImportedBridgeExitZeroCopy> for ImportedBridgeExit {
 
 /// Zero-copy compatible merkle proof types for specific depths.
 /// These are newtype wrappers for the specific depths we actually use.
-
+///
 /// Balance merkle proof (192 siblings, 6144 bytes)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -256,18 +261,14 @@ pub struct LETMerkleProofZeroCopy(pub [Hash256; 32]);
 unsafe impl Pod for BalanceMerkleProofZeroCopy {}
 unsafe impl Zeroable for BalanceMerkleProofZeroCopy {}
 
-/// Helper function to convert SmtMerkleProof to BalanceMerkleProofZeroCopy
-fn balance_merkle_proof_to_zero_copy(
-    proof: &agglayer_tries::proof::SmtMerkleProof<Keccak256Hasher, 192>,
-) -> BalanceMerkleProofZeroCopy {
+/// Helper function to convert BalanceMerkleProof to BalanceMerkleProofZeroCopy
+fn balance_merkle_proof_to_zero_copy(proof: &BalanceMerkleProof) -> BalanceMerkleProofZeroCopy {
     BalanceMerkleProofZeroCopy(digest_array_to_bytes(&proof.siblings))
 }
 
-/// Helper function to convert BalanceMerkleProofZeroCopy to SmtMerkleProof
-fn balance_merkle_proof_from_zero_copy(
-    zc: &BalanceMerkleProofZeroCopy,
-) -> agglayer_tries::proof::SmtMerkleProof<Keccak256Hasher, 192> {
-    agglayer_tries::proof::SmtMerkleProof {
+/// Helper function to convert BalanceMerkleProofZeroCopy to BalanceMerkleProof
+fn balance_merkle_proof_from_zero_copy(zc: &BalanceMerkleProofZeroCopy) -> BalanceMerkleProof {
+    BalanceMerkleProof {
         siblings: bytes_array_to_digests(&zc.0),
     }
 }
@@ -312,10 +313,8 @@ pub struct SmtNonInclusionProofZeroCopy {
 unsafe impl Pod for SmtNonInclusionProofZeroCopy {}
 unsafe impl Zeroable for SmtNonInclusionProofZeroCopy {}
 
-impl From<&agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64>>
-    for SmtNonInclusionProofZeroCopy
-{
-    fn from(proof: &agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64>) -> Self {
+impl From<&NullifierNonInclusionProof> for SmtNonInclusionProofZeroCopy {
+    fn from(proof: &NullifierNonInclusionProof) -> Self {
         let mut siblings = [[0u8; 32]; 64];
         let num_siblings = proof.siblings.len().min(64) as u8;
 
@@ -336,9 +335,7 @@ impl From<&agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64>>
     }
 }
 
-impl From<&SmtNonInclusionProofZeroCopy>
-    for agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64>
-{
+impl From<&SmtNonInclusionProofZeroCopy> for NullifierNonInclusionProof {
     fn from(zc: &SmtNonInclusionProofZeroCopy) -> Self {
         let num_siblings = zc.num_siblings.min(64) as usize;
         let siblings: Vec<Digest> = zc
@@ -347,7 +344,7 @@ impl From<&SmtNonInclusionProofZeroCopy>
             .take(num_siblings)
             .map(|s| Digest(*s))
             .collect();
-        agglayer_tries::proof::SmtNonInclusionProof { siblings }
+        NullifierNonInclusionProof { siblings }
     }
 }
 
@@ -1058,14 +1055,6 @@ where
     pub aggchain_proof: AggchainData,
 }
 
-impl<H> MultiBatchHeaderRef<'_, H>
-where
-    H: Hasher,
-    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
-{
-    // Remove the generic to_owned method to avoid type conflicts
-}
-
 // Specific implementation for Keccak256Hasher
 impl MultiBatchHeaderRef<'_, Keccak256Hasher> {
     /// Convert to owned MultiBatchHeader by cloning all borrowed data.
@@ -1274,26 +1263,24 @@ mod tests {
         }
     }
 
-    /// Test helper to create a sample SmtMerkleProof
-    fn create_sample_smt_merkle_proof(
-    ) -> agglayer_tries::proof::SmtMerkleProof<Keccak256Hasher, 192> {
-        agglayer_tries::proof::SmtMerkleProof {
+    /// Test helper to create a sample BalanceMerkleProof
+    fn create_sample_balance_merkle_proof() -> BalanceMerkleProof {
+        BalanceMerkleProof {
             siblings: [Digest([13u8; 32]); 192],
         }
     }
 
-    /// Test helper to create a sample SmtNonInclusionProof
-    fn create_sample_smt_non_inclusion_proof(
-    ) -> agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64> {
-        agglayer_tries::proof::SmtNonInclusionProof {
+    /// Test helper to create a sample NullifierNonInclusionProof
+    fn create_sample_nullifier_non_inclusion_proof() -> NullifierNonInclusionProof {
+        NullifierNonInclusionProof {
             siblings: vec![Digest([14u8; 32]); 64],
         }
     }
 
-    /// Test helper to create a sample SmtNonInclusionProof with fewer siblings
-    fn create_sample_smt_non_inclusion_proof_partial(
-    ) -> agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64> {
-        agglayer_tries::proof::SmtNonInclusionProof {
+    /// Test helper to create a sample NullifierNonInclusionProof with fewer
+    /// siblings
+    fn create_sample_nullifier_non_inclusion_proof_partial() -> NullifierNonInclusionProof {
+        NullifierNonInclusionProof {
             siblings: vec![Digest([15u8; 32]); 32], // Only 32 siblings instead of 64
         }
     }
@@ -1307,12 +1294,12 @@ mod tests {
             bridge_exits: vec![create_sample_bridge_exit()],
             imported_bridge_exits: vec![(
                 create_sample_imported_bridge_exit(),
-                create_sample_smt_non_inclusion_proof(),
+                create_sample_nullifier_non_inclusion_proof(),
             )],
             l1_info_root: Digest([16u8; 32]),
             balances_proofs: vec![(
                 create_sample_token_info(),
-                (U256::from(5000u64), create_sample_smt_merkle_proof()),
+                (U256::from(5000u64), create_sample_balance_merkle_proof()),
             )],
             aggchain_proof: AggchainData::ECDSA {
                 signer: Address::new([17u8; 20]),
@@ -1331,12 +1318,12 @@ mod tests {
             bridge_exits: vec![create_sample_bridge_exit()],
             imported_bridge_exits: vec![(
                 create_sample_imported_bridge_exit(),
-                create_sample_smt_non_inclusion_proof(),
+                create_sample_nullifier_non_inclusion_proof(),
             )],
             l1_info_root: Digest([21u8; 32]),
             balances_proofs: vec![(
                 create_sample_token_info(),
-                (U256::from(7000u64), create_sample_smt_merkle_proof()),
+                (U256::from(7000u64), create_sample_balance_merkle_proof()),
             )],
             aggchain_proof: AggchainData::Generic {
                 aggchain_params: Digest([22u8; 32]),
@@ -1354,12 +1341,12 @@ mod tests {
             bridge_exits: vec![create_sample_bridge_exit()],
             imported_bridge_exits: vec![(
                 create_sample_imported_bridge_exit_rollup(),
-                create_sample_smt_non_inclusion_proof(),
+                create_sample_nullifier_non_inclusion_proof(),
             )],
             l1_info_root: Digest([31u8; 32]),
             balances_proofs: vec![(
                 create_sample_token_info(),
-                (U256::from(8000u64), create_sample_smt_merkle_proof()),
+                (U256::from(8000u64), create_sample_balance_merkle_proof()),
             )],
             aggchain_proof: AggchainData::ECDSA {
                 signer: Address::new([32u8; 20]),
@@ -1378,17 +1365,17 @@ mod tests {
             imported_bridge_exits: vec![
                 (
                     create_sample_imported_bridge_exit(),
-                    create_sample_smt_non_inclusion_proof(),
+                    create_sample_nullifier_non_inclusion_proof(),
                 ),
                 (
                     create_sample_imported_bridge_exit_rollup(),
-                    create_sample_smt_non_inclusion_proof(),
+                    create_sample_nullifier_non_inclusion_proof(),
                 ),
             ],
             l1_info_root: Digest([41u8; 32]),
             balances_proofs: vec![(
                 create_sample_token_info(),
-                (U256::from(9000u64), create_sample_smt_merkle_proof()),
+                (U256::from(9000u64), create_sample_balance_merkle_proof()),
             )],
             aggchain_proof: AggchainData::Generic {
                 aggchain_params: Digest([42u8; 32]),
@@ -1683,22 +1670,18 @@ mod tests {
     #[test]
     fn test_smt_non_inclusion_proof_variable_length() {
         // Test with full-length proof (64 siblings)
-        let full_proof = create_sample_smt_non_inclusion_proof();
+        let full_proof = create_sample_nullifier_non_inclusion_proof();
         let full_zero_copy = SmtNonInclusionProofZeroCopy::from(&full_proof);
-        let reconstructed_full: agglayer_tries::proof::SmtNonInclusionProof<Keccak256Hasher, 64> =
-            (&full_zero_copy).into();
+        let reconstructed_full: NullifierNonInclusionProof = (&full_zero_copy).into();
 
         assert_eq!(full_proof.siblings.len(), reconstructed_full.siblings.len());
         assert_eq!(full_proof.siblings, reconstructed_full.siblings);
         assert_eq!(full_zero_copy.num_siblings, 64);
 
         // Test with partial-length proof (32 siblings)
-        let partial_proof = create_sample_smt_non_inclusion_proof_partial();
+        let partial_proof = create_sample_nullifier_non_inclusion_proof_partial();
         let partial_zero_copy = SmtNonInclusionProofZeroCopy::from(&partial_proof);
-        let reconstructed_partial: agglayer_tries::proof::SmtNonInclusionProof<
-            Keccak256Hasher,
-            64,
-        > = (&partial_zero_copy).into();
+        let reconstructed_partial: NullifierNonInclusionProof = (&partial_zero_copy).into();
 
         assert_eq!(
             partial_proof.siblings.len(),
