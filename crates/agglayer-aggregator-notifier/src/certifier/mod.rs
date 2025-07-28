@@ -141,8 +141,26 @@ where
 
         let network_state = pessimistic_proof::NetworkState::from(initial_state);
         let mut stdin = SP1Stdin::new();
-        stdin.write(&network_state);
-        stdin.write(&multi_batch_header);
+
+        // Use zero-copy for NetworkState
+        let network_state_bytes = network_state.to_bytes_zero_copy();
+        stdin.write_vec(network_state_bytes);
+
+        // Use the new helper function to get all zero-copy components
+        let components = multi_batch_header.to_zero_copy_components().map_err(|e| {
+            CertificationError::InternalError(format!(
+                "Failed to convert to zero-copy components: {}",
+                e
+            ))
+        })?;
+
+        // Write all components to stdin
+        stdin.write_vec(components.header_bytes);
+        stdin.write_vec(components.bridge_exits_bytes);
+        stdin.write_vec(components.imported_bridge_exits_bytes);
+        stdin.write_vec(components.nullifier_paths_bytes);
+        stdin.write_vec(components.balances_proofs_bytes);
+        stdin.write_vec(components.balance_merkle_paths_bytes);
 
         // Writing the proof to the stdin if needed
         // At this point, we have the proof and the verifying key coming from the chain

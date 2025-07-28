@@ -1113,46 +1113,6 @@ impl MultiBatchHeaderRef<'_, Keccak256Hasher> {
 mod tests {
     use super::*;
 
-    /// Test to print actual struct sizes for debugging
-    #[test]
-    fn test_claim_struct_sizes() {
-        println!("=== Claim Struct Sizes ===");
-        println!("ClaimFromMainnetZeroCopy size: {} bytes", std::mem::size_of::<ClaimFromMainnetZeroCopy>());
-        println!("ClaimFromRollupZeroCopy size: {} bytes", std::mem::size_of::<ClaimFromRollupZeroCopy>());
-        println!("ClaimZeroCopy size: {} bytes", std::mem::size_of::<ClaimZeroCopy>());
-        println!("ClaimZeroCopy claim_data size: {} bytes", std::mem::size_of::<[u8; 3344]>());
-        
-        println!("\n=== Component Sizes ===");
-        println!("MerkleProofZeroCopy size: {} bytes", std::mem::size_of::<MerkleProofZeroCopy>());
-        println!("L1InfoTreeLeafZeroCopy size: {} bytes", std::mem::size_of::<L1InfoTreeLeafZeroCopy>());
-        println!("L1InfoTreeLeafInnerZeroCopy size: {} bytes", std::mem::size_of::<L1InfoTreeLeafInnerZeroCopy>());
-        
-        println!("\n=== Calculated Sizes ===");
-        let mainnet_calculated = std::mem::size_of::<MerkleProofZeroCopy>() * 2 + std::mem::size_of::<L1InfoTreeLeafZeroCopy>();
-        let rollup_calculated = std::mem::size_of::<MerkleProofZeroCopy>() * 3 + std::mem::size_of::<L1InfoTreeLeafZeroCopy>();
-        println!("ClaimFromMainnetZeroCopy calculated: {} bytes", mainnet_calculated);
-        println!("ClaimFromRollupZeroCopy calculated: {} bytes", rollup_calculated);
-        
-        println!("\n=== Size Comparison ===");
-        println!("Mainnet actual vs calculated: {} vs {}", std::mem::size_of::<ClaimFromMainnetZeroCopy>(), mainnet_calculated);
-        println!("Rollup actual vs calculated: {} vs {}", std::mem::size_of::<ClaimFromRollupZeroCopy>(), rollup_calculated);
-        println!("ClaimZeroCopy claim_data vs largest claim: {} vs {}", 3344, std::mem::size_of::<ClaimFromRollupZeroCopy>());
-        
-        // Check if there's a potential lossy conversion
-        let mainnet_size = std::mem::size_of::<ClaimFromMainnetZeroCopy>();
-        let rollup_size = std::mem::size_of::<ClaimFromRollupZeroCopy>();
-        let claim_data_size = 3344;
-        
-        if mainnet_size > claim_data_size {
-            println!("⚠️  WARNING: ClaimFromMainnetZeroCopy ({}) is larger than claim_data buffer ({})", mainnet_size, claim_data_size);
-        }
-        if rollup_size > claim_data_size {
-            println!("⚠️  WARNING: ClaimFromRollupZeroCopy ({}) is larger than claim_data buffer ({})", rollup_size, claim_data_size);
-        }
-        
-        println!("✅ All claim structs fit within the claim_data buffer");
-    }
-
     /// Deep comparison function to check for lossy conversions
     /// This function compares all fields including nested structures
     /// Uses Eq where available, manual comparison where needed
