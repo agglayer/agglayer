@@ -38,11 +38,7 @@ pub type NullifierNonInclusionProof = SmtNonInclusionProof<Keccak256Hasher, 64>;
 
 /// Helper function to convert array of Digests to array of byte arrays
 fn digest_array_to_bytes<const N: usize>(digests: &[Digest; N]) -> [[u8; 32]; N] {
-    let mut result = [[0u8; 32]; N];
-    for (i, digest) in digests.iter().enumerate() {
-        result[i] = digest.0;
-    }
-    result
+    std::array::from_fn(|i| digests[i].0)
 }
 
 /// Helper function to convert array of byte arrays to array of Digests
@@ -315,17 +311,21 @@ unsafe impl Zeroable for SmtNonInclusionProofZeroCopy {}
 
 impl From<&NullifierNonInclusionProof> for SmtNonInclusionProofZeroCopy {
     fn from(proof: &NullifierNonInclusionProof) -> Self {
-        let mut siblings = [[0u8; 32]; 64];
-        let num_siblings = proof.siblings.len().min(64) as u8;
-
-        for (i, sibling) in proof
-            .siblings
-            .iter()
-            .take(num_siblings as usize)
-            .enumerate()
-        {
-            siblings[i] = sibling.0;
-        }
+        // Assert that we're not truncating data - this should never happen in practice
+        // since SmtNonInclusionProof is designed to work with max 64 siblings
+        assert!(
+            proof.siblings.len() <= 64,
+            "SmtNonInclusionProof cannot have more than 64 siblings, got {}",
+            proof.siblings.len()
+        );
+        let num_siblings = proof.siblings.len() as u8;
+        let siblings = std::array::from_fn(|i| {
+            if i < num_siblings as usize {
+                proof.siblings[i].0
+            } else {
+                [0u8; 32]
+            }
+        });
 
         Self {
             num_siblings,
@@ -337,7 +337,15 @@ impl From<&NullifierNonInclusionProof> for SmtNonInclusionProofZeroCopy {
 
 impl From<&SmtNonInclusionProofZeroCopy> for NullifierNonInclusionProof {
     fn from(zc: &SmtNonInclusionProofZeroCopy) -> Self {
-        let num_siblings = zc.num_siblings.min(64) as usize;
+        // Assert that num_siblings doesn't exceed the maximum capacity
+        // This should never happen if the zero-copy struct was created correctly
+        assert!(
+            zc.num_siblings <= 64,
+            "SmtNonInclusionProofZeroCopy cannot have more than 64 siblings, got {}",
+            zc.num_siblings
+        );
+
+        let num_siblings = zc.num_siblings as usize;
         let siblings: Vec<Digest> = zc
             .siblings
             .iter()
@@ -676,13 +684,11 @@ impl From<&AggchainData> for AggchainDataZeroCopy {
                 aggchain_vkey,
             } => {
                 let mut aggchain_proof_data = [0u8; 85];
-                // Copy aggchain_params (32 bytes) + vkey (32 bytes)
+                // Copy aggchain_params (32 bytes)
                 aggchain_proof_data[..32].copy_from_slice(aggchain_params.as_slice());
-                // Convert vkey from [u32; 8] to bytes
-                for (i, &val) in aggchain_vkey.iter().enumerate() {
-                    let bytes = val.to_be_bytes();
-                    aggchain_proof_data[32 + i * 4..36 + i * 4].copy_from_slice(&bytes);
-                }
+                // Convert vkey from [u32; 8] to bytes using bytemuck
+                let vkey_bytes = bytemuck::cast_slice::<u32, u8>(aggchain_vkey);
+                aggchain_proof_data[32..64].copy_from_slice(vkey_bytes);
 
                 Self {
                     aggchain_proof_type: 1,
@@ -706,19 +712,10 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
                     <[u8; 20]>::try_from(&zero_copy.aggchain_proof_data[..20])
                         .map_err(|e| format!("Failed to convert signer bytes: {}", e))?,
                 );
-                let signature = Signature::new(
-                    U256::from_be_bytes(
-                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[20..52])
-                            .map_err(|e| format!("Failed to convert signature r bytes: {}", e))?,
-                    ),
-                    U256::from_be_bytes(
-                        <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[52..84])
-                            .map_err(|e| format!("Failed to convert signature s bytes: {}", e))?,
-                    ),
-                    // Extract v byte and convert from Ethereum format (27/28) to boolean
-                    // v = 27 means even parity (false), v = 28 means odd parity (true)
-                    zero_copy.aggchain_proof_data[84] == 28,
-                );
+                let signature_bytes = <[u8; 65]>::try_from(&zero_copy.aggchain_proof_data[20..85])
+                    .map_err(|e| format!("Failed to convert signature bytes: {}", e))?;
+                let signature = Signature::try_from(&signature_bytes[..])
+                    .map_err(|e| format!("Failed to parse signature: {}", e))?;
                 Ok(AggchainData::ECDSA { signer, signature })
             }
             1 => {
@@ -727,18 +724,10 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
                     <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[..32])
                         .map_err(|e| format!("Failed to convert aggchain_params bytes: {}", e))?,
                 );
-                // Reconstruct vkey from bytes
-                let mut aggchain_vkey = [0u32; 8];
-                for (i, val) in aggchain_vkey.iter_mut().enumerate() {
-                    let start = 32 + i * 4;
-                    let end = start + 4;
-                    let bytes = &zero_copy.aggchain_proof_data[start..end];
-                    *val = u32::from_be_bytes(
-                        bytes
-                            .try_into()
-                            .map_err(|e| format!("Failed to convert vkey byte {}: {}", i, e))?,
-                    );
-                }
+                // Reconstruct vkey from bytes using bytemuck
+                let vkey_bytes = <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[32..64])
+                    .map_err(|e| format!("Failed to convert vkey bytes: {}", e))?;
+                let aggchain_vkey = bytemuck::cast::<[u8; 32], [u32; 8]>(vkey_bytes);
                 Ok(AggchainData::Generic {
                     aggchain_params,
                     aggchain_vkey,

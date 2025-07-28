@@ -1,5 +1,3 @@
-use std::collections::{btree_map::Entry, BTreeMap};
-
 use agglayer_primitives::{keccak::Keccak256Hasher, ruint::UintTryFrom, Hashable, U256, U512};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
 use bytemuck::{Pod, Zeroable};
@@ -175,11 +173,21 @@ impl NetworkState {
         &mut self,
         multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
     ) -> Result<StateCommitment, ProofError> {
-        // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
-        let mut new_balances = BTreeMap::new();
-        for (k, v) in &multi_batch_header.balances_proofs {
-            if new_balances.insert(*k, U512::from(v.0)).is_some() {
-                return Err(ProofError::DuplicateTokenBalanceProof(*k));
+        // Convert balances_proofs to sorted Vec for efficient binary search
+        // This is more efficient than BTreeMap for SP1 cycles
+        let mut new_balances: Vec<(TokenInfo, U512)> = multi_batch_header
+            .balances_proofs
+            .iter()
+            .map(|(k, v)| (*k, U512::from(v.0)))
+            .collect();
+
+        // Sort by TokenInfo for binary search (TokenInfo has PartialOrd)
+        new_balances.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Check for duplicates during sorting
+        for i in 1..new_balances.len() {
+            if new_balances[i].0 == new_balances[i - 1].0 {
+                return Err(ProofError::DuplicateTokenBalanceProof(new_balances[i].0));
             }
         }
 
@@ -219,19 +227,17 @@ impl NetworkState {
                 continue;
             }
 
-            // Update the token balance.
+            // Update the token balance using binary search
             let amount = imported_bridge_exit.bridge_exit.amount;
-            let entry = new_balances.entry(token_info);
-            match entry {
-                Entry::<TokenInfo, U512>::Vacant(_) => {
-                    return Err(ProofError::MissingTokenBalanceProof(token_info))
-                }
-                Entry::<TokenInfo, U512>::Occupied(mut entry) => {
-                    *entry.get_mut() = entry
-                        .get()
+            match new_balances.binary_search_by(|(k, _)| k.cmp(&token_info)) {
+                Ok(index) => {
+                    // Found the token, update balance
+                    new_balances[index].1 = new_balances[index]
+                        .1
                         .checked_add(U512::from(amount))
                         .ok_or(ProofError::BalanceOverflowInBridgeExit)?;
                 }
+                Err(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
             }
         }
 
@@ -266,19 +272,17 @@ impl NetworkState {
                 continue;
             }
 
-            // Update the token balance.
+            // Update the token balance using binary search
             let amount = bridge_exit.amount;
-            let entry = new_balances.entry(token_info);
-            match entry {
-                Entry::<TokenInfo, U512>::Vacant(_) => {
-                    return Err(ProofError::MissingTokenBalanceProof(token_info))
-                }
-                Entry::<TokenInfo, U512>::Occupied(mut entry) => {
-                    *entry.get_mut() = entry
-                        .get()
+            match new_balances.binary_search_by(|(k, _)| k.cmp(&token_info)) {
+                Ok(index) => {
+                    // Found the token, update balance (subtract for bridge exits)
+                    new_balances[index].1 = new_balances[index]
+                        .1
                         .checked_sub(U512::from(amount))
                         .ok_or(ProofError::BalanceUnderflowInBridgeExit)?;
                 }
+                Err(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
             }
         }
 
@@ -286,7 +290,10 @@ impl NetworkState {
         // tree with the new balances. TODO: implement batch `verify_and_update`
         // for the LBT
         for (token, (old_balance, balance_path)) in &multi_batch_header.balances_proofs {
-            let new_balance = new_balances[token];
+            let new_balance = new_balances
+                .binary_search_by(|(k, _)| k.cmp(token))
+                .map(|index| new_balances[index].1)
+                .map_err(|_| ProofError::MissingTokenBalanceProof(*token))?;
             let new_balance = U256::uint_try_from(new_balance)
                 .map_err(|_| ProofError::BalanceOverflowInBridgeExit)?;
             self.balance_tree
