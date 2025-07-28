@@ -189,14 +189,13 @@ pub struct ImportedBridgeExitZeroCopy {
     /// Global index rollup_index (u32) - this is what GlobalIndex::new()
     /// expects as first parameter
     pub global_index_rollup: u32,
-    /// Bridge exit data (120 bytes)
+    /// Bridge exit data (116 bytes)
     pub bridge_exit: BridgeExitZeroCopy,
-    /// Claim data (2288 bytes)
+    /// Claim data (3352 bytes)
     pub claim_data: ClaimZeroCopy,
     /// End padding to ensure the struct size is a multiple of 8 bytes.
     /// This ensures proper alignment when the struct is used in arrays or
-    /// as part of larger structures. The total size becomes 3480 bytes
-    /// (4+4+116+3352+4).
+    /// as part of larger structures. Total size: 3480 bytes.
     pub _end_padding: [u8; 4],
 }
 
@@ -623,8 +622,8 @@ pub struct BalanceProofEntryZeroCopy {
     pub balance: U256Bytes,
     /// Padding to ensure proper alignment for 8-byte boundaries.
     /// The token_info is 24 bytes and balance is 32 bytes, totaling 56 bytes.
-    /// We need 8 bytes of padding to align the struct to 8-byte boundaries
-    /// for optimal memory access and to maintain consistent alignment.
+    /// 8 bytes of padding align the struct to 8-byte boundaries for optimal
+    /// memory access. Total size: 64 bytes.
     pub _padding: [u8; 8],
 }
 
@@ -641,14 +640,13 @@ pub struct AggchainDataZeroCopy {
     /// memory access. This is important for the large proof data array (85
     /// bytes).
     pub _padding: [u8; 7],
-    /// Aggchain proof data (variable size, but we'll use a fixed buffer)
+    /// Aggchain proof data (fixed buffer sized for the larger variant)
     /// For ECDSA: 20 bytes signer + 65 bytes signature = 85 bytes
     /// For Generic: 32 bytes aggchain_params + 32 bytes vkey = 64 bytes
     pub aggchain_proof_data: [u8; 85],
     /// End padding to ensure the struct size is a multiple of 8 bytes.
     /// This ensures proper alignment when the struct is used in arrays or
-    /// as part of larger structures. The total size becomes 96 bytes
-    /// (1+7+85+3).
+    /// as part of larger structures. Total size: 96 bytes.
     pub _end_padding: [u8; 3],
 }
 
@@ -742,7 +740,7 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
     }
 }
 
-/// Zero-copy representation of MultiBatchHeader for safe transmute.
+/// Zero-copy representation of MultiBatchHeader for bytemuck operations.
 /// This struct has a stable C-compatible memory layout with fixed-size fields
 /// and offsets to variable-length data.
 #[repr(C)]
@@ -773,7 +771,6 @@ pub struct MultiBatchHeaderZeroCopy {
 // - Total size is 184 bytes (includes internal padding for optimal alignment)
 // - Cannot use derive due to AggchainDataZeroCopy not being supported by
 //   bytemuck derive
-// - Safety verified by comprehensive runtime tests
 unsafe impl Pod for MultiBatchHeaderZeroCopy {}
 unsafe impl Zeroable for MultiBatchHeaderZeroCopy {}
 
@@ -799,7 +796,6 @@ where
     pub l1_info_root: H::Digest,
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
-    /// Using Vec instead of BTreeMap for better zero-copy compatibility.
     pub balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath<H>))>,
     /// Aggchain proof.
     pub aggchain_proof: AggchainData,
