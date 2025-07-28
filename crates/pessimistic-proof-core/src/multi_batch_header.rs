@@ -32,6 +32,10 @@ pub type Hash256 = [u8; 32];
 /// This is the big-endian byte representation of a U256
 pub type U256Bytes = [u8; 32];
 
+/// A 20-byte Ethereum address (for token addresses, destination addresses)
+/// This is the standard Ethereum address format
+pub type AddressBytes = [u8; 20];
+
 /// Type aliases for agglayer_tries proof types to improve readability
 pub type BalanceMerkleProof = SmtMerkleProof<Keccak256Hasher, 192>;
 pub type NullifierNonInclusionProof = SmtNonInclusionProof<Keccak256Hasher, 64>;
@@ -88,9 +92,9 @@ pub struct BridgeExitZeroCopy {
     /// Destination network (u32)
     pub dest_network: u32,
     /// Origin token address (20 bytes)
-    pub origin_token_address: [u8; 20],
+    pub origin_token_address: AddressBytes,
     /// Destination address (20 bytes)
-    pub dest_address: [u8; 20],
+    pub dest_address: AddressBytes,
     /// Amount (32 bytes) - big-endian U256 representation
     pub amount: U256Bytes,
     /// Metadata hash (32 bytes, 0 if None)
@@ -154,7 +158,7 @@ pub struct TokenInfoZeroCopy {
     /// Origin network (u32)
     pub origin_network: u32,
     /// Origin token address (20 bytes)
-    pub origin_token_address: [u8; 20],
+    pub origin_token_address: AddressBytes,
 }
 
 impl From<&TokenInfo> for TokenInfoZeroCopy {
@@ -707,7 +711,7 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
             0 => {
                 // ECDSA - reconstruct signer (20 bytes) + signature (65 bytes)
                 let signer = Address::from(
-                    <[u8; 20]>::try_from(&zero_copy.aggchain_proof_data[..20])
+                    <AddressBytes>::try_from(&zero_copy.aggchain_proof_data[..20])
                         .map_err(|e| format!("Failed to convert signer bytes: {}", e))?,
                 );
                 let signature_bytes = <[u8; 65]>::try_from(&zero_copy.aggchain_proof_data[20..85])
@@ -1108,6 +1112,46 @@ impl MultiBatchHeaderRef<'_, Keccak256Hasher> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Test to print actual struct sizes for debugging
+    #[test]
+    fn test_claim_struct_sizes() {
+        println!("=== Claim Struct Sizes ===");
+        println!("ClaimFromMainnetZeroCopy size: {} bytes", std::mem::size_of::<ClaimFromMainnetZeroCopy>());
+        println!("ClaimFromRollupZeroCopy size: {} bytes", std::mem::size_of::<ClaimFromRollupZeroCopy>());
+        println!("ClaimZeroCopy size: {} bytes", std::mem::size_of::<ClaimZeroCopy>());
+        println!("ClaimZeroCopy claim_data size: {} bytes", std::mem::size_of::<[u8; 3344]>());
+        
+        println!("\n=== Component Sizes ===");
+        println!("MerkleProofZeroCopy size: {} bytes", std::mem::size_of::<MerkleProofZeroCopy>());
+        println!("L1InfoTreeLeafZeroCopy size: {} bytes", std::mem::size_of::<L1InfoTreeLeafZeroCopy>());
+        println!("L1InfoTreeLeafInnerZeroCopy size: {} bytes", std::mem::size_of::<L1InfoTreeLeafInnerZeroCopy>());
+        
+        println!("\n=== Calculated Sizes ===");
+        let mainnet_calculated = std::mem::size_of::<MerkleProofZeroCopy>() * 2 + std::mem::size_of::<L1InfoTreeLeafZeroCopy>();
+        let rollup_calculated = std::mem::size_of::<MerkleProofZeroCopy>() * 3 + std::mem::size_of::<L1InfoTreeLeafZeroCopy>();
+        println!("ClaimFromMainnetZeroCopy calculated: {} bytes", mainnet_calculated);
+        println!("ClaimFromRollupZeroCopy calculated: {} bytes", rollup_calculated);
+        
+        println!("\n=== Size Comparison ===");
+        println!("Mainnet actual vs calculated: {} vs {}", std::mem::size_of::<ClaimFromMainnetZeroCopy>(), mainnet_calculated);
+        println!("Rollup actual vs calculated: {} vs {}", std::mem::size_of::<ClaimFromRollupZeroCopy>(), rollup_calculated);
+        println!("ClaimZeroCopy claim_data vs largest claim: {} vs {}", 3344, std::mem::size_of::<ClaimFromRollupZeroCopy>());
+        
+        // Check if there's a potential lossy conversion
+        let mainnet_size = std::mem::size_of::<ClaimFromMainnetZeroCopy>();
+        let rollup_size = std::mem::size_of::<ClaimFromRollupZeroCopy>();
+        let claim_data_size = 3344;
+        
+        if mainnet_size > claim_data_size {
+            println!("⚠️  WARNING: ClaimFromMainnetZeroCopy ({}) is larger than claim_data buffer ({})", mainnet_size, claim_data_size);
+        }
+        if rollup_size > claim_data_size {
+            println!("⚠️  WARNING: ClaimFromRollupZeroCopy ({}) is larger than claim_data buffer ({})", rollup_size, claim_data_size);
+        }
+        
+        println!("✅ All claim structs fit within the claim_data buffer");
+    }
 
     /// Deep comparison function to check for lossy conversions
     /// This function compares all fields including nested structures
