@@ -819,7 +819,7 @@ where
 impl<H> From<&MultiBatchHeader<H>> for MultiBatchHeaderZeroCopy
 where
     H: Hasher,
-    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
+    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<Hash256>,
 {
     fn from(self_: &MultiBatchHeader<H>) -> Self {
         MultiBatchHeaderZeroCopy {
@@ -828,8 +828,16 @@ where
             bridge_exits_count: self_.bridge_exits.len() as u32,
             imported_bridge_exits_count: self_.imported_bridge_exits.len() as u32,
             balances_proofs_count: self_.balances_proofs.len() as u32,
-            prev_pessimistic_root: self_.prev_pessimistic_root.as_ref().try_into().unwrap(),
-            l1_info_root: self_.l1_info_root.as_ref().try_into().unwrap(),
+            prev_pessimistic_root: self_
+                .prev_pessimistic_root
+                .as_ref()
+                .try_into()
+                .expect("Digest must be exactly 32 bytes"),
+            l1_info_root: self_
+                .l1_info_root
+                .as_ref()
+                .try_into()
+                .expect("Digest must be exactly 32 bytes"),
             aggchain_proof: (&self_.aggchain_proof).into(),
         }
     }
@@ -838,15 +846,15 @@ where
 impl<H> TryFrom<&MultiBatchHeaderZeroCopy> for MultiBatchHeader<H>
 where
     H: Hasher,
-    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
+    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<Hash256>,
 {
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
     fn try_from(zero_copy: &MultiBatchHeaderZeroCopy) -> Result<Self, Self::Error> {
         let origin_network = NetworkId::new(zero_copy.origin_network);
         let prev_pessimistic_root =
-            <H::Digest as From<[u8; 32]>>::from(zero_copy.prev_pessimistic_root);
-        let l1_info_root = <H::Digest as From<[u8; 32]>>::from(zero_copy.l1_info_root);
+            <H::Digest as From<Hash256>>::from(zero_copy.prev_pessimistic_root);
+        let l1_info_root = <H::Digest as From<Hash256>>::from(zero_copy.l1_info_root);
 
         let aggchain_proof = AggchainData::try_from(&zero_copy.aggchain_proof)?;
 
@@ -947,10 +955,10 @@ impl MultiBatchHeader<Keccak256Hasher> {
 
         // Reconstruct the MultiBatchHeaderRef from zero-copy components
         let origin_network = NetworkId::new(header_zero_copy.origin_network);
-        let prev_pessimistic_root = <<Keccak256Hasher as Hasher>::Digest as From<[u8; 32]>>::from(
+        let prev_pessimistic_root = <<Keccak256Hasher as Hasher>::Digest as From<Hash256>>::from(
             header_zero_copy.prev_pessimistic_root,
         );
-        let l1_info_root = <<Keccak256Hasher as Hasher>::Digest as From<[u8; 32]>>::from(
+        let l1_info_root = <<Keccak256Hasher as Hasher>::Digest as From<Hash256>>::from(
             header_zero_copy.l1_info_root,
         );
 
@@ -1038,7 +1046,7 @@ impl MultiBatchHeader<Keccak256Hasher> {
 pub struct MultiBatchHeaderRef<'a, H>
 where
     H: Hasher,
-    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
+    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<Hash256>,
 {
     /// Network that emitted this [MultiBatchHeaderRef].
     pub origin_network: NetworkId,
@@ -1122,7 +1130,7 @@ mod tests {
     fn deep_equals<H>(original: &MultiBatchHeader<H>, reconstructed: &MultiBatchHeader<H>) -> bool
     where
         H: Hasher,
-        H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<[u8; 32]>,
+        H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<Hash256>,
     {
         // Compare basic fields (all have Eq)
         if original.origin_network != reconstructed.origin_network
