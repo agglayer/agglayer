@@ -712,23 +712,23 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
                 // ECDSA - reconstruct signer (20 bytes) + signature (65 bytes)
                 let signer = Address::from(
                     <AddressBytes>::try_from(&zero_copy.aggchain_proof_data[..20])
-                        .map_err(|e| format!("Failed to convert signer bytes: {}", e))?,
+                        .map_err(|e| format!("Failed to convert signer bytes: {e}"))?,
                 );
                 let signature_bytes = <[u8; 65]>::try_from(&zero_copy.aggchain_proof_data[20..85])
-                    .map_err(|e| format!("Failed to convert signature bytes: {}", e))?;
+                    .map_err(|e| format!("Failed to convert signature bytes: {e}"))?;
                 let signature = Signature::try_from(&signature_bytes[..])
-                    .map_err(|e| format!("Failed to parse signature: {}", e))?;
+                    .map_err(|e| format!("Failed to parse signature: {e}"))?;
                 Ok(AggchainData::ECDSA { signer, signature })
             }
             1 => {
                 // Generic
                 let aggchain_params = Digest::from(
                     <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[..32])
-                        .map_err(|e| format!("Failed to convert aggchain_params bytes: {}", e))?,
+                        .map_err(|e| format!("Failed to convert aggchain_params bytes: {e}"))?,
                 );
                 // Reconstruct vkey from bytes using bytemuck
                 let vkey_bytes = <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[32..64])
-                    .map_err(|e| format!("Failed to convert vkey bytes: {}", e))?;
+                    .map_err(|e| format!("Failed to convert vkey bytes: {e}"))?;
                 let aggchain_vkey = bytemuck::cast::<[u8; 32], [u32; 8]>(vkey_bytes);
                 Ok(AggchainData::Generic {
                     aggchain_params,
@@ -905,7 +905,7 @@ impl MultiBatchHeader<Keccak256Hasher> {
             &[]
         } else {
             bytemuck::try_cast_slice(bridge_exits_bytes)
-                .map_err(|e| format!("Failed to cast bridge_exits_bytes: {}", e))?
+                .map_err(|e| format!("Failed to cast bridge_exits_bytes: {e}"))?
         };
 
         let imported_bridge_exits: &'a [ImportedBridgeExitZeroCopy] =
@@ -913,7 +913,7 @@ impl MultiBatchHeader<Keccak256Hasher> {
                 &[]
             } else {
                 bytemuck::try_cast_slice(imported_bridge_exits_bytes)
-                    .map_err(|e| format!("Failed to cast imported_bridge_exits_bytes: {}", e))?
+                    .map_err(|e| format!("Failed to cast imported_bridge_exits_bytes: {e}"))?
             };
 
         let nullifier_paths: &'a [SmtNonInclusionProofZeroCopy] =
@@ -921,14 +921,14 @@ impl MultiBatchHeader<Keccak256Hasher> {
                 &[]
             } else {
                 bytemuck::try_cast_slice(nullifier_paths_bytes)
-                    .map_err(|e| format!("Failed to cast nullifier_paths_bytes: {}", e))?
+                    .map_err(|e| format!("Failed to cast nullifier_paths_bytes: {e}"))?
             };
 
         let balances_proofs: &'a [BalanceProofEntryZeroCopy] = if balances_proofs_bytes.is_empty() {
             &[]
         } else {
             bytemuck::try_cast_slice(balances_proofs_bytes)
-                .map_err(|e| format!("Failed to cast balances_proofs_bytes: {}", e))?
+                .map_err(|e| format!("Failed to cast balances_proofs_bytes: {e}"))?
         };
 
         let balance_merkle_paths: &'a [BalanceMerkleProofZeroCopy] =
@@ -936,7 +936,7 @@ impl MultiBatchHeader<Keccak256Hasher> {
                 &[]
             } else {
                 bytemuck::try_cast_slice(balance_merkle_paths_bytes)
-                    .map_err(|e| format!("Failed to cast balance_merkle_paths_bytes: {}", e))?
+                    .map_err(|e| format!("Failed to cast balance_merkle_paths_bytes: {e}"))?
             };
 
         // Extract aggchain_proof from header
