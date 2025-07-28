@@ -79,23 +79,25 @@ pub enum SignatureVerificationError {
         expected_signer: Address,
     },
 
-    /// The extra signature is not signed from the expected signer, or not
-    /// performed on the right commitment.
-    #[error("wrong signed commitment or invalid extra signer: expected: {expected}, got: {got}")]
-    InvalidExtraSignature {
-        /// The expected extra signer.
-        expected: Address,
-        /// The recovered signer address.
-        got: Address,
-    },
+    /// The extra signature is invalid.
+    #[error("invalid extra signature: {0}")]
+    InvalidExtraSignature(#[source] SignerError),
+
+    /// The pessimistic proof signature is invalid.
+    #[error("invalid pessimistic proof signature: {0}")]
+    InvalidPessimisticProofSignature(#[source] SignerError),
 }
 
 impl SignatureVerificationError {
     pub fn from_signer_error(e: agglayer_types::SignerError) -> Self {
         match e {
             agglayer_types::SignerError::Missing => Self::SignatureMissing,
-            agglayer_types::SignerError::Recovery(e) => {
-                Self::CouldNotRecoverCertSigner(agglayer_types::SignerError::Recovery(e))
+            e @ agglayer_types::SignerError::Recovery(_) => Self::CouldNotRecoverCertSigner(e),
+            e @ agglayer_types::SignerError::InvalidExtraSignature { .. } => {
+                Self::InvalidExtraSignature(e)
+            }
+            e @ agglayer_types::SignerError::InvalidPessimisticProofSignature { .. } => {
+                Self::InvalidPessimisticProofSignature(e)
             }
         }
     }

@@ -24,7 +24,9 @@ fn cycles_on_sample_inputs(
     bridge_exits: impl IntoIterator<Item = BridgeExit>,
 ) {
     let old_state = state.local_state();
-    let certificate = state.clone().apply_bridge_exits([], bridge_exits);
+    let certificate = state
+        .clone()
+        .apply_bridge_exits([], bridge_exits, CommitmentVersion::V2);
 
     let multi_batch_header = state
         .state_b

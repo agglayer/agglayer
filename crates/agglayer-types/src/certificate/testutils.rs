@@ -20,7 +20,7 @@ impl Default for Certificate {
             .into();
         let height = Height::ZERO;
         let (_new_local_exit_root, signature, _signer) =
-            compute_signature_info(local_exit_root, &[], &wallet, height);
+            compute_signature_info(local_exit_root, &[], &wallet, height, CommitmentVersion::V2);
         Self {
             network_id,
             height,
@@ -41,9 +41,9 @@ pub fn compute_signature_info(
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &alloy::signers::local::PrivateKeySigner,
     height: Height,
+    version: CommitmentVersion,
 ) -> (Digest, Signature, Address) {
     use alloy::signers::SignerSync;
-    let version = CommitmentVersion::V2;
     let combined_hash = SignatureCommitmentValues {
         new_local_exit_root,
         commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
@@ -76,11 +76,20 @@ impl Certificate {
     }
 
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
+        Self::new_for_test_with_version(network_id, height, CommitmentVersion::V2)
+    }
+
+    pub fn new_for_test_with_version(
+        network_id: NetworkId,
+        height: Height,
+        version: CommitmentVersion,
+    ) -> Self {
         let wallet = Self::wallet_for_test(network_id);
         let local_exit_root = LocalExitTree::<Keccak256Hasher>::default()
             .get_root()
             .into();
-        let (_, signature, _signer) = compute_signature_info(local_exit_root, &[], &wallet, height);
+        let (_, signature, _signer) =
+            compute_signature_info(local_exit_root, &[], &wallet, height, version);
 
         Self {
             network_id,
@@ -99,5 +108,30 @@ impl Certificate {
     pub fn with_new_local_exit_root(mut self, new_local_exit_root: LocalExitRoot) -> Self {
         self.new_local_exit_root = new_local_exit_root;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+    use unified_bridge::CommitmentVersion;
+
+    use crate::Certificate;
+
+    #[rstest]
+    fn can_retrieve_correct_signer(
+        #[values(CommitmentVersion::V2, CommitmentVersion::V3)] version: CommitmentVersion,
+    ) {
+        let certificate = Certificate::new_for_test_with_version(2.into(), 1.into(), version);
+        let expected_signer = certificate.get_signer();
+
+        // Can retrieve the correct signer address from the signature
+        assert_eq!(
+            certificate.retrieve_signer(version).unwrap(),
+            expected_signer
+        );
+
+        // Check that the signature is valid
+        assert!(certificate.verify_cert_signature(expected_signer).is_ok())
     }
 }
