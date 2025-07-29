@@ -149,8 +149,7 @@ where
         // Use the new helper function to get all zero-copy components
         let components = multi_batch_header.to_zero_copy_components().map_err(|e| {
             CertificationError::InternalError(format!(
-                "Failed to convert to zero-copy components: {}",
-                e
+                "Failed to convert to zero-copy components: {e}"
             ))
         })?;
 
