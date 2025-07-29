@@ -177,7 +177,7 @@ where
         // number, we walk the L1 block stream until reaching the genesis block.
         self.latest_seen_block = self.provider.get_block_number().await.map_err(|e| {
             error!(error = %e, "Failed to get initial block number from L1");
-            agglayer_telemetry::clock::record_connection_lost();
+            agglayer_telemetry::clock::record_connection_failed();
             BlockClockError::GetBlockNumber
         })?;
 
@@ -192,7 +192,7 @@ where
         // Subscribe to the L1 Block stream.
         let mut stream = provider.subscribe_blocks().await.map_err(|e| {
             error!(error = %e, "Failed to subscribe to L1 block stream");
-            agglayer_telemetry::clock::record_connection_lost();
+            agglayer_telemetry::clock::record_connection_failed();
             BlockClockError::SubscribeBlocks
         })?;
 
@@ -240,8 +240,8 @@ where
                 self.reinitialize_epoch_number(current_block);
 
                 // Update initial metrics
-                agglayer_telemetry::clock::CURRENT_BLOCK_HEIGHT.record(current_block, &[]);
-                agglayer_telemetry::clock::CURRENT_EPOCH.record(current_epoch, &[]);
+                agglayer_telemetry::clock::record_current_block_height(current_block);
+                agglayer_telemetry::clock::record_current_epoch(current_epoch);
             }
             Ok(block) => {
                 return Err(BlockClockError::BlockHeightAlreadySet(block));
@@ -264,7 +264,7 @@ where
                 block_result = Self::recv_block(&mut stream) => {
                     let block = block_result.map_err(|e| {
                         error!(error = %e, "Failed to receive block from stream");
-                        agglayer_telemetry::clock::record_connection_lost();
+                        agglayer_telemetry::clock::record_connection_failed();
                         e
                     })?;
 
@@ -356,7 +356,7 @@ where
             .checked_add(1)
         {
             // Record block processing metrics
-            agglayer_telemetry::clock::CURRENT_BLOCK_HEIGHT.record(current_block, &[]);
+            agglayer_telemetry::clock::record_current_block_height(current_block);
 
             // If the current Block height is a multiple of the Epoch duration, the current
             // Epoch has ended. In this case, we need to update the new Epoch number and
@@ -452,7 +452,7 @@ impl PubSubConnect for WsConnectWithRetries {
             })
             .inspect_err(|e| {
                 warn!(error = %e, "Failed to connect to L1 WebSocket");
-                agglayer_telemetry::clock::record_connection_lost();
+                agglayer_telemetry::clock::record_connection_failed();
             })
     }
 

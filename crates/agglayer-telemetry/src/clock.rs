@@ -69,7 +69,7 @@ pub fn record_connection_established() {
 
 /// Helper function to record connection lost
 #[inline]
-pub fn record_connection_lost() {
+pub fn record_connection_failed() {
     CONNECTION_STATUS.record(0, &[]);
     CONNECTION_ERRORS.add(1, &[]);
 }
@@ -99,6 +99,12 @@ pub fn record_clock_shutdown() {
     HEALTH_STATUS.record(0.0, &[]); // Unhealthy status
 }
 
+/// Helper function to record the current block height
+#[inline]
+pub fn record_current_block_height(height: u64) {
+    CURRENT_BLOCK_HEIGHT.record(height, &[]);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,10 +123,10 @@ mod tests {
         // Test helper functions
         record_clock_startup();
         record_connection_established();
-        record_connection_lost();
+        record_connection_failed();
         record_reconnection_attempt();
 
-        CURRENT_BLOCK_HEIGHT.record(1000, &[]);
+        record_current_block_height(1000);
         record_current_epoch(50);
         record_subscription_lag(5);
     }
