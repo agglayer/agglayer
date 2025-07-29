@@ -36,5 +36,5 @@ genesis-block = 18000000  # L1 block number to start from
 
 [l1]
 ws-node-url = "wss://ethereum-node.example.com"
-max-reconnection-elapsed-time = "5m"
+connect-attempt-timeout = "3s"
 ```
