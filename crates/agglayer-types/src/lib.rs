@@ -400,9 +400,7 @@ impl Certificate {
         version: CommitmentVersion,
     ) -> Self {
         let wallet = Self::wallet_for_test(network_id);
-        let local_exit_root = LocalExitTree::<Keccak256Hasher>::default()
-            .get_root()
-            .into();
+        let local_exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
         let (_, signature, _signer) =
             compute_signature_info(local_exit_root, &[], &wallet, height, version);
 

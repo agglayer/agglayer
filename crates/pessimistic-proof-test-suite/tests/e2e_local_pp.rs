@@ -63,8 +63,8 @@ impl VersionConsistencyChecker {
 
         // Previous state settled in L1
         let expected_prev_pp_root = PessimisticRoot {
-            balance_root: self.initial_state.balance_tree.root.into(),
-            nullifier_root: self.initial_state.nullifier_tree.root.into(),
+            balance_root: self.initial_state.balance_tree.root,
+            nullifier_root: self.initial_state.nullifier_tree.root,
             ler_leaf_count: self.initial_state.exit_tree.leaf_count(),
             height: self.certificate.height,
             origin_network: self.certificate.network_id,
