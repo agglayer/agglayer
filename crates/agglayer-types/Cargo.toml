@@ -33,7 +33,7 @@ rand.workspace = true
 
 [dev-dependencies]
 agglayer-types = { path = ".", features = ["testutils"] }
-
 agglayer-bincode.workspace = true
 
 criterion.workspace = true
+rstest.workspace = true

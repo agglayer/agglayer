@@ -1,12 +1,11 @@
-use agglayer_types::{primitives::U256, Digest, Error, PessimisticRootInput};
+use agglayer_types::{
+    primitives::U256, Certificate, Digest, Error, LocalNetworkStateData, PessimisticRootInput,
+};
 use pessimistic_proof::{
-    core::{
-        commitment::{PessimisticRoot, SignatureCommitmentValues, StateCommitment},
-        generate_pessimistic_proof, AggchainData,
-    },
+    core::{commitment::PessimisticRoot, generate_pessimistic_proof, AggchainData},
     local_state::LocalNetworkState,
     unified_bridge::{CommitmentVersion, TokenInfo},
-    NetworkState, PessimisticProofOutput, ProofError,
+    NetworkState, ProofError,
 };
 use pessimistic_proof_test_suite::{
     forest::Forest,
@@ -22,104 +21,131 @@ fn u(x: u64) -> U256 {
     x.try_into().unwrap()
 }
 
-fn pp_root_migration_helper(
-    previous_version: CommitmentVersion,
-    new_version: CommitmentVersion,
-) -> (
-    Result<(PessimisticProofOutput, StateCommitment), ProofError>,
-    Digest,
-    Digest,
-) {
+struct VersionConsistencyChecker {
+    /// Initial state
+    initial_state: LocalNetworkStateData,
+    /// Certificate
+    certificate: Certificate,
+    /// Commitment version of the settled PP root, indicates the latest settled
+    /// commitment version.
+    last_settled_pp_root_version: CommitmentVersion,
+    /// Version used to sign the commitment contained in the Certificate,
+    /// indicates the desired next commitment version.
+    certificate_signature_version: CommitmentVersion,
+}
+
+fn state_transition(
+    certificate_signature_version: CommitmentVersion,
+) -> (LocalNetworkStateData, Certificate) {
     let mut forest = Forest::new(vec![(USDC, u(100)), (ETH, u(200))]);
     let imported_bridge_events = vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))];
     let bridge_events = vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))];
 
     let initial_state = forest.state_b.clone();
-    let certificate = forest.apply_events(&imported_bridge_events, &bridge_events);
-    let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
-    let mut multi_batch_header = initial_state
-        .make_multi_batch_header(
-            &certificate,
-            forest.get_signer(),
-            l1_info_root,
-            PessimisticRootInput::Computed(CommitmentVersion::V2),
-            None,
-        )
-        .unwrap();
+    let certificate = forest.apply_events_with_version(
+        &imported_bridge_events,
+        &bridge_events,
+        certificate_signature_version,
+    );
 
-    let new_state = {
-        let mut state = initial_state.clone();
-        state
-            .apply_certificate(
-                &certificate,
-                forest.get_signer(),
+    (initial_state, certificate)
+}
+
+impl VersionConsistencyChecker {
+    fn check(&self) -> Result<(), ProofError> {
+        let l1_info_root = self.certificate.l1_info_root().unwrap().unwrap_or_default();
+        let signer = self
+            .certificate
+            .retrieve_signer(self.certificate_signature_version)
+            .unwrap();
+
+        self.certificate.verify_cert_signature(signer).unwrap();
+
+        // Previous state settled in L1
+        let expected_prev_pp_root = PessimisticRoot {
+            balance_root: self.initial_state.balance_tree.root.into(),
+            nullifier_root: self.initial_state.nullifier_tree.root.into(),
+            ler_leaf_count: self.initial_state.exit_tree.leaf_count(),
+            height: self.certificate.height.as_u64(),
+            origin_network: self.certificate.network_id,
+        }
+        .compute_pp_root(self.last_settled_pp_root_version);
+
+        let multi_batch_header = self
+            .initial_state
+            .make_multi_batch_header(
+                &self.certificate,
+                signer,
                 l1_info_root,
-                PessimisticRootInput::Computed(CommitmentVersion::V2),
+                PessimisticRootInput::Fetched(expected_prev_pp_root),
                 None,
             )
             .unwrap();
-        state
-    };
 
-    // Previous state settled in L1
-    let prev_pp_root = PessimisticRoot {
-        balance_root: initial_state.balance_tree.root.into(),
-        nullifier_root: initial_state.nullifier_tree.root.into(),
-        ler_leaf_count: initial_state.exit_tree.leaf_count(),
-        height: certificate.height.as_u64(),
-        origin_network: certificate.network_id,
-    };
+        let new_state = {
+            let mut state = self.initial_state.clone();
+            state
+                .apply_certificate(
+                    &self.certificate,
+                    signer,
+                    l1_info_root,
+                    PessimisticRootInput::Fetched(expected_prev_pp_root),
+                    None,
+                )
+                .unwrap();
+            state
+        };
 
-    // Signed transition
-    let signature_data = SignatureCommitmentValues::from(&certificate);
+        // New state about to be settled in L1
+        let expected_new_pp_root = PessimisticRoot {
+            balance_root: new_state.balance_tree.root.into(),
+            nullifier_root: new_state.nullifier_tree.root.into(),
+            ler_leaf_count: new_state.exit_tree.leaf_count(),
+            height: self.certificate.height.as_u64() + 1,
+            origin_network: self.certificate.network_id,
+        }
+        .compute_pp_root(self.certificate_signature_version);
 
-    // New state about to be settled in L1
-    let new_pp_root = PessimisticRoot {
-        balance_root: new_state.balance_tree.root.into(),
-        nullifier_root: new_state.nullifier_tree.root.into(),
-        ler_leaf_count: new_state.exit_tree.leaf_count(),
-        height: certificate.height.as_u64() + 1,
-        origin_network: certificate.network_id,
-    };
+        let (pv, _) =
+            generate_pessimistic_proof(self.initial_state.clone().into(), &multi_batch_header)?;
 
-    multi_batch_header.prev_pessimistic_root = prev_pp_root.compute_pp_root(previous_version);
-    let (signature, signer) = forest.sign(signature_data.commitment(new_version)).unwrap();
-    multi_batch_header.aggchain_proof = AggchainData::ECDSA { signer, signature };
+        assert_eq!(expected_prev_pp_root, pv.prev_pessimistic_root);
+        assert_eq!(expected_new_pp_root, pv.new_pessimistic_root);
 
-    (
-        generate_pessimistic_proof(initial_state.into(), &multi_batch_header),
-        prev_pp_root.compute_pp_root(previous_version),
-        new_pp_root.compute_pp_root(new_version),
-    )
+        Ok(())
+    }
 }
 
 #[rstest]
-#[case(CommitmentVersion::V2, CommitmentVersion::V2)] // pre-migration
-#[case(CommitmentVersion::V2, CommitmentVersion::V3)] // migration
-#[case(CommitmentVersion::V3, CommitmentVersion::V3)] // post-migration
+// pre-migration: from V2 to V2 is ok
+#[case(CommitmentVersion::V2, CommitmentVersion::V2, Ok(()))]
+// migration: from V2 to V3 is ok
+#[case(CommitmentVersion::V2, CommitmentVersion::V3, Ok(()))]
+// post-migration: from V3 to V3 is ok
+#[case(CommitmentVersion::V3, CommitmentVersion::V3, Ok(()))]
+// rollback: from V3 to V2 is forbidden and lead to an inconsistent signed payload error
+#[case(
+    CommitmentVersion::V3,
+    CommitmentVersion::V2,
+    Err(ProofError::InconsistentSignedPayload)
+)]
 fn pp_root_migration(
     #[case] prev_version: CommitmentVersion,
     #[case] new_version: CommitmentVersion,
+    #[case] expected_result: Result<(), ProofError>,
 ) {
-    let (result, expected_prev_pp_root, expected_new_pp_root) =
-        pp_root_migration_helper(prev_version, new_version);
+    let (initial_state, certificate) = state_transition(new_version);
 
-    let PessimisticProofOutput {
-        prev_pessimistic_root,
-        new_pessimistic_root,
-        ..
-    } = result.unwrap().0;
-
-    assert_eq!(expected_prev_pp_root, prev_pessimistic_root);
-    assert_eq!(expected_new_pp_root, new_pessimistic_root);
-}
-
-#[test]
-fn forbidden_pp_root_transition() {
-    assert!(matches!(
-        pp_root_migration_helper(CommitmentVersion::V3, CommitmentVersion::V2).0,
-        Err(ProofError::InconsistentSignedPayload)
-    ));
+    assert_eq!(
+        VersionConsistencyChecker {
+            certificate_signature_version: new_version,
+            last_settled_pp_root_version: prev_version,
+            initial_state,
+            certificate
+        }
+        .check(),
+        expected_result
+    );
 }
 
 fn e2e_local_pp_simple_helper(
