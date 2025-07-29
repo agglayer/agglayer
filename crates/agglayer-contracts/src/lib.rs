@@ -89,6 +89,8 @@ pub enum L1RpcError {
     VerifierTypeRetrievalFailed,
     #[error("Unable to retrieve the aggchain hash")]
     AggchainHashFetchFailed,
+    #[error("The rollup contract is either invalid or not set for the specified rollup id {0}")]
+    InvalidRollupContract(u32),
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
