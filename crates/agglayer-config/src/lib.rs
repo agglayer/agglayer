@@ -26,7 +26,6 @@ pub(crate) mod l1;
 pub(crate) mod l2;
 pub mod log;
 pub mod outbound;
-mod proxied_networks;
 pub mod rate_limiting;
 pub(crate) mod rpc;
 pub mod shutdown;
@@ -40,7 +39,6 @@ pub use l1::L1;
 pub use l2::L2;
 pub use log::Log;
 use prover::default_prover_entrypoint;
-pub use proxied_networks::ProxiedNetworksConfig;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
 
@@ -72,10 +70,6 @@ pub struct Config {
     /// The local RPC server configuration.
     #[serde(default)]
     pub rpc: RpcConfig,
-
-    /// The proxied networks configuration.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub proxied_networks: Option<ProxiedNetworksConfig>,
 
     /// Rate limiting configuration.
     #[serde(default)]
@@ -169,7 +163,6 @@ impl Config {
             proof_signers: Default::default(),
             log: Default::default(),
             rpc: Default::default(),
-            proxied_networks: Default::default(),
             rate_limiting: Default::default(),
             outbound: Default::default(),
             l1: Default::default(),
@@ -195,13 +188,6 @@ impl Config {
     /// Get the target gRPC socket address from the configuration.
     pub fn public_grpc_addr(&self) -> std::net::SocketAddr {
         std::net::SocketAddr::from((self.rpc.host, self.rpc.grpc_port))
-    }
-
-    /// Get the proxied gRPC socket address from the configuration.
-    pub fn proxied_grpc_addr(&self) -> Option<std::net::SocketAddr> {
-        self.proxied_networks
-            .as_ref()
-            .map(|pn| std::net::SocketAddr::from((pn.host, pn.grpc_port)))
     }
 
     /// Get the admin RPC socket address from the configuration.
