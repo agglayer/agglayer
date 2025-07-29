@@ -47,7 +47,9 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 #[case(
     "cert_sig",
     SendTxError::SignatureError(SignatureError::CouldNotRecoverCertSigner(
-        AlloySignatureError::K256(k256::ecdsa::Error::new())
+        agglayer_types::SignerError::Recovery(AlloySignatureError::K256(
+            k256::ecdsa::Error::new()
+        ))
     ))
 )]
 #[case(

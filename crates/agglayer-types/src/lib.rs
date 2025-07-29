@@ -306,7 +306,7 @@ impl Default for Certificate {
         let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
         let height: Height = 0u64;
         let (_new_local_exit_root, signature, _signer) =
-            compute_signature_info(exit_root, &[], &wallet, height);
+            compute_signature_info(exit_root, &[], &wallet, height, CommitmentVersion::V2);
         Self {
             network_id,
             height,
@@ -328,10 +328,10 @@ pub fn compute_signature_info(
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &ethers::signers::LocalWallet,
     height: Height,
+    version: CommitmentVersion,
 ) -> (Digest, Signature, Address) {
     use ethers::signers::Signer;
 
-    let version = CommitmentVersion::V2;
     let combined_hash = SignatureCommitmentValues {
         new_local_exit_root,
         commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues {
@@ -354,6 +354,27 @@ pub fn compute_signature_info(
     (combined_hash, signature, wallet.address().0.into())
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum SignerError {
+    #[error("Signature not provided")]
+    Missing,
+
+    #[error("Signature recovery error")]
+    Recovery(#[source] SignatureError),
+
+    #[error(
+        "Invalid extra signature either due to wrong signer or commitment. expected signer: \
+         {expected_signer}"
+    )]
+    InvalidExtraSignature { expected_signer: Address },
+
+    #[error(
+        "Invalid PP signature either due to wrong signer or commitment. expected signer: \
+         {expected_signer}"
+    )]
+    InvalidPessimisticProofSignature { expected_signer: Address },
+}
+
 impl Certificate {
     #[cfg(any(test, feature = "testutils"))]
     pub fn wallet_for_test(network_id: NetworkId) -> ethers::signers::LocalWallet {
@@ -369,15 +390,27 @@ impl Certificate {
 
     #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
+        Self::new_for_test_with_version(network_id, height, CommitmentVersion::V2)
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn new_for_test_with_version(
+        network_id: NetworkId,
+        height: Height,
+        version: CommitmentVersion,
+    ) -> Self {
         let wallet = Self::wallet_for_test(network_id);
-        let exit_root = LocalExitTree::<Keccak256Hasher>::default().get_root();
-        let (_, signature, _signer) = compute_signature_info(exit_root, &[], &wallet, height);
+        let local_exit_root = LocalExitTree::<Keccak256Hasher>::default()
+            .get_root()
+            .into();
+        let (_, signature, _signer) =
+            compute_signature_info(local_exit_root, &[], &wallet, height, version);
 
         Self {
             network_id,
             height,
-            prev_local_exit_root: exit_root,
-            new_local_exit_root: exit_root,
+            prev_local_exit_root: local_exit_root,
+            new_local_exit_root: local_exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
             aggchain_data: AggchainData::ECDSA { signature },
@@ -445,39 +478,102 @@ impl Certificate {
         }
     }
 
-    pub fn signer_from_signature(&self, signature: Signature) -> Result<Address, SignatureError> {
-        // TODO: Verify for both commitment versions and return the version
-        let version = CommitmentVersion::V2;
-        let commitment = SignatureCommitmentValues::from(self).commitment(version);
+    /// Computes the commitment used to verify the extra signature on the
+    /// agglayer only.
+    /// The commitment is expected to be on the certificate id and the optional
+    /// l1 info tree leaf count.
+    fn extra_signature_commitment(&self) -> Digest {
+        let certificate_id = self.hash();
 
-        signature.recover_address_from_prehash(&B256::new(commitment.0))
+        match self.l1_info_tree_leaf_count {
+            Some(leaf_count) => keccak256_combine([
+                certificate_id.as_slice(),
+                leaf_count.to_le_bytes().as_slice(),
+            ]),
+            None => certificate_id,
+        }
     }
 
-    pub fn signer(&self) -> Result<Option<Address>, SignatureError> {
-        match self.aggchain_data {
-            AggchainData::ECDSA { signature } => {
-                // retrieve signer
-                let version = CommitmentVersion::V2;
-                let combined_hash = SignatureCommitmentValues::from(self).commitment(version);
+    /// Verify the extra certificate signature.
+    pub fn verify_extra_signature(
+        &self,
+        expected_signer: Address,
+        signature: Signature,
+    ) -> Result<(), SignerError> {
+        let expected_commitment = self.extra_signature_commitment();
 
-                signature
-                    .recover_address_from_prehash(&B256::new(combined_hash.0))
-                    .map(Some)
-            }
+        let retrieved_signer = signature
+            .recover_address_from_prehash(&B256::new(expected_commitment.0))
+            .map_err(SignerError::Recovery)?;
+
+        (expected_signer == retrieved_signer)
+            .then_some(())
+            .ok_or(SignerError::InvalidExtraSignature { expected_signer })
+    }
+
+    /// Verify the signature on the PP commitment.
+    pub fn verify_cert_signature(&self, expected_signer: Address) -> Result<(), SignerError> {
+        let pp_commitment_values = SignatureCommitmentValues::from(self);
+
+        let recovered_expected_signer = match &self.aggchain_data {
+            // Verify if one of the commitment version is signed.
+            // NOTE: The legitimacy of the version is verified during the witness generation,
+            // especially in order to forbid version rollback by the chain.
+            AggchainData::ECDSA { signature } => [CommitmentVersion::V3, CommitmentVersion::V2]
+                .iter()
+                .any(|version| {
+                    let commitment = B256::new(pp_commitment_values.commitment(*version).0);
+                    match signature.recover_address_from_prehash(&commitment) {
+                        Ok(recovered) => recovered == expected_signer,
+                        Err(_) => false,
+                    }
+                }),
             AggchainData::Generic {
-                signature: Some(ref signature),
+                signature,
                 aggchain_params,
                 ..
             } => {
-                let commitment = SignatureCommitmentValues::from(self)
-                    .aggchain_proof_commitment(&aggchain_params);
+                let signature = signature.as_ref().ok_or(SignerError::Missing)?;
+                let commitment = B256::new(
+                    pp_commitment_values
+                        .aggchain_proof_commitment(aggchain_params)
+                        .0,
+                );
+                let recovered = signature
+                    .recover_address_from_prehash(&commitment)
+                    .map_err(SignerError::Recovery)?;
 
-                signature
-                    .recover_address_from_prehash(&B256::new(commitment.0))
-                    .map(Some)
+                recovered == expected_signer
             }
-            _ => Ok(None),
-        }
+        };
+
+        recovered_expected_signer
+            .then_some(())
+            .ok_or(SignerError::InvalidPessimisticProofSignature { expected_signer })
+    }
+
+    /// Retrieve the signer from the certificate signature.
+    pub fn retrieve_signer(&self, version: CommitmentVersion) -> Result<Address, SignerError> {
+        let (signature, commitment) = match &self.aggchain_data {
+            AggchainData::ECDSA { signature } => {
+                let commitment = SignatureCommitmentValues::from(self).commitment(version);
+                (signature, commitment)
+            }
+            AggchainData::Generic {
+                signature,
+                aggchain_params,
+                ..
+            } => {
+                let signature = signature.as_ref().ok_or(SignerError::Missing)?;
+                let commitment = SignatureCommitmentValues::from(self)
+                    .aggchain_proof_commitment(aggchain_params);
+                (signature.as_ref(), commitment)
+            }
+        };
+
+        signature
+            .recover_address_from_prehash(&B256::new(commitment.0))
+            .map_err(SignerError::Recovery)
     }
 }
 
@@ -747,5 +843,30 @@ impl LocalNetworkStateData {
             balance_root: self.balance_tree.root,
             nullifier_root: self.nullifier_tree.root,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+    use unified_bridge::CommitmentVersion;
+
+    use crate::Certificate;
+
+    #[rstest]
+    fn can_retrieve_correct_signer(
+        #[values(CommitmentVersion::V2, CommitmentVersion::V3)] version: CommitmentVersion,
+    ) {
+        let certificate = Certificate::new_for_test_with_version(2.into(), 1, version);
+        let expected_signer = certificate.get_signer();
+
+        // Can retrieve the correct signer address from the signature
+        assert_eq!(
+            certificate.retrieve_signer(version).unwrap(),
+            expected_signer
+        );
+
+        // Check that the signature is valid
+        assert!(certificate.verify_cert_signature(expected_signer).is_ok())
     }
 }

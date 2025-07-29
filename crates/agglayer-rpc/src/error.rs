@@ -2,7 +2,7 @@
 use agglayer_contracts::L1RpcError;
 pub use agglayer_storage::error::Error as StorageError;
 pub use agglayer_types::primitives::Digest;
-use agglayer_types::{Address, NetworkId};
+use agglayer_types::{Address, NetworkId, SignerError};
 use ethers::{contract::ContractError, providers::Middleware};
 
 pub use crate::rate_limiting::RateLimited as RateLimitedError;
@@ -48,7 +48,7 @@ pub enum SignatureVerificationError<Rpc: Middleware> {
 
     /// The signer could not be recovered from the certificate signature.
     #[error("could not recover certificate signer: {0}")]
-    CouldNotRecoverCertSigner(#[source] alloy::primitives::SignatureError),
+    CouldNotRecoverCertSigner(#[source] SignerError),
 
     /// The signer of the proof is not the trusted sequencer for the given
     /// rollup id.
@@ -83,13 +83,26 @@ pub enum SignatureVerificationError<Rpc: Middleware> {
         expected_signer: Address,
     },
 
-    /// The extra signature is not signed from the expected signer, or not
-    /// performed on the right commitment.
-    #[error("wrong signed commitment or invalid extra signer: expected: {expected}, got: {got}")]
-    InvalidExtraSignature {
-        /// The expected extra signer.
-        expected: Address,
-        /// The recovered signer address.
-        got: Address,
-    },
+    /// The extra signature is invalid.
+    #[error("invalid extra signature: {0}")]
+    InvalidExtraSignature(#[source] SignerError),
+
+    /// The pessimistic proof signature is invalid.
+    #[error("invalid pessimistic proof signature: {0}")]
+    InvalidPessimisticProofSignature(#[source] SignerError),
+}
+
+impl<Rpc: Middleware> SignatureVerificationError<Rpc> {
+    pub fn from_signer_error(e: agglayer_types::SignerError) -> Self {
+        match e {
+            agglayer_types::SignerError::Missing => Self::SignatureMissing,
+            e @ agglayer_types::SignerError::Recovery(_) => Self::CouldNotRecoverCertSigner(e),
+            e @ agglayer_types::SignerError::InvalidExtraSignature { .. } => {
+                Self::InvalidExtraSignature(e)
+            }
+            e @ agglayer_types::SignerError::InvalidPessimisticProofSignature { .. } => {
+                Self::InvalidPessimisticProofSignature(e)
+            }
+        }
+    }
 }

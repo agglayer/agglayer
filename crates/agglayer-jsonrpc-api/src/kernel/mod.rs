@@ -12,7 +12,7 @@ use agglayer_types::Certificate;
 use ethers::{
     contract::{ContractCall, ContractError},
     providers::{Middleware, ProviderError},
-    types::{Address, TransactionReceipt, H160, H256, U64},
+    types::{Address, TransactionReceipt, H256, U64},
 };
 use thiserror::Error;
 use tracing::{info, instrument, warn};
@@ -308,23 +308,8 @@ where
             .get_trusted_sequencer_address(u32::from(cert.network_id))
             .await?;
 
-        let signer: H160 = cert
-            .signer()
-            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
-            .ok_or(SignatureVerificationError::SP1AggchainProofUnsupported)?
-            .into_array()
-            .into();
-
-        // ECDSA-k256 signature verification works by recovering the public key from the
-        // signature, and then checking that it is the expected one.
-        if signer != sequencer_address {
-            return Err(SignatureVerificationError::InvalidSigner {
-                signer,
-                trusted_sequencer: sequencer_address,
-            });
-        }
-
-        Ok(())
+        cert.verify_cert_signature(sequencer_address.0.into())
+            .map_err(SignatureVerificationError::from_signer_error)
     }
 
     /// Verify that the given [`SignedTx`] does not error during eth_call dry

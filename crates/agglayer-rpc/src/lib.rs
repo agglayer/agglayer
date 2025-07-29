@@ -311,22 +311,8 @@ where
                 SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(cert.network_id)
             })?;
 
-        if let Some(signer) = cert
-            .signer()
-            .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
-            .map(|signature| signature.into_array().into())
-        {
-            // ECDSA-k256 signature verification works by recovering the public key from the
-            // signature, and then checking that it is the expected one.
-            if signer != sequencer_address {
-                return Err(SignatureVerificationError::InvalidSigner {
-                    signer,
-                    trusted_sequencer: sequencer_address,
-                });
-            }
-        }
-
-        Ok(())
+        cert.verify_cert_signature(sequencer_address.0.into())
+            .map_err(SignatureVerificationError::from_signer_error)
     }
 
     /// Verify the extra [`Certificate`] signature.
@@ -339,22 +325,9 @@ where
     ) -> Result<(), SignatureVerificationError<L1Rpc::M>> {
         match (extra_signer, extra_signature) {
             // Extra signature expected and provided
-            (Some(&expected_extra_signer), Some(extra_signature)) => {
-                // Retrieve the signer from the extra signature
-                let retrieved_extra_signer: Address = certificate
-                    .signer_from_signature(extra_signature)
-                    .map_err(SignatureVerificationError::CouldNotRecoverCertSigner)?
-                    .into_array()
-                    .into();
-
-                // Verify that the signature is performed by the expected authority
-                if retrieved_extra_signer != expected_extra_signer {
-                    return Err(SignatureVerificationError::InvalidExtraSignature {
-                        expected: expected_extra_signer,
-                        got: retrieved_extra_signer,
-                    });
-                }
-            }
+            (Some(&expected_extra_signer), Some(extra_signature)) => certificate
+                .verify_extra_signature(expected_extra_signer, extra_signature)
+                .map_err(SignatureVerificationError::from_signer_error)?,
             // Extra signature is expected but missing
             (Some(&expected_signer), None) => {
                 return Err(SignatureVerificationError::MissingExtraSignature {
@@ -389,15 +362,7 @@ where
         );
         self.validate_pre_existing_certificate(&certificate).await?;
 
-        // Verify the involved signatures
-        // TODO: For now both commitments are enforced to be the V2 version.
-        // Ideally we want the aggsender to sign the V3 version.
-        // Consequently, we'll need to
-        //   - return the commitment version of the signed message for both signatures
-        //   - verify that they are both considering the exact same message (and so same
-        //     commitment version)
-        //   - verify that the commitment version is the expected one from the last PP
-        //     root in L1 (same as what is done in the witness generation)
+        // Verify the extra certificate signature
         self.verify_extra_cert_signature(
             &certificate,
             self.config()
@@ -413,10 +378,14 @@ where
             CertificateSubmissionError::SignatureError(error)
         })?;
 
+        // Verify the certificate signature
         self.verify_cert_signature(&certificate)
             .await
             .map_err(|error| {
-                error!(?error, "Failed to verify the signature of certificate");
+                error!(
+                    ?error,
+                    "Failed to verify the signature within the certificate"
+                );
                 CertificateSubmissionError::SignatureError(error)
             })?;
 

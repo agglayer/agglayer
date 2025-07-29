@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use agglayer_types::primitives::Hashable as _;
-use agglayer_types::{Certificate, Digest, LocalNetworkStateData, NetworkId, PessimisticRootInput};
-use pessimistic_proof::unified_bridge::CommitmentVersion;
-use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
+use agglayer_types::{
+    primitives::Hashable as _, Certificate, Digest, LocalNetworkStateData, NetworkId,
+    PessimisticRootInput,
+};
+use pessimistic_proof::{
+    core::generate_pessimistic_proof, unified_bridge::CommitmentVersion, LocalNetworkState,
+};
 use rstest::{fixture, rstest};
 use tracing::info;
 
@@ -166,7 +169,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
             certificate.bridge_exits.len(),
         );
 
-        let signer = certificate.signer().unwrap().unwrap();
+        let signer = certificate.retrieve_signer(CommitmentVersion::V2).unwrap();
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
         let multi_batch_header = lns
@@ -262,7 +265,7 @@ fn import_native_tokens() {
             certificate.bridge_exits.len(),
         );
 
-        let signer = certificate.signer().unwrap().expect("Signer");
+        let signer = certificate.retrieve_signer(CommitmentVersion::V2).unwrap();
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
         let multi_batch_header = lns
