@@ -112,9 +112,6 @@ pub(crate) struct NetworkTask<CertifierClient, SettlementClient, PendingStore, S
     /// The clock reference to subscribe to the epoch events and check for
     /// current epoch.
     clock_ref: ClockRef,
-    /// The pending local network state that should be applied on receiving
-    /// settlement response.
-    pending_state: Option<Box<LocalNetworkStateData>>,
     /// The stream of new certificates to certify.
     certificate_stream: mpsc::Receiver<NewCertificate>,
     /// Flag to indicate if the network is at capacity for the current epoch.
@@ -166,7 +163,6 @@ where
             certifier_client,
             local_state,
             clock_ref,
-            pending_state: None,
             certificate_stream,
             at_capacity_for_epoch: false,
             latest_settled,
@@ -343,6 +339,9 @@ where
             .process(),
         );
 
+        // The pending local network state that should be applied on receiving
+        // settlement response.
+        let mut pending_state = None;
         loop {
             tokio::select! {
                 msg = receiver.recv() => match msg {
@@ -358,7 +357,7 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateExecuted { new_state, .. }) => {
-                        self.pending_state = Some(new_state);
+                        pending_state = Some(new_state);
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateProven { height, .. }) => {
@@ -408,7 +407,7 @@ where
                         self.latest_settled = Some(settled_certificate);
                         next_expected_height.increment();
                         debug!(%certificate_id, "Certification process completed");
-                        let Some(new) = self.pending_state.take() else {
+                        let Some(new) = pending_state else {
                             return Err(Error::InternalError(format!("Missing pending state needed upon settlement, current state: {}", self.local_state.get_roots().display_to_hex() )))
                         };
                         debug!(
@@ -443,7 +442,6 @@ where
                     }
                     Some(NetworkTaskMessage::CertificateErrored { .. }) => {
                         // The certificate task already logged everything that should be logged.
-                        self.pending_state = None;
                         self.at_capacity_for_epoch = false;
                         break;
                     }
