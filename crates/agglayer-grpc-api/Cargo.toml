@@ -33,7 +33,13 @@ uuid = { version = "1.15", features = ["v4"] }
 agglayer-grpc-client.workspace = true
 agglayer-storage = { workspace = true, features = ["testutils"] }
 
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "sync"] }
+rstest.workspace = true
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "net",
+    "sync",
+] }
 
 [lints]
 workspace = true

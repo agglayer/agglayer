@@ -6,7 +6,7 @@
 use std::{collections::HashMap, path::Path, str::FromStr};
 
 use agglayer_prover_config::GrpcConfig;
-use ethers::types::Address;
+use agglayer_types::Address;
 use outbound::OutboundConfig;
 use serde::{de::DeserializeSeed, Deserialize, Serialize};
 use serde_with::DisplayFromStr;
@@ -61,7 +61,7 @@ pub struct Config {
 
     #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     #[serde(default)]
-    pub proof_signers: HashMap<u32, Address>,
+    pub proof_signers: HashMap<u32, ethers::types::Address>,
 
     /// The log configuration.
     #[serde(default)]
@@ -125,6 +125,14 @@ pub struct Config {
 
     #[serde(default, skip_serializing_if = "crate::is_default")]
     pub grpc: GrpcConfig,
+
+    /// Extra Certificate signer per network.
+    /// Signatures is expected to be performed on the same commitment as
+    /// the certificate signature, which is the V2 commitment for now.
+    #[serde(default)]
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub extra_certificate_signer: HashMap<u32, Address>,
 }
 
 impl Config {
@@ -177,6 +185,7 @@ impl Config {
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),
+            extra_certificate_signer: Default::default(),
         }
     }
 

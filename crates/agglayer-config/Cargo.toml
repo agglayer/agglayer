@@ -21,6 +21,7 @@ agglayer-types.workspace = true
 agglayer-prover-config.workspace = true
 
 [dev-dependencies]
+alloy-primitives.workspace = true
 insta = { workspace = true, features = ["toml", "redactions", "filters"] }
 pretty_assertions = "1.4.0"
 rstest.workspace = true

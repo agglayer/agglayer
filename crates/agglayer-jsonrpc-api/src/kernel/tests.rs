@@ -8,7 +8,7 @@ use agglayer_contracts::{
     },
     polygon_zk_evm::{TrustedSequencerCall, TrustedSequencerReturn},
 };
-use agglayer_types::Certificate;
+use agglayer_types::{Certificate, SignerError};
 use ethers::{
     abi::AbiEncode,
     core::utils,
@@ -340,7 +340,6 @@ async fn interop_executor_verify_tx_signature_proof_signer() {
 #[tokio::test]
 async fn verify_cert_signature() {
     let signer1 = Certificate::wallet_for_test(1.into()).address();
-    let signer2 = Certificate::wallet_for_test(2.into()).address();
     let signer3 = Certificate::wallet_for_test(3.into()).address();
     let mut config = Config::new_for_test();
     // Proof signer for network 1 is ok
@@ -364,8 +363,12 @@ async fn verify_cert_signature() {
         let signed_cert = Certificate::new_for_test(2.into(), 0);
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
-            Err(crate::kernel::SignatureVerificationError::InvalidSigner { signer, trusted_sequencer })
-            if signer == signer2 && trusted_sequencer == signer3
+            Err(
+                agglayer_rpc::error::SignatureVerificationError::InvalidPessimisticProofSignature(
+                    SignerError::InvalidPessimisticProofSignature { expected_signer }
+                )
+            )
+            if *expected_signer == signer3.0
         ));
     }
 
@@ -386,8 +389,12 @@ async fn verify_cert_signature() {
         signed_cert.new_local_exit_root.0[0] += 1;
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
-            Err(crate::kernel::SignatureVerificationError::InvalidSigner { signer: _, trusted_sequencer })
-            if trusted_sequencer == signer1
+            Err(
+                agglayer_rpc::error::SignatureVerificationError::InvalidPessimisticProofSignature(
+                    SignerError::InvalidPessimisticProofSignature { expected_signer }
+                )
+            )
+            if *expected_signer == signer1.0
         ));
     }
 }
