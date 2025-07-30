@@ -1,6 +1,6 @@
 use std::{
     future::IntoFuture,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::{IpAddr, SocketAddr},
     sync::Arc,
 };
 
@@ -31,7 +31,6 @@ type MockAgglayerImpl = AgglayerImpl<
     PendingStore,
     StateStore,
     DebugStore,
-    Box<dyn 'static + Send + Sync + Fn(NetworkId) -> bool>,
 >;
 pub(crate) struct RawRpcContext {
     pub(crate) rpc: MockAgglayerImpl,
@@ -49,7 +48,6 @@ pub struct TestContext {
     pub pending_store: Arc<PendingStore>,
     pub client: jsonrpsee::http_client::HttpClient,
     pub admin_client: jsonrpsee::http_client::HttpClient,
-    pub proxied_grpc_client: Option<jsonrpsee::http_client::HttpClient>,
     pub config: Arc<Config>,
     pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
@@ -75,10 +73,6 @@ impl TestContext {
         let admin_url = format!("http://{}/", raw_rpc.config.admin_rpc_addr());
         let client = HttpClientBuilder::default().build(api_url).unwrap();
         let admin_client = HttpClientBuilder::default().build(admin_url).unwrap();
-        let proxied_grpc_client = raw_rpc.config.proxied_networks.as_ref().map(|pn| {
-            let proxied_url = format!("http://{}:{}", pn.host, pn.grpc_port);
-            HttpClientBuilder::default().build(proxied_url).unwrap()
-        });
 
         let listener_api = tokio::net::TcpListener::bind(raw_rpc.config.readrpc_addr())
             .await
@@ -102,7 +96,6 @@ impl TestContext {
             pending_store: raw_rpc.pending_store,
             client,
             admin_client,
-            proxied_grpc_client,
             config: raw_rpc.config,
             certificate_receiver: raw_rpc.certificate_receiver,
         }
@@ -133,14 +126,6 @@ impl TestContext {
         }
         config.rpc.readrpc_port = addr.port();
         config.rpc.admin_port = admin_addr.port();
-        if let Some(proxied_networks) = config.proxied_networks.as_mut() {
-            let proxied_addr = next_available_addr();
-            proxied_networks.host = match proxied_addr.ip() {
-                IpAddr::V4(ip) => ip,
-                IpAddr::V6(_) => Ipv4Addr::new(127, 0, 0, 1),
-            };
-            proxied_networks.grpc_port = proxied_addr.port();
-        };
 
         let config = Arc::new(config);
 
@@ -190,15 +175,7 @@ impl TestContext {
             config.clone(),
         );
 
-        let proxied_networks = config
-            .proxied_networks
-            .as_ref()
-            .map(|pn| pn.networks.clone());
-        let allowed_networks = Box::new(move |incoming| match &proxied_networks {
-            None => true,
-            Some(pn) => !pn.contains(&incoming),
-        }) as _;
-        let rpc = AgglayerImpl::new(Arc::new(service), rpc_service, allowed_networks);
+        let rpc = AgglayerImpl::new(Arc::new(service), rpc_service);
 
         RawRpcContext {
             rpc,
