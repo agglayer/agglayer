@@ -191,7 +191,7 @@ where
 
         // Subscribe to the L1 Block stream.
         let mut stream = provider.subscribe_blocks().await.map_err(|e| {
-            error!(error = %e, "Failed to subscribe to L1 block stream");
+            error!(error = ?e, "Failed to subscribe to L1 block stream");
             agglayer_telemetry::clock::record_connection_failed();
             BlockClockError::SubscribeBlocks
         })?;
@@ -263,7 +263,7 @@ where
                 }
                 block_result = Self::recv_block(&mut stream) => {
                     let block = block_result.map_err(|e| {
-                        error!(error = %e, "Failed to receive block from stream");
+                        error!(error = ?e, "Failed to receive block from stream");
                         agglayer_telemetry::clock::record_connection_failed();
                         e
                     })?;
