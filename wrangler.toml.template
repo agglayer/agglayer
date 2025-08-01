@@ -4,22 +4,14 @@
 # on a per-pull-request basis. It creates PR-specific subdomains for documentation
 # previews (e.g., pr-123-rust-docs.agglayer.dev).
 #
-# How it works:
-# 1. During CI, {{PR_NUMBER}} is replaced with the actual PR number
-# 2. The generated wrangler.toml is used to deploy a Cloudflare Worker
-# 3. The worker serves the built Rust docs from the ./docs directory
-# 4. Each PR gets its own isolated documentation deployment
-# 5. Workers are automatically cleaned up when PRs are closed
-#
-# This file is a template - the actual wrangler.toml is generated during CI
-# and should not be committed to the repository.
 
-# Worker name with PR-specific identifier
 name = "agglayer-rust-docs-pr-{{PR_NUMBER}}"
-
-# Cloudflare Workers compatibility settings
-compatibility_date = "2023-10-30"
-compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2025-04-03"
+placement = { mode = "smart" }
+preview_urls = false
+keep_names = false
+send_metrics = false
+workers_dev = false
 
 # Entry point for the Cloudflare Worker (generated during CI)
 main = "index.js"
@@ -28,17 +20,11 @@ main = "index.js"
 # This directory contains the built Rust documentation from `cargo doc`
 [site]
 bucket = "./docs"
+include = ["**/*"]
+exclude = []
 
-# Route configuration for PR-specific subdomain
-# Maps pr-{NUMBER}-rust-docs.agglayer.dev to this worker
-[[routes]]
-pattern = "pr-{{PR_NUMBER}}-rust-docs.agglayer.dev/*"
-zone_name = "agglayer.dev"
+routes = [{ pattern = "pr-{{PR_NUMBER}}-rust-docs.agglayer.dev", custom_domain = true }]
 
 # Environment variables available to the worker
 [vars]
 ENVIRONMENT = "pr-{{PR_NUMBER}}"
-
-# Build configuration (no build step needed for static docs)
-[build]
-command = ""
