@@ -101,17 +101,37 @@ jobs:
       - name: Create worker script
         run: |
           cat > index.js << 'EOF'
-          import { getAssetFromKV } from '@cloudflare/kv-asset-handler'
+          import { getAssetFromKV, mapRequestToAsset } from '@cloudflare/kv-asset-handler'
 
           export default {
             async fetch(request, env, ctx) {
               try {
-                return await getAssetFromKV(request, {
-                  ASSET_NAMESPACE: env.__STATIC_CONTENT,
-                  ASSET_MANIFEST: __STATIC_CONTENT_MANIFEST,
-                })
+                // Handle root path redirect to agglayer docs
+                const url = new URL(request.url)
+                if (url.pathname === '/') {
+                  return Response.redirect(`${url.origin}/agglayer/`, 301)
+                }
+
+                const options = {
+                  mapRequestToAsset: req => {
+                    // Handle trailing slashes for directory index files
+                    if (req.url.endsWith('/')) {
+                      return mapRequestToAsset(new Request(req.url + 'index.html', req))
+                    }
+                    return mapRequestToAsset(req)
+                  }
+                }
+
+                return await getAssetFromKV(request, options)
               } catch (e) {
-                return new Response('Not found', { status: 404 })
+                // Fallback for missing files
+                if (e.status === 404) {
+                  return new Response('Documentation not found', { 
+                    status: 404,
+                    headers: { 'content-type': 'text/html' }
+                  })
+                }
+                return new Response('Error: ' + e.message, { status: 500 })
               }
             }
           }
@@ -164,7 +184,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22'
+          node-version: '22'
 
       - name: Install Wrangler
         run: npm install -g wrangler
