@@ -57,6 +57,10 @@ pub fn main(
         .thread_name("agglayer-node-runtime")
         .enable_all()
         .build()?;
+    info!(
+        num_workers = node_runtime.metrics().num_workers(),
+        "Node runtime created."
+    );
 
     let metrics_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("metrics-runtime")
