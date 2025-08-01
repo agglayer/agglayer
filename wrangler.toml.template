@@ -1,0 +1,31 @@
+# Cloudflare Workers Configuration Template for Rust Documentation
+#
+# This file is a template for deploying Rust documentation to Cloudflare Workers
+# on a per-pull-request basis. It creates PR-specific subdomains for documentation
+# previews (e.g., pr-123-rust-docs.agglayer.dev).
+#
+
+name = "agglayer-rust-docs-pr-{{PR_NUMBER}}"
+compatibility_date = "2025-04-03"
+placement = { mode = "smart" }
+preview_urls = false
+keep_names = false
+send_metrics = false
+workers_dev = false
+
+# Entry point for the Cloudflare Worker (generated during CI)
+main = "index.js"
+
+# Static site configuration - serves files from the docs directory
+# This directory contains the built Rust documentation from `cargo doc`
+[site]
+bucket = "./docs"
+include = ["**/*"]
+exclude = []
+
+[env.staging]
+routes = [{ pattern = "pr-{{PR_NUMBER}}-rust-docs.agglayer.dev", custom_domain = true }]
+
+# Environment variables available to the worker
+[vars]
+ENVIRONMENT = "pr-{{PR_NUMBER}}"
