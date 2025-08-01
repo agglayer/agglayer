@@ -1,10 +1,11 @@
-name: Build and host documentation on GH pages
+name: Build and host documentation
 
 on:
   merge_group:
   pull_request:
     branches:
       - main
+    types: [opened, synchronize, reopened, closed]
   push:
     branches:
       - main
@@ -13,6 +14,7 @@ jobs:
   build:
     name: Build documentation
     runs-on: ubuntu-latest-16-cores
+    if: github.event.action != 'closed'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,13 +32,16 @@ jobs:
           mkdir host-docs
           echo "<meta http-equiv=\"refresh\" content=\"0; url=agglayer\">" > target/doc/index.html
           cp -r target/doc/* ./host-docs
-      - name: Upload documentation
-        uses: actions/upload-pages-artifact@v3.0.0
-        with:
-          path: "host-docs/"
 
-  deploy:
-    name: Deploy documentation
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-docs
+          path: "host-docs/"
+          retention-days: 7
+
+  deploy-gh-pages:
+    name: Deploy to GitHub Pages
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -48,6 +53,116 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      - name: Download documentation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-docs
+          path: host-docs
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3.0.0
+        with:
+          path: "host-docs/"
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Workers
+    needs: build
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download documentation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-docs
+          path: docs
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Create worker script
+        run: |
+          cat > index.js << 'EOF'
+          import { getAssetFromKV } from '@cloudflare/kv-asset-handler'
+
+          export default {
+            async fetch(request, env, ctx) {
+              try {
+                return await getAssetFromKV(request, {
+                  ASSET_NAMESPACE: env.__STATIC_CONTENT,
+                  ASSET_MANIFEST: __STATIC_CONTENT_MANIFEST,
+                })
+              } catch (e) {
+                return new Response('Not found', { status: 404 })
+              }
+            }
+          }
+          EOF
+
+      - name: Create package.json
+        run: |
+          cat > package.json << 'EOF'
+          {
+            "name": "agglayer-rust-docs",
+            "version": "1.0.0",
+            "dependencies": {
+              "@cloudflare/kv-asset-handler": "^0.3.0"
+            }
+          }
+          EOF
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Update wrangler.toml for PR
+        run: |
+          sed "s/{{PR_NUMBER}}/${{ github.event.number }}/g" wrangler.toml.template > wrangler.toml
+
+      - name: Deploy to Cloudflare Workers
+        run: wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
+
+      - name: Comment PR with deployment URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `📖 Documentation deployed to: https://pr${{ github.event.number }}.rust-docs.agglayer.dev`
+            })
+
+  cleanup-cloudflare:
+    name: Cleanup Cloudflare deployment
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Delete worker
+        run: |
+          wrangler delete agglayer-rust-docs-pr${{ github.event.number }} --force || echo "Worker may not exist"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
