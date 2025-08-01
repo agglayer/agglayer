@@ -170,7 +170,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `📖 Documentation deployed to: https://pr${{ github.event.number }}.rust-docs.agglayer.dev`
+              body: `📖 Documentation deployed to: https://pr-${{ github.event.number }}-rust-docs.agglayer.dev\n\n*Fallback URL: https://agglayer-rust-docs-pr-${{ github.event.number }}.workers.dev*`
             })
 
   cleanup-cloudflare:
@@ -191,7 +191,7 @@ jobs:
 
       - name: Delete worker
         run: |
-          wrangler delete agglayer-rust-docs-pr${{ github.event.number }} --force || echo "Worker may not exist"
+          wrangler delete agglayer-rust-docs-pr-${{ github.event.number }} --force || echo "Worker may not exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_WORKER_ACCOUNT_ID }}

@@ -2,7 +2,7 @@
 #
 # This file is a template for deploying Rust documentation to Cloudflare Workers
 # on a per-pull-request basis. It creates PR-specific subdomains for documentation
-# previews (e.g., pr123.rust-docs.agglayer.dev).
+# previews (e.g., pr-123-rust-docs.agglayer.dev).
 #
 # How it works:
 # 1. During CI, {{PR_NUMBER}} is replaced with the actual PR number
@@ -15,7 +15,7 @@
 # and should not be committed to the repository.
 
 # Worker name with PR-specific identifier
-name = "agglayer-rust-docs-pr{{PR_NUMBER}}"
+name = "agglayer-rust-docs-pr-{{PR_NUMBER}}"
 
 # Cloudflare Workers compatibility settings
 compatibility_date = "2023-10-30"
@@ -30,9 +30,9 @@ main = "index.js"
 bucket = "./docs"
 
 # Route configuration for PR-specific subdomain
-# Maps pr{NUMBER}.rust-docs.agglayer.dev to this worker
+# Maps pr-{NUMBER}-rust-docs.agglayer.dev to this worker
 [[routes]]
-pattern = "pr{{PR_NUMBER}}.rust-docs.agglayer.dev/*"
+pattern = "pr-{{PR_NUMBER}}-rust-docs.agglayer.dev/*"
 zone_name = "agglayer.dev"
 
 # Environment variables available to the worker
