@@ -192,6 +192,23 @@ where
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Rpc: RollupContract + L1TransactionFetcher + 'static,
 {
+    fn get_known_certificate_id_at_height(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+    ) -> Result<Option<CertificateId>, agglayer_storage::error::Error> {
+        // TODO This should be in a database transaction to get a consistent
+        // view of the storage.
+        if let Some(cert) = self.pending_store.get_certificate(network_id, height)? {
+            return Ok(Some(cert.hash()));
+        }
+        let certificate_id = self
+            .state
+            .get_certificate_header_by_cursor(network_id, height)?
+            .map(|header| header.certificate_id);
+        Ok(certificate_id)
+    }
+
     #[instrument(skip(self, certificate), level = "info")]
     async fn validate_pre_existing_certificate(
         &self,
@@ -199,14 +216,12 @@ where
     ) -> Result<(), CertificateSubmissionError> {
         let new_certificate_id = certificate.hash();
         // Get pre-existing certificate in pending
-        if let Some(certificate) = self
-            .pending_store
-            .get_certificate(certificate.network_id, certificate.height)?
+        if let Some(pre_existing_certificate_id) =
+            self.get_known_certificate_id_at_height(certificate.network_id, certificate.height)?
         {
-            let pre_existing_certificate_id = certificate.hash();
             warn!(
                 pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
-                "Certificate already exists in pending store for network {} at height {}",
+                "Certificate already exists in store for network {} at height {}",
                 certificate.network_id,
                 certificate.height
             );
@@ -221,7 +236,7 @@ where
                 match settlement_tx_hash {
                     None => {
                         info!(
-                            "Replacing pending certificate {} that is in error",
+                            "Replacing certificate {} that is in error",
                             pre_existing_certificate_id
                         );
                     }
@@ -254,8 +269,8 @@ where
                                 "Replacing pending certificate in error that has already been settled, but transaction receipt status is in failure"
                             );
                         } else {
-                            let message = "Unable to replace a pending certificate in error that \
-                                           has already been settled";
+                            let message = "Unable to replace a certificate in error that has \
+                                           already been settled";
                             warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
 
                             return Err(
@@ -272,7 +287,7 @@ where
                     }
                 }
             } else {
-                let message = "Unable to replace a pending certificate that is not in error";
+                let message = "Unable to replace a certificate that is not in error";
                 info!(%pre_existing_certificate_id, message);
 
                 return Err(
@@ -309,22 +324,8 @@ where
                 SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(cert.network_id)
             })?;
 
-        let signer = cert
-            .signer()
-            .map_err(SignatureVerificationError::from_signer_error)?
-            .into_array()
-            .into();
-
-        // ECDSA-k256 signature verification works by recovering the public key from the
-        // signature, and then checking that it is the expected one.
-        if signer != sequencer_address {
-            return Err(SignatureVerificationError::InvalidSigner {
-                signer,
-                trusted_sequencer: sequencer_address,
-            });
-        }
-
-        Ok(())
+        cert.verify_cert_signature(sequencer_address)
+            .map_err(SignatureVerificationError::from_signer_error)
     }
 
     /// Verify the extra [`Certificate`] signature.
@@ -337,22 +338,9 @@ where
     ) -> Result<(), SignatureVerificationError> {
         match (extra_signer, extra_signature) {
             // Extra signature expected and provided
-            (Some(&expected_extra_signer), Some(extra_signature)) => {
-                // Retrieve the signer from the extra signature
-                let retrieved_extra_signer = certificate
-                    .signer_from_signature(extra_signature)
-                    .map_err(SignatureVerificationError::from_signer_error)?
-                    .into_array()
-                    .into();
-
-                // Verify that the signature is performed by the expected authority
-                if retrieved_extra_signer != expected_extra_signer {
-                    return Err(SignatureVerificationError::InvalidExtraSignature {
-                        expected: expected_extra_signer,
-                        got: retrieved_extra_signer,
-                    });
-                }
-            }
+            (Some(&expected_extra_signer), Some(extra_signature)) => certificate
+                .verify_extra_signature(expected_extra_signer, extra_signature)
+                .map_err(SignatureVerificationError::from_signer_error)?,
             // Extra signature is expected but missing
             (Some(&expected_signer), None) => {
                 return Err(SignatureVerificationError::MissingExtraSignature {
@@ -387,15 +375,7 @@ where
         );
         self.validate_pre_existing_certificate(&certificate).await?;
 
-        // Verify the involved signatures
-        // TODO: For now both commitments are enforced to be the V2 version.
-        // Ideally we want the aggsender to sign the V3 version.
-        // Consequently, we'll need to
-        //   - return the commitment version of the signed message for both signatures
-        //   - verify that they are both considering the exact same message (and so same
-        //     commitment version)
-        //   - verify that the commitment version is the expected one from the last PP
-        //     root in L1 (same as what is done in the witness generation)
+        // Verify the extra certificate signature
         self.verify_extra_cert_signature(
             &certificate,
             self.config()
@@ -411,10 +391,14 @@ where
             CertificateSubmissionError::SignatureError(error)
         })?;
 
+        // Verify the certificate signature
         self.verify_cert_signature(&certificate)
             .await
             .map_err(|error| {
-                error!(?error, "Failed to verify the signature of certificate");
+                error!(
+                    ?error,
+                    "Failed to verify the signature within the certificate"
+                );
                 CertificateSubmissionError::SignatureError(error)
             })?;
 

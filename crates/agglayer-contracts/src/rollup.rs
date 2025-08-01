@@ -32,7 +32,6 @@ const TIME_TO_FINALITY_ETHEREUM: tokio::time::Duration = tokio::time::Duration::
 
 #[async_trait::async_trait]
 pub trait RollupContract {
-    type P: Provider;
     async fn get_trusted_sequencer_address(
         &self,
         rollup_id: u32,
@@ -53,8 +52,6 @@ impl<RpcProvider> RollupContract for L1RpcClient<RpcProvider>
 where
     RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
-    type P = RpcProvider;
-
     /// Returns the first entry of the l1 info tree map in the L1.
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]) {
         self.default_l1_info_tree_entry
@@ -185,6 +182,10 @@ where
                 .await
                 .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
 
+            if rollup_data.rollupContract.is_zero() {
+                return Err(L1RpcError::InvalidRollupContract(rollup_id));
+            }
+
             PolygonZkEvm::new(rollup_data.rollupContract, self.rpc.clone())
                 .trustedSequencer()
                 .call()
@@ -201,6 +202,10 @@ where
             .call()
             .await
             .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
+
+        if rollup_data.rollupContract.is_zero() {
+            return Err(L1RpcError::InvalidRollupContract(rollup_id));
+        }
 
         Ok(rollup_data.rollupContract.into())
     }

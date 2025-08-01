@@ -19,7 +19,6 @@ impl AggchainVkeyHash {
 
 #[async_trait::async_trait]
 pub trait AggchainContract {
-    type M: alloy::providers::Provider;
     async fn get_aggchain_vkey_hash(
         &self,
         rollup_address: Address,
@@ -38,8 +37,6 @@ impl<RpcProvider> AggchainContract for L1RpcClient<RpcProvider>
 where
     RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
-    type M = RpcProvider;
-
     async fn get_aggchain_vkey_hash(
         &self,
         rollup_address: Address,
