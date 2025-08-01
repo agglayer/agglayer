@@ -19,7 +19,7 @@ impl From<CertificateHeader> for v1::CertificateHeader {
             CertificateStatus::Proven => (v1::CertificateStatus::Proven, None),
             CertificateStatus::Candidate => (v1::CertificateStatus::Candidate, None),
             CertificateStatus::InError { error } => {
-                (v1::CertificateStatus::InError, Some(error.into()))
+                (v1::CertificateStatus::InError, Some((*error).into()))
             }
             CertificateStatus::Settled => (v1::CertificateStatus::Settled, None),
         };

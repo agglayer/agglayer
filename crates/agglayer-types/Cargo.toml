@@ -8,6 +8,10 @@ license.workspace = true
 default = []
 testutils = ["dep:arbitrary", "pessimistic-proof/testutils"]
 
+[[bench]]
+name = "criterion"
+harness = false
+
 [dependencies]
 agglayer-primitives.workspace = true
 agglayer-tries.workspace = true
@@ -29,4 +33,7 @@ rand.workspace = true
 
 [dev-dependencies]
 agglayer-types = { path = ".", features = ["testutils"] }
+agglayer-bincode.workspace = true
+
+criterion.workspace = true
 rstest.workspace = true
