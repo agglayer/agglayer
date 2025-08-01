@@ -141,7 +141,7 @@ impl Node {
                     WsConnect::new(config.l1.ws_node_url.as_str()),
                     cfg.genesis_block,
                     cfg.epoch_duration,
-                    config.l1.max_reconnection_elapsed_time,
+                    config.l1.connect_attempt_timeout,
                 )
                 .await
                 .inspect_err(|e| {

@@ -90,6 +90,13 @@ impl ClockRef {
     pub fn current_block_height(&self) -> u64 {
         self.block_height.load(Ordering::Acquire)
     }
+
+    /// Returns progress information about the current epoch
+    pub fn epoch_progress(&self) -> f64 {
+        let current_block = self.current_block_height();
+        let blocks_in_epoch = current_block % *self.block_per_epoch;
+        blocks_in_epoch as f64 / self.block_per_epoch.get() as f64
+    }
 }
 
 /// Events broadcasted by the Clock.

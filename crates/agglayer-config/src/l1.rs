@@ -13,10 +13,10 @@ pub struct L1 {
     #[serde(default = "default_ws_node_url")]
     pub ws_node_url: Url,
     #[serde(
-        default = "default_max_reconnection_elapsed_time",
+        default = "default_connect_attempt_timeout",
         with = "crate::with::HumanDuration"
     )]
-    pub max_reconnection_elapsed_time: Duration,
+    pub connect_attempt_timeout: Duration,
     #[serde(alias = "RollupManagerContract")]
     pub rollup_manager_contract: Address,
     #[serde(alias = "PolygonZkEVMGlobalExitRootV2Contract")]
@@ -39,7 +39,7 @@ impl Default for L1 {
         Self {
             chain_id: 1337,
             node_url: "http://zkevm-mock-l1-network:8545".parse().unwrap(),
-            max_reconnection_elapsed_time: default_max_reconnection_elapsed_time(),
+            connect_attempt_timeout: default_connect_attempt_timeout(),
             ws_node_url: default_ws_node_url(),
             rollup_manager_contract: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
                 .parse()
@@ -57,6 +57,6 @@ fn default_ws_node_url() -> Url {
     "ws://zkevm-mock-l1-network:8546".parse().unwrap()
 }
 
-const fn default_max_reconnection_elapsed_time() -> Duration {
-    Duration::from_secs(10)
+const fn default_connect_attempt_timeout() -> Duration {
+    Duration::from_secs(3)
 }
