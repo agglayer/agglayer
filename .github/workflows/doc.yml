@@ -10,6 +10,10 @@ on:
     branches:
       - main
 
+# Default permissions (individual jobs can override as needed)
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build documentation
@@ -73,6 +77,9 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
