@@ -219,10 +219,11 @@ where
         // Calculate the local Block height based on the current L1 Block number.
         let current_block = self.calculate_block_number(self.latest_seen_block);
 
-        // Overwrite the block number to simulate an overflow
-        // This is used for testing purposes only and doesn't affect the production
-        // code.
-        fail::fail_point!("block_clock::BlockClock::run::overwrite_block_number");
+        #[cfg(test)]
+        {
+            // Overwrite the block number to simulate an overflow.
+            fail::fail_point!("block_clock::BlockClock::run::overwrite_block_number");
+        }
 
         match self.block_height.compare_exchange(
             0,
@@ -285,10 +286,11 @@ where
                         "Received new L1 block"
                     );
 
-                    // Overwrite the block number to simulate an overflow
-                    // This is used for testing purposes only and doesn't affect the production
-                    // code.
-                    fail::fail_point!("block_clock::BlockClock::run::overwrite_block_number_on_new_block");
+                    #[cfg(test)]
+                    {
+                        // Overwrite the block number to simulate an overflow.
+                        fail::fail_point!("block_clock::BlockClock::run::overwrite_block_number_on_new_block");
+                    }
 
                     // Process all blocks up to the received one
                     while self.latest_seen_block < block.number {
@@ -407,10 +409,11 @@ where
         let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
         let expected_epoch = current_epoch.saturating_sub(1);
 
-        // Overwrite the current_epoch to simulate an overflow
-        // This is used for testing purposes only and doesn't affect the production
-        // code.
-        fail::fail_point!("block_clock::BlockClock::update_epoch_number::overwrite_epoch");
+        #[cfg(test)]
+        {
+            // Overwrite the current_epoch to simulate an overflow,
+            fail::fail_point!("block_clock::BlockClock::update_epoch_number::overwrite_epoch");
+        }
 
         match self.current_epoch.compare_exchange(
             expected_epoch,
@@ -460,9 +463,13 @@ impl PubSubConnect for WsConnectWithRetries {
         agglayer_telemetry::clock::record_reconnection_attempt();
 
         info!("Attempting to reconnect to L1 WebSocket");
-        // This fail point is used to insert delay in the reconnection to make the block
-        // progress when the client is disconnected
-        fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
+
+        #[cfg(test)]
+        {
+            // This fail point is used to insert delay in the reconnection to make the block
+            // progress when the client is disconnected.
+            fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
+        }
 
         self.connect().await
     }
