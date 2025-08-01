@@ -23,6 +23,7 @@ bucket = "./docs"
 include = ["**/*"]
 exclude = []
 
+[env.staging]
 routes = [{ pattern = "pr-{{PR_NUMBER}}-rust-docs.agglayer.dev", custom_domain = true }]
 
 # Environment variables available to the worker

@@ -163,7 +163,7 @@ jobs:
           sed "s/{{PR_NUMBER}}/${{ github.event.number }}/g" wrangler.toml.template > wrangler.toml
 
       - name: Deploy to Cloudflare Workers
-        run: wrangler deploy
+        run: wrangler deploy --env staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_WORKER_ACCOUNT_ID }}
