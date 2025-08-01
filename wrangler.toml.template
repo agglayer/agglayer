@@ -35,10 +35,6 @@ bucket = "./docs"
 pattern = "pr{{PR_NUMBER}}.rust-docs.agglayer.dev/*"
 zone_name = "agglayer.dev"
 
-# Production environment configuration
-[env.production]
-name = "agglayer-rust-docs-pr{{PR_NUMBER}}"
-
 # Environment variables available to the worker
 [vars]
 ENVIRONMENT = "pr-{{PR_NUMBER}}"
