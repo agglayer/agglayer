@@ -1,7 +1,4 @@
-use agglayer_primitives::{
-    keccak::{Hasher, Keccak256Hasher},
-    FromBool,
-};
+use agglayer_primitives::{keccak::keccak256_combine, Digest};
 pub use pessimistic_proof_core::nullifier_tree::{
     NullifierKey, NullifierPath, NULLIFIER_TREE_DEPTH,
 };
@@ -14,64 +11,50 @@ use serde_with::serde_as;
 /// local network
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NullifierTree<H>
-where
-    H: Hasher,
-    H::Digest: Serialize + for<'a> Deserialize<'a>,
-{
+pub struct NullifierTree {
     /// The Merkle Root of the nullifier tree
     #[serde_as(as = "_")]
-    pub root: H::Digest,
+    pub root: Digest,
     /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
     /// `i`.
     #[serde_as(as = "[_; NULLIFIER_TREE_DEPTH]")]
-    empty_hash_at_height: [H::Digest; NULLIFIER_TREE_DEPTH],
+    empty_hash_at_height: [Digest; NULLIFIER_TREE_DEPTH],
 }
 
-impl<H> Default for NullifierTree<H>
-where
-    H: Hasher,
-    H::Digest: Copy + Eq + Default + Serialize + for<'a> Deserialize<'a> + FromBool,
-{
+impl Default for NullifierTree {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H> NullifierTree<H>
-where
-    H: Hasher,
-    H::Digest: Copy + Eq + Default + Serialize + for<'a> Deserialize<'a> + FromBool,
-{
+impl NullifierTree {
     pub fn new() -> Self {
-        let mut empty_hash_at_height = [H::Digest::default(); NULLIFIER_TREE_DEPTH];
+        let mut empty_hash_at_height = [Digest::default(); NULLIFIER_TREE_DEPTH];
         for height in 1..NULLIFIER_TREE_DEPTH {
-            empty_hash_at_height[height] = H::merge(
+            empty_hash_at_height[height] = keccak256_combine([
                 &empty_hash_at_height[height - 1],
                 &empty_hash_at_height[height - 1],
-            );
+            ]);
         }
-        let root = H::merge(
+        let root = keccak256_combine([
             &empty_hash_at_height[NULLIFIER_TREE_DEPTH - 1],
             &empty_hash_at_height[NULLIFIER_TREE_DEPTH - 1],
-        );
+        ]);
         NullifierTree {
             root,
             empty_hash_at_height,
         }
     }
 
-    pub fn new_with_root(root: H::Digest) -> Self {
+    pub fn new_with_root(root: Digest) -> Self {
         let mut res = Self::new();
         res.root = root;
         res
     }
 }
 
-impl From<NullifierTree<Keccak256Hasher>>
-    for pessimistic_proof_core::nullifier_tree::NullifierTree<Keccak256Hasher>
-{
-    fn from(tree: NullifierTree<Keccak256Hasher>) -> Self {
+impl From<NullifierTree> for pessimistic_proof_core::nullifier_tree::NullifierTree {
+    fn from(tree: NullifierTree) -> Self {
         Self {
             root: tree.root,
             empty_hash_at_height: tree.empty_hash_at_height,

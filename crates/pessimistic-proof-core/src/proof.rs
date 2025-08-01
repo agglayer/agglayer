@@ -1,5 +1,5 @@
 use agglayer_bincode as bincode;
-use agglayer_primitives::{keccak::Keccak256Hasher, Address, Digest, Signature, B256};
+use agglayer_primitives::{Address, Digest, Signature, B256};
 use agglayer_tries::roots::LocalExitRoot;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
@@ -185,7 +185,7 @@ pub const EMPTY_PP_ROOT_V2: Digest = Digest(hex!(
 /// [`NetworkState`].
 pub fn generate_pessimistic_proof(
     initial_network_state: NetworkState,
-    batch_header: &MultiBatchHeader<Keccak256Hasher>,
+    batch_header: &MultiBatchHeader,
 ) -> Result<(PessimisticProofOutput, StateCommitment), ProofError> {
     // Get the initial state commitment
     let initial_state_commitment = initial_network_state.get_state_commitment();
@@ -241,7 +241,7 @@ pub fn zero_if_empty_local_exit_root(root: LocalExitRoot) -> LocalExitRoot {
 /// Verify the signature or aggchain proof
 /// Returns the pp root version on success.
 pub fn verify_consensus(
-    multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+    multi_batch_header: &MultiBatchHeader,
     initial_state_commitment: &StateCommitment,
     final_state_commitment: &StateCommitment,
 ) -> Result<CommitmentVersion, ProofError> {

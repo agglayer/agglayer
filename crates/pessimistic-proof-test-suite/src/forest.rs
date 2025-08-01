@@ -9,7 +9,7 @@ use alloy::signers::{local::PrivateKeySigner, SignerSync};
 use ecdsa_proof_lib::AggchainECDSA;
 use pessimistic_proof::{
     core::commitment::SignatureCommitmentValues,
-    keccak::{keccak256_combine, Keccak256Hasher},
+    keccak::keccak256_combine,
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
     local_state::LocalNetworkState,
     proof::zero_if_empty_local_exit_root,
@@ -49,8 +49,8 @@ pub fn compute_aggchain_proof(
 pub struct Forest {
     pub network_id: NetworkId,
     pub wallet: PrivateKeySigner,
-    pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
-    pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
+    pub l1_info_tree: LocalExitTreeData,
+    pub local_exit_tree_data_a: LocalExitTreeData,
     pub state_b: LocalNetworkStateData,
 }
 
@@ -89,7 +89,7 @@ impl Forest {
     /// Override the local exit tree for network B
     pub fn new_with_local_exit_tree(
         initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>,
-        local_exit_tree: LocalExitTree<Keccak256Hasher>,
+        local_exit_tree: LocalExitTree,
     ) -> Self {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {

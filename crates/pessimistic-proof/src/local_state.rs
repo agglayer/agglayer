@@ -1,4 +1,4 @@
-use agglayer_primitives::{keccak::Keccak256Hasher, Digest};
+use agglayer_primitives::Digest;
 use agglayer_tries::roots::{LocalBalanceRoot, LocalExitRoot, LocalNullifierRoot};
 use serde::{Deserialize, Serialize};
 use unified_bridge::LocalExitTree;
@@ -10,12 +10,12 @@ use crate::{local_balance_tree::LocalBalanceTree, nullifier_tree::NullifierTree}
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
-    pub exit_tree: LocalExitTree<Keccak256Hasher>,
+    pub exit_tree: LocalExitTree,
     /// Commitment to the balance for each token.
-    pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
+    pub balance_tree: LocalBalanceTree,
     /// Commitment to the Nullifier tree for the local network, tracks claimed
     /// assets on foreign networks
-    pub nullifier_tree: NullifierTree<Keccak256Hasher>,
+    pub nullifier_tree: NullifierTree,
 }
 
 impl From<LocalNetworkState> for pessimistic_proof_core::NetworkState {

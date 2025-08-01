@@ -1,9 +1,6 @@
 use agglayer_interop_types::{aggchain_proof::AggchainData, LocalExitRoot};
 use agglayer_primitives::{Address, Signature};
-use pessimistic_proof::{
-    core::commitment::SignatureCommitmentValues,
-    keccak::{keccak256_combine, Keccak256Hasher},
-};
+use pessimistic_proof::{core::commitment::SignatureCommitmentValues, keccak::keccak256_combine};
 use unified_bridge::{
     CommitmentVersion, ImportedBridgeExit, ImportedBridgeExitCommitmentValues, LocalExitTree,
     NetworkId,
@@ -15,9 +12,7 @@ impl Default for Certificate {
     fn default() -> Self {
         let network_id = NetworkId::ETH_L1;
         let wallet = Self::wallet_for_test(network_id);
-        let local_exit_root = LocalExitTree::<Keccak256Hasher>::default()
-            .get_root()
-            .into();
+        let local_exit_root = LocalExitTree::<32>::default().get_root().into();
         let height = Height::ZERO;
         let (_new_local_exit_root, signature, _signer) =
             compute_signature_info(local_exit_root, &[], &wallet, height, CommitmentVersion::V2);
@@ -85,9 +80,7 @@ impl Certificate {
         version: CommitmentVersion,
     ) -> Self {
         let wallet = Self::wallet_for_test(network_id);
-        let local_exit_root = LocalExitTree::<Keccak256Hasher>::default()
-            .get_root()
-            .into();
+        let local_exit_root = LocalExitTree::<32>::default().get_root().into();
         let (_, signature, _signer) =
             compute_signature_info(local_exit_root, &[], &wallet, height, version);
 
