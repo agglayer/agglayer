@@ -370,7 +370,7 @@ where
                     }
                     Ok(epoch_ended) => {
                         info!(
-                            epoch_number = epoch_ended.as_u64(),
+                            finished_epoch_number = epoch_ended.as_u64(),
                             block_height = current_block,
                             epoch_duration = self.epoch_duration.get(),
                             "Epoch ended, broadcasting event"
