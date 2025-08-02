@@ -115,7 +115,7 @@ impl BlockClock<BlockProvider> {
         epoch_duration: NonZeroU64,
         connect_attempt_timeout: Duration,
     ) -> Result<Self, BlockClockError> {
-        let ws = WsConnectWithRetries {
+        let ws = WsConnectWithTimeout {
             connection,
             connect_attempt_timeout,
         };
@@ -427,7 +427,7 @@ where
     }
 }
 
-struct WsConnectWithRetries {
+struct WsConnectWithTimeout {
     connection: WsConnect,
     connect_attempt_timeout: Duration,
 }
@@ -436,7 +436,7 @@ struct WsConnectWithRetries {
 #[error("Attempt to establish L1 connection timed out")]
 struct ConnectionTimeout;
 
-impl PubSubConnect for WsConnectWithRetries {
+impl PubSubConnect for WsConnectWithTimeout {
     fn is_local(&self) -> bool {
         self.connection.is_local()
     }
