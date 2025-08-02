@@ -20,7 +20,7 @@ use alloy::{
 };
 use tokio::sync::{broadcast, oneshot};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{Clock, ClockRef, Error, Event, BROADCAST_CHANNEL_SIZE};
 
@@ -109,6 +109,7 @@ impl<P> BlockClock<P> {
 }
 
 impl BlockClock<BlockProvider> {
+    #[instrument(skip_all, fields(genesis_block, epoch_duration))]
     pub async fn new_with_ws(
         connection: WsConnect,
         genesis_block: u64,
@@ -160,17 +161,20 @@ where
     P: Provider + 'static,
 {
     /// Run the Clock task.
+    #[instrument(
+        skip_all,
+        fields(
+            genesis_block = self.genesis_block,
+            epoch_duration = self.epoch_duration.get(),
+        ),
+    )]
     async fn run(
         &mut self,
         sender: broadcast::Sender<Event>,
         start_sender: oneshot::Sender<()>,
         cancellation_token: CancellationToken,
     ) -> Result<(), BlockClockError> {
-        info!(
-            genesis_block = self.genesis_block,
-            epoch_duration = self.epoch_duration.get(),
-            "Starting BlockClock task"
-        );
+        info!("Starting BlockClock task");
 
         // Start by setting the current Block height based on the current L1 Block
         // number. If the current L1 Block number is less than the genesis block
@@ -183,8 +187,7 @@ where
 
         info!(
             current_l1_block = self.latest_seen_block,
-            genesis_block = self.genesis_block,
-            "Retrieved current L1 block number"
+            "Retrieved current L1 block number",
         );
 
         let provider = self.provider.clone();
@@ -204,11 +207,7 @@ where
             let header = Self::recv_block(&mut stream).await?;
             self.latest_seen_block = header.number;
 
-            debug!(
-                current_block = self.latest_seen_block,
-                genesis_block = self.genesis_block,
-                "Waiting for genesis block"
-            );
+            debug!("Waiting for genesis block");
         }
 
         info!(
