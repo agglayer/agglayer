@@ -116,6 +116,10 @@ mod tests {
         CURRENT_EPOCH.record(10, &[]);
         CONNECTION_STATUS.record(1, &[]);
         HEALTH_STATUS.record(1.0, &[]);
+
+        SUBSCRIPTION_LAG.add(50, &[]);
+        CONNECTION_ERRORS.add(75, &[]);
+        RECONNECTION_ATTEMPTS.add(25, &[]);
     }
 
     #[test]
@@ -125,6 +129,7 @@ mod tests {
         record_connection_established();
         record_connection_failed();
         record_reconnection_attempt();
+        record_clock_shutdown();
 
         record_current_block_height(1000);
         record_current_epoch(50);
