@@ -162,7 +162,7 @@ jobs:
 
       - name: Delete worker
         run: |
-          wrangler delete --name agglayer-rust-docs-pr-${{ github.event.number }} --force || echo "Worker may not exist"
+          wrangler delete --name agglayer-rust-docs-pr-${{ github.event.number }}-staging --force || echo "Worker may not exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_WORKER_ACCOUNT_ID }}
