@@ -18,10 +18,10 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-fail = { workspace = true, features = ["failpoints"] }
+agglayer-clock = { workspace = true, features = ["testutils"] }
 rstest.workspace = true
 test-log.workspace = true
 
 [features]
 default = []
-testutils = []
+testutils = ["fail/failpoints"]

@@ -218,7 +218,7 @@ where
         // Calculate the local Block height based on the current L1 Block number.
         let current_block = self.calculate_block_number(self.latest_seen_block);
 
-        #[cfg(test)]
+        #[cfg(feature = "testutils")]
         {
             // Overwrite the block number to simulate an overflow.
             fail::fail_point!("block_clock::BlockClock::run::overwrite_block_number");
@@ -285,7 +285,7 @@ where
                         "Received new L1 block"
                     );
 
-                    #[cfg(test)]
+                    #[cfg(feature = "testutils")]
                     {
                         // Overwrite the block number to simulate an overflow.
                         fail::fail_point!("block_clock::BlockClock::run::overwrite_block_number_on_new_block");
@@ -312,7 +312,7 @@ where
     }
 
     async fn recv_block(stream: &mut Subscription<Header>) -> Result<Header, BlockClockError> {
-        #[cfg(test)]
+        #[cfg(feature = "testutils")]
         {
             // The default sleep fail point directive issues a blocking sleep.
             // That does not play nice with code that is meant to be executed
@@ -408,7 +408,7 @@ where
         let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
         let expected_epoch = current_epoch.saturating_sub(1);
 
-        #[cfg(test)]
+        #[cfg(feature = "testutils")]
         {
             // Overwrite the current_epoch to simulate an overflow,
             fail::fail_point!("block_clock::BlockClock::update_epoch_number::overwrite_epoch");
@@ -463,7 +463,7 @@ impl PubSubConnect for WsConnectWithTimeout {
 
         info!("Attempting to reconnect to L1 WebSocket");
 
-        #[cfg(test)]
+        #[cfg(feature = "testutils")]
         {
             // This fail point is used to insert delay in the reconnection to make the block
             // progress when the client is disconnected.
