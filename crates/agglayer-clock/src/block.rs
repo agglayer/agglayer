@@ -120,11 +120,7 @@ impl BlockClock<BlockProvider> {
             connection,
             connect_attempt_timeout,
         };
-        info!(
-            genesis_block = genesis_block,
-            epoch_duration = epoch_duration.get(),
-            "Creating BlockClock with WebSocket connection"
-        );
+        info!("Creating BlockClock with WebSocket connection");
 
         let client = ClientBuilder::default().pubsub(ws).await?;
         let provider = ProviderBuilder::new().on_client(client);
@@ -210,10 +206,7 @@ where
             debug!("Waiting for genesis block");
         }
 
-        info!(
-            genesis_block = self.genesis_block,
-            "Reached genesis L1 block, starting epoch tracking"
-        );
+        info!("Reached genesis L1 block, starting epoch tracking");
 
         // Calculate the local Block height based on the current L1 Block number.
         let current_block = self.calculate_block_number(self.latest_seen_block);
