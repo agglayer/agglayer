@@ -178,12 +178,19 @@ where
         let (pv_sp1_execute, _report) = {
             // Do not verify the deferred proof if we are in mock mode
             let deferred_proof_verification = !self.config.mock_verifier;
-            let (pv, report) = self
-                .verifier
-                .execute(ELF, &stdin.clone())
-                .deferred_proof_verification(deferred_proof_verification)
-                .run()
-                .map_err(CertificationError::Sp1ExecuteFailed)?;
+            let (pv, report) = tokio::task::spawn_blocking({
+                let verifier = self.verifier.clone();
+                let stdin = stdin.clone();
+                move || {
+                    verifier
+                        .execute(ELF, &stdin)
+                        .deferred_proof_verification(deferred_proof_verification)
+                        .run()
+                }
+            })
+            .await
+            .map_err(|e| CertificationError::InternalError(e.to_string()))?
+            .map_err(CertificationError::Sp1ExecuteFailed)?;
 
             let pv_sp1_execute: PessimisticProofOutput = PessimisticProofOutput::bincode_codec()
                 .deserialize(pv.as_slice())
@@ -462,9 +469,14 @@ where
 
         // Perform the native PP execution without the STARK verification in order to
         // cross check the target roots.
-        let (pv, targets_native_execution) =
-            generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
-                .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
+        let (pv, targets_native_execution) = tokio::task::spawn_blocking({
+            let initial_state = initial_state.clone();
+            let multi_batch_header = multi_batch_header.clone();
+            move || generate_pessimistic_proof(initial_state.into(), &multi_batch_header)
+        })
+        .await
+        .map_err(|e| CertificationError::InternalError(e.to_string()))?
+        .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
         // Verify consistency on the aggchain proof public values if provided in the
         // optional context

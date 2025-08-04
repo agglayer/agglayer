@@ -182,6 +182,10 @@ where
                 .await
                 .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
 
+            if rollup_data.rollupContract.is_zero() {
+                return Err(L1RpcError::InvalidRollupContract(rollup_id));
+            }
+
             PolygonZkEvm::new(rollup_data.rollupContract, self.rpc.clone())
                 .trustedSequencer()
                 .call()
@@ -198,6 +202,10 @@ where
             .call()
             .await
             .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
+
+        if rollup_data.rollupContract.is_zero() {
+            return Err(L1RpcError::InvalidRollupContract(rollup_id));
+        }
 
         Ok(rollup_data.rollupContract.into())
     }
