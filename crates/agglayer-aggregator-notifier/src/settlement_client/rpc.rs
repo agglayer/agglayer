@@ -52,17 +52,14 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
     }
 }
 
-#[async_trait::async_trait]
-impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> SettlementClient
-    for RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 where
-    StateStore: StateReader + StateWriter + 'static,
-    PendingStore: PendingCertificateReader + 'static,
-    RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
-    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    StateStore: StateReader,
+    PendingStore: PendingCertificateReader,
+    RollupManagerRpc: RollupContract + Settler,
+    PerEpochStore: PerEpochWriter,
 {
-    type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
-
     #[instrument(skip(self), fields(network_id, settlement_params), level = "debug")]
     async fn submit_certificate_settlement(
         &self,
@@ -225,7 +222,14 @@ where
 
         Ok(SettlementTxHash::from(tx_hash))
     }
+}
 
+impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+where
+    RollupManagerRpc: L1TransactionFetcher,
+    PerEpochStore: PerEpochWriter + PerEpochReader,
+{
     #[tracing::instrument(skip(self))]
     async fn wait_for_settlement(
         &self,
@@ -299,10 +303,7 @@ where
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
     RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 where
-    StateStore: StateReader + StateWriter + 'static,
-    PendingStore: PendingCertificateReader + 'static,
-    RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
-    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    RollupManagerRpc: L1TransactionFetcher,
 {
     /// Wait for transaction receipt with configurable retries and intervals
     async fn wait_for_transaction_receipt(
@@ -363,6 +364,34 @@ where
                 })
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> SettlementClient
+    for RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+where
+    StateStore: StateReader + StateWriter + 'static,
+    PendingStore: PendingCertificateReader + 'static,
+    RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+{
+    type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
+
+    async fn submit_certificate_settlement(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<SettlementTxHash, Error> {
+        self.submit_certificate_settlement(certificate_id).await
+    }
+
+    async fn wait_for_settlement(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+        certificate_id: CertificateId,
+    ) -> Result<(EpochNumber, CertificateIndex), Error> {
+        self.wait_for_settlement(settlement_tx_hash, certificate_id)
+            .await
     }
 }
 

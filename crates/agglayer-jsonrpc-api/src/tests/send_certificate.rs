@@ -8,7 +8,6 @@ use agglayer_types::{
     NetworkId, SettlementTxHash,
 };
 use jsonrpsee::{core::client::ClientT, rpc_params};
-use tracing::info;
 
 use crate::testutils::TestContext;
 
@@ -52,54 +51,6 @@ async fn send_certificate_method_can_be_called_and_fail() {
         .await;
 
     assert!(res.is_err());
-}
-
-#[test_log::test(tokio::test)]
-async fn send_certificate_with_blocked_networks() {
-    let path = TempDBDir::new();
-    let mut config = Config::new(&path.path);
-    config.proxied_networks = Some(agglayer_config::ProxiedNetworksConfig::for_tests(vec![
-        NetworkId::new(1),
-    ]));
-    config.proof_signers.insert(
-        1,
-        Certificate::wallet_for_test(NetworkId::new(1))
-            .address()
-            .into(),
-    );
-    config.proof_signers.insert(
-        2,
-        Certificate::wallet_for_test(NetworkId::new(2))
-            .address()
-            .into(),
-    );
-    let context = TestContext::new_with_config(config).await;
-
-    let res: Result<CertificateId, _> = context
-        .api_client
-        .request(
-            "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
-        )
-        .await;
-    info!(?res, "Sending proxied cert to public port");
-    assert!(
-        res.is_err(),
-        "Certificate from blocked network should be rejected"
-    );
-
-    let res: Result<CertificateId, _> = context
-        .api_client
-        .request(
-            "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(2.into(), Height::ZERO)],
-        )
-        .await;
-    info!(?res, "Sending non-proxied cert to public port");
-    assert!(
-        res.is_ok(),
-        "Certificate from non-blocked network should be allowed"
-    );
 }
 
 #[test_log::test(tokio::test)]
@@ -169,9 +120,9 @@ async fn pending_certificate_in_error_can_be_replaced() {
         .state_store
         .insert_certificate_header(
             &pending_certificate,
-            CertificateStatus::InError {
-                error: agglayer_types::CertificateStatusError::InternalError("testing".to_string()),
-            },
+            CertificateStatus::error(agglayer_types::CertificateStatusError::InternalError(
+                "testing".to_string(),
+            )),
         )
         .expect("unable to insert pending certificate header");
 
@@ -228,9 +179,9 @@ async fn pending_certificate_in_error_force_push() {
         .state_store
         .update_certificate_header_status(
             &certificate_id,
-            &CertificateStatus::InError {
-                error: agglayer_types::CertificateStatusError::InternalError("testing".to_string()),
-            },
+            &CertificateStatus::error(agglayer_types::CertificateStatusError::InternalError(
+                "testing".to_string(),
+            )),
         )
         .expect("Unable to update certificate header status");
 

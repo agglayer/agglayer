@@ -667,16 +667,19 @@ dependencies = [
 name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
+ "agglayer-bincode",
  "agglayer-interop-types",
  "agglayer-primitives",
  "agglayer-tries",
  "agglayer-types",
  "alloy",
  "arbitrary",
+ "criterion",
  "derive_more 2.0.1",
  "hex",
  "pessimistic-proof",
  "rand 0.9.1",
+ "rstest",
  "serde",
  "serde_with",
  "sp1-core-machine",
