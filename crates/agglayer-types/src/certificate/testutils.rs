@@ -12,6 +12,8 @@ impl Default for Certificate {
     fn default() -> Self {
         let network_id = NetworkId::ETH_L1;
         let wallet = Self::wallet_for_test(network_id);
+        // The LET depth can't be inferred to be the default of 32 due to the
+        // limitations of the Rust compiler's type inference, so we specify it here.
         let local_exit_root = LocalExitTree::<32>::default().get_root().into();
         let height = Height::ZERO;
         let (_new_local_exit_root, signature, _signer) =
@@ -80,6 +82,8 @@ impl Certificate {
         version: CommitmentVersion,
     ) -> Self {
         let wallet = Self::wallet_for_test(network_id);
+        // The LET depth can't be inferred to be the default of 32 due to the
+        // limitations of the Rust compiler's type inference, so we specify it here.
         let local_exit_root = LocalExitTree::<32>::default().get_root().into();
         let (_, signature, _signer) =
             compute_signature_info(local_exit_root, &[], &wallet, height, version);
