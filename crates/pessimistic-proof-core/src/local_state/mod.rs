@@ -93,6 +93,7 @@ impl NetworkStateZeroCopy {
 
 /// State representation of one network without the leaves, taken as input by
 /// the prover.
+#[repr(C)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).

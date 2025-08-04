@@ -4,34 +4,34 @@ expression: stats
 snapshot_kind: text
 ---
 gas: 4462399
-opcode counts (1602548 total instructions):
-    429213 add
-    255205 sw
-    191070 lw
-    186799 lbu
-    103337 bne
-     96086 sb
+opcode counts (1600176 total instructions):
+    428163 add
+    256745 sw
+    192253 lw
+    186866 lbu
+    103367 bne
+     96058 sb
      81540 xor
-     66830 bltu
-     34372 and
-     29067 beq
-     22334 or
-     20618 jalr
-     16708 sll
-     14566 sltu
+     67217 bltu
+     34421 and
+     29083 beq
+     20831 or
+     20636 jalr
+     15196 sll
+     14580 sltu
      14194 sub
-     12696 srl
-     10313 auipc
-      4042 bgeu
+     11134 srl
+     10322 auipc
+      4044 bgeu
       3427 jal
       3070 mul
       2687 ecall
       1596 mulhu
-      1330 lb
-      1120 sh
+      1302 lb
+      1118 sh
        210 sra
        103 bge
-         9 lh
+         7 lh
          6 blt
 syscall counts (2687 total syscall instructions):
     1108 keccak_permute

@@ -63,12 +63,12 @@ const _SMT_NON_INCLUSION_PROOF_SIZE: () = {
 };
 
 const _CLAIM_ZERO_COPY_SIZE: () = {
-    assert!(std::mem::size_of::<ClaimZeroCopy>() == 3352);
+    assert!(std::mem::size_of::<ClaimZeroCopy>() == 3592);
     assert!(std::mem::align_of::<ClaimZeroCopy>() == 1);
 };
 
 const _MULTI_BATCH_HEADER_SIZE: () = {
-    assert!(std::mem::size_of::<MultiBatchHeaderZeroCopy>() == 184);
+    assert!(std::mem::size_of::<MultiBatchHeaderZeroCopy>() == 248);
     assert!(std::mem::align_of::<MultiBatchHeaderZeroCopy>() == 8);
 };
 
@@ -78,7 +78,7 @@ const _BRIDGE_EXIT_ZERO_COPY_SIZE: () = {
 };
 
 const _AGGCHAIN_DATA_ZERO_COPY_SIZE: () = {
-    assert!(std::mem::size_of::<AggchainDataZeroCopy>() == 96);
+    assert!(std::mem::size_of::<AggchainDataZeroCopy>() == 160);
     assert!(std::mem::align_of::<AggchainDataZeroCopy>() == 1);
 };
 
@@ -239,36 +239,74 @@ impl TryFrom<&ImportedBridgeExitZeroCopy> for ImportedBridgeExit {
     }
 }
 
+/// Helper struct for Hash256 chunks to work around bytemuck array size
+/// limitations Using 32-element chunks as the largest safe size for bytemuck
+/// derives
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct Hash256Chunk32(pub [Hash256; 32]);
+
 /// Zero-copy compatible merkle proof types for specific depths.
 /// These are newtype wrappers for the specific depths we actually use.
 ///
-/// Balance merkle proof (192 siblings, 6144 bytes)
+/// Balance merkle proof (192 siblings, 6144 bytes) - broken into 6 chunks of 32
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct BalanceMerkleProofZeroCopy(pub [Hash256; 192]);
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct BalanceMerkleProofZeroCopy {
+    /// Siblings 0-31
+    pub chunk1: Hash256Chunk32,
+    /// Siblings 32-63
+    pub chunk2: Hash256Chunk32,
+    /// Siblings 64-95
+    pub chunk3: Hash256Chunk32,
+    /// Siblings 96-127
+    pub chunk4: Hash256Chunk32,
+    /// Siblings 128-159
+    pub chunk5: Hash256Chunk32,
+    /// Siblings 160-191
+    pub chunk6: Hash256Chunk32,
+}
 
 /// LET merkle proof (32 siblings, 1024 bytes)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct LETMerkleProofZeroCopy(pub [Hash256; 32]);
 
-// SAFETY: BalanceMerkleProofZeroCopy has a stable C-compatible memory layout
-// - #[repr(C)] ensures C-compatible layout
-// - All fields are fixed-size arrays of Hash256, which are Pod and Zeroable
-// - Cannot use derive due to large array size (6144 bytes) exceeding bytemuck's
-//   derive limits
-unsafe impl Pod for BalanceMerkleProofZeroCopy {}
-unsafe impl Zeroable for BalanceMerkleProofZeroCopy {}
-
 /// Helper function to convert BalanceMerkleProof to BalanceMerkleProofZeroCopy
 fn balance_merkle_proof_to_zero_copy(proof: &BalanceMerkleProof) -> BalanceMerkleProofZeroCopy {
-    BalanceMerkleProofZeroCopy(digest_array_to_bytes(&proof.siblings))
+    let bytes = digest_array_to_bytes(&proof.siblings);
+
+    // Split the 192-element array into 6 chunks of 32 elements each
+    let chunk1 = std::array::from_fn(|i| bytes[i]);
+    let chunk2 = std::array::from_fn(|i| bytes[32 + i]);
+    let chunk3 = std::array::from_fn(|i| bytes[64 + i]);
+    let chunk4 = std::array::from_fn(|i| bytes[96 + i]);
+    let chunk5 = std::array::from_fn(|i| bytes[128 + i]);
+    let chunk6 = std::array::from_fn(|i| bytes[160 + i]);
+
+    BalanceMerkleProofZeroCopy {
+        chunk1: Hash256Chunk32(chunk1),
+        chunk2: Hash256Chunk32(chunk2),
+        chunk3: Hash256Chunk32(chunk3),
+        chunk4: Hash256Chunk32(chunk4),
+        chunk5: Hash256Chunk32(chunk5),
+        chunk6: Hash256Chunk32(chunk6),
+    }
 }
 
 /// Helper function to convert BalanceMerkleProofZeroCopy to BalanceMerkleProof
 fn balance_merkle_proof_from_zero_copy(zc: &BalanceMerkleProofZeroCopy) -> BalanceMerkleProof {
+    // Reconstruct the 192-element array from 6 chunks
+    let mut bytes = [[0u8; 32]; 192];
+    bytes[0..32].copy_from_slice(&zc.chunk1.0);
+    bytes[32..64].copy_from_slice(&zc.chunk2.0);
+    bytes[64..96].copy_from_slice(&zc.chunk3.0);
+    bytes[96..128].copy_from_slice(&zc.chunk4.0);
+    bytes[128..160].copy_from_slice(&zc.chunk5.0);
+    bytes[160..192].copy_from_slice(&zc.chunk6.0);
+
     BalanceMerkleProof {
-        siblings: bytes_array_to_digests(&zc.0),
+        siblings: bytes_array_to_digests(&bytes),
     }
 }
 
@@ -287,30 +325,24 @@ fn let_merkle_proof_from_zero_copy(zc: &LETMerkleProofZeroCopy) -> LETMerkleProo
 }
 
 /// Zero-copy compatible SmtNonInclusionProof for bytemuck operations.
-/// This captures the variable-length siblings as a fixed-size array with length
-/// tracking.
+/// This captures the variable-length siblings as fixed-size chunks with length
+/// tracking. Now uses safe Pod/Zeroable derives by breaking large array into
+/// chunks.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct SmtNonInclusionProofZeroCopy {
     /// Number of actual siblings (u8, max 64)
     pub num_siblings: u8,
     /// Padding to ensure proper alignment for 4-byte boundaries.
     /// The num_siblings field is 1 byte, so we need 3 bytes of padding
-    /// to align the siblings array to 4-byte boundaries for optimal memory
+    /// to align the siblings chunks to 4-byte boundaries for optimal memory
     /// access.
     pub _padding: [u8; 3],
-    /// Siblings array (64 * 32 = 2048 bytes)
-    pub siblings: [Hash256; 64],
+    /// Siblings chunk 1 (elements 0-31)
+    pub siblings_chunk1: Hash256Chunk32,
+    /// Siblings chunk 2 (elements 32-63)
+    pub siblings_chunk2: Hash256Chunk32,
 }
-
-// SAFETY: This struct has a stable C-compatible memory layout
-// - #[repr(C)] ensures C-compatible layout
-// - Fields are ordered by alignment (u8 first, then padding, then array)
-// - Total size is 2052 bytes: 1+3+2048 = 2052
-// - Padding ensures 4-byte alignment for the siblings array
-// - Cannot use derive due to large array size and explicit padding requirements
-unsafe impl Pod for SmtNonInclusionProofZeroCopy {}
-unsafe impl Zeroable for SmtNonInclusionProofZeroCopy {}
 
 impl From<&NullifierNonInclusionProof> for SmtNonInclusionProofZeroCopy {
     fn from(proof: &NullifierNonInclusionProof) -> Self {
@@ -322,9 +354,21 @@ impl From<&NullifierNonInclusionProof> for SmtNonInclusionProofZeroCopy {
             proof.siblings.len()
         );
         let num_siblings = proof.siblings.len() as u8;
-        let siblings = std::array::from_fn(|i| {
+
+        // Fill first chunk (elements 0-31)
+        let chunk1 = std::array::from_fn(|i| {
             if i < num_siblings as usize {
                 proof.siblings[i].0
+            } else {
+                [0u8; 32]
+            }
+        });
+
+        // Fill second chunk (elements 32-63)
+        let chunk2 = std::array::from_fn(|i| {
+            let index = 32 + i;
+            if index < num_siblings as usize {
+                proof.siblings[index].0
             } else {
                 [0u8; 32]
             }
@@ -333,7 +377,8 @@ impl From<&NullifierNonInclusionProof> for SmtNonInclusionProofZeroCopy {
         Self {
             num_siblings,
             _padding: [0; 3],
-            siblings,
+            siblings_chunk1: Hash256Chunk32(chunk1),
+            siblings_chunk2: Hash256Chunk32(chunk2),
         }
     }
 }
@@ -349,12 +394,20 @@ impl From<&SmtNonInclusionProofZeroCopy> for NullifierNonInclusionProof {
         );
 
         let num_siblings = zc.num_siblings as usize;
-        let siblings: Vec<Digest> = zc
-            .siblings
-            .iter()
-            .take(num_siblings)
-            .map(|s| Digest(*s))
-            .collect();
+        let mut siblings = Vec::with_capacity(num_siblings);
+
+        // Collect from first chunk (0-31)
+        for i in 0..std::cmp::min(32, num_siblings) {
+            siblings.push(Digest(zc.siblings_chunk1.0[i]));
+        }
+
+        // Collect from second chunk (32-63) if needed
+        if num_siblings > 32 {
+            for i in 0..(num_siblings - 32) {
+                siblings.push(Digest(zc.siblings_chunk2.0[i]));
+            }
+        }
+
         NullifierNonInclusionProof { siblings }
     }
 }
@@ -529,33 +582,44 @@ impl From<&ClaimFromRollupZeroCopy> for ClaimFromRollup {
     }
 }
 
+/// Helper struct for claim data chunks to work around bytemuck array size
+/// limitations Using 256-byte chunks as a reasonable size for bytemuck derives
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct ClaimDataChunk256(pub [u8; 256]);
+
 /// Zero-copy compatible Claim for bytemuck operations.
 /// This union-like structure can hold either Mainnet or Rollup claim data.
+/// Now uses safe Pod/Zeroable derives by breaking large array into chunks.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct ClaimZeroCopy {
     /// Claim type (u8: 0=Mainnet, 1=Rollup)
     pub claim_type: u8,
     /// Padding to ensure proper alignment for 8-byte boundaries.
     /// The claim_type field is 1 byte, so we need 7 bytes of padding
-    /// to align the claim_data array to 8-byte boundaries for optimal memory
-    /// access. This is particularly important for the large claim_data
-    /// array (3344 bytes).
+    /// to align the claim_data chunks to 8-byte boundaries for optimal memory
+    /// access.
     pub _padding: [u8; 7],
-    /// Union of claim data - size matches the larger of the two claim types
-    /// Mainnet: 2288 bytes, Rollup: 3344 bytes, so we use 3344 bytes
-    pub claim_data: [u8; 3344],
+    /// Union of claim data broken into 14 chunks of 256 bytes each
+    /// Total: 14 * 256 = 3584 bytes (vs original 3344, providing 240 bytes
+    /// buffer) Mainnet: 2288 bytes (uses ~9 chunks), Rollup: 3344 bytes
+    /// (uses ~14 chunks)
+    pub chunk1: ClaimDataChunk256,
+    pub chunk2: ClaimDataChunk256,
+    pub chunk3: ClaimDataChunk256,
+    pub chunk4: ClaimDataChunk256,
+    pub chunk5: ClaimDataChunk256,
+    pub chunk6: ClaimDataChunk256,
+    pub chunk7: ClaimDataChunk256,
+    pub chunk8: ClaimDataChunk256,
+    pub chunk9: ClaimDataChunk256,
+    pub chunk10: ClaimDataChunk256,
+    pub chunk11: ClaimDataChunk256,
+    pub chunk12: ClaimDataChunk256,
+    pub chunk13: ClaimDataChunk256,
+    pub chunk14: ClaimDataChunk256,
 }
-
-// SAFETY: This struct has a stable C-compatible memory layout
-// - #[repr(C)] ensures C-compatible layout
-// - Fields are ordered by alignment (u8 first, then padding, then array)
-// - Total size is 3352 bytes: 1+7+3344 = 3352
-// - Padding ensures 8-byte alignment for the large claim_data array
-// - Cannot use derive due to complex field layout and explicit padding
-// requirements
-unsafe impl Pod for ClaimZeroCopy {}
-unsafe impl Zeroable for ClaimZeroCopy {}
 
 impl From<&Claim> for ClaimZeroCopy {
     fn from(claim: &Claim) -> Self {
@@ -563,28 +627,111 @@ impl From<&Claim> for ClaimZeroCopy {
             Claim::Mainnet(mainnet_claim) => {
                 let mainnet_zero_copy = ClaimFromMainnetZeroCopy::from(&**mainnet_claim);
                 let mainnet_bytes = bytemuck::bytes_of(&mainnet_zero_copy);
-                let mut claim_data = [0u8; 3344];
-                claim_data[..mainnet_bytes.len()].copy_from_slice(mainnet_bytes);
+
+                // Distribute bytes across chunks
+                let chunks = Self::bytes_to_chunks(mainnet_bytes);
 
                 Self {
                     claim_type: 0,
                     _padding: [0; 7],
-                    claim_data,
+                    chunk1: chunks[0],
+                    chunk2: chunks[1],
+                    chunk3: chunks[2],
+                    chunk4: chunks[3],
+                    chunk5: chunks[4],
+                    chunk6: chunks[5],
+                    chunk7: chunks[6],
+                    chunk8: chunks[7],
+                    chunk9: chunks[8],
+                    chunk10: chunks[9],
+                    chunk11: chunks[10],
+                    chunk12: chunks[11],
+                    chunk13: chunks[12],
+                    chunk14: chunks[13],
                 }
             }
             Claim::Rollup(rollup_claim) => {
                 let rollup_zero_copy = ClaimFromRollupZeroCopy::from(&**rollup_claim);
                 let rollup_bytes = bytemuck::bytes_of(&rollup_zero_copy);
-                let mut claim_data = [0u8; 3344];
-                claim_data[..rollup_bytes.len()].copy_from_slice(rollup_bytes);
+
+                // Distribute bytes across chunks
+                let chunks = Self::bytes_to_chunks(rollup_bytes);
 
                 Self {
                     claim_type: 1,
                     _padding: [0; 7],
-                    claim_data,
+                    chunk1: chunks[0],
+                    chunk2: chunks[1],
+                    chunk3: chunks[2],
+                    chunk4: chunks[3],
+                    chunk5: chunks[4],
+                    chunk6: chunks[5],
+                    chunk7: chunks[6],
+                    chunk8: chunks[7],
+                    chunk9: chunks[8],
+                    chunk10: chunks[9],
+                    chunk11: chunks[10],
+                    chunk12: chunks[11],
+                    chunk13: chunks[12],
+                    chunk14: chunks[13],
                 }
             }
         }
+    }
+}
+
+impl ClaimZeroCopy {
+    /// Helper function to convert bytes to chunks
+    fn bytes_to_chunks(bytes: &[u8]) -> [ClaimDataChunk256; 14] {
+        let mut chunks = [ClaimDataChunk256([0u8; 256]); 14];
+
+        for (chunk_idx, chunk) in chunks.iter_mut().enumerate() {
+            let start = chunk_idx * 256;
+            let end = std::cmp::min(start + 256, bytes.len());
+
+            if start < bytes.len() {
+                let copy_len = end - start;
+                chunk.0[..copy_len].copy_from_slice(&bytes[start..end]);
+            }
+            // Remaining bytes in chunk are already zeroed
+        }
+
+        chunks
+    }
+
+    /// Helper function to convert chunks back to bytes
+    fn chunks_to_bytes(&self, data_len: usize) -> Vec<u8> {
+        let chunks = [
+            &self.chunk1,
+            &self.chunk2,
+            &self.chunk3,
+            &self.chunk4,
+            &self.chunk5,
+            &self.chunk6,
+            &self.chunk7,
+            &self.chunk8,
+            &self.chunk9,
+            &self.chunk10,
+            &self.chunk11,
+            &self.chunk12,
+            &self.chunk13,
+            &self.chunk14,
+        ];
+
+        let mut result = Vec::with_capacity(data_len);
+        let mut remaining = data_len;
+
+        for chunk in chunks.iter() {
+            if remaining == 0 {
+                break;
+            }
+
+            let copy_len = std::cmp::min(256, remaining);
+            result.extend_from_slice(&chunk.0[..copy_len]);
+            remaining -= copy_len;
+        }
+
+        result
     }
 }
 
@@ -596,16 +743,18 @@ impl TryFrom<&ClaimZeroCopy> for Claim {
             0 => {
                 // Mainnet claim
                 let mainnet_size = std::mem::size_of::<ClaimFromMainnetZeroCopy>();
+                let claim_bytes = zc.chunks_to_bytes(mainnet_size);
                 let mainnet_zero_copy = bytemuck::pod_read_unaligned::<ClaimFromMainnetZeroCopy>(
-                    &zc.claim_data[..mainnet_size],
+                    &claim_bytes[..mainnet_size],
                 );
                 Ok(Claim::Mainnet(Box::new((&mainnet_zero_copy).into())))
             }
             1 => {
                 // Rollup claim
                 let rollup_size = std::mem::size_of::<ClaimFromRollupZeroCopy>();
+                let claim_bytes = zc.chunks_to_bytes(rollup_size);
                 let rollup_zero_copy = bytemuck::pod_read_unaligned::<ClaimFromRollupZeroCopy>(
-                    &zc.claim_data[..rollup_size],
+                    &claim_bytes[..rollup_size],
                 );
                 Ok(Claim::Rollup(Box::new((&rollup_zero_copy).into())))
             }
@@ -631,53 +780,79 @@ pub struct BalanceProofEntryZeroCopy {
     pub _padding: [u8; 8],
 }
 
+/// Helper struct for ECDSA signer data (20 bytes)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct EcdsaSignerData([u8; 20]);
+
+/// Helper struct for ECDSA signature data (64 bytes for r,s + 1 byte for v)
+/// Split into two parts to work around bytemuck array size limitations
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct EcdsaSignatureData {
+    /// First 64 bytes of signature (r and s values)
+    pub rs_data: [u8; 64],
+    /// Last byte of signature (v value)
+    pub v_data: u8,
+}
+
+/// Helper struct for Generic aggchain params (32 bytes)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct GenericParamsData([u8; 32]);
+
+/// Helper struct for Generic vkey data (32 bytes = 8 * u32)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct GenericVkeyData([u8; 32]);
+
 /// Zero-copy compatible AggchainData for bytemuck operations.
 /// This captures the fixed-size data from AggchainData variants.
+/// Now uses smaller component structs to avoid unsafe implementations.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct AggchainDataZeroCopy {
     /// Aggchain proof type (u8: 0=ECDSA, 1=Generic)
     pub aggchain_proof_type: u8,
     /// Padding to ensure proper alignment for 8-byte boundaries.
     /// The aggchain_proof_type field is 1 byte, so we need 7 bytes of padding
-    /// to align the aggchain_proof_data array to 8-byte boundaries for optimal
-    /// memory access. This is important for the large proof data array (85
-    /// bytes).
+    /// to align the data fields to 8-byte boundaries for optimal memory access.
     pub _padding: [u8; 7],
-    /// Aggchain proof data (fixed buffer sized for the larger variant)
-    /// For ECDSA: 20 bytes signer + 65 bytes signature = 85 bytes
-    /// For Generic: 32 bytes aggchain_params + 32 bytes vkey = 64 bytes
-    pub aggchain_proof_data: [u8; 85],
+    /// ECDSA signer data (used when type=0, 20 bytes)
+    pub ecdsa_signer: EcdsaSignerData,
+    /// ECDSA signature data (used when type=0, 65 bytes)
+    pub ecdsa_signature: EcdsaSignatureData,
+    /// Generic params data (used when type=1, 32 bytes)
+    pub generic_params: GenericParamsData,
+    /// Generic vkey data (used when type=1, 32 bytes)
+    pub generic_vkey: GenericVkeyData,
     /// End padding to ensure the struct size is a multiple of 8 bytes.
-    /// This ensures proper alignment when the struct is used in arrays or
-    /// as part of larger structures. Total size: 96 bytes.
+    /// Total size: 1+7+20+65+32+32+3 = 160 bytes (multiple of 8).
+    /// This is larger than the previous 96 bytes but eliminates unsafe code.
     pub _end_padding: [u8; 3],
 }
-
-// SAFETY: This struct has a stable C-compatible memory layout
-// - #[repr(C)] ensures C-compatible layout
-// - Fields are ordered by alignment (u8 first, then padding, then array, then
-//   end padding)
-// - Total size is 96 bytes: 1+7+85+3 = 96 (multiple of 8 for optimal array
-//   alignment)
-// - Cannot use derive due to [u8; 85] not being supported by bytemuck derive
-unsafe impl Pod for AggchainDataZeroCopy {}
-unsafe impl Zeroable for AggchainDataZeroCopy {}
 
 impl From<&AggchainData> for AggchainDataZeroCopy {
     fn from(aggchain_data: &AggchainData) -> Self {
         match aggchain_data {
             AggchainData::ECDSA { signer, signature } => {
-                let mut aggchain_proof_data = [0u8; 85];
-                // Copy signer address (20 bytes) + signature bytes (65 bytes)
-                aggchain_proof_data[..20].copy_from_slice(signer.as_slice());
+                // Copy signer address (20 bytes)
+                let mut ecdsa_signer_data = [0u8; 20];
+                ecdsa_signer_data.copy_from_slice(signer.as_slice());
+
+                // Copy signature bytes (65 bytes)
                 let sig_bytes = signature.as_bytes();
-                aggchain_proof_data[20..85].copy_from_slice(&sig_bytes[..65]);
+                let mut rs_data = [0u8; 64];
+                rs_data.copy_from_slice(&sig_bytes[..64]);
+                let v_data = sig_bytes[64];
 
                 Self {
                     aggchain_proof_type: 0,
                     _padding: [0; 7],
-                    aggchain_proof_data,
+                    ecdsa_signer: EcdsaSignerData(ecdsa_signer_data),
+                    ecdsa_signature: EcdsaSignatureData { rs_data, v_data },
+                    generic_params: GenericParamsData([0; 32]), // Unused for ECDSA
+                    generic_vkey: GenericVkeyData([0; 32]),     // Unused for ECDSA
                     _end_padding: [0; 3],
                 }
             }
@@ -685,17 +860,25 @@ impl From<&AggchainData> for AggchainDataZeroCopy {
                 aggchain_params,
                 aggchain_vkey,
             } => {
-                let mut aggchain_proof_data = [0u8; 85];
                 // Copy aggchain_params (32 bytes)
-                aggchain_proof_data[..32].copy_from_slice(aggchain_params.as_slice());
+                let mut generic_params_data = [0u8; 32];
+                generic_params_data.copy_from_slice(aggchain_params.as_slice());
+
                 // Convert vkey from [u32; 8] to bytes using bytemuck
                 let vkey_bytes = bytemuck::cast_slice::<u32, u8>(aggchain_vkey);
-                aggchain_proof_data[32..64].copy_from_slice(vkey_bytes);
+                let mut generic_vkey_data = [0u8; 32];
+                generic_vkey_data.copy_from_slice(vkey_bytes);
 
                 Self {
                     aggchain_proof_type: 1,
                     _padding: [0; 7],
-                    aggchain_proof_data,
+                    ecdsa_signer: EcdsaSignerData([0; 20]), // Unused for Generic
+                    ecdsa_signature: EcdsaSignatureData {
+                        rs_data: [0; 64],
+                        v_data: 0,
+                    }, // Unused for Generic
+                    generic_params: GenericParamsData(generic_params_data),
+                    generic_vkey: GenericVkeyData(generic_vkey_data),
                     _end_padding: [0; 3],
                 }
             }
@@ -709,27 +892,23 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
     fn try_from(zero_copy: &AggchainDataZeroCopy) -> Result<Self, Self::Error> {
         match zero_copy.aggchain_proof_type {
             0 => {
-                // ECDSA - reconstruct signer (20 bytes) + signature (65 bytes)
-                let signer = Address::from(
-                    <AddressBytes>::try_from(&zero_copy.aggchain_proof_data[..20])
-                        .map_err(|e| format!("Failed to convert signer bytes: {e}"))?,
-                );
-                let signature_bytes = <[u8; 65]>::try_from(&zero_copy.aggchain_proof_data[20..85])
-                    .map_err(|e| format!("Failed to convert signature bytes: {e}"))?;
-                let signature = Signature::try_from(&signature_bytes[..])
+                // ECDSA - reconstruct signer and signature from dedicated fields
+                let signer = Address::from(zero_copy.ecdsa_signer.0);
+
+                // Reconstruct the 65-byte signature from rs_data + v_data
+                let mut sig_bytes = [0u8; 65];
+                sig_bytes[..64].copy_from_slice(&zero_copy.ecdsa_signature.rs_data);
+                sig_bytes[64] = zero_copy.ecdsa_signature.v_data;
+
+                let signature = Signature::try_from(&sig_bytes[..])
                     .map_err(|e| format!("Failed to parse signature: {e}"))?;
                 Ok(AggchainData::ECDSA { signer, signature })
             }
             1 => {
-                // Generic
-                let aggchain_params = Digest::from(
-                    <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[..32])
-                        .map_err(|e| format!("Failed to convert aggchain_params bytes: {e}"))?,
-                );
+                // Generic - reconstruct params and vkey from dedicated fields
+                let aggchain_params = Digest::from(zero_copy.generic_params.0);
                 // Reconstruct vkey from bytes using bytemuck
-                let vkey_bytes = <[u8; 32]>::try_from(&zero_copy.aggchain_proof_data[32..64])
-                    .map_err(|e| format!("Failed to convert vkey bytes: {e}"))?;
-                let aggchain_vkey = bytemuck::cast::<[u8; 32], [u32; 8]>(vkey_bytes);
+                let aggchain_vkey = bytemuck::cast::<[u8; 32], [u32; 8]>(zero_copy.generic_vkey.0);
                 Ok(AggchainData::Generic {
                     aggchain_params,
                     aggchain_vkey,
@@ -748,7 +927,7 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
 /// This struct has a stable C-compatible memory layout with fixed-size fields
 /// and offsets to variable-length data.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct MultiBatchHeaderZeroCopy {
     /// Current certificate height of the L2 chain (u64)
     pub height: u64,
@@ -767,16 +946,6 @@ pub struct MultiBatchHeaderZeroCopy {
     /// Aggchain proof data (zero-copy struct)
     pub aggchain_proof: AggchainDataZeroCopy,
 }
-
-// SAFETY: This struct has a stable C-compatible memory layout
-// - #[repr(C)] ensures C-compatible layout
-// - Fields are ordered by alignment (u64 first, then u32, then arrays, then
-//   struct)
-// - Total size is 184 bytes (includes internal padding for optimal alignment)
-// - Cannot use derive due to AggchainDataZeroCopy not being supported by
-//   bytemuck derive
-unsafe impl Pod for MultiBatchHeaderZeroCopy {}
-unsafe impl Zeroable for MultiBatchHeaderZeroCopy {}
 
 /// Represents the chain state transition for the pessimistic proof.
 #[serde_as]
@@ -1719,10 +1888,10 @@ mod tests {
         assert_eq!(std::mem::size_of::<BridgeExitZeroCopy>(), 116);
         assert_eq!(std::mem::size_of::<BalanceMerkleProofZeroCopy>(), 6144);
         assert_eq!(std::mem::size_of::<SmtNonInclusionProofZeroCopy>(), 2052);
-        assert_eq!(std::mem::size_of::<ClaimZeroCopy>(), 3352);
-        assert_eq!(std::mem::size_of::<MultiBatchHeaderZeroCopy>(), 184);
+        assert_eq!(std::mem::size_of::<ClaimZeroCopy>(), 3592);
+        assert_eq!(std::mem::size_of::<MultiBatchHeaderZeroCopy>(), 248);
         assert_eq!(std::mem::size_of::<BalanceProofEntryZeroCopy>(), 64);
-        assert_eq!(std::mem::size_of::<AggchainDataZeroCopy>(), 96);
+        assert_eq!(std::mem::size_of::<AggchainDataZeroCopy>(), 160);
 
         // Compile-time alignment assertions
         assert_eq!(std::mem::align_of::<BridgeExitZeroCopy>(), 4);
@@ -1734,14 +1903,22 @@ mod tests {
         assert_eq!(std::mem::align_of::<AggchainDataZeroCopy>(), 1);
 
         // Runtime size and alignment verification for large structs
-        let balance_proof = BalanceMerkleProofZeroCopy([[0u8; 32]; 192]);
+        let balance_proof = BalanceMerkleProofZeroCopy {
+            chunk1: Hash256Chunk32([[0u8; 32]; 32]),
+            chunk2: Hash256Chunk32([[0u8; 32]; 32]),
+            chunk3: Hash256Chunk32([[0u8; 32]; 32]),
+            chunk4: Hash256Chunk32([[0u8; 32]; 32]),
+            chunk5: Hash256Chunk32([[0u8; 32]; 32]),
+            chunk6: Hash256Chunk32([[0u8; 32]; 32]),
+        };
         assert_eq!(std::mem::size_of_val(&balance_proof), 6144);
         assert_eq!(std::mem::align_of_val(&balance_proof), 1);
 
         let smt_non_inclusion_proof = SmtNonInclusionProofZeroCopy {
             num_siblings: 64,
             _padding: [0; 3],
-            siblings: [[0u8; 32]; 64],
+            siblings_chunk1: Hash256Chunk32([[0u8; 32]; 32]),
+            siblings_chunk2: Hash256Chunk32([[0u8; 32]; 32]),
         };
         assert_eq!(std::mem::size_of_val(&smt_non_inclusion_proof), 2052);
         assert_eq!(std::mem::align_of_val(&smt_non_inclusion_proof), 1);
@@ -1749,9 +1926,22 @@ mod tests {
         let claim = ClaimZeroCopy {
             claim_type: 0,
             _padding: [0; 7],
-            claim_data: [0u8; 3344],
+            chunk1: ClaimDataChunk256([0u8; 256]),
+            chunk2: ClaimDataChunk256([0u8; 256]),
+            chunk3: ClaimDataChunk256([0u8; 256]),
+            chunk4: ClaimDataChunk256([0u8; 256]),
+            chunk5: ClaimDataChunk256([0u8; 256]),
+            chunk6: ClaimDataChunk256([0u8; 256]),
+            chunk7: ClaimDataChunk256([0u8; 256]),
+            chunk8: ClaimDataChunk256([0u8; 256]),
+            chunk9: ClaimDataChunk256([0u8; 256]),
+            chunk10: ClaimDataChunk256([0u8; 256]),
+            chunk11: ClaimDataChunk256([0u8; 256]),
+            chunk12: ClaimDataChunk256([0u8; 256]),
+            chunk13: ClaimDataChunk256([0u8; 256]),
+            chunk14: ClaimDataChunk256([0u8; 256]),
         };
-        assert_eq!(std::mem::size_of_val(&claim), 3352);
+        assert_eq!(std::mem::size_of_val(&claim), 3592);
         assert_eq!(std::mem::align_of_val(&claim), 1);
 
         let header = MultiBatchHeaderZeroCopy {
@@ -1765,11 +1955,17 @@ mod tests {
             aggchain_proof: AggchainDataZeroCopy {
                 aggchain_proof_type: 0,
                 _padding: [0; 7],
-                aggchain_proof_data: [0u8; 85],
+                ecdsa_signer: EcdsaSignerData([0; 20]),
+                ecdsa_signature: EcdsaSignatureData {
+                    rs_data: [0; 64],
+                    v_data: 0,
+                },
+                generic_params: GenericParamsData([0; 32]),
+                generic_vkey: GenericVkeyData([0; 32]),
                 _end_padding: [0; 3],
             },
         };
-        assert_eq!(std::mem::size_of_val(&header), 184);
+        assert_eq!(std::mem::size_of_val(&header), 248);
         assert_eq!(std::mem::align_of_val(&header), 8);
     }
 
