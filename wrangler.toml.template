@@ -13,16 +13,13 @@ keep_names = false
 send_metrics = false
 workers_dev = false
 
-# Static site configuration - serves files from the docs directory automatically
-# No custom worker script needed - Cloudflare serves static files directly
-[site]
-bucket = "./docs"
-include = ["**/*"]
-exclude = []
+# Modern assets configuration for static files (like your dashboard setup)
+[assets]
+directory = "./docs"
+# For documentation, we want to serve index.html files for directories
+# but since Rust docs have explicit file structure, no special handling needed
 
 [env.staging]
 routes = [{ pattern = "pr-{{PR_NUMBER}}-rust-docs.agglayer.dev", custom_domain = true }]
-
-# Environment variables available to the worker
-[vars]
-ENVIRONMENT = "pr-{{PR_NUMBER}}"
+# Move vars into the environment to fix the warning
+vars = { ENVIRONMENT = "pr-{{PR_NUMBER}}" }
