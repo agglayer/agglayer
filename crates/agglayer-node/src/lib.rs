@@ -49,7 +49,7 @@ pub fn main(
     }
 
     // Initialize the logger
-    logging::tracing(&config.log);
+    logging::tracing(&config.log)?;
 
     info!("Starting agglayer node version info: {}", version);
 
