@@ -13,11 +13,8 @@ keep_names = false
 send_metrics = false
 workers_dev = false
 
-# Entry point for the Cloudflare Worker (generated during CI)
-main = "index.js"
-
-# Static site configuration - serves files from the docs directory
-# This directory contains the built Rust documentation from `cargo doc`
+# Static site configuration - serves files from the docs directory automatically
+# No custom worker script needed - Cloudflare serves static files directly
 [site]
 bucket = "./docs"
 include = ["**/*"]
