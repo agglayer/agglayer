@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - main
+      - ci-deploy-docs-cf-pr
     types: [opened, synchronize, reopened, closed]
   push:
     branches:
