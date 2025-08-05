@@ -49,7 +49,23 @@ pub fn main(
     }
 
     // Initialize the logger
-    logging::tracing(&config.log)?;
+    match logging::tracing(&config.log) {
+        Ok(()) => {
+            info!("Tracing initialized successfully.");
+        }
+        Err(e)
+            if e.to_string()
+                .contains("trace dispatcher has already been set") =>
+        {
+            // This is a common case in integration tests where the logger is initialized
+            // multiple times. We can safely ignore this error.
+            debug!("Logger already initialized, ignoring error: {e}");
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize logger: {e:?}");
+            return Err(e);
+        }
+    }
 
     info!("Starting agglayer node version info: {}", version);
 
