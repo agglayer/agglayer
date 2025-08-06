@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use agglayer_interop_types::{aggchain_proof::AggchainData, ImportedBridgeExit, TokenInfo};
-use agglayer_primitives::{keccak::Keccak256Hasher, ruint::UintTryFrom, FromBool, Hashable};
+use agglayer_primitives::{ruint::UintTryFrom, FromBool, Hashable};
 use agglayer_tries::{roots::LocalExitRoot, smt::Smt};
 use pessimistic_proof::{
     core::{self, commitment::PessimisticRoot, Vkey},
@@ -21,11 +21,11 @@ use crate::{Address, Certificate, Digest, Error, U256, U512};
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkStateData {
     /// The local exit tree without leaves.
-    pub exit_tree: LocalExitTree<Keccak256Hasher>,
+    pub exit_tree: LocalExitTree,
     /// The full local balance tree.
-    pub balance_tree: Smt<Keccak256Hasher, LOCAL_BALANCE_TREE_DEPTH>,
+    pub balance_tree: Smt<LOCAL_BALANCE_TREE_DEPTH>,
     /// The full nullifier tree.
-    pub nullifier_tree: Smt<Keccak256Hasher, NULLIFIER_TREE_DEPTH>,
+    pub nullifier_tree: Smt<NULLIFIER_TREE_DEPTH>,
 }
 
 impl From<LocalNetworkStateData> for LocalNetworkState {
@@ -71,7 +71,7 @@ impl LocalNetworkStateData {
         l1_info_root: Digest,
         prev_pp_root: PessimisticRootInput,
         aggchain_vkey: Option<Vkey>,
-    ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
+    ) -> Result<MultiBatchHeader, Error> {
         let gers_are_consistent = certificate
             .imported_bridge_exits
             .iter()
@@ -106,7 +106,7 @@ impl LocalNetworkStateData {
             self.exit_tree.add_leaf(e.hash())?;
         }
 
-        let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>)> = {
+        let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath)> = {
             // Consider all the imported bridge exits except for the native token
             let imported_bridge_exits = certificate.imported_bridge_exits.iter().filter(|b| {
                 b.bridge_exit.amount_token_info().origin_network != certificate.network_id
@@ -192,26 +192,25 @@ impl LocalNetworkStateData {
                 .collect::<Result<BTreeMap<_, _>, Error>>()?
         };
 
-        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> =
-            certificate
-                .imported_bridge_exits
-                .iter()
-                .map(|exit| {
-                    let nullifier_key: NullifierKey = exit.global_index.into();
-                    let nullifier_error = |source| Error::NullifierPathGenerationFailed {
-                        source,
-                        global_index: exit.global_index,
-                    };
-                    let nullifier_path = self
-                        .nullifier_tree
-                        .get_non_inclusion_proof(nullifier_key)
-                        .map_err(nullifier_error)?;
-                    self.nullifier_tree
-                        .insert(nullifier_key, Digest::from_bool(true))
-                        .map_err(nullifier_error)?;
-                    Ok((exit.clone(), nullifier_path))
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
+        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath)> = certificate
+            .imported_bridge_exits
+            .iter()
+            .map(|exit| {
+                let nullifier_key: NullifierKey = exit.global_index.into();
+                let nullifier_error = |source| Error::NullifierPathGenerationFailed {
+                    source,
+                    global_index: exit.global_index,
+                };
+                let nullifier_path = self
+                    .nullifier_tree
+                    .get_non_inclusion_proof(nullifier_key)
+                    .map_err(nullifier_error)?;
+                self.nullifier_tree
+                    .insert(nullifier_key, Digest::from_bool(true))
+                    .map_err(nullifier_error)?;
+                Ok((exit.clone(), nullifier_path))
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
 
         // Check that the certificate referred to the right target
         let computed = LocalExitRoot::from(self.exit_tree.get_root());
@@ -235,7 +234,7 @@ impl LocalNetworkStateData {
             },
         };
 
-        Ok(MultiBatchHeader::<Keccak256Hasher> {
+        Ok(MultiBatchHeader {
             origin_network: certificate.network_id,
             bridge_exits: certificate.bridge_exits.clone(),
             imported_bridge_exits,
@@ -256,7 +255,7 @@ impl LocalNetworkStateData {
         l1_info_root: Digest,
         prev_pp_root: PessimisticRootInput,
         aggchain_vkey: Option<Vkey>,
-    ) -> Result<MultiBatchHeader<Keccak256Hasher>, Error> {
+    ) -> Result<MultiBatchHeader, Error> {
         self.clone().apply_certificate(
             certificate,
             signer,
