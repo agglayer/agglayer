@@ -9,7 +9,6 @@ use agglayer_primitives::{
 use agglayer_tries::proof::{SmtMerkleProof, SmtNonInclusionProof};
 use bytemuck::{Pod, Zeroable};
 use serde::{de::DeserializeOwned, Serialize};
-use serde_with::serde_as;
 use unified_bridge::{
     BridgeExit, Claim, ClaimFromMainnet, ClaimFromRollup, GlobalIndex, ImportedBridgeExit,
     L1InfoTreeLeaf, L1InfoTreeLeafInner, LETMerkleProof, LeafType, MerkleProof, NetworkId,
@@ -39,6 +38,14 @@ pub type AddressBytes = [u8; 20];
 /// Type aliases for agglayer_tries proof types to improve readability
 pub type BalanceMerkleProof = SmtMerkleProof<Keccak256Hasher, 192>;
 pub type NullifierNonInclusionProof = SmtNonInclusionProof<Keccak256Hasher, 64>;
+
+/// Constants for aggchain proof types to eliminate magic numbers
+pub const AGGCHAIN_PROOF_TYPE_ECDSA: u8 = 0;
+pub const AGGCHAIN_PROOF_TYPE_GENERIC: u8 = 1;
+
+/// Constants for claim types to eliminate magic numbers
+pub const CLAIM_TYPE_MAINNET: u8 = 0;
+pub const CLAIM_TYPE_ROLLUP: u8 = 1;
 
 /// Helper function to convert array of Digests to array of byte arrays
 fn digest_array_to_bytes<const N: usize>(digests: &[Digest; N]) -> [[u8; 32]; N] {
@@ -632,7 +639,7 @@ impl From<&Claim> for ClaimZeroCopy {
                 let chunks = Self::bytes_to_chunks(mainnet_bytes);
 
                 Self {
-                    claim_type: 0,
+                    claim_type: CLAIM_TYPE_MAINNET,
                     _padding: [0; 7],
                     chunk1: chunks[0],
                     chunk2: chunks[1],
@@ -658,7 +665,7 @@ impl From<&Claim> for ClaimZeroCopy {
                 let chunks = Self::bytes_to_chunks(rollup_bytes);
 
                 Self {
-                    claim_type: 1,
+                    claim_type: CLAIM_TYPE_ROLLUP,
                     _padding: [0; 7],
                     chunk1: chunks[0],
                     chunk2: chunks[1],
@@ -740,7 +747,7 @@ impl TryFrom<&ClaimZeroCopy> for Claim {
 
     fn try_from(zc: &ClaimZeroCopy) -> Result<Self, Self::Error> {
         match zc.claim_type {
-            0 => {
+            CLAIM_TYPE_MAINNET => {
                 // Mainnet claim
                 let mainnet_size = std::mem::size_of::<ClaimFromMainnetZeroCopy>();
                 let claim_bytes = zc.chunks_to_bytes(mainnet_size);
@@ -749,7 +756,7 @@ impl TryFrom<&ClaimZeroCopy> for Claim {
                 );
                 Ok(Claim::Mainnet(Box::new((&mainnet_zero_copy).into())))
             }
-            1 => {
+            CLAIM_TYPE_ROLLUP => {
                 // Rollup claim
                 let rollup_size = std::mem::size_of::<ClaimFromRollupZeroCopy>();
                 let claim_bytes = zc.chunks_to_bytes(rollup_size);
@@ -847,7 +854,7 @@ impl From<&AggchainData> for AggchainDataZeroCopy {
                 let v_data = sig_bytes[64];
 
                 Self {
-                    aggchain_proof_type: 0,
+                    aggchain_proof_type: AGGCHAIN_PROOF_TYPE_ECDSA,
                     _padding: [0; 7],
                     ecdsa_signer: EcdsaSignerData(ecdsa_signer_data),
                     ecdsa_signature: EcdsaSignatureData { rs_data, v_data },
@@ -870,7 +877,7 @@ impl From<&AggchainData> for AggchainDataZeroCopy {
                 generic_vkey_data.copy_from_slice(vkey_bytes);
 
                 Self {
-                    aggchain_proof_type: 1,
+                    aggchain_proof_type: AGGCHAIN_PROOF_TYPE_GENERIC,
                     _padding: [0; 7],
                     ecdsa_signer: EcdsaSignerData([0; 20]), // Unused for Generic
                     ecdsa_signature: EcdsaSignatureData {
@@ -891,7 +898,7 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
 
     fn try_from(zero_copy: &AggchainDataZeroCopy) -> Result<Self, Self::Error> {
         match zero_copy.aggchain_proof_type {
-            0 => {
+            AGGCHAIN_PROOF_TYPE_ECDSA => {
                 // ECDSA - reconstruct signer and signature from dedicated fields
                 let signer = Address::from(zero_copy.ecdsa_signer.0);
 
@@ -904,7 +911,7 @@ impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
                     .map_err(|e| format!("Failed to parse signature: {e}"))?;
                 Ok(AggchainData::ECDSA { signer, signature })
             }
-            1 => {
+            AGGCHAIN_PROOF_TYPE_GENERIC => {
                 // Generic - reconstruct params and vkey from dedicated fields
                 let aggchain_params = Digest::from(zero_copy.generic_params.0);
                 // Reconstruct vkey from bytes using bytemuck
@@ -948,7 +955,6 @@ pub struct MultiBatchHeaderZeroCopy {
 }
 
 /// Represents the chain state transition for the pessimistic proof.
-#[serde_as]
 #[derive(Clone, Debug, Serialize)]
 pub struct MultiBatchHeader<H>
 where
@@ -1924,7 +1930,7 @@ mod tests {
         assert_eq!(std::mem::align_of_val(&smt_non_inclusion_proof), 1);
 
         let claim = ClaimZeroCopy {
-            claim_type: 0,
+            claim_type: CLAIM_TYPE_MAINNET,
             _padding: [0; 7],
             chunk1: ClaimDataChunk256([0u8; 256]),
             chunk2: ClaimDataChunk256([0u8; 256]),
