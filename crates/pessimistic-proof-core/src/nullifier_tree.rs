@@ -1,4 +1,4 @@
-use agglayer_primitives::{keccak::Hasher, FromBool};
+use agglayer_primitives::{Digest, FromBool};
 use agglayer_tries::proof::{SmtNonInclusionProof, ToBits};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -17,21 +17,17 @@ pub const NULLIFIER_TREE_DEPTH: usize = 64;
 /// local network
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NullifierTree<H>
-where
-    H: Hasher,
-    H::Digest: Serialize + for<'a> Deserialize<'a>,
-{
+pub struct NullifierTree {
     /// The Merkle Root of the nullifier tree
     #[serde_as(as = "_")]
-    pub root: H::Digest,
+    pub root: Digest,
     /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
     /// `i`.
     #[serde_as(as = "[_; NULLIFIER_TREE_DEPTH]")]
-    pub empty_hash_at_height: [H::Digest; NULLIFIER_TREE_DEPTH],
+    pub empty_hash_at_height: [Digest; NULLIFIER_TREE_DEPTH],
 }
 
-pub type NullifierPath<H> = SmtNonInclusionProof<H, NULLIFIER_TREE_DEPTH>;
+pub type NullifierPath = SmtNonInclusionProof<NULLIFIER_TREE_DEPTH>;
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct NullifierKey {
@@ -60,21 +56,17 @@ impl ToBits<64> for NullifierKey {
     }
 }
 
-impl<H> NullifierTree<H>
-where
-    H: Hasher,
-    H::Digest: Copy + Eq + Default + Serialize + for<'a> Deserialize<'a> + FromBool,
-{
+impl NullifierTree {
     // TODO: Consider batching the updates per network for efficiency
     pub fn verify_and_update(
         &mut self,
         key: NullifierKey,
-        path_to_update: &NullifierPath<H>,
+        path_to_update: &NullifierPath,
     ) -> Result<(), ProofError> {
         self.root = path_to_update
             .verify_and_update(
                 key,
-                H::Digest::from_bool(true),
+                Digest::from_bool(true),
                 self.root,
                 &self.empty_hash_at_height,
             )

@@ -1,6 +1,4 @@
 #[cfg(any(test, feature = "testutils"))]
-use agglayer_primitives::keccak::Keccak256Hasher;
-#[cfg(any(test, feature = "testutils"))]
 pub use pessimistic_proof_core::proof::zero_if_empty_local_exit_root;
 pub use pessimistic_proof_core::PessimisticProofOutput;
 #[cfg(any(test, feature = "testutils"))]
@@ -52,10 +50,7 @@ impl Proof {
     }
 
     #[cfg(any(test, feature = "testutils"))]
-    pub fn new_for_test(
-        state: &NetworkState,
-        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
-    ) -> Self {
+    pub fn new_for_test(state: &NetworkState, multi_batch_header: &MultiBatchHeader) -> Self {
         let mock = ProverClient::builder().mock().build();
         let (p, _v) = mock.setup(ELF);
 

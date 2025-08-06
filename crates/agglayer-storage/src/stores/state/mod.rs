@@ -6,7 +6,7 @@ use std::{
 
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
-    primitives::{keccak::Keccak256Hasher, Digest}, Certificate,
+    primitives::Digest, Certificate,
     CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
     LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
@@ -317,7 +317,7 @@ impl StateStore {
     fn write_smt<C, const DEPTH: usize>(
         &self,
         network_id: u32,
-        smt: &Smt<Keccak256Hasher, DEPTH>,
+        smt: &Smt<DEPTH>,
         batch: &mut WriteBatch,
     ) -> Result<(), Error>
     where
@@ -361,7 +361,7 @@ impl StateStore {
     fn read_local_exit_tree(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<LocalExitTree<Keccak256Hasher>>, Error> {
+    ) -> Result<Option<LocalExitTree>, Error> {
         let leaf_count = if let Some(leaf_count_value) =
             self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
                 network_id: network_id.into(),
@@ -393,7 +393,7 @@ impl StateStore {
             frontier[i] = Digest(*l);
         }
 
-        Ok(Some(LocalExitTree::<Keccak256Hasher>::from_parts(
+        Ok(Some(LocalExitTree::from_parts(
             leaf_count, frontier,
         )))
     }
@@ -401,11 +401,11 @@ impl StateStore {
     fn read_smt<C, const DEPTH: usize>(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<Smt<Keccak256Hasher, DEPTH>>, Error>
+    ) -> Result<Option<Smt<DEPTH>>, Error>
     where
         C: ColumnSchema<Key = SmtKey, Value = SmtValue>,
     {
-        let root_node: Node<Keccak256Hasher> = if let Some(root_node_value) =
+        let root_node: Node = if let Some(root_node_value) =
             self.db.get::<C>(&SmtKey {
                 network_id: network_id.into(),
                 key_type: SmtKeyType::Root,
@@ -425,7 +425,7 @@ impl StateStore {
         keys.push_back(SmtKeyType::Node(root_node.left));
         keys.push_back(SmtKeyType::Node(root_node.right));
 
-        let mut nodes: Vec<Node<Keccak256Hasher>> = Vec::new();
+        let mut nodes: Vec<Node> = Vec::new();
         nodes.push(root_node);
 
         let mut queued = BTreeSet::new();
@@ -455,7 +455,7 @@ impl StateStore {
             }
         }
 
-        Ok(Some(Smt::<Keccak256Hasher, DEPTH>::new_with_nodes(
+        Ok(Some(Smt::<DEPTH>::new_with_nodes(
             root_node.hash(),
             nodes.as_slice(),
         )))
