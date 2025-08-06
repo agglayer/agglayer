@@ -22,13 +22,18 @@ We welcome contributions of all kinds, from code improvements to documentation f
 
 We follow these practices to keep contributions smooth for everyone:
 
-### 1. PR Reviews
+### 1. Commits
+
+- You need to **sign your commits with OpenPGP** for CI to pass.
+- The PR title must **start with `docs:`, `chore:`, `fix:` or `feat:`** for the most frequently-used options.
+
+### 2. PR Reviews
 
 - We **aim to review PRs within 1 business day ⏱️.**
 - If we cannot review within that time, we will **leave a comment indicating the expected review timeline.**
 - Reviews are collaborative: maintainers and contributors work together to make the PR merge-ready.
 
-### 2. Force-Push Policy
+### 3. Force-Push Policy
 
 - **Draft PRs:**
   You may **force-push freely** while your PR is in draft mode.
