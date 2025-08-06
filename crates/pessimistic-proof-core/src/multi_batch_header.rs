@@ -970,7 +970,7 @@ where
     /// List of bridge exits created in this batch.
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits claimed in this batch.
-    pub imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<H>)>,
+    pub imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath)>,
     /// L1 info root used to import bridge exits.
     pub l1_info_root: H::Digest,
     /// Token balances of the origin network before processing bridge events,

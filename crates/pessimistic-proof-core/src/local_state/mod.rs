@@ -1,4 +1,6 @@
-use agglayer_primitives::{keccak::Keccak256Hasher, ruint::UintTryFrom, Hashable, U256, U512};
+use std::collections::{btree_map::Entry, BTreeMap};
+
+use agglayer_primitives::{ruint::UintTryFrom, Hashable, U256, U512};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
 use bytemuck::{Pod, Zeroable};
 use commitment::StateCommitment;
@@ -97,12 +99,12 @@ impl NetworkStateZeroCopy {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
-    pub exit_tree: LocalExitTree<Keccak256Hasher>,
+    pub exit_tree: LocalExitTree,
     /// Commitment to the balance for each token.
-    pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
+    pub balance_tree: LocalBalanceTree,
     /// Commitment to the Nullifier tree for the local network, tracks claimed
     /// assets on foreign networks
-    pub nullifier_tree: NullifierTree<Keccak256Hasher>,
+    pub nullifier_tree: NullifierTree,
 }
 
 impl NetworkState {
@@ -158,7 +160,7 @@ impl NetworkState {
     /// The state isn't modified on error.
     pub fn apply_batch_header(
         &mut self,
-        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+        multi_batch_header: &MultiBatchHeader,
     ) -> Result<StateCommitment, ProofError> {
         let mut clone = self.clone();
         let roots = clone.apply_batch_header_helper(multi_batch_header)?;
@@ -172,7 +174,7 @@ impl NetworkState {
     /// The state can be modified on error.
     fn apply_batch_header_helper(
         &mut self,
-        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+        multi_batch_header: &MultiBatchHeader,
     ) -> Result<StateCommitment, ProofError> {
         // Convert balances_proofs to sorted Vec for efficient binary search
         // This is more efficient than BTreeMap for SP1 cycles

@@ -9,8 +9,8 @@ use agglayer_prover_types::v1::{
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    aggchain_proof::AggchainData, bincode, primitives::keccak::Keccak256Hasher, Certificate,
-    Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
+    aggchain_proof::AggchainData, bincode, Certificate, Digest, Height, LocalNetworkStateData,
+    NetworkId, PessimisticRootInput, Proof,
 };
 use pessimistic_proof::{
     core::{commitment::StateCommitment, generate_pessimistic_proof},
@@ -333,14 +333,8 @@ where
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
-    ) -> Result<
-        (
-            MultiBatchHeader<Keccak256Hasher>,
-            LocalNetworkState,
-            PessimisticProofOutput,
-        ),
-        CertificationError,
-    > {
+    ) -> Result<(MultiBatchHeader, LocalNetworkState, PessimisticProofOutput), CertificationError>
+    {
         let network_id = certificate.network_id;
         let certificate_id = certificate.hash();
 

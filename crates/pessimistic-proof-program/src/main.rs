@@ -1,8 +1,8 @@
 #![no_main]
 
 use pessimistic_proof_core::{
-    generate_pessimistic_proof, keccak::Keccak256Hasher, multi_batch_header::MultiBatchHeader,
-    NetworkState, PessimisticProofOutput,
+    generate_pessimistic_proof, multi_batch_header::MultiBatchHeader, NetworkState,
+    PessimisticProofOutput,
 };
 sp1_zkvm::entrypoint!(main);
 

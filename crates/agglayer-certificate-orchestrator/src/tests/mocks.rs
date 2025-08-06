@@ -20,6 +20,6 @@ mock! {
             &self,
             certificate: &agglayer_types::Certificate,
             state: &mut LocalNetworkStateData,
-        ) -> Result<(MultiBatchHeader<pessimistic_proof::keccak::Keccak256Hasher>, LocalNetworkState, pessimistic_proof::PessimisticProofOutput), CertificationError>;
+        ) -> Result<(MultiBatchHeader, LocalNetworkState, pessimistic_proof::PessimisticProofOutput), CertificationError>;
     }
 }
