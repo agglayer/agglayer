@@ -149,10 +149,11 @@ dependencies = [
 name = "agglayer-clock"
 version = "0.1.0"
 dependencies = [
+ "agglayer-clock",
+ "agglayer-telemetry 0.1.0",
  "agglayer-types",
  "alloy",
  "async-trait",
- "backoff",
  "chrono",
  "fail",
  "futures",
