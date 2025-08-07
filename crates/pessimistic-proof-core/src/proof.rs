@@ -425,3 +425,56 @@ pub fn verify_consensus(
 
     Ok(target_pp_root_version)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn size_and_alignment_are_expected() {
+        assert_eq!(std::mem::size_of::<PessimisticProofOutputZeroCopy>(), 196);
+        assert_eq!(std::mem::align_of::<PessimisticProofOutputZeroCopy>(), 4);
+    }
+
+    #[test]
+    fn zero_copy_roundtrip_preserves_values() {
+        let out = PessimisticProofOutput {
+            prev_local_exit_root: LocalExitRoot::new(Digest([1u8; 32])),
+            prev_pessimistic_root: Digest([2u8; 32]),
+            l1_info_root: Digest([3u8; 32]),
+            origin_network: NetworkId::new(42),
+            aggchain_hash: Digest([4u8; 32]),
+            new_local_exit_root: LocalExitRoot::new(Digest([5u8; 32])),
+            new_pessimistic_root: Digest([6u8; 32]),
+        };
+
+        let bytes = out.to_bytes_zero_copy();
+        assert_eq!(
+            bytes.len(),
+            std::mem::size_of::<PessimisticProofOutputZeroCopy>()
+        );
+
+        let back = PessimisticProofOutput::from_bytes_zero_copy(&bytes).unwrap();
+        assert_eq!(out, back);
+    }
+
+    #[test]
+    fn zero_copy_rejects_wrong_sizes() {
+        let out = PessimisticProofOutput {
+            prev_local_exit_root: LocalExitRoot::new(Digest([7u8; 32])),
+            prev_pessimistic_root: Digest([8u8; 32]),
+            l1_info_root: Digest([9u8; 32]),
+            origin_network: NetworkId::new(7),
+            aggchain_hash: Digest([10u8; 32]),
+            new_local_exit_root: LocalExitRoot::new(Digest([11u8; 32])),
+            new_pessimistic_root: Digest([12u8; 32]),
+        };
+
+        let mut bytes = out.to_bytes_zero_copy();
+        let too_small = &bytes[..bytes.len() - 1];
+        assert!(PessimisticProofOutput::from_bytes_zero_copy(too_small).is_err());
+
+        bytes.push(0);
+        assert!(PessimisticProofOutput::from_bytes_zero_copy(&bytes).is_err());
+    }
+}
