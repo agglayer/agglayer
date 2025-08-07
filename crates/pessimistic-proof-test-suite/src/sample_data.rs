@@ -6,9 +6,8 @@ use agglayer_types::{
 };
 use hex_literal::hex;
 use pessimistic_proof::{
-    keccak::Keccak256Hasher,
     local_balance_tree::LocalBalanceTree,
-    local_exit_tree,
+    local_exit_tree::LocalExitTree,
     local_state::LocalNetworkState,
     nullifier_tree::NullifierTree,
     unified_bridge::{BridgeExit, TokenInfo},
@@ -18,9 +17,6 @@ use crate::{
     event_data::{load_json_data_file, parse_json_file, DepositEventData},
     forest::Forest,
 };
-
-type TreeHasher = Keccak256Hasher;
-type LocalExitTree = local_exit_tree::LocalExitTree<TreeHasher>;
 
 pub const NETWORK_A: NetworkId = NetworkId::new(0);
 pub const NETWORK_B: NetworkId = NetworkId::new(1);
