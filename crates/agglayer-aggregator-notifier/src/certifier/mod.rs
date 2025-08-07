@@ -192,9 +192,9 @@ where
             .map_err(|e| CertificationError::InternalError(e.to_string()))?
             .map_err(CertificationError::Sp1ExecuteFailed)?;
 
-            let pv_sp1_execute: PessimisticProofOutput = PessimisticProofOutput::bincode_codec()
-                .deserialize(pv.as_slice())
-                .map_err(|source| CertificationError::Deserialize { source })?;
+            let pv_sp1_execute: PessimisticProofOutput =
+                PessimisticProofOutput::from_bytes_zero_copy(pv.as_slice())
+                    .map_err(|e| CertificationError::InternalError(e.to_string()))?;
 
             (pv_sp1_execute, report)
         };

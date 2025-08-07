@@ -126,20 +126,6 @@ impl NetworkState {
         zero_copy.to_network_state()
     }
 
-    /// Serialize the NetworkState to a vector of bytes using bincode.
-    /// This is compatible with `sp1_zkvm::io::read_vec`.
-    pub fn to_vec(&self) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
-        use agglayer_bincode as bincode;
-        bincode::contracts().serialize(self).map_err(|e| e.into())
-    }
-
-    /// Deserialize the NetworkState from a vector of bytes using bincode.
-    /// This is compatible with `sp1_zkvm::io::read_vec`.
-    pub fn from_vec(data: &[u8]) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        use agglayer_bincode as bincode;
-        bincode::contracts().deserialize(data).map_err(|e| e.into())
-    }
-
     /// Zero-copy deserialization from bytes using bytemuck.
     /// This function safely deserializes the data if it has the correct size
     /// and alignment.

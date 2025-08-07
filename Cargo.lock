@@ -6152,7 +6152,6 @@ dependencies = [
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
- "agglayer-bincode 0.9.0",
  "agglayer-primitives 0.9.0",
  "agglayer-tries 0.9.0",
  "bytemuck",
@@ -6173,7 +6172,6 @@ dependencies = [
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
- "agglayer-bincode 0.9.0",
  "agglayer-prover",
  "agglayer-tries 0.9.0",
  "agglayer-types",

@@ -13,7 +13,6 @@ testutils = [
 ]
 
 [dependencies]
-agglayer-bincode.workspace = true
 agglayer-primitives.workspace = true
 agglayer-tries.workspace = true
 unified-bridge.workspace = true

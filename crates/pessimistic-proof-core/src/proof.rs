@@ -1,4 +1,3 @@
-use agglayer_bincode as bincode;
 use agglayer_primitives::{Address, Digest, Signature, B256};
 use agglayer_tries::roots::LocalExitRoot;
 use bytemuck::{Pod, Zeroable};
@@ -230,10 +229,6 @@ pub struct PessimisticProofOutput {
 }
 
 impl PessimisticProofOutput {
-    pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
-        bincode::contracts()
-    }
-
     /// Convert to zero-copy representation for efficient serialization.
     pub fn to_zero_copy(&self) -> PessimisticProofOutputZeroCopy {
         self.into()
