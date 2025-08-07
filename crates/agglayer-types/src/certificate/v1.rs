@@ -47,7 +47,7 @@ pub struct CertificateV1 {
 
 impl CertificateV1 {
     #[inline]
-    pub fn fields(&self) -> Fields {
+    pub fn fields(&self) -> Fields<'_> {
         Fields {
             version: Version::V0,
             network_id: self.network_id,
