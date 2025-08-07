@@ -8,7 +8,6 @@ use agglayer_types::{
 use alloy::signers::{local::PrivateKeySigner, SignerSync};
 use ecdsa_proof_lib::AggchainECDSA;
 use pessimistic_proof::{
-    core::commitment::SignatureCommitmentValues,
     keccak::keccak256_combine,
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
     local_state::LocalNetworkState,
@@ -266,7 +265,9 @@ impl Forest {
             compute_aggchain_proof(AggchainECDSA {
                 signer: certificate.retrieve_signer(CommitmentVersion::V2).unwrap(),
                 signature,
-                commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
+                commit_imported_bridge_exits: certificate
+                    .fields()
+                    .signature_commitment_values()
                     .commitment(CommitmentVersion::V2)
                     .0,
                 prev_local_exit_root: certificate.prev_local_exit_root,

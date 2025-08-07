@@ -12,8 +12,8 @@ mod proof_modes;
 #[cfg(feature = "testutils")]
 pub use certificate::compute_signature_info;
 pub use certificate::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Height,
-    Metadata, SettlementTxHash,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
+    CertificateV0, CertificateV1, CertificateVx, Height, Metadata, SettlementTxHash,
 };
 pub use epoch::{EpochConfiguration, EpochNumber};
 pub use error::{CertificateStatusError, Error, SignerError};
