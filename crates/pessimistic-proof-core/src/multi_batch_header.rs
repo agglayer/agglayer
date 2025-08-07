@@ -1029,6 +1029,67 @@ pub struct ZeroCopyComponents {
 
 // Specific implementation for MultiBatchHeader with zero-copy component helpers
 impl MultiBatchHeader {
+    /// Verify that `bytes.len()` exactly equals `size_of::<T>() *
+    /// expected_count`.
+    fn verify_counted_blob_len<T>(
+        bytes: &[u8],
+        expected_count: usize,
+        label: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let elem_size = std::mem::size_of::<T>();
+        let expected_len = expected_count
+            .checked_mul(elem_size)
+            .ok_or_else(|| format!("{label}: size overflow computing expected length"))?;
+        if bytes.len() != expected_len {
+            return Err(format!(
+                "{label}: invalid length {}, expected {} (count {} * size {})",
+                bytes.len(),
+                expected_len,
+                expected_count,
+                elem_size
+            )
+            .into());
+        }
+        Ok(())
+    }
+
+    /// Verify that `bytes.len()` is exactly `size_of::<T>()` for a single
+    /// struct.
+    fn verify_exact_struct_len<T>(
+        bytes: &[u8],
+        label: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let expected_len = std::mem::size_of::<T>();
+        if bytes.len() != expected_len {
+            return Err(format!(
+                "{label}: invalid length {}, expected {}",
+                bytes.len(),
+                expected_len
+            )
+            .into());
+        }
+        Ok(())
+    }
+
+    /// Return count = len / size_of::<T>(), error if len not a multiple.
+    fn count_from_blob_len<T>(
+        bytes: &[u8],
+        label: &str,
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+        let elem_size = std::mem::size_of::<T>();
+        if elem_size == 0 {
+            return Err(format!("{label}: zero-sized type not supported").into());
+        }
+        if bytes.len() % elem_size != 0 {
+            return Err(format!(
+                "{label}: length {} is not a multiple of element size {}",
+                bytes.len(),
+                elem_size
+            )
+            .into());
+        }
+        Ok(bytes.len() / elem_size)
+    }
     /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy
     /// components. This is the complete reconstruction pattern used in SP1
     /// zkvm environments. Returns a borrowed view to avoid allocations for
@@ -1041,12 +1102,62 @@ impl MultiBatchHeader {
         balances_proofs_bytes: &'a [u8],
         balance_merkle_paths_bytes: &'a [u8],
     ) -> Result<MultiBatchHeaderRef<'a>, Box<dyn std::error::Error + Send + Sync>> {
+        // 1) Validate header blob size matches exactly one header
+        Self::verify_exact_struct_len::<MultiBatchHeaderZeroCopy>(header_bytes, "header_bytes")?;
+
         // Deserialize header using pod_read_unaligned for robustness against alignment
         // issues
         let header_zero_copy =
             bytemuck::pod_read_unaligned::<MultiBatchHeaderZeroCopy>(header_bytes);
 
-        // Create borrowed slices for zero-copy components using try_cast_slice
+        // 2) Validate each blob length equals count * size_of::<T>()
+        let be_count = header_zero_copy.bridge_exits_count as usize;
+        let ibe_count = header_zero_copy.imported_bridge_exits_count as usize;
+        let bp_count = header_zero_copy.balances_proofs_count as usize;
+
+        Self::verify_counted_blob_len::<BridgeExitZeroCopy>(
+            bridge_exits_bytes,
+            be_count,
+            "bridge_exits_bytes",
+        )?;
+        Self::verify_counted_blob_len::<ImportedBridgeExitZeroCopy>(
+            imported_bridge_exits_bytes,
+            ibe_count,
+            "imported_bridge_exits_bytes",
+        )?;
+        Self::verify_counted_blob_len::<BalanceProofEntryZeroCopy>(
+            balances_proofs_bytes,
+            bp_count,
+            "balances_proofs_bytes",
+        )?;
+
+        // For nullifier_paths and balance_merkle_paths, derive counts from sizes
+        let derived_nullifier_count = Self::count_from_blob_len::<SmtNonInclusionProofZeroCopy>(
+            nullifier_paths_bytes,
+            "nullifier_paths_bytes",
+        )?;
+        let derived_balance_paths_count = Self::count_from_blob_len::<BalanceMerkleProofZeroCopy>(
+            balance_merkle_paths_bytes,
+            "balance_merkle_paths_bytes",
+        )?;
+
+        // 3) Cross-validate array counts where required
+        if derived_nullifier_count != ibe_count {
+            return Err(format!(
+                "nullifier_paths_bytes count {} does not match imported_bridge_exits_count {}",
+                derived_nullifier_count, ibe_count
+            )
+            .into());
+        }
+        if derived_balance_paths_count != bp_count {
+            return Err(format!(
+                "balance_merkle_paths_bytes count {} does not match balances_proofs_count {}",
+                derived_balance_paths_count, bp_count
+            )
+            .into());
+        }
+
+        // 4) Create borrowed slices for zero-copy components using try_cast_slice
         let bridge_exits: &'a [BridgeExitZeroCopy] = if bridge_exits_bytes.is_empty() {
             &[]
         } else {
@@ -1084,6 +1195,55 @@ impl MultiBatchHeader {
                 bytemuck::try_cast_slice(balance_merkle_paths_bytes)
                     .map_err(|e| format!("Failed to cast balance_merkle_paths_bytes: {e}"))?
             };
+
+        // 5) has_metadata consistency check: if has_metadata == 0 then metadata_hash
+        //    must be 0s. Also validate leaf_type discriminants.
+        for (idx, be) in bridge_exits.iter().enumerate() {
+            if be.has_metadata == 0 && be.metadata_hash != [0u8; 32] {
+                return Err(format!(
+                    "bridge_exits_bytes[{}]: has_metadata=0 but metadata_hash is non-zero",
+                    idx
+                )
+                .into());
+            }
+            <LeafType as core::convert::TryFrom<u8>>::try_from(be.leaf_type).map_err(|_| {
+                format!(
+                    "bridge_exits_bytes[{}]: invalid leaf_type {}",
+                    idx, be.leaf_type
+                )
+            })?;
+        }
+
+        // has_metadata consistency for imported bridge exits' inner bridge_exit too
+        // and validate leaf_type for nested bridge exits
+        for (idx, ibe) in imported_bridge_exits.iter().enumerate() {
+            let be = &ibe.bridge_exit;
+            if be.has_metadata == 0 && be.metadata_hash != [0u8; 32] {
+                return Err(format!(
+                    "imported_bridge_exits_bytes[{}].bridge_exit: has_metadata=0 but \
+                     metadata_hash is non-zero",
+                    idx
+                )
+                .into());
+            }
+            <LeafType as core::convert::TryFrom<u8>>::try_from(be.leaf_type).map_err(|_| {
+                format!(
+                    "imported_bridge_exits_bytes[{}]: invalid leaf_type {}",
+                    idx, be.leaf_type
+                )
+            })?;
+        }
+
+        // 6) Validate SmtNonInclusionProofZeroCopy.num_siblings bounds (avoid asserts)
+        for (idx, np) in nullifier_paths.iter().enumerate() {
+            if np.num_siblings == 0 || np.num_siblings > 64 {
+                return Err(format!(
+                    "nullifier_paths_bytes[{}]: num_siblings={} out of bounds (expected 1..=64)",
+                    idx, np.num_siblings
+                )
+                .into());
+            }
+        }
 
         // Extract aggchain_proof from header
         let aggchain_proof = AggchainData::try_from(&header_zero_copy.aggchain_proof)?;
