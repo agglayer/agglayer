@@ -44,20 +44,20 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = "0.9.0"
-agglayer-interop = "0.9.0"
-agglayer-interop-types = "0.9.0"
-agglayer-elf-build = "0.9.0"
-agglayer-primitives = "0.9.0"
-agglayer-tries = "0.9.0"
-unified-bridge = "0.9.0"
+agglayer-bincode = { path = "../interop/crates/agglayer-bincode"}
+agglayer-interop = { path = "../interop/crates/agglayer-interop"}
+agglayer-interop-types = { path = "../interop/crates/agglayer-interop-types"}
+agglayer-elf-build = { path = "../interop/crates/agglayer-elf-build"}
+agglayer-primitives = { path = "../interop/crates/agglayer-primitives"}
+agglayer-tries = { path = "../interop/crates/agglayer-tries"}
+unified-bridge = { path = "../interop/crates/unified-bridge"}
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
-prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.0" }
+agglayer-prover = { path = "../provers/crates/agglayer-prover" }
+agglayer-prover-config = { path = "../provers/crates/agglayer-prover-config" }
+agglayer-prover-types = { path = "../provers/crates/agglayer-prover-types" }
+prover-alloy = { path = "../provers/crates/prover-alloy" }
+prover-config = { path = "../provers/crates/prover-config" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
