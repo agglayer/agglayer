@@ -22,7 +22,7 @@ pub fn main() {
 
     // Reconstruct the MultiBatchHeaderRef from zero-copy components using the
     // helper function
-    let batch_header_ref = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
+    let batch_header_ref = MultiBatchHeader::from_zero_copy_components(
         &header_bytes,
         &bridge_exits_bytes,
         &imported_bridge_exits_bytes,
@@ -34,7 +34,7 @@ pub fn main() {
 
     // Convert to owned MultiBatchHeader for the proof generation
     let batch_header = batch_header_ref
-        .to_owned_keccak()
+        .to_owned()
         .expect("Failed to convert MultiBatchHeaderRef to owned");
 
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header)

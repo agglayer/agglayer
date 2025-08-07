@@ -1,5 +1,3 @@
-use std::collections::{btree_map::Entry, BTreeMap};
-
 use agglayer_primitives::{ruint::UintTryFrom, Hashable, U256, U512};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
 use bytemuck::{Pod, Zeroable};
@@ -56,11 +54,11 @@ impl NetworkStateZeroCopy {
                 .map(agglayer_primitives::Digest::from),
         );
 
-        let balance_tree = LocalBalanceTree::<Keccak256Hasher> {
+        let balance_tree = LocalBalanceTree {
             root: agglayer_primitives::Digest::from(self.balance_tree_root),
         };
 
-        let nullifier_tree = NullifierTree::<Keccak256Hasher> {
+        let nullifier_tree = NullifierTree {
             root: agglayer_primitives::Digest::from(self.nullifier_tree_root),
             empty_hash_at_height: self
                 .nullifier_empty_hash_at_height
@@ -309,7 +307,6 @@ impl NetworkState {
 
 #[cfg(test)]
 mod tests {
-    use agglayer_primitives::keccak::Keccak256Hasher;
     use unified_bridge::LocalExitTree;
 
     use super::*;
@@ -318,10 +315,10 @@ mod tests {
     fn test_zero_copy_roundtrip() {
         let state = NetworkState {
             exit_tree: LocalExitTree::from_parts(42, [[1u8; 32].into(); 32]),
-            balance_tree: LocalBalanceTree::<Keccak256Hasher> {
+            balance_tree: LocalBalanceTree {
                 root: [0xAAu8; 32].into(),
             },
-            nullifier_tree: NullifierTree::<Keccak256Hasher> {
+            nullifier_tree: NullifierTree {
                 root: [0xBBu8; 32].into(),
                 empty_hash_at_height: [[0xCCu8; 32].into(); 64],
             },
@@ -345,10 +342,10 @@ mod tests {
     fn test_zero_copy_invalid_input() {
         let state = NetworkState {
             exit_tree: LocalExitTree::new(),
-            balance_tree: LocalBalanceTree::<Keccak256Hasher> {
+            balance_tree: LocalBalanceTree {
                 root: [1u8; 32].into(),
             },
-            nullifier_tree: NullifierTree::<Keccak256Hasher> {
+            nullifier_tree: NullifierTree {
                 root: [2u8; 32].into(),
                 empty_hash_at_height: [[3u8; 32].into(); 64],
             },

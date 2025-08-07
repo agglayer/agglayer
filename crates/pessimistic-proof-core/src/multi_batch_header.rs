@@ -1,14 +1,9 @@
 #![allow(clippy::too_many_arguments)]
 
-use std::hash::Hash;
-
-use agglayer_primitives::{
-    keccak::{Hasher, Keccak256Hasher},
-    Address, Digest, Signature, U256,
-};
+use agglayer_primitives::{Address, Digest, Signature, U256};
 use agglayer_tries::proof::{SmtMerkleProof, SmtNonInclusionProof};
 use bytemuck::{Pod, Zeroable};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 use unified_bridge::{
     BridgeExit, Claim, ClaimFromMainnet, ClaimFromRollup, GlobalIndex, ImportedBridgeExit,
     L1InfoTreeLeaf, L1InfoTreeLeafInner, LETMerkleProof, LeafType, MerkleProof, NetworkId,
@@ -36,8 +31,8 @@ pub type U256Bytes = [u8; 32];
 pub type AddressBytes = [u8; 20];
 
 /// Type aliases for agglayer_tries proof types to improve readability
-pub type BalanceMerkleProof = SmtMerkleProof<Keccak256Hasher, 192>;
-pub type NullifierNonInclusionProof = SmtNonInclusionProof<Keccak256Hasher, 64>;
+pub type BalanceMerkleProof = SmtMerkleProof<192>;
+pub type NullifierNonInclusionProof = SmtNonInclusionProof<64>;
 
 /// Constants for aggchain proof types to eliminate magic numbers
 pub const AGGCHAIN_PROOF_TYPE_ECDSA: u8 = 0;
@@ -318,14 +313,12 @@ fn balance_merkle_proof_from_zero_copy(zc: &BalanceMerkleProofZeroCopy) -> Balan
 }
 
 /// Helper function to convert LETMerkleProof to LETMerkleProofZeroCopy
-fn let_merkle_proof_to_zero_copy(
-    proof: &LETMerkleProof<Keccak256Hasher>,
-) -> LETMerkleProofZeroCopy {
+fn let_merkle_proof_to_zero_copy(proof: &LETMerkleProof) -> LETMerkleProofZeroCopy {
     LETMerkleProofZeroCopy(digest_array_to_bytes(&proof.siblings))
 }
 
 /// Helper function to convert LETMerkleProofZeroCopy to LETMerkleProof
-fn let_merkle_proof_from_zero_copy(zc: &LETMerkleProofZeroCopy) -> LETMerkleProof<Keccak256Hasher> {
+fn let_merkle_proof_from_zero_copy(zc: &LETMerkleProofZeroCopy) -> LETMerkleProof {
     LETMerkleProof {
         siblings: bytes_array_to_digests(&zc.0),
     }
@@ -956,69 +949,48 @@ pub struct MultiBatchHeaderZeroCopy {
 
 /// Represents the chain state transition for the pessimistic proof.
 #[derive(Clone, Debug, Serialize)]
-pub struct MultiBatchHeader<H>
-where
-    H: Hasher,
-    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned,
-{
+pub struct MultiBatchHeader {
     /// Network that emitted this [MultiBatchHeader].
     pub origin_network: NetworkId,
     /// Current certificate height of the L2 chain.
     pub height: u64,
     /// Previous pessimistic root.
-    pub prev_pessimistic_root: H::Digest,
+    pub prev_pessimistic_root: Digest,
     /// List of bridge exits created in this batch.
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits claimed in this batch.
     pub imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath)>,
     /// L1 info root used to import bridge exits.
-    pub l1_info_root: H::Digest,
+    pub l1_info_root: Digest,
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
-    pub balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath<H>))>,
+    pub balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath))>,
     /// Aggchain proof.
     pub aggchain_proof: AggchainData,
 }
 
-impl<H> From<&MultiBatchHeader<H>> for MultiBatchHeaderZeroCopy
-where
-    H: Hasher,
-    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<Hash256>,
-{
-    fn from(self_: &MultiBatchHeader<H>) -> Self {
+impl From<&MultiBatchHeader> for MultiBatchHeaderZeroCopy {
+    fn from(self_: &MultiBatchHeader) -> Self {
         MultiBatchHeaderZeroCopy {
             height: self_.height,
             origin_network: self_.origin_network.to_u32(),
             bridge_exits_count: self_.bridge_exits.len() as u32,
             imported_bridge_exits_count: self_.imported_bridge_exits.len() as u32,
             balances_proofs_count: self_.balances_proofs.len() as u32,
-            prev_pessimistic_root: self_
-                .prev_pessimistic_root
-                .as_ref()
-                .try_into()
-                .expect("Digest must be exactly 32 bytes"),
-            l1_info_root: self_
-                .l1_info_root
-                .as_ref()
-                .try_into()
-                .expect("Digest must be exactly 32 bytes"),
+            prev_pessimistic_root: self_.prev_pessimistic_root.0,
+            l1_info_root: self_.l1_info_root.0,
             aggchain_proof: (&self_.aggchain_proof).into(),
         }
     }
 }
 
-impl<H> TryFrom<&MultiBatchHeaderZeroCopy> for MultiBatchHeader<H>
-where
-    H: Hasher,
-    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<Hash256>,
-{
+impl TryFrom<&MultiBatchHeaderZeroCopy> for MultiBatchHeader {
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
     fn try_from(zero_copy: &MultiBatchHeaderZeroCopy) -> Result<Self, Self::Error> {
         let origin_network = NetworkId::new(zero_copy.origin_network);
-        let prev_pessimistic_root =
-            <H::Digest as From<Hash256>>::from(zero_copy.prev_pessimistic_root);
-        let l1_info_root = <H::Digest as From<Hash256>>::from(zero_copy.l1_info_root);
+        let prev_pessimistic_root = Digest(zero_copy.prev_pessimistic_root);
+        let l1_info_root = Digest(zero_copy.l1_info_root);
 
         let aggchain_proof = AggchainData::try_from(&zero_copy.aggchain_proof)?;
 
@@ -1055,8 +1027,8 @@ pub struct ZeroCopyComponents {
     pub balance_merkle_paths_bytes: Vec<u8>,
 }
 
-// Specific implementation for Keccak256Hasher with zero-copy component helpers
-impl MultiBatchHeader<Keccak256Hasher> {
+// Specific implementation for MultiBatchHeader with zero-copy component helpers
+impl MultiBatchHeader {
     /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy
     /// components. This is the complete reconstruction pattern used in SP1
     /// zkvm environments. Returns a borrowed view to avoid allocations for
@@ -1068,8 +1040,7 @@ impl MultiBatchHeader<Keccak256Hasher> {
         nullifier_paths_bytes: &'a [u8],
         balances_proofs_bytes: &'a [u8],
         balance_merkle_paths_bytes: &'a [u8],
-    ) -> Result<MultiBatchHeaderRef<'a, Keccak256Hasher>, Box<dyn std::error::Error + Send + Sync>>
-    {
+    ) -> Result<MultiBatchHeaderRef<'a>, Box<dyn std::error::Error + Send + Sync>> {
         // Deserialize header using pod_read_unaligned for robustness against alignment
         // issues
         let header_zero_copy =
@@ -1119,12 +1090,8 @@ impl MultiBatchHeader<Keccak256Hasher> {
 
         // Reconstruct the MultiBatchHeaderRef from zero-copy components
         let origin_network = NetworkId::new(header_zero_copy.origin_network);
-        let prev_pessimistic_root = <<Keccak256Hasher as Hasher>::Digest as From<Hash256>>::from(
-            header_zero_copy.prev_pessimistic_root,
-        );
-        let l1_info_root = <<Keccak256Hasher as Hasher>::Digest as From<Hash256>>::from(
-            header_zero_copy.l1_info_root,
-        );
+        let prev_pessimistic_root = Digest(header_zero_copy.prev_pessimistic_root);
+        let l1_info_root = Digest(header_zero_copy.l1_info_root);
 
         Ok(MultiBatchHeaderRef {
             origin_network,
@@ -1207,17 +1174,13 @@ impl MultiBatchHeader<Keccak256Hasher> {
 /// variable fields. This struct holds borrowed slices for large variable-length
 /// data while keeping small fields owned.
 #[derive(Debug, Clone)]
-pub struct MultiBatchHeaderRef<'a, H>
-where
-    H: Hasher,
-    H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<Hash256>,
-{
+pub struct MultiBatchHeaderRef<'a> {
     /// Network that emitted this [MultiBatchHeaderRef].
     pub origin_network: NetworkId,
     /// Current certificate height of the L2 chain.
     pub height: u64,
     /// Previous pessimistic root.
-    pub prev_pessimistic_root: H::Digest,
+    pub prev_pessimistic_root: Digest,
     /// List of bridge exits created in this batch (borrowed).
     pub bridge_exits: &'a [BridgeExitZeroCopy],
     /// List of imported bridge exits claimed in this batch (borrowed).
@@ -1225,7 +1188,7 @@ where
     /// Nullifier paths for imported bridge exits (borrowed).
     pub nullifier_paths: &'a [SmtNonInclusionProofZeroCopy],
     /// L1 info root used to import bridge exits.
-    pub l1_info_root: H::Digest,
+    pub l1_info_root: Digest,
     /// Token balances of the origin network before processing bridge events
     /// (borrowed).
     pub balances_proofs: &'a [BalanceProofEntryZeroCopy],
@@ -1235,19 +1198,15 @@ where
     pub aggchain_proof: AggchainData,
 }
 
-// Specific implementation for Keccak256Hasher
-impl MultiBatchHeaderRef<'_, Keccak256Hasher> {
+// Implementation for MultiBatchHeaderRef
+impl MultiBatchHeaderRef<'_> {
     /// Convert to owned MultiBatchHeader by cloning all borrowed data.
-    /// This is a specialized version for Keccak256Hasher to avoid type
-    /// conflicts.
-    pub fn to_owned_keccak(
-        &self,
-    ) -> Result<MultiBatchHeader<Keccak256Hasher>, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn to_owned(&self) -> Result<MultiBatchHeader, Box<dyn std::error::Error + Send + Sync>> {
         // Convert bridge_exits
         let bridge_exits: Vec<BridgeExit> = self.bridge_exits.iter().map(|be| be.into()).collect();
 
         // Convert imported_bridge_exits and nullifier_paths
-        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath<Keccak256Hasher>)> = self
+        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath)> = self
             .imported_bridge_exits
             .iter()
             .zip(self.nullifier_paths.iter())
@@ -1259,7 +1218,7 @@ impl MultiBatchHeaderRef<'_, Keccak256Hasher> {
             .collect::<Result<_, Box<dyn std::error::Error + Send + Sync>>>()?;
 
         // Convert balances_proofs and balance_merkle_paths
-        let balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>))> = self
+        let balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath))> = self
             .balances_proofs
             .iter()
             .zip(self.balance_merkle_paths.iter())
@@ -1291,11 +1250,7 @@ mod tests {
     /// Deep comparison function to check for lossy conversions
     /// This function compares all fields including nested structures
     /// Uses Eq where available, manual comparison where needed
-    fn deep_equals<H>(original: &MultiBatchHeader<H>, reconstructed: &MultiBatchHeader<H>) -> bool
-    where
-        H: Hasher,
-        H::Digest: Eq + Hash + Copy + Serialize + DeserializeOwned + AsRef<[u8]> + From<Hash256>,
-    {
+    fn deep_equals(original: &MultiBatchHeader, reconstructed: &MultiBatchHeader) -> bool {
         // Compare basic fields (all have Eq)
         if original.origin_network != reconstructed.origin_network
             || original.height != reconstructed.height
@@ -1466,7 +1421,7 @@ mod tests {
     }
 
     /// Test helper to create a sample MultiBatchHeader
-    fn create_sample_multi_batch_header() -> MultiBatchHeader<Keccak256Hasher> {
+    fn create_sample_multi_batch_header() -> MultiBatchHeader {
         MultiBatchHeader {
             origin_network: NetworkId::new(5),
             height: 1000,
@@ -1490,7 +1445,7 @@ mod tests {
 
     /// Test helper to create a sample MultiBatchHeader with Generic aggchain
     /// proof
-    fn create_sample_multi_batch_header_generic() -> MultiBatchHeader<Keccak256Hasher> {
+    fn create_sample_multi_batch_header_generic() -> MultiBatchHeader {
         MultiBatchHeader {
             origin_network: NetworkId::new(6),
             height: 2000,
@@ -1513,7 +1468,7 @@ mod tests {
     }
 
     /// Test helper to create a sample MultiBatchHeader with Rollup claims
-    fn create_sample_multi_batch_header_rollup() -> MultiBatchHeader<Keccak256Hasher> {
+    fn create_sample_multi_batch_header_rollup() -> MultiBatchHeader {
         MultiBatchHeader {
             origin_network: NetworkId::new(7),
             height: 3000,
@@ -1536,7 +1491,7 @@ mod tests {
     }
 
     /// Test helper to create a sample MultiBatchHeader with mixed claims
-    fn create_sample_multi_batch_header_mixed() -> MultiBatchHeader<Keccak256Hasher> {
+    fn create_sample_multi_batch_header_mixed() -> MultiBatchHeader {
         MultiBatchHeader {
             origin_network: NetworkId::new(8),
             height: 4000,
@@ -1608,8 +1563,7 @@ mod tests {
         let mut zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
         zero_copy.aggchain_proof.aggchain_proof_type = 255; // Invalid type
 
-        let result: Result<MultiBatchHeader<Keccak256Hasher>, _> =
-            MultiBatchHeader::try_from(&zero_copy);
+        let result: Result<MultiBatchHeader, _> = MultiBatchHeader::try_from(&zero_copy);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -1653,7 +1607,7 @@ mod tests {
         let mut misaligned_bridge_exits = vec![0u8];
         misaligned_bridge_exits.extend_from_slice(&components.bridge_exits_bytes);
 
-        let result = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
+        let result = MultiBatchHeader::from_zero_copy_components(
             &components.header_bytes,
             &misaligned_bridge_exits,
             &components.imported_bridge_exits_bytes,
@@ -1670,14 +1624,14 @@ mod tests {
     }
 
     /// Helper function to test zero-copy recovery for a given MultiBatchHeader
-    fn test_zero_copy_recovery(original: &MultiBatchHeader<Keccak256Hasher>) {
+    fn test_zero_copy_recovery(original: &MultiBatchHeader) {
         // Use the new helper function to get all zero-copy components
         let components = original
             .to_zero_copy_components()
             .expect("Failed to convert to zero-copy components");
 
         // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
-        let borrowed_view = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
+        let borrowed_view = MultiBatchHeader::from_zero_copy_components(
             &components.header_bytes,
             &components.bridge_exits_bytes,
             &components.imported_bridge_exits_bytes,
@@ -1689,7 +1643,7 @@ mod tests {
 
         // Convert to owned for deep comparison
         let reconstructed = borrowed_view
-            .to_owned_keccak()
+            .to_owned()
             .expect("Failed to convert to owned");
 
         // Verify full recovery using comprehensive deep comparison
@@ -1702,14 +1656,14 @@ mod tests {
 
     /// Helper function to test borrowed view recovery for a given
     /// MultiBatchHeader
-    fn test_borrowed_view_recovery(original: &MultiBatchHeader<Keccak256Hasher>) {
+    fn test_borrowed_view_recovery(original: &MultiBatchHeader) {
         // Use the new helper function to get all zero-copy components
         let components = original
             .to_zero_copy_components()
             .expect("Failed to convert to zero-copy components");
 
         // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
-        let borrowed_view = MultiBatchHeader::<Keccak256Hasher>::from_zero_copy_components(
+        let borrowed_view = MultiBatchHeader::from_zero_copy_components(
             &components.header_bytes,
             &components.bridge_exits_bytes,
             &components.imported_bridge_exits_bytes,
@@ -1721,7 +1675,7 @@ mod tests {
 
         // Convert to owned and verify full recovery
         let reconstructed = borrowed_view
-            .to_owned_keccak()
+            .to_owned()
             .expect("Failed to convert to owned");
 
         // Verify full recovery using comprehensive deep comparison
@@ -1862,8 +1816,7 @@ mod tests {
 
         // Convert to zero-copy and back
         let zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
-        let reconstructed: MultiBatchHeader<Keccak256Hasher> =
-            MultiBatchHeader::try_from(&zero_copy).unwrap();
+        let reconstructed: MultiBatchHeader = MultiBatchHeader::try_from(&zero_copy).unwrap();
 
         // Verify that the signature was reconstructed correctly
         match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
@@ -2088,8 +2041,7 @@ mod tests {
         // Test Generic serialization through MultiBatchHeader
         let original = create_sample_multi_batch_header_generic();
         let zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
-        let reconstructed: MultiBatchHeader<Keccak256Hasher> =
-            MultiBatchHeader::try_from(&zero_copy).unwrap();
+        let reconstructed: MultiBatchHeader = MultiBatchHeader::try_from(&zero_copy).unwrap();
 
         match (&original.aggchain_proof, &reconstructed.aggchain_proof) {
             (

@@ -106,7 +106,7 @@ impl LocalNetworkStateData {
             self.exit_tree.add_leaf(e.hash())?;
         }
 
-        let balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath<Keccak256Hasher>))> = {
+        let balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath))> = {
             // Consider all the imported bridge exits except for the native token
             let imported_bridge_exits = certificate.imported_bridge_exits.iter().filter(|b| {
                 b.bridge_exit.amount_token_info().origin_network != certificate.network_id
