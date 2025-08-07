@@ -1,6 +1,7 @@
 use agglayer_bincode as bincode;
 use agglayer_primitives::{Address, Digest, Signature, B256};
 use agglayer_tries::roots::LocalExitRoot;
+use bytemuck::{Pod, Zeroable};
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -27,6 +28,14 @@ use crate::{
 /// This constant defines which commitment version is expected to verify the
 /// aggchain proof.
 pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: CommitmentVersion = CommitmentVersion::V3;
+
+// Compile-time size assertion for PessimisticProofOutputZeroCopy
+const _PESSIMISTIC_PROOF_OUTPUT_SIZE: () = {
+    // 6 * 32-byte fields + 1 u32 field = 192 + 4 = 196 bytes
+    assert!(std::mem::size_of::<PessimisticProofOutputZeroCopy>() == 196);
+    assert!(std::mem::align_of::<PessimisticProofOutputZeroCopy>() == 4); // u32
+                                                                          // alignment
+};
 
 /// Represents all errors that can occur while generating the proof.
 ///
@@ -147,6 +156,59 @@ pub enum ProofError {
     HeightOverflow,
 }
 
+/// Zero-copy representation of PessimisticProofOutput for bytemuck operations.
+/// This struct has a stable C-compatible memory layout with fixed-size fields.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct PessimisticProofOutputZeroCopy {
+    /// The previous local exit root (32 bytes)
+    pub prev_local_exit_root: [u8; 32],
+    /// The previous pessimistic root (32 bytes)
+    pub prev_pessimistic_root: [u8; 32],
+    /// The l1 info root (32 bytes)
+    pub l1_info_root: [u8; 32],
+    /// The aggchain hash (32 bytes)
+    pub aggchain_hash: [u8; 32],
+    /// The new local exit root (32 bytes)
+    pub new_local_exit_root: [u8; 32],
+    /// The new pessimistic root (32 bytes)
+    pub new_pessimistic_root: [u8; 32],
+    /// The origin network (u32)
+    pub origin_network: u32,
+}
+
+impl From<&PessimisticProofOutput> for PessimisticProofOutputZeroCopy {
+    fn from(output: &PessimisticProofOutput) -> Self {
+        // Convert LocalExitRoot to Digest first, then extract bytes
+        let prev_digest: Digest = output.prev_local_exit_root.into();
+        let new_digest: Digest = output.new_local_exit_root.into();
+
+        Self {
+            prev_local_exit_root: prev_digest.0,
+            prev_pessimistic_root: output.prev_pessimistic_root.0,
+            l1_info_root: output.l1_info_root.0,
+            aggchain_hash: output.aggchain_hash.0,
+            new_local_exit_root: new_digest.0,
+            new_pessimistic_root: output.new_pessimistic_root.0,
+            origin_network: output.origin_network.to_u32(),
+        }
+    }
+}
+
+impl From<&PessimisticProofOutputZeroCopy> for PessimisticProofOutput {
+    fn from(zc: &PessimisticProofOutputZeroCopy) -> Self {
+        Self {
+            prev_local_exit_root: LocalExitRoot::new(Digest(zc.prev_local_exit_root)),
+            prev_pessimistic_root: Digest(zc.prev_pessimistic_root),
+            l1_info_root: Digest(zc.l1_info_root),
+            origin_network: NetworkId::new(zc.origin_network),
+            aggchain_hash: Digest(zc.aggchain_hash),
+            new_local_exit_root: LocalExitRoot::new(Digest(zc.new_local_exit_root)),
+            new_pessimistic_root: Digest(zc.new_pessimistic_root),
+        }
+    }
+}
+
 /// Outputs of the pessimistic proof.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PessimisticProofOutput {
@@ -170,6 +232,27 @@ pub struct PessimisticProofOutput {
 impl PessimisticProofOutput {
     pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
         bincode::contracts()
+    }
+
+    /// Convert to zero-copy representation for efficient serialization.
+    pub fn to_zero_copy(&self) -> PessimisticProofOutputZeroCopy {
+        self.into()
+    }
+
+    /// Serialize to zero-copy bytes using bytemuck.
+    /// This avoids the overhead of bincode encoding for better SP1 performance.
+    pub fn to_bytes_zero_copy(&self) -> Vec<u8> {
+        let zero_copy = self.to_zero_copy();
+        bytemuck::bytes_of(&zero_copy).to_vec()
+    }
+
+    /// Deserialize from zero-copy bytes using bytemuck.
+    pub fn from_bytes_zero_copy(data: &[u8]) -> Result<Self, bytemuck::PodCastError> {
+        if data.len() != std::mem::size_of::<PessimisticProofOutputZeroCopy>() {
+            return Err(bytemuck::PodCastError::SizeMismatch);
+        }
+        let zero_copy = bytemuck::try_from_bytes::<PessimisticProofOutputZeroCopy>(data)?;
+        Ok(zero_copy.into())
     }
 }
 

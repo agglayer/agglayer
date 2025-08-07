@@ -55,10 +55,10 @@ impl Runner {
     }
 
     /// Extract outputs from the committed public values.
+    /// Updated to use zero-copy deserialization for better performance.
     pub fn extract_output(public_vals: SP1PublicValues) -> PessimisticProofOutput {
-        PessimisticProofOutput::bincode_codec()
-            .deserialize(public_vals.as_slice())
-            .expect("deser")
+        PessimisticProofOutput::from_bytes_zero_copy(public_vals.as_slice())
+            .expect("Failed to deserialize PessimisticProofOutput from zero-copy bytes")
     }
 
     /// Execute the ELF with given inputs.

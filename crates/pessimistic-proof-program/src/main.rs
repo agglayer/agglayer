@@ -2,10 +2,9 @@
 
 use pessimistic_proof_core::{
     generate_pessimistic_proof, multi_batch_header::MultiBatchHeader, NetworkState,
-    PessimisticProofOutput,
 };
-sp1_zkvm::entrypoint!(main);
 
+sp1_zkvm::entrypoint!(main);
 pub fn main() {
     // Read NetworkState (zero-copy)
     let network_state_bytes = sp1_zkvm::io::read_vec();
@@ -40,9 +39,7 @@ pub fn main() {
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header)
         .expect("Failed to generate pessimistic proof");
 
-    let pp_inputs = PessimisticProofOutput::bincode_codec()
-        .serialize(&outputs)
-        .expect("Failed to serialize proof outputs");
+    let pp_inputs = outputs.to_bytes_zero_copy();
 
     sp1_zkvm::io::commit_slice(&pp_inputs);
 }
