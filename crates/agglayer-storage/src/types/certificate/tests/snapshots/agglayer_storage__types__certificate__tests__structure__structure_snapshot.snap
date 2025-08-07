@@ -1,7 +1,6 @@
 ---
 source: crates/agglayer-storage/src/types/certificate/tests/structure.rs
 expression: "&registry"
-snapshot_kind: text
 ---
 {
   "CertificateStatus": {
@@ -137,6 +136,25 @@ snapshot_kind: text
       },
       "2": {
         "FrontierIndexOutOfBounds": "UNIT"
+      }
+    }
+  },
+  "MultisigError": {
+    "ENUM": {
+      "0": {
+        "UnderThreshold": {
+          "STRUCT": [
+            {
+              "got": "U64"
+            },
+            {
+              "expected": "U64"
+            }
+          ]
+        }
+      },
+      "1": {
+        "HasInvalidSignature": "UNIT"
       }
     }
   },
@@ -372,6 +390,13 @@ snapshot_kind: text
       },
       "24": {
         "HeightOverflow": "UNIT"
+      },
+      "25": {
+        "InvalidMultisig": {
+          "NEWTYPE": {
+            "TYPENAME": "MultisigError"
+          }
+        }
       }
     }
   },
@@ -603,6 +628,11 @@ snapshot_kind: text
               }
             }
           ]
+        }
+      },
+      "14": {
+        "InvalidChainData": {
+          "NEWTYPE": "UNIT"
         }
       }
     }

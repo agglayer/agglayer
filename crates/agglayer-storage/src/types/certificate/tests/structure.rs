@@ -1,4 +1,4 @@
-use agglayer_types::{Address, Digest, NetworkId};
+use agglayer_types::{Address, Digest, NetworkId, B256};
 use pessimistic_proof::unified_bridge;
 
 fn trace() -> serde_reflection::Result<serde_reflection::Registry> {
@@ -10,6 +10,7 @@ fn trace() -> serde_reflection::Result<serde_reflection::Registry> {
     dbg!(tracer.trace_value::<Address>(&mut samples, &Address::new([0xad; 20]))?);
     dbg!(tracer.trace_value::<Digest>(&mut samples, &Digest([0xd1; 32]))?);
     dbg!(tracer.trace_value::<NetworkId>(&mut samples, &NetworkId::new(42))?);
+    dbg!(tracer.trace_value::<B256>(&mut samples, &B256::from([0xbd; 32]))?);
 
     // Remaining support types.
     dbg!(tracer.trace_type::<agglayer_types::GenerationType>(&samples)?);
@@ -19,9 +20,12 @@ fn trace() -> serde_reflection::Result<serde_reflection::Registry> {
     // Error enumerations.
     dbg!(tracer.trace_type::<unified_bridge::LocalExitTreeError>(&samples)?);
     dbg!(tracer.trace_type::<unified_bridge::Error>(&samples)?);
+    dbg!(tracer.trace_type::<pessimistic_proof::core::MultisigError>(&samples)?);
     dbg!(tracer.trace_type::<pessimistic_proof::ProofError>(&samples)?);
     dbg!(tracer.trace_type::<pessimistic_proof::error::ProofVerificationError>(&samples)?);
     dbg!(tracer.trace_type::<agglayer_tries::error::SmtError>(&samples)?);
+    dbg!(tracer.trace_type::<agglayer_types::aggchain_data::MultisigError>(&samples)?);
+    dbg!(tracer.trace_type::<agglayer_types::aggchain_data::AggchainDataError>(&samples)?);
     dbg!(tracer.trace_type::<agglayer_types::Error>(&samples)?);
     dbg!(tracer.trace_type::<agglayer_types::CertificateStatusError>(&samples)?);
 
@@ -40,8 +44,8 @@ fn structure_snapshot() {
     // be considered. As a rule of thumb:
     // * It is OK to add an enum arm at the end
     // * It is NOT OK to remove, reorder or change existing enum arms.
-    // * It is NOT OK to alter structs in any way, even just by adding a field
-    //   at the end.
+    // * It is NOT OK to alter structs in any way, even just by adding a field at
+    //   the end.
     match trace() {
         Ok(registry) => insta::assert_json_snapshot!(&registry),
         Err(err) => panic!("{err}: {}", err.explanation()),

@@ -4,10 +4,23 @@
 //! inputs. Some logic in this file handles the migration on its computation.
 use agglayer_primitives::{keccak::keccak256_combine, Digest};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalExitRoot, LocalNullifierRoot};
+use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
-use unified_bridge::{CommitmentVersion, ImportedBridgeExitCommitmentValues, NetworkId};
+use unified_bridge::{
+    ImportedBridgeExitCommitmentValues, ImportedBridgeExitCommitmentVersion, NetworkId,
+};
 
-use crate::{proof::EMPTY_PP_ROOT_V2, ProofError};
+use crate::{
+    aggchain_data::AggchainHashValues,
+    proof::{ConstrainedValues, EMPTY_PP_ROOT_V2},
+    ProofError,
+};
+
+#[derive(Debug, Clone, Copy)]
+pub enum PessimisticRootCommitmentVersion {
+    V2,
+    V3,
+}
 
 /// The state commitment of one [`super::NetworkState`].
 #[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -20,7 +33,7 @@ pub struct StateCommitment {
 
 /// The parameters which compose the pessimistic root.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PessimisticRoot {
+pub struct PessimisticRootCommitmentValues {
     pub balance_root: LocalBalanceRoot,
     pub nullifier_root: LocalNullifierRoot,
     pub ler_leaf_count: u32,
@@ -28,27 +41,39 @@ pub struct PessimisticRoot {
     pub origin_network: NetworkId,
 }
 
-impl PessimisticRoot {
+impl From<&ConstrainedValues> for PessimisticRootCommitmentValues {
+    fn from(value: &ConstrainedValues) -> Self {
+        Self {
+            balance_root: value.initial_state_commitment.balance_root,
+            nullifier_root: value.initial_state_commitment.nullifier_root,
+            ler_leaf_count: value.initial_state_commitment.ler_leaf_count,
+            height: value.height,
+            origin_network: value.origin_network,
+        }
+    }
+}
+
+impl PessimisticRootCommitmentValues {
     /// Infer the version of the provided settled pessimistic root.
     pub fn infer_settled_pp_root_version(
         &self,
         settled_pp_root: Digest,
-    ) -> Result<CommitmentVersion, ProofError> {
-        let computed_v3 = self.compute_pp_root(CommitmentVersion::V3);
+    ) -> Result<PessimisticRootCommitmentVersion, ProofError> {
+        let computed_v3 = self.compute_pp_root(PessimisticRootCommitmentVersion::V3);
         if computed_v3 == settled_pp_root {
-            return Ok(CommitmentVersion::V3);
+            return Ok(PessimisticRootCommitmentVersion::V3);
         }
 
-        let computed_v2 = self.compute_pp_root(CommitmentVersion::V2);
+        let computed_v2 = self.compute_pp_root(PessimisticRootCommitmentVersion::V2);
         if computed_v2 == settled_pp_root {
-            return Ok(CommitmentVersion::V2);
+            return Ok(PessimisticRootCommitmentVersion::V2);
         }
 
         // NOTE: Return v2 to trigger the migration
         let is_initial_state = computed_v2 == EMPTY_PP_ROOT_V2 && self.height == 0;
 
         if settled_pp_root.0 == [0u8; 32] && is_initial_state {
-            return Ok(CommitmentVersion::V2);
+            return Ok(PessimisticRootCommitmentVersion::V2);
         }
 
         Err(ProofError::InvalidPreviousPessimisticRoot {
@@ -59,14 +84,14 @@ impl PessimisticRoot {
     }
 
     /// Compute the pessimistic root for the provided version.
-    pub fn compute_pp_root(&self, version: CommitmentVersion) -> Digest {
+    pub fn compute_pp_root(&self, version: PessimisticRootCommitmentVersion) -> Digest {
         match version {
-            CommitmentVersion::V2 => keccak256_combine([
+            PessimisticRootCommitmentVersion::V2 => keccak256_combine([
                 self.balance_root.as_ref(),
                 self.nullifier_root.as_ref(),
                 self.ler_leaf_count.to_le_bytes().as_slice(),
             ]),
-            CommitmentVersion::V3 => keccak256_combine([
+            PessimisticRootCommitmentVersion::V3 => keccak256_combine([
                 self.balance_root.as_ref(),
                 self.nullifier_root.as_ref(),
                 self.ler_leaf_count.to_le_bytes().as_slice(),
@@ -77,39 +102,90 @@ impl PessimisticRoot {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum SignatureCommitmentVersion {
+    V2,
+    V3,
+    V4,
+    V5,
+}
+
 /// The values which compose the signature.
 pub struct SignatureCommitmentValues {
     pub new_local_exit_root: LocalExitRoot,
     pub commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues,
     pub height: u64,
+    pub aggchain_params: Option<Digest>,
+    pub certificate_id: Digest,
 }
 
 impl SignatureCommitmentValues {
-    pub fn aggchain_proof_commitment(&self, aggchain_params: &Digest) -> Digest {
-        keccak256_combine([
-            self.new_local_exit_root.as_ref(),
-            self.commit_imported_bridge_exits
-                .commitment(CommitmentVersion::V3)
-                .as_slice(),
-            self.height.to_le_bytes().as_slice(),
-            aggchain_params.as_slice(),
-        ])
+    pub fn new(constrained_values: &ConstrainedValues, aggchain_params: Option<Digest>) -> Self {
+        Self {
+            new_local_exit_root: constrained_values.final_state_commitment.exit_root,
+            commit_imported_bridge_exits: constrained_values.commit_imported_bridge_exits.clone(),
+            height: constrained_values.height,
+            aggchain_params,
+            certificate_id: constrained_values.certificate_id,
+        }
     }
+}
 
+impl SignatureCommitmentValues {
     /// Returns the expected signed commitment for the provided version.
     #[inline]
-    pub fn commitment(&self, version: CommitmentVersion) -> Digest {
-        let imported_bridge_exit_commitment = self.commit_imported_bridge_exits.commitment(version);
-        match version {
-            CommitmentVersion::V2 => keccak256_combine([
+    pub fn commitment(&self, version: SignatureCommitmentVersion) -> B256 {
+        let commitment = match version {
+            SignatureCommitmentVersion::V2 => keccak256_combine([
                 self.new_local_exit_root.as_ref(),
-                imported_bridge_exit_commitment.as_slice(),
+                self.commit_imported_bridge_exits
+                    .commitment(ImportedBridgeExitCommitmentVersion::V2)
+                    .as_slice(),
             ]),
-            CommitmentVersion::V3 => keccak256_combine([
-                self.new_local_exit_root.as_ref(),
-                imported_bridge_exit_commitment.as_slice(),
-                self.height.to_le_bytes().as_slice(),
-            ]),
-        }
+            SignatureCommitmentVersion::V3 => {
+                // Added the height to avoid replay attack edge cases
+                keccak256_combine([
+                    self.new_local_exit_root.as_ref(),
+                    self.commit_imported_bridge_exits
+                        .commitment(ImportedBridgeExitCommitmentVersion::V3)
+                        .as_slice(),
+                    self.height.to_le_bytes().as_slice(),
+                ])
+            }
+            SignatureCommitmentVersion::V4 => {
+                // Added the aggchain params to support the aggchain proof
+                keccak256_combine([
+                    self.new_local_exit_root.as_ref(),
+                    self.commit_imported_bridge_exits
+                        .commitment(ImportedBridgeExitCommitmentVersion::V3)
+                        .as_slice(),
+                    self.height.to_le_bytes().as_slice(),
+                    self.aggchain_params
+                        .unwrap_or_else(AggchainHashValues::empty_aggchain_params)
+                        .as_slice(),
+                ])
+            }
+            SignatureCommitmentVersion::V5 => {
+                // Added the certificate id to cover edge cases coming with the multisig
+                keccak256_combine([
+                    self.new_local_exit_root.as_ref(),
+                    self.commit_imported_bridge_exits
+                        .commitment(ImportedBridgeExitCommitmentVersion::V3)
+                        .as_slice(),
+                    self.height.to_le_bytes().as_slice(),
+                    self.aggchain_params
+                        .unwrap_or_else(AggchainHashValues::empty_aggchain_params)
+                        .as_slice(),
+                    self.certificate_id.as_slice(),
+                ])
+            }
+        };
+
+        B256::new(commitment.0)
+    }
+
+    #[inline]
+    pub fn multisig_commitment(&self) -> B256 {
+        self.commitment(SignatureCommitmentVersion::V5)
     }
 }

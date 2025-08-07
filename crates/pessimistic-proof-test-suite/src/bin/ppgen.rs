@@ -1,8 +1,14 @@
 use std::{path::PathBuf, time::Instant};
 
-use agglayer_types::{Address, Certificate, NetworkId, PessimisticRootInput, U256};
+use agglayer_types::{
+    aggchain_data::CertificateAggchainDataCtx, Address, Certificate, L1WitnessCtx, NetworkId,
+    PessimisticRootInput, U256,
+};
 use clap::Parser;
-use pessimistic_proof::{unified_bridge::TokenInfo, PessimisticProofOutput};
+use pessimistic_proof::{
+    core::commitment::PessimisticRootCommitmentVersion, unified_bridge::TokenInfo,
+    PessimisticProofOutput,
+};
 use pessimistic_proof_test_suite::{
     runner::Runner,
     sample_data::{self as data},
@@ -10,7 +16,6 @@ use pessimistic_proof_test_suite::{
 use serde::{Deserialize, Serialize};
 use sp1_sdk::HashableKey;
 use tracing::{info, warn};
-use unified_bridge::CommitmentVersion;
 use uuid::Uuid;
 
 /// The arguments for the pp generator.
@@ -81,21 +86,25 @@ pub fn main() {
         )
         .expect("failed to write certificate");
     }
+
     info!(
         "Certificate {}: [{}]",
         certificate.hash(),
         serde_json::to_string(&certificate).unwrap()
     );
 
-    let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
-
     let multi_batch_header = old_state
         .make_multi_batch_header(
             &certificate,
-            state.get_signer(),
-            l1_info_root,
-            PessimisticRootInput::Computed(CommitmentVersion::V2),
-            None,
+            L1WitnessCtx {
+                l1_info_root: certificate.l1_info_root().unwrap().unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa {
+                    signer: state.get_signer(),
+                },
+            },
         )
         .unwrap();
 
