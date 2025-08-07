@@ -72,11 +72,6 @@ async fn happy_path() {
         .returning(move |_, _| Ok(signer));
 
     l1_rpc
-        .expect_get_rollup_contract_address()
-        .once()
-        .returning(|_| Ok(alloy::primitives::Address::default().into()));
-
-    l1_rpc
         .expect_default_l1_info_tree_entry()
         .once()
         .returning(|| (0u32, [1u8; 32]));
@@ -175,11 +170,6 @@ async fn prover_timeout() {
         .expect_get_trusted_sequencer_address()
         .once()
         .returning(move |_, _| Ok(signer));
-
-    l1_rpc
-        .expect_get_rollup_contract_address()
-        .once()
-        .returning(|_| Ok(alloy::primitives::Address::default().into()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()

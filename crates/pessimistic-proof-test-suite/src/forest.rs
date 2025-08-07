@@ -8,14 +8,14 @@ use agglayer_types::{
 use alloy::signers::{local::PrivateKeySigner, SignerSync};
 use ecdsa_proof_lib::AggchainECDSA;
 use pessimistic_proof::{
-    core::commitment::SignatureCommitmentValues,
+    core::commitment::{SignatureCommitmentValues, SignatureCommitmentVersion},
     keccak::keccak256_combine,
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
     local_state::LocalNetworkState,
     proof::zero_if_empty_local_exit_root,
     unified_bridge::{
-        BridgeExit, Claim, ClaimFromMainnet, CommitmentVersion, GlobalIndex, ImportedBridgeExit,
-        L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
+        BridgeExit, Claim, ClaimFromMainnet, GlobalIndex, ImportedBridgeExit, L1InfoTreeLeaf,
+        L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
     },
     PessimisticProofOutput,
 };
@@ -191,7 +191,7 @@ impl Forest {
         &mut self,
         imported_bridge_events: impl IntoIterator<Item = (TokenInfo, U256)>,
         bridge_exits: impl IntoIterator<Item = BridgeExit>,
-        version: CommitmentVersion,
+        version: SignatureCommitmentVersion,
     ) -> Certificate {
         let prev_local_exit_root = self.state_b.exit_tree.get_root().into();
 
@@ -234,7 +234,11 @@ impl Forest {
         imported_bridge_events: &[(TokenInfo, U256)],
         bridge_events: &[(TokenInfo, U256)],
     ) -> Certificate {
-        self.apply_events_with_version(imported_bridge_events, bridge_events, CommitmentVersion::V2)
+        self.apply_events_with_version(
+            imported_bridge_events,
+            bridge_events,
+            SignatureCommitmentVersion::V2,
+        )
     }
 
     /// Apply a sequence of events and return the corresponding [`Certificate`].
@@ -242,7 +246,7 @@ impl Forest {
         &mut self,
         imported_bridge_events: &[(TokenInfo, U256)],
         bridge_events: &[(TokenInfo, U256)],
-        version: CommitmentVersion,
+        version: SignatureCommitmentVersion,
     ) -> Certificate {
         let imported_bridge_events = imported_bridge_events.iter().cloned();
         let bridge_exits = bridge_events.iter().map(|(tok, amt)| exit_to_a(*tok, *amt));
@@ -264,11 +268,14 @@ impl Forest {
 
         let (aggchain_proof, aggchain_vkey, aggchain_params) =
             compute_aggchain_proof(AggchainECDSA {
-                signer: certificate.retrieve_signer(CommitmentVersion::V2).unwrap(),
+                signer: certificate
+                    .retrieve_signer(SignatureCommitmentVersion::V2)
+                    .unwrap(),
                 signature,
-                commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
-                    .commitment(CommitmentVersion::V2)
-                    .0,
+                commit_imported_bridge_exits:
+                    SignatureCommitmentValues::from(&certificate) // FIXME: ImportedBridgeExitCommitmentValue
+                        .commitment(SignatureCommitmentVersion::V2)
+                        .0,
                 prev_local_exit_root: certificate.prev_local_exit_root,
                 new_local_exit_root: certificate.new_local_exit_root,
                 l1_info_root: *certificate.l1_info_root().unwrap().unwrap(),

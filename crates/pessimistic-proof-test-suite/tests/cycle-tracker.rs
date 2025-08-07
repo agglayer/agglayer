@@ -1,7 +1,12 @@
 use std::time::Duration;
 
-use agglayer_types::PessimisticRootInput;
-use pessimistic_proof::unified_bridge::{BridgeExit, CommitmentVersion};
+use agglayer_types::{
+    aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx, PessimisticRootInput,
+};
+use pessimistic_proof::{
+    core::commitment::{PessimisticRootCommitmentVersion, SignatureCommitmentVersion},
+    unified_bridge::BridgeExit,
+};
 use pessimistic_proof_test_suite::{forest::Forest, runner::Runner, sample_data as data};
 
 #[rstest::rstest]
@@ -24,18 +29,24 @@ fn cycles_on_sample_inputs(
     bridge_exits: impl IntoIterator<Item = BridgeExit>,
 ) {
     let old_state = state.local_state();
-    let certificate = state
-        .clone()
-        .apply_bridge_exits([], bridge_exits, CommitmentVersion::V2);
+    let certificate =
+        state
+            .clone()
+            .apply_bridge_exits([], bridge_exits, SignatureCommitmentVersion::V2);
 
     let multi_batch_header = state
         .state_b
         .apply_certificate(
             &certificate,
-            state.get_signer(),
-            certificate.l1_info_root().unwrap().unwrap_or_default(),
-            PessimisticRootInput::Computed(CommitmentVersion::V2),
-            None,
+            L1WitnessCtx {
+                l1_info_root: certificate.l1_info_root().unwrap().unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa {
+                    signer: state.get_signer(),
+                },
+            },
         )
         .unwrap();
 
