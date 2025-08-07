@@ -347,12 +347,14 @@ where
             .update_certificate_header_status(&certificate_id, &error_status)
             .map_err(|error| {
                 error!(
+                    %certificate_id,
                     ?error,
                     "Failed to update certificate status in the state store on pending removal"
                 );
-                Error::internal(
-                    "Unable to update certificate status in the state store on pending removal",
-                )
+                Error::internal(format!(
+                    "Unable to update certificate_id: {certificate_id} status in the state store \
+                     on pending removal"
+                ))
             })?;
 
         if remove_proof {
