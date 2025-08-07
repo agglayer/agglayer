@@ -1,7 +1,9 @@
-#[test]
-fn vkey_snapshot() {
+#[tokio::test]
+async fn vkey_snapshot() {
     let selector = hex::encode(pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR);
-    let vkey = agglayer_prover::compute_program_vkey(pessimistic_proof::ELF);
+    let vkey = agglayer_prover::compute_program_vkey(pessimistic_proof::ELF)
+        .await
+        .unwrap();
 
     let message: String = [
         "# If this test fails, it means the PP vkey has changed.",
