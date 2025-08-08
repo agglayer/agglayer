@@ -4,11 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 
 alloy = { workspace = true, features = ["node-bindings"] }
 async-trait.workspace = true
-backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 fail.workspace = true
 futures.workspace = true
@@ -18,10 +18,10 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-fail = { workspace = true, features = ["failpoints"] }
+agglayer-clock = { workspace = true, features = ["testutils"] }
 rstest.workspace = true
 test-log.workspace = true
 
 [features]
 default = []
-testutils = []
+testutils = ["fail/failpoints"]
