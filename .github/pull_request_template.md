@@ -1,6 +1,10 @@
-Please include a summary of the changes and the related issue. Please also include relevant motivation and context. List any dependencies that are required for this change.
+📌 Review Process TL;DR:
+- ⏱️ We aim to acknowledge PRs within 1 business day.
+- 🚫 Once a PR is marked ready for review, **do not force-push** anymore.
+    - Add one commit per requested change instead.
+    - Draft PRs can be force-pushed freely.
 
-Fixes # (issue)
+Fixes #issue
 
 CONFIG-CHANGE: Short description of the configuration changes.
   More details can be added in the description.
@@ -10,5 +14,5 @@ CONFIG-CHANGE: Short description of the configuration changes.
 
 BREAKING-CHANGE: Short description of the breaking changes.
   More details can be added in the description.
-  Multiple lines can be used. Even with **markdown** formatting.
+  Multiple lines can be used, with **markdown** formatting if desired.
   Multiple breaking changes can be listed.
