@@ -26,10 +26,11 @@ We follow these practices to keep contributions smooth for everyone:
 
 - You need to **sign your commits with OpenPGP** for CI to pass.
 - The PR title must **start with `docs:`, `chore:`, `fix:` or `feat:`** for the most frequently-used options.
+- The PR description should **use the BREAKING-CHANGE and CONFIG-CHANGE keywords** as per the explanations in the PR template.
 
 ### 2. PR Reviews
 
-- We **aim to review PRs within 1 business day ⏱️.**
+- We **aim to acknowledge PRs within 1 business day ⏱️.**
 - If we cannot review within that time, we will **leave a comment indicating the expected review timeline.**
 - Reviews are collaborative: maintainers and contributors work together to make the PR merge-ready.
 
@@ -68,7 +69,7 @@ We follow these practices to keep contributions smooth for everyone:
 ## 🏁 Merging
 
 - PRs are merged via **Squash and Merge.**
-- The final commit message will summarize the work in the PR.
+- The final commit message will contain the title and description of the PR, hence these should be clean upon merging.
 
 -----
 

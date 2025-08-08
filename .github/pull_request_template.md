@@ -1,5 +1,5 @@
 📌 Review Process TL;DR:
-- ⏱️ We aim to review reasonably-sized PRs within 1 business day.
+- ⏱️ We aim to acknowledge PRs within 1 business day.
 - 🚫 Once a PR is marked ready for review, **do not force-push** anymore.
     - Add one commit per requested change instead.
     - Draft PRs can be force-pushed freely.
