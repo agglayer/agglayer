@@ -1,7 +1,7 @@
 use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 
 use agglayer_config::Config;
-use anyhow::{bail, Result};
+use eyre::bail;
 use node::Node;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
@@ -24,9 +24,9 @@ pub fn main(
     cfg: PathBuf,
     version: &str,
     cancellation_token: Option<CancellationToken>,
-) -> Result<()> {
+) -> eyre::Result<()> {
     let cfg = cfg.canonicalize().map_err(|_| {
-        anyhow::Error::msg(format!(
+        eyre::Error::msg(format!(
             "Configuration file path must be absolute, given: {}",
             cfg.display()
         ))
