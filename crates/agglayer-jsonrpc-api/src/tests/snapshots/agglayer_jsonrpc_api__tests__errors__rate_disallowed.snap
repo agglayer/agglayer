@@ -1,6 +1,6 @@
 ---
 source: crates/agglayer-node/src/rpc/tests/errors.rs
-expression: "RateLimited { detail: \"The `sendTx` settlement disabled by rate limiter\", error: SendTxDiabled }"
+expression: "RateLimited { detail: \"The `sendTx` settlement disabled by rate limiter\", error: SendTxDisabled }"
 ---
 {
   "code": -10007,
@@ -8,7 +8,7 @@ expression: "RateLimited { detail: \"The `sendTx` settlement disabled by rate li
     "rate-limited": {
       "detail": "The `sendTx` settlement disabled by rate limiter",
       "error": {
-        "send-tx-diabled": {}
+        "send-tx-disabled": {}
       }
     }
   },
