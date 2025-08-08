@@ -1047,7 +1047,6 @@ impl MultiBatchHeader {
         Ok(())
     }
 
-    
     /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy
     /// components. This is the complete reconstruction pattern used in SP1
     /// zkvm environments. Returns a borrowed view to avoid allocations for
@@ -1069,8 +1068,9 @@ impl MultiBatchHeader {
             bytemuck::pod_read_unaligned::<MultiBatchHeaderZeroCopy>(header_bytes);
 
         // 2) Create borrowed slices for zero-copy components using try_cast_slice first
-        // Doing this before count validation ensures that alignment/multiple-of-size errors
-        // surface as casting errors (as expected by tests), rather than length errors.
+        // Doing this before count validation ensures that alignment/multiple-of-size
+        // errors surface as casting errors (as expected by tests), rather than
+        // length errors.
         let be_count = header_zero_copy.bridge_exits_count as usize;
         let ibe_count = header_zero_copy.imported_bridge_exits_count as usize;
         let bp_count = header_zero_copy.balances_proofs_count as usize;
@@ -1117,26 +1117,31 @@ impl MultiBatchHeader {
         if bridge_exits.len() != be_count {
             return Err(format!(
                 "bridge_exits_bytes count {} does not match bridge_exits_count {}",
-                bridge_exits.len(), be_count
+                bridge_exits.len(),
+                be_count
             )
             .into());
         }
         if imported_bridge_exits.len() != ibe_count {
             return Err(format!(
-                "imported_bridge_exits_bytes count {} does not match imported_bridge_exits_count {}",
-                imported_bridge_exits.len(), ibe_count
+                "imported_bridge_exits_bytes count {} does not match imported_bridge_exits_count \
+                 {}",
+                imported_bridge_exits.len(),
+                ibe_count
             )
             .into());
         }
         if balances_proofs.len() != bp_count {
             return Err(format!(
                 "balances_proofs_bytes count {} does not match balances_proofs_count {}",
-                balances_proofs.len(), bp_count
+                balances_proofs.len(),
+                bp_count
             )
             .into());
         }
 
-        // For nullifier_paths and balance_merkle_paths, derive counts from the slice lengths
+        // For nullifier_paths and balance_merkle_paths, derive counts from the slice
+        // lengths
         let derived_nullifier_count = nullifier_paths.len();
         let derived_balance_paths_count = balance_merkle_paths.len();
 
