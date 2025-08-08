@@ -361,8 +361,10 @@ where
             self.pending_store
                 .remove_generated_proof(&certificate_id)
                 .map_err(|error| {
-                    error!("Failed to remove certificate header: {}", error);
-                    Error::internal("Unable to remove certificate header")
+                    error!( %certificate_id, ?error, "Failed to remove generated proof");
+                    Error::internal(format!(
+                        "Failed to remove generated proof for certificate_id: {certificate_id}"
+                    ))
                 })?;
         }
 
