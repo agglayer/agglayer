@@ -5,28 +5,28 @@ snapshot_kind: text
 ---
 gas: 3195502
 opcode counts (922095 total instructions):
-    247657 add
-    145505 sw
-    111482 lw
+    247722 add
+    145478 sw
+    111474 lw
     104562 lbu
      58524 bne
      53909 sb
      46795 xor
-     38078 bltu
-     20159 and
-     18176 beq
-     12484 jalr
+     38076 bltu
+     20158 and
+     18169 beq
+     12482 jalr
      12122 or
-      9467 sll
-      9276 sltu
-      8089 sub
-      7170 srl
-      6246 auipc
+      9463 sll
+      9275 sltu
+      8087 sub
+      7167 srl
+      6245 auipc
       2522 jal
-      2383 mul
+      2380 mul
       2227 bgeu
       2199 ecall
-      1600 mulhu
+      1596 mulhu
        670 lb
        626 sh
        108 sra
