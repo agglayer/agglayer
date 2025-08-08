@@ -18,7 +18,7 @@ use crate::{Address, Certificate, Digest, Error, U256, U512};
 
 /// Local state data of one network.
 /// The AggLayer tracks the [`LocalNetworkStateData`] for all networks.
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct LocalNetworkStateData {
     /// The local exit tree without leaves.
     pub exit_tree: LocalExitTree,
