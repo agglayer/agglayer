@@ -32,7 +32,8 @@ impl L1Docker {
         if !docker.status.success() {
             let status = docker.status;
             let err = String::from_utf8_lossy(&docker.stderr);
-            panic!("Starting L1 docker container failed (status={status}): {err}");
+            panic!("Starting L1 docker container failed (status={:?}): {:?}", status, err);
+
         }
 
         let id = String::from_utf8(docker.stdout).unwrap().replace('\n', "");
