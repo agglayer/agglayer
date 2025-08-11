@@ -6,7 +6,8 @@ use agglayer_storage::stores::{
     StateWriter,
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
+    Height, NetworkId,
 };
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
@@ -338,12 +339,32 @@ where
                 Error::internal("Unable to remove pending certificate")
             })?;
 
+        // Update certificate status to InError in the state store
+        let error_status = CertificateStatus::error(CertificateStatusError::InternalError(
+            "Certificate removed from pending store by administrator".to_string(),
+        ));
+        self.state
+            .update_certificate_header_status(&certificate_id, &error_status)
+            .map_err(|error| {
+                error!(
+                    %certificate_id,
+                    ?error,
+                    "Failed to update certificate status in the state store on pending removal"
+                );
+                Error::internal(format!(
+                    "Unable to update certificate_id: {certificate_id} status in the state store \
+                     on pending removal"
+                ))
+            })?;
+
         if remove_proof {
             self.pending_store
                 .remove_generated_proof(&certificate_id)
                 .map_err(|error| {
-                    error!("Failed to remove certificate header: {}", error);
-                    Error::internal("Unable to remove certificate header")
+                    error!( %certificate_id, ?error, "Failed to remove generated proof");
+                    Error::internal(format!(
+                        "Failed to remove generated proof for certificate_id: {certificate_id}"
+                    ))
                 })?;
         }
 
