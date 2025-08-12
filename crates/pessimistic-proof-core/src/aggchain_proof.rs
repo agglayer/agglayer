@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::keccak::keccak256_combine;
 
-#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
 pub enum ConsensusType {
     ECDSA = 0,
     Generic = 1,
@@ -23,7 +23,7 @@ pub type Vkey = [u32; 8];
 
 /// Aggchain Data which is either one ECDSA signature, or one generic proof.
 /// Contains all the necessary data for verification.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AggchainData {
     /// ECDSA signature.
     ECDSA {

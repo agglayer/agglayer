@@ -29,16 +29,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "agglayer-bincode"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b600f94a636bff0170bd11b2b93f4a7fd305be95bfbaa558e1a9a1f0e6a87bdd"
-dependencies = [
- "bincode",
- "serde",
-]
-
-[[package]]
 name = "agglayer-primitives"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -642,6 +632,20 @@ name = "bytemuck"
 version = "1.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c76a5792e44e4abe34d3abf15636779261d45a7450612059293d1d2cfc63422"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ecc273b49b3205b83d648f0690daa588925572cc5063745bfe547fe7ec8e1a1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
 
 [[package]]
 name = "byteorder"
@@ -2429,6 +2433,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
 
 [[package]]
+name = "memoffset"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "memuse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3086,18 +3099,16 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
- "agglayer-bincode",
  "agglayer-primitives",
  "agglayer-tries",
- "alloy-primitives",
- "hex",
+ "bytemuck",
  "hex-literal 0.4.1",
+ "memoffset",
  "semver 1.0.26",
  "serde",
  "serde_with",
  "sp1-zkvm",
  "thiserror 2.0.12",
- "tiny-keccak",
  "toml",
  "tracing",
  "unified-bridge",
