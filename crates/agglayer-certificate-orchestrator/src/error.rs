@@ -125,6 +125,9 @@ pub enum CertificationError {
         from_proof: Box<AggchainProofPublicValues>,
         from_witness: Box<AggchainProofPublicValues>,
     },
+
+    #[error(transparent)]
+    Other(eyre::Error),
 }
 
 impl From<CertificationError> for CertificateStatusError {
