@@ -9,15 +9,24 @@ use agglayer_prover_types::v1::{
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    aggchain_proof::AggchainData, bincode, Certificate, Digest, Height, LocalNetworkStateData,
-    NetworkId, PessimisticRootInput, Proof,
+    aggchain_data::{
+        AggchainProofCtx, AggchainProofPayload, CertificateAggchainData,
+        CertificateAggchainDataCtx, MultisigCtx,
+    },
+    aggchain_proof::AggchainData,
+    bincode, Address, Certificate, Digest, Height, L1WitnessCtx, LocalNetworkStateData, NetworkId,
+    PessimisticRootInput, Proof, B256,
 };
 use pessimistic_proof::{
-    core::{commitment::StateCommitment, generate_pessimistic_proof},
+    core::{
+        commitment::{SignatureCommitmentValues, SignatureCommitmentVersion, StateCommitment},
+        generate_pessimistic_proof,
+    },
     local_state::LocalNetworkState,
     multi_batch_header::MultiBatchHeader,
     unified_bridge::{
-        AggchainProofPublicValues, CommitmentVersion, ImportedBridgeExitCommitmentValues,
+        AggchainProofPublicValues, ImportedBridgeExitCommitmentValues,
+        ImportedBridgeExitCommitmentVersion,
     },
     NetworkState, PessimisticProofOutput,
 };
@@ -46,6 +55,200 @@ pub struct CertifierClient<PendingStore, L1Rpc> {
     /// The L1 RPC client.
     l1_rpc: Arc<L1Rpc>,
     config: Arc<Config>,
+}
+
+impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc>
+where
+    L1Rpc: RollupContract + AggchainContract + Send + Sync + 'static,
+{
+    /// Fetch all the necessary context from the L1 for the witness generation.
+    pub async fn fetch_l1_context(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<L1WitnessCtx, CertificationError> {
+        let network_id = certificate.network_id;
+
+        let prev_pessimistic_root = self
+            .l1_rpc
+            .get_prev_pessimistic_root(network_id.to_u32())
+            .await
+            .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
+
+        let l1_info_root = self.fetch_l1_info_root(certificate).await?;
+
+        // Fetch context based on the aggchain data type that we received from the
+        // chain.
+        let aggchain_data_ctx: CertificateAggchainDataCtx =
+            match CertificateAggchainData::from(certificate.aggchain_data.clone()) {
+                CertificateAggchainData::LegacyEcdsa { .. } => {
+                    let signer = self
+                        .l1_rpc
+                        .get_trusted_sequencer_address(
+                            network_id.to_u32(),
+                            self.config.proof_signers.clone(),
+                        )
+                        .await
+                        .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
+                    CertificateAggchainDataCtx::LegacyEcdsa { signer }
+                }
+                CertificateAggchainData::MultisigOnly(_) => {
+                    CertificateAggchainDataCtx::MultisigOnly(
+                        self.fetch_multisig_ctx(certificate).await?,
+                    )
+                }
+                CertificateAggchainData::AggchainProofOnly { aggchain_proof, .. } => {
+                    CertificateAggchainDataCtx::AggchainProofOnly(
+                        self.fetch_aggchain_proof_ctx(certificate, &aggchain_proof)
+                            .await?,
+                    )
+                }
+                CertificateAggchainData::MultisigAndAggchainProof { aggchain_proof, .. } => {
+                    CertificateAggchainDataCtx::MultisigAndAggchainProof {
+                        multisig_ctx: self.fetch_multisig_ctx(certificate).await?,
+                        aggchain_proof_ctx: self
+                            .fetch_aggchain_proof_ctx(certificate, &aggchain_proof)
+                            .await?,
+                    }
+                }
+            };
+
+        Ok(L1WitnessCtx {
+            prev_pessimistic_root: PessimisticRootInput::Fetched(prev_pessimistic_root.into()),
+            l1_info_root,
+            aggchain_data_ctx,
+        })
+    }
+
+    pub async fn fetch_aggchain_proof_ctx(
+        &self,
+        certificate: &Certificate,
+        aggchain_proof_payload: &AggchainProofPayload,
+    ) -> Result<AggchainProofCtx, CertificationError> {
+        // Fetching rollup contract address
+        let rollup_address = self
+            .l1_rpc
+            .get_rollup_contract_address(certificate.network_id.to_u32())
+            .await
+            .map_err(CertificationError::RollupContractAddressNotFound)?;
+
+        let aggchain_vkey_selector = certificate
+            .custom_chain_data
+            .first_chunk::<2>()
+            .ok_or(CertificationError::Types {
+                source: agglayer_types::Error::InvalidCustomChainDataLength {
+                    expected_at_least: 2,
+                    actual: certificate.custom_chain_data.len(),
+                },
+            })
+            .map(|bytes| u16::from_be_bytes(*bytes))?;
+
+        let aggchain_vkey = self
+            .l1_rpc
+            .get_aggchain_vkey_hash(rollup_address, aggchain_vkey_selector)
+            .await
+            .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
+
+        let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::new(
+            aggchain_proof_payload
+                .aggchain_vkey_from_proof()
+                .vk
+                .hash_bytes(),
+        );
+
+        if aggchain_vkey != proof_vk_hash {
+            return Err(CertificationError::AggchainProofVkeyMismatch {
+                expected: aggchain_vkey.to_hex(),
+                actual: proof_vk_hash.to_hex(),
+            });
+        }
+
+        Ok(AggchainProofCtx {
+            aggchain_vkey: aggchain_proof_payload
+                .aggchain_vkey_from_proof()
+                .vk
+                .hash_u32(),
+        })
+    }
+
+    pub async fn fetch_multisig_ctx(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<MultisigCtx, CertificationError> {
+        let (_multisig_signers, _multisig_threshold): (Vec<Address>, usize) = {
+            // TODO: To fetch from the L1
+            Default::default()
+        };
+
+        Ok(MultisigCtx {
+            signers: _multisig_signers,
+            threshold: _multisig_threshold,
+            prehash: B256::new(
+                SignatureCommitmentValues::from(certificate)
+                    .commitment(SignatureCommitmentVersion::V5)
+                    .0,
+            ),
+        })
+    }
+
+    /// Fetch, verify consistency, and wait the finalization for the l1 info
+    /// root.
+    pub async fn fetch_l1_info_root(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<Digest, CertificationError> {
+        let certificate_id = certificate.hash();
+        let declared_l1_info_root = certificate
+            .l1_info_root()
+            .map_err(|source| CertificationError::Types { source })?;
+
+        let declared_l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
+
+        let l1_info_root = match (declared_l1_info_leaf_count, declared_l1_info_root) {
+            // Use the default corresponding to the entry set by the event `InitL1InfoRootMap`
+            (None, _) if matches!(certificate.aggchain_data, AggchainData::Generic { .. }) => {
+                return Err(CertificationError::MissingL1InfoTreeLeafCountForGenericAggchainData);
+            }
+            (None, None) => self.l1_rpc.default_l1_info_tree_entry().1.into(),
+            // Retrieve the event corresponding to the declared entry and await for finalization
+            (Some(declared_leaf), declared_root) => {
+                // Retrieve from contract and await for finalization
+                let retrieved_root = self
+                    .l1_rpc
+                    .get_l1_info_root(declared_leaf)
+                    .await
+                    .map_err(|_| {
+                        CertificationError::L1InfoRootNotFound(certificate_id, declared_leaf)
+                    })?
+                    .into();
+
+                if let Some(declared_root) = declared_root {
+                    // Check that the retrieved l1 info root is equal to the declared one
+                    if declared_root != retrieved_root {
+                        return Err(CertificationError::Types {
+                            source: agglayer_types::Error::L1InfoRootIncorrect {
+                                declared: declared_root,
+                                retrieved: retrieved_root,
+                                leaf_count: declared_leaf,
+                            },
+                        });
+                    }
+                }
+
+                retrieved_root
+            }
+            // Inconsistent declared L1 info tree entry
+            (l1_leaf, l1_info_root) => {
+                return Err(CertificationError::Types {
+                    source: agglayer_types::Error::InconsistentL1InfoTreeInformation {
+                        l1_leaf,
+                        l1_info_root,
+                    },
+                })
+            }
+        };
+
+        Ok(l1_info_root)
+    }
 }
 
 impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
@@ -318,125 +521,13 @@ where
         state: &mut LocalNetworkStateData,
     ) -> Result<(MultiBatchHeader, LocalNetworkState, PessimisticProofOutput), CertificationError>
     {
-        let network_id = certificate.network_id;
-        let certificate_id = certificate.hash();
-
-        let signer = self
-            .l1_rpc
-            .get_trusted_sequencer_address(network_id.to_u32(), self.config.proof_signers.clone())
-            .await
-            .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
-
-        let prev_pessimistic_root = self
-            .l1_rpc
-            .get_prev_pessimistic_root(network_id.to_u32())
-            .await
-            .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
-
-        let declared_l1_info_root = certificate
-            .l1_info_root()
-            .map_err(|source| CertificationError::Types { source })?;
-
-        let declared_l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
-
-        let l1_info_root = match (declared_l1_info_leaf_count, declared_l1_info_root) {
-            // Use the default corresponding to the entry set by the event `InitL1InfoRootMap`
-            (None, _) if matches!(certificate.aggchain_data, AggchainData::Generic { .. }) => {
-                return Err(CertificationError::MissingL1InfoTreeLeafCountForGenericAggchainData);
-            }
-            (None, None) => self.l1_rpc.default_l1_info_tree_entry().1.into(),
-            // Retrieve the event corresponding to the declared entry and await for finalization
-            (Some(declared_leaf), declared_root) => {
-                // Retrieve from contract and await for finalization
-                let retrieved_root = self
-                    .l1_rpc
-                    .get_l1_info_root(declared_leaf)
-                    .await
-                    .map_err(|_| {
-                        CertificationError::L1InfoRootNotFound(certificate_id, declared_leaf)
-                    })?
-                    .into();
-
-                if let Some(declared_root) = declared_root {
-                    // Check that the retrieved l1 info root is equal to the declared one
-                    if declared_root != retrieved_root {
-                        return Err(CertificationError::Types {
-                            source: agglayer_types::Error::L1InfoRootIncorrect {
-                                declared: declared_root,
-                                retrieved: retrieved_root,
-                                leaf_count: declared_leaf,
-                            },
-                        });
-                    }
-                }
-
-                retrieved_root
-            }
-            // Inconsistent declared L1 info tree entry
-            (l1_leaf, l1_info_root) => {
-                return Err(CertificationError::Types {
-                    source: agglayer_types::Error::InconsistentL1InfoTreeInformation {
-                        l1_leaf,
-                        l1_info_root,
-                    },
-                })
-            }
-        };
-
-        // Fetching rollup contract address
-        let rollup_address = self
-            .l1_rpc
-            .get_rollup_contract_address(network_id.to_u32())
-            .await
-            .map_err(CertificationError::RollupContractAddressNotFound)?;
-
-        let aggchain_vkey = match certificate.aggchain_data {
-            AggchainData::ECDSA { .. } => None,
-            AggchainData::Generic { ref proof, .. } => {
-                let aggchain_vkey_selector = certificate
-                    .custom_chain_data
-                    .first_chunk::<2>()
-                    .ok_or(CertificationError::Types {
-                        source: agglayer_types::Error::InvalidCustomChainDataLength {
-                            expected_at_least: 2,
-                            actual: certificate.custom_chain_data.len(),
-                        },
-                    })
-                    .map(|bytes| u16::from_be_bytes(*bytes))?;
-
-                let aggchain_vkey = self
-                    .l1_rpc
-                    .get_aggchain_vkey_hash(rollup_address, aggchain_vkey_selector)
-                    .await
-                    .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
-
-                let agglayer_types::aggchain_proof::Proof::SP1Stark(sp1_reduce_proof) = proof;
-
-                let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::new(
-                    sp1_reduce_proof.vkey.vk.hash_bytes(),
-                );
-
-                if aggchain_vkey != proof_vk_hash {
-                    return Err(CertificationError::AggchainProofVkeyMismatch {
-                        expected: aggchain_vkey.to_hex(),
-                        actual: proof_vk_hash.to_hex(),
-                    });
-                }
-
-                Some(sp1_reduce_proof.vkey.vk.hash_u32())
-            }
-        };
+        // Fetch all the necessary context from the L1
+        let ctx_from_l1 = self.fetch_l1_context(certificate).await?;
 
         let initial_state = LocalNetworkState::from(state.clone());
 
         let multi_batch_header = state
-            .apply_certificate(
-                certificate,
-                signer,
-                l1_info_root,
-                PessimisticRootInput::Fetched(prev_pessimistic_root.into()),
-                aggchain_vkey,
-            )
+            .apply_certificate(certificate, ctx_from_l1)
             .map_err(|source| CertificationError::Types { source })?;
 
         let targets_witness_generation: StateCommitment = {
@@ -463,6 +554,13 @@ where
             ..
         } = &certificate.aggchain_data
         {
+            // Fetching rollup contract address
+            let rollup_address = self
+                .l1_rpc
+                .get_rollup_contract_address(certificate.network_id.to_u32())
+                .await
+                .map_err(CertificationError::RollupContractAddressNotFound)?;
+
             // Verify matching on the aggchain hash between the L1 and the agglayer
             let l1_aggchain_hash: Digest = self
                 .l1_rpc
@@ -471,7 +569,7 @@ where
                 .map_err(CertificationError::UnableToFindAggchainHash)?
                 .into();
 
-            let computed_aggchain_hash = multi_batch_header.aggchain_proof.aggchain_hash();
+            let computed_aggchain_hash = multi_batch_header.aggchain_data.aggchain_hash();
 
             if l1_aggchain_hash != computed_aggchain_hash {
                 return Err(CertificationError::AggchainHashMismatch {
@@ -501,7 +599,7 @@ where
                         .map(|(exit, _)| exit.to_indexed_exit_hash())
                         .collect(),
                 }
-                .commitment(CommitmentVersion::V3),
+                .commitment(ImportedBridgeExitCommitmentVersion::V3),
                 aggchain_params: *aggchain_params,
             };
 

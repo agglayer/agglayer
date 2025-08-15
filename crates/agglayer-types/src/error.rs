@@ -91,6 +91,9 @@ pub enum Error {
         computed: LocalExitRoot,
         declared: LocalExitRoot,
     },
+
+    #[error("Invalid multisig, signature or aggchain proof related data. {0:?}")]
+    InvalidChainData(()),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
