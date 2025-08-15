@@ -1,4 +1,5 @@
-use agglayer_primitives::{keccak::keccak256_combine, Digest};
+use agglayer_primitives::Digest;
+use agglayer_tries::utils::empty_hash_at_height;
 pub use pessimistic_proof_core::local_balance_tree::{LocalBalancePath, LOCAL_BALANCE_TREE_DEPTH};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -12,10 +13,6 @@ pub struct LocalBalanceTree {
     /// The Merkle Root of the nullifier tree
     #[serde_as(as = "_")]
     pub root: Digest,
-    /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
-    /// `i`.
-    #[serde_as(as = "[_; LOCAL_BALANCE_TREE_DEPTH]")]
-    empty_hash_at_height: [Digest; LOCAL_BALANCE_TREE_DEPTH],
 }
 
 impl Default for LocalBalanceTree {
@@ -26,27 +23,14 @@ impl Default for LocalBalanceTree {
 
 impl LocalBalanceTree {
     pub fn new() -> Self {
-        let mut empty_hash_at_height = [Digest::default(); LOCAL_BALANCE_TREE_DEPTH];
-        for height in 1..LOCAL_BALANCE_TREE_DEPTH {
-            empty_hash_at_height[height] = keccak256_combine([
-                &empty_hash_at_height[height - 1],
-                &empty_hash_at_height[height - 1],
-            ]);
-        }
-        let root = keccak256_combine([
-            &empty_hash_at_height[LOCAL_BALANCE_TREE_DEPTH - 1],
-            &empty_hash_at_height[LOCAL_BALANCE_TREE_DEPTH - 1],
-        ]);
-        LocalBalanceTree {
-            root,
-            empty_hash_at_height,
-        }
+        // We add 1 to the depth here because the empty hash at height 0 is
+        // already set to Digest::ZERO.
+        let root = empty_hash_at_height::<{ LOCAL_BALANCE_TREE_DEPTH + 1 }>();
+        LocalBalanceTree { root }
     }
 
     pub fn new_with_root(root: Digest) -> Self {
-        let mut res = Self::new();
-        res.root = root;
-        res
+        LocalBalanceTree { root }
     }
 }
 
