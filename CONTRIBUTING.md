@@ -26,6 +26,7 @@ We follow these practices to keep contributions smooth for everyone:
 
 - You need to **sign your commits with OpenPGP** for CI to pass.
 - The PR title must **start with `docs:`, `chore:`, `fix:` or `feat:`** for the most frequently-used options.
+  We follow [conventional commit guidelines](https://www.conventionalcommits.org/en/v1.0.0/).
 - The PR description should **use the BREAKING-CHANGE and CONFIG-CHANGE keywords** as per the explanations in the PR template.
 
 ### 2. PR Reviews
