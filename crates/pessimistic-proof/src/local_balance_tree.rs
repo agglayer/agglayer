@@ -1,17 +1,14 @@
 use agglayer_primitives::Digest;
 use agglayer_tries::utils::empty_hash_at_height;
 pub use pessimistic_proof_core::local_balance_tree::{LocalBalancePath, LOCAL_BALANCE_TREE_DEPTH};
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 // TODO: This is basically the same as the nullifier tree, consider refactoring
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct LocalBalanceTree {
     /// The Merkle Root of the nullifier tree
-    #[serde_as(as = "_")]
     pub root: Digest,
 }
 

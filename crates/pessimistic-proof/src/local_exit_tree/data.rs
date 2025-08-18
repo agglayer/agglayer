@@ -1,12 +1,9 @@
 use agglayer_primitives::{keccak::keccak256_combine, Digest};
 use agglayer_tries::utils::{empty_hash_array_at_height, empty_hash_at_height};
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use unified_bridge::{LETMerkleProof, LocalExitTreeError};
 
 /// Represents a local exit tree as defined by the LxLy bridge.
-#[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct LocalExitTreeData<const TREE_DEPTH: usize = 32> {
     /// The layers of the Merkle tree from bottom to top (i.e., the leaves are
     /// in `layers[0]`)
@@ -16,7 +13,6 @@ pub struct LocalExitTreeData<const TREE_DEPTH: usize = 32> {
     ///
     /// So if `layers[0]` has `n` exit leaf hashes, then `layers[1] has
     /// `round_up(n/2)` hashes, etc.
-    #[serde_as(as = "[_; TREE_DEPTH]")]
     pub layers: [Vec<Digest>; TREE_DEPTH],
 }
 

@@ -3,18 +3,14 @@ use agglayer_tries::utils::empty_hash_at_height;
 pub use pessimistic_proof_core::nullifier_tree::{
     NullifierKey, NullifierPath, NULLIFIER_TREE_DEPTH,
 };
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 // TODO: This is basically the same as the local balance tree, consider
 // refactoring TODO: Consider using an Indexed Merkle Tree instead of an SMT. See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
-#[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct NullifierTree {
     /// The Merkle Root of the nullifier tree
-    #[serde_as(as = "_")]
     pub root: Digest,
 }
 

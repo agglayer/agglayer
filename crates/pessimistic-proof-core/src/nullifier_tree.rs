@@ -1,7 +1,6 @@
 use agglayer_primitives::{Digest, FromBool};
 use agglayer_tries::proof::{SmtNonInclusionProof, ToBits};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use unified_bridge::{GlobalIndex, NetworkId};
 
 use crate::ProofError;
@@ -15,11 +14,9 @@ pub const NULLIFIER_TREE_DEPTH: usize = 64;
 // refactoring TODO: Consider using an Indexed Merkle Tree instead of an SMT. See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
-#[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct NullifierTree {
     /// The Merkle Root of the nullifier tree
-    #[serde_as(as = "_")]
     pub root: Digest,
 }
 
