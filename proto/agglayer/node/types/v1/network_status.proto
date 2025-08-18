@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package agglayer.node.types.v1;
+
+import "agglayer/interop/types/v1/bytes.proto";
+import "agglayer/node/types/v1/certificate_id.proto";
+
+message NetworkStatus {
+  string network_status = 1;
+  string network_type = 2;
+  uint32 network_id = 3;
+  uint64 settled_height = 4;
+  types.v1.CertificateId settled_certificate_id = 5;
+  agglayer.interop.types.v1.FixedBytes32 settled_PPRoot = 6;
+  agglayer.interop.types.v1.FixedBytes32 settled_LER = 7;
+  agglayer.interop.types.v1.FixedBytes32 settled_bridge_global_index = 8;
+  agglayer.interop.types.v1.FixedBytes32 settled_claim_global_index = 9;
+  uint64 latest_pending_height = 10;
+  string latest_pending_status = 11;
+  string latest_pending_error = 12;
+  uint64 latest_epoch_with_settlement = 13;
+}
