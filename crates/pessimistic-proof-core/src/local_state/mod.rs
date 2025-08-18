@@ -31,9 +31,8 @@ pub struct NetworkStateZeroCopy {
     pub nullifier_empty_hash_at_height: [[u8; 32]; 64],
 }
 
-impl NetworkStateZeroCopy {
-    /// Create a zero-copy representation from a regular NetworkState.
-    pub fn from_network_state(state: &NetworkState) -> Self {
+impl From<&NetworkState> for NetworkStateZeroCopy {
+    fn from(state: &NetworkState) -> Self {
         Self {
             exit_tree_leaf_count: state.exit_tree.leaf_count,
             exit_tree_frontier: state.exit_tree.frontier().map(|h| *h.as_bytes()),
@@ -45,22 +44,24 @@ impl NetworkStateZeroCopy {
                 .map(|h| *h.as_bytes()),
         }
     }
+}
 
-    /// Convert back to a regular NetworkState.
-    pub fn to_network_state(&self) -> NetworkState {
+impl From<&NetworkStateZeroCopy> for NetworkState {
+    fn from(zero_copy: &NetworkStateZeroCopy) -> Self {
         let exit_tree = LocalExitTree::from_parts(
-            self.exit_tree_leaf_count,
-            self.exit_tree_frontier
+            zero_copy.exit_tree_leaf_count,
+            zero_copy
+                .exit_tree_frontier
                 .map(agglayer_primitives::Digest::from),
         );
 
         let balance_tree = LocalBalanceTree {
-            root: agglayer_primitives::Digest::from(self.balance_tree_root),
+            root: agglayer_primitives::Digest::from(zero_copy.balance_tree_root),
         };
 
         let nullifier_tree = NullifierTree {
-            root: agglayer_primitives::Digest::from(self.nullifier_tree_root),
-            empty_hash_at_height: self
+            root: agglayer_primitives::Digest::from(zero_copy.nullifier_tree_root),
+            empty_hash_at_height: zero_copy
                 .nullifier_empty_hash_at_height
                 .map(agglayer_primitives::Digest::from),
         };
@@ -71,7 +72,9 @@ impl NetworkStateZeroCopy {
             nullifier_tree,
         }
     }
+}
 
+impl NetworkStateZeroCopy {
     /// Safely deserialize from bytes using bytemuck.
     pub fn from_bytes(data: &[u8]) -> Result<&Self, bytemuck::PodCastError> {
         if data.len() != std::mem::size_of::<Self>() {
@@ -105,6 +108,15 @@ pub struct NetworkState {
     pub nullifier_tree: NullifierTree,
 }
 
+impl TryFrom<&[u8]> for NetworkState {
+    type Error = bytemuck::PodCastError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        let zero_copy = NetworkStateZeroCopy::from_bytes(data)?;
+        Ok(Self::from(zero_copy))
+    }
+}
+
 impl NetworkState {
     /// Returns the roots.
     pub fn get_state_commitment(&self) -> StateCommitment {
@@ -116,27 +128,10 @@ impl NetworkState {
         }
     }
 
-    /// Convert to zero-copy representation for safe transmute.
-    pub fn to_zero_copy(&self) -> NetworkStateZeroCopy {
-        NetworkStateZeroCopy::from_network_state(self)
-    }
-
-    /// Create from zero-copy representation.
-    pub fn from_zero_copy(zero_copy: &NetworkStateZeroCopy) -> Self {
-        zero_copy.to_network_state()
-    }
-
-    /// Zero-copy deserialization from bytes using bytemuck.
-    /// This function safely deserializes the data if it has the correct size
-    /// and alignment.
-    pub fn from_bytes_zero_copy(data: &[u8]) -> Result<Self, bytemuck::PodCastError> {
-        NetworkStateZeroCopy::from_bytes(data).map(Self::from_zero_copy)
-    }
-
     /// Serialize to zero-copy bytes.
     /// This creates a byte representation that can be safely transmuted back.
     pub fn to_bytes_zero_copy(&self) -> Vec<u8> {
-        self.to_zero_copy().to_bytes()
+        NetworkStateZeroCopy::from(self).to_bytes()
     }
 
     /// Apply the [`MultiBatchHeader`] on the current [`LocalNetworkState`].
@@ -313,7 +308,7 @@ mod tests {
         let bytes = state.to_bytes_zero_copy();
         assert_eq!(bytes.len(), std::mem::size_of::<NetworkStateZeroCopy>());
 
-        let deserialized = NetworkState::from_bytes_zero_copy(&bytes)
+        let deserialized = NetworkState::try_from(bytes.as_slice())
             .expect("Zero-copy deserialization should succeed");
 
         assert_eq!(
@@ -340,18 +335,18 @@ mod tests {
 
         // Test unaligned data
         let unaligned = &bytes[1..];
-        assert!(NetworkState::from_bytes_zero_copy(unaligned).is_err());
+        assert!(NetworkState::try_from(unaligned).is_err());
 
         // Test wrong size (too small)
         let too_small = &bytes[..bytes.len() - 1];
-        assert!(NetworkState::from_bytes_zero_copy(too_small).is_err());
+        assert!(NetworkState::try_from(too_small).is_err());
 
         // Test wrong size (too large)
         let mut too_large = bytes.clone();
         too_large.push(0);
-        assert!(NetworkState::from_bytes_zero_copy(&too_large).is_err());
+        assert!(NetworkState::try_from(too_large.as_slice()).is_err());
 
         // Test empty data
-        assert!(NetworkState::from_bytes_zero_copy(&[]).is_err());
+        assert!(NetworkState::try_from([].as_slice()).is_err());
     }
 }
