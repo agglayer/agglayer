@@ -8,7 +8,7 @@ sp1_zkvm::entrypoint!(main);
 pub fn main() {
     // Read NetworkState (zero-copy)
     let network_state_bytes = sp1_zkvm::io::read_vec();
-    let initial_state = NetworkState::from_bytes_zero_copy(&network_state_bytes)
+    let initial_state = NetworkState::try_from(network_state_bytes.as_slice())
         .expect("Failed to deserialize NetworkState");
 
     // Read all zero-copy components
