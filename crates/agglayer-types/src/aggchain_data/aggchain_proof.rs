@@ -32,14 +32,14 @@ pub struct Ctx {
     pub aggchain_vkey: [u32; 8],
 }
 
-impl Into<core::AggchainProof> for PayloadWithCtx<Payload, Ctx> {
-    fn into(self) -> core::AggchainProof {
+impl From<PayloadWithCtx<Payload, Ctx>> for core::AggchainProof {
+    fn from(val: PayloadWithCtx<Payload, Ctx>) -> Self {
         let PayloadWithCtx(
             Payload {
                 aggchain_params, ..
             },
             Ctx { aggchain_vkey },
-        ) = self;
+        ) = val;
 
         core::AggchainProof {
             aggchain_params,

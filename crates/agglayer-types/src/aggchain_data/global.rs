@@ -16,6 +16,8 @@
 //!   - aggchain proof + multisig (multi signer, not necessarily trusted
 //!     sequencer)
 //!   - multisig
+use std::fmt::Display;
+
 use agglayer_primitives::{Address, Signature};
 use pessimistic_proof::core::{self};
 use serde::{Deserialize, Serialize};
@@ -109,7 +111,7 @@ impl TryInto<core::AggchainData> for PayloadWithCtx<Payload, Ctx> {
             },
             (payload, ctx) => {
                 return Err(AggchainDataError::InvalidVariant(format!(
-                    "payload: {payload:?}, ctx: {ctx:?}"
+                    "payload: {payload}, ctx: {ctx}"
                 )))
             }
         })
@@ -117,25 +119,25 @@ impl TryInto<core::AggchainData> for PayloadWithCtx<Payload, Ctx> {
 }
 
 // For error and debugging
-impl ToString for Payload {
-    fn to_string(&self) -> String {
+impl Display for Payload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Payload::LegacyEcdsa { .. } => String::from("legacy_ecdsa"),
-            Payload::MultisigOnly(_) => String::from("multisig_only"),
-            Payload::AggchainProofOnly { .. } => String::from("aggchain_proof_only"),
-            Payload::MultisigAndAggchainProof { .. } => String::from("multisig_and_aggchain_proof"),
+            Payload::LegacyEcdsa { .. } => write!(f, "legacy_ecdsa"),
+            Payload::MultisigOnly(_) => write!(f, "multisig_only"),
+            Payload::AggchainProofOnly { .. } => write!(f, "aggchain_proof_only"),
+            Payload::MultisigAndAggchainProof { .. } => write!(f, "multisig_and_aggchain_proof"),
         }
     }
 }
 
 // For error and debugging
-impl ToString for Ctx {
-    fn to_string(&self) -> String {
+impl Display for Ctx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Ctx::LegacyEcdsa { .. } => String::from("legacy_ecdsa"),
-            Ctx::MultisigOnly(_) => String::from("multisig_only"),
-            Ctx::AggchainProofOnly { .. } => String::from("aggchain_proof_only"),
-            Ctx::MultisigAndAggchainProof { .. } => String::from("multisig_and_aggchain_proof"),
+            Ctx::LegacyEcdsa { .. } => write!(f, "legacy_ecdsa"),
+            Ctx::MultisigOnly(_) => write!(f, "multisig_only"),
+            Ctx::AggchainProofOnly { .. } => write!(f, "aggchain_proof_only"),
+            Ctx::MultisigAndAggchainProof { .. } => write!(f, "multisig_and_aggchain_proof"),
         }
     }
 }
