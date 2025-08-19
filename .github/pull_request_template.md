@@ -1,11 +1,3 @@
-📌 Review Process TL;DR:
-- ⏱️ We aim to acknowledge PRs within 1 business day.
-- 🚫 Once a PR is marked ready for review, **do not force-push** anymore.
-    - Add one commit per requested change instead.
-    - Draft PRs can be force-pushed freely.
-
-Fixes #issue
-
 CONFIG-CHANGE: Short description of the configuration changes.
   More details can be added in the description.
   Link to configuration file example if applicable.
