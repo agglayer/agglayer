@@ -1000,10 +1000,10 @@ impl serde::Serialize for NetworkStatus {
             struct_ser.serialize_field("settledCertificateId", v)?;
         }
         if let Some(v) = self.settled_pp_root.as_ref() {
-            struct_ser.serialize_field("settledPPRoot", v)?;
+            struct_ser.serialize_field("settledPpRoot", v)?;
         }
         if let Some(v) = self.settled_ler.as_ref() {
-            struct_ser.serialize_field("settledLER", v)?;
+            struct_ser.serialize_field("settledLer", v)?;
         }
         if let Some(v) = self.settled_bridge_global_index.as_ref() {
             struct_ser.serialize_field("settledBridgeGlobalIndex", v)?;
@@ -1047,10 +1047,10 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
             "settledHeight",
             "settled_certificate_id",
             "settledCertificateId",
-            "settled_PPRoot",
-            "settledPPRoot",
-            "settled_LER",
-            "settledLER",
+            "settled_pp_root",
+            "settledPpRoot",
+            "settled_ler",
+            "settledLer",
             "settled_bridge_global_index",
             "settledBridgeGlobalIndex",
             "settled_claim_global_index",
@@ -1106,8 +1106,8 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                             "networkId" | "network_id" => Ok(GeneratedField::NetworkId),
                             "settledHeight" | "settled_height" => Ok(GeneratedField::SettledHeight),
                             "settledCertificateId" | "settled_certificate_id" => Ok(GeneratedField::SettledCertificateId),
-                            "settledPPRoot" | "settled_PPRoot" => Ok(GeneratedField::SettledPpRoot),
-                            "settledLER" | "settled_LER" => Ok(GeneratedField::SettledLer),
+                            "settledPpRoot" | "settled_pp_root" => Ok(GeneratedField::SettledPpRoot),
+                            "settledLer" | "settled_ler" => Ok(GeneratedField::SettledLer),
                             "settledBridgeGlobalIndex" | "settled_bridge_global_index" => Ok(GeneratedField::SettledBridgeGlobalIndex),
                             "settledClaimGlobalIndex" | "settled_claim_global_index" => Ok(GeneratedField::SettledClaimGlobalIndex),
                             "latestPendingHeight" | "latest_pending_height" => Ok(GeneratedField::LatestPendingHeight),
@@ -1184,13 +1184,13 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                         }
                         GeneratedField::SettledPpRoot => {
                             if settled_pp_root__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("settledPPRoot"));
+                                return Err(serde::de::Error::duplicate_field("settledPpRoot"));
                             }
                             settled_pp_root__ = map_.next_value()?;
                         }
                         GeneratedField::SettledLer => {
                             if settled_ler__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("settledLER"));
+                                return Err(serde::de::Error::duplicate_field("settledLer"));
                             }
                             settled_ler__ = map_.next_value()?;
                         }

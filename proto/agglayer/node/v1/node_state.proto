@@ -110,6 +110,7 @@ message GetNetworkStatusRequest {
   uint32 network_id = 1;
 }
 
+// GetNetworkStatusResponse contains the current status information for a network.
 message GetNetworkStatusResponse {
   // The current status of the network.
   types.v1.NetworkStatus network_status = 1;

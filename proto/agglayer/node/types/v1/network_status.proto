@@ -5,18 +5,32 @@ package agglayer.node.types.v1;
 import "agglayer/interop/types/v1/bytes.proto";
 import "agglayer/node/types/v1/certificate_id.proto";
 
+// NetworkStatus represents the current state and status of a network in the AggLayer.
 message NetworkStatus {
+  // The current status of the network (e.g., "active", "syncing", "error").
   string network_status = 1;
+  // The aggchain type of network
   string network_type = 2;
+  // The unique identifier for this network.
   uint32 network_id = 3;
+  // The height of the latest settled certificate.
   uint64 settled_height = 4;
+  // The ID of the latest settled certificate.
   types.v1.CertificateId settled_certificate_id = 5;
-  agglayer.interop.types.v1.FixedBytes32 settled_PPRoot = 6;
-  agglayer.interop.types.v1.FixedBytes32 settled_LER = 7;
+  // The pessimistic proof root of the latest settled certificate.
+  agglayer.interop.types.v1.FixedBytes32 settled_pp_root = 6;
+  // The local exit root of the latest settled certificate.
+  agglayer.interop.types.v1.FixedBytes32 settled_ler = 7;
+  // The global index for bridge operations in the latest settled certificate.
   agglayer.interop.types.v1.FixedBytes32 settled_bridge_global_index = 8;
+  // The global index for claim operations in the latest settled certificate.
   agglayer.interop.types.v1.FixedBytes32 settled_claim_global_index = 9;
+  // The height of the latest pending certificate.
   uint64 latest_pending_height = 10;
+  // The status of the latest pending certificate (e.g., "Proven", "Pending", "InError").
   string latest_pending_status = 11;
+  // Any error message associated with the latest pending certificate.
   string latest_pending_error = 12;
+  // The epoch number of the latest settlement.
   uint64 latest_epoch_with_settlement = 13;
 }
