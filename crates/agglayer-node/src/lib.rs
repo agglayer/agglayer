@@ -1,7 +1,7 @@
 use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 
 use agglayer_config::Config;
-use eyre::bail;
+use eyre::{bail, eyre};
 use node::Node;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
@@ -63,7 +63,7 @@ pub fn main(
         }
         Err(e) => {
             eprintln!("Failed to initialize logger: {e:?}");
-            return Err(e);
+            return Err(eyre!(e.into_boxed_dyn_error()));
         }
     }
 
