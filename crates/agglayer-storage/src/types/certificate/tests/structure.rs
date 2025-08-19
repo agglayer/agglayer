@@ -1,4 +1,4 @@
-use agglayer_types::{Address, Digest, NetworkId, B256};
+use agglayer_types::{Address, Digest, NetworkId};
 use pessimistic_proof::unified_bridge;
 
 fn trace() -> serde_reflection::Result<serde_reflection::Registry> {
@@ -10,7 +10,6 @@ fn trace() -> serde_reflection::Result<serde_reflection::Registry> {
     dbg!(tracer.trace_value::<Address>(&mut samples, &Address::new([0xad; 20]))?);
     dbg!(tracer.trace_value::<Digest>(&mut samples, &Digest([0xd1; 32]))?);
     dbg!(tracer.trace_value::<NetworkId>(&mut samples, &NetworkId::new(42))?);
-    dbg!(tracer.trace_value::<B256>(&mut samples, &B256::from([0xbd; 32]))?);
 
     // Remaining support types.
     dbg!(tracer.trace_type::<agglayer_types::GenerationType>(&samples)?);
