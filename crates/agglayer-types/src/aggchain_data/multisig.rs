@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use agglayer_primitives::{Address, Signature, B256};
+use agglayer_primitives::{Address, Digest, Signature, B256};
 use pessimistic_proof::core::{self};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -33,7 +33,7 @@ pub enum MultisigError {
     InvalidSignature,
 
     #[error("Unknown signer or invalid prehash. prehash: {prehash:?}, recovered: {recovered} ")]
-    UnknownRecoveredSigner { recovered: Address, prehash: B256 },
+    UnknownRecoveredSigner { recovered: Address, prehash: Digest },
 }
 
 // Generate the prover inputs from the chain payload and the L1 context.
@@ -69,9 +69,12 @@ impl TryInto<core::MultiSignature> for PayloadWithCtx<Payload, Ctx> {
                 let recovered = sig
                     .recover_address_from_prehash(&prehash)
                     .map_err(|_| MultisigError::InvalidSignature)?;
-                let i = *index
-                    .get(&recovered.into_array())
-                    .ok_or(MultisigError::UnknownRecoveredSigner { recovered, prehash })?;
+                let i = *index.get(&recovered.into_array()).ok_or(
+                    MultisigError::UnknownRecoveredSigner {
+                        recovered,
+                        prehash: prehash.into(),
+                    },
+                )?;
                 Ok::<_, Self::Error>((i, sig))
             })
             .collect::<Result<_, _>>()?;

@@ -3,6 +3,22 @@ source: crates/agglayer-storage/src/types/certificate/tests/structure.rs
 expression: "&registry"
 ---
 {
+  "AggchainDataError": {
+    "ENUM": {
+      "0": {
+        "InvalidVariant": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "1": {
+        "InvalidMultisig": {
+          "NEWTYPE": {
+            "TYPENAME": "MultisigError"
+          }
+        }
+      }
+    }
+  },
   "CertificateStatus": {
     "ENUM": {
       "0": {
@@ -155,6 +171,22 @@ expression: "&registry"
       },
       "1": {
         "HasInvalidSignature": "UNIT"
+      },
+      "2": {
+        "UnknownRecoveredSigner": {
+          "STRUCT": [
+            {
+              "recovered": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "prehash": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
       }
     }
   },
@@ -632,7 +664,9 @@ expression: "&registry"
       },
       "14": {
         "InvalidChainData": {
-          "NEWTYPE": "UNIT"
+          "NEWTYPE": {
+            "TYPENAME": "AggchainDataError"
+          }
         }
       }
     }
