@@ -1,10 +1,9 @@
-use std::collections::{btree_map::Entry, BTreeMap};
-
 use agglayer_primitives::{ruint::UintTryFrom, Hashable, U256, U512};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
+use bytemuck::{Pod, Zeroable};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
-use unified_bridge::{Error, LocalExitTree, NetworkId, L1_ETH};
+use unified_bridge::{Error, LocalExitTree, NetworkId, TokenInfo, L1_ETH};
 
 use crate::{
     local_balance_tree::LocalBalanceTree,
@@ -15,8 +14,89 @@ use crate::{
 
 pub mod commitment;
 
+/// Zero-copy representation of NetworkState for safe transmute.
+/// This struct has a stable C-compatible memory layout.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct NetworkStateZeroCopy {
+    /// Leaf count of the exit tree (u32)
+    pub exit_tree_leaf_count: u32,
+    /// Frontier of the exit tree (32 * 32 = 1024 bytes)
+    pub exit_tree_frontier: [[u8; 32]; 32],
+    /// Root of the balance tree (32 bytes)
+    pub balance_tree_root: [u8; 32],
+    /// Root of the nullifier tree (32 bytes)
+    pub nullifier_tree_root: [u8; 32],
+    /// Empty hash array for nullifier tree (64 * 32 = 2048 bytes)
+    pub nullifier_empty_hash_at_height: [[u8; 32]; 64],
+}
+
+impl From<&NetworkState> for NetworkStateZeroCopy {
+    fn from(state: &NetworkState) -> Self {
+        Self {
+            exit_tree_leaf_count: state.exit_tree.leaf_count,
+            exit_tree_frontier: state.exit_tree.frontier().map(|h| *h.as_bytes()),
+            balance_tree_root: *state.balance_tree.root.as_bytes(),
+            nullifier_tree_root: *state.nullifier_tree.root.as_bytes(),
+            nullifier_empty_hash_at_height: state
+                .nullifier_tree
+                .empty_hash_at_height
+                .map(|h| *h.as_bytes()),
+        }
+    }
+}
+
+impl From<&NetworkStateZeroCopy> for NetworkState {
+    fn from(zero_copy: &NetworkStateZeroCopy) -> Self {
+        let exit_tree = LocalExitTree::from_parts(
+            zero_copy.exit_tree_leaf_count,
+            zero_copy
+                .exit_tree_frontier
+                .map(agglayer_primitives::Digest::from),
+        );
+
+        let balance_tree = LocalBalanceTree {
+            root: agglayer_primitives::Digest::from(zero_copy.balance_tree_root),
+        };
+
+        let nullifier_tree = NullifierTree {
+            root: agglayer_primitives::Digest::from(zero_copy.nullifier_tree_root),
+            empty_hash_at_height: zero_copy
+                .nullifier_empty_hash_at_height
+                .map(agglayer_primitives::Digest::from),
+        };
+
+        NetworkState {
+            exit_tree,
+            balance_tree,
+            nullifier_tree,
+        }
+    }
+}
+
+impl NetworkStateZeroCopy {
+    /// Safely deserialize from bytes using bytemuck.
+    pub fn from_bytes(data: &[u8]) -> Result<&Self, bytemuck::PodCastError> {
+        if data.len() != std::mem::size_of::<Self>() {
+            return Err(bytemuck::PodCastError::SizeMismatch);
+        }
+        bytemuck::try_from_bytes(data)
+    }
+
+    /// Convert this struct to a byte slice.
+    pub fn as_bytes(&self) -> &[u8] {
+        bytemuck::bytes_of(self)
+    }
+
+    /// Convert this struct to a owned byte vector.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.as_bytes().to_vec()
+    }
+}
+
 /// State representation of one network without the leaves, taken as input by
 /// the prover.
+#[repr(C)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
@@ -28,6 +108,15 @@ pub struct NetworkState {
     pub nullifier_tree: NullifierTree,
 }
 
+impl TryFrom<&[u8]> for NetworkState {
+    type Error = bytemuck::PodCastError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        let zero_copy = NetworkStateZeroCopy::from_bytes(data)?;
+        Ok(Self::from(zero_copy))
+    }
+}
+
 impl NetworkState {
     /// Returns the roots.
     pub fn get_state_commitment(&self) -> StateCommitment {
@@ -37,6 +126,12 @@ impl NetworkState {
             balance_root: LocalBalanceRoot::new(self.balance_tree.root),
             nullifier_root: LocalNullifierRoot::new(self.nullifier_tree.root),
         }
+    }
+
+    /// Serialize to zero-copy bytes.
+    /// This creates a byte representation that can be safely transmuted back.
+    pub fn to_bytes_zero_copy(&self) -> Vec<u8> {
+        NetworkStateZeroCopy::from(self).to_bytes()
     }
 
     /// Apply the [`MultiBatchHeader`] on the current [`LocalNetworkState`].
@@ -60,11 +155,21 @@ impl NetworkState {
         &mut self,
         multi_batch_header: &MultiBatchHeader,
     ) -> Result<StateCommitment, ProofError> {
-        // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
-        let mut new_balances = BTreeMap::new();
-        for (k, v) in &multi_batch_header.balances_proofs {
-            if new_balances.insert(*k, U512::from(v.0)).is_some() {
-                return Err(ProofError::DuplicateTokenBalanceProof(*k));
+        // Convert balances_proofs to sorted Vec for efficient binary search
+        // This is more efficient than BTreeMap for SP1 cycles
+        let mut new_balances: Vec<(TokenInfo, U512)> = multi_batch_header
+            .balances_proofs
+            .iter()
+            .map(|(k, v)| (*k, U512::from(v.0)))
+            .collect();
+
+        // Sort by TokenInfo for binary search (TokenInfo has PartialOrd)
+        new_balances.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Check for duplicates during sorting
+        for i in 1..new_balances.len() {
+            if new_balances[i].0 == new_balances[i - 1].0 {
+                return Err(ProofError::DuplicateTokenBalanceProof(new_balances[i].0));
             }
         }
 
@@ -104,17 +209,17 @@ impl NetworkState {
                 continue;
             }
 
-            // Update the token balance.
+            // Update the token balance using binary search
             let amount = imported_bridge_exit.bridge_exit.amount;
-            let entry = new_balances.entry(token_info);
-            match entry {
-                Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
-                Entry::Occupied(mut entry) => {
-                    *entry.get_mut() = entry
-                        .get()
+            match new_balances.binary_search_by(|(k, _)| k.cmp(&token_info)) {
+                Ok(index) => {
+                    // Found the token, update balance
+                    new_balances[index].1 = new_balances[index]
+                        .1
                         .checked_add(U512::from(amount))
                         .ok_or(ProofError::BalanceOverflowInBridgeExit)?;
                 }
+                Err(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
             }
         }
 
@@ -149,17 +254,17 @@ impl NetworkState {
                 continue;
             }
 
-            // Update the token balance.
+            // Update the token balance using binary search
             let amount = bridge_exit.amount;
-            let entry = new_balances.entry(token_info);
-            match entry {
-                Entry::Vacant(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
-                Entry::Occupied(mut entry) => {
-                    *entry.get_mut() = entry
-                        .get()
+            match new_balances.binary_search_by(|(k, _)| k.cmp(&token_info)) {
+                Ok(index) => {
+                    // Found the token, update balance (subtract for bridge exits)
+                    new_balances[index].1 = new_balances[index]
+                        .1
                         .checked_sub(U512::from(amount))
                         .ok_or(ProofError::BalanceUnderflowInBridgeExit)?;
                 }
+                Err(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
             }
         }
 
@@ -167,7 +272,10 @@ impl NetworkState {
         // tree with the new balances. TODO: implement batch `verify_and_update`
         // for the LBT
         for (token, (old_balance, balance_path)) in &multi_batch_header.balances_proofs {
-            let new_balance = new_balances[token];
+            let new_balance = new_balances
+                .binary_search_by(|(k, _)| k.cmp(token))
+                .map(|index| new_balances[index].1)
+                .map_err(|_| ProofError::MissingTokenBalanceProof(*token))?;
             let new_balance = U256::uint_try_from(new_balance)
                 .map_err(|_| ProofError::BalanceOverflowInBridgeExit)?;
             self.balance_tree
@@ -175,5 +283,70 @@ impl NetworkState {
         }
 
         Ok(self.get_state_commitment())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use unified_bridge::LocalExitTree;
+
+    use super::*;
+
+    #[test]
+    fn test_zero_copy_roundtrip() {
+        let state = NetworkState {
+            exit_tree: LocalExitTree::from_parts(42, [[1u8; 32].into(); 32]),
+            balance_tree: LocalBalanceTree {
+                root: [0xAAu8; 32].into(),
+            },
+            nullifier_tree: NullifierTree {
+                root: [0xBBu8; 32].into(),
+                empty_hash_at_height: [[0xCCu8; 32].into(); 64],
+            },
+        };
+
+        let bytes = state.to_bytes_zero_copy();
+        assert_eq!(bytes.len(), std::mem::size_of::<NetworkStateZeroCopy>());
+
+        let deserialized = NetworkState::try_from(bytes.as_slice())
+            .expect("Zero-copy deserialization should succeed");
+
+        assert_eq!(
+            state.exit_tree.leaf_count,
+            deserialized.exit_tree.leaf_count
+        );
+        assert_eq!(state.balance_tree.root, deserialized.balance_tree.root);
+        assert_eq!(state.nullifier_tree.root, deserialized.nullifier_tree.root);
+    }
+
+    #[test]
+    fn test_zero_copy_invalid_input() {
+        let state = NetworkState {
+            exit_tree: LocalExitTree::new(),
+            balance_tree: LocalBalanceTree {
+                root: [1u8; 32].into(),
+            },
+            nullifier_tree: NullifierTree {
+                root: [2u8; 32].into(),
+                empty_hash_at_height: [[3u8; 32].into(); 64],
+            },
+        };
+        let bytes = state.to_bytes_zero_copy();
+
+        // Test unaligned data
+        let unaligned = &bytes[1..];
+        assert!(NetworkState::try_from(unaligned).is_err());
+
+        // Test wrong size (too small)
+        let too_small = &bytes[..bytes.len() - 1];
+        assert!(NetworkState::try_from(too_small).is_err());
+
+        // Test wrong size (too large)
+        let mut too_large = bytes.clone();
+        too_large.push(0);
+        assert!(NetworkState::try_from(too_large.as_slice()).is_err());
+
+        // Test empty data
+        assert!(NetworkState::try_from([].as_slice()).is_err());
     }
 }
