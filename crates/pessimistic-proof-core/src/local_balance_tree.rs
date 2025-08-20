@@ -1,5 +1,7 @@
 use agglayer_primitives::{Digest, FromU256, U256};
 use agglayer_tries::proof::SmtMerkleProof;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use unified_bridge::TokenInfo;
 
 use crate::ProofError;
@@ -11,9 +13,11 @@ pub const LOCAL_BALANCE_TREE_DEPTH: usize = 192;
 // TODO: This is basically the same as the nullifier tree, consider refactoring
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
-#[derive(Clone, Debug)]
+#[serde_as]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LocalBalanceTree {
     /// The Merkle Root of the nullifier tree
+    #[serde_as(as = "_")]
     pub root: Digest,
 }
 
