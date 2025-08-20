@@ -10,9 +10,9 @@ We welcome contributions of all kinds, from code improvements to documentation f
 1. **Fork the repository** to your own GitHub account.
 2. **Create a new branch** for your changes:
    ```bash
-   git checkout -b my-feature
+   git checkout -b my-username/my-feature
    ```
-3. **Make your changes,** following our coding conventions.
+3. **Make your changes,** following our coding conventions displayed in the code around your changes.
 4. **Write or update tests** if applicable.
 5. **Open a Pull Request** when ready for feedback or review.
 
@@ -45,6 +45,7 @@ We follow these practices to keep contributions smooth for everyone:
   Once you mark your PR as **ready for review, do not force-push anymore.**
   - Force-pushing after requesting review makes it harder for reviewers to track changes.
   - Instead, **add one commit per change** requested during review.
+  - When you want to pull in new changes from `main` or `master`, **use a merge commit.**
 
 - **Squash & Merge:**
   Even with multiple commits during review, the repository history stays clean because we **always squash-merge PRs.**
