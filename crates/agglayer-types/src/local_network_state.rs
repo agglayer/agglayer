@@ -11,14 +11,13 @@ use pessimistic_proof::{
     nullifier_tree::{NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
     LocalNetworkState,
 };
-use serde::{Deserialize, Serialize};
 use unified_bridge::{CommitmentVersion, LocalExitTree};
 
 use crate::{Address, Certificate, Digest, Error, U256, U512};
 
 /// Local state data of one network.
 /// The AggLayer tracks the [`LocalNetworkStateData`] for all networks.
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct LocalNetworkStateData {
     /// The local exit tree without leaves.
     pub exit_tree: LocalExitTree,
