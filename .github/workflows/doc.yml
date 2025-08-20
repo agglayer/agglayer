@@ -64,7 +64,7 @@ jobs:
           path: host-docs
 
       - name: Upload to GitHub Pages
-        uses: actions/upload-pages-artifact@v3.0.0
+        uses: actions/upload-pages-artifact@v4.0.0
         with:
           path: "host-docs/"
 
