@@ -8,7 +8,6 @@ use crate::aggchain_data::{aggchain_proof::AggchainProof, AggchainData, Vkey};
 
 type ConsensusType = u32;
 
-// TODO: merge with new aggchain hash format as 1-of-1 multisig
 pub enum AggchainHashValues {
     ConsensusType0 {
         signer: Address,
