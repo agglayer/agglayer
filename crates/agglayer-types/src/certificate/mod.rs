@@ -70,15 +70,29 @@ impl Certificate {
         let commit_imported_bridge_exits =
             keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
 
-        CertificateId::new(keccak256_combine([
-            self.network_id.to_be_bytes().as_slice(),
-            self.height.as_u64().to_be_bytes().as_slice(),
-            self.prev_local_exit_root.as_ref(),
-            self.new_local_exit_root.as_ref(),
-            commit_bridge_exits.as_slice(),
-            commit_imported_bridge_exits.as_slice(),
-            self.metadata.0.as_slice(),
-        ]))
+        if matches!(
+            self.aggchain_data,
+            AggchainData::ECDSA { .. } | AggchainData::Generic { .. }
+        ) {
+            CertificateId::new(keccak256_combine([
+                self.network_id.to_be_bytes().as_slice(),
+                self.height.as_u64().to_be_bytes().as_slice(),
+                self.prev_local_exit_root.as_ref(),
+                self.new_local_exit_root.as_ref(),
+                commit_bridge_exits.as_slice(),
+                commit_imported_bridge_exits.as_slice(),
+                self.metadata.0.as_slice(),
+            ]))
+        } else {
+            CertificateId::new(keccak256_combine([
+                self.network_id.to_be_bytes().as_slice(),
+                self.height.as_u64().to_be_bytes().as_slice(),
+                self.prev_local_exit_root.as_ref(),
+                self.new_local_exit_root.as_ref(),
+                commit_bridge_exits.as_slice(),
+                commit_imported_bridge_exits.as_slice(),
+            ]))
+        }
     }
 
     /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].
