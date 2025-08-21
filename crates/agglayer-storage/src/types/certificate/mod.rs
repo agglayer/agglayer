@@ -21,7 +21,7 @@ use std::borrow::Cow;
 
 use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
-    aggchain_proof::{AggchainData, Proof},
+    aggchain_proof::{AggchainData, AggchainProof, Proof},
     primitives::Digest,
     Certificate, Height, Metadata, NetworkId, Signature,
 };
@@ -214,6 +214,17 @@ pub enum AggchainDataV1<'a> {
         signature: Option<Box<Signature>>,
         public_values: Cow<'a, Box<AggchainProofPublicValues>>,
     },
+
+    Multisig {
+        multisig: Cow<'a, [Signature]>,
+    },
+
+    GenericWithMultisig {
+        multisig: Cow<'a, [Signature]>,
+        proof: Cow<'a, Proof>,
+        aggchain_params: Digest,
+        public_values: Option<Cow<'a, Box<AggchainProofPublicValues>>>,
+    },
 }
 
 impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
@@ -251,6 +262,19 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
                     },
                 }
             }
+
+            AggchainData::MultisigOnly(multisig) => AggchainDataV1::Multisig {
+                multisig: Cow::Borrowed(multisig),
+            },
+            AggchainData::MultisigAndAggchainProof {
+                multisig,
+                aggchain_proof,
+            } => AggchainDataV1::GenericWithMultisig {
+                multisig: Cow::Borrowed(multisig),
+                proof: Cow::Borrowed(&aggchain_proof.proof),
+                aggchain_params: aggchain_proof.aggchain_params,
+                public_values: aggchain_proof.public_values.as_ref().map(Cow::Borrowed),
+            },
         }
     }
 }
@@ -288,6 +312,20 @@ impl From<AggchainDataV1<'_>> for AggchainData {
                 aggchain_params,
                 signature,
                 public_values: Some(public_values.into_owned()),
+            },
+            AggchainDataV1::Multisig { multisig } => Self::MultisigOnly(multisig.into_owned()),
+            AggchainDataV1::GenericWithMultisig {
+                multisig,
+                proof,
+                aggchain_params,
+                public_values,
+            } => Self::MultisigAndAggchainProof {
+                multisig: multisig.into_owned(),
+                aggchain_proof: AggchainProof {
+                    proof: proof.into_owned(),
+                    aggchain_params,
+                    public_values: public_values.map(|pv| pv.into_owned()),
+                },
             },
         }
     }

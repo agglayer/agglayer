@@ -1,3 +1,5 @@
+use super::*;
+use crate::columns::Codec;
 use agglayer_types::{
     aggchain_proof::{Proof, SP1StarkWithContext},
     bincode, U256,
@@ -6,8 +8,6 @@ use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
 
-use super::*;
-use crate::columns::Codec;
 
 mod header;
 mod status;
@@ -115,6 +115,24 @@ impl AggchainDataV1<'static> {
             ))),
         }
     }
+
+    fn test4() -> Self {
+        AggchainDataV1::Multisig {
+            multisig: Cow::Owned(vec![sig(0x11, 0x22), sig(0x33, 0x44)]),
+        }
+    }
+
+    fn test5() -> Self {
+        let aggchain_params = Digest([0x61; 32]);
+        AggchainDataV1::GenericWithMultisig {
+            multisig: Cow::Owned(vec![sig(0x55, 0x66), sig(0x77, 0x88)]),
+            proof: Cow::Owned(Self::proof0()),
+            aggchain_params,
+            public_values: Some(Cow::Owned(Box::new(
+                Self::aggchain_proof_public_values0(aggchain_params),
+            ))),
+        }
+    }
 }
 
 impl CertificateV0 {
@@ -166,6 +184,38 @@ impl CertificateV1<'static> {
             imported_bridge_exits: Vec::new().into(),
             aggchain_data: AggchainDataV1::test1(),
             metadata: Metadata::new(Digest([0xb9; 32])),
+            custom_chain_data: Cow::Owned(vec![]),
+            l1_info_tree_leaf_count: None,
+        }
+    }
+
+    fn test4() -> Self {
+        Self {
+            version: VersionTag,
+            network_id: NetworkId::new((1 << 24) - 1),
+            height: Height::new(987),
+            prev_local_exit_root: LocalExitRoot::from([0x04; 32]),
+            new_local_exit_root: LocalExitRoot::from([0x62; 32]),
+            bridge_exits: Vec::new().into(),
+            imported_bridge_exits: Vec::new().into(),
+            aggchain_data: AggchainDataV1::test4(),
+            metadata: Metadata::new(Digest([0; 32])),
+            custom_chain_data: Cow::Owned(vec![]),
+            l1_info_tree_leaf_count: None,
+        }
+    }
+
+    fn test5() -> Self {
+        Self {
+            version: VersionTag,
+            network_id: NetworkId::new(u32::MAX - 1),
+            height: Height::new(987),
+            prev_local_exit_root: LocalExitRoot::from([0x04; 32]),
+            new_local_exit_root: LocalExitRoot::from([0x62; 32]),
+            bridge_exits: Vec::new().into(),
+            imported_bridge_exits: Vec::new().into(),
+            aggchain_data: AggchainDataV1::test5(),
+            metadata: Metadata::new(Digest([0; 32])),
             custom_chain_data: Cow::Owned(vec![]),
             l1_info_tree_leaf_count: None,
         }
@@ -225,6 +275,20 @@ impl CertificateV1<'_> {
                     signature,
                     public_values: Cow::Owned(public_values.into_owned()),
                 },
+                AggchainDataV1::Multisig { multisig } => AggchainDataV1::Multisig {
+                    multisig: Cow::Owned(multisig.into_owned()),
+                },
+                AggchainDataV1::GenericWithMultisig {
+                    multisig,
+                    proof,
+                    aggchain_params,
+                    public_values,
+                } => AggchainDataV1::GenericWithMultisig {
+                    multisig: Cow::Owned(multisig.into_owned()),
+                    proof: Cow::Owned(proof.into_owned()),
+                    aggchain_params,
+                    public_values: public_values.map(|pv| Cow::Owned(pv.into_owned())),
+                },
             },
             metadata,
             custom_chain_data: Cow::Owned(custom_chain_data.into_owned()),
@@ -246,6 +310,8 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 #[case(CertificateV0::test0())]
 #[case(CertificateV1::test0())]
 #[case(CertificateV1::test1())]
+#[case(CertificateV1::test4())]
+#[case(CertificateV1::test5())]
 #[case(CertificateV1::from(&Certificate::new_for_test(74.into(), Height::new(998))).into_owned())]
 fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
     let bytes = bincode_codec().serialize(&orig).unwrap();
@@ -261,10 +327,16 @@ fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> 
 #[case("cert_v0_00", CertificateV0::test0())]
 #[case("cert_v1_00", CertificateV1::test0())]
 #[case("cert_v1_01", CertificateV1::test1())]
+#[case("cert_v1_04", CertificateV1::test4())]
+#[case("cert_v1_05", CertificateV1::test5())]
 #[case("aggdata_v1_00", AggchainDataV1::test0())]
 #[case("aggdata_v1_01", AggchainDataV1::test1())]
 #[case("aggdata_v1_02", AggchainDataV1::test2())]
 #[case("aggdata_v1_03", AggchainDataV1::test3())]
+#[case("aggdata_v1_04", AggchainDataV1::test4())]
+#[case("aggdata_v1_05", AggchainDataV1::test5())]
+#[case("aggdata_v1_04", AggchainDataV1::test4())]
+#[case("aggdata_v1_05", AggchainDataV1::test5())]
 fn encoding<T>(#[case] name: &str, #[case] value: T)
 where
     T: Serialize + serde::de::DeserializeOwned + std::fmt::Debug,

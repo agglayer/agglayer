@@ -117,7 +117,7 @@ dependencies = [
 [[package]]
 name = "agglayer-bincode"
 version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#aa944c59bdd1814e30deb241e39256dbace67a35"
 dependencies = [
  "bincode",
  "serde",
@@ -182,7 +182,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "agglayer-prover-config",
  "agglayer-types",
  "alloy-primitives",
@@ -207,7 +207,7 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "alloy",
  "anyhow",
  "async-trait",
@@ -225,7 +225,7 @@ dependencies = [
 [[package]]
 name = "agglayer-elf-build"
 version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#aa944c59bdd1814e30deb241e39256dbace67a35"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -269,7 +269,7 @@ dependencies = [
  "agglayer-grpc-client",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
- "agglayer-interop 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-interop 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "agglayer-rpc",
  "agglayer-storage",
  "agglayer-types",
@@ -310,7 +310,7 @@ dependencies = [
 name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-interop 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "agglayer-types",
  "anyhow",
  "bolero",
@@ -336,10 +336,10 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#aa944c59bdd1814e30deb241e39256dbace67a35"
 dependencies = [
- "agglayer-interop-grpc-types 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-interop-types 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-interop-grpc-types 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-interop-types 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
 ]
 
 [[package]]
@@ -360,9 +360,9 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#aa944c59bdd1814e30deb241e39256dbace67a35"
 dependencies = [
- "agglayer-interop-types 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-interop-types 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "bincode",
  "pbjson 0.7.0",
  "prost 0.13.5",
@@ -394,11 +394,11 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#aa944c59bdd1814e30deb241e39256dbace67a35"
 dependencies = [
- "agglayer-bincode 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-bincode 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "arbitrary",
  "bincode",
  "educe",
@@ -408,7 +408,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.16",
- "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
 ]
 
 [[package]]
@@ -532,7 +532,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#aa944c59bdd1814e30deb241e39256dbace67a35"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -651,7 +651,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
- "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "agglayer-types",
  "alloy-primitives",
  "chrono",
@@ -737,9 +737,9 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#aa944c59bdd1814e30deb241e39256dbace67a35"
 dependencies = [
- "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "hex",
  "serde",
  "serde_with",
@@ -750,10 +750,10 @@ dependencies = [
 name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-bincode 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-interop-types 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-bincode 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-interop-types 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "agglayer-types",
  "alloy",
  "arbitrary",
@@ -770,7 +770,7 @@ dependencies = [
  "sp1-sdk",
  "strum_macros 0.27.2",
  "thiserror 2.0.16",
- "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
 ]
 
 [[package]]
@@ -3407,12 +3407,12 @@ dependencies = [
 name = "ecdsa-proof-lib"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "k256",
  "serde",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
- "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
 ]
 
 [[package]]
@@ -6160,8 +6160,8 @@ name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
  "agglayer-elf-build",
- "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "arbitrary",
  "hex",
  "hex-literal 0.4.1",
@@ -6176,16 +6176,16 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.16",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
 ]
 
 [[package]]
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
- "agglayer-bincode 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-bincode 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "alloy",
  "alloy-primitives",
  "arbitrary",
@@ -6201,7 +6201,7 @@ dependencies = [
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
  "toml",
  "tracing",
- "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
 ]
 
 [[package]]
@@ -6209,7 +6209,7 @@ name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
  "agglayer-prover",
- "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "agglayer-types",
  "alloy",
  "anyhow",
@@ -6231,7 +6231,7 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tracing",
- "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "uuid 1.18.0",
 ]
 
@@ -6842,9 +6842,9 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quinn"
-version = "0.11.8"
+version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "626214629cda6781b6dc1d316ba307189c85ba657213ce642d9c77670f8202c8"
+checksum = "b9e20a958963c291dc322d98411f541009df2ced7b5a4f2bd52337638cfccf20"
 dependencies = [
  "bytes",
  "cfg_aliases",
@@ -6853,7 +6853,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "thiserror 2.0.16",
  "tokio",
  "tracing",
@@ -6862,9 +6862,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.12"
+version = "0.11.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49df843a9161c85bb8aae55f101bc0bac8bcafd637a620d9122fd7e0b2f7422e"
+checksum = "f1906b49b0c3bc04b5fe5d86a77925ae6524a19b816ae38ce1e426255f1d8a31"
 dependencies = [
  "bytes",
  "getrandom 0.3.3",
@@ -6883,16 +6883,16 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.5.13"
+version = "0.5.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcebb1209ee276352ef14ff8732e24cc2b02bbac986cd74a4c81bcb2f9881970"
+checksum = "addec6a0dcad8a8d96a771f815f0eaf55f9d1805756410b39f5fa81332574cbd"
 dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -9520,10 +9520,10 @@ dependencies = [
 [[package]]
 name = "unified-bridge"
 version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#aa944c59bdd1814e30deb241e39256dbace67a35"
 dependencies = [
- "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
- "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?branch=multisig-api)",
  "arbitrary",
  "hex-literal 1.0.0",
  "serde",
