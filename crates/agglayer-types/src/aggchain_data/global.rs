@@ -72,6 +72,9 @@ pub enum AggchainDataError {
 
     #[error("Invalid multisig: {0}")]
     InvalidMultisig(#[source] MultisigError),
+
+    #[error("Aggchain proof comes without its ECDSA")]
+    MissingSignature,
 }
 
 // Generate the prover inputs from the chain payload and the L1 context.

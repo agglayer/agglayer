@@ -236,12 +236,15 @@ impl LocalNetworkStateData {
             });
         }
 
-        let aggchain_data = CertificateAggchainDataWithCtx(
-            certificate.aggchain_data.clone().into(),
-            aggchain_data_ctx,
-        )
-        .try_into()
-        .map_err(Error::InvalidChainData)?;
+        let chain_paylaod = certificate
+            .aggchain_data
+            .clone()
+            .try_into()
+            .map_err(Error::InvalidChainData)?;
+
+        let aggchain_data = CertificateAggchainDataWithCtx(chain_paylaod, aggchain_data_ctx)
+            .try_into()
+            .map_err(Error::InvalidChainData)?;
 
         Ok(MultiBatchHeader {
             origin_network: certificate.network_id,

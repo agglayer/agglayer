@@ -32,41 +32,45 @@ where
 
         let l1_info_root = self.fetch_l1_info_root(certificate).await?;
 
+        let aggchain_data_paylaod = CertificateAggchainData::try_from(
+            certificate.aggchain_data.clone(),
+        )
+        .map_err(|source| CertificationError::Types {
+            source: agglayer_types::Error::InvalidChainData(source),
+        })?;
+
         // Fetch context based on the aggchain data type that we received from the
         // chain.
-        let aggchain_data_ctx: CertificateAggchainDataCtx =
-            match CertificateAggchainData::from(certificate.aggchain_data.clone()) {
-                CertificateAggchainData::LegacyEcdsa { .. } => {
-                    let signer = self
-                        .l1_rpc
-                        .get_trusted_sequencer_address(
-                            network_id.to_u32(),
-                            self.config.proof_signers.clone(),
-                        )
-                        .await
-                        .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
-                    CertificateAggchainDataCtx::LegacyEcdsa { signer }
-                }
-                CertificateAggchainData::MultisigOnly(_) => {
-                    CertificateAggchainDataCtx::MultisigOnly(
-                        self.fetch_multisig_ctx(certificate).await?,
+        let aggchain_data_ctx: CertificateAggchainDataCtx = match aggchain_data_paylaod {
+            CertificateAggchainData::LegacyEcdsa { .. } => {
+                let signer = self
+                    .l1_rpc
+                    .get_trusted_sequencer_address(
+                        network_id.to_u32(),
+                        self.config.proof_signers.clone(),
                     )
+                    .await
+                    .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
+                CertificateAggchainDataCtx::LegacyEcdsa { signer }
+            }
+            CertificateAggchainData::MultisigOnly(_) => CertificateAggchainDataCtx::MultisigOnly(
+                self.fetch_multisig_ctx(certificate).await?,
+            ),
+            CertificateAggchainData::AggchainProofOnly { aggchain_proof, .. } => {
+                CertificateAggchainDataCtx::AggchainProofOnly(
+                    self.fetch_aggchain_proof_ctx(certificate, &aggchain_proof)
+                        .await?,
+                )
+            }
+            CertificateAggchainData::MultisigAndAggchainProof { aggchain_proof, .. } => {
+                CertificateAggchainDataCtx::MultisigAndAggchainProof {
+                    multisig_ctx: self.fetch_multisig_ctx(certificate).await?,
+                    aggchain_proof_ctx: self
+                        .fetch_aggchain_proof_ctx(certificate, &aggchain_proof)
+                        .await?,
                 }
-                CertificateAggchainData::AggchainProofOnly { aggchain_proof, .. } => {
-                    CertificateAggchainDataCtx::AggchainProofOnly(
-                        self.fetch_aggchain_proof_ctx(certificate, &aggchain_proof)
-                            .await?,
-                    )
-                }
-                CertificateAggchainData::MultisigAndAggchainProof { aggchain_proof, .. } => {
-                    CertificateAggchainDataCtx::MultisigAndAggchainProof {
-                        multisig_ctx: self.fetch_multisig_ctx(certificate).await?,
-                        aggchain_proof_ctx: self
-                            .fetch_aggchain_proof_ctx(certificate, &aggchain_proof)
-                            .await?,
-                    }
-                }
-            };
+            }
+        };
 
         Ok(L1WitnessCtx {
             prev_pessimistic_root: PessimisticRootInput::Fetched(prev_pessimistic_root.into()),
@@ -193,7 +197,7 @@ where
                 retrieved_root
             }
             // Inconsistent declared L1 info tree entry
-            (l1_leaf, l1_info_root) => {
+            (l1_leaf @ None, l1_info_root @ Some(_)) => {
                 return Err(CertificationError::Types {
                     source: agglayer_types::Error::InconsistentL1InfoTreeInformation {
                         l1_leaf,

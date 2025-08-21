@@ -23,9 +23,10 @@ pub struct PayloadWithCtx<Payload, Context>(pub Payload, pub Context);
 // FIXME: To remove, global::Payload should replace all the aggchain data from
 // the Certificate and API
 // NOTE: This is temporary to have minimal backward compatibility
-impl From<AggchainData> for global::Payload {
-    fn from(value: AggchainData) -> Self {
-        match value {
+impl TryFrom<AggchainData> for global::Payload {
+    type Error = AggchainDataError;
+    fn try_from(value: AggchainData) -> Result<Self, Self::Error> {
+        Ok(match value {
             AggchainData::ECDSA { signature } => global::Payload::LegacyEcdsa { signature },
             AggchainData::Generic {
                 proof,
@@ -33,14 +34,13 @@ impl From<AggchainData> for global::Payload {
                 signature,
                 public_values,
             } => global::Payload::AggchainProofOnly {
-                signature: *signature.unwrap(), /* this signature must be mandatory, need
-                                                 * fixing backward compatibility */
+                signature: *signature.ok_or(AggchainDataError::MissingSignature)?,
                 aggchain_proof: aggchain_proof::Payload {
                     proof,
                     aggchain_params,
                     public_values,
                 },
             },
-        }
+        })
     }
 }
