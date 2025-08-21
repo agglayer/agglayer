@@ -16,6 +16,9 @@ expression: "&registry"
             "TYPENAME": "MultisigError"
           }
         }
+      },
+      "2": {
+        "MissingSignature": "UNIT"
       }
     }
   },
