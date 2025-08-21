@@ -25,11 +25,12 @@ pub enum MultisigError {
 impl MultiSignature {
     /// Commitment on the signers and threshold.
     pub fn signers_commit(&self) -> Digest {
-        // addresses should be padded in 32bytes because solidity
+        // addresses does not need to be padded in 32bytes because
+        // addresses won't be decoded in solidity, just encoded from the contract
+        // storage.
         let mut buf = Vec::with_capacity(self.expected_signers.len());
         buf.extend_from_slice(self.threshold.to_be_bytes().as_slice());
         for addr in &self.expected_signers {
-            buf.extend_from_slice(&[0u8; 12]); // padding (12bytes)
             buf.extend_from_slice(addr.as_slice()); // address (20bytes)
         }
         keccak256_combine([buf.as_slice()])
