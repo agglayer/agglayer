@@ -10,8 +10,10 @@ use agglayer_grpc_types::{
         GetNetworkStatusResponse, LatestCertificateRequestType,
     },
 };
+use agglayer_interop::grpc::v1::FixedBytes32;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::stores::{DebugReader, PendingCertificateReader, StateReader};
+use agglayer_types::Digest;
 use tonic_types::{ErrorDetails, StatusExt as _};
 use tracing::error;
 
@@ -187,7 +189,7 @@ where
 
         // TODO: Fetch additional needed data.
 
-        // Build NetworkStatus response
+        // TODO: Implement build NetworkStatus response
         let network_status = agglayer_grpc_types::node::types::v1::NetworkStatus {
             network_status: "default".to_string(), // Default status
             network_type: "default".to_string(),   // Default type
@@ -195,24 +197,25 @@ where
             settled_height: settled_certificate
                 .as_ref()
                 .map(|cert| cert.height.as_u64())
-                .unwrap_or(0),
+                .unwrap_or(10),
             settled_certificate_id: settled_certificate
                 .as_ref()
                 .map(|cert| cert.certificate_id.into()),
-            settled_pp_root: None, // Would need additional data source
-            settled_ler: None,     // Would need additional data source
-            settled_bridge_global_index: None, // Would need additional data source
-            settled_claim_global_index: None, // Would need additional data source
+            settled_pp_root: Some(FixedBytes32::from(Digest::from([0x01; 32]))), // Placeholder
+            settled_ler: Some(FixedBytes32::from(Digest::from([0x02; 32]))),     // Placeholder
+            settled_bridge_global_index: Some(FixedBytes32::from(Digest::from([0x03; 32]))), // Placeholder
+            settled_claim_global_index: Some(FixedBytes32::from(Digest::from([0x04; 32]))), // Placeholder
             latest_pending_height: pending_certificate
                 .as_ref()
                 .map(|cert| cert.height.as_u64())
-                .unwrap_or(0),
+                .unwrap_or(123),
             latest_pending_status: pending_certificate
                 .as_ref()
                 .map(|cert| format!("{:?}", cert.status))
-                .unwrap_or_else(|| "None".to_string()),
-            latest_pending_error: "".to_string(), // Would need additional error tracking
-            latest_epoch_with_settlement: 0,      // Would need epoch tracking
+                .unwrap_or_else(|| "Pending".to_string()),
+            latest_pending_error: "Some pending error".to_string(), /* Would need additional
+                                                                     * error tracking */
+            latest_epoch_with_settlement: 12, // Would need epoch tracking
         };
 
         Ok(tonic::Response::new(GetNetworkStatusResponse {
