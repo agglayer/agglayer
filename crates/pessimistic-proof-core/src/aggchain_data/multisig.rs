@@ -20,6 +20,12 @@ pub enum MultisigError {
 
     #[error("At least one signature is invalid or from an unregistered signer.")]
     HasInvalidSignature,
+
+    #[error("At least one signer comes duplicated. signer: {signer}.")]
+    HasDuplicateSigner { signer: Address },
+
+    #[error("Out of bounds signer index: signer index: {idx}, committee size: {total}.")]
+    OutOfBoundSignerIndex { idx: usize, total: usize },
 }
 
 impl MultiSignature {
@@ -36,14 +42,31 @@ impl MultiSignature {
         keccak256_combine([buf.as_slice()])
     }
 
+    /// Ensure that the signatures refer to unique and existing signer.
+    fn unique_signers(&self) -> Result<(), MultisigError> {
+        let total = self.expected_signers.len();
+        let mut seen = vec![false; total];
+
+        for &(idx, _) in &self.signatures {
+            if idx >= total {
+                return Err(MultisigError::OutOfBoundSignerIndex { idx, total });
+            }
+
+            if seen[idx] {
+                return Err(MultisigError::HasDuplicateSigner {
+                    signer: self.expected_signers[idx],
+                });
+            }
+
+            seen[idx] = true;
+        }
+
+        Ok(())
+    }
+
     /// Verify signatures and ensure they are all from the expected set.
     pub fn verify(&self, commitment: B256) -> Result<(), MultisigError> {
-        if self.signatures.len() < self.threshold {
-            return Err(MultisigError::UnderThreshold {
-                got: self.signatures.len(),
-                expected: self.threshold,
-            });
-        }
+        self.unique_signers()?;
 
         let has_invalid_signature = self.signatures.iter().any(|&(signer_idx, signature)| {
             self.expected_signers
@@ -59,6 +82,13 @@ impl MultiSignature {
 
         if has_invalid_signature {
             return Err(MultisigError::HasInvalidSignature);
+        }
+
+        if self.signatures.len() < self.threshold {
+            return Err(MultisigError::UnderThreshold {
+                got: self.signatures.len(),
+                expected: self.threshold,
+            });
         }
 
         Ok(())
