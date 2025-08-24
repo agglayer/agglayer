@@ -64,6 +64,3 @@ input-backpressure-buffer-size = 1000
 
 [storage]
 db-path = "./storage"
-
-[extra-certificate-signer]
-1337 = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"

@@ -1,5 +1,5 @@
 use agglayer_interop_types::{aggchain_proof::AggchainData, LocalExitRoot};
-use agglayer_primitives::{Address, Hashable, Signature, B256};
+use agglayer_primitives::{Address, Hashable, B256};
 use pessimistic_proof::{core::commitment::SignatureCommitmentValues, keccak::keccak256_combine};
 use unified_bridge::{
     BridgeExit, CommitmentVersion, ImportedBridgeExit, ImportedBridgeExitCommitmentValues,
@@ -114,39 +114,6 @@ impl Certificate {
         } else {
             Err(Error::MultipleL1InfoRoot)
         }
-    }
-
-    /// Computes the commitment used to verify the extra signature on the
-    /// agglayer only.
-    /// The commitment is expected to be on the certificate id and the optional
-    /// l1 info tree leaf count.
-    fn extra_signature_commitment(&self) -> Digest {
-        let certificate_id = self.hash();
-
-        match self.l1_info_tree_leaf_count {
-            Some(leaf_count) => keccak256_combine([
-                certificate_id.as_digest().as_slice(),
-                leaf_count.to_le_bytes().as_slice(),
-            ]),
-            None => *certificate_id,
-        }
-    }
-
-    /// Verify the extra certificate signature.
-    pub fn verify_extra_signature(
-        &self,
-        expected_signer: Address,
-        signature: Signature,
-    ) -> Result<(), SignerError> {
-        let expected_commitment = self.extra_signature_commitment();
-
-        let retrieved_signer = signature
-            .recover_address_from_prehash(&B256::new(expected_commitment.0))
-            .map_err(SignerError::Recovery)?;
-
-        (expected_signer == retrieved_signer)
-            .then_some(())
-            .ok_or(SignerError::InvalidExtraSignature { expected_signer })
     }
 
     /// Verify the signature on the PP commitment.
