@@ -125,6 +125,9 @@ pub enum CertificationError {
         from_proof: Box<AggchainProofPublicValues>,
         from_witness: Box<AggchainProofPublicValues>,
     },
+
+    #[error("multisig is not fully supported yet.")]
+    UnsupportedMultisig
 }
 
 impl From<CertificationError> for CertificateStatusError {

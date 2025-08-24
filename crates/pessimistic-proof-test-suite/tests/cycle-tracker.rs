@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use agglayer_types::PessimisticRootInput;
-use pessimistic_proof::unified_bridge::{BridgeExit, CommitmentVersion};
+use pessimistic_proof::{core::commitment::CommitmentVersion, unified_bridge::BridgeExit};
 use pessimistic_proof_test_suite::{forest::Forest, runner::Runner, sample_data as data};
 
 #[rstest::rstest]

@@ -17,7 +17,8 @@ use pessimistic_proof::{
     local_state::LocalNetworkState,
     multi_batch_header::MultiBatchHeader,
     unified_bridge::{
-        AggchainProofPublicValues, CommitmentVersion, ImportedBridgeExitCommitmentValues,
+        AggchainProofPublicValues, ImportedBridgeExitCommitmentValues,
+        ImportedBridgeExitCommitmentVersion,
     },
     NetworkState, PessimisticProofOutput,
 };
@@ -152,8 +153,11 @@ where
             AggchainData::ECDSA { .. } => {}
             AggchainData::Generic { ref proof, .. } => {
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
-
                 stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone());
+            }
+            AggchainData::MultisigOnly(_) => return Err(CertificationError::UnsupportedMultisig),
+            AggchainData::MultisigAndAggchainProof { .. } => {
+                return Err(CertificationError::UnsupportedMultisig)
             }
         };
 
@@ -425,6 +429,10 @@ where
 
                 Some(sp1_reduce_proof.vkey.vk.hash_u32())
             }
+            AggchainData::MultisigOnly(_) => return Err(CertificationError::UnsupportedMultisig),
+            AggchainData::MultisigAndAggchainProof { .. } => {
+                return Err(CertificationError::UnsupportedMultisig)
+            }
         };
 
         let initial_state = LocalNetworkState::from(state.clone());
@@ -501,7 +509,7 @@ where
                         .map(|(exit, _)| exit.to_indexed_exit_hash())
                         .collect(),
                 }
-                .commitment(CommitmentVersion::V3),
+                .commitment(ImportedBridgeExitCommitmentVersion::V3),
                 aggchain_params: *aggchain_params,
             };
 

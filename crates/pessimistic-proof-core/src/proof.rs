@@ -9,14 +9,14 @@ use tracing::warn;
 #[cfg(target_os = "zkvm")]
 use unified_bridge::AggchainProofPublicValues;
 use unified_bridge::{
-    CommitmentVersion, Error, GlobalIndex, ImportedBridgeExitCommitmentValues, LocalExitTreeError,
-    NetworkId, TokenInfo,
+    Error, GlobalIndex, ImportedBridgeExitCommitmentValues, ImportedBridgeExitCommitmentVersion,
+    LocalExitTreeError, NetworkId, TokenInfo,
 };
 
 use crate::{
     aggchain_proof::AggchainData,
     local_state::{
-        commitment::{PessimisticRoot, SignatureCommitmentValues, StateCommitment},
+        commitment::{CommitmentVersion, PessimisticRoot, SignatureCommitmentValues, StateCommitment},
         NetworkState,
     },
     multi_batch_header::MultiBatchHeader,
@@ -26,7 +26,8 @@ use crate::{
 /// aggchain proof public values (`commit_imported_bridge_exits` field).
 /// This constant defines which commitment version is expected to verify the
 /// aggchain proof.
-pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: CommitmentVersion = CommitmentVersion::V3;
+pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: ImportedBridgeExitCommitmentVersion =
+    ImportedBridgeExitCommitmentVersion::V3;
 
 /// Represents all errors that can occur while generating the proof.
 ///

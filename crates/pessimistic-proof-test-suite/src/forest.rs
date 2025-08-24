@@ -8,14 +8,14 @@ use agglayer_types::{
 use alloy::signers::{local::PrivateKeySigner, SignerSync};
 use ecdsa_proof_lib::AggchainECDSA;
 use pessimistic_proof::{
-    core::commitment::SignatureCommitmentValues,
+    core::commitment::{CommitmentVersion, SignatureCommitmentValues},
     keccak::keccak256_combine,
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
     local_state::LocalNetworkState,
     proof::zero_if_empty_local_exit_root,
     unified_bridge::{
-        BridgeExit, Claim, ClaimFromMainnet, CommitmentVersion, GlobalIndex, ImportedBridgeExit,
-        L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
+        BridgeExit, Claim, ClaimFromMainnet, GlobalIndex, ImportedBridgeExit, L1InfoTreeLeaf,
+        L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
     },
     PessimisticProofOutput,
 };
@@ -260,6 +260,10 @@ impl Forest {
         let signature = match certificate.aggchain_data {
             AggchainData::ECDSA { signature } => signature,
             AggchainData::Generic { .. } => unimplemented!("SP1 handling not implemented"),
+            AggchainData::MultisigOnly(_) => unimplemented!("multisig handling not implemented"),
+            AggchainData::MultisigAndAggchainProof { .. } => {
+                unimplemented!("SP1 handling not implemented")
+            }
         };
 
         let (aggchain_proof, aggchain_vkey, aggchain_params) =

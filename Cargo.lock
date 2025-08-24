@@ -114,8 +114,7 @@ dependencies = [
 [[package]]
 name = "agglayer-bincode"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b600f94a636bff0170bd11b2b93f4a7fd305be95bfbaa558e1a9a1f0e6a87bdd"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#b79f9c605fd192c869c0685d2a5631c45a4a661f"
 dependencies = [
  "bincode",
  "serde",
@@ -222,8 +221,7 @@ dependencies = [
 [[package]]
 name = "agglayer-elf-build"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90bad143db162f9562c13b321d150a5b0c7633cb151d1b913e08f06a7bcf6038"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#b79f9c605fd192c869c0685d2a5631c45a4a661f"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -334,8 +332,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39edcae2dc53474844ff4b83385a0b8648c984319bb50d50b0700a9895503803"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#b79f9c605fd192c869c0685d2a5631c45a4a661f"
 dependencies = [
  "agglayer-interop-grpc-types 0.9.0",
  "agglayer-interop-types 0.9.0",
@@ -359,8 +356,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e99ea508c69dd2a77d58d4832d392d2128990cd3c6ec0addabab101c8b6f7f80"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#b79f9c605fd192c869c0685d2a5631c45a4a661f"
 dependencies = [
  "agglayer-interop-types 0.9.0",
  "bincode",
@@ -394,8 +390,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3765e1cea355ce34e3e0dd824a5e57198bf3498ffe242be7758bf3a889b3f49"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#b79f9c605fd192c869c0685d2a5631c45a4a661f"
 dependencies = [
  "agglayer-bincode 0.9.0",
  "agglayer-primitives 0.9.0",
@@ -532,8 +527,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88e08a5ddabc0710ff57206a6222135e45b380d3f15f62ea5267c0a91bd42d9f"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#b79f9c605fd192c869c0685d2a5631c45a4a661f"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -737,8 +731,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2db770a5571e86a72e216d2711f519ba6887f63cfc57cb6c38c0ff0363b314d"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#b79f9c605fd192c869c0685d2a5631c45a4a661f"
 dependencies = [
  "agglayer-primitives 0.9.0",
  "hex",
@@ -9394,8 +9387,7 @@ dependencies = [
 [[package]]
 name = "unified-bridge"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ed7ffb6ee35350e44f40e4385ddda852802d43984a8ebfc238a8f0594c5ab24"
+source = "git+https://github.com/agglayer/interop.git?branch=multisig-api#b79f9c605fd192c869c0685d2a5631c45a4a661f"
 dependencies = [
  "agglayer-primitives 0.9.0",
  "agglayer-tries 0.9.0",

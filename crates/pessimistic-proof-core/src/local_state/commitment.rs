@@ -5,7 +5,9 @@
 use agglayer_primitives::{keccak::keccak256_combine, Digest};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalExitRoot, LocalNullifierRoot};
 use serde::{Deserialize, Serialize};
-use unified_bridge::{CommitmentVersion, ImportedBridgeExitCommitmentValues, NetworkId};
+use unified_bridge::{
+    ImportedBridgeExitCommitmentValues, ImportedBridgeExitCommitmentVersion, NetworkId,
+};
 
 use crate::{proof::EMPTY_PP_ROOT_V2, ProofError};
 
@@ -77,6 +79,12 @@ impl PessimisticRoot {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum CommitmentVersion {
+    V2,
+    V3,
+}
+
 /// The values which compose the signature.
 pub struct SignatureCommitmentValues {
     pub new_local_exit_root: LocalExitRoot,
@@ -89,7 +97,7 @@ impl SignatureCommitmentValues {
         keccak256_combine([
             self.new_local_exit_root.as_ref(),
             self.commit_imported_bridge_exits
-                .commitment(CommitmentVersion::V3)
+                .commitment(ImportedBridgeExitCommitmentVersion::V3)
                 .as_slice(),
             self.height.to_le_bytes().as_slice(),
             aggchain_params.as_slice(),
@@ -99,15 +107,18 @@ impl SignatureCommitmentValues {
     /// Returns the expected signed commitment for the provided version.
     #[inline]
     pub fn commitment(&self, version: CommitmentVersion) -> Digest {
-        let imported_bridge_exit_commitment = self.commit_imported_bridge_exits.commitment(version);
         match version {
             CommitmentVersion::V2 => keccak256_combine([
                 self.new_local_exit_root.as_ref(),
-                imported_bridge_exit_commitment.as_slice(),
+                self.commit_imported_bridge_exits
+                    .commitment(ImportedBridgeExitCommitmentVersion::V2)
+                    .as_slice(),
             ]),
             CommitmentVersion::V3 => keccak256_combine([
                 self.new_local_exit_root.as_ref(),
-                imported_bridge_exit_commitment.as_slice(),
+                self.commit_imported_bridge_exits
+                    .commitment(ImportedBridgeExitCommitmentVersion::V3)
+                    .as_slice(),
                 self.height.to_le_bytes().as_slice(),
             ]),
         }

@@ -1,9 +1,11 @@
 use agglayer_interop_types::{aggchain_proof::AggchainData, LocalExitRoot};
 use agglayer_primitives::{Address, Hashable, B256};
-use pessimistic_proof::{core::commitment::SignatureCommitmentValues, keccak::keccak256_combine};
+use pessimistic_proof::{
+    core::commitment::{CommitmentVersion, SignatureCommitmentValues},
+    keccak::keccak256_combine,
+};
 use unified_bridge::{
-    BridgeExit, CommitmentVersion, ImportedBridgeExit, ImportedBridgeExitCommitmentValues,
-    NetworkId,
+    BridgeExit, ImportedBridgeExit, ImportedBridgeExitCommitmentValues, NetworkId,
 };
 
 use crate::{Digest, Error, SignerError};
@@ -150,6 +152,10 @@ impl Certificate {
 
                 recovered == expected_signer
             }
+            AggchainData::MultisigOnly(_) => return Err(SignerError::UnsupportedMultisig),
+            AggchainData::MultisigAndAggchainProof { .. } => {
+                return Err(SignerError::UnsupportedMultisig)
+            }
         };
 
         recovered_expected_signer
@@ -173,6 +179,10 @@ impl Certificate {
                 let commitment = SignatureCommitmentValues::from(self)
                     .aggchain_proof_commitment(aggchain_params);
                 (signature.as_ref(), commitment)
+            }
+            AggchainData::MultisigOnly(_) => return Err(SignerError::UnsupportedMultisig),
+            AggchainData::MultisigAndAggchainProof { .. } => {
+                return Err(SignerError::UnsupportedMultisig)
             }
         };
 

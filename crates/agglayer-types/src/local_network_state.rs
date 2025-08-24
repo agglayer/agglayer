@@ -4,7 +4,11 @@ use agglayer_interop_types::{aggchain_proof::AggchainData, ImportedBridgeExit, T
 use agglayer_primitives::{ruint::UintTryFrom, FromBool, Hashable};
 use agglayer_tries::{roots::LocalExitRoot, smt::Smt};
 use pessimistic_proof::{
-    core::{self, commitment::PessimisticRoot, Vkey},
+    core::{
+        self,
+        commitment::{CommitmentVersion, PessimisticRoot},
+        Vkey,
+    },
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
     local_state::StateCommitment,
     multi_batch_header::MultiBatchHeader,
@@ -12,7 +16,7 @@ use pessimistic_proof::{
     LocalNetworkState,
 };
 use serde::{Deserialize, Serialize};
-use unified_bridge::{CommitmentVersion, LocalExitTree};
+use unified_bridge::LocalExitTree;
 
 use crate::{Address, Certificate, Digest, Error, U256, U512};
 
@@ -232,6 +236,10 @@ impl LocalNetworkStateData {
                 aggchain_params: *aggchain_params,
                 aggchain_vkey: aggchain_vkey.ok_or(Error::MissingAggchainVkey)?,
             },
+            AggchainData::MultisigOnly(_) => return Err(Error::UnsupportedMultisig),
+            AggchainData::MultisigAndAggchainProof { .. } => {
+                return Err(Error::UnsupportedMultisig)
+            }
         };
 
         Ok(MultiBatchHeader {

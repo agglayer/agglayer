@@ -6,7 +6,10 @@ use agglayer_storage::{
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use mockall::predicate::{always, eq};
-use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
+use pessimistic_proof::{
+    core::{commitment::CommitmentVersion, generate_pessimistic_proof},
+    LocalNetworkState,
+};
 use rstest::rstest;
 
 use super::*;
