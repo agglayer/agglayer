@@ -1,22 +1,18 @@
 use agglayer_bincode as bincode;
-use agglayer_primitives::{Address, Digest, Signature, B256};
+use agglayer_primitives::{Address, Digest};
 use agglayer_tries::roots::LocalExitRoot;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-#[cfg(not(target_os = "zkvm"))]
-use tracing::warn;
-#[cfg(target_os = "zkvm")]
-use unified_bridge::AggchainProofPublicValues;
 use unified_bridge::{
-    CommitmentVersion, Error, GlobalIndex, ImportedBridgeExitCommitmentValues, LocalExitTreeError,
-    NetworkId, TokenInfo,
+    Error, GlobalIndex, ImportedBridgeExitCommitmentValues, ImportedBridgeExitCommitmentVersion,
+    LocalExitTreeError, NetworkId, TokenInfo,
 };
 
 use crate::{
-    aggchain_proof::AggchainData,
+    aggchain_data::MultisigError,
     local_state::{
-        commitment::{PessimisticRoot, SignatureCommitmentValues, StateCommitment},
+        commitment::{PessimisticRootCommitmentValues, StateCommitment},
         NetworkState,
     },
     multi_batch_header::MultiBatchHeader,
@@ -26,7 +22,8 @@ use crate::{
 /// aggchain proof public values (`commit_imported_bridge_exits` field).
 /// This constant defines which commitment version is expected to verify the
 /// aggchain proof.
-pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: CommitmentVersion = CommitmentVersion::V3;
+pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: ImportedBridgeExitCommitmentVersion =
+    ImportedBridgeExitCommitmentVersion::V3;
 
 /// Represents all errors that can occur while generating the proof.
 ///
@@ -145,6 +142,10 @@ pub enum ProofError {
     /// Height overflow.
     #[error("Height overflow")]
     HeightOverflow,
+
+    /// Invalid multisig
+    #[error("Invalid multisig")]
+    InvalidMultisig(#[source] MultisigError),
 }
 
 /// Outputs of the pessimistic proof.
@@ -181,6 +182,39 @@ pub const EMPTY_PP_ROOT_V2: Digest = Digest(hex!(
     "c89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184"
 ));
 
+/// Represents all the enforced values for the stark and for the signed
+/// commitments.
+#[derive(Clone)]
+pub struct ConstrainedValues {
+    pub initial_state_commitment: StateCommitment,
+    pub final_state_commitment: StateCommitment,
+    pub prev_pessimistic_root: Digest,
+    pub height: u64,
+    pub origin_network: NetworkId,
+    pub l1_info_root: Digest,
+    pub commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues,
+    pub certificate_id: Digest,
+}
+
+impl ConstrainedValues {
+    fn new(
+        batch_header: &MultiBatchHeader,
+        initial_state_commitment: &StateCommitment,
+        final_state_commitment: &StateCommitment,
+    ) -> Self {
+        Self {
+            initial_state_commitment: initial_state_commitment.clone(),
+            final_state_commitment: final_state_commitment.clone(),
+            height: batch_header.height,
+            origin_network: batch_header.origin_network,
+            l1_info_root: batch_header.l1_info_root,
+            commit_imported_bridge_exits: batch_header.commit_imported_bridge_exits(),
+            certificate_id: batch_header.certificate_id,
+            prev_pessimistic_root: batch_header.prev_pessimistic_root,
+        }
+    }
+}
+
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
 /// [`NetworkState`].
 pub fn generate_pessimistic_proof(
@@ -192,19 +226,21 @@ pub fn generate_pessimistic_proof(
     let mut network_state: NetworkState = initial_network_state;
     let final_state_commitment = network_state.apply_batch_header(batch_header)?;
 
-    // verify the consensus
-    let target_pp_root_version = verify_consensus(
+    let constrained_values = ConstrainedValues::new(
         batch_header,
         &initial_state_commitment,
         &final_state_commitment,
-    )?;
+    );
+
+    // Verify multisig, aggchain proof, or both.
+    let target_pp_root_version = batch_header.aggchain_data.verify(constrained_values)?;
 
     let height = batch_header
         .height
         .checked_add(1)
         .ok_or(ProofError::HeightOverflow)?;
 
-    let new_pessimistic_root = PessimisticRoot {
+    let new_pessimistic_root = PessimisticRootCommitmentValues {
         balance_root: final_state_commitment.balance_root,
         nullifier_root: final_state_commitment.nullifier_root,
         ler_leaf_count: final_state_commitment.ler_leaf_count,
@@ -219,7 +255,7 @@ pub fn generate_pessimistic_proof(
             prev_pessimistic_root: batch_header.prev_pessimistic_root,
             l1_info_root: batch_header.l1_info_root,
             origin_network: batch_header.origin_network,
-            aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),
+            aggchain_hash: batch_header.aggchain_data.aggchain_hash(),
             new_local_exit_root: zero_if_empty_local_exit_root(final_state_commitment.exit_root),
             new_pessimistic_root,
         },
@@ -236,114 +272,4 @@ pub fn zero_if_empty_local_exit_root(root: LocalExitRoot) -> LocalExitRoot {
     } else {
         root
     }
-}
-
-/// Verify the signature or aggchain proof
-/// Returns the pp root version on success.
-pub fn verify_consensus(
-    multi_batch_header: &MultiBatchHeader,
-    initial_state_commitment: &StateCommitment,
-    final_state_commitment: &StateCommitment,
-) -> Result<CommitmentVersion, ProofError> {
-    // Verify initial state commitment and PP root matches
-    let base_pp_root_version = PessimisticRoot {
-        balance_root: initial_state_commitment.balance_root,
-        nullifier_root: initial_state_commitment.nullifier_root,
-        ler_leaf_count: initial_state_commitment.ler_leaf_count,
-        height: multi_batch_header.height,
-        origin_network: multi_batch_header.origin_network,
-    }
-    .infer_settled_pp_root_version(multi_batch_header.prev_pessimistic_root)?;
-
-    let commit_imported_bridge_exits = ImportedBridgeExitCommitmentValues {
-        claims: multi_batch_header
-            .imported_bridge_exits
-            .iter()
-            .map(|(exit, _)| exit.to_indexed_exit_hash())
-            .collect(),
-    };
-
-    // Verify the aggchain proof which can be either one signature or one sp1 proof.
-    // NOTE: The STARK is verified exclusively within the SP1 VM.
-    let target_pp_root_version = match &multi_batch_header.aggchain_proof {
-        AggchainData::ECDSA { signer, signature } => {
-            let verify_signature = |digest: Digest, signature: &Signature| {
-                signature
-                    .recover_address_from_prehash(&B256::new(digest.0))
-                    .map_err(|_| ProofError::InvalidSignature)
-            };
-
-            let signature_commitment = SignatureCommitmentValues {
-                new_local_exit_root: final_state_commitment.exit_root,
-                commit_imported_bridge_exits,
-                height: multi_batch_header.height,
-            };
-
-            let target_pp_root_version = {
-                if *signer
-                    == verify_signature(
-                        signature_commitment.commitment(CommitmentVersion::V3),
-                        signature,
-                    )?
-                {
-                    CommitmentVersion::V3
-                } else if *signer
-                    == verify_signature(
-                        signature_commitment.commitment(CommitmentVersion::V2),
-                        signature,
-                    )?
-                {
-                    CommitmentVersion::V2
-                } else {
-                    return Err(ProofError::InvalidSignature);
-                }
-            };
-
-            match (base_pp_root_version, target_pp_root_version) {
-                // From V2 to V2: OK
-                (CommitmentVersion::V2, CommitmentVersion::V2) => {}
-                // From V3 to V3: OK
-                (CommitmentVersion::V3, CommitmentVersion::V3) => {}
-                // From V2 to V3: OK (migration)
-                (CommitmentVersion::V2, CommitmentVersion::V3) => {}
-                // Inconsistent signed payload.
-                _ => return Err(ProofError::InconsistentSignedPayload),
-            }
-
-            target_pp_root_version
-        }
-        #[cfg(not(target_os = "zkvm"))]
-        AggchainData::Generic { .. } => {
-            // NOTE: No stark verification in the native rust code due to
-            // the sp1_zkvm::lib::verify::verify_sp1_proof syscall
-            warn!("verify_sp1_proof is not callable outside of SP1");
-            CommitmentVersion::V3
-        }
-        #[cfg(target_os = "zkvm")]
-        AggchainData::Generic {
-            aggchain_vkey,
-            aggchain_params,
-        } => {
-            let aggchain_proof_public_values = AggchainProofPublicValues {
-                prev_local_exit_root: initial_state_commitment.exit_root.into(),
-                new_local_exit_root: final_state_commitment.exit_root.into(),
-                l1_info_root: multi_batch_header.l1_info_root,
-                origin_network: multi_batch_header.origin_network,
-                aggchain_params: *aggchain_params,
-                commit_imported_bridge_exits: commit_imported_bridge_exits
-                    .commitment(IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION),
-            };
-
-            eprintln!("AP public values: {aggchain_proof_public_values:?}");
-
-            sp1_zkvm::lib::verify::verify_sp1_proof(
-                aggchain_vkey,
-                &aggchain_proof_public_values.hash().into(),
-            );
-
-            CommitmentVersion::V3
-        }
-    };
-
-    Ok(target_pp_root_version)
 }

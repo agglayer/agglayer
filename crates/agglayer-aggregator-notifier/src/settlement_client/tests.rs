@@ -4,7 +4,8 @@ use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{L1RpcError, L1TransactionFetcher, Settler};
 use agglayer_storage::tests::mocks::{MockPendingStore, MockPerEpochStore, MockStateStore};
 use agglayer_types::{
-    Address, CertificateHeader, CertificateStatus, Height, Metadata, PessimisticRootInput, Proof,
+    aggchain_data::CertificateAggchainDataCtx, Address, CertificateHeader, CertificateStatus,
+    Height, L1WitnessCtx, Metadata, PessimisticRootInput, Proof,
 };
 use alloy::{
     primitives::{Bytes, FixedBytes},
@@ -13,7 +14,7 @@ use alloy::{
 };
 use arc_swap::ArcSwap;
 use mockall::predicate::eq;
-use pessimistic_proof::unified_bridge::CommitmentVersion;
+use pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion;
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 
@@ -84,10 +85,13 @@ async fn epoch_packer_can_settle_one_certificate() {
         .state_b
         .apply_certificate(
             &certificate,
-            signer,
-            l1_info_root,
-            PessimisticRootInput::Computed(CommitmentVersion::V2),
-            None,
+            L1WitnessCtx {
+                l1_info_root,
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+            },
         )
         .unwrap();
     let certificate_id = certificate.hash();

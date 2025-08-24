@@ -1,9 +1,27 @@
 ---
 source: crates/agglayer-storage/src/types/certificate/tests/structure.rs
 expression: "&registry"
-snapshot_kind: text
 ---
 {
+  "AggchainDataError": {
+    "ENUM": {
+      "0": {
+        "InvalidVariant": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "1": {
+        "InvalidMultisig": {
+          "NEWTYPE": {
+            "TYPENAME": "MultisigError"
+          }
+        }
+      },
+      "2": {
+        "MissingSignature": "UNIT"
+      }
+    }
+  },
   "CertificateStatus": {
     "ENUM": {
       "0": {
@@ -137,6 +155,41 @@ snapshot_kind: text
       },
       "2": {
         "FrontierIndexOutOfBounds": "UNIT"
+      }
+    }
+  },
+  "MultisigError": {
+    "ENUM": {
+      "0": {
+        "UnderThreshold": {
+          "STRUCT": [
+            {
+              "got": "U64"
+            },
+            {
+              "expected": "U64"
+            }
+          ]
+        }
+      },
+      "1": {
+        "HasInvalidSignature": "UNIT"
+      },
+      "2": {
+        "UnknownRecoveredSigner": {
+          "STRUCT": [
+            {
+              "recovered": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "prehash": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
       }
     }
   },
@@ -372,6 +425,13 @@ snapshot_kind: text
       },
       "24": {
         "HeightOverflow": "UNIT"
+      },
+      "25": {
+        "InvalidMultisig": {
+          "NEWTYPE": {
+            "TYPENAME": "MultisigError"
+          }
+        }
       }
     }
   },
@@ -603,6 +663,13 @@ snapshot_kind: text
               }
             }
           ]
+        }
+      },
+      "14": {
+        "InvalidChainData": {
+          "NEWTYPE": {
+            "TYPENAME": "AggchainDataError"
+          }
         }
       }
     }

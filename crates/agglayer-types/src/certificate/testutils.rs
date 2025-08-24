@@ -1,12 +1,14 @@
 use agglayer_interop_types::{aggchain_proof::AggchainData, LocalExitRoot};
-use agglayer_primitives::{Address, Signature};
-use pessimistic_proof::{core::commitment::SignatureCommitmentValues, keccak::keccak256_combine};
+use agglayer_primitives::{Address, Digest, Signature, B256};
+use pessimistic_proof::{
+    core::commitment::{SignatureCommitmentValues, SignatureCommitmentVersion},
+    keccak::keccak256_combine,
+};
 use unified_bridge::{
-    CommitmentVersion, ImportedBridgeExit, ImportedBridgeExitCommitmentValues, LocalExitTree,
-    NetworkId,
+    ImportedBridgeExit, ImportedBridgeExitCommitmentValues, LocalExitTree, NetworkId,
 };
 
-use crate::{Certificate, Digest, Height};
+use crate::{Certificate, Height};
 
 impl Default for Certificate {
     fn default() -> Self {
@@ -16,8 +18,13 @@ impl Default for Certificate {
         // limitations of the Rust compiler's type inference, so we specify it here.
         let local_exit_root = LocalExitTree::<32>::default().get_root().into();
         let height = Height::ZERO;
-        let (_new_local_exit_root, signature, _signer) =
-            compute_signature_info(local_exit_root, &[], &wallet, height, CommitmentVersion::V2);
+        let (_new_local_exit_root, signature, _signer) = compute_signature_info(
+            local_exit_root,
+            &[],
+            &wallet,
+            height,
+            SignatureCommitmentVersion::V2,
+        );
         Self {
             network_id,
             height,
@@ -38,8 +45,8 @@ pub fn compute_signature_info(
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &alloy::signers::local::PrivateKeySigner,
     height: Height,
-    version: CommitmentVersion,
-) -> (Digest, Signature, Address) {
+    version: SignatureCommitmentVersion,
+) -> (B256, Signature, Address) {
     use alloy::signers::SignerSync;
     let combined_hash = SignatureCommitmentValues {
         new_local_exit_root,
@@ -50,11 +57,13 @@ pub fn compute_signature_info(
                 .collect(),
         },
         height: height.as_u64(),
+        aggchain_params: None,
+        certificate_id: Digest::default(),
     }
     .commitment(version);
 
     let signature = wallet
-        .sign_hash_sync(&agglayer_primitives::B256::new(combined_hash.0))
+        .sign_hash_sync(&combined_hash)
         .expect("valid signature");
     let signature = Signature::new(signature.r(), signature.s(), signature.v());
 
@@ -73,13 +82,13 @@ impl Certificate {
     }
 
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
-        Self::new_for_test_with_version(network_id, height, CommitmentVersion::V2)
+        Self::new_for_test_with_version(network_id, height, SignatureCommitmentVersion::V2)
     }
 
     pub fn new_for_test_with_version(
         network_id: NetworkId,
         height: Height,
-        version: CommitmentVersion,
+        version: SignatureCommitmentVersion,
     ) -> Self {
         let wallet = Self::wallet_for_test(network_id);
         // The LET depth can't be inferred to be the default of 32 due to the
@@ -110,14 +119,15 @@ impl Certificate {
 
 #[cfg(test)]
 mod tests {
+    use pessimistic_proof::core::commitment::SignatureCommitmentVersion;
     use rstest::rstest;
-    use unified_bridge::CommitmentVersion;
 
     use crate::Certificate;
 
     #[rstest]
     fn can_retrieve_correct_signer(
-        #[values(CommitmentVersion::V2, CommitmentVersion::V3)] version: CommitmentVersion,
+        #[values(SignatureCommitmentVersion::V2, SignatureCommitmentVersion::V3)]
+        version: SignatureCommitmentVersion,
     ) {
         let certificate = Certificate::new_for_test_with_version(2.into(), 1.into(), version);
         let expected_signer = certificate.get_signer();
