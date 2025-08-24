@@ -5,7 +5,8 @@ use agglayer_types::{
     Height, LocalNetworkStateData, NetworkId, PessimisticRootInput,
 };
 use pessimistic_proof::{
-    core::generate_pessimistic_proof, unified_bridge::CommitmentVersion, LocalNetworkState,
+    core::{commitment::CommitmentVersion, generate_pessimistic_proof},
+    LocalNetworkState,
 };
 use rstest::{fixture, rstest};
 use tracing::info;

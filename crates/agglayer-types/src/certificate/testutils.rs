@@ -1,9 +1,11 @@
 use agglayer_interop_types::{aggchain_proof::AggchainData, LocalExitRoot};
 use agglayer_primitives::{Address, Signature};
-use pessimistic_proof::{core::commitment::SignatureCommitmentValues, keccak::keccak256_combine};
+use pessimistic_proof::{
+    core::commitment::{CommitmentVersion, SignatureCommitmentValues},
+    keccak::keccak256_combine,
+};
 use unified_bridge::{
-    CommitmentVersion, ImportedBridgeExit, ImportedBridgeExitCommitmentValues, LocalExitTree,
-    NetworkId,
+    ImportedBridgeExit, ImportedBridgeExitCommitmentValues, LocalExitTree, NetworkId,
 };
 
 use crate::{Certificate, Digest, Height};
@@ -110,8 +112,8 @@ impl Certificate {
 
 #[cfg(test)]
 mod tests {
+    use pessimistic_proof::core::commitment::CommitmentVersion;
     use rstest::rstest;
-    use unified_bridge::CommitmentVersion;
 
     use crate::Certificate;
 

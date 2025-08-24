@@ -91,6 +91,9 @@ pub enum Error {
         computed: LocalExitRoot,
         declared: LocalExitRoot,
     },
+
+    #[error("multisig is not fully supported yet.")]
+    UnsupportedMultisig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error, PartialEq, Eq)]
@@ -147,4 +150,7 @@ pub enum SignerError {
          {expected_signer}"
     )]
     InvalidPessimisticProofSignature { expected_signer: Address },
+
+    #[error("multisig is not fully supported yet.")]
+    UnsupportedMultisig,
 }

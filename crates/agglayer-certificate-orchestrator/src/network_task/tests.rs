@@ -10,7 +10,7 @@ use agglayer_storage::{
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use agglayer_types::{Certificate, CertificateStatus, Metadata, PessimisticRootInput};
 use mockall::predicate::{always, eq, in_iter};
-use pessimistic_proof::unified_bridge::CommitmentVersion;
+use pessimistic_proof::core::commitment::CommitmentVersion;
 use rstest::rstest;
 
 use super::*;

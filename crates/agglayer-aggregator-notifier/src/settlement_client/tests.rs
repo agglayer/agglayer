@@ -13,7 +13,7 @@ use alloy::{
 };
 use arc_swap::ArcSwap;
 use mockall::predicate::eq;
-use pessimistic_proof::unified_bridge::CommitmentVersion;
+use pessimistic_proof::core::commitment::CommitmentVersion;
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 

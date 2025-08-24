@@ -2,9 +2,12 @@ use agglayer_types::{
     primitives::U256, Certificate, Digest, Error, LocalNetworkStateData, PessimisticRootInput,
 };
 use pessimistic_proof::{
-    core::{commitment::PessimisticRoot, generate_pessimistic_proof, AggchainData},
+    core::{
+        commitment::{CommitmentVersion, PessimisticRoot},
+        generate_pessimistic_proof, AggchainData,
+    },
     local_state::LocalNetworkState,
-    unified_bridge::{CommitmentVersion, TokenInfo},
+    unified_bridge::TokenInfo,
     NetworkState, ProofError,
 };
 use pessimistic_proof_test_suite::{

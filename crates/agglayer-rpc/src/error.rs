@@ -75,6 +75,9 @@ pub enum SignatureVerificationError {
     /// The pessimistic proof signature is invalid.
     #[error("invalid pessimistic proof signature: {0}")]
     InvalidPessimisticProofSignature(#[source] SignerError),
+
+    #[error("multisig is not fully supported yet.")]
+    UnsupportedMultisig,
 }
 
 impl SignatureVerificationError {
@@ -85,6 +88,7 @@ impl SignatureVerificationError {
             e @ agglayer_types::SignerError::InvalidPessimisticProofSignature { .. } => {
                 Self::InvalidPessimisticProofSignature(e)
             }
+            SignerError::UnsupportedMultisig => Self::UnsupportedMultisig,
         }
     }
 }
