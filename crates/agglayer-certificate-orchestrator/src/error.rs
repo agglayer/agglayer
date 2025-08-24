@@ -127,7 +127,7 @@ pub enum CertificationError {
     },
 
     #[error("multisig is not fully supported yet.")]
-    UnsupportedMultisig
+    UnsupportedMultisig,
 }
 
 impl From<CertificationError> for CertificateStatusError {

@@ -16,7 +16,9 @@ use unified_bridge::{
 use crate::{
     aggchain_proof::AggchainData,
     local_state::{
-        commitment::{CommitmentVersion, PessimisticRoot, SignatureCommitmentValues, StateCommitment},
+        commitment::{
+            CommitmentVersion, PessimisticRoot, SignatureCommitmentValues, StateCommitment,
+        },
         NetworkState,
     },
     multi_batch_header::MultiBatchHeader,
