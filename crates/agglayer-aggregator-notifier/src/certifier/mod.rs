@@ -347,7 +347,6 @@ where
 
         // Verify consistency on the aggchain proof public values if provided in the
         // optional context
-        // TODO: to move
         if let AggchainData::Generic {
             public_values: Some(pv_from_proof),
             aggchain_params,

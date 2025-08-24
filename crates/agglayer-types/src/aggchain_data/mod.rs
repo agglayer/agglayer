@@ -1,5 +1,4 @@
 use agglayer_interop_types::aggchain_proof::AggchainData;
-use serde::{Deserialize, Serialize};
 
 mod aggchain_proof;
 mod global;
@@ -17,7 +16,7 @@ pub use crate::aggchain_data::{
 };
 
 /// Represents the payload from the chain, with the context fetched from the L1.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct PayloadWithCtx<Payload, Context>(pub Payload, pub Context);
 
 // FIXME: To remove, global::Payload should replace all the aggchain data from

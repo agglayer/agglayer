@@ -21,13 +21,19 @@ pub enum MultisigError {
 }
 
 /// Multisig data from the chain.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Payload {
     signatures: Vec<Signature>,
 }
 
+impl From<Vec<Signature>> for Payload {
+    fn from(signatures: Vec<Signature>) -> Self {
+        Self { signatures }
+    }
+}
+
 /// Multisig data from the L1 and enforced by the agglayer.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Ctx {
     /// Ordered list of all possible signers.
     pub signers: Vec<Address>,
@@ -38,7 +44,7 @@ pub struct Ctx {
 }
 
 impl Ctx {
-    /// Returns the ide,
+    /// Returns the index of the signer from the provided signature.
     fn signer_from_signature(&self, signature: &Signature) -> Result<usize, MultisigError> {
         let recovered = signature
             .recover_address_from_prehash(&self.prehash)
@@ -62,7 +68,7 @@ impl TryInto<core::MultiSignature> for PayloadWithCtx<Payload, Ctx> {
 
         let mut seen = vec![false; multisig.signers.len()];
 
-        let mut indexed_signatures: Vec<(usize, Signature)> = signatures
+        let indexed_signatures: Vec<(usize, Signature)> = signatures
             .into_iter()
             .map(|sig| {
                 let idx = multisig.signer_from_signature(&sig)?;
@@ -83,12 +89,83 @@ impl TryInto<core::MultiSignature> for PayloadWithCtx<Payload, Ctx> {
             });
         }
 
-        indexed_signatures.sort_unstable_by_key(|(i, _)| *i); // contiguous access in the prover
-
         Ok(core::MultiSignature {
             signatures: indexed_signatures,
             expected_signers: multisig.signers,
             threshold: multisig.threshold,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::convert::TryInto;
+
+    use alloy::{
+        primitives::keccak256,
+        signers::{local::PrivateKeySigner, SignerSync as _},
+    };
+    use rstest::rstest;
+
+    use super::*;
+
+    fn prehash() -> B256 {
+        let h = keccak256(b"prehash");
+        B256::new(h.0)
+    }
+
+    fn wallet(i: usize) -> PrivateKeySigner {
+        let seed = keccak256(&i.to_be_bytes());
+        PrivateKeySigner::from_slice(seed.as_slice()).unwrap()
+    }
+
+    fn signatures_from_indices(order: &[usize], prehash: &B256) -> Vec<Signature> {
+        order
+            .iter()
+            .map(|&i| wallet(i).sign_hash_sync(prehash).unwrap().into())
+            .collect()
+    }
+
+    #[rstest]
+    #[case(vec![0, 1], 2, Ok(()))]
+    #[case(vec![0], 2, Err(MultisigError::UnderThreshold { got: 1, expected: 2 }))]
+    #[case(
+        vec![2], // registered only 2 wallets, so idx 2 (3rd signer) is unknown
+        1,
+        Err(MultisigError::UnknownRecoveredSigner {
+            recovered: wallet(2).address().into(),
+            prehash: prehash().into(),
+        })
+    )]
+    #[case(
+        vec![0, 0],
+        2,
+        Err(MultisigError::HasDuplicateSigner {
+            signer: wallet(0).address().into(),
+        })
+    )]
+    fn multisig_cases(
+        #[case] signer_indices: Vec<usize>,
+        #[case] threshold: usize,
+        #[case] expected: Result<(), MultisigError>,
+    ) {
+        let wallets: Vec<PrivateKeySigner> = (0..2).map(wallet).collect();
+        let prehash = prehash();
+
+        let signers = wallets.iter().map(|w| w.address().into()).collect();
+        let signatures = signatures_from_indices(&signer_indices, &prehash);
+
+        let payload_with_ctx = PayloadWithCtx(
+            Payload::from(signatures),
+            Ctx {
+                signers,
+                threshold,
+                prehash,
+            },
+        );
+
+        let res: Result<core::MultiSignature, MultisigError> = payload_with_ctx.try_into();
+
+        assert_eq!(res.map(|_| ()), expected);
     }
 }

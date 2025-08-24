@@ -32,7 +32,7 @@ use crate::aggchain_data::{
 /// Represents the data needed from the API/Certificate to verify aggchain
 /// proofs and multisig.
 /// Made separately for now to not have to deal with storage and API design.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Payload {
     LegacyEcdsa {
         /// ECDSA Signature from the trusted sequencer.
@@ -51,7 +51,7 @@ pub enum Payload {
 }
 
 /// Represents the context fetched from L1 and/or defined by the agglayer.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Ctx {
     LegacyEcdsa {
         /// Address of the trusted sequencer.

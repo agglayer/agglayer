@@ -1,7 +1,6 @@
 use agglayer_interop_types::aggchain_proof::Proof;
 use agglayer_primitives::Digest;
-use pessimistic_proof::core::{self};
-use serde::{Deserialize, Serialize};
+use pessimistic_proof::core;
 use sp1_sdk::SP1VerifyingKey;
 use unified_bridge::AggchainProofPublicValues;
 
@@ -9,7 +8,7 @@ use crate::aggchain_data::PayloadWithCtx;
 
 /// Aggchain proof with aggchain params and optional public values for debug
 /// purposes.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Payload {
     /// STARK of the aggchain proof.
     pub proof: Proof,
@@ -27,7 +26,7 @@ impl Payload {
 }
 
 /// Aggchain proof data from the L1 and enforced by the agglayer.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Ctx {
     pub aggchain_vkey: [u32; 8],
 }

@@ -16,9 +16,12 @@ use crate::{
     ProofError,
 };
 
+/// The pessimistic root is a public value of the PP which is settled in the L1.
 #[derive(Debug, Clone, Copy)]
 pub enum PessimisticRootCommitmentVersion {
+    /// Legacy PP root commitment.
     V2,
+    /// Add the height and the origin network.
     V3,
 }
 
@@ -104,9 +107,13 @@ impl PessimisticRootCommitmentValues {
 
 #[derive(Debug, Clone, Copy)]
 pub enum SignatureCommitmentVersion {
+    /// Legacy commitment for the signature.
     V2,
+    /// Add the height.
     V3,
+    /// Add the aggchain params.
     V4,
+    /// Add the certificate id.
     V5,
 }
 

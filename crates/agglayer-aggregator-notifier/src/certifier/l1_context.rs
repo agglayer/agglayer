@@ -108,12 +108,9 @@ where
             .await
             .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
 
-        let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::new(
-            aggchain_proof_payload
-                .aggchain_vkey_from_proof()
-                .vk
-                .hash_bytes(),
-        );
+        let vkey = aggchain_proof_payload.aggchain_vkey_from_proof();
+        let proof_vk_hash =
+            agglayer_contracts::aggchain::AggchainVkeyHash::new(vkey.vk.hash_bytes());
 
         if aggchain_vkey != proof_vk_hash {
             return Err(CertificationError::AggchainProofVkeyMismatch {
@@ -123,10 +120,7 @@ where
         }
 
         Ok(AggchainProofCtx {
-            aggchain_vkey: aggchain_proof_payload
-                .aggchain_vkey_from_proof()
-                .vk
-                .hash_u32(),
+            aggchain_vkey: vkey.vk.hash_u32(),
         })
     }
 
@@ -135,7 +129,7 @@ where
         certificate: &Certificate,
     ) -> Result<MultisigCtx, CertificationError> {
         let (_multisig_signers, _multisig_threshold): (Vec<Address>, usize) = {
-            // TODO: To fetch from the L1
+            // TODO: To fetch from the L1: https://github.com/agglayer/agglayer/issues/941
             Default::default()
         };
 
@@ -150,7 +144,7 @@ where
         })
     }
 
-    /// Fetch, verify consistency, and wait the finalization for the l1 info
+    /// Fetch, verify consistency, and wait for the finalization of the l1 info
     /// root.
     pub async fn fetch_l1_info_root(
         &self,

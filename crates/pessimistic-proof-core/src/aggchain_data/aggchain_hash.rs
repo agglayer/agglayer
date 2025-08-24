@@ -6,7 +6,7 @@ use agglayer_primitives::{
 
 use crate::aggchain_data::{aggchain_proof::AggchainProof, AggchainData, Vkey};
 
-type ConsensusType = u32;
+struct ConsensusType(u32);
 
 pub enum AggchainHashValues {
     ConsensusType0 {
@@ -23,8 +23,8 @@ pub enum AggchainHashValues {
 impl From<&AggchainHashValues> for ConsensusType {
     fn from(value: &AggchainHashValues) -> Self {
         match value {
-            AggchainHashValues::ConsensusType0 { .. } => 0,
-            AggchainHashValues::ConsensusType1 { .. } => 1,
+            AggchainHashValues::ConsensusType0 { .. } => Self(0),
+            AggchainHashValues::ConsensusType1 { .. } => Self(1),
         }
     }
 }
@@ -51,7 +51,7 @@ impl AggchainHashValues {
 
     /// Computes the aggchain hash with the right default values.
     pub(crate) fn hash(&self) -> Digest {
-        let consensus_type: u32 = ConsensusType::from(self);
+        let consensus_type: u32 = ConsensusType::from(self).0;
 
         match self {
             AggchainHashValues::ConsensusType0 { signer } => {

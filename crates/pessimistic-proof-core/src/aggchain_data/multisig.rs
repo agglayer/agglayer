@@ -94,3 +94,64 @@ impl MultiSignature {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use alloy::{
+        primitives::keccak256,
+        signers::{local::PrivateKeySigner, SignerSync as _},
+    };
+    use rstest::rstest;
+
+    use super::*;
+
+    fn prehash() -> B256 {
+        let h = keccak256(b"prehash");
+        B256::new(h.0)
+    }
+
+    fn wallet(i: usize) -> PrivateKeySigner {
+        let seed = keccak256(&i.to_be_bytes());
+        PrivateKeySigner::from_slice(seed.as_slice()).unwrap()
+    }
+
+    #[rstest]
+    #[case(vec![0, 1], 2, Ok(()))]
+    #[case(vec![0], 2, Err(MultisigError::UnderThreshold { got: 1, expected: 2 }))]
+    #[case(vec![2], 1, Err(MultisigError::OutOfBoundSignerIndex { idx: 2, total: 2 }))]
+    #[case(
+        vec![0, 0],
+        2,
+        Err(MultisigError::HasDuplicateSigner { signer: wallet(0).address().into() })
+    )]
+    fn verify_cases(
+        #[case] signer_indices: Vec<usize>,
+        #[case] threshold: usize,
+        #[case] expected: Result<(), MultisigError>,
+    ) {
+        let wallets: Vec<PrivateKeySigner> = (0..3).map(wallet).collect();
+        let prehash = prehash();
+
+        let expected_signers: Vec<Address> = wallets
+            .iter()
+            .take(2)
+            .map(|sk| sk.address().into())
+            .collect();
+
+        let signatures: Vec<(usize, Signature)> = signer_indices
+            .iter()
+            .map(|&idx| {
+                let sig = wallet(idx).sign_hash_sync(&prehash).unwrap().into();
+                (idx, sig)
+            })
+            .collect();
+
+        let ms = MultiSignature {
+            signatures,
+            expected_signers,
+            threshold,
+        };
+
+        assert_eq!(ms.verify(prehash).map(|_| ()), expected);
+    }
+}

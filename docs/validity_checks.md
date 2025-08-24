@@ -23,7 +23,7 @@ The PP has a public input called `aggchain_hash`, whose composition depends on t
 
 Notes:
 
-- Aggchain proof alone isn’t accepted by the Agglayer; it must be accompanied by at least one ECDSA signature from the trusted sequencer (see #[issue to whitelist submitter in case of sp1 issue]).
+- Aggchain proof alone isn’t accepted by the Agglayer; it must be accompanied by at least one ECDSA signature from the trusted sequencer (see https://github.com/agglayer/protocol-research/issues/141).
 - Cases 2 and 3 can be merged (single ECDSA treated as 1-of-1 multisig) only if the permissionless chain has a registered multisig committee that includes the trusted sequencer; otherwise we need to keep them separated because the PP cannot provide a valid `aggchain_hash` for the trusted sequencer as single signer without a registered multisig committee.
 
 ## Commitments
