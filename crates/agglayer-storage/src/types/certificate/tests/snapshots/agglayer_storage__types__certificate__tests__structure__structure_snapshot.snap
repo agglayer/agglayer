@@ -1,7 +1,6 @@
 ---
 source: crates/agglayer-storage/src/types/certificate/tests/structure.rs
 expression: "&registry"
-snapshot_kind: text
 ---
 {
   "CertificateStatus": {
@@ -604,6 +603,9 @@ snapshot_kind: text
             }
           ]
         }
+      },
+      "14": {
+        "UnsupportedMultisig": "UNIT"
       }
     }
   },
