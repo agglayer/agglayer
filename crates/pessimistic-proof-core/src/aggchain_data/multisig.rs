@@ -111,7 +111,7 @@ mod tests {
     }
 
     fn wallet(i: usize) -> PrivateKeySigner {
-        let seed = keccak256(&i.to_be_bytes());
+        let seed = keccak256(i.to_be_bytes());
         PrivateKeySigner::from_slice(seed.as_slice()).unwrap()
     }
 
