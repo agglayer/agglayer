@@ -269,6 +269,7 @@ dependencies = [
  "anyhow",
  "axum 0.8.4",
  "http",
+ "pessimistic-proof",
  "prost",
  "rstest",
  "serde",

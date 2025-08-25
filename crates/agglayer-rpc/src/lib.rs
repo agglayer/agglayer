@@ -228,6 +228,20 @@ where
             })
     }
 
+    /// Get the proof for a certificate by certificate ID
+    pub fn get_proof(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<Option<agglayer_types::Proof>, CertificateRetrievalError> {
+        self.pending_store.get_proof(certificate_id).map_err(|e| {
+            error!(
+                "Failed to get proof for certificate {}: {}",
+                certificate_id, e
+            );
+            CertificateRetrievalError::NotFound { certificate_id }
+        })
+    }
+
     /// Get the certificate header, raising an error if not found.
     pub fn fetch_certificate_header(
         &self,

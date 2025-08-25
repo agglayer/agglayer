@@ -249,6 +249,38 @@ where
             .map(|epoch| epoch.as_u64())
             .unwrap_or(0);
 
+        // Extract settled_pp_root from the settled certificate's proof public values
+        let settled_pp_root = latest_settled_certificate.as_ref().and_then(|cert| {
+            // Get the proof for the settled certificate
+            self.service
+                .get_proof(cert.certificate_id)
+                .inspect_err(|error| {
+                    error!(
+                        ?error,
+                        "get network status: failed to get proof for settled certificate"
+                    );
+                })
+                .ok()
+                .flatten()
+                .and_then(|proof| {
+                    // Deserialize the proof's public values to get PessimisticProofOutput
+                    let agglayer_types::Proof::SP1(sp1_proof) = proof;
+                    pessimistic_proof::PessimisticProofOutput::bincode_codec()
+                        .deserialize::<pessimistic_proof::PessimisticProofOutput>(
+                            sp1_proof.public_values.as_slice(),
+                        )
+                        .inspect_err(|error| {
+                            error!(
+                                ?error,
+                                "get network status: failed to deserialize pessimistic proof \
+                                 output"
+                            );
+                        })
+                        .ok()
+                        .map(|output| output.new_pessimistic_root)
+                })
+        });
+
         let network_status = agglayer_grpc_types::node::types::v1::NetworkStatus {
             network_status: network_status.to_string(),
             network_type: network_type.to_string(),
@@ -256,9 +288,7 @@ where
             settled_height,
             settled_certificate_id: settled_cert_id,
             // Extract actual data from settled certificate when available
-            settled_pp_root: latest_settled_certificate
-                .as_ref()
-                .map(|cert| FixedBytes32::from(*cert.metadata.as_digest())),
+            settled_pp_root: settled_pp_root.map(FixedBytes32::from),
             settled_ler: latest_settled_certificate
                 .as_ref()
                 .map(|cert| FixedBytes32::from(cert.new_local_exit_root)),
