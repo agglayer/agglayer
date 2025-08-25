@@ -16,7 +16,7 @@ agglayer-types = { workspace = true, optional = true }
 agglayer-interop = { workspace = true, features = ["grpc-compat"] }
 
 hex.workspace = true
-pbjson = "0.7.0"
+pbjson = "0.8.0"
 prost.workspace = true
 serde.workspace = true
 thiserror = { workspace = true, optional = true }
