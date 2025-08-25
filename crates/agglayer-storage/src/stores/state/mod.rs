@@ -159,7 +159,8 @@ impl StateWriter for StateStore {
                 prev_local_exit_root: certificate.prev_local_exit_root,
                 new_local_exit_root: certificate.new_local_exit_root,
                 status: status.clone(),
-                metadata: certificate.metadata,
+                // TODO make header enum too
+                metadata: certificate.metadata().copied().unwrap_or_default(),
                 settlement_tx_hash: None,
             },
         )?;

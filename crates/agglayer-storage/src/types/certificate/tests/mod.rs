@@ -167,8 +167,8 @@ impl CertificateV1<'static> {
     }
 }
 
-impl CertificateV1<'_> {
-    fn into_owned(self) -> CertificateV1<'static> {
+impl CertificateV2<'_> {
+    fn into_owned(self) -> CertificateV2<'static> {
         let Self {
             version,
             network_id,
@@ -178,12 +178,12 @@ impl CertificateV1<'_> {
             bridge_exits,
             imported_bridge_exits,
             aggchain_data,
-            metadata,
             custom_chain_data,
             l1_info_tree_leaf_count,
+            extra_fields,
         } = self;
 
-        CertificateV1 {
+        CertificateV2 {
             version,
             network_id,
             height,
@@ -221,9 +221,9 @@ impl CertificateV1<'_> {
                     public_values: Cow::Owned(public_values.into_owned()),
                 },
             },
-            metadata,
             custom_chain_data: Cow::Owned(custom_chain_data.into_owned()),
             l1_info_tree_leaf_count,
+            extra_fields: Cow::Owned(extra_fields.into_owned()),
         }
     }
 }
@@ -241,7 +241,7 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 #[case(CertificateV0::test0())]
 #[case(CertificateV1::test0())]
 #[case(CertificateV1::test1())]
-#[case(CertificateV1::from(&Certificate::new_for_test(74.into(), Height::new(998))).into_owned())]
+#[case(CertificateV2::from(&Certificate::new_for_test(74.into(), Height::new(998))).into_owned())]
 fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
     let bytes = bincode_codec().serialize(&orig).unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();
