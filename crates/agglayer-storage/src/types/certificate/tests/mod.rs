@@ -265,10 +265,22 @@ fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> 
 #[case("aggdata_v1_01", AggchainDataV1::test1())]
 #[case("aggdata_v1_02", AggchainDataV1::test2())]
 #[case("aggdata_v1_03", AggchainDataV1::test3())]
-fn encoding(#[case] name: &str, #[case] value: impl Serialize) {
+fn encoding<T>(#[case] name: &str, #[case] value: T)
+where
+    T: Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
+{
     // Snapshots for types where the encoding must stay stable.
     let bytes = Bytes::from(bincode::default().serialize(&value).unwrap());
     insta::assert_snapshot!(name, bytes);
+
+    // Also check decoding must produce the same value.
+    let from_bytes: T = bincode::default()
+        .deserialize(bytes.as_ref())
+        .expect("deserialization failed");
+
+    // This should really compare the certificates directly but that requires adding
+    // whole bunch of `Eq` impl to many types.
+    assert_eq!(format!("{from_bytes:?}"), format!("{value:?}"));
 }
 
 #[rstest::rstest]
