@@ -24,11 +24,11 @@ pub enum MultisigError {
 /// Multisig data from the chain.
 #[derive(Clone, Debug)]
 pub struct Payload {
-    signatures: Vec<Signature>,
+    signatures: Vec<Option<Signature>>,
 }
 
-impl From<&[Signature]> for Payload {
-    fn from(signatures: &[Signature]) -> Self {
+impl From<&[Option<Signature>]> for Payload {
+    fn from(signatures: &[Option<Signature>]) -> Self {
         Self {
             signatures: signatures.to_vec(),
         }
@@ -48,7 +48,7 @@ pub struct Ctx {
 
 impl Ctx {
     /// Returns the index of the signer from the provided signature.
-    fn signer_from_signature(&self, signature: &Signature) -> Result<usize, MultisigError> {
+    fn signer_from_signature(&self, signature: &Option<Signature>) -> Result<usize, MultisigError> {
         let recovered = signature
             .recover_address_from_prehash(&self.prehash)
             .map_err(|_| MultisigError::InvalidSignature)?;
@@ -71,7 +71,7 @@ impl TryInto<core::MultiSignature> for PayloadWithCtx<Payload, Ctx> {
 
         let mut seen = vec![false; multisig.signers.len()];
 
-        let indexed_signatures: Vec<(usize, Signature)> = signatures
+        let indexed_signatures: Vec<(usize, Option<Signature>)> = signatures
             .into_iter()
             .map(|sig| {
                 let idx = multisig.signer_from_signature(&sig)?;

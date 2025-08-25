@@ -203,7 +203,7 @@ impl Certificate {
 
     pub fn verify_multisig(
         &self,
-        signatures: &[Signature],
+        signatures: &[Option<Signature>],
         ctx: MultisigCtx,
     ) -> Result<(), SignerError> {
         let multisig_with_ctx = PayloadWithCtx(MultisigPayload::from(signatures), ctx);
