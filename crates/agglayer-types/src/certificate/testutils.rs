@@ -6,7 +6,15 @@ use unified_bridge::{
     NetworkId,
 };
 
-use crate::{Certificate, Digest, Height};
+use crate::{certificate::VersionFields, Certificate, Digest, Height, Metadata};
+
+impl Default for VersionFields {
+    fn default() -> Self {
+        Self::V0(crate::certificate::v0::FieldsV0 {
+            metadata: Default::default(),
+        })
+    }
+}
 
 impl Default for Certificate {
     fn default() -> Self {
@@ -26,9 +34,9 @@ impl Default for Certificate {
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
             aggchain_data: AggchainData::ECDSA { signature },
-            metadata: Default::default(),
             custom_chain_data: vec![],
             l1_info_tree_leaf_count: None,
+            extra_fields: Default::default(),
         }
     }
 }
@@ -96,14 +104,26 @@ impl Certificate {
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
             aggchain_data: AggchainData::ECDSA { signature },
-            metadata: Default::default(),
             custom_chain_data: vec![],
             l1_info_tree_leaf_count: None,
+            extra_fields: Default::default(),
         }
     }
 
     pub fn with_new_local_exit_root(mut self, new_local_exit_root: LocalExitRoot) -> Self {
         self.new_local_exit_root = new_local_exit_root;
+        self
+    }
+
+    pub fn metadata_or_default(&self) -> &Metadata {
+        self.metadata().unwrap_or(&Metadata::ZERO)
+    }
+
+    pub fn with_metadata(mut self, metadata: Metadata) -> Self {
+        match &mut self.extra_fields {
+            VersionFields::V0(fields) => fields.metadata = metadata,
+            _ => panic!("Setting metadata on an unsupported certificate version"),
+        };
         self
     }
 }

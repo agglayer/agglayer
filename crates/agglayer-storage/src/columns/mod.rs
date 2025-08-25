@@ -1,5 +1,4 @@
 use agglayer_types::bincode;
-use serde::{de::DeserializeOwned, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CodecError {
@@ -50,14 +49,10 @@ pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
 // debug CFs
 pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
 
-pub trait Codec: Sized + Serialize + DeserializeOwned {
-    fn encode(&self) -> Result<Vec<u8>, CodecError> {
-        Ok(bincode_codec().serialize(self)?)
-    }
+pub trait Codec: Sized {
+    fn encode(&self) -> Result<Vec<u8>, CodecError>;
 
-    fn decode(buf: &[u8]) -> Result<Self, CodecError> {
-        Ok(bincode_codec().deserialize(buf)?)
-    }
+    fn decode(buf: &[u8]) -> Result<Self, CodecError>;
 }
 
 pub trait ColumnSchema {
