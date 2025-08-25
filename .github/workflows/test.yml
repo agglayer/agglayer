@@ -17,7 +17,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
-  ZKEVM_CONTRACT_GIT_REF: v11.0.0-rc.1
+  ZKEVM_CONTRACT_GIT_REF: feature/aggchainECSAV2-2-fix
+  PP_SELECTOR: "0x00000006"
 
 jobs:
   unit:
@@ -71,6 +72,8 @@ jobs:
           npm i
       - name: Build docker
         run: |
+          # HACK: By default, the build contract expects PP selector 0x01, fix it up here.
+          sed -i "/ppVKeySelector/ s:0x00000001:$PP_SELECTOR:" ./docker/scripts/v2/deploy_parameters_docker.json
           npm run dockerv2:contracts:all
 
       - name: Extract metadata (tags, labels) for Docker
