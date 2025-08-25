@@ -5,6 +5,7 @@ use agglayer_types::{
 use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
+
 use super::*;
 use crate::columns::Codec;
 
@@ -79,8 +80,12 @@ impl AggchainDataV1<'static> {
         }
     }
 
+    fn sig0() -> Signature {
+        sig(0x7a, 0x9b)
+    }
+
     fn test0() -> Self {
-        let signature = sig(0x7a, 0x9b);
+        let signature = Self::sig0();
         Self::ECDSA { signature }
     }
 
@@ -274,7 +279,7 @@ fn encoding(#[case] name: &str, #[case] value: impl Serialize) {
 fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
     let from_json = sample_data::load_certificate(&format!("{cert_name}.json"));
 
-    let bytes = load_sample_bytes(&format!("encoded_v0-{cert_name}.hex"));
+    let bytes = load_sample_bytes(&format!("encoded/v0-{cert_name}.hex"));
     let from_bytes = Certificate::decode(&bytes).expect("v0 certificate to decode successfully");
 
     // Again comparing debug output due to lack of `Eq`.
@@ -282,8 +287,8 @@ fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
 }
 
 #[rstest::rstest]
-#[case::regression_01("regression_01.hex")]
-#[case::regression_02("regression_02.hex")]
+#[case::regression_01("encoded/regression_01.hex")]
+#[case::regression_02("encoded/regression_02.hex")]
 fn regressions(#[case] cert_filename: &str) {
     let bytes = load_sample_bytes(cert_filename);
     let _certificate = Certificate::decode(&bytes).expect("decoding failed");
