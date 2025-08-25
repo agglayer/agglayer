@@ -963,10 +963,10 @@ impl serde::Serialize for NetworkStatus {
         if self.settled_ler.is_some() {
             len += 1;
         }
-        if self.settled_bridge_global_index.is_some() {
+        if self.settled_let_leaf_count != 0 {
             len += 1;
         }
-        if self.settled_claim_global_index.is_some() {
+        if self.settled_claim.is_some() {
             len += 1;
         }
         if self.latest_pending_height != 0 {
@@ -1005,11 +1005,13 @@ impl serde::Serialize for NetworkStatus {
         if let Some(v) = self.settled_ler.as_ref() {
             struct_ser.serialize_field("settledLer", v)?;
         }
-        if let Some(v) = self.settled_bridge_global_index.as_ref() {
-            struct_ser.serialize_field("settledBridgeGlobalIndex", v)?;
+        if self.settled_let_leaf_count != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("settledLetLeafCount", ToString::to_string(&self.settled_let_leaf_count).as_str())?;
         }
-        if let Some(v) = self.settled_claim_global_index.as_ref() {
-            struct_ser.serialize_field("settledClaimGlobalIndex", v)?;
+        if let Some(v) = self.settled_claim.as_ref() {
+            struct_ser.serialize_field("settledClaim", v)?;
         }
         if self.latest_pending_height != 0 {
             #[allow(clippy::needless_borrow)]
@@ -1051,10 +1053,10 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
             "settledPpRoot",
             "settled_ler",
             "settledLer",
-            "settled_bridge_global_index",
-            "settledBridgeGlobalIndex",
-            "settled_claim_global_index",
-            "settledClaimGlobalIndex",
+            "settled_let_leaf_count",
+            "settledLetLeafCount",
+            "settled_claim",
+            "settledClaim",
             "latest_pending_height",
             "latestPendingHeight",
             "latest_pending_status",
@@ -1074,8 +1076,8 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
             SettledCertificateId,
             SettledPpRoot,
             SettledLer,
-            SettledBridgeGlobalIndex,
-            SettledClaimGlobalIndex,
+            SettledLetLeafCount,
+            SettledClaim,
             LatestPendingHeight,
             LatestPendingStatus,
             LatestPendingError,
@@ -1108,8 +1110,8 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                             "settledCertificateId" | "settled_certificate_id" => Ok(GeneratedField::SettledCertificateId),
                             "settledPpRoot" | "settled_pp_root" => Ok(GeneratedField::SettledPpRoot),
                             "settledLer" | "settled_ler" => Ok(GeneratedField::SettledLer),
-                            "settledBridgeGlobalIndex" | "settled_bridge_global_index" => Ok(GeneratedField::SettledBridgeGlobalIndex),
-                            "settledClaimGlobalIndex" | "settled_claim_global_index" => Ok(GeneratedField::SettledClaimGlobalIndex),
+                            "settledLetLeafCount" | "settled_let_leaf_count" => Ok(GeneratedField::SettledLetLeafCount),
+                            "settledClaim" | "settled_claim" => Ok(GeneratedField::SettledClaim),
                             "latestPendingHeight" | "latest_pending_height" => Ok(GeneratedField::LatestPendingHeight),
                             "latestPendingStatus" | "latest_pending_status" => Ok(GeneratedField::LatestPendingStatus),
                             "latestPendingError" | "latest_pending_error" => Ok(GeneratedField::LatestPendingError),
@@ -1140,8 +1142,8 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                 let mut settled_certificate_id__ = None;
                 let mut settled_pp_root__ = None;
                 let mut settled_ler__ = None;
-                let mut settled_bridge_global_index__ = None;
-                let mut settled_claim_global_index__ = None;
+                let mut settled_let_leaf_count__ = None;
+                let mut settled_claim__ = None;
                 let mut latest_pending_height__ = None;
                 let mut latest_pending_status__ = None;
                 let mut latest_pending_error__ = None;
@@ -1194,17 +1196,19 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                             }
                             settled_ler__ = map_.next_value()?;
                         }
-                        GeneratedField::SettledBridgeGlobalIndex => {
-                            if settled_bridge_global_index__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("settledBridgeGlobalIndex"));
+                        GeneratedField::SettledLetLeafCount => {
+                            if settled_let_leaf_count__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("settledLetLeafCount"));
                             }
-                            settled_bridge_global_index__ = map_.next_value()?;
+                            settled_let_leaf_count__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
                         }
-                        GeneratedField::SettledClaimGlobalIndex => {
-                            if settled_claim_global_index__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("settledClaimGlobalIndex"));
+                        GeneratedField::SettledClaim => {
+                            if settled_claim__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("settledClaim"));
                             }
-                            settled_claim_global_index__ = map_.next_value()?;
+                            settled_claim__ = map_.next_value()?;
                         }
                         GeneratedField::LatestPendingHeight => {
                             if latest_pending_height__.is_some() {
@@ -1244,8 +1248,8 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                     settled_certificate_id: settled_certificate_id__,
                     settled_pp_root: settled_pp_root__,
                     settled_ler: settled_ler__,
-                    settled_bridge_global_index: settled_bridge_global_index__,
-                    settled_claim_global_index: settled_claim_global_index__,
+                    settled_let_leaf_count: settled_let_leaf_count__.unwrap_or_default(),
+                    settled_claim: settled_claim__,
                     latest_pending_height: latest_pending_height__.unwrap_or_default(),
                     latest_pending_status: latest_pending_status__.unwrap_or_default(),
                     latest_pending_error: latest_pending_error__.unwrap_or_default(),
@@ -1254,5 +1258,115 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
             }
         }
         deserializer.deserialize_struct("agglayer.node.types.v1.NetworkStatus", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for SettledClaim {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.global_index.is_some() {
+            len += 1;
+        }
+        if self.bridge_exit_hash.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.node.types.v1.SettledClaim", len)?;
+        if let Some(v) = self.global_index.as_ref() {
+            struct_ser.serialize_field("globalIndex", v)?;
+        }
+        if let Some(v) = self.bridge_exit_hash.as_ref() {
+            struct_ser.serialize_field("bridgeExitHash", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for SettledClaim {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "global_index",
+            "globalIndex",
+            "bridge_exit_hash",
+            "bridgeExitHash",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            GlobalIndex,
+            BridgeExitHash,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "globalIndex" | "global_index" => Ok(GeneratedField::GlobalIndex),
+                            "bridgeExitHash" | "bridge_exit_hash" => Ok(GeneratedField::BridgeExitHash),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = SettledClaim;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.node.types.v1.SettledClaim")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<SettledClaim, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut global_index__ = None;
+                let mut bridge_exit_hash__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::GlobalIndex => {
+                            if global_index__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("globalIndex"));
+                            }
+                            global_index__ = map_.next_value()?;
+                        }
+                        GeneratedField::BridgeExitHash => {
+                            if bridge_exit_hash__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("bridgeExitHash"));
+                            }
+                            bridge_exit_hash__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(SettledClaim {
+                    global_index: global_index__,
+                    bridge_exit_hash: bridge_exit_hash__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.node.types.v1.SettledClaim", FIELDS, GeneratedVisitor)
     }
 }

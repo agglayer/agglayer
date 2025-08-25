@@ -6,17 +6,15 @@ use agglayer_grpc_types::{
     node::v1::{
         GetCertificateHeaderErrorKind, GetCertificateHeaderRequest, GetCertificateHeaderResponse,
         GetLatestCertificateHeaderErrorKind, GetLatestCertificateHeaderRequest,
-        GetLatestCertificateHeaderResponse, GetNetworkStatusRequest,
+        GetLatestCertificateHeaderResponse, GetNetworkStatusErrorKind, GetNetworkStatusRequest,
         GetNetworkStatusResponse, LatestCertificateRequestType,
     },
 };
 use agglayer_interop::grpc::v1::FixedBytes32;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::stores::{DebugReader, PendingCertificateReader, StateReader};
-use agglayer_types::Digest;
 use tonic_types::{ErrorDetails, StatusExt as _};
 use tracing::error;
-use agglayer_grpc_types::node::v1::GetNetworkStatusErrorKind;
 
 const GET_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_certificate_header";
@@ -186,24 +184,29 @@ where
                 )
             })?;
 
-        // TODO: Define network status. Could represent the healthiness of the network in regard to the agglayer-node.
-        // We could have multiple kind of status that could represent a network sending too many unprovable certs,
+        // TODO: Define network status. Could represent the healthiness of the network
+        // in regard to the agglayer-node. We could have multiple kind of status
+        // that could represent a network sending too many unprovable certs,
         // or even a network that didn't settle for N epochs and such (optional).
         let network_status = "TBD";
 
         // Extract settled certificate data
         let (settled_height, settled_cert_id, _settled_epoch) = latest_settled_certificate
             .as_ref()
-            .map(|cert| (cert.height.as_u64(), Some(cert.certificate_id.into()), cert.epoch_number))
+            .map(|cert| {
+                (
+                    cert.height.as_u64(),
+                    Some(cert.certificate_id.into()),
+                    cert.epoch_number,
+                )
+            })
             .unwrap_or((0, None, None));
 
         // Get pending certificate error if exists
         let pending_error = latest_pending_certificate
             .as_ref()
             .and_then(|cert| match &cert.status {
-                agglayer_types::CertificateStatus::InError { error } => {
-                    Some(error.to_string())
-                },
+                agglayer_types::CertificateStatus::InError { error } => Some(error.to_string()),
                 _ => None,
             })
             .unwrap_or_default();
@@ -230,8 +233,8 @@ where
                 .map(|cert| FixedBytes32::from(cert.new_local_exit_root)),
             // For global indices, we'll need to implement additional storage lookups
             // Setting as None for now since they require more complex data retrieval
-            settled_bridge_global_index: None,
-            settled_claim_global_index: None,
+            settled_let_leaf_count: 0,
+            settled_claim: None,
             latest_pending_height: latest_pending_certificate
                 .as_ref()
                 .map(|cert| cert.height.as_u64())

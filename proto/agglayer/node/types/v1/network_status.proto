@@ -21,10 +21,10 @@ message NetworkStatus {
   agglayer.interop.types.v1.FixedBytes32 settled_pp_root = 6;
   // The local exit root of the latest settled certificate.
   agglayer.interop.types.v1.FixedBytes32 settled_ler = 7;
-  // The global index for bridge operations in the latest settled certificate.
-  agglayer.interop.types.v1.FixedBytes32 settled_bridge_global_index = 8;
-  // The global index for claim operations in the latest settled certificate.
-  agglayer.interop.types.v1.FixedBytes32 settled_claim_global_index = 9;
+  // The leaf count of the latest settled local exit tree.
+  uint64 settled_let_leaf_count = 8;
+  // Info about the latest settled claim in the network.
+  SettledClaim settled_claim = 9;
   // The height of the latest pending certificate.
   uint64 latest_pending_height = 10;
   // The status of the latest pending certificate (e.g., "Proven", "Pending", "InError").
@@ -33,4 +33,13 @@ message NetworkStatus {
   string latest_pending_error = 12;
   // The epoch number of the latest settlement.
   uint64 latest_epoch_with_settlement = 13;
+}
+
+
+/// SettledClaim represents information about the settled claim.
+message SettledClaim {
+  // Global index, indicating uniquely which tree leaf is claimed.
+  agglayer.interop.types.v1.FixedBytes32 global_index = 1;
+  /// Hash of the claimed imported bridge exit.
+  agglayer.interop.types.v1.FixedBytes32 bridge_exit_hash = 2;
 }
