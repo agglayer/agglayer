@@ -143,12 +143,6 @@ pub enum SignerError {
     Recovery(#[source] SignatureError),
 
     #[error(
-        "Invalid extra signature either due to wrong signer or commitment. expected signer: \
-         {expected_signer}"
-    )]
-    InvalidExtraSignature { expected_signer: Address },
-
-    #[error(
         "Invalid PP signature either due to wrong signer or commitment. expected signer: \
          {expected_signer}"
     )]
