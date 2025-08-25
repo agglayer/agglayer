@@ -14,7 +14,7 @@ use agglayer_interop::grpc::v1::FixedBytes32;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::stores::{DebugReader, PendingCertificateReader, StateReader};
 use tonic_types::{ErrorDetails, StatusExt as _};
-use tracing::error;
+use tracing::{error, warn};
 
 const GET_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_certificate_header";
@@ -184,6 +184,37 @@ where
                 )
             })?;
 
+        // Determine network type from the latest available certificate
+        let network_type = match self
+            .service
+            .get_latest_available_certificate_for_network(network_id)
+        {
+            Ok(Some(certificate)) => {
+                // Determine network type based on aggchain_data variant
+                match certificate.aggchain_data {
+                    agglayer_types::aggchain_proof::AggchainData::ECDSA { .. } => "ECDSA",
+                    agglayer_types::aggchain_proof::AggchainData::Generic { .. } => "Generic",
+                }
+            }
+            Ok(None) => {
+                // No certificate found, use default/unknown type
+                warn!(
+                    "No certificate found for network {}, using default network type",
+                    network_id
+                );
+                "Unknown"
+            }
+            Err(error) => {
+                // Error retrieving certificate, log and use default
+                warn!(
+                    ?error,
+                    "Failed to get certificate for network {}, using default network type",
+                    network_id
+                );
+                "Unknown"
+            }
+        };
+
         // TODO: Define network status. Could represent the healthiness of the network
         // in regard to the agglayer-node. We could have multiple kind of status
         // that could represent a network sending too many unprovable certs,
@@ -220,7 +251,7 @@ where
 
         let network_status = agglayer_grpc_types::node::types::v1::NetworkStatus {
             network_status: network_status.to_string(),
-            network_type: "aggchain".to_string(), // Standard aggchain type
+            network_type: network_type.to_string(),
             network_id: request.network_id,
             settled_height,
             settled_certificate_id: settled_cert_id,

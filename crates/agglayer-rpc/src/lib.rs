@@ -133,6 +133,62 @@ where
         }
     }
 
+    /// Get latest available certificate data for a network.
+    /// Note: also using debug storage to cover all cases. This includes pending
+    /// certificates, proven certificates and settled certificates. If no
+    /// certificate is found, return None.
+    pub fn get_latest_available_certificate_for_network(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<Certificate>, CertificateRetrievalError> {
+        debug!("Received request to get the latest available certificate for rollup {network_id}",);
+
+        let latest_certificate_header = self.get_latest_known_certificate_header(network_id)?;
+
+        match latest_certificate_header {
+            None => Ok(None),
+            Some(CertificateHeader {
+                certificate_id,
+                height,
+                ..
+            }) => {
+                // First try to get the full certificate from pending store
+                if let Some(certificate) = self.pending_store.get_certificate(network_id, height)? {
+                    // Verify that this is indeed the certificate we're looking for
+                    if certificate.hash() == certificate_id {
+                        return Ok(Some(certificate));
+                    } else {
+                        error!(
+                            "Certificate hash mismatch: expected {}, got {}",
+                            certificate_id,
+                            certificate.hash()
+                        );
+                        return Err(CertificateRetrievalError::NotFound { certificate_id });
+                    }
+                }
+
+                // If not found in pending store, try to get from debug store
+                // This covers settled certificates and any other certificates stored in debug
+                // storage
+                match self.debug_store.get_certificate(&certificate_id)? {
+                    Some(certificate) => {
+                        debug!("Found certificate {} in debug store", certificate_id);
+                        return Ok(Some(certificate));
+                    }
+                    None => {
+                        warn!("Certificate {} not found in debug store", certificate_id);
+                    }
+                }
+
+                warn!(
+                    "Certificate {} at height {} not found in any store",
+                    certificate_id, height
+                );
+                Err(CertificateRetrievalError::NotFound { certificate_id })
+            }
+        }
+    }
+
     pub fn get_latest_settled_certificate_header(
         &self,
         network_id: NetworkId,
