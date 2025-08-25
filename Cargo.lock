@@ -86,7 +86,7 @@ dependencies = [
  "mockall",
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
- "prover-config",
+ "prover-config 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.2.1)",
  "reqwest",
  "rstest",
  "serde",
@@ -575,9 +575,9 @@ name = "agglayer-prover-config"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
 dependencies = [
- "prover-config",
+ "prover-config 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.2.0)",
  "prover-logger",
- "prover-utils",
+ "prover-utils 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.2.0)",
  "serde",
  "thiserror 2.0.12",
  "toml",
@@ -6635,7 +6635,18 @@ name = "prover-config"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
 dependencies = [
- "prover-utils",
+ "prover-utils 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.2.0)",
+ "serde",
+ "serde_with",
+ "url",
+]
+
+[[package]]
+name = "prover-config"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.2.1#f429f7d23822c2ef07854edac2a570824eafcb4d"
+dependencies = [
+ "prover-utils 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.2.1)",
  "serde",
  "serde_with",
  "url",
@@ -6668,7 +6679,7 @@ dependencies = [
  "anyhow",
  "buildstructor",
  "futures",
- "prover-config",
+ "prover-config 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.2.0)",
  "prover-engine",
  "prover-logger",
  "serde",
@@ -6701,6 +6712,17 @@ dependencies = [
 name = "prover-utils"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git?tag=v1.2.0#e1bf40c9383d739a31465c78aaec8b084bef93d0"
+dependencies = [
+ "humantime-serde",
+ "serde",
+ "serde_with",
+ "toml",
+]
+
+[[package]]
+name = "prover-utils"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.2.1#f429f7d23822c2ef07854edac2a570824eafcb4d"
 dependencies = [
  "humantime-serde",
  "serde",
