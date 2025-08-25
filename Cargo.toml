@@ -66,7 +66,7 @@ sp1-core-machine = "=5.0.0"
 sp1-sdk = "=5.0.3"
 sp1-primitives = "=5.0.0"
 sp1-prover = "=5.0.1"
-sp1-zkvm = { version = "=5.0.0", default-features = false }
+sp1-zkvm = { version = "=5.1.1", default-features = false }
 
 # Core dependencies
 alloy = { version = "0.14.0", features = ["full"] }
