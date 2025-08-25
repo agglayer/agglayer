@@ -236,13 +236,13 @@ impl LocalNetworkStateData {
             });
         }
 
-        let chain_paylaod = certificate
+        let chain_payload = certificate
             .aggchain_data
             .clone()
             .try_into()
             .map_err(Error::InvalidChainData)?;
 
-        let aggchain_data = CertificateAggchainDataWithCtx(chain_paylaod, aggchain_data_ctx)
+        let aggchain_data = CertificateAggchainDataWithCtx(chain_payload, aggchain_data_ctx)
             .try_into()
             .map_err(Error::InvalidChainData)?;
 

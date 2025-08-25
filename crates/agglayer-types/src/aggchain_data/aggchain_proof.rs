@@ -27,17 +27,17 @@ impl Payload {
 
 /// Aggchain proof data from the L1 and enforced by the agglayer.
 #[derive(Clone, Debug)]
-pub struct Ctx {
+pub struct Context {
     pub aggchain_vkey: [u32; 8],
 }
 
-impl From<PayloadWithCtx<Payload, Ctx>> for core::AggchainProof {
-    fn from(val: PayloadWithCtx<Payload, Ctx>) -> Self {
+impl From<PayloadWithCtx<Payload, Context>> for core::AggchainProof {
+    fn from(val: PayloadWithCtx<Payload, Context>) -> Self {
         let PayloadWithCtx(
             Payload {
                 aggchain_params, ..
             },
-            Ctx { aggchain_vkey },
+            Context { aggchain_vkey },
         ) = val;
 
         core::AggchainProof {

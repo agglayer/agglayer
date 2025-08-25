@@ -7,9 +7,10 @@ mod multisig;
 // TODO: better naming for all the structures in this module, including this
 // module name
 pub use crate::aggchain_data::{
-    aggchain_proof::{Ctx as AggchainProofCtx, Payload as AggchainProofPayload},
+    aggchain_proof::{Context as AggchainProofCtx, Payload as AggchainProofPayload},
     global::{
-        AggchainDataError, Ctx as CertificateAggchainDataCtx, Payload as CertificateAggchainData,
+        AggchainDataError, Context as CertificateAggchainDataCtx,
+        Payload as CertificateAggchainData,
     },
     multisig::{Ctx as MultisigCtx, MultisigError, Payload as MultisigPayload},
     PayloadWithCtx as CertificateAggchainDataWithCtx,

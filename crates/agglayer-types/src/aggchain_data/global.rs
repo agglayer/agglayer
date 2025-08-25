@@ -16,7 +16,6 @@
 //!   - aggchain proof + multisig (multi signer, not necessarily trusted
 //!     sequencer)
 //!   - multisig
-use std::fmt::Display;
 
 use agglayer_primitives::{Address, Signature};
 use pessimistic_proof::core::{self};
@@ -32,7 +31,7 @@ use crate::aggchain_data::{
 /// Represents the data needed from the API/Certificate to verify aggchain
 /// proofs and multisig.
 /// Made separately for now to not have to deal with storage and API design.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, strum_macros::Display)]
 pub enum Payload {
     LegacyEcdsa {
         /// ECDSA Signature from the trusted sequencer.
@@ -51,17 +50,17 @@ pub enum Payload {
 }
 
 /// Represents the context fetched from L1 and/or defined by the agglayer.
-#[derive(Clone, Debug)]
-pub enum Ctx {
+#[derive(Clone, Debug, strum_macros::Display)]
+pub enum Context {
     LegacyEcdsa {
         /// Address of the trusted sequencer.
         signer: Address,
     },
     MultisigOnly(multisig::Ctx),
-    AggchainProofOnly(aggchain_proof::Ctx),
+    AggchainProofOnly(aggchain_proof::Context),
     MultisigAndAggchainProof {
         multisig_ctx: multisig::Ctx,
-        aggchain_proof_ctx: aggchain_proof::Ctx,
+        aggchain_proof_ctx: aggchain_proof::Context,
     },
 }
 
@@ -78,69 +77,48 @@ pub enum AggchainDataError {
 }
 
 // Generate the prover inputs from the chain payload and the L1 context.
-impl TryInto<core::AggchainData> for PayloadWithCtx<Payload, Ctx> {
+impl TryInto<core::AggchainData> for PayloadWithCtx<Payload, Context> {
     type Error = AggchainDataError;
 
     fn try_into(self) -> Result<core::AggchainData, Self::Error> {
         let PayloadWithCtx(payload, ctx) = self;
-        Ok(match (payload, ctx) {
-            (Payload::LegacyEcdsa { signature }, Ctx::LegacyEcdsa { signer }) => {
-                core::AggchainData::LegacyEcdsa { signer, signature }
+        match (payload, ctx) {
+            (Payload::LegacyEcdsa { signature }, Context::LegacyEcdsa { signer }) => {
+                Ok(core::AggchainData::LegacyEcdsa { signer, signature })
             }
-            (Payload::MultisigOnly(payload), Ctx::MultisigOnly(ctx)) => {
-                core::AggchainData::MultisigOnly(
+            (Payload::MultisigOnly(payload), Context::MultisigOnly(ctx)) => {
+                Ok(core::AggchainData::MultisigOnly(
                     PayloadWithCtx(payload, ctx)
                         .try_into()
                         .map_err(AggchainDataError::InvalidMultisig)?,
-                )
+                ))
             }
-            (Payload::AggchainProofOnly { aggchain_proof, .. }, Ctx::AggchainProofOnly(ctx)) => {
-                core::AggchainData::AggchainProofOnly(PayloadWithCtx(aggchain_proof, ctx).into())
-            }
+            (
+                Payload::AggchainProofOnly { aggchain_proof, .. },
+                Context::AggchainProofOnly(ctx),
+            ) => Ok(core::AggchainData::AggchainProofOnly(
+                PayloadWithCtx(aggchain_proof, ctx).into(),
+            )),
             (
                 Payload::MultisigAndAggchainProof {
                     multisig,
                     aggchain_proof,
                 },
-                Ctx::MultisigAndAggchainProof {
+                Context::MultisigAndAggchainProof {
                     multisig_ctx,
                     aggchain_proof_ctx,
                 },
-            ) => core::AggchainData::MultisigAndAggchainProof {
+            ) => Ok(core::AggchainData::MultisigAndAggchainProof {
                 multisig: PayloadWithCtx(multisig, multisig_ctx)
                     .try_into()
                     .map_err(AggchainDataError::InvalidMultisig)?,
                 aggchain_proof: PayloadWithCtx(aggchain_proof, aggchain_proof_ctx).into(),
-            },
-            (payload, ctx) => {
+            }),
+            (payload, context) => {
                 return Err(AggchainDataError::InvalidVariant(format!(
-                    "payload: {payload}, ctx: {ctx}"
+                    "payload: {payload}, context: {context}"
                 )))
             }
-        })
-    }
-}
-
-// For error and debugging
-impl Display for Payload {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Payload::LegacyEcdsa { .. } => write!(f, "legacy_ecdsa"),
-            Payload::MultisigOnly(_) => write!(f, "multisig_only"),
-            Payload::AggchainProofOnly { .. } => write!(f, "aggchain_proof_only"),
-            Payload::MultisigAndAggchainProof { .. } => write!(f, "multisig_and_aggchain_proof"),
-        }
-    }
-}
-
-// For error and debugging
-impl Display for Ctx {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Ctx::LegacyEcdsa { .. } => write!(f, "legacy_ecdsa"),
-            Ctx::MultisigOnly(_) => write!(f, "multisig_only"),
-            Ctx::AggchainProofOnly { .. } => write!(f, "aggchain_proof_only"),
-            Ctx::MultisigAndAggchainProof { .. } => write!(f, "multisig_and_aggchain_proof"),
         }
     }
 }

@@ -762,6 +762,7 @@ dependencies = [
  "sp1-core-machine",
  "sp1-prover",
  "sp1-sdk",
+ "strum_macros 0.27.2",
  "thiserror 2.0.12",
  "unified-bridge 0.9.0",
 ]

@@ -30,6 +30,7 @@ sp1-core-machine.workspace = true
 sp1-prover.workspace = true
 thiserror.workspace = true
 rand.workspace = true
+strum_macros.workspace = true
 
 [dev-dependencies]
 agglayer-types = { path = ".", features = ["testutils"] }
