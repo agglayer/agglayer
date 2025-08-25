@@ -39,6 +39,14 @@ pub enum AggchainData {
         /// Verifying key for the aggchain proof program.
         aggchain_vkey: Vkey,
     },
+    Multisig {
+        multisig: Vec<(Address, Signature)>,
+    },
+    GenericWithMultisig {
+        multisig: Vec<(Address, Signature)>,
+        aggchain_params: Digest,
+        aggchain_vkey: Vkey,
+    }
 }
 
 impl AggchainData {

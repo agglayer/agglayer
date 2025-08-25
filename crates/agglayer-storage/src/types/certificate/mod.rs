@@ -214,6 +214,17 @@ pub enum AggchainDataV1<'a> {
         signature: Option<Box<Signature>>,
         public_values: Cow<'a, Box<AggchainProofPublicValues>>,
     },
+
+    Multisig {
+        multisig: Vec<(Address, Signature)>,
+    },
+
+    GenericWithMultisig {
+        multisig: Vec<(Address, Signature)>,
+        proof: Cow<'a, Proof>,
+        aggchain_params: Digest,
+        public_values: Cow<'a, Box<AggchainProofPublicValues>>,
+    },
 }
 
 impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
