@@ -203,44 +203,18 @@ impl Certificate {
 
     pub fn verify_multisig(
         &self,
-        signatures: &Vec<Signature>,
+        signatures: &[Signature],
         ctx: MultisigCtx,
     ) -> Result<(), SignerError> {
-        let multisig_with_ctx = PayloadWithCtx(MultisigPayload::from(signatures.clone()), ctx);
+        let multisig_with_ctx = PayloadWithCtx(MultisigPayload::from(signatures), ctx);
 
         // Verify the multisig from the chain payload and the L1 context
-        let _witness_data: pessimistic_proof::core::MultiSignature = multisig_with_ctx
-            .try_into()
-            .map_err(SignerError::InvalidMultisig)?;
+        let _witness_data: pessimistic_proof::core::MultiSignature =
+            multisig_with_ctx
+                .try_into()
+                .map_err(SignerError::InvalidMultisig)?;
 
         Ok(())
-    }
-
-    /// Retrieve the signer from the certificate signature.
-    pub fn retrieve_signer(
-        &self,
-        version: SignatureCommitmentVersion,
-    ) -> Result<Address, SignerError> {
-        let (signature, commitment) = match &self.aggchain_data {
-            AggchainData::ECDSA { signature } => {
-                let commitment = SignatureCommitmentValues::from(self).commitment(version);
-                (signature, commitment)
-            }
-            AggchainData::Generic { signature, .. } => {
-                let signature = signature.as_ref().ok_or(SignerError::Missing)?;
-                let commitment = SignatureCommitmentValues::from(self)
-                    .commitment(SignatureCommitmentVersion::V4);
-                (signature.as_ref(), commitment)
-            }
-            AggchainData::MultisigOnly(_signatures) => todo!(), // return vec signers on V5
-            AggchainData::MultisigAndAggchainProof { multisig: _, .. } => todo!(), /* return vec
-                                                                  * signers on
-                                                                  * V5 */
-        };
-
-        signature
-            .recover_address_from_prehash(&commitment)
-            .map_err(SignerError::Recovery)
     }
 
     pub fn aggchain_params(&self) -> Option<Digest> {

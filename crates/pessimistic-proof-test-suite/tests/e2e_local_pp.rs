@@ -66,7 +66,15 @@ impl VersionConsistencyChecker {
             .retrieve_signer(self.certificate_signature_version)
             .unwrap();
 
-        self.certificate.verify_cert_signature(signer).unwrap();
+        let agglayer_types::aggchain_proof::AggchainData::ECDSA { signature } =
+            self.certificate.aggchain_data
+        else {
+            panic!("inconsistent test data")
+        };
+
+        self.certificate
+            .verify_legacy_ecdsa(signer, &signature)
+            .unwrap();
 
         // Previous state settled in L1
         let expected_prev_pp_root = PessimisticRootCommitmentValues {

@@ -373,11 +373,32 @@ where
         &self,
         cert: &agglayer_types::Certificate,
     ) -> Result<(), SignatureVerificationError> {
+        use agglayer_types::{aggchain_data::MultisigCtx, aggchain_proof::AggchainData};
+
         let sequencer_address = self
             .get_trusted_sequencer_address(u32::from(cert.network_id))
             .await?;
 
-        cert.verify_cert_signature(sequencer_address)
-            .map_err(SignatureVerificationError::from_signer_error)
+        let multisig_ctx = MultisigCtx {
+            signers: Default::default(), // TODO: to fetch from L1
+            threshold: 1,                // TODO: to fetch from L1
+            prehash: cert.signature_commitment_values().multisig_commitment(),
+        };
+
+        match &cert.aggchain_data {
+            AggchainData::ECDSA { signature } => {
+                cert.verify_legacy_ecdsa(sequencer_address, signature)
+            }
+            AggchainData::Generic { signature, .. } => {
+                cert.verify_aggchain_proof_signature(sequencer_address, signature)
+            }
+            AggchainData::MultisigOnly(signatures) => {
+                cert.verify_multisig(signatures, multisig_ctx)
+            }
+            AggchainData::MultisigAndAggchainProof { multisig, .. } => {
+                cert.verify_multisig(multisig, multisig_ctx)
+            }
+        }
+        .map_err(SignatureVerificationError::from_signer_error)
     }
 }
