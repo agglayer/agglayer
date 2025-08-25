@@ -21,10 +21,6 @@ pub struct NullifierTree {
     /// The Merkle Root of the nullifier tree
     #[serde_as(as = "_")]
     pub root: Digest,
-    /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
-    /// `i`.
-    #[serde_as(as = "[_; NULLIFIER_TREE_DEPTH]")]
-    pub empty_hash_at_height: [Digest; NULLIFIER_TREE_DEPTH],
 }
 
 pub type NullifierPath = SmtNonInclusionProof<NULLIFIER_TREE_DEPTH>;
@@ -64,12 +60,7 @@ impl NullifierTree {
         path_to_update: &NullifierPath,
     ) -> Result<(), ProofError> {
         self.root = path_to_update
-            .verify_and_update(
-                key,
-                Digest::from_bool(true),
-                self.root,
-                &self.empty_hash_at_height,
-            )
+            .verify_and_update(key, Digest::from_bool(true), self.root)
             .ok_or(ProofError::InvalidNullifierPath)?;
 
         Ok(())
