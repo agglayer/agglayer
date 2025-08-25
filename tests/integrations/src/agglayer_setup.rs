@@ -77,7 +77,7 @@ pub async fn start_agglayer(
     };
 
     // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::new(ELF);
+    let fake_prover = FakeProver::new(ELF).await.unwrap();
     let endpoint = prover_config.grpc_endpoint;
 
     config.prover_entrypoint = format!("http://{endpoint}");
