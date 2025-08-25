@@ -41,6 +41,25 @@ impl TryFrom<AggchainData> for global::Payload {
                     public_values,
                 },
             },
+            AggchainData::MultisigOnly(signatures) => {
+                global::Payload::MultisigOnly(multisig::Payload::from(signatures))
+            }
+            AggchainData::MultisigAndAggchainProof {
+                multisig,
+                aggchain_proof:
+                    agglayer_interop_types::aggchain_proof::AggchainProof {
+                        proof,
+                        aggchain_params,
+                        public_values,
+                    },
+            } => global::Payload::MultisigAndAggchainProof {
+                multisig: multisig::Payload::from(multisig),
+                aggchain_proof: aggchain_proof::Payload {
+                    proof,
+                    aggchain_params,
+                    public_values,
+                },
+            },
         })
     }
 }

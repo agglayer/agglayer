@@ -8,7 +8,10 @@ use unified_bridge::{
     BridgeExit, ImportedBridgeExit, ImportedBridgeExitCommitmentValues, NetworkId,
 };
 
-use crate::{Digest, Error, SignerError};
+use crate::{
+    aggchain_data::{MultisigCtx, MultisigPayload, PayloadWithCtx},
+    Digest, Error, SignerError,
+};
 
 mod header;
 mod height;
@@ -151,40 +154,66 @@ impl Certificate {
             .ok_or(SignerError::InvalidExtraSignature { expected_signer })
     }
 
-    /// Verify the signature on the PP commitment.
-    pub fn verify_cert_signature(&self, expected_signer: Address) -> Result<(), SignerError> {
-        let pp_commitment_values = SignatureCommitmentValues::from(self);
+    pub fn signature_commitment_values(&self) -> SignatureCommitmentValues {
+        SignatureCommitmentValues::from(self)
+    }
 
-        let recovered_expected_signer = match &self.aggchain_data {
-            // Verify if one of the commitment version is signed.
-            // NOTE: The legitimacy of the version is verified during the witness generation,
-            // especially in order to forbid version rollback by the chain.
-            AggchainData::ECDSA { signature } => [
-                SignatureCommitmentVersion::V3,
-                SignatureCommitmentVersion::V2,
-            ]
-            .iter()
-            .any(|version| {
-                let commitment = pp_commitment_values.commitment(*version);
-                match signature.recover_address_from_prehash(&commitment) {
-                    Ok(recovered) => recovered == expected_signer,
-                    Err(_) => false,
-                }
-            }),
-            AggchainData::Generic { signature, .. } => {
-                let signature = signature.as_ref().ok_or(SignerError::Missing)?;
-                let commitment = pp_commitment_values.commitment(SignatureCommitmentVersion::V4);
-                let recovered = signature
-                    .recover_address_from_prehash(&commitment)
-                    .map_err(SignerError::Recovery)?;
+    pub fn verify_legacy_ecdsa(
+        &self,
+        expected_signer: Address,
+        signature: &Signature,
+    ) -> Result<(), SignerError> {
+        let signature_commitment_values = self.signature_commitment_values();
 
-                recovered == expected_signer
+        let recovered_expected_signer = [
+            SignatureCommitmentVersion::V3,
+            SignatureCommitmentVersion::V2,
+        ]
+        .iter()
+        .any(|version| {
+            let commitment = signature_commitment_values.commitment(*version);
+            match signature.recover_address_from_prehash(&commitment) {
+                Ok(recovered) => recovered == expected_signer,
+                Err(_) => false,
             }
-        };
+        });
 
         recovered_expected_signer
             .then_some(())
             .ok_or(SignerError::InvalidPessimisticProofSignature { expected_signer })
+    }
+
+    pub fn verify_aggchain_proof_signature(
+        &self,
+        expected_signer: Address,
+        signature: &Option<Box<Signature>>,
+    ) -> Result<(), SignerError> {
+        let signature_commitment_values = self.signature_commitment_values();
+
+        let signature = signature.as_ref().ok_or(SignerError::Missing)?;
+        let commitment = signature_commitment_values.commitment(SignatureCommitmentVersion::V4); // NOTE: will be upgraded to V5 eventually
+        let recovered = signature
+            .recover_address_from_prehash(&commitment)
+            .map_err(SignerError::Recovery)?;
+
+        (recovered == expected_signer)
+            .then_some(())
+            .ok_or(SignerError::InvalidPessimisticProofSignature { expected_signer })
+    }
+
+    pub fn verify_multisig(
+        &self,
+        signatures: &Vec<Signature>,
+        ctx: MultisigCtx,
+    ) -> Result<(), SignerError> {
+        let multisig_with_ctx = PayloadWithCtx(MultisigPayload::from(signatures.clone()), ctx);
+
+        // Verify the multisig from the chain payload and the L1 context
+        let _witness_data: pessimistic_proof::core::MultiSignature = multisig_with_ctx
+            .try_into()
+            .map_err(SignerError::InvalidMultisig)?;
+
+        Ok(())
     }
 
     /// Retrieve the signer from the certificate signature.
@@ -203,6 +232,10 @@ impl Certificate {
                     .commitment(SignatureCommitmentVersion::V4);
                 (signature.as_ref(), commitment)
             }
+            AggchainData::MultisigOnly(_signatures) => todo!(), // return vec signers on V5
+            AggchainData::MultisigAndAggchainProof { multisig: _, .. } => todo!(), /* return vec
+                                                                  * signers on
+                                                                  * V5 */
         };
 
         signature
@@ -211,11 +244,19 @@ impl Certificate {
     }
 
     pub fn aggchain_params(&self) -> Option<Digest> {
-        match self.aggchain_data {
+        match &self.aggchain_data {
             AggchainData::ECDSA { .. } => None,
             AggchainData::Generic {
                 aggchain_params, ..
-            } => Some(aggchain_params),
+            } => Some(*aggchain_params),
+            AggchainData::MultisigOnly(_) => None,
+            AggchainData::MultisigAndAggchainProof {
+                aggchain_proof:
+                    agglayer_interop_types::aggchain_proof::AggchainProof {
+                        aggchain_params, ..
+                    },
+                ..
+            } => Some(*aggchain_params),
         }
     }
 }

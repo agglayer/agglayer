@@ -10,6 +10,7 @@ agglayer-storage.workspace = true
 agglayer-config.workspace = true
 agglayer-rate-limiting.workspace = true
 agglayer-types.workspace = true
+pessimistic-proof.workspace = true
 
 alloy.workspace = true
 futures.workspace = true
