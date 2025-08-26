@@ -15,6 +15,8 @@ mod index;
 mod metadata;
 #[cfg(feature = "testutils")]
 mod testutils;
+mod v0;
+mod v1;
 
 pub use header::{CertificateHeader, CertificateStatus, SettlementTxHash};
 pub use height::Height;
@@ -23,6 +25,35 @@ pub use index::CertificateIndex;
 pub use metadata::Metadata;
 #[cfg(feature = "testutils")]
 pub use testutils::compute_signature_info;
+pub use v0::FieldsV0;
+pub use v1::FieldsV1;
+
+/// Holds certificate fields that are specific to particular version(s).
+#[derive(Clone, Debug, derive_more::From, serde::Serialize, serde::Deserialize)]
+pub enum VersionFields {
+    V0(v0::FieldsV0),
+    V1(v1::FieldsV1),
+}
+
+impl VersionFields {
+    pub const fn metadata(&self) -> Option<&Metadata> {
+        match self {
+            Self::V0(FieldsV0 { metadata }) => Some(metadata),
+            Self::V1(FieldsV1 {}) => None,
+        }
+    }
+
+    fn metadata_slice(&self) -> &[u8] {
+        self.metadata().map_or(&[], |m| m.as_slice())
+    }
+
+    const fn id_preimage_prefix(&self) -> &[u8] {
+        match self {
+            Self::V0(_) => FieldsV0::ID_PREIMAGE_PREFIX,
+            Self::V1(_) => FieldsV1::ID_PREIMAGE_PREFIX,
+        }
+    }
+}
 
 /// Represents the data submitted by the chains to the AggLayer.
 ///
@@ -38,7 +69,7 @@ pub use testutils::compute_signature_info;
 ///
 /// Note: be mindful to update the [`Self::hash`] method accordingly
 /// upon modifying the fields of this structure.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Certificate {
     /// NetworkID of the origin network.
     pub network_id: NetworkId,
@@ -52,15 +83,24 @@ pub struct Certificate {
     pub bridge_exits: Vec<BridgeExit>,
     /// List of imported bridge exits included in this state transition.
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
-    /// Fixed size field of arbitrary data for the chain needs.
-    pub metadata: Metadata,
     /// Aggchain data which is either one ECDSA or Generic proof.
-    #[serde(flatten)]
     pub aggchain_data: AggchainData,
-    #[serde(default)]
     pub custom_chain_data: Vec<u8>,
-    #[serde(default)]
     pub l1_info_tree_leaf_count: Option<u32>,
+
+    pub extra_fields: VersionFields,
+}
+
+impl serde::Serialize for Certificate {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        todo!()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Certificate {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        todo!()
+    }
 }
 
 impl Certificate {
@@ -71,14 +111,19 @@ impl Certificate {
             keccak256_combine(self.imported_bridge_exits.iter().map(|exit| exit.hash()));
 
         CertificateId::new(keccak256_combine([
+            self.extra_fields.id_preimage_prefix(),
             self.network_id.to_be_bytes().as_slice(),
             self.height.as_u64().to_be_bytes().as_slice(),
             self.prev_local_exit_root.as_ref(),
             self.new_local_exit_root.as_ref(),
             commit_bridge_exits.as_slice(),
             commit_imported_bridge_exits.as_slice(),
-            self.metadata.0.as_slice(),
+            self.extra_fields.metadata_slice(),
         ]))
+    }
+
+    pub const fn metadata(&self) -> Option<&Metadata> {
+        self.extra_fields.metadata()
     }
 
     /// Returns the L1 Info Tree leaf count considered for this [`Certificate`].

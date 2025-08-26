@@ -23,7 +23,7 @@ use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
     aggchain_proof::{AggchainData, Proof},
     primitives::Digest,
-    Certificate, Height, Metadata, NetworkId, Signature,
+    Certificate, FieldsV0, Height, Metadata, NetworkId, Signature, VersionFields,
 };
 use pessimistic_proof::unified_bridge::{
     AggchainProofPublicValues, BridgeExit, ImportedBridgeExit,
@@ -103,9 +103,9 @@ impl From<CertificateV0> for Certificate {
             bridge_exits,
             imported_bridge_exits,
             aggchain_data: AggchainData::ECDSA { signature },
-            metadata,
             custom_chain_data: vec![],
             l1_info_tree_leaf_count: None,
+            extra_fields: FieldsV0 { metadata }.into(),
         }
     }
 }
@@ -149,15 +149,62 @@ impl From<CertificateV1<'_>> for Certificate {
             new_local_exit_root,
             bridge_exits: bridge_exits.into_owned(),
             imported_bridge_exits: imported_bridge_exits.into_owned(),
-            metadata,
             aggchain_data: aggchain_data.into(),
             custom_chain_data: custom_chain_data.into_owned(),
             l1_info_tree_leaf_count,
+            extra_fields: FieldsV0 { metadata }.into(),
         }
     }
 }
 
-impl<'a> From<&'a Certificate> for CertificateV1<'a> {
+/// Storage format for versioned certificates.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CertificateV2<'a> {
+    version: VersionTag<2>,
+    network_id: NetworkId,
+    height: Height,
+    prev_local_exit_root: LocalExitRoot,
+    new_local_exit_root: LocalExitRoot,
+    bridge_exits: Cow<'a, [BridgeExit]>,
+    imported_bridge_exits: Cow<'a, [ImportedBridgeExit]>,
+    aggchain_data: AggchainDataV1<'a>,
+    custom_chain_data: Cow<'a, [u8]>,
+    l1_info_tree_leaf_count: Option<u32>,
+    extra_fields: Cow<'a, VersionFields>,
+}
+
+impl From<CertificateV2<'_>> for Certificate {
+    fn from(certificate: CertificateV2) -> Self {
+        let CertificateV2 {
+            version: VersionTag,
+            network_id,
+            height,
+            prev_local_exit_root,
+            new_local_exit_root,
+            bridge_exits,
+            imported_bridge_exits,
+            aggchain_data,
+            custom_chain_data,
+            l1_info_tree_leaf_count,
+            extra_fields,
+        } = certificate;
+
+        Certificate {
+            network_id,
+            height,
+            prev_local_exit_root,
+            new_local_exit_root,
+            bridge_exits: bridge_exits.into_owned(),
+            imported_bridge_exits: imported_bridge_exits.into_owned(),
+            aggchain_data: aggchain_data.into(),
+            custom_chain_data: custom_chain_data.into_owned(),
+            l1_info_tree_leaf_count,
+            extra_fields: extra_fields.into_owned(),
+        }
+    }
+}
+
+impl<'a> From<&'a Certificate> for CertificateV2<'a> {
     fn from(certificate: &'a Certificate) -> Self {
         let Certificate {
             network_id,
@@ -166,13 +213,13 @@ impl<'a> From<&'a Certificate> for CertificateV1<'a> {
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            metadata,
             aggchain_data,
             custom_chain_data,
             l1_info_tree_leaf_count,
+            extra_fields,
         } = certificate;
 
-        CertificateV1 {
+        CertificateV2 {
             version: VersionTag,
             network_id: *network_id,
             height: *height,
@@ -181,9 +228,9 @@ impl<'a> From<&'a Certificate> for CertificateV1<'a> {
             bridge_exits: bridge_exits.into(),
             imported_bridge_exits: imported_bridge_exits.into(),
             aggchain_data: aggchain_data.into(),
-            metadata: *metadata,
             custom_chain_data: custom_chain_data.into(),
             l1_info_tree_leaf_count: *l1_info_tree_leaf_count,
+            extra_fields: Cow::Borrowed(extra_fields),
         }
     }
 }
@@ -294,7 +341,7 @@ impl From<AggchainDataV1<'_>> for AggchainData {
 }
 
 /// Type specifying the current certificate encoding format.
-type CurrentCertificate<'a> = CertificateV1<'a>;
+type CurrentCertificate<'a> = CertificateV2<'a>;
 
 fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
     bytes: &[u8],
@@ -313,6 +360,7 @@ impl crate::columns::Codec for Certificate {
             None => Err(CodecError::CertificateEmpty),
             Some(0) => decode::<CertificateV0>(bytes),
             Some(1) => decode::<CertificateV1>(bytes),
+            Some(2) => decode::<CertificateV2>(bytes),
             Some(version) => Err(CodecError::BadCertificateVersion { version }),
         }
     }
