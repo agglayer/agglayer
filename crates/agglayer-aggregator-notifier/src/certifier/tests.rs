@@ -32,7 +32,7 @@ async fn happy_path() {
     let prover_config = agglayer_prover_config::ProverConfig::default();
 
     // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::new(ELF);
+    let fake_prover = FakeProver::new(ELF).await.unwrap();
     let endpoint = prover_config.grpc_endpoint;
     let cancellation = CancellationToken::new();
 
