@@ -1,0 +1,6 @@
+---
+source: crates/pessimistic-proof-test-suite/tests/root_hashes.rs
+expression: "NullifierTree::new().root"
+snapshot_kind: text
+---
+e2c3ed4052eeb1d60514b4c38ece8d73a27f37fa5b36dcbf338e70de95798caa

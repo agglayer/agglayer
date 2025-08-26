@@ -1,5 +1,5 @@
 use agglayer_primitives::{keccak::keccak256_combine, Digest};
-use agglayer_tries::utils::empty_hash_at_height;
+use agglayer_tries::utils::{empty_hash_array_at_height, empty_hash_at_height};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use unified_bridge::{LETMerkleProof, LocalExitTreeError};
@@ -18,13 +18,6 @@ pub struct LocalExitTreeData<const TREE_DEPTH: usize = 32> {
     /// `round_up(n/2)` hashes, etc.
     #[serde_as(as = "[_; TREE_DEPTH]")]
     pub layers: [Vec<Digest>; TREE_DEPTH],
-
-    /// `empty_hash_at_height[i]` is the root of an empty Merkle tree of depth
-    /// `i`.
-    ///
-    /// This is a constant, but until const traits land we cannot make it one.
-    #[serde_as(as = "[_; TREE_DEPTH]")]
-    empty_hash_at_height: [Digest; TREE_DEPTH],
 }
 
 impl<const TREE_DEPTH: usize> Default for LocalExitTreeData<TREE_DEPTH> {
@@ -38,10 +31,8 @@ impl<const TREE_DEPTH: usize> LocalExitTreeData<TREE_DEPTH> {
 
     /// Creates a new empty [`LocalExitTreeData`].
     pub fn new() -> Self {
-        let empty_hash_at_height = empty_hash_at_height::<TREE_DEPTH>();
         LocalExitTreeData {
             layers: std::array::from_fn(|_| Vec::new()),
-            empty_hash_at_height,
         }
     }
 
@@ -92,7 +83,7 @@ impl<const TREE_DEPTH: usize> LocalExitTreeData<TREE_DEPTH> {
         }
         Ok(*self.layers[height]
             .get(index)
-            .unwrap_or(&self.empty_hash_at_height[height]))
+            .unwrap_or(&empty_hash_array_at_height::<TREE_DEPTH>()[height]))
     }
 
     pub fn is_empty(&self) -> bool {
@@ -101,11 +92,8 @@ impl<const TREE_DEPTH: usize> LocalExitTreeData<TREE_DEPTH> {
 
     /// Returns the root of the tree.
     pub fn get_root(&self) -> Digest {
-        let get_last_layer = |i| {
-            self.layers[TREE_DEPTH - 1]
-                .get(i)
-                .unwrap_or(&self.empty_hash_at_height[TREE_DEPTH - 1])
-        };
+        let empty_hash = empty_hash_at_height::<TREE_DEPTH>();
+        let get_last_layer = |i| self.layers[TREE_DEPTH - 1].get(i).unwrap_or(&empty_hash);
         keccak256_combine([get_last_layer(0), get_last_layer(1)])
     }
 

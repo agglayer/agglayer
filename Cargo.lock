@@ -115,6 +115,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-bincode"
+version = "0.9.0"
+source = "git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373#2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373"
+dependencies = [
+ "bincode",
+ "serde",
+]
+
+[[package]]
 name = "agglayer-certificate-orchestrator"
 version = "0.1.0"
 dependencies = [
@@ -173,7 +182,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "agglayer-prover-config",
  "agglayer-types",
  "alloy-primitives",
@@ -198,7 +207,7 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "alloy",
  "anyhow",
  "async-trait",
@@ -216,8 +225,7 @@ dependencies = [
 [[package]]
 name = "agglayer-elf-build"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90bad143db162f9562c13b321d150a5b0c7633cb151d1b913e08f06a7bcf6038"
+source = "git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373#2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -231,7 +239,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3136c5a74d075bcba7837b71be64c6486a96ff7e47e92f6d67a631077a55ae1f"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "alloy",
  "anyhow",
  "async-trait",
@@ -261,7 +269,7 @@ dependencies = [
  "agglayer-grpc-client",
  "agglayer-grpc-server",
  "agglayer-grpc-types",
- "agglayer-interop",
+ "agglayer-interop 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "agglayer-rpc",
  "agglayer-storage",
  "agglayer-types",
@@ -302,7 +310,7 @@ dependencies = [
 name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-interop",
+ "agglayer-interop 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "agglayer-types",
  "anyhow",
  "bolero",
@@ -321,8 +329,17 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39edcae2dc53474844ff4b83385a0b8648c984319bb50d50b0700a9895503803"
 dependencies = [
- "agglayer-interop-grpc-types",
- "agglayer-interop-types",
+ "agglayer-interop-grpc-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "agglayer-interop-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "agglayer-interop"
+version = "0.9.0"
+source = "git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373#2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373"
+dependencies = [
+ "agglayer-interop-grpc-types 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-interop-types 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
 ]
 
 [[package]]
@@ -331,7 +348,21 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e99ea508c69dd2a77d58d4832d392d2128990cd3c6ec0addabab101c8b6f7f80"
 dependencies = [
- "agglayer-interop-types",
+ "agglayer-interop-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode",
+ "pbjson 0.7.0",
+ "prost",
+ "serde",
+ "thiserror 2.0.16",
+ "tonic-types 0.13.1",
+]
+
+[[package]]
+name = "agglayer-interop-grpc-types"
+version = "0.9.0"
+source = "git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373#2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373"
+dependencies = [
+ "agglayer-interop-types 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "bincode",
  "pbjson 0.7.0",
  "prost",
@@ -346,9 +377,28 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3765e1cea355ce34e3e0dd824a5e57198bf3498ffe242be7758bf3a889b3f49"
 dependencies = [
- "agglayer-bincode",
- "agglayer-primitives",
- "agglayer-tries",
+ "agglayer-bincode 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "agglayer-primitives 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "agglayer-tries 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode",
+ "educe",
+ "hex",
+ "serde",
+ "sp1-core-machine",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror 2.0.16",
+ "unified-bridge 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "agglayer-interop-types"
+version = "0.9.0"
+source = "git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373#2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373"
+dependencies = [
+ "agglayer-bincode 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "arbitrary",
  "bincode",
  "educe",
@@ -358,7 +408,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.16",
- "unified-bridge",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
 ]
 
 [[package]]
@@ -389,7 +439,7 @@ dependencies = [
  "lazy_static",
  "mockall",
  "pin-project 1.1.10",
- "rand 0.9.1",
+ "rand 0.9.2",
  "reqwest",
  "rstest",
  "serde",
@@ -445,7 +495,7 @@ dependencies = [
  "mockall",
  "pessimistic-proof",
  "pin-project 1.1.10",
- "rand 0.9.1",
+ "rand 0.9.2",
  "reqwest",
  "rstest",
  "serde",
@@ -471,12 +521,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88e08a5ddabc0710ff57206a6222135e45b380d3f15f62ea5267c0a91bd42d9f"
 dependencies = [
  "alloy-primitives",
+ "byteorder",
+ "derive_more 2.0.1",
+ "hex",
+ "k256",
+ "serde",
+ "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "agglayer-primitives"
+version = "0.9.0"
+source = "git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373#2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373"
+dependencies = [
+ "alloy-primitives",
  "arbitrary",
  "byteorder",
  "derive_more 2.0.1",
  "hex",
  "k256",
- "rand 0.9.1",
+ "rand 0.9.2",
  "serde",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -524,7 +588,7 @@ name = "agglayer-prover-types"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git?tag=v1.2.1#f429f7d23822c2ef07854edac2a570824eafcb4d"
 dependencies = [
- "agglayer-interop",
+ "agglayer-interop 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pbjson 0.7.0",
  "prost",
  "prover-executor",
@@ -587,7 +651,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
- "agglayer-tries",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "agglayer-types",
  "alloy-primitives",
  "chrono",
@@ -598,7 +662,7 @@ dependencies = [
  "parking_lot",
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
- "rand 0.9.1",
+ "rand 0.9.2",
  "rocksdb",
  "rstest",
  "serde",
@@ -663,7 +727,19 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db770a5571e86a72e216d2711f519ba6887f63cfc57cb6c38c0ff0363b314d"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex",
+ "serde",
+ "serde_with",
+ "thiserror 2.0.16",
+]
+
+[[package]]
+name = "agglayer-tries"
+version = "0.9.0"
+source = "git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373#2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373"
+dependencies = [
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "hex",
  "serde",
  "serde_with",
@@ -674,10 +750,10 @@ dependencies = [
 name = "agglayer-types"
 version = "0.1.0"
 dependencies = [
- "agglayer-bincode",
- "agglayer-interop-types",
- "agglayer-primitives",
- "agglayer-tries",
+ "agglayer-bincode 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-interop-types 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "agglayer-types",
  "alloy",
  "arbitrary",
@@ -685,7 +761,7 @@ dependencies = [
  "derive_more 2.0.1",
  "hex",
  "pessimistic-proof",
- "rand 0.9.1",
+ "rand 0.9.2",
  "rstest",
  "serde",
  "serde_with",
@@ -693,7 +769,7 @@ dependencies = [
  "sp1-prover",
  "sp1-sdk",
  "thiserror 2.0.16",
- "unified-bridge",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
 ]
 
 [[package]]
@@ -1061,7 +1137,7 @@ dependencies = [
  "paste",
  "proptest",
  "proptest-derive",
- "rand 0.9.1",
+ "rand 0.9.2",
  "ruint",
  "rustc-hash 2.1.1",
  "serde",
@@ -2215,7 +2291,7 @@ dependencies = [
  "bolero-kani",
  "bolero-libfuzzer",
  "cfg-if",
- "rand 0.9.1",
+ "rand 0.9.2",
 ]
 
 [[package]]
@@ -2238,7 +2314,7 @@ dependencies = [
  "bolero-generator",
  "lazy_static",
  "pretty-hex",
- "rand 0.9.1",
+ "rand 0.9.2",
  "rand_xoshiro",
 ]
 
@@ -3306,12 +3382,12 @@ dependencies = [
 name = "ecdsa-proof-lib"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
- "agglayer-tries",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "k256",
  "serde",
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
- "unified-bridge",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
 ]
 
 [[package]]
@@ -4514,7 +4590,7 @@ dependencies = [
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
  "pin-project 1.1.10",
- "rand 0.9.1",
+ "rand 0.9.2",
  "reqwest",
  "rstest",
  "serde",
@@ -5599,7 +5675,7 @@ dependencies = [
  "glob",
  "opentelemetry 0.29.1",
  "percent-encoding",
- "rand 0.9.1",
+ "rand 0.9.2",
  "serde_json",
  "thiserror 2.0.16",
  "tracing",
@@ -6048,13 +6124,13 @@ name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
  "agglayer-elf-build",
- "agglayer-primitives",
- "agglayer-tries",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "arbitrary",
  "hex",
  "hex-literal 0.4.1",
  "pessimistic-proof-core",
- "rand 0.9.1",
+ "rand 0.9.2",
  "rs_merkle",
  "serde",
  "serde_json",
@@ -6064,21 +6140,21 @@ dependencies = [
  "sp1-sdk",
  "thiserror 2.0.16",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "unified-bridge",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
 ]
 
 [[package]]
 name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
- "agglayer-bincode",
- "agglayer-primitives",
- "agglayer-tries",
+ "agglayer-bincode 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "alloy-primitives",
  "arbitrary",
  "hex",
  "hex-literal 0.4.1",
- "rand 0.9.1",
+ "rand 0.9.2",
  "semver 1.0.26",
  "serde",
  "serde_with",
@@ -6087,7 +6163,7 @@ dependencies = [
  "tiny-keccak 2.0.2 (git+https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-4.0.0)",
  "toml",
  "tracing",
- "unified-bridge",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
 ]
 
 [[package]]
@@ -6095,7 +6171,7 @@ name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
  "agglayer-prover",
- "agglayer-tries",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "agglayer-types",
  "alloy",
  "anyhow",
@@ -6107,7 +6183,7 @@ dependencies = [
  "insta",
  "lazy_static",
  "pessimistic-proof",
- "rand 0.9.1",
+ "rand 0.9.2",
  "regex",
  "rstest",
  "serde",
@@ -6117,7 +6193,7 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tracing",
- "unified-bridge",
+ "unified-bridge 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "uuid 1.18.0",
 ]
 
@@ -6494,7 +6570,7 @@ dependencies = [
  "bitflags",
  "lazy_static",
  "num-traits",
- "rand 0.9.1",
+ "rand 0.9.2",
  "rand_chacha 0.9.0",
  "rand_xorshift",
  "regex-syntax 0.8.5",
@@ -6723,7 +6799,7 @@ dependencies = [
  "bytes",
  "getrandom 0.3.3",
  "lru-slab",
- "rand 0.9.1",
+ "rand 0.9.2",
  "ring",
  "rustc-hash 2.1.1",
  "rustls",
@@ -6784,9 +6860,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97"
+checksum = "6db2770f06117d490610c7488547d543617b21bfa07796d7a12f6f1bd53850d1"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
@@ -7181,7 +7257,7 @@ dependencies = [
  "primitive-types",
  "proptest",
  "rand 0.8.5",
- "rand 0.9.1",
+ "rand 0.9.2",
  "rlp",
  "ruint-macro",
  "serde",
@@ -9249,7 +9325,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "rand 0.9.1",
+ "rand 0.9.2",
  "rustls",
  "rustls-pki-types",
  "sha1",
@@ -9351,8 +9427,22 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ed7ffb6ee35350e44f40e4385ddda852802d43984a8ebfc238a8f0594c5ab24"
 dependencies = [
- "agglayer-primitives",
- "agglayer-tries",
+ "agglayer-primitives 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "agglayer-tries 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex-literal 1.0.0",
+ "serde",
+ "serde_with",
+ "sha2",
+ "thiserror 2.0.16",
+]
+
+[[package]]
+name = "unified-bridge"
+version = "0.9.0"
+source = "git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373#2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373"
+dependencies = [
+ "agglayer-primitives 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
+ "agglayer-tries 0.9.0 (git+https://github.com/agglayer/interop.git?rev=2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373)",
  "arbitrary",
  "hex-literal 1.0.0",
  "serde",
@@ -9415,7 +9505,7 @@ checksum = "f33196643e165781c20a5ead5582283a7dacbb87855d867fbc2df3f81eddc1be"
 dependencies = [
  "getrandom 0.3.3",
  "js-sys",
- "rand 0.9.1",
+ "rand 0.9.2",
  "wasm-bindgen",
 ]
 
