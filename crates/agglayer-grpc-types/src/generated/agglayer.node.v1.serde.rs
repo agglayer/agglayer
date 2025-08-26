@@ -787,6 +787,7 @@ impl serde::Serialize for GetNetworkStatusErrorKind {
             Self::MissingLatestSettledCertificate => "GET_NETWORK_STATUS_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE",
             Self::MissingLatestPendingCertificate => "GET_NETWORK_STATUS_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE",
             Self::InvalidNetworkId => "GET_NETWORK_STATUS_ERROR_KIND_INVALID_NETWORK_ID",
+            Self::NetworkLocalStateError => "GET_NETWORK_STATUS_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR",
         };
         serializer.serialize_str(variant)
     }
@@ -802,6 +803,7 @@ impl<'de> serde::Deserialize<'de> for GetNetworkStatusErrorKind {
             "GET_NETWORK_STATUS_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE",
             "GET_NETWORK_STATUS_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE",
             "GET_NETWORK_STATUS_ERROR_KIND_INVALID_NETWORK_ID",
+            "GET_NETWORK_STATUS_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR",
         ];
 
         struct GeneratedVisitor;
@@ -846,6 +848,7 @@ impl<'de> serde::Deserialize<'de> for GetNetworkStatusErrorKind {
                     "GET_NETWORK_STATUS_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE" => Ok(GetNetworkStatusErrorKind::MissingLatestSettledCertificate),
                     "GET_NETWORK_STATUS_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE" => Ok(GetNetworkStatusErrorKind::MissingLatestPendingCertificate),
                     "GET_NETWORK_STATUS_ERROR_KIND_INVALID_NETWORK_ID" => Ok(GetNetworkStatusErrorKind::InvalidNetworkId),
+                    "GET_NETWORK_STATUS_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR" => Ok(GetNetworkStatusErrorKind::NetworkLocalStateError),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

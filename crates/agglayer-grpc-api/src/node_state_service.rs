@@ -281,6 +281,31 @@ where
                 })
         });
 
+        let settled_let_leaf_count = self
+            .service
+            .get_local_network_state(network_id)
+            .map_err(|error| {
+                error!(?error, "Failed to get latest network local state");
+                tonic::Status::with_error_details(
+                    tonic::Code::Internal,
+                    "Failed to get latest network local state",
+                    ErrorDetails::with_error_info(
+                        GetNetworkStatusErrorKind::NetworkLocalStateError.as_str_name(),
+                        GET_NETWORK_STATUS_METHOD_PATH,
+                        [],
+                    ),
+                )
+            })?
+            .map(|local_network_state| {
+                // We return the leaf count of the latest local exit tree
+                local_network_state.exit_tree.leaf_count as u64
+            })
+            .unwrap_or_else(|| {
+                // If no local state is found, we assume 0 leaves
+                warn!("No local network state found, assuming 0 leaves");
+                0
+            });
+
         let network_status = agglayer_grpc_types::node::types::v1::NetworkStatus {
             network_status: network_status.to_string(),
             network_type: network_type.to_string(),
@@ -292,9 +317,7 @@ where
             settled_ler: latest_settled_certificate
                 .as_ref()
                 .map(|cert| FixedBytes32::from(cert.new_local_exit_root)),
-            // For global indices, we'll need to implement additional storage lookups
-            // Setting as None for now since they require more complex data retrieval
-            settled_let_leaf_count: 0,
+            settled_let_leaf_count,
             settled_claim: None,
             latest_pending_height: latest_pending_certificate
                 .as_ref()

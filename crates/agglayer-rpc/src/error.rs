@@ -102,3 +102,32 @@ impl SignatureVerificationError {
         }
     }
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum GetNetworkStatusError {
+    #[error("Proof for certificate {certificate_id} not found")]
+    ProofNotFound { certificate_id: CertificateId },
+
+    #[error("Data for certificate {certificate_id} not found")]
+    CertificateNotFound { certificate_id: CertificateId },
+
+    #[error("Certificate id and hash mismatch - expected certificate_id: {expected} got: {got}")]
+    CertificateIdHashMismatch {
+        expected: CertificateId,
+        got: CertificateId,
+    },
+
+    #[error("Failed to get latest known certificate header for network {network_id}")]
+    UnknownCertificateHeader {
+        network_id: NetworkId,
+        #[source]
+        source: CertificateRetrievalError,
+    },
+
+    #[error("Failed to get local state for network {network_id}")]
+    LocalNetworkStateError {
+        network_id: NetworkId,
+        #[source]
+        error: StorageError,
+    },
+}

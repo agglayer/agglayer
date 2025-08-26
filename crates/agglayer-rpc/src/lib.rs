@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
 pub use self::error::{CertificateRetrievalError, CertificateSubmissionError};
+use crate::error::GetNetworkStatusError;
 
 pub mod error;
 
@@ -140,10 +141,15 @@ where
     pub fn get_latest_available_certificate_for_network(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<Certificate>, CertificateRetrievalError> {
-        debug!("Received request to get the latest available certificate for rollup {network_id}",);
+    ) -> Result<Option<Certificate>, GetNetworkStatusError> {
+        debug!("Received request to get the latest available certificate for rollup {network_id}");
 
-        let latest_certificate_header = self.get_latest_known_certificate_header(network_id)?;
+        let latest_certificate_header = self
+            .get_latest_known_certificate_header(network_id)
+            .map_err(|error| GetNetworkStatusError::UnknownCertificateHeader {
+                network_id,
+                source: error,
+            })?;
 
         match latest_certificate_header {
             None => Ok(None),
@@ -153,30 +159,35 @@ where
                 ..
             }) => {
                 // First try to get the full certificate from pending store
-                if let Some(certificate) = self.pending_store.get_certificate(network_id, height)? {
+                if let Ok(Some(certificate)) =
+                    self.pending_store.get_certificate(network_id, height)
+                {
                     // Verify that this is indeed the certificate we're looking for
                     if certificate.hash() == certificate_id {
                         return Ok(Some(certificate));
                     } else {
                         error!(
-                            "Certificate hash mismatch: expected {}, got {}",
+                            "Pending certificate hash mismatch: expected {}, got {}",
                             certificate_id,
                             certificate.hash()
                         );
-                        return Err(CertificateRetrievalError::NotFound { certificate_id });
+                        return Err(GetNetworkStatusError::CertificateIdHashMismatch {
+                            expected: certificate_id,
+                            got: certificate.hash(),
+                        });
                     }
                 }
 
-                // If not found in pending store, try to get from debug store
+                // If not found in pending store, try to get from debug store.
                 // This covers settled certificates and any other certificates stored in debug
-                // storage
-                match self.debug_store.get_certificate(&certificate_id)? {
-                    Some(certificate) => {
+                // storage.
+                match self.debug_store.get_certificate(&certificate_id) {
+                    Ok(Some(certificate)) => {
                         debug!("Found certificate {} in debug store", certificate_id);
                         return Ok(Some(certificate));
                     }
-                    None => {
-                        warn!("Certificate {} not found in debug store", certificate_id);
+                    _ => {
+                        debug!("Certificate {certificate_id} not found in debug store");
                     }
                 }
 
@@ -184,7 +195,7 @@ where
                     "Certificate {} at height {} not found in any store",
                     certificate_id, height
                 );
-                Err(CertificateRetrievalError::NotFound { certificate_id })
+                Err(GetNetworkStatusError::CertificateNotFound { certificate_id })
             }
         }
     }
@@ -232,14 +243,29 @@ where
     pub fn get_proof(
         &self,
         certificate_id: CertificateId,
-    ) -> Result<Option<agglayer_types::Proof>, CertificateRetrievalError> {
+    ) -> Result<Option<agglayer_types::Proof>, GetNetworkStatusError> {
         self.pending_store.get_proof(certificate_id).map_err(|e| {
             error!(
                 "Failed to get proof for certificate {}: {}",
                 certificate_id, e
             );
-            CertificateRetrievalError::NotFound { certificate_id }
+            GetNetworkStatusError::ProofNotFound { certificate_id }
         })
+    }
+
+    pub fn get_local_network_state(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<agglayer_types::LocalNetworkStateData>, GetNetworkStatusError> {
+        self.state
+            .read_local_network_state(network_id)
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to get local network state for network {network_id}"
+                );
+                GetNetworkStatusError::LocalNetworkStateError { network_id, error }
+            })
     }
 
     /// Get the certificate header, raising an error if not found.

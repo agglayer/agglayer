@@ -62,6 +62,9 @@ enum GetNetworkStatusErrorKind {
 
   // Invalid network ID/network not found.
   GET_NETWORK_STATUS_ERROR_KIND_INVALID_NETWORK_ID = 3;
+
+  // Invalid network local state.
+  GET_NETWORK_STATUS_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR = 4;
 }
 
 // Request to get a CertificateHeader for a particular CertificateId.
