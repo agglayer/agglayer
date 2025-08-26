@@ -14,7 +14,7 @@ snapshot_kind: text
       "1": {
         "InvalidMultisig": {
           "NEWTYPE": {
-            "TYPENAME": "agglayer_types::aggchain_data::MultisigEror"
+            "TYPENAME": "agglayer_types::aggchain_data::MultisigError"
           }
         }
       },
@@ -682,7 +682,7 @@ snapshot_kind: text
       }
     }
   },
-  "agglayer_types::aggchain_data::MultisigEror": {
+  "agglayer_types::aggchain_data::MultisigError": {
     "ENUM": {
       "0": {
         "UnderThreshold": {
