@@ -6,6 +6,7 @@ use thiserror::Error;
 use crate::aggchain_data::PayloadWithCtx;
 
 #[derive(Clone, Debug, Error, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename = "agglayer_types::aggchain_data::MultisigEror")]
 pub enum MultisigError {
     #[error("Multisig is under the required threshold. got: {got}, expected: {expected}")]
     UnderThreshold { got: usize, expected: usize },
