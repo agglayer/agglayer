@@ -21,7 +21,9 @@ use std::borrow::Cow;
 
 use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
-    aggchain_proof::{AggchainData, AggchainProof, Proof, MultisigPayload}, primitives::Digest, Certificate, Height, Metadata, NetworkId, Signature
+    aggchain_proof::{AggchainData, AggchainProof, MultisigPayload, Proof},
+    primitives::Digest,
+    Certificate, Height, Metadata, NetworkId, Signature,
 };
 use pessimistic_proof::unified_bridge::{
     AggchainProofPublicValues, BridgeExit, ImportedBridgeExit,
@@ -31,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use crate::columns::{bincode_codec, CodecError};
 
 /// A unit type serializing to a constant byte representing the storage version.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(try_from = "u8", into = "u8")]
 struct VersionTag<const VERSION: u8>;
 
@@ -54,8 +56,8 @@ impl<const VERSION: u8> From<VersionTag<VERSION>> for u8 {
 ///
 /// In v0, the first byte of network ID was reserved to specify the storage
 /// format version.
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[cfg_attr(test, derive(Serialize))]
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "testutils", derive(Serialize))]
 struct NetworkIdV0([u8; 3]);
 
 impl From<NetworkIdV0> for NetworkId {
@@ -66,7 +68,7 @@ impl From<NetworkIdV0> for NetworkId {
 
 /// The pre-0.3 certificate format (`v0`).
 #[derive(Debug, Clone, Deserialize)]
-#[cfg_attr(test, derive(Serialize))]
+#[cfg_attr(feature = "testutils", derive(Serialize, Eq, PartialEq))]
 struct CertificateV0 {
     version: VersionTag<0>,
     network_id: NetworkIdV0,
@@ -110,6 +112,7 @@ impl From<CertificateV0> for Certificate {
 
 /// The new certificate format as stored in the database (`v1`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "testutils", derive(Eq, PartialEq))]
 struct CertificateV1<'a> {
     version: VersionTag<1>,
     network_id: NetworkId,
@@ -189,6 +192,7 @@ impl<'a> From<&'a Certificate> for CertificateV1<'a> {
 // Duplicated from `agglayer-types` since we need slightly different serde
 // impls.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "testutils", derive(Eq, PartialEq))]
 #[allow(clippy::upper_case_acronyms)]
 pub enum AggchainDataV1<'a> {
     ECDSA {
@@ -310,7 +314,9 @@ impl From<AggchainDataV1<'_>> for AggchainData {
                 signature,
                 public_values: Some(public_values.into_owned()),
             },
-            AggchainDataV1::MultisigOnly { multisig } => Self::MultisigOnly(MultisigPayload(multisig.into_owned())),
+            AggchainDataV1::MultisigOnly { multisig } => {
+                Self::MultisigOnly(MultisigPayload(multisig.into_owned()))
+            }
             AggchainDataV1::MultisigAndAggchainProof {
                 multisig,
                 proof,
