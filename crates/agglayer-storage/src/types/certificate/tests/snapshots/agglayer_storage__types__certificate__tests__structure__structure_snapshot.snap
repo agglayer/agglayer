@@ -1,6 +1,7 @@
 ---
 source: crates/agglayer-storage/src/types/certificate/tests/structure.rs
 expression: "&registry"
+snapshot_kind: text
 ---
 {
   "AggchainDataError": {
@@ -13,7 +14,7 @@ expression: "&registry"
       "1": {
         "InvalidMultisig": {
           "NEWTYPE": {
-            "TYPENAME": "MultisigError"
+            "TYPENAME": "agglayer_types::aggchain_data::MultisigError"
           }
         }
       },
@@ -176,17 +177,24 @@ expression: "&registry"
         "HasInvalidSignature": "UNIT"
       },
       "2": {
-        "UnknownRecoveredSigner": {
+        "HasDuplicateSigner": {
           "STRUCT": [
             {
-              "recovered": {
+              "signer": {
                 "TYPENAME": "agglayer_primitives::Address"
               }
+            }
+          ]
+        }
+      },
+      "3": {
+        "OutOfBoundSignerIndex": {
+          "STRUCT": [
+            {
+              "idx": "U64"
             },
             {
-              "prehash": {
-                "TYPENAME": "agglayer_primitives::Digest"
-              }
+              "total": "U64"
             }
           ]
         }
@@ -670,6 +678,52 @@ expression: "&registry"
           "NEWTYPE": {
             "TYPENAME": "AggchainDataError"
           }
+        }
+      }
+    }
+  },
+  "agglayer_types::aggchain_data::MultisigError": {
+    "ENUM": {
+      "0": {
+        "UnderThreshold": {
+          "STRUCT": [
+            {
+              "got": "U64"
+            },
+            {
+              "expected": "U64"
+            }
+          ]
+        }
+      },
+      "1": {
+        "InvalidSignature": "UNIT"
+      },
+      "2": {
+        "UnknownRecoveredSigner": {
+          "STRUCT": [
+            {
+              "recovered": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "prehash": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "3": {
+        "HasDuplicateSigner": {
+          "STRUCT": [
+            {
+              "signer": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            }
+          ]
         }
       }
     }
