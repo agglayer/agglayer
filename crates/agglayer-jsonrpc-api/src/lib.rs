@@ -11,7 +11,7 @@ use agglayer_storage::stores::{
     StateWriter,
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId,
+    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId, NetworkStatus,
 };
 use alloy::{primitives::B256, providers::Provider};
 use error::{Error, RpcResult};
@@ -24,6 +24,7 @@ use jsonrpsee::{
 };
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::info;
+use unified_bridge::GlobalIndex;
 
 use crate::{service::AgglayerService, signed_tx::SignedTx};
 
@@ -79,6 +80,9 @@ trait Agglayer {
         &self,
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>>;
+
+    #[method(name = "getNetworkStatus")]
+    async fn get_network_status(&self, network_id: NetworkId) -> RpcResult<NetworkStatus>;
 }
 
 /// The RPC agglayer service implementation.
@@ -257,6 +261,169 @@ where
             .rpc_service
             .get_latest_pending_certificate_header(network_id)?;
         Ok(header)
+    }
+
+    async fn get_network_status(&self, network_id: NetworkId) -> RpcResult<NetworkStatus> {
+        // Get the latest settled certificate for the network
+        let latest_settled_certificate = self
+            .rpc_service
+            .get_latest_settled_certificate_header(network_id)
+            .map_err(|error| {
+                tracing::error!(?error, "Failed to get latest settled certificate");
+                Error::internal("Failed to get latest settled certificate")
+            })?;
+
+        // Get the latest pending certificate for the network
+        let latest_pending_certificate = self
+            .rpc_service
+            .get_latest_pending_certificate_header(network_id)
+            .map_err(|error| {
+                tracing::error!(?error, "Failed to get latest pending certificate");
+                Error::internal("Failed to get latest pending certificate")
+            })?;
+
+        // Determine network type from the latest available certificate
+        let network_type = match self
+            .rpc_service
+            .get_latest_available_certificate_for_network(network_id)
+        {
+            Ok(Some(certificate)) => {
+                // Determine network type based on aggchain_data variant
+                match certificate.aggchain_data {
+                    agglayer_types::aggchain_proof::AggchainData::ECDSA { .. } => "ECDSA",
+                    agglayer_types::aggchain_proof::AggchainData::Generic { .. } => "Generic",
+                }
+            }
+            Ok(None) => {
+                // No certificate found, use default/unknown type
+                tracing::warn!(
+                    "No certificate found for network {}, using default network type",
+                    network_id
+                );
+                "Unknown"
+            }
+            Err(error) => {
+                // Error retrieving certificate, log and use default
+                tracing::warn!(
+                    ?error,
+                    "Failed to get certificate for network {}, using default network type",
+                    network_id
+                );
+                "Unknown"
+            }
+        };
+
+        // TODO: Define network status. Could represent the healthiness of the network
+        // in regard to the agglayer-node. We could have multiple kind of status
+        // that could represent a network sending too many unprovable certs,
+        // or even a network that didn't settle for N epochs and such (optional).
+        let network_status = "TBD";
+
+        // Extract settled certificate data
+        let (settled_height, settled_cert_id, _settled_epoch) = latest_settled_certificate
+            .as_ref()
+            .map(|cert| (cert.height, cert.certificate_id, cert.epoch_number))
+            .unwrap_or((
+                agglayer_types::Height::from(0u64),
+                agglayer_types::CertificateId::default(),
+                None,
+            ));
+
+        // Get pending certificate error if exists
+        let pending_error = latest_pending_certificate
+            .as_ref()
+            .and_then(|cert| match &cert.status {
+                agglayer_types::CertificateStatus::InError { error } => Some(error.to_string()),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        // Get epoch with latest settlement from settled certificate header
+        let latest_epoch_with_settlement = latest_settled_certificate
+            .as_ref()
+            .and_then(|cert| cert.epoch_number)
+            .map(|epoch| epoch.as_u64())
+            .unwrap_or(0);
+
+        // Extract settled_pp_root from the settled certificate's proof public values
+        let settled_pp_root = latest_settled_certificate.as_ref().and_then(|cert| {
+            // Get the proof for the settled certificate
+            self.rpc_service
+                .get_proof(cert.certificate_id)
+                .inspect_err(|error| {
+                    tracing::error!(
+                        ?error,
+                        "get network status: failed to get proof for settled certificate"
+                    );
+                })
+                .ok()
+                .flatten()
+                .and_then(|proof| {
+                    // Deserialize the proof's public values to get PessimisticProofOutput
+                    let agglayer_types::Proof::SP1(sp1_proof) = proof;
+                    pessimistic_proof::PessimisticProofOutput::bincode_codec()
+                        .deserialize::<pessimistic_proof::PessimisticProofOutput>(
+                            sp1_proof.public_values.as_slice(),
+                        )
+                        .inspect_err(|error| {
+                            tracing::error!(
+                                ?error,
+                                "get network status: failed to deserialize pessimistic proof \
+                                 output"
+                            );
+                        })
+                        .ok()
+                        .map(|output| output.new_pessimistic_root)
+                })
+        });
+
+        let settled_let_leaf_count = self
+            .rpc_service
+            .get_local_network_state(network_id)
+            .map_err(|error| {
+                tracing::error!(?error, "Failed to get latest network local state");
+                Error::internal("Failed to get latest network local state")
+            })?
+            .map(|local_network_state| {
+                // We return the leaf count of the latest local exit tree
+                local_network_state.exit_tree.leaf_count as u64
+            })
+            .unwrap_or_else(|| {
+                // If no local state is found, we assume 0 leaves
+                tracing::warn!("No local network state found, assuming 0 leaves");
+                0
+            });
+
+        let network_status = NetworkStatus {
+            network_status: network_status.to_string(),
+            network_type: network_type.to_string(),
+            network_id,
+            settled_height,
+            settled_certificate_id: settled_cert_id,
+            // Extract actual data from settled certificate when available
+            settled_pp_root: settled_pp_root.unwrap_or_default(),
+            settled_ler: latest_settled_certificate
+                .as_ref()
+                .map(|cert| cert.new_local_exit_root)
+                .unwrap_or_default(),
+            settled_let_leaf_count,
+            settled_claim: agglayer_types::SettledClaim {
+                global_index: GlobalIndex::new(network_id, 0),
+                bridge_exit_hash: agglayer_types::Digest::default(),
+            },
+            latest_pending_height: latest_pending_certificate
+                .as_ref()
+                .map(|cert| cert.height.as_u64())
+                .unwrap_or(0),
+            latest_pending_status: latest_pending_certificate
+                .as_ref()
+                .map(|cert| format!("{}", cert.status))
+                .unwrap_or_else(|| "Unknown".to_string()),
+            latest_pending_error: pending_error,
+            latest_epoch_with_settlement,
+        };
+
+        Ok(network_status)
     }
 }
 

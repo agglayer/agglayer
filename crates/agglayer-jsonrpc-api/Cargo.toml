@@ -40,6 +40,8 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 agglayer-contracts.workspace = true
 agglayer-rpc.workspace = true
 agglayer-storage.workspace = true
+pessimistic-proof.workspace = true
+unified-bridge.workspace = true
 
 rstest = { workspace = true, optional = true }
 
