@@ -114,11 +114,9 @@ impl TryInto<core::AggchainData> for PayloadWithCtx<Payload, Context> {
                     .map_err(AggchainDataError::InvalidMultisig)?,
                 aggchain_proof: PayloadWithCtx(aggchain_proof, aggchain_proof_ctx).into(),
             }),
-            (payload, context) => {
-                return Err(AggchainDataError::InvalidVariant(format!(
-                    "payload: {payload}, context: {context}"
-                )))
-            }
+            (payload, context) => Err(AggchainDataError::InvalidVariant(format!(
+                "payload: {payload}, context: {context}"
+            ))),
         }
     }
 }
