@@ -1,0 +1,6 @@
+---
+source: crates/pessimistic-proof-test-suite/tests/root_hashes.rs
+expression: "LocalBalanceTree::new().root"
+snapshot_kind: text
+---
+b89931f7384aeddb5c136a679d54464007e2d828d4741bec626ff92aeb4b12d4
