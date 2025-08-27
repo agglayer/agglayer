@@ -45,14 +45,13 @@ async fn get_network_status(#[case] state: Forest) {
     // Verify the network status response
     assert_eq!(network_status.network_id, network_id);
     assert_eq!(network_status.network_status, "TBD");
-    // Since the certificate is settled, the settled_height should be > 0
-    assert!(network_status.settled_height.as_u64() > 0);
-    // The latest pending status should indicate no pending certificates or be
-    // Unknown
-    assert!(
-        network_status.latest_pending_status == "Unknown"
-            || network_status.latest_pending_status == "Settled"
+    // Settled height for first certiticate is 0
+    assert_eq!(
+        network_status.settled_height,
+        agglayer_types::Height::new(0)
     );
+    // The latest pending status should indicate no pending certificates ("Unknown")
+    assert_eq!(network_status.latest_pending_status, "Unknown");
     // No errors should be present
     assert!(network_status.latest_pending_error.is_empty());
 
