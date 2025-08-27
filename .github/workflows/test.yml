@@ -154,14 +154,14 @@ jobs:
     if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     needs:
       - docker-build-local
-    uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@8518659c9848160debc83d8de7366145d659d7b2 # jhilliard/gas-token-test
+    uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@d0b455afcf6289f442db94edff7d4e8983f447b4 # jhilliard/else-case
     secrets: inherit
     with:
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
-      kurtosis-cdk-ref: 28b26957b2b5c1984420edaf673597c4efe203d9
+      kurtosis-cdk-ref: 22f15c90cf39af02fff77352716c541af7043e3c
       docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
-      agglayer-e2e-ref: 8518659c9848160debc83d8de7366145d659d7b2 # jhilliard/gas-token-test
+      agglayer-e2e-ref: d0b455afcf6289f442db94edff7d4e8983f447b4 # jhilliard/else-case
       kurtosis-cdk-args: |
         {
           "deployment_stages": {
