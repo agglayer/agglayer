@@ -8,7 +8,9 @@ use agglayer_types::{
     aggchain_proof::AggchainData,
     Address, Certificate, Digest, L1WitnessCtx, PessimisticRootInput, B256,
 };
+use eyre::Context as _;
 use pessimistic_proof::core::commitment::{SignatureCommitmentValues, SignatureCommitmentVersion};
+use prover_executor::sp1_fast;
 use sp1_sdk::HashableKey;
 
 use crate::CertifierClient;
@@ -109,8 +111,12 @@ where
             .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
 
         let vkey = aggchain_proof_payload.aggchain_vkey_from_proof();
-        let proof_vk_hash =
-            agglayer_contracts::aggchain::AggchainVkeyHash::new(vkey.vk.hash_bytes());
+
+        let vkey_hash_bytes = sp1_fast(|| vkey.vk.hash_bytes())
+            .context("Failed to hash SP1 vkey")
+            .map_err(CertificationError::Other)?;
+
+        let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::new(vkey_hash_bytes);
 
         if aggchain_vkey != proof_vk_hash {
             return Err(CertificationError::AggchainProofVkeyMismatch {
@@ -119,8 +125,12 @@ where
             });
         }
 
+        let vkey_hash_u32 = sp1_fast(|| vkey.vk.hash_u32())
+            .context("Failed to hash SP1 vkey")
+            .map_err(CertificationError::Other)?;
+
         Ok(AggchainProofCtx {
-            aggchain_vkey: vkey.vk.hash_u32(),
+            aggchain_vkey: vkey_hash_u32,
         })
     }
 

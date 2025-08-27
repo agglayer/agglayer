@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{panic::AssertUnwindSafe, sync::Arc};
 
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
@@ -12,6 +12,7 @@ use agglayer_types::{
     aggchain_proof::AggchainData, bincode, Certificate, Digest, Height, LocalNetworkStateData,
     NetworkId, Proof,
 };
+use eyre::Context as _;
 use pessimistic_proof::{
     core::{commitment::StateCommitment, generate_pessimistic_proof},
     local_state::LocalNetworkState,
@@ -22,6 +23,7 @@ use pessimistic_proof::{
     },
     NetworkState, PessimisticProofOutput,
 };
+use prover_executor::{sp1_blocking, sp1_fast};
 use sp1_sdk::{
     CpuProver, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
 };
@@ -56,14 +58,22 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         pending_store: Arc<PendingStore>,
         l1_rpc: Arc<L1Rpc>,
         config: Arc<Config>,
-    ) -> anyhow::Result<Self> {
+    ) -> eyre::Result<Self> {
         debug!("Initializing the CertifierClient verifier...");
-        let verifier = if config.mock_verifier {
-            sp1_sdk::ProverClient::builder().mock().build()
-        } else {
-            sp1_sdk::ProverClient::builder().cpu().build()
-        };
-        let (_, verifying_key) = verifier.setup(ELF);
+        let (verifier, verifying_key) = sp1_blocking({
+            let mock_verifier = config.mock_verifier;
+            move || {
+                let verifier = if mock_verifier {
+                    sp1_sdk::ProverClient::builder().mock().build()
+                } else {
+                    sp1_sdk::ProverClient::builder().cpu().build()
+                };
+                let (_, verifying_key) = verifier.setup(ELF);
+                (verifier, verifying_key)
+            }
+        })
+        .await
+        .context("Failed setting up SP1 verifier")?;
         debug!("CertifierClient verifier successfully initialized!");
 
         debug!("Connecting to the prover service...");
@@ -90,7 +100,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         verifier: Arc<CpuProver>,
         verifying_key: &SP1VerifyingKey,
         proof: &SP1ProofWithPublicValues,
-    ) -> Result<(), SP1VerificationError> {
+    ) -> eyre::Result<()> {
         // This fail_point is use to make the verification pass or fail
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
@@ -98,11 +108,12 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
                 let verifier = sp1_sdk::ProverClient::builder().mock().build();
                 let (_, verifying_key) = verifier.setup(ELF);
 
-                verifier.verify(proof, &verifying_key)
+                Ok(verifier.verify(proof, &verifying_key)?)
             }
         );
 
-        verifier.verify(proof, verifying_key)
+        Ok(sp1_fast(|| verifier.verify(proof, verifying_key))
+            .context("Failed verifying sp1 proof")??)
     }
 }
 
@@ -142,9 +153,13 @@ where
         info!("Successfully generated the witness for the PP for the Certificate {certificate_id}");
 
         let network_state = pessimistic_proof::NetworkState::from(initial_state);
-        let mut stdin = SP1Stdin::new();
-        stdin.write(&network_state);
-        stdin.write(&multi_batch_header);
+        let mut stdin = sp1_fast(|| {
+            let mut stdin = SP1Stdin::new();
+            stdin.write(&network_state);
+            stdin.write(&multi_batch_header);
+            stdin
+        })
+        .map_err(CertificationError::Other)?;
 
         // Writing the proof to the stdin if needed
         // At this point, we have the proof and the verifying key coming from the chain
@@ -155,7 +170,12 @@ where
             AggchainData::Generic { ref proof, .. } => {
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
 
-                stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone());
+                // This operation is unwind safe: if it errors, we will discard stdin and
+                // stark_proof anyway.
+                sp1_fast(AssertUnwindSafe(|| {
+                    stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone())
+                }))
+                .map_err(CertificationError::Other)?;
             }
         };
 
@@ -163,7 +183,7 @@ where
         let (pv_sp1_execute, _report) = {
             // Do not verify the deferred proof if we are in mock mode
             let deferred_proof_verification = !self.config.mock_verifier;
-            let (pv, report) = tokio::task::spawn_blocking({
+            let (pv, report) = sp1_blocking({
                 let verifier = self.verifier.clone();
                 let stdin = stdin.clone();
                 move || {
@@ -174,7 +194,7 @@ where
                 }
             })
             .await
-            .map_err(|e| CertificationError::InternalError(e.to_string()))?
+            .map_err(CertificationError::Other)?
             .map_err(CertificationError::Sp1ExecuteFailed)?;
 
             let pv_sp1_execute: PessimisticProofOutput = PessimisticProofOutput::bincode_codec()
@@ -195,8 +215,8 @@ where
 
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
-                bincode::default()
-                    .serialize(&stdin)
+                sp1_fast(|| bincode::default().serialize(&stdin))
+                    .map_err(CertificationError::Other)?
                     .map_err(|source| CertificationError::Serialize { source })?
                     .into(),
             )),
@@ -278,8 +298,8 @@ where
             })?;
 
         let proof = prover_response.into_inner().proof;
-        let proof: Proof = std::panic::catch_unwind(|| bincode::default().deserialize(&proof))
-            .map_err(|_| CertificationError::InternalError(String::from("panic")))?
+        let proof: Proof = sp1_fast(|| bincode::default().deserialize(&proof))
+            .map_err(CertificationError::Other)?
             .map_err(|source| CertificationError::Deserialize { source })?;
 
         debug!("Proof successfully generated!");
@@ -290,10 +310,12 @@ where
 
         if let Err(error) = Self::verify_proof(verifier, &verifying_key, proof_to_verify) {
             error!("Failed to verify the p-proof: {:?}", error);
-
-            Err(CertificationError::ProofVerificationFailed {
-                source: error.into(),
-            })
+            match error.downcast::<SP1VerificationError>() {
+                Ok(error) => Err(CertificationError::ProofVerificationFailed {
+                    source: error.into(),
+                }),
+                Err(error) => Err(CertificationError::Other(error)),
+            }
         } else {
             info!("Successfully generated and verified the p-proof!");
 
