@@ -1,19 +1,22 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use agglayer_interop_types::{aggchain_proof::AggchainData, ImportedBridgeExit, TokenInfo};
+use agglayer_interop_types::{ImportedBridgeExit, TokenInfo};
 use agglayer_primitives::{ruint::UintTryFrom, FromBool, Hashable};
 use agglayer_tries::{roots::LocalExitRoot, smt::Smt};
 use pessimistic_proof::{
-    core::{self, commitment::PessimisticRoot, Vkey},
+    core::commitment::{PessimisticRootCommitmentValues, PessimisticRootCommitmentVersion},
     local_balance_tree::{LocalBalancePath, LocalBalanceTree, LOCAL_BALANCE_TREE_DEPTH},
     local_state::StateCommitment,
     multi_batch_header::MultiBatchHeader,
     nullifier_tree::{NullifierKey, NullifierPath, NullifierTree, NULLIFIER_TREE_DEPTH},
     LocalNetworkState,
 };
-use unified_bridge::{CommitmentVersion, LocalExitTree};
+use unified_bridge::LocalExitTree;
 
-use crate::{Address, Certificate, Digest, Error, U256, U512};
+use crate::{
+    aggchain_data::{CertificateAggchainDataCtx, CertificateAggchainDataWithCtx},
+    Certificate, Digest, Error, U256, U512,
+};
 
 /// Local state data of one network.
 /// The AggLayer tracks the [`LocalNetworkStateData`] for all networks.
@@ -45,11 +48,20 @@ impl From<LocalNetworkStateData> for pessimistic_proof::NetworkState {
 
 /// The last pessimistic root can be either fetched from L1 or recomputed for a
 /// given version.
+#[derive(Debug, Clone)]
 pub enum PessimisticRootInput {
     /// Computed from the given version.
-    Computed(CommitmentVersion),
+    Computed(PessimisticRootCommitmentVersion),
     /// Fetched from the L1.
     Fetched(Digest),
+}
+
+/// Represents all context data fetched from the L1 for the witness generation.
+#[derive(Debug, Clone)]
+pub struct L1WitnessCtx {
+    pub l1_info_root: Digest,
+    pub prev_pessimistic_root: PessimisticRootInput,
+    pub aggchain_data_ctx: CertificateAggchainDataCtx,
 }
 
 impl LocalNetworkStateData {
@@ -66,11 +78,14 @@ impl LocalNetworkStateData {
     pub fn apply_certificate(
         &mut self,
         certificate: &Certificate,
-        signer: Address,
-        l1_info_root: Digest,
-        prev_pp_root: PessimisticRootInput,
-        aggchain_vkey: Option<Vkey>,
+        ctx_from_l1: L1WitnessCtx,
     ) -> Result<MultiBatchHeader, Error> {
+        let L1WitnessCtx {
+            prev_pessimistic_root,
+            l1_info_root,
+            aggchain_data_ctx,
+        } = ctx_from_l1;
+
         let gers_are_consistent = certificate
             .imported_bridge_exits
             .iter()
@@ -81,9 +96,9 @@ impl LocalNetworkStateData {
         }
 
         // Retrieve the pp root
-        let prev_pessimistic_root = match prev_pp_root {
+        let prev_pessimistic_root = match prev_pessimistic_root {
             PessimisticRootInput::Fetched(settled_from_l1) => settled_from_l1,
-            PessimisticRootInput::Computed(version) => PessimisticRoot {
+            PessimisticRootInput::Computed(version) => PessimisticRootCommitmentValues {
                 balance_root: self.balance_tree.root.into(),
                 nullifier_root: self.nullifier_tree.root.into(),
                 ler_leaf_count: self.exit_tree.leaf_count(),
@@ -220,18 +235,15 @@ impl LocalNetworkStateData {
             });
         }
 
-        let aggchain_proof = match &certificate.aggchain_data {
-            AggchainData::ECDSA { signature } => {
-                let signature = *signature;
-                core::AggchainData::ECDSA { signer, signature }
-            }
-            AggchainData::Generic {
-                aggchain_params, ..
-            } => core::AggchainData::Generic {
-                aggchain_params: *aggchain_params,
-                aggchain_vkey: aggchain_vkey.ok_or(Error::MissingAggchainVkey)?,
-            },
-        };
+        let chain_payload = certificate
+            .aggchain_data
+            .clone()
+            .try_into()
+            .map_err(Error::InvalidChainData)?;
+
+        let aggchain_data = CertificateAggchainDataWithCtx(chain_payload, aggchain_data_ctx)
+            .try_into()
+            .map_err(Error::InvalidChainData)?;
 
         Ok(MultiBatchHeader {
             origin_network: certificate.network_id,
@@ -239,9 +251,10 @@ impl LocalNetworkStateData {
             imported_bridge_exits,
             balances_proofs,
             l1_info_root,
-            aggchain_proof,
             height: certificate.height.as_u64(),
             prev_pessimistic_root,
+            aggchain_data,
+            certificate_id: certificate.hash().into(),
         })
     }
 
@@ -250,18 +263,10 @@ impl LocalNetworkStateData {
     pub fn make_multi_batch_header(
         &self,
         certificate: &Certificate,
-        signer: Address,
-        l1_info_root: Digest,
-        prev_pp_root: PessimisticRootInput,
-        aggchain_vkey: Option<Vkey>,
+        witness_fetched_from_l1: L1WitnessCtx,
     ) -> Result<MultiBatchHeader, Error> {
-        self.clone().apply_certificate(
-            certificate,
-            signer,
-            l1_info_root,
-            prev_pp_root,
-            aggchain_vkey,
-        )
+        self.clone()
+            .apply_certificate(certificate, witness_fetched_from_l1)
     }
 
     pub fn get_roots(&self) -> StateCommitment {
