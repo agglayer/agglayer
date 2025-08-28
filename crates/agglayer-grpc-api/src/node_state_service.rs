@@ -310,7 +310,7 @@ where
         let network_status = agglayer_grpc_types::node::types::v1::NetworkStatus {
             network_status: network_status.to_string(),
             network_type: network_type.to_string(),
-            network_id: request.network_id,
+            network_id: network_id.into(),
             settled_height,
             settled_certificate_id: settled_cert_id,
             // Extract actual data from settled certificate when available
