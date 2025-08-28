@@ -58,12 +58,6 @@ where
             CertificateAggchainData::MultisigOnly(_) => CertificateAggchainDataCtx::MultisigOnly(
                 self.fetch_multisig_ctx(certificate).await?,
             ),
-            CertificateAggchainData::AggchainProofOnly { aggchain_proof, .. } => {
-                CertificateAggchainDataCtx::AggchainProofOnly(
-                    self.fetch_aggchain_proof_ctx(certificate, &aggchain_proof)
-                        .await?,
-                )
-            }
             CertificateAggchainData::MultisigAndAggchainProof { aggchain_proof, .. } => {
                 CertificateAggchainDataCtx::MultisigAndAggchainProof {
                     multisig_ctx: self.fetch_multisig_ctx(certificate).await?,

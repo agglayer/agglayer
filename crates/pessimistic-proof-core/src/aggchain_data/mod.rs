@@ -42,8 +42,6 @@ pub enum AggchainData {
     },
     /// Multisig only
     MultisigOnly(MultiSignature),
-    /// Aggchain proof only (stark proof)
-    AggchainProofOnly(AggchainProof),
     /// Multisig and an aggchain proof
     MultisigAndAggchainProof {
         /// Multisig
@@ -75,10 +73,6 @@ impl AggchainData {
                 multisig
                     .verify(commitment)
                     .map_err(ProofError::InvalidMultisig)?;
-            }
-            AggchainData::AggchainProofOnly(aggchain_proof) => {
-                // Panic upon invalid proof.
-                aggchain_proof.verify_aggchain_proof(&constrained_values);
             }
             AggchainData::MultisigAndAggchainProof {
                 multisig,

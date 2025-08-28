@@ -95,14 +95,6 @@ impl From<&AggchainData> for AggchainHashValues {
                 aggchain_params: None,
                 signers_commit: Some(multisig.signers_commit()),
             },
-            AggchainData::AggchainProofOnly(AggchainProof {
-                aggchain_params,
-                aggchain_vkey,
-            }) => AggchainHashValues::ConsensusType1 {
-                aggchain_vkey: Some(*aggchain_vkey),
-                aggchain_params: Some(*aggchain_params),
-                signers_commit: None,
-            },
             AggchainData::MultisigAndAggchainProof {
                 multisig,
                 aggchain_proof:
