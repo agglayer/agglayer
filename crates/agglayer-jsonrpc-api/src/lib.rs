@@ -264,6 +264,8 @@ where
     }
 
     async fn get_network_status(&self, network_id: NetworkId) -> RpcResult<NetworkStatus> {
+        // Gather all the network status information needed to build the response
+
         // Get the latest settled certificate for the network
         let latest_settled_certificate = self
             .rpc_service

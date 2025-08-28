@@ -148,10 +148,11 @@ where
         let request_id = uuid::Uuid::new_v4().to_string();
         tracing::Span::current().record("request_id", &request_id);
         let request = request.into_inner();
-
         let network_id = request.network_id.into();
 
-        // Gather network status information
+        // Gather all the network information needed to build the response
+
+        // Retrieve latest settled certificate
         let latest_settled_certificate = self
             .service
             .get_latest_settled_certificate_header(network_id)

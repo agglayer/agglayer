@@ -244,13 +244,15 @@ where
         &self,
         certificate_id: CertificateId,
     ) -> Result<Option<agglayer_types::Proof>, GetNetworkStatusError> {
-        self.pending_store.get_proof(certificate_id).map_err(|e| {
-            error!(
-                "Failed to get proof for certificate {}: {}",
-                certificate_id, e
-            );
-            GetNetworkStatusError::ProofNotFound { certificate_id }
-        })
+        self.pending_store
+            .get_proof(certificate_id)
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to get proof for certificate {certificate_id}",
+                );
+                GetNetworkStatusError::ProofNotFound { certificate_id }
+            })
     }
 
     pub fn get_local_network_state(

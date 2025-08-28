@@ -45,7 +45,7 @@ async fn get_network_status(#[case] state: Forest) {
     // Verify the network status response
     assert_eq!(network_status.network_id, network_id);
     assert_eq!(network_status.network_status, "TBD");
-    // Settled height for first certiticate is 0
+    // Settled height for first certificate is 0
     assert_eq!(
         network_status.settled_height,
         agglayer_types::Height::new(0)
