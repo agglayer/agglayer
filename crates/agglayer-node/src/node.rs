@@ -24,7 +24,7 @@ use alloy::{
     providers::{ProviderBuilder, WsConnect},
     signers::Signer,
 };
-use eyre::{eyre, Context as _};
+use eyre::Context as _;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -54,9 +54,8 @@ impl Node {
     /// # use agglayer_config::Config;
     /// # use agglayer_node::Node;
     /// # use tokio_util::sync::CancellationToken;
-    /// # use anyhow::Result;
     /// #
-    /// async fn start_node() -> Result<()> {
+    /// async fn start_node() -> eyre::Result<()> {
     ///    let config: Arc<Config> = Arc::new(Config::default());
     ///
     ///    Node::builder()
@@ -177,7 +176,6 @@ impl Node {
         let current_epoch_store =
             EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref.clone())
                 .await
-                .map_err(|e| eyre!(e.into_boxed_dyn_error()))
                 .context("Failed starting epoch synchronizer")?;
 
         info!(
@@ -249,7 +247,6 @@ impl Node {
             .certifier_task_builder(certifier_client)
             .start()
             .await
-            .map_err(|e| eyre!(e.into_boxed_dyn_error()))
             .context("Failed starting certificate orchestrator")?;
 
         info!("Certificate orchestrator started.");
@@ -273,14 +270,12 @@ impl Node {
         )
         .start()
         .await
-        .map_err(|e| eyre!(e.into_boxed_dyn_error()))
         .context("Failed starting admin router")?;
 
         // Bind the core to the RPC server.
         let json_rpc_router = AgglayerImpl::new(service, rpc_service.clone())
             .start()
             .await
-            .map_err(|e| eyre!(e.into_boxed_dyn_error()))
             .context("Failed starting JSON-RPC router")?;
 
         let public_grpc_router =

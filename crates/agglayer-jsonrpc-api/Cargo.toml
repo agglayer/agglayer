@@ -5,43 +5,39 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-agglayer-telemetry = { workspace = true }
 agglayer-config.workspace = true
+agglayer-contracts.workspace = true
 agglayer-rate-limiting.workspace = true
+agglayer-rpc.workspace = true
+agglayer-storage.workspace = true
+agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 
-alloy = { workspace = true }
-futures = { workspace = true }
-jsonrpsee = { workspace = true, features = ["full"] }
+alloy.workspace = true
+axum = { workspace = true, features = ["tokio", "http1", "http2"] }
+buildstructor.workspace = true
+eyre.workspace = true
+futures.workspace = true
 hex.workspace = true
-
+http.workspace = true
+hyper.workspace = true
+jsonrpsee = { workspace = true, features = ["full"] }
+pin-project.workspace = true
+reqwest.workspace = true
+rstest = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with.workspace = true
-tokio.workspace = true
 thiserror.workspace = true
-tracing.workspace = true
-
-anyhow.workspace = true
-axum = { version = "0.8.1", features = ["tokio", "http1", "http2"] }
-buildstructor.workspace = true
-hyper.workspace = true
-http.workspace = true
-pin-project.workspace = true
-reqwest = "0.12.23"
+tokio.workspace = true
 tokio-util.workspace = true
 tokio-stream.workspace = true
 toml.workspace = true
 tonic.workspace = true
-tower-http = { version = "0.6.2", features = ["full"] }
 tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
-
-agglayer-contracts.workspace = true
-agglayer-rpc.workspace = true
-agglayer-storage.workspace = true
-
-rstest = { workspace = true, optional = true }
 
 [dev-dependencies]
 alloy = { workspace = true, features = ["full", "node-bindings"] }

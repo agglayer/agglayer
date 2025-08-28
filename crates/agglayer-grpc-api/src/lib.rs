@@ -45,7 +45,7 @@ impl ServerBuilder {
             + Send
             + 'static,
         S::Future: Send + 'static,
-        S::Error: Into<anyhow::Error> + Send,
+        S::Error: Into<eyre::Error> + Send,
     {
         self.router = self.router.route_service(
             &format!("/{}/{{*rest}}", S::NAME),

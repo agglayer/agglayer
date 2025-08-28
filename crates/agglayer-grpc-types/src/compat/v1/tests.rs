@@ -18,7 +18,7 @@ fn error_messages(#[case] name: &str, #[case] error: Error) {
     insta::assert_debug_snapshot!(format!("{name}/kind"), error.kind());
     insta::assert_snapshot!(
         format!("{name}/debug"),
-        format!("{:?}", anyhow::Error::from(error))
+        format!("{:?}", eyre::Error::from(error))
     );
 }
 

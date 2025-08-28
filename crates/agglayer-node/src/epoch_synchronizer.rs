@@ -9,7 +9,6 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::EpochNumber;
-use anyhow::Result;
 use tokio::sync::broadcast::error::TryRecvError;
 use tracing::{debug, error, info};
 
@@ -21,7 +20,7 @@ impl EpochSynchronizer {
         mut opened_epoch: EpochsStore::PerEpochStore,
         mut current_epoch_number: EpochNumber,
         mut epoch_stream: tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
-    ) -> Result<EpochsStore::PerEpochStore>
+    ) -> eyre::Result<EpochsStore::PerEpochStore>
     where
         EpochsStore: EpochStoreWriter,
         EpochsStore::PerEpochStore: PerEpochReader + PerEpochWriter,
@@ -55,7 +54,7 @@ impl EpochSynchronizer {
                     current_epoch_number = n;
                 }
                 Err(TryRecvError::Closed) => {
-                    anyhow::bail!("Epoch stream closed during epoch synchronization");
+                    eyre::bail!("Epoch stream closed during epoch synchronization");
                 }
                 Err(TryRecvError::Lagged(n)) => {
                     debug!(
@@ -77,7 +76,7 @@ impl EpochSynchronizer {
         state_store: Arc<StateStore>,
         epochs_store: Arc<EpochsStore>,
         clock_ref: ClockRef,
-    ) -> Result<EpochsStore::PerEpochStore>
+    ) -> eyre::Result<EpochsStore::PerEpochStore>
     where
         StateStore: StateReader + MetadataReader + MetadataWriter,
         EpochsStore: EpochStoreWriter,
@@ -101,7 +100,7 @@ impl EpochSynchronizer {
             Some(lse_number) => {
                 debug!("synchronizer: Latest settled epoch: {}", lse_number);
                 if current_epoch_number < lse_number {
-                    anyhow::bail!(
+                    eyre::bail!(
                         "Unable to synchronize: Current epoch is less than the latest settled \
                          epoch"
                     );
