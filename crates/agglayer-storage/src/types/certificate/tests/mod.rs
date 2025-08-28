@@ -5,6 +5,7 @@ use agglayer_types::{
 use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
+
 use super::*;
 use crate::columns::Codec;
 
@@ -79,8 +80,12 @@ impl AggchainDataV1<'static> {
         }
     }
 
+    fn sig0() -> Signature {
+        sig(0x7a, 0x9b)
+    }
+
     fn test0() -> Self {
-        let signature = sig(0x7a, 0x9b);
+        let signature = Self::sig0();
         Self::ECDSA { signature }
     }
 
@@ -260,10 +265,22 @@ fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> 
 #[case("aggdata_v1_01", AggchainDataV1::test1())]
 #[case("aggdata_v1_02", AggchainDataV1::test2())]
 #[case("aggdata_v1_03", AggchainDataV1::test3())]
-fn encoding(#[case] name: &str, #[case] value: impl Serialize) {
+fn encoding<T>(#[case] name: &str, #[case] value: T)
+where
+    T: Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
+{
     // Snapshots for types where the encoding must stay stable.
     let bytes = Bytes::from(bincode::default().serialize(&value).unwrap());
     insta::assert_snapshot!(name, bytes);
+
+    // Also check decoding must produce the same value.
+    let from_bytes: T = bincode::default()
+        .deserialize(bytes.as_ref())
+        .expect("deserialization failed");
+
+    // This should really compare the certificates directly but that requires adding
+    // whole bunch of `Eq` impl to many types.
+    assert_eq!(format!("{from_bytes:?}"), format!("{value:?}"));
 }
 
 #[rstest::rstest]
@@ -274,7 +291,7 @@ fn encoding(#[case] name: &str, #[case] value: impl Serialize) {
 fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
     let from_json = sample_data::load_certificate(&format!("{cert_name}.json"));
 
-    let bytes = load_sample_bytes(&format!("encoded_v0-{cert_name}.hex"));
+    let bytes = load_sample_bytes(&format!("encoded/v0-{cert_name}.hex"));
     let from_bytes = Certificate::decode(&bytes).expect("v0 certificate to decode successfully");
 
     // Again comparing debug output due to lack of `Eq`.
@@ -282,8 +299,8 @@ fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
 }
 
 #[rstest::rstest]
-#[case::regression_01("regression_01.hex")]
-#[case::regression_02("regression_02.hex")]
+#[case::regression_01("encoded/regression_01.hex")]
+#[case::regression_02("encoded/regression_02.hex")]
 fn regressions(#[case] cert_filename: &str) {
     let bytes = load_sample_bytes(cert_filename);
     let _certificate = Certificate::decode(&bytes).expect("decoding failed");

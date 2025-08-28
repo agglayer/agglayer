@@ -32,7 +32,7 @@ async fn happy_path() {
     let prover_config = agglayer_prover_config::ProverConfig::default();
 
     // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::new(ELF);
+    let fake_prover = FakeProver::new(ELF).await.unwrap();
     let endpoint = prover_config.grpc_endpoint;
     let cancellation = CancellationToken::new();
 
@@ -70,11 +70,6 @@ async fn happy_path() {
         .expect_get_trusted_sequencer_address()
         .once()
         .returning(move |_, _| Ok(signer));
-
-    l1_rpc
-        .expect_get_rollup_contract_address()
-        .once()
-        .returning(|_| Ok(alloy::primitives::Address::default().into()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -175,11 +170,6 @@ async fn prover_timeout() {
         .expect_get_trusted_sequencer_address()
         .once()
         .returning(move |_, _| Ok(signer));
-
-    l1_rpc
-        .expect_get_rollup_contract_address()
-        .once()
-        .returning(|_| Ok(alloy::primitives::Address::default().into()));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()

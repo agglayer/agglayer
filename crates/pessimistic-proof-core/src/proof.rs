@@ -1,22 +1,18 @@
-use agglayer_primitives::{Address, Digest, Signature, B256};
+use agglayer_primitives::{Address, Digest};
 use agglayer_tries::roots::LocalExitRoot;
 use bytemuck::{Pod, Zeroable};
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-#[cfg(not(target_os = "zkvm"))]
-use tracing::warn;
-#[cfg(target_os = "zkvm")]
-use unified_bridge::AggchainProofPublicValues;
 use unified_bridge::{
-    CommitmentVersion, Error, GlobalIndex, ImportedBridgeExitCommitmentValues, LocalExitTreeError,
-    NetworkId, TokenInfo,
+    Error, GlobalIndex, ImportedBridgeExitCommitmentValues, ImportedBridgeExitCommitmentVersion,
+    LocalExitTreeError, NetworkId, TokenInfo,
 };
 
 use crate::{
-    aggchain_proof::AggchainData,
+    aggchain_data::MultisigError,
     local_state::{
-        commitment::{PessimisticRoot, SignatureCommitmentValues, StateCommitment},
+        commitment::{PessimisticRootCommitmentValues, StateCommitment},
         NetworkState,
     },
     multi_batch_header::MultiBatchHeader,
@@ -26,7 +22,8 @@ use crate::{
 /// aggchain proof public values (`commit_imported_bridge_exits` field).
 /// This constant defines which commitment version is expected to verify the
 /// aggchain proof.
-pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: CommitmentVersion = CommitmentVersion::V3;
+pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: ImportedBridgeExitCommitmentVersion =
+    ImportedBridgeExitCommitmentVersion::V3;
 
 // Compile-time size assertion for PessimisticProofOutputZeroCopy
 const _PESSIMISTIC_PROOF_OUTPUT_SIZE: () = {
@@ -153,6 +150,10 @@ pub enum ProofError {
     /// Height overflow.
     #[error("Height overflow")]
     HeightOverflow,
+    
+    /// Invalid multisig
+    #[error("Invalid multisig")]
+    InvalidMultisig(#[source] MultisigError),
 }
 
 /// Zero-copy representation of PessimisticProofOutput for bytemuck operations.
@@ -259,6 +260,39 @@ pub const EMPTY_PP_ROOT_V2: Digest = Digest(hex!(
     "c89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184"
 ));
 
+/// Represents all the enforced values for the stark and for the signed
+/// commitments.
+#[derive(Clone)]
+pub struct ConstrainedValues {
+    pub initial_state_commitment: StateCommitment,
+    pub final_state_commitment: StateCommitment,
+    pub prev_pessimistic_root: Digest,
+    pub height: u64,
+    pub origin_network: NetworkId,
+    pub l1_info_root: Digest,
+    pub commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues,
+    pub certificate_id: Digest,
+}
+
+impl ConstrainedValues {
+    fn new(
+        batch_header: &MultiBatchHeader,
+        initial_state_commitment: &StateCommitment,
+        final_state_commitment: &StateCommitment,
+    ) -> Self {
+        Self {
+            initial_state_commitment: initial_state_commitment.clone(),
+            final_state_commitment: final_state_commitment.clone(),
+            height: batch_header.height,
+            origin_network: batch_header.origin_network,
+            l1_info_root: batch_header.l1_info_root,
+            commit_imported_bridge_exits: batch_header.commit_imported_bridge_exits(),
+            certificate_id: batch_header.certificate_id,
+            prev_pessimistic_root: batch_header.prev_pessimistic_root,
+        }
+    }
+}
+
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
 /// [`NetworkState`].
 pub fn generate_pessimistic_proof(
@@ -270,19 +304,21 @@ pub fn generate_pessimistic_proof(
     let mut network_state: NetworkState = initial_network_state;
     let final_state_commitment = network_state.apply_batch_header(batch_header)?;
 
-    // verify the consensus
-    let target_pp_root_version = verify_consensus(
+    let constrained_values = ConstrainedValues::new(
         batch_header,
         &initial_state_commitment,
         &final_state_commitment,
-    )?;
+    );
+
+    // Verify multisig, aggchain proof, or both.
+    let target_pp_root_version = batch_header.aggchain_data.verify(constrained_values)?;
 
     let height = batch_header
         .height
         .checked_add(1)
         .ok_or(ProofError::HeightOverflow)?;
 
-    let new_pessimistic_root = PessimisticRoot {
+    let new_pessimistic_root = PessimisticRootCommitmentValues {
         balance_root: final_state_commitment.balance_root,
         nullifier_root: final_state_commitment.nullifier_root,
         ler_leaf_count: final_state_commitment.ler_leaf_count,
@@ -297,7 +333,7 @@ pub fn generate_pessimistic_proof(
             prev_pessimistic_root: batch_header.prev_pessimistic_root,
             l1_info_root: batch_header.l1_info_root,
             origin_network: batch_header.origin_network,
-            aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),
+            aggchain_hash: batch_header.aggchain_data.aggchain_hash(),
             new_local_exit_root: zero_if_empty_local_exit_root(final_state_commitment.exit_root),
             new_pessimistic_root,
         },

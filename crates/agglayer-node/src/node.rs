@@ -24,7 +24,7 @@ use alloy::{
     providers::{ProviderBuilder, WsConnect},
     signers::Signer,
 };
-use anyhow::Result;
+use eyre::{eyre, Context as _};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -80,7 +80,7 @@ impl Node {
     pub(crate) async fn start(
         config: Arc<Config>,
         cancellation_token: CancellationToken,
-    ) -> Result<Self> {
+    ) -> eyre::Result<Self> {
         if config.mock_verifier {
             warn!(
                 "Mock verifier is being used. This should only be used for testing purposes and \
@@ -176,7 +176,9 @@ impl Node {
         info!("Epoch synchronization started.");
         let current_epoch_store =
             EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref.clone())
-                .await?;
+                .await
+                .map_err(|e| eyre!(e.into_boxed_dyn_error()))
+                .context("Failed starting epoch synchronizer")?;
 
         info!(
             "Epoch synchronization completed, active epoch: {}.",
@@ -246,7 +248,9 @@ impl Node {
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
             .start()
-            .await?;
+            .await
+            .map_err(|e| eyre!(e.into_boxed_dyn_error()))
+            .context("Failed starting certificate orchestrator")?;
 
         info!("Certificate orchestrator started.");
 
@@ -268,12 +272,16 @@ impl Node {
             config.clone(),
         )
         .start()
-        .await?;
+        .await
+        .map_err(|e| eyre!(e.into_boxed_dyn_error()))
+        .context("Failed starting admin router")?;
 
         // Bind the core to the RPC server.
         let json_rpc_router = AgglayerImpl::new(service, rpc_service.clone())
             .start()
-            .await?;
+            .await
+            .map_err(|e| eyre!(e.into_boxed_dyn_error()))
+            .context("Failed starting JSON-RPC router")?;
 
         let public_grpc_router =
             agglayer_grpc_api::Server::with_config(config.clone(), rpc_service)

@@ -7,11 +7,11 @@ use serde::Serialize;
 use unified_bridge::{
     BridgeExit, Claim, ClaimFromMainnet, ClaimFromRollup, GlobalIndex, ImportedBridgeExit,
     L1InfoTreeLeaf, L1InfoTreeLeafInner, LETMerkleProof, LeafType, MerkleProof, NetworkId,
-    TokenInfo,
+    TokenInfo, ImportedBridgeExitCommitmentValues
 };
 
 use crate::{
-    aggchain_proof::AggchainData, local_balance_tree::LocalBalancePath,
+    aggchain_data::AggchainData, local_balance_tree::LocalBalancePath,
     nullifier_tree::NullifierPath,
 };
 
@@ -965,8 +965,23 @@ pub struct MultiBatchHeader {
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
     pub balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath))>,
-    /// Aggchain proof.
-    pub aggchain_proof: AggchainData,
+    /// Aggchain data which include either multisig, aggchain proof, or both.
+    pub aggchain_data: AggchainData,
+    /// Certificate id used as nonce to compute the commitment.
+    pub certificate_id: Digest,
+}
+
+impl MultiBatchHeader {
+    /// Returns the commitment on the imported bridge exits.
+    pub fn commit_imported_bridge_exits(&self) -> ImportedBridgeExitCommitmentValues {
+        ImportedBridgeExitCommitmentValues {
+            claims: self
+                .imported_bridge_exits
+                .iter()
+                .map(|(exit, _)| exit.to_indexed_exit_hash())
+                .collect(),
+        }
+    }
 }
 
 impl From<&MultiBatchHeader> for MultiBatchHeaderZeroCopy {
