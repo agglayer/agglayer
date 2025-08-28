@@ -3,11 +3,11 @@ use std::{
     sync::Arc,
 };
 
-use agglayer_types::{EpochNumber, Height, NetworkId};
+use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId, Proof};
 use parking_lot::RwLock;
 
 use super::{
-    per_epoch::PerEpochStore, EpochStoreReader, EpochStoreWriter, MetadataWriter,
+    interfaces::reader::PerEpochReader, per_epoch::PerEpochStore, EpochStoreReader, EpochStoreWriter, MetadataWriter,
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
 };
 use crate::{error::Error, storage::backup::BackupClient};
@@ -80,4 +80,21 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateWriter + MetadataWriter + StateReader,
 {
+    /// Get the proof for a certificate by certificate ID from the epoch store
+    fn get_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error> {
+        // Get the certificate header to find which epoch it belongs to and its index
+        let certificate_header = self.state_store
+            .get_certificate_header(&certificate_id)?;
+        
+        if let Some(header) = certificate_header {
+            if let (Some(epoch_number), Some(certificate_index)) = (header.epoch_number, header.certificate_index) {
+                // Open the specific epoch store and get the proof by certificate index
+                let epoch_store = self.open(epoch_number)?;
+                return epoch_store.get_proof_at_index(certificate_index);
+            }
+        }
+        
+        // If not found in any epoch, return None
+        Ok(None)
+    }
 }

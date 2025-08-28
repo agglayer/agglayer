@@ -1,4 +1,4 @@
-use agglayer_types::EpochNumber;
+use agglayer_types::{CertificateId, EpochNumber, Proof};
 use mockall::mock;
 
 use super::MockPerEpochStore;
@@ -20,5 +20,7 @@ mock! {
         ) -> Result<MockPerEpochStore, Error>;
     }
 
-    impl EpochStoreReader for EpochsStore {}
+    impl EpochStoreReader for EpochsStore {
+        fn get_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error>;
+    }
 }

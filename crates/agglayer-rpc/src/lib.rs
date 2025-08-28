@@ -100,6 +100,7 @@ where
     PendingStore: PendingCertificateReader + 'static,
     StateStore: StateReader + 'static,
     DebugStore: DebugReader + 'static,
+    EpochStore: EpochStoreReader + 'static,
     L1Rpc: Send + Sync + 'static,
 {
     pub fn get_latest_known_certificate_header(
@@ -253,15 +254,27 @@ where
         &self,
         certificate_id: CertificateId,
     ) -> Result<Option<agglayer_types::Proof>, GetNetworkStatusError> {
-        self.pending_store
-            .get_proof(certificate_id)
-            .map_err(|error| {
+        // First try to get the proof from the pending store
+        match self.pending_store.get_proof(certificate_id) {
+            Ok(Some(proof)) => Ok(Some(proof)),
+            Ok(None) => {
+                // If not found in pending store, check the epoch store
+                self.epoch_store.get_proof(certificate_id).map_err(|error| {
+                    error!(
+                        ?error,
+                        "Failed to get proof for certificate {certificate_id} from epoch store",
+                    );
+                    GetNetworkStatusError::ProofNotFound { certificate_id }
+                })
+            }
+            Err(error) => {
                 error!(
                     ?error,
-                    "Failed to get proof for certificate {certificate_id}",
+                    "Failed to get proof for certificate {certificate_id} from pending store",
                 );
-                GetNetworkStatusError::ProofNotFound { certificate_id }
-            })
+                Err(GetNetworkStatusError::ProofNotFound { certificate_id })
+            }
+        }
     }
 
     pub fn get_local_network_state(

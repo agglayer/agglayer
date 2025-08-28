@@ -12,7 +12,9 @@ use agglayer_grpc_types::{
 };
 use agglayer_interop::grpc::v1::FixedBytes32;
 use agglayer_rpc::AgglayerService;
-use agglayer_storage::stores::{DebugReader, PendingCertificateReader, StateReader};
+use agglayer_storage::stores::{
+    DebugReader, EpochStoreReader, PendingCertificateReader, StateReader,
+};
 use tonic_types::{ErrorDetails, StatusExt as _};
 use tracing::{error, warn};
 
@@ -35,7 +37,7 @@ where
     PendingStore: PendingCertificateReader + 'static,
     StateStore: StateReader + 'static,
     DebugStore: DebugReader + 'static,
-    EpochStore: Send + Sync + 'static,
+    EpochStore: EpochStoreReader + Send + Sync + 'static,
     L1Rpc: Send + Sync + 'static,
 {
     #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty))]

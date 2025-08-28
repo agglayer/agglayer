@@ -169,7 +169,11 @@ impl StateReader for DummyPendingStore {
         todo!()
     }
 }
-impl EpochStoreReader for DummyPendingStore {}
+impl EpochStoreReader for DummyPendingStore {
+    fn get_proof(&self, _certificate_id: CertificateId) -> Result<Option<Proof>, agglayer_storage::error::Error> {
+        Ok(None)
+    }
+}
 
 impl EpochStoreWriter for DummyPendingStore {
     type PerEpochStore = Self;
