@@ -7,7 +7,7 @@ use crate::{
     proof::{ConstrainedValues, IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AggchainProof {
     /// Chain-specific commitment forwarded by the PP.
     pub aggchain_params: Digest,

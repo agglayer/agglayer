@@ -27,8 +27,6 @@ pub struct NetworkStateZeroCopy {
     pub balance_tree_root: [u8; 32],
     /// Root of the nullifier tree (32 bytes)
     pub nullifier_tree_root: [u8; 32],
-    /// Empty hash array for nullifier tree (64 * 32 = 2048 bytes)
-    pub nullifier_empty_hash_at_height: [[u8; 32]; 64],
 }
 
 impl From<&NetworkState> for NetworkStateZeroCopy {
@@ -38,10 +36,6 @@ impl From<&NetworkState> for NetworkStateZeroCopy {
             exit_tree_frontier: state.exit_tree.frontier().map(|h| *h.as_bytes()),
             balance_tree_root: *state.balance_tree.root.as_bytes(),
             nullifier_tree_root: *state.nullifier_tree.root.as_bytes(),
-            nullifier_empty_hash_at_height: state
-                .nullifier_tree
-                .empty_hash_at_height
-                .map(|h| *h.as_bytes()),
         }
     }
 }
@@ -61,9 +55,6 @@ impl From<&NetworkStateZeroCopy> for NetworkState {
 
         let nullifier_tree = NullifierTree {
             root: agglayer_primitives::Digest::from(zero_copy.nullifier_tree_root),
-            empty_hash_at_height: zero_copy
-                .nullifier_empty_hash_at_height
-                .map(agglayer_primitives::Digest::from),
         };
 
         NetworkState {
@@ -301,7 +292,6 @@ mod tests {
             },
             nullifier_tree: NullifierTree {
                 root: [0xBBu8; 32].into(),
-                empty_hash_at_height: [[0xCCu8; 32].into(); 64],
             },
         };
 
@@ -328,7 +318,6 @@ mod tests {
             },
             nullifier_tree: NullifierTree {
                 root: [2u8; 32].into(),
-                empty_hash_at_height: [[3u8; 32].into(); 64],
             },
         };
         let bytes = state.to_bytes_zero_copy();

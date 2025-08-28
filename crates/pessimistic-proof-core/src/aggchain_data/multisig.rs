@@ -1,9 +1,10 @@
-use agglayer_primitives::{keccak::keccak256_combine, Address, Digest, Signature};
-use alloy_primitives::B256;
+use agglayer_primitives::{
+    alloy_primitives::B256, keccak::keccak256_combine, Address, Digest, Signature,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MultiSignature {
     /// Set of the indexed signatures
     pub signatures: Vec<(usize, Signature)>,

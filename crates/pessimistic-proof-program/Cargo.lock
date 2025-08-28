@@ -29,15 +29,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "agglayer-bincode"
-version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
-dependencies = [
- "bincode",
- "serde",
-]
-
-[[package]]
 name = "agglayer-primitives"
 version = "0.9.0"
 source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
@@ -1454,6 +1445,20 @@ name = "bytemuck"
 version = "1.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3995eaeebcdf32f91f980d360f78732ddc061097ab4e39991ae7a6ace9194677"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f154e572231cb6ba2bd1176980827e3d5dc04cc183a75dea38109fbdd672d29"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
 
 [[package]]
 name = "byteorder"
@@ -4153,7 +4158,6 @@ dependencies = [
  "serde_with",
  "sp1-zkvm",
  "thiserror 2.0.16",
- "tiny-keccak",
  "toml",
  "tracing",
  "unified-bridge",

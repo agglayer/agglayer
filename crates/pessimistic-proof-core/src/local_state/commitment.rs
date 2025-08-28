@@ -2,9 +2,8 @@
 //!
 //! The pessimistic proof has the "pessimistic root" as part of its public
 //! inputs. Some logic in this file handles the migration on its computation.
-use agglayer_primitives::{keccak::keccak256_combine, Digest};
+use agglayer_primitives::{alloy_primitives::B256, keccak::keccak256_combine, Digest};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalExitRoot, LocalNullifierRoot};
-use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
 use unified_bridge::{
     ImportedBridgeExitCommitmentValues, ImportedBridgeExitCommitmentVersion, NetworkId,
