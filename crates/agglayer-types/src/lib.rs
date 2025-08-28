@@ -3,6 +3,7 @@ pub use agglayer_primitives::{self as primitives, Address, Digest, Signature, B2
 pub use agglayer_tries::roots::LocalExitRoot;
 pub use pessimistic_proof::proof::Proof;
 
+pub mod aggchain_data;
 mod certificate;
 mod epoch;
 mod error;
@@ -18,6 +19,6 @@ pub use certificate::{
 };
 pub use epoch::{EpochConfiguration, EpochNumber};
 pub use error::{CertificateStatusError, Error, SignerError};
-pub use local_network_state::{LocalNetworkStateData, PessimisticRootInput};
+pub use local_network_state::{L1WitnessCtx, LocalNetworkStateData, PessimisticRootInput};
 pub use network_status::{NetworkStatus, SettledClaim};
 pub use proof_modes::{ExecutionMode, GenerationType};

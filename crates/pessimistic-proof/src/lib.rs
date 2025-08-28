@@ -20,7 +20,7 @@ pub use unified_bridge;
 
 pub mod core {
     pub use pessimistic_proof_core::{
-        aggchain_proof::{AggchainData, Vkey},
+        aggchain_data::{AggchainData, AggchainProof, MultiSignature, MultisigError, Vkey},
         generate_pessimistic_proof,
         local_state::commitment,
         PESSIMISTIC_PROOF_PROGRAM_SELECTOR, PESSIMISTIC_PROOF_PROGRAM_VERSION,

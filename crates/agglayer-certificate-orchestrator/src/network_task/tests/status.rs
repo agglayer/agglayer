@@ -5,8 +5,12 @@ use agglayer_storage::{
     tests::TempDBDir,
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
+use agglayer_types::{aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx};
 use mockall::predicate::{always, eq};
-use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
+use pessimistic_proof::{
+    core::{commitment::PessimisticRootCommitmentVersion, generate_pessimistic_proof},
+    LocalNetworkState,
+};
 use rstest::rstest;
 
 use super::*;
@@ -56,17 +60,19 @@ async fn from_pending_to_settle() {
                 .expect("Certificate not found");
 
             let signer = agglayer_types::Address::new([0; 20]);
+            let ctx_from_l1 = L1WitnessCtx {
+                l1_info_root: certificate
+                    .l1_info_root()
+                    .expect("Failed to get L1 info root")
+                    .unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+            };
+
             let _ = new_state
-                .apply_certificate(
-                    &certificate,
-                    signer,
-                    certificate
-                        .l1_info_root()
-                        .expect("Failed to get L1 info root")
-                        .unwrap_or_default(),
-                    PessimisticRootInput::Computed(CommitmentVersion::V2),
-                    None,
-                )
+                .apply_certificate(&certificate, ctx_from_l1)
                 .expect("Failed to apply certificate");
 
             Ok(CertifierOutput {
@@ -164,17 +170,19 @@ async fn from_proven_to_settled() {
                 .expect("Certificate not found");
             let signer = agglayer_types::Address::new([0; 20]);
 
+            let ctx_from_l1 = L1WitnessCtx {
+                l1_info_root: certificate
+                    .l1_info_root()
+                    .expect("Failed to get L1 info root")
+                    .unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+            };
+
             let _ = new_state
-                .apply_certificate(
-                    &certificate,
-                    signer,
-                    certificate
-                        .l1_info_root()
-                        .expect("Failed to get L1 info root")
-                        .unwrap_or_default(),
-                    PessimisticRootInput::Computed(CommitmentVersion::V2),
-                    None,
-                )
+                .apply_certificate(&certificate, ctx_from_l1)
                 .expect("Failed to apply certificate");
 
             Ok(CertifierOutput {
@@ -278,10 +286,13 @@ async fn from_candidate_to_settle() {
             let batch = state
                 .apply_certificate(
                     cert,
-                    signer,
-                    l1_info_root,
-                    PessimisticRootInput::Computed(CommitmentVersion::V2),
-                    None,
+                    L1WitnessCtx {
+                        l1_info_root,
+                        prev_pessimistic_root: PessimisticRootInput::Computed(
+                            PessimisticRootCommitmentVersion::V2,
+                        ),
+                        aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                    },
                 )
                 .unwrap();
 

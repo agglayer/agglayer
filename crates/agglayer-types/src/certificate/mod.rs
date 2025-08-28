@@ -1,9 +1,11 @@
 use agglayer_interop_types::{aggchain_proof::AggchainData, LocalExitRoot};
 use agglayer_primitives::{Address, Hashable, Signature, B256};
-use pessimistic_proof::{core::commitment::SignatureCommitmentValues, keccak::keccak256_combine};
+use pessimistic_proof::{
+    core::commitment::{SignatureCommitmentValues, SignatureCommitmentVersion},
+    keccak::keccak256_combine,
+};
 use unified_bridge::{
-    BridgeExit, CommitmentVersion, ImportedBridgeExit, ImportedBridgeExitCommitmentValues,
-    NetworkId,
+    BridgeExit, ImportedBridgeExit, ImportedBridgeExitCommitmentValues, NetworkId,
 };
 
 use crate::{Digest, Error, SignerError};
@@ -157,26 +159,21 @@ impl Certificate {
             // Verify if one of the commitment version is signed.
             // NOTE: The legitimacy of the version is verified during the witness generation,
             // especially in order to forbid version rollback by the chain.
-            AggchainData::ECDSA { signature } => [CommitmentVersion::V3, CommitmentVersion::V2]
-                .iter()
-                .any(|version| {
-                    let commitment = B256::new(pp_commitment_values.commitment(*version).0);
-                    match signature.recover_address_from_prehash(&commitment) {
-                        Ok(recovered) => recovered == expected_signer,
-                        Err(_) => false,
-                    }
-                }),
-            AggchainData::Generic {
-                signature,
-                aggchain_params,
-                ..
-            } => {
+            AggchainData::ECDSA { signature } => [
+                SignatureCommitmentVersion::V3,
+                SignatureCommitmentVersion::V2,
+            ]
+            .iter()
+            .any(|version| {
+                let commitment = pp_commitment_values.commitment(*version);
+                match signature.recover_address_from_prehash(&commitment) {
+                    Ok(recovered) => recovered == expected_signer,
+                    Err(_) => false,
+                }
+            }),
+            AggchainData::Generic { signature, .. } => {
                 let signature = signature.as_ref().ok_or(SignerError::Missing)?;
-                let commitment = B256::new(
-                    pp_commitment_values
-                        .aggchain_proof_commitment(aggchain_params)
-                        .0,
-                );
+                let commitment = pp_commitment_values.commitment(SignatureCommitmentVersion::V4);
                 let recovered = signature
                     .recover_address_from_prehash(&commitment)
                     .map_err(SignerError::Recovery)?;
@@ -191,27 +188,35 @@ impl Certificate {
     }
 
     /// Retrieve the signer from the certificate signature.
-    pub fn retrieve_signer(&self, version: CommitmentVersion) -> Result<Address, SignerError> {
+    pub fn retrieve_signer(
+        &self,
+        version: SignatureCommitmentVersion,
+    ) -> Result<Address, SignerError> {
         let (signature, commitment) = match &self.aggchain_data {
             AggchainData::ECDSA { signature } => {
                 let commitment = SignatureCommitmentValues::from(self).commitment(version);
                 (signature, commitment)
             }
-            AggchainData::Generic {
-                signature,
-                aggchain_params,
-                ..
-            } => {
+            AggchainData::Generic { signature, .. } => {
                 let signature = signature.as_ref().ok_or(SignerError::Missing)?;
                 let commitment = SignatureCommitmentValues::from(self)
-                    .aggchain_proof_commitment(aggchain_params);
+                    .commitment(SignatureCommitmentVersion::V4);
                 (signature.as_ref(), commitment)
             }
         };
 
         signature
-            .recover_address_from_prehash(&B256::new(commitment.0))
+            .recover_address_from_prehash(&commitment)
             .map_err(SignerError::Recovery)
+    }
+
+    pub fn aggchain_params(&self) -> Option<Digest> {
+        match self.aggchain_data {
+            AggchainData::ECDSA { .. } => None,
+            AggchainData::Generic {
+                aggchain_params, ..
+            } => Some(aggchain_params),
+        }
     }
 }
 
@@ -227,6 +232,8 @@ impl From<&Certificate> for SignatureCommitmentValues {
                     .collect(),
             },
             height: certificate.height.as_u64(),
+            aggchain_params: certificate.aggchain_params(),
+            certificate_id: certificate.hash().into(),
         }
     }
 }

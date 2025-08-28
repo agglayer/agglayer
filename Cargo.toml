@@ -44,13 +44,13 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = { git = "https://github.com/agglayer/interop.git", rev = "2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", rev = "2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", rev = "2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373" }
-agglayer-elf-build = { git = "https://github.com/agglayer/interop.git", rev = "2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "2ed08a28d0f2e3945fc09fbbad7dbf33bcae5373" }
+agglayer-bincode = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
+agglayer-elf-build = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
 
 # Provers
 agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.1" }
@@ -115,6 +115,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_with = "3.14"
 serde-reflection = "0.5"
+strum_macros = "0.27"
 test-log = { version = "0.2.16", features = ["trace"] }
 thiserror = "2.0"
 tokio = { version = "1.43", features = ["full"] }

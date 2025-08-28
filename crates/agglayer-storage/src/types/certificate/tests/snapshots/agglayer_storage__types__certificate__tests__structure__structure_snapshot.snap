@@ -4,6 +4,25 @@ expression: "&registry"
 snapshot_kind: text
 ---
 {
+  "AggchainDataError": {
+    "ENUM": {
+      "0": {
+        "InvalidVariant": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "1": {
+        "InvalidMultisig": {
+          "NEWTYPE": {
+            "TYPENAME": "agglayer_types::aggchain_data::MultisigError"
+          }
+        }
+      },
+      "2": {
+        "MissingSignature": "UNIT"
+      }
+    }
+  },
   "CertificateStatus": {
     "ENUM": {
       "0": {
@@ -137,6 +156,48 @@ snapshot_kind: text
       },
       "2": {
         "FrontierIndexOutOfBounds": "UNIT"
+      }
+    }
+  },
+  "MultisigError": {
+    "ENUM": {
+      "0": {
+        "UnderThreshold": {
+          "STRUCT": [
+            {
+              "got": "U64"
+            },
+            {
+              "expected": "U64"
+            }
+          ]
+        }
+      },
+      "1": {
+        "HasInvalidSignature": "UNIT"
+      },
+      "2": {
+        "HasDuplicateSigner": {
+          "STRUCT": [
+            {
+              "signer": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            }
+          ]
+        }
+      },
+      "3": {
+        "OutOfBoundSignerIndex": {
+          "STRUCT": [
+            {
+              "idx": "U64"
+            },
+            {
+              "total": "U64"
+            }
+          ]
+        }
       }
     }
   },
@@ -372,6 +433,13 @@ snapshot_kind: text
       },
       "24": {
         "HeightOverflow": "UNIT"
+      },
+      "25": {
+        "InvalidMultisig": {
+          "NEWTYPE": {
+            "TYPENAME": "MultisigError"
+          }
+        }
       }
     }
   },
@@ -600,6 +668,59 @@ snapshot_kind: text
             {
               "declared": {
                 "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "14": {
+        "InvalidChainData": {
+          "NEWTYPE": {
+            "TYPENAME": "AggchainDataError"
+          }
+        }
+      }
+    }
+  },
+  "agglayer_types::aggchain_data::MultisigError": {
+    "ENUM": {
+      "0": {
+        "UnderThreshold": {
+          "STRUCT": [
+            {
+              "got": "U64"
+            },
+            {
+              "expected": "U64"
+            }
+          ]
+        }
+      },
+      "1": {
+        "InvalidSignature": "UNIT"
+      },
+      "2": {
+        "UnknownRecoveredSigner": {
+          "STRUCT": [
+            {
+              "recovered": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "prehash": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "3": {
+        "HasDuplicateSigner": {
+          "STRUCT": [
+            {
+              "signer": {
+                "TYPENAME": "agglayer_primitives::Address"
               }
             }
           ]
