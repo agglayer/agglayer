@@ -203,10 +203,10 @@ impl Certificate {
 
     pub fn verify_multisig(
         &self,
-        signatures: &[Option<Signature>],
+        signatures: MultisigPayload,
         ctx: MultisigCtx,
     ) -> Result<(), SignerError> {
-        let multisig_with_ctx = PayloadWithCtx(MultisigPayload::from(signatures), ctx);
+        let multisig_with_ctx = PayloadWithCtx(signatures, ctx);
 
         // Verify the multisig from the chain payload and the L1 context
         let _witness_data: pessimistic_proof::core::MultiSignature =

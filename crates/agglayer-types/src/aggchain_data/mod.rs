@@ -41,8 +41,8 @@ impl TryFrom<AggchainData> for global::Payload {
                     public_values,
                 },
             },
-            AggchainData::MultisigOnly(signatures) => {
-                global::Payload::MultisigOnly(multisig::Payload::from(signatures.0.as_slice()))
+            AggchainData::MultisigOnly(multisig) => {
+                global::Payload::MultisigOnly(multisig::Payload::from(&multisig))
             }
             AggchainData::MultisigAndAggchainProof {
                 multisig,
@@ -53,7 +53,7 @@ impl TryFrom<AggchainData> for global::Payload {
                         public_values,
                     },
             } => global::Payload::MultisigAndAggchainProof {
-                multisig: multisig::Payload::from(multisig.0.as_slice()),
+                multisig: multisig::Payload::from(&multisig),
                 aggchain_proof: aggchain_proof::Payload {
                     proof,
                     aggchain_params,

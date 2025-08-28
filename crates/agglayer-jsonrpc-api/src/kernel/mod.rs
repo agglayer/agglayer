@@ -393,10 +393,10 @@ where
                 cert.verify_aggchain_proof_signature(sequencer_address, signature)
             }
             AggchainData::MultisigOnly(signatures) => {
-                cert.verify_multisig(signatures, multisig_ctx)
+                cert.verify_multisig(signatures.into(), multisig_ctx)
             }
             AggchainData::MultisigAndAggchainProof { multisig, .. } => {
-                cert.verify_multisig(multisig, multisig_ctx)
+                cert.verify_multisig(multisig.into(), multisig_ctx)
             }
         }
         .map_err(SignatureVerificationError::from_signer_error)

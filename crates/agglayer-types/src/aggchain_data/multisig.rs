@@ -24,13 +24,21 @@ pub enum MultisigError {
 /// Multisig data from the chain.
 #[derive(Clone, Debug)]
 pub struct Payload {
-    signatures: Vec<Option<Signature>>,
+    signatures: Vec<Signature>,
 }
 
-impl From<&[Option<Signature>]> for Payload {
-    fn from(signatures: &[Option<Signature>]) -> Self {
+impl From<&[Signature]> for Payload {
+    fn from(signatures: &[Signature]) -> Self {
         Self {
             signatures: signatures.to_vec(),
+        }
+    }
+}
+
+impl From<&agglayer_interop_types::aggchain_proof::MultisigPayload> for Payload {
+    fn from(value: &agglayer_interop_types::aggchain_proof::MultisigPayload) -> Self {
+        Self {
+            signatures: value.0.clone().into_iter().flatten().collect(),
         }
     }
 }
@@ -48,7 +56,7 @@ pub struct Ctx {
 
 impl Ctx {
     /// Returns the index of the signer from the provided signature.
-    fn signer_from_signature(&self, signature: &Option<Signature>) -> Result<usize, MultisigError> {
+    fn signer_from_signature(&self, signature: &Signature) -> Result<usize, MultisigError> {
         let recovered = signature
             .recover_address_from_prehash(&self.prehash)
             .map_err(|_| MultisigError::InvalidSignature)?;
@@ -71,7 +79,7 @@ impl TryInto<core::MultiSignature> for PayloadWithCtx<Payload, Ctx> {
 
         let mut seen = vec![false; multisig.signers.len()];
 
-        let indexed_signatures: Vec<(usize, Option<Signature>)> = signatures
+        let indexed_signatures: Vec<(usize, Signature)> = signatures
             .into_iter()
             .map(|sig| {
                 let idx = multisig.signer_from_signature(&sig)?;
