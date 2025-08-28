@@ -23,17 +23,19 @@ const GET_LATEST_CERTIFICATE_HEADER_METHOD_PATH: &str =
 const GET_NETWORK_STATUS_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_network_status";
 
-pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore> {
-    pub(crate) service: Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>>,
+pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore> {
+    pub(crate) service:
+        Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore>>,
 }
 
 #[tonic::async_trait]
-impl<L1Rpc, PendingStore, StateStore, DebugStore> NodeStateService
-    for NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore> NodeStateService
+    for NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore>
 where
     PendingStore: PendingCertificateReader + 'static,
     StateStore: StateReader + 'static,
     DebugStore: DebugReader + 'static,
+    EpochStore: Send + Sync + 'static,
     L1Rpc: Send + Sync + 'static,
 {
     #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty))]

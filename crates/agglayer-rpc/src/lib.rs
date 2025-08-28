@@ -6,8 +6,8 @@ use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
-        DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-        StateWriter,
+        DebugReader, DebugWriter, EpochStoreReader, EpochStoreWriter, PendingCertificateReader,
+        PendingCertificateWriter, StateReader, StateWriter,
     },
 };
 use agglayer_types::{
@@ -24,17 +24,18 @@ use crate::error::GetNetworkStatusError;
 pub mod error;
 
 /// The RPC agglayer service implementation.
-pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore> {
+pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore> {
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pub(crate) pending_store: Arc<PendingStore>,
     pub(crate) state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
+    epoch_store: Arc<EpochStore>,
     config: Arc<Config>,
     l1_rpc_provider: Arc<L1Rpc>,
 }
 
-impl<L1Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore>
 {
     /// Create an instance of the RPC agglayer service.
     pub fn new(
@@ -42,6 +43,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore>
         pending_store: Arc<PendingStore>,
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
+        epoch_store: Arc<EpochStore>,
         config: Arc<Config>,
         l1_rpc_provider: Arc<L1Rpc>,
     ) -> Self {
@@ -50,6 +52,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore>
             pending_store,
             state,
             debug_store,
+            epoch_store,
             config,
             l1_rpc_provider,
         }
@@ -59,6 +62,12 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore>
     pub fn config(&self) -> &Config {
         &self.config
     }
+
+    /// Get access to the epoch store.
+    pub fn epoch_store(&self) -> &Arc<EpochStore> {
+        &self.epoch_store
+    }
+
     pub fn get_epoch_configuration(&self) -> Option<EpochConfiguration> {
         info!("Received request to get epoch configuration");
 
@@ -77,16 +86,16 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore>
     }
 }
 
-impl<L1Rpc, PendingStore, StateStore, DebugStore> Drop
-    for AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore> Drop
+    for AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer RPC service");
     }
 }
 
-impl<L1Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore>
 where
     PendingStore: PendingCertificateReader + 'static,
     StateStore: StateReader + 'static,
@@ -282,12 +291,13 @@ where
     }
 }
 
-impl<L1Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochStore>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    EpochStore: EpochStoreReader + EpochStoreWriter + 'static,
     L1Rpc: RollupContract + L1TransactionFetcher + 'static,
 {
     fn get_known_certificate_id_at_height(

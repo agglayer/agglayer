@@ -7,7 +7,7 @@ use agglayer_storage::{
         backup::BackupClient, debug_db_cf_definitions, pending_db_cf_definitions,
         state_db_cf_definitions, DB,
     },
-    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
+    stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId};
@@ -42,6 +42,7 @@ pub type RawRpcClient = crate::AgglayerImpl<
     PendingStore,
     StateStore,
     DebugStore,
+    EpochsStore<PendingStore, StateStore>,
 >;
 
 pub struct RawRpcContext {
@@ -116,6 +117,16 @@ impl TestContext {
         } else {
             Arc::new(DebugStore::Disabled)
         };
+        let epoch_store = Arc::new(
+            EpochsStore::new(
+                config.clone(),
+                agglayer_types::EpochNumber::ZERO,
+                pending_store.clone(),
+                state_store.clone(),
+                BackupClient::noop(),
+            )
+            .unwrap(),
+        );
 
         // Use the provided provider
         let real_provider = Arc::new(provider);
@@ -137,6 +148,7 @@ impl TestContext {
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
+            epoch_store.clone(),
             config.clone(),
             Arc::new(l1_rpc_client),
         ));
@@ -246,6 +258,16 @@ impl TestContext {
         let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
         let pending_store = Arc::new(PendingStore::new(pending_db));
         let debug_store = Arc::new(DebugStore::new(debug_db));
+        let epoch_store = Arc::new(
+            EpochsStore::new(
+                config.clone(),
+                agglayer_types::EpochNumber::ZERO,
+                pending_store.clone(),
+                state_store.clone(),
+                BackupClient::noop(),
+            )
+            .unwrap(),
+        );
 
         // Create mock transport with an asserter
         let asserter = Asserter::new();
@@ -271,6 +293,7 @@ impl TestContext {
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
+            epoch_store.clone(),
             config.clone(),
             Arc::new(l1_rpc_client),
         ));

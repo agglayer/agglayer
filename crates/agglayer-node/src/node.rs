@@ -261,6 +261,7 @@ impl Node {
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
+            epochs_store.clone(),
             config.clone(),
             Arc::clone(&rollup_manager),
         ));

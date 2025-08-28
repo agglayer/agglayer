@@ -7,8 +7,8 @@ use std::{
 
 use agglayer_contracts::{L1TransactionFetcher, RollupContract};
 use agglayer_storage::stores::{
-    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-    StateWriter,
+    DebugReader, DebugWriter, EpochStoreReader, EpochStoreWriter, PendingCertificateReader,
+    PendingCertificateWriter, StateReader, StateWriter,
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId, NetworkStatus,
@@ -86,19 +86,21 @@ trait Agglayer {
 }
 
 /// The RPC agglayer service implementation.
-pub struct AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> {
+pub struct AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochStore> {
     service: Arc<AgglayerService<V0Rpc>>,
     pub(crate) rpc_service:
-        Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
+        Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore, EpochStore>>,
 }
 
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochStore>
+    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochStore>
 {
     /// Create an instance of the RPC agglayer service.
     pub fn new(
         service: Arc<AgglayerService<V0Rpc>>,
-        rpc_service: Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
+        rpc_service: Arc<
+            agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore, EpochStore>,
+        >,
     ) -> Self {
         Self {
             service,
@@ -107,22 +109,23 @@ impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
     }
 }
 
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> Drop
-    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochStore> Drop
+    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochStore>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer JsonRPC server");
     }
 }
 
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochStore>
+    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochStore>
 where
     V0Rpc: Provider + Clone + 'static,
     Rpc: RollupContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    EpochStore: EpochStoreReader + EpochStoreWriter + 'static,
 {
     pub async fn start(self) -> anyhow::Result<axum::Router> {
         let config = self.rpc_service.config();
@@ -190,14 +193,15 @@ where
 }
 
 #[async_trait]
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> AgglayerServer
-    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochStore> AgglayerServer
+    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochStore>
 where
     V0Rpc: Provider + Clone + 'static,
     Rpc: RollupContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    EpochStore: EpochStoreReader + EpochStoreWriter + 'static,
 {
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<B256> {
         Ok(self.service.send_tx(tx).await?)

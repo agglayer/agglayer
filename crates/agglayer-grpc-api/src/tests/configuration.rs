@@ -10,7 +10,7 @@ use agglayer_grpc_types::node::{types::v1, v1::GetEpochConfigurationRequest};
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
     storage::backup::BackupClient,
-    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
+    stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
@@ -96,13 +96,28 @@ async fn start_server_with_configuration_service(
     JoinHandle<()>,
 ) {
     let (sender, _receiver) = tokio::sync::mpsc::channel(10);
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let debug_store = Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap());
+    let epoch_store = Arc::new(
+        EpochsStore::new(
+            config.clone(),
+            agglayer_types::EpochNumber::ZERO,
+            pending_store.clone(),
+            state_store.clone(),
+            BackupClient::noop(),
+        )
+        .unwrap(),
+    );
     let service = Arc::new(AgglayerService::new(
         sender,
-        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap()),
-        Arc::new(
-            StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
-        ),
-        Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap()),
+        pending_store,
+        state_store,
+        debug_store,
+        epoch_store,
         config,
         Arc::new(L1Rpc {}),
     ));
