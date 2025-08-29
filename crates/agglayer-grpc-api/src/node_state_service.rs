@@ -22,7 +22,7 @@ const GET_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_certificate_header";
 const GET_LATEST_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_latest_certificate_header";
-const GET_NETWORK_STATE_METHOD_PATH: &str =
+const _GET_NETWORK_STATE_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_network_state";
 
 pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore> {
@@ -152,8 +152,8 @@ where
 
         // Dummy implementation - return a basic network state
         let network_state = NetworkState {
-            network_status: "default".to_string(),
-            network_type: NetworkType::Unknown as i32,
+            network_status: 0,
+            network_type: NetworkType::Unspecified as i32,
             network_id: request.into_inner().network_id,
             settled_height: None,
             settled_certificate_id: None,
