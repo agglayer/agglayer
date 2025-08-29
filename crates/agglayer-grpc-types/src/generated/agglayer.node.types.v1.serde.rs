@@ -945,13 +945,13 @@ impl serde::Serialize for NetworkStatus {
         if !self.network_status.is_empty() {
             len += 1;
         }
-        if !self.network_type.is_empty() {
+        if self.network_type != 0 {
             len += 1;
         }
         if self.network_id != 0 {
             len += 1;
         }
-        if self.settled_height != 0 {
+        if self.settled_height.is_some() {
             len += 1;
         }
         if self.settled_certificate_id.is_some() {
@@ -963,38 +963,40 @@ impl serde::Serialize for NetworkStatus {
         if self.settled_ler.is_some() {
             len += 1;
         }
-        if self.settled_let_leaf_count != 0 {
+        if self.settled_let_leaf_count.is_some() {
             len += 1;
         }
         if self.settled_claim.is_some() {
             len += 1;
         }
-        if self.latest_pending_height != 0 {
+        if self.latest_pending_height.is_some() {
             len += 1;
         }
-        if !self.latest_pending_status.is_empty() {
+        if self.latest_pending_status.is_some() {
             len += 1;
         }
-        if !self.latest_pending_error.is_empty() {
+        if self.latest_pending_error.is_some() {
             len += 1;
         }
-        if self.latest_epoch_with_settlement != 0 {
+        if self.latest_epoch_with_settlement.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.types.v1.NetworkStatus", len)?;
         if !self.network_status.is_empty() {
             struct_ser.serialize_field("networkStatus", &self.network_status)?;
         }
-        if !self.network_type.is_empty() {
-            struct_ser.serialize_field("networkType", &self.network_type)?;
+        if self.network_type != 0 {
+            let v = NetworkType::try_from(self.network_type)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.network_type)))?;
+            struct_ser.serialize_field("networkType", &v)?;
         }
         if self.network_id != 0 {
             struct_ser.serialize_field("networkId", &self.network_id)?;
         }
-        if self.settled_height != 0 {
+        if let Some(v) = self.settled_height.as_ref() {
             #[allow(clippy::needless_borrow)]
             #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("settledHeight", ToString::to_string(&self.settled_height).as_str())?;
+            struct_ser.serialize_field("settledHeight", ToString::to_string(&v).as_str())?;
         }
         if let Some(v) = self.settled_certificate_id.as_ref() {
             struct_ser.serialize_field("settledCertificateId", v)?;
@@ -1005,29 +1007,31 @@ impl serde::Serialize for NetworkStatus {
         if let Some(v) = self.settled_ler.as_ref() {
             struct_ser.serialize_field("settledLer", v)?;
         }
-        if self.settled_let_leaf_count != 0 {
+        if let Some(v) = self.settled_let_leaf_count.as_ref() {
             #[allow(clippy::needless_borrow)]
             #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("settledLetLeafCount", ToString::to_string(&self.settled_let_leaf_count).as_str())?;
+            struct_ser.serialize_field("settledLetLeafCount", ToString::to_string(&v).as_str())?;
         }
         if let Some(v) = self.settled_claim.as_ref() {
             struct_ser.serialize_field("settledClaim", v)?;
         }
-        if self.latest_pending_height != 0 {
+        if let Some(v) = self.latest_pending_height.as_ref() {
             #[allow(clippy::needless_borrow)]
             #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("latestPendingHeight", ToString::to_string(&self.latest_pending_height).as_str())?;
+            struct_ser.serialize_field("latestPendingHeight", ToString::to_string(&v).as_str())?;
         }
-        if !self.latest_pending_status.is_empty() {
-            struct_ser.serialize_field("latestPendingStatus", &self.latest_pending_status)?;
+        if let Some(v) = self.latest_pending_status.as_ref() {
+            let v = CertificateStatus::try_from(*v)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", *v)))?;
+            struct_ser.serialize_field("latestPendingStatus", &v)?;
         }
-        if !self.latest_pending_error.is_empty() {
-            struct_ser.serialize_field("latestPendingError", &self.latest_pending_error)?;
+        if let Some(v) = self.latest_pending_error.as_ref() {
+            struct_ser.serialize_field("latestPendingError", v)?;
         }
-        if self.latest_epoch_with_settlement != 0 {
+        if let Some(v) = self.latest_epoch_with_settlement.as_ref() {
             #[allow(clippy::needless_borrow)]
             #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("latestEpochWithSettlement", ToString::to_string(&self.latest_epoch_with_settlement).as_str())?;
+            struct_ser.serialize_field("latestEpochWithSettlement", ToString::to_string(&v).as_str())?;
         }
         struct_ser.end()
     }
@@ -1160,7 +1164,7 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                             if network_type__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("networkType"));
                             }
-                            network_type__ = Some(map_.next_value()?);
+                            network_type__ = Some(map_.next_value::<NetworkType>()? as i32);
                         }
                         GeneratedField::NetworkId => {
                             if network_id__.is_some() {
@@ -1175,7 +1179,7 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                                 return Err(serde::de::Error::duplicate_field("settledHeight"));
                             }
                             settled_height__ = 
-                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
                         GeneratedField::SettledCertificateId => {
@@ -1201,7 +1205,7 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                                 return Err(serde::de::Error::duplicate_field("settledLetLeafCount"));
                             }
                             settled_let_leaf_count__ = 
-                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
                         GeneratedField::SettledClaim => {
@@ -1215,27 +1219,27 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                                 return Err(serde::de::Error::duplicate_field("latestPendingHeight"));
                             }
                             latest_pending_height__ = 
-                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
                         GeneratedField::LatestPendingStatus => {
                             if latest_pending_status__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("latestPendingStatus"));
                             }
-                            latest_pending_status__ = Some(map_.next_value()?);
+                            latest_pending_status__ = map_.next_value::<::std::option::Option<CertificateStatus>>()?.map(|x| x as i32);
                         }
                         GeneratedField::LatestPendingError => {
                             if latest_pending_error__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("latestPendingError"));
                             }
-                            latest_pending_error__ = Some(map_.next_value()?);
+                            latest_pending_error__ = map_.next_value()?;
                         }
                         GeneratedField::LatestEpochWithSettlement => {
                             if latest_epoch_with_settlement__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("latestEpochWithSettlement"));
                             }
                             latest_epoch_with_settlement__ = 
-                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
                     }
@@ -1244,20 +1248,91 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                     network_status: network_status__.unwrap_or_default(),
                     network_type: network_type__.unwrap_or_default(),
                     network_id: network_id__.unwrap_or_default(),
-                    settled_height: settled_height__.unwrap_or_default(),
+                    settled_height: settled_height__,
                     settled_certificate_id: settled_certificate_id__,
                     settled_pp_root: settled_pp_root__,
                     settled_ler: settled_ler__,
-                    settled_let_leaf_count: settled_let_leaf_count__.unwrap_or_default(),
+                    settled_let_leaf_count: settled_let_leaf_count__,
                     settled_claim: settled_claim__,
-                    latest_pending_height: latest_pending_height__.unwrap_or_default(),
-                    latest_pending_status: latest_pending_status__.unwrap_or_default(),
-                    latest_pending_error: latest_pending_error__.unwrap_or_default(),
-                    latest_epoch_with_settlement: latest_epoch_with_settlement__.unwrap_or_default(),
+                    latest_pending_height: latest_pending_height__,
+                    latest_pending_status: latest_pending_status__,
+                    latest_pending_error: latest_pending_error__,
+                    latest_epoch_with_settlement: latest_epoch_with_settlement__,
                 })
             }
         }
         deserializer.deserialize_struct("agglayer.node.types.v1.NetworkStatus", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for NetworkType {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Ecdsa => "NETWORK_TYPE_ECDSA",
+            Self::Generic => "NETWORK_TYPE_GENERIC",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for NetworkType {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "NETWORK_TYPE_ECDSA",
+            "NETWORK_TYPE_GENERIC",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = NetworkType;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "NETWORK_TYPE_ECDSA" => Ok(NetworkType::Ecdsa),
+                    "NETWORK_TYPE_GENERIC" => Ok(NetworkType::Generic),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
     }
 }
 impl serde::Serialize for SettledClaim {
