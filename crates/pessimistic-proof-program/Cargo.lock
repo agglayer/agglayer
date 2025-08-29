@@ -30,8 +30,9 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agglayer-bincode"
-version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16252ddbcf80d85c321dc3bab51b3b24f52fbc994902cd29e73df7ff09158ea4"
 dependencies = [
  "bincode",
  "serde",
@@ -39,8 +40,9 @@ dependencies = [
 
 [[package]]
 name = "agglayer-primitives"
-version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8541aa678c7760cd445b8446ede22ecdd4fe78baada302a107231721b5e8385"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -53,8 +55,9 @@ dependencies = [
 
 [[package]]
 name = "agglayer-tries"
-version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae8ca2527b54038be55df6f05a7bb27a0c40d13dc120ea5956f21aae8c459874"
 dependencies = [
  "agglayer-primitives",
  "hex",
@@ -6687,8 +6690,9 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "unified-bridge"
-version = "0.9.0"
-source = "git+https://github.com/agglayer/interop.git?rev=74570d8a556ec36336fc06416bc8f8bdf2d88426#74570d8a556ec36336fc06416bc8f8bdf2d88426"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e88d192311bf505ee3abe2869210c7f9e98df01d62722a4e3309f53ac489bd7c"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",
