@@ -4,7 +4,6 @@ use crate::Digest;
     Clone,
     Copy,
     Debug,
-    Default,
     Eq,
     Ord,
     PartialEq,
@@ -19,8 +18,15 @@ use crate::Digest;
 #[serde(transparent)]
 pub struct Metadata(Digest);
 
+impl Default for Metadata {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 impl Metadata {
     pub const ZERO: Metadata = Metadata(Digest::ZERO);
+    pub const DEFAULT: Metadata = Self::ZERO;
 
     pub const fn new(metadata: Digest) -> Metadata {
         Metadata(metadata)
