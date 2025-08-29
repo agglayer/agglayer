@@ -4,7 +4,7 @@ use agglayer_grpc_server::node::v1::node_state_service_server::NodeStateService;
 use agglayer_grpc_types::{
     compat::v1::Error,
     node::{
-        types::v1::{NetworkState, NetworkType},
+        types::v1::{NetworkState, NetworkStatus, NetworkType},
         v1::{
             GetCertificateHeaderErrorKind, GetCertificateHeaderRequest,
             GetCertificateHeaderResponse, GetLatestCertificateHeaderErrorKind,
@@ -152,7 +152,7 @@ where
 
         // Dummy implementation - return a basic network state
         let network_state = NetworkState {
-            network_status: 0,
+            network_status: NetworkStatus::Unspecified as i32,
             network_type: NetworkType::Unspecified as i32,
             network_id: request.into_inner().network_id,
             settled_height: None,
