@@ -15,7 +15,7 @@ service NodeStateService {
   // Method used to get the latest known certificate header for a network.
   rpc GetLatestCertificateHeader(GetLatestCertificateHeaderRequest) returns (GetLatestCertificateHeaderResponse);
 
-  // Method used to get current network status
+  // Method used to get current network state as seen by this node.
   rpc GetNetworkState(GetNetworkStateRequest) returns (GetNetworkStateResponse);
 }
 
