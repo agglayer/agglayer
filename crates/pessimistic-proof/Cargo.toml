@@ -33,6 +33,7 @@ rs_merkle = { version = "1.4", default-features = false }
 
 [build-dependencies]
 agglayer-elf-build.workspace = true
+eyre.workspace = true
 
 [lints]
 workspace = true

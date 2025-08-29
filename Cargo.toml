@@ -44,21 +44,21 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
-agglayer-elf-build = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "74570d8a556ec36336fc06416bc8f8bdf2d88426" }
+agglayer-bincode = "0.10.0"
+agglayer-interop = "0.10.0"
+agglayer-interop-types = "0.10.0"
+agglayer-elf-build = "0.10.0"
+agglayer-primitives = "0.10.0"
+agglayer-tries = "0.10.0"
+unified-bridge = "0.10.0"
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.1" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.1" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.1" }
-prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.1" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.1" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.2.1" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.

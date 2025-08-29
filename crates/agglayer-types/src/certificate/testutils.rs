@@ -8,7 +8,7 @@ use unified_bridge::{
     ImportedBridgeExit, ImportedBridgeExitCommitmentValues, LocalExitTree, NetworkId,
 };
 
-use crate::{Certificate, Height};
+use crate::{Certificate, Height, SignerError};
 
 impl Default for Certificate {
     fn default() -> Self {
@@ -115,6 +115,33 @@ impl Certificate {
         self.new_local_exit_root = new_local_exit_root;
         self
     }
+
+    /// Retrieve the signer from the certificate signature.
+    pub fn retrieve_signer(
+        &self,
+        version: SignatureCommitmentVersion,
+    ) -> Result<Address, SignerError> {
+        let (signature, commitment) = match &self.aggchain_data {
+            AggchainData::ECDSA { signature } => {
+                let commitment = SignatureCommitmentValues::from(self).commitment(version);
+                (signature, commitment)
+            }
+            AggchainData::Generic { signature, .. } => {
+                let signature = signature.as_ref().ok_or(SignerError::Missing)?;
+                let commitment = SignatureCommitmentValues::from(self)
+                    .commitment(SignatureCommitmentVersion::V4);
+                (signature.as_ref(), commitment)
+            }
+            AggchainData::MultisigOnly(_) => unimplemented!("adapt tests for multisig"),
+            AggchainData::MultisigAndAggchainProof { .. } => {
+                unimplemented!("adapt tests for multisig")
+            }
+        };
+
+        signature
+            .recover_address_from_prehash(&commitment)
+            .map_err(SignerError::Recovery)
+    }
 }
 
 #[cfg(test)]
@@ -139,6 +166,14 @@ mod tests {
         );
 
         // Check that the signature is valid
-        assert!(certificate.verify_cert_signature(expected_signer).is_ok())
+        let agglayer_types::aggchain_proof::AggchainData::ECDSA { signature } =
+            certificate.aggchain_data
+        else {
+            panic!("inconsistent test data")
+        };
+
+        assert!(certificate
+            .verify_legacy_ecdsa(expected_signer, &signature)
+            .is_ok())
     }
 }
