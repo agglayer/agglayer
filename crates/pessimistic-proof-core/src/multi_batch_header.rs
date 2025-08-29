@@ -1437,13 +1437,15 @@ impl MultiBatchHeader {
 
         if derived_nullifier_count != ibe_count {
             return Err(format!(
-                "nullifier_paths_bytes count {derived_nullifier_count} does not match imported_bridge_exits_count {ibe_count}"
+                "nullifier_paths_bytes count {derived_nullifier_count} does not match \
+                 imported_bridge_exits_count {ibe_count}"
             )
             .into());
         }
         if derived_balance_paths_count != bp_count {
             return Err(format!(
-                "balance_merkle_paths_bytes count {derived_balance_paths_count} does not match balances_proofs_count {bp_count}"
+                "balance_merkle_paths_bytes count {derived_balance_paths_count} does not match \
+                 balances_proofs_count {bp_count}"
             )
             .into());
         }
