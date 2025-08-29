@@ -1,21 +1,1087 @@
 #![allow(clippy::too_many_arguments)]
-use std::collections::BTreeMap;
 
-use agglayer_primitives::{Digest, U256};
-use serde::{Deserialize, Serialize};
+use agglayer_primitives::{Address, Digest, Signature, U256};
+use agglayer_tries::proof::{SmtMerkleProof, SmtNonInclusionProof};
+use bytemuck::{Pod, Zeroable};
+use serde::Serialize;
 use unified_bridge::{
-    BridgeExit, ImportedBridgeExit, ImportedBridgeExitCommitmentValues, NetworkId, TokenInfo,
+    BridgeExit, Claim, ClaimFromMainnet, ClaimFromRollup, GlobalIndex, ImportedBridgeExit,
+    ImportedBridgeExitCommitmentValues, L1InfoTreeLeaf, L1InfoTreeLeafInner, LETMerkleProof,
+    LeafType, MerkleProof, NetworkId, TokenInfo,
 };
 
 use crate::{
-    aggchain_data::AggchainData, local_balance_tree::LocalBalancePath,
+    aggchain_data::{AggchainData, AggchainProof, MultiSignature},
+    local_balance_tree::LocalBalancePath,
     nullifier_tree::NullifierPath,
 };
 
+/// Type aliases for zero-copy compatibility
+pub type Hash256 = [u8; 32];
+pub type U256Bytes = [u8; 32];
+pub type AddressBytes = [u8; 20];
+
+pub type BalanceMerkleProof = SmtMerkleProof<192>;
+pub type NullifierNonInclusionProof = SmtNonInclusionProof<64>;
+
+/// Aggchain proof type constants
+pub const AGGCHAIN_PROOF_TYPE_ECDSA: u8 = 0;
+pub const AGGCHAIN_PROOF_TYPE_GENERIC: u8 = 1;
+pub const AGGCHAIN_PROOF_TYPE_MULTISIG: u8 = 2;
+pub const AGGCHAIN_PROOF_TYPE_MULTISIG_AND_GENERIC: u8 = 3;
+
+/// Claim type constants
+pub const CLAIM_TYPE_MAINNET: u8 = 0;
+pub const CLAIM_TYPE_ROLLUP: u8 = 1;
+
+/// Helper function to convert array of Digests to array of byte arrays
+#[inline(always)]
+fn digest_array_to_bytes<const N: usize>(digests: &[Digest; N]) -> [[u8; 32]; N] {
+    core::array::from_fn(|i| digests[i].0)
+}
+
+/// Helper function to convert array of byte arrays to array of Digests
+#[inline(always)]
+fn bytes_array_to_digests<const N: usize>(bytes: &[[u8; 32]; N]) -> [Digest; N] {
+    bytes.map(Digest)
+}
+
+// Static size assertions
+const _BALANCE_MERKLE_PROOF_SIZE: () = {
+    assert!(core::mem::size_of::<BalanceMerkleProofZeroCopy>() == 6144);
+    assert!(core::mem::align_of::<BalanceMerkleProofZeroCopy>() == 1);
+};
+
+const _SMT_NON_INCLUSION_PROOF_SIZE: () = {
+    assert!(core::mem::size_of::<SmtNonInclusionProofZeroCopy>() == 2052);
+    assert!(core::mem::align_of::<SmtNonInclusionProofZeroCopy>() == 1);
+};
+
+const _CLAIM_ZERO_COPY_SIZE: () = {
+    assert!(core::mem::size_of::<ClaimZeroCopy>() == 3592);
+    assert!(core::mem::align_of::<ClaimZeroCopy>() == 1);
+};
+
+const _CLAIM_COMPONENT_SIZE_CONSTRAINTS: () = {
+    // Ensure individual claim types fit within the 14 * 256 bytes available in
+    // ClaimZeroCopy
+    assert!(core::mem::size_of::<ClaimFromMainnetZeroCopy>() <= 14 * 256);
+    assert!(core::mem::size_of::<ClaimFromRollupZeroCopy>() <= 14 * 256);
+};
+
+const _MULTI_BATCH_HEADER_SIZE: () = {
+    assert!(core::mem::size_of::<MultiBatchHeaderZeroCopy>() == 296);
+    #[cfg(target_pointer_width = "64")]
+    assert!(core::mem::align_of::<MultiBatchHeaderZeroCopy>() == 8);
+};
+
+const _BRIDGE_EXIT_ZERO_COPY_SIZE: () = {
+    assert!(core::mem::size_of::<BridgeExitZeroCopy>() == 116);
+    assert!(core::mem::align_of::<BridgeExitZeroCopy>() == 4);
+};
+
+const _AGGCHAIN_DATA_ZERO_COPY_SIZE: () = {
+    assert!(core::mem::size_of::<AggchainDataZeroCopy>() == 176);
+    #[cfg(target_pointer_width = "64")]
+    assert!(core::mem::align_of::<AggchainDataZeroCopy>() == 8);
+};
+
+/// Zero-copy compatible BridgeExit for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct BridgeExitZeroCopy {
+    /// Origin network (u32)
+    pub origin_network: u32,
+    /// Destination network (u32)
+    pub dest_network: u32,
+    /// Origin token address (20 bytes)
+    pub origin_token_address: AddressBytes,
+    /// Destination address (20 bytes)
+    pub dest_address: AddressBytes,
+    /// Amount (32 bytes) - big-endian U256 representation
+    pub amount: U256Bytes,
+    /// Metadata hash (32 bytes, 0 if None)
+    pub metadata_hash: Hash256,
+    /// Leaf type (u8: 0=Transfer, 1=Message)
+    pub leaf_type: u8,
+    /// Whether metadata is present (u8: 0=No metadata, 1=Has metadata)
+    pub has_metadata: u8,
+    /// Padding for 4-byte alignment
+    _padding: [u8; 2],
+}
+
+impl From<&BridgeExit> for BridgeExitZeroCopy {
+    #[inline(always)]
+    fn from(bridge_exit: &BridgeExit) -> Self {
+        Self {
+            origin_network: bridge_exit.token_info.origin_network.to_u32(),
+            dest_network: bridge_exit.dest_network.to_u32(),
+            origin_token_address: bridge_exit
+                .token_info
+                .origin_token_address
+                .as_slice()
+                .try_into()
+                .unwrap(),
+            dest_address: bridge_exit.dest_address.as_slice().try_into().unwrap(),
+            amount: bridge_exit.amount.to_be_bytes(),
+            metadata_hash: bridge_exit.metadata.unwrap_or_default().0,
+            leaf_type: bridge_exit.leaf_type as u8,
+            has_metadata: if bridge_exit.metadata.is_some() { 1 } else { 0 },
+            _padding: [0; 2],
+        }
+    }
+}
+
+impl From<&BridgeExitZeroCopy> for BridgeExit {
+    #[inline(always)]
+    fn from(zc: &BridgeExitZeroCopy) -> Self {
+        BridgeExit {
+            leaf_type: zc.leaf_type.try_into().unwrap_or(LeafType::Transfer),
+            token_info: TokenInfo {
+                origin_network: NetworkId::new(zc.origin_network),
+                origin_token_address: Address::from(zc.origin_token_address),
+            },
+            dest_network: NetworkId::new(zc.dest_network),
+            dest_address: Address::from(zc.dest_address),
+            amount: U256::from_be_bytes(zc.amount),
+            metadata: if zc.has_metadata != 0 {
+                Some(Digest(zc.metadata_hash))
+            } else {
+                None
+            },
+        }
+    }
+}
+
+/// Zero-copy compatible TokenInfo for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct TokenInfoZeroCopy {
+    /// Origin network (u32)
+    pub origin_network: u32,
+    /// Origin token address (20 bytes)
+    pub origin_token_address: AddressBytes,
+}
+
+impl From<&TokenInfo> for TokenInfoZeroCopy {
+    #[inline(always)]
+    fn from(token_info: &TokenInfo) -> Self {
+        Self {
+            origin_network: token_info.origin_network.to_u32(),
+            origin_token_address: token_info
+                .origin_token_address
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        }
+    }
+}
+
+impl From<&TokenInfoZeroCopy> for TokenInfo {
+    #[inline(always)]
+    fn from(zc: &TokenInfoZeroCopy) -> Self {
+        TokenInfo {
+            origin_network: NetworkId::new(zc.origin_network),
+            origin_token_address: Address::from(zc.origin_token_address),
+        }
+    }
+}
+
+/// Zero-copy compatible ImportedBridgeExit
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct ImportedBridgeExitZeroCopy {
+    /// Global index leaf_index (u32)
+    pub global_index_index: u32,
+    /// Global index rollup_index (u32)
+    pub global_index_rollup: u32,
+    /// Bridge exit data (116 bytes)
+    pub bridge_exit: BridgeExitZeroCopy,
+    /// Claim data (3352 bytes)
+    pub claim_data: ClaimZeroCopy,
+    /// End padding for 8-byte alignment
+    _end_padding: [u8; 4],
+}
+
+impl TryFrom<&ImportedBridgeExit> for ImportedBridgeExitZeroCopy {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(imported_bridge_exit: &ImportedBridgeExit) -> Result<Self, Self::Error> {
+        let claim_data = ClaimZeroCopy::from(&imported_bridge_exit.claim_data);
+
+        let rollup_index = imported_bridge_exit.global_index.rollup_index().ok_or(
+            "GlobalIndex rollup_index is None - this should not happen in rollup contexts",
+        )?;
+
+        Ok(Self {
+            global_index_index: imported_bridge_exit.global_index.leaf_index(),
+            global_index_rollup: rollup_index.to_u32(),
+            bridge_exit: (&imported_bridge_exit.bridge_exit).into(),
+            claim_data,
+            _end_padding: [0; 4],
+        })
+    }
+}
+
+impl TryFrom<&ImportedBridgeExitZeroCopy> for ImportedBridgeExit {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(zc: &ImportedBridgeExitZeroCopy) -> Result<Self, Self::Error> {
+        let claim = Claim::try_from(&zc.claim_data)?;
+        Ok(ImportedBridgeExit {
+            bridge_exit: (&zc.bridge_exit).into(),
+            claim_data: claim,
+            global_index: GlobalIndex::new(
+                NetworkId::new(zc.global_index_rollup),
+                zc.global_index_index,
+            ),
+        })
+    }
+}
+
+/// Helper struct for Hash256 chunks (32-element limit for bytemuck)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct Hash256Chunk32(pub [Hash256; 32]);
+
+/// Balance merkle proof (192 siblings, 6144 bytes) - 6 chunks of 32
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct BalanceMerkleProofZeroCopy {
+    /// 6 chunks of 32 hash siblings each (192 total)
+    pub chunks: [Hash256Chunk32; 6],
+}
+
+/// LET merkle proof (32 siblings, 1024 bytes)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct LETMerkleProofZeroCopy(pub [Hash256; 32]);
+
+/// Helper function to convert BalanceMerkleProof to BalanceMerkleProofZeroCopy
+#[inline(always)]
+fn balance_merkle_proof_to_zero_copy(proof: &BalanceMerkleProof) -> BalanceMerkleProofZeroCopy {
+    let mut out = BalanceMerkleProofZeroCopy {
+        chunks: [Hash256Chunk32([[0; 32]; 32]); 6],
+    };
+    // Use slice-based approach since large arrays don't have Pod trait
+    let src = digest_array_to_bytes(&proof.siblings);
+    let dst_slice: &mut [Hash256] = bytemuck::cast_slice_mut(&mut out.chunks);
+    dst_slice.copy_from_slice(&src);
+    out
+}
+
+/// Helper function to convert BalanceMerkleProofZeroCopy to BalanceMerkleProof
+#[inline(always)]
+fn balance_merkle_proof_from_zero_copy(zc: &BalanceMerkleProofZeroCopy) -> BalanceMerkleProof {
+    let src_slice: &[Hash256] = bytemuck::cast_slice(&zc.chunks);
+    // Convert slice back to array for bytes_array_to_digests
+    let mut arr = [[0u8; 32]; 192];
+    arr.copy_from_slice(src_slice);
+    BalanceMerkleProof {
+        siblings: bytes_array_to_digests(&arr),
+    }
+}
+
+/// Helper function to convert LETMerkleProof to LETMerkleProofZeroCopy
+#[inline(always)]
+fn let_merkle_proof_to_zero_copy(proof: &LETMerkleProof) -> LETMerkleProofZeroCopy {
+    LETMerkleProofZeroCopy(digest_array_to_bytes(&proof.siblings))
+}
+
+/// Helper function to convert LETMerkleProofZeroCopy to LETMerkleProof
+#[inline(always)]
+fn let_merkle_proof_from_zero_copy(zc: &LETMerkleProofZeroCopy) -> LETMerkleProof {
+    LETMerkleProof {
+        siblings: bytes_array_to_digests(&zc.0),
+    }
+}
+
+/// Zero-copy compatible SmtNonInclusionProof with fixed-size chunks
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct SmtNonInclusionProofZeroCopy {
+    /// Number of actual siblings (u8, max 64)
+    pub num_siblings: u8,
+    /// Padding for 4-byte alignment
+    _padding: [u8; 3],
+    /// 2 chunks of 32 hash siblings each (64 max)
+    pub chunks: [Hash256Chunk32; 2],
+}
+
+impl From<&NullifierNonInclusionProof> for SmtNonInclusionProofZeroCopy {
+    #[inline(always)]
+    fn from(proof: &NullifierNonInclusionProof) -> Self {
+        let siblings_len = proof.siblings.len();
+        assert!(siblings_len > 0, "Invalid siblings count");
+        assert!(siblings_len <= 64, "Invalid siblings count");
+        let n = proof.siblings.len();
+        let mut out = SmtNonInclusionProofZeroCopy {
+            num_siblings: n as u8,
+            _padding: [0; 3],
+            chunks: [Hash256Chunk32([[0; 32]; 32]); 2],
+        };
+        let dst_slice: &mut [Hash256] = bytemuck::cast_slice_mut(&mut out.chunks);
+        for (i, dst) in dst_slice.iter_mut().enumerate().take(n) {
+            *dst = proof.siblings[i].0;
+        }
+        out
+    }
+}
+
+impl From<&SmtNonInclusionProofZeroCopy> for NullifierNonInclusionProof {
+    #[inline(always)]
+    fn from(zc: &SmtNonInclusionProofZeroCopy) -> Self {
+        let n = zc.num_siblings as usize;
+        assert!(n > 0, "Invalid siblings count");
+        assert!(n <= 64, "Invalid siblings count");
+        let src_slice: &[Hash256] = bytemuck::cast_slice(&zc.chunks);
+        let siblings = src_slice[..n].iter().map(|b| Digest(*b)).collect();
+        NullifierNonInclusionProof { siblings }
+    }
+}
+
+/// Zero-copy compatible MerkleProof for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct MerkleProofZeroCopy {
+    /// Proof data (1024 bytes)
+    pub proof: LETMerkleProofZeroCopy,
+    /// Root (32 bytes)
+    pub root: Hash256,
+}
+
+impl From<&MerkleProof> for MerkleProofZeroCopy {
+    fn from(proof: &MerkleProof) -> Self {
+        Self {
+            proof: let_merkle_proof_to_zero_copy(&proof.proof),
+            root: proof.root.0,
+        }
+    }
+}
+
+impl From<&MerkleProofZeroCopy> for MerkleProof {
+    fn from(zc: &MerkleProofZeroCopy) -> Self {
+        MerkleProof {
+            proof: let_merkle_proof_from_zero_copy(&zc.proof),
+            root: Digest(zc.root),
+        }
+    }
+}
+
+/// Zero-copy compatible L1InfoTreeLeafInner for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct L1InfoTreeLeafInnerZeroCopy {
+    /// Block hash (32 bytes)
+    pub block_hash: Hash256,
+    /// Timestamp (u64)
+    pub timestamp: u64,
+    /// Global exit root (32 bytes)
+    pub global_exit_root: Hash256,
+}
+
+impl From<&L1InfoTreeLeafInner> for L1InfoTreeLeafInnerZeroCopy {
+    fn from(inner: &L1InfoTreeLeafInner) -> Self {
+        Self {
+            block_hash: inner.block_hash.0,
+            timestamp: inner.timestamp,
+            global_exit_root: inner.global_exit_root.0,
+        }
+    }
+}
+
+impl From<&L1InfoTreeLeafInnerZeroCopy> for L1InfoTreeLeafInner {
+    fn from(zc: &L1InfoTreeLeafInnerZeroCopy) -> Self {
+        L1InfoTreeLeafInner {
+            block_hash: Digest(zc.block_hash),
+            timestamp: zc.timestamp,
+            global_exit_root: Digest(zc.global_exit_root),
+        }
+    }
+}
+
+/// Zero-copy compatible L1InfoTreeLeaf for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct L1InfoTreeLeafZeroCopy {
+    /// L1 info tree index (u32)
+    pub l1_info_tree_index: u32,
+    /// Padding for 8-byte alignment of inner struct
+    _padding: [u8; 4],
+    /// RER (32 bytes)
+    pub rer: Hash256,
+    /// MER (32 bytes)
+    pub mer: Hash256,
+    /// Inner data (72 bytes)
+    pub inner: L1InfoTreeLeafInnerZeroCopy,
+}
+
+impl From<&L1InfoTreeLeaf> for L1InfoTreeLeafZeroCopy {
+    fn from(leaf: &L1InfoTreeLeaf) -> Self {
+        Self {
+            l1_info_tree_index: leaf.l1_info_tree_index,
+            _padding: [0; 4],
+            rer: leaf.rer.0,
+            mer: leaf.mer.0,
+            inner: (&leaf.inner).into(),
+        }
+    }
+}
+
+impl From<&L1InfoTreeLeafZeroCopy> for L1InfoTreeLeaf {
+    fn from(zc: &L1InfoTreeLeafZeroCopy) -> Self {
+        L1InfoTreeLeaf {
+            l1_info_tree_index: zc.l1_info_tree_index,
+            rer: Digest(zc.rer),
+            mer: Digest(zc.mer),
+            inner: (&zc.inner).into(),
+        }
+    }
+}
+
+/// Zero-copy compatible ClaimFromMainnet for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct ClaimFromMainnetZeroCopy {
+    /// Proof leaf MER (1056 bytes)
+    pub proof_leaf_mer: MerkleProofZeroCopy,
+    /// Proof GER L1 root (1056 bytes)
+    pub proof_ger_l1root: MerkleProofZeroCopy,
+    /// L1 leaf (176 bytes)
+    pub l1_leaf: L1InfoTreeLeafZeroCopy,
+}
+
+impl From<&ClaimFromMainnet> for ClaimFromMainnetZeroCopy {
+    fn from(claim: &ClaimFromMainnet) -> Self {
+        Self {
+            proof_leaf_mer: (&claim.proof_leaf_mer).into(),
+            proof_ger_l1root: (&claim.proof_ger_l1root).into(),
+            l1_leaf: (&claim.l1_leaf).into(),
+        }
+    }
+}
+
+impl From<&ClaimFromMainnetZeroCopy> for ClaimFromMainnet {
+    fn from(zc: &ClaimFromMainnetZeroCopy) -> Self {
+        ClaimFromMainnet {
+            proof_leaf_mer: (&zc.proof_leaf_mer).into(),
+            proof_ger_l1root: (&zc.proof_ger_l1root).into(),
+            l1_leaf: (&zc.l1_leaf).into(),
+        }
+    }
+}
+
+/// Zero-copy compatible ClaimFromRollup for bytemuck operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct ClaimFromRollupZeroCopy {
+    /// Proof from bridge exit leaf to LER (1056 bytes)
+    pub proof_leaf_ler: MerkleProofZeroCopy,
+    /// Proof from LER to RER (1056 bytes)
+    pub proof_ler_rer: MerkleProofZeroCopy,
+    /// Proof from GER to L1Root (1056 bytes)
+    pub proof_ger_l1root: MerkleProofZeroCopy,
+    /// L1 leaf (176 bytes)
+    pub l1_leaf: L1InfoTreeLeafZeroCopy,
+}
+
+impl From<&ClaimFromRollup> for ClaimFromRollupZeroCopy {
+    fn from(claim: &ClaimFromRollup) -> Self {
+        Self {
+            proof_leaf_ler: (&claim.proof_leaf_ler).into(),
+            proof_ler_rer: (&claim.proof_ler_rer).into(),
+            proof_ger_l1root: (&claim.proof_ger_l1root).into(),
+            l1_leaf: (&claim.l1_leaf).into(),
+        }
+    }
+}
+
+impl From<&ClaimFromRollupZeroCopy> for ClaimFromRollup {
+    fn from(zc: &ClaimFromRollupZeroCopy) -> Self {
+        ClaimFromRollup {
+            proof_leaf_ler: (&zc.proof_leaf_ler).into(),
+            proof_ler_rer: (&zc.proof_ler_rer).into(),
+            proof_ger_l1root: (&zc.proof_ger_l1root).into(),
+            l1_leaf: (&zc.l1_leaf).into(),
+        }
+    }
+}
+
+/// Helper struct for claim data chunks (256-byte chunks for bytemuck)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct ClaimDataChunk256(pub [u8; 256]);
+
+/// Zero-copy compatible Claim union-like structure
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct ClaimZeroCopy {
+    /// Claim type (u8: 0=Mainnet, 1=Rollup)
+    pub claim_type: u8,
+    /// Padding for 8-byte alignment
+    _padding: [u8; 7],
+    /// Union of claim data in 14 chunks of 256 bytes (3584 bytes total)
+    pub chunks: [ClaimDataChunk256; 14],
+}
+
+impl From<&Claim> for ClaimZeroCopy {
+    fn from(claim: &Claim) -> Self {
+        match claim {
+            Claim::Mainnet(mainnet_claim) => {
+                let mainnet_zero_copy = ClaimFromMainnetZeroCopy::from(&**mainnet_claim);
+                let mainnet_bytes = bytemuck::bytes_of(&mainnet_zero_copy);
+
+                // Distribute bytes across chunks
+                let chunks = Self::bytes_to_chunks(mainnet_bytes);
+
+                Self {
+                    claim_type: CLAIM_TYPE_MAINNET,
+                    _padding: [0; 7],
+                    chunks,
+                }
+            }
+            Claim::Rollup(rollup_claim) => {
+                let rollup_zero_copy = ClaimFromRollupZeroCopy::from(&**rollup_claim);
+                let rollup_bytes = bytemuck::bytes_of(&rollup_zero_copy);
+
+                // Distribute bytes across chunks
+                let chunks = Self::bytes_to_chunks(rollup_bytes);
+
+                Self {
+                    claim_type: CLAIM_TYPE_ROLLUP,
+                    _padding: [0; 7],
+                    chunks,
+                }
+            }
+        }
+    }
+}
+
+impl ClaimZeroCopy {
+    /// Helper function to convert bytes to chunks
+    fn bytes_to_chunks(bytes: &[u8]) -> [ClaimDataChunk256; 14] {
+        let mut chunks = [ClaimDataChunk256([0u8; 256]); 14];
+
+        for (chunk_idx, chunk) in chunks.iter_mut().enumerate() {
+            let start = chunk_idx * 256;
+            let end = core::cmp::min(start + 256, bytes.len());
+
+            if start < bytes.len() {
+                let copy_len = end - start;
+                chunk.0[..copy_len].copy_from_slice(&bytes[start..end]);
+            }
+            // Remaining bytes in chunk are already zeroed
+        }
+
+        chunks
+    }
+
+    /// Helper function to convert chunks back to bytes
+    #[inline(always)]
+    fn chunks_to_bytes(&self, data_len: usize) -> Vec<u8> {
+        let mut result = Vec::with_capacity(data_len);
+        let mut remaining = data_len;
+
+        for chunk in &self.chunks {
+            if remaining == 0 {
+                break;
+            }
+
+            let copy_len = core::cmp::min(256, remaining);
+            result.extend_from_slice(&chunk.0[..copy_len]);
+            remaining -= copy_len;
+        }
+
+        result
+    }
+}
+
+impl TryFrom<&ClaimZeroCopy> for Claim {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(zc: &ClaimZeroCopy) -> Result<Self, Self::Error> {
+        match zc.claim_type {
+            CLAIM_TYPE_MAINNET => {
+                // Mainnet claim
+                let mainnet_size = core::mem::size_of::<ClaimFromMainnetZeroCopy>();
+                let claim_bytes = zc.chunks_to_bytes(mainnet_size);
+                let mainnet_zero_copy = bytemuck::pod_read_unaligned::<ClaimFromMainnetZeroCopy>(
+                    &claim_bytes[..mainnet_size],
+                );
+                Ok(Claim::Mainnet(Box::new((&mainnet_zero_copy).into())))
+            }
+            CLAIM_TYPE_ROLLUP => {
+                // Rollup claim
+                let rollup_size = core::mem::size_of::<ClaimFromRollupZeroCopy>();
+                let claim_bytes = zc.chunks_to_bytes(rollup_size);
+                let rollup_zero_copy = bytemuck::pod_read_unaligned::<ClaimFromRollupZeroCopy>(
+                    &claim_bytes[..rollup_size],
+                );
+                Ok(Claim::Rollup(Box::new((&rollup_zero_copy).into())))
+            }
+            _ => Err("Invalid claim type".into()),
+        }
+    }
+}
+
+/// Zero-copy compatible balance proof entry (fixed-size parts only)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct BalanceProofEntryZeroCopy {
+    /// Token info (24 bytes)
+    pub token_info: TokenInfoZeroCopy,
+    /// Balance amount (32 bytes) - big-endian U256 representation
+    pub balance: U256Bytes,
+    /// Padding for 8-byte alignment (total size: 64 bytes)
+    _padding: [u8; 8],
+}
+
+/// Helper struct for ECDSA signer data (20 bytes)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct EcdsaSignerData([u8; 20]);
+
+/// Helper struct for ECDSA signature data (65 bytes + 3 padding)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct EcdsaSignatureData {
+    /// First 64 bytes of signature (r and s values)
+    pub rs_data: [u8; 64],
+    /// Last byte of signature (v value)
+    pub v_data: u8,
+    /// Padding for alignment (3 bytes)
+    _padding: [u8; 3],
+}
+
+/// Helper struct for Generic aggchain params (32 bytes)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct GenericParamsData([u8; 32]);
+
+/// Zero-copy compatible multisig signature entry for bytemuck operations
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct MultisigSignatureEntryZeroCopy {
+    /// Index of the signer in the expected_signers array
+    pub signer_index: u32,
+    /// ECDSA signature data
+    pub signature: EcdsaSignatureData,
+    /// Padding for alignment (4 bytes)
+    _padding: [u8; 4],
+}
+
+/// Helper struct for Generic vkey data (32 bytes = 8 * u32)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct GenericVkeyData(pub [u32; 8]);
+
+/// Zero-copy compatible AggchainData supporting all 4 enum variants
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct AggchainDataZeroCopy {
+    /// Multisig threshold (used when type=2 or 3, 8 bytes)
+    pub multisig_threshold: u64,
+    /// ECDSA signer data (used when type=0, 20 bytes)
+    pub ecdsa_signer: EcdsaSignerData,
+    /// ECDSA signature data (used when type=0, 65 bytes)
+    pub ecdsa_signature: EcdsaSignatureData,
+    /// Generic params data (used when type=1 or 3, 32 bytes)
+    pub generic_params: GenericParamsData,
+    /// Generic vkey data (used when type=1 or 3, 32 bytes)
+    pub generic_vkey: GenericVkeyData,
+    /// Number of expected signers (used when type=2 or 3, 4 bytes)
+    pub multisig_expected_signers_count: u32,
+    /// Number of signatures (used when type=2 or 3, 4 bytes)
+    pub multisig_signatures_count: u32,
+    /// Aggchain proof type (u8: 0=ECDSA, 1=Generic, 2=Multisig,
+    /// 3=MultisigAndGeneric)
+    pub aggchain_proof_type: u8,
+    /// Natural padding (7 bytes)
+    _padding: [u8; 7],
+}
+
+impl From<&AggchainData> for AggchainDataZeroCopy {
+    fn from(aggchain_data: &AggchainData) -> Self {
+        match aggchain_data {
+            AggchainData::LegacyEcdsa { signer, signature } => {
+                // Copy signer address (20 bytes)
+                let mut ecdsa_signer_data = [0u8; 20];
+                ecdsa_signer_data.copy_from_slice(signer.as_slice());
+
+                // Copy signature bytes (65 bytes)
+                let sig_bytes = signature.as_bytes();
+                let mut rs_data = [0u8; 64];
+                rs_data.copy_from_slice(&sig_bytes[..64]);
+                let v_data = sig_bytes[64];
+
+                Self {
+                    multisig_threshold: 0, // Unused for ECDSA
+                    ecdsa_signer: EcdsaSignerData(ecdsa_signer_data),
+                    ecdsa_signature: EcdsaSignatureData {
+                        rs_data,
+                        v_data,
+                        _padding: [0; 3],
+                    },
+                    generic_params: GenericParamsData([0; 32]), // Unused for ECDSA
+                    generic_vkey: GenericVkeyData([0; 8]),      // Unused for ECDSA
+                    multisig_expected_signers_count: 0,         // Unused for ECDSA
+                    multisig_signatures_count: 0,               // Unused for ECDSA
+                    aggchain_proof_type: AGGCHAIN_PROOF_TYPE_ECDSA,
+                    _padding: [0; 7],
+                }
+            }
+            AggchainData::AggchainProofOnly(aggchain_proof) => {
+                // Copy aggchain_params (32 bytes)
+                let mut generic_params_data = [0u8; 32];
+                generic_params_data.copy_from_slice(aggchain_proof.aggchain_params.as_slice());
+
+                // Store vkey directly as [u32; 8] (little-endian targets only)
+
+                Self {
+                    multisig_threshold: 0,                  // Unused for Generic only
+                    ecdsa_signer: EcdsaSignerData([0; 20]), // Unused for Generic
+                    ecdsa_signature: EcdsaSignatureData {
+                        rs_data: [0; 64],
+                        v_data: 0,
+                        _padding: [0; 3],
+                    }, // Unused for Generic
+                    generic_params: GenericParamsData(generic_params_data),
+                    generic_vkey: GenericVkeyData(aggchain_proof.aggchain_vkey),
+                    multisig_expected_signers_count: 0, // Unused for Generic only
+                    multisig_signatures_count: 0,       // Unused for Generic only
+                    aggchain_proof_type: AGGCHAIN_PROOF_TYPE_GENERIC,
+                    _padding: [0; 7],
+                }
+            }
+            AggchainData::MultisigOnly(multisig) => {
+                Self {
+                    multisig_threshold: multisig.threshold as u64,
+                    ecdsa_signer: EcdsaSignerData([0; 20]), // Unused for Multisig
+                    ecdsa_signature: EcdsaSignatureData {
+                        rs_data: [0; 64],
+                        v_data: 0,
+                        _padding: [0; 3],
+                    }, // Unused for Multisig
+                    generic_params: GenericParamsData([0; 32]), // Unused for Multisig only
+                    generic_vkey: GenericVkeyData([0; 8]),  // Unused for Multisig only
+                    multisig_expected_signers_count: multisig.expected_signers.len() as u32,
+                    multisig_signatures_count: multisig.signatures.len() as u32,
+                    aggchain_proof_type: AGGCHAIN_PROOF_TYPE_MULTISIG,
+                    _padding: [0; 7],
+                }
+            }
+            AggchainData::MultisigAndAggchainProof {
+                multisig,
+                aggchain_proof,
+            } => {
+                // Copy aggchain_params (32 bytes)
+                let mut generic_params_data = [0u8; 32];
+                generic_params_data.copy_from_slice(aggchain_proof.aggchain_params.as_slice());
+
+                // Store vkey directly as [u32; 8] (little-endian targets only)
+
+                Self {
+                    multisig_threshold: multisig.threshold as u64,
+                    ecdsa_signer: EcdsaSignerData([0; 20]), // Unused for MultisigAndGeneric
+                    ecdsa_signature: EcdsaSignatureData {
+                        rs_data: [0; 64],
+                        v_data: 0,
+                        _padding: [0; 3],
+                    }, // Unused for MultisigAndGeneric
+                    generic_params: GenericParamsData(generic_params_data),
+                    generic_vkey: GenericVkeyData(aggchain_proof.aggchain_vkey),
+                    multisig_expected_signers_count: multisig.expected_signers.len() as u32,
+                    multisig_signatures_count: multisig.signatures.len() as u32,
+                    aggchain_proof_type: AGGCHAIN_PROOF_TYPE_MULTISIG_AND_GENERIC,
+                    _padding: [0; 7],
+                }
+            }
+        }
+    }
+}
+
+impl TryFrom<&AggchainDataZeroCopy> for AggchainData {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(zero_copy: &AggchainDataZeroCopy) -> Result<Self, Self::Error> {
+        match zero_copy.aggchain_proof_type {
+            AGGCHAIN_PROOF_TYPE_ECDSA => {
+                // ECDSA - reconstruct signer and signature from dedicated fields
+                let signer = Address::from(zero_copy.ecdsa_signer.0);
+
+                // Reconstruct the 65-byte signature from rs_data + v_data (ignore padding)
+                let mut sig_bytes = [0u8; 65];
+                sig_bytes[..64].copy_from_slice(&zero_copy.ecdsa_signature.rs_data);
+                sig_bytes[64] = zero_copy.ecdsa_signature.v_data;
+
+                let signature = Signature::try_from(&sig_bytes[..])
+                    .map_err(|e| format!("Failed to parse signature: {e}"))?;
+                Ok(AggchainData::LegacyEcdsa { signer, signature })
+            }
+            AGGCHAIN_PROOF_TYPE_GENERIC => {
+                // Generic - reconstruct params and vkey from dedicated fields
+                let aggchain_params = Digest(zero_copy.generic_params.0);
+                // Access vkey directly (little-endian targets only)
+                let aggchain_vkey = zero_copy.generic_vkey.0;
+                let aggchain_proof = AggchainProof {
+                    aggchain_params,
+                    aggchain_vkey,
+                };
+                Ok(AggchainData::AggchainProofOnly(aggchain_proof))
+            }
+            AGGCHAIN_PROOF_TYPE_MULTISIG => {
+                // Multisig variants with empty variable data (for cases where no multisig data
+                // is provided)
+                let multisig = MultiSignature {
+                    signatures: Vec::new(),
+                    expected_signers: Vec::new(),
+                    threshold: zero_copy.multisig_threshold as usize,
+                };
+                Ok(AggchainData::MultisigOnly(multisig))
+            }
+            AGGCHAIN_PROOF_TYPE_MULTISIG_AND_GENERIC => {
+                // MultisigAndGeneric with empty multisig data
+                let aggchain_params = Digest(zero_copy.generic_params.0);
+                let aggchain_vkey = zero_copy.generic_vkey.0;
+                let aggchain_proof = AggchainProof {
+                    aggchain_params,
+                    aggchain_vkey,
+                };
+                let multisig = MultiSignature {
+                    signatures: Vec::new(),
+                    expected_signers: Vec::new(),
+                    threshold: zero_copy.multisig_threshold as usize,
+                };
+                Ok(AggchainData::MultisigAndAggchainProof {
+                    multisig,
+                    aggchain_proof,
+                })
+            }
+            _ => Err(format!(
+                "Invalid aggchain proof type: {}",
+                zero_copy.aggchain_proof_type
+            )
+            .into()),
+        }
+    }
+}
+
+/// Zero-copy representation of MultiSignature variable-length data components.
+/// Used to serialize/deserialize the variable-length parts of MultiSignature
+/// separately.
+#[derive(Debug, Clone)]
+pub struct MultisigZeroCopyComponents {
+    /// Serialized signatures as (index: u32, signature: [u8; 65]) pairs
+    pub signatures_bytes: Vec<u8>,
+    /// Serialized expected signers as [u8; 20] addresses
+    pub expected_signers_bytes: Vec<u8>,
+}
+
+impl AggchainData {
+    /// Convert to zero-copy components including separate multisig data if
+    /// needed.
+    pub fn to_zero_copy_components(
+        &self,
+    ) -> Result<
+        (AggchainDataZeroCopy, Option<MultisigZeroCopyComponents>),
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
+        let header = AggchainDataZeroCopy::from(self);
+
+        let multisig_components = match self {
+            AggchainData::LegacyEcdsa { .. } | AggchainData::AggchainProofOnly { .. } => None,
+            AggchainData::MultisigOnly(multisig)
+            | AggchainData::MultisigAndAggchainProof { multisig, .. } => {
+                Some(Self::multisig_to_zero_copy_components(multisig)?)
+            }
+        };
+
+        Ok((header, multisig_components))
+    }
+
+    /// Convert MultiSignature to zero-copy components.
+    fn multisig_to_zero_copy_components(
+        multisig: &crate::aggchain_data::MultiSignature,
+    ) -> Result<MultisigZeroCopyComponents, Box<dyn std::error::Error + Send + Sync>> {
+        // Serialize signatures
+        let signatures_zero_copy: Vec<MultisigSignatureEntryZeroCopy> = multisig
+            .signatures
+            .iter()
+            .map(|(index, signature)| {
+                let sig_bytes = signature.as_bytes();
+                let mut rs_data = [0u8; 64];
+                rs_data.copy_from_slice(&sig_bytes[..64]);
+                let v_data = sig_bytes[64];
+
+                MultisigSignatureEntryZeroCopy {
+                    signature: EcdsaSignatureData {
+                        rs_data,
+                        v_data,
+                        _padding: [0; 3],
+                    },
+                    signer_index: *index as u32,
+                    _padding: [0; 4],
+                }
+            })
+            .collect();
+
+        // Stream directly into pre-sized Vec<u8> to avoid intermediate allocation
+        let mut signatures_bytes = Vec::with_capacity(
+            signatures_zero_copy.len() * core::mem::size_of::<MultisigSignatureEntryZeroCopy>(),
+        );
+        for entry in &signatures_zero_copy {
+            signatures_bytes.extend_from_slice(bytemuck::bytes_of(entry));
+        }
+
+        // Serialize expected signers
+        let expected_signers_bytes: Vec<u8> = multisig
+            .expected_signers
+            .iter()
+            .flat_map(|addr| addr.as_slice().iter().copied())
+            .collect();
+
+        Ok(MultisigZeroCopyComponents {
+            signatures_bytes,
+            expected_signers_bytes,
+        })
+    }
+
+    /// Reconstruct AggchainData from zero-copy components with multisig data.
+    pub fn from_zero_copy_with_multisig_data(
+        zero_copy: &AggchainDataZeroCopy,
+        multisig_components: Option<&MultisigZeroCopyComponents>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        match zero_copy.aggchain_proof_type {
+            AGGCHAIN_PROOF_TYPE_ECDSA | AGGCHAIN_PROOF_TYPE_GENERIC => {
+                // These don't need multisig data, use the regular TryFrom
+                AggchainData::try_from(zero_copy)
+            }
+            AGGCHAIN_PROOF_TYPE_MULTISIG => {
+                let multisig_components = multisig_components
+                    .ok_or("MultisigOnly variant requires multisig components")?;
+                let multisig =
+                    Self::multisig_from_zero_copy_components(zero_copy, multisig_components)?;
+                Ok(AggchainData::MultisigOnly(multisig))
+            }
+            AGGCHAIN_PROOF_TYPE_MULTISIG_AND_GENERIC => {
+                let multisig_components = multisig_components
+                    .ok_or("MultisigAndAggchainProof variant requires multisig components")?;
+                let multisig =
+                    Self::multisig_from_zero_copy_components(zero_copy, multisig_components)?;
+
+                // Reconstruct aggchain proof
+                let aggchain_params = Digest(zero_copy.generic_params.0);
+                let aggchain_vkey = zero_copy.generic_vkey.0;
+                let aggchain_proof = crate::aggchain_data::AggchainProof {
+                    aggchain_params,
+                    aggchain_vkey,
+                };
+
+                Ok(AggchainData::MultisigAndAggchainProof {
+                    multisig,
+                    aggchain_proof,
+                })
+            }
+            _ => Err(format!(
+                "Invalid aggchain proof type: {}",
+                zero_copy.aggchain_proof_type
+            )
+            .into()),
+        }
+    }
+
+    /// Reconstruct MultiSignature from zero-copy components.
+    fn multisig_from_zero_copy_components(
+        zero_copy: &AggchainDataZeroCopy,
+        components: &MultisigZeroCopyComponents,
+    ) -> Result<crate::aggchain_data::MultiSignature, Box<dyn std::error::Error + Send + Sync>>
+    {
+        // Deserialize signatures
+        let signatures_zero_copy: &[MultisigSignatureEntryZeroCopy] =
+            bytemuck::try_cast_slice(&components.signatures_bytes)
+                .map_err(|e| format!("Failed to cast signatures_bytes: {e}"))?;
+
+        let signatures: Vec<(usize, Signature)> = signatures_zero_copy
+            .iter()
+            .map(|entry| {
+                let mut sig_bytes = [0u8; 65];
+                sig_bytes[..64].copy_from_slice(&entry.signature.rs_data);
+                sig_bytes[64] = entry.signature.v_data;
+
+                let signature = Signature::try_from(&sig_bytes[..])
+                    .map_err(|e| format!("Failed to parse signature: {e}"))?;
+                Ok((entry.signer_index as usize, signature))
+            })
+            .collect::<Result<Vec<_>, Box<dyn std::error::Error + Send + Sync>>>()?;
+
+        // Deserialize expected signers
+        if components.expected_signers_bytes.len() % 20 != 0 {
+            return Err("Invalid expected_signers_bytes length, must be multiple of 20".into());
+        }
+        let expected_signers: Vec<Address> = components
+            .expected_signers_bytes
+            .chunks(20)
+            .map(|chunk| {
+                let mut addr_bytes = [0u8; 20];
+                addr_bytes.copy_from_slice(chunk);
+                Address::from(addr_bytes)
+            })
+            .collect();
+
+        // Validate counts match
+        if signatures.len() != zero_copy.multisig_signatures_count as usize {
+            return Err(format!(
+                "Signature count mismatch: header says {}, got {}",
+                zero_copy.multisig_signatures_count,
+                signatures.len()
+            )
+            .into());
+        }
+        if expected_signers.len() != zero_copy.multisig_expected_signers_count as usize {
+            return Err(format!(
+                "Expected signers count mismatch: header says {}, got {}",
+                zero_copy.multisig_expected_signers_count,
+                expected_signers.len()
+            )
+            .into());
+        }
+
+        Ok(crate::aggchain_data::MultiSignature {
+            signatures,
+            expected_signers,
+            threshold: zero_copy.multisig_threshold as usize,
+        })
+    }
+}
+
+/// Zero-copy representation of MultiBatchHeader with C-compatible layout
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct MultiBatchHeaderZeroCopy {
+    /// Current certificate height of the L2 chain (u64)
+    pub height: u64,
+    /// Network that emitted this MultiBatchHeader (u32)
+    pub origin_network: u32,
+    /// Number of bridge exits (u32)
+    pub bridge_exits_count: u32,
+    /// Number of imported bridge exits (u32)
+    pub imported_bridge_exits_count: u32,
+    /// Number of balance proofs (u32)
+    pub balances_proofs_count: u32,
+    /// Previous pessimistic root (32 bytes)
+    pub prev_pessimistic_root: Hash256,
+    /// L1 info root used to import bridge exits (32 bytes)
+    pub l1_info_root: Hash256,
+    /// Aggchain data (zero-copy struct)
+    pub aggchain_data: AggchainDataZeroCopy,
+    /// Certificate id (32 bytes)
+    pub certificate_id: Hash256,
+}
+
 /// Represents the chain state transition for the pessimistic proof.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct MultiBatchHeader {
-    /// Network that emitted this [`MultiBatchHeader`].
+    /// Network that emitted this [MultiBatchHeader].
     pub origin_network: NetworkId,
     /// Current certificate height of the L2 chain.
     pub height: u64,
@@ -29,7 +1095,7 @@ pub struct MultiBatchHeader {
     pub l1_info_root: Digest,
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
-    pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath)>,
+    pub balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath))>,
     /// Aggchain data which include either multisig, aggchain proof, or both.
     pub aggchain_data: AggchainData,
     /// Certificate id used as nonce to compute the commitment.
@@ -37,6 +1103,211 @@ pub struct MultiBatchHeader {
 }
 
 impl MultiBatchHeader {
+    /// Reconstruct AggchainData from zero-copy components (following bridge
+    /// exits pattern)
+    fn reconstruct_aggchain_data(
+        aggchain_data_zero_copy: &AggchainDataZeroCopy,
+        multisig_signatures_bytes: &[u8],
+        multisig_expected_signers_bytes: &[u8],
+    ) -> Result<AggchainData, Box<dyn std::error::Error + Send + Sync>> {
+        match aggchain_data_zero_copy.aggchain_proof_type {
+            AGGCHAIN_PROOF_TYPE_ECDSA => {
+                let signer = Address::from(aggchain_data_zero_copy.ecdsa_signer.0);
+                let signature = {
+                    let mut sig_bytes = [0u8; 65];
+                    sig_bytes[..64]
+                        .copy_from_slice(&aggchain_data_zero_copy.ecdsa_signature.rs_data);
+                    sig_bytes[64] = aggchain_data_zero_copy.ecdsa_signature.v_data;
+                    Signature::try_from(sig_bytes.as_slice())
+                        .map_err(|e| format!("Failed to convert ECDSA signature: {e}"))?
+                };
+                Ok(AggchainData::LegacyEcdsa { signer, signature })
+            }
+            AGGCHAIN_PROOF_TYPE_GENERIC => {
+                let aggchain_params = Digest(aggchain_data_zero_copy.generic_params.0);
+                let aggchain_vkey = aggchain_data_zero_copy.generic_vkey.0;
+                let aggchain_proof = AggchainProof {
+                    aggchain_params,
+                    aggchain_vkey,
+                };
+                Ok(AggchainData::AggchainProofOnly(aggchain_proof))
+            }
+            AGGCHAIN_PROOF_TYPE_MULTISIG => {
+                // Validate multisig counts before processing
+                let sig_size = core::mem::size_of::<MultisigSignatureEntryZeroCopy>();
+                if !multisig_signatures_bytes.is_empty() {
+                    if multisig_signatures_bytes.len() % sig_size != 0 {
+                        return Err("multisig_signatures_bytes has invalid length".into());
+                    }
+                    let sig_count = multisig_signatures_bytes.len() / sig_size;
+                    if sig_count != aggchain_data_zero_copy.multisig_signatures_count as usize {
+                        return Err(format!(
+                            "Signature count mismatch: header={}, bytes={}",
+                            aggchain_data_zero_copy.multisig_signatures_count, sig_count
+                        )
+                        .into());
+                    }
+                }
+
+                if !multisig_expected_signers_bytes.is_empty() {
+                    if multisig_expected_signers_bytes.len() % 20 != 0 {
+                        return Err(
+                            "multisig_expected_signers_bytes length must be multiple of 20".into(),
+                        );
+                    }
+                    let exp_count = multisig_expected_signers_bytes.len() / 20;
+                    if exp_count != aggchain_data_zero_copy.multisig_expected_signers_count as usize
+                    {
+                        return Err(format!(
+                            "Expected signers count mismatch: header={}, bytes={}",
+                            aggchain_data_zero_copy.multisig_expected_signers_count, exp_count
+                        )
+                        .into());
+                    }
+                }
+
+                // Deserialize multisig data from separate bytes (following bridge exits
+                // pattern)
+                let signatures = if multisig_signatures_bytes.is_empty() {
+                    Vec::new()
+                } else {
+                    let signatures_zero_copy: &[MultisigSignatureEntryZeroCopy] =
+                        bytemuck::try_cast_slice(multisig_signatures_bytes).map_err(|e| {
+                            format!("Failed to cast multisig_signatures_bytes: {e}")
+                        })?;
+                    signatures_zero_copy
+                        .iter()
+                        .map(|entry| {
+                            // Convert EcdsaSignatureData back to Signature
+                            let mut sig_bytes = [0u8; 65];
+                            sig_bytes[..64].copy_from_slice(&entry.signature.rs_data);
+                            sig_bytes[64] = entry.signature.v_data;
+                            let signature = Signature::try_from(sig_bytes.as_slice())
+                                .map_err(|e| format!("Failed to convert signature: {e}"))?;
+                            Ok((entry.signer_index as usize, signature))
+                        })
+                        .collect::<Result<Vec<_>, Box<dyn std::error::Error + Send + Sync>>>()?
+                };
+
+                let expected_signers = if multisig_expected_signers_bytes.is_empty() {
+                    Vec::new()
+                } else {
+                    // Address is [u8; 20], so we can cast to &[[u8; 20]] and convert
+                    let signers_zero_copy: &[[u8; 20]] =
+                        bytemuck::try_cast_slice(multisig_expected_signers_bytes).map_err(|e| {
+                            format!("Failed to cast multisig_expected_signers_bytes: {e}")
+                        })?;
+                    signers_zero_copy
+                        .iter()
+                        .map(|bytes| Address::from(*bytes))
+                        .collect()
+                };
+
+                let multisig = MultiSignature {
+                    signatures,
+                    expected_signers,
+                    threshold: aggchain_data_zero_copy.multisig_threshold as usize,
+                };
+
+                Ok(AggchainData::MultisigOnly(multisig))
+            }
+            AGGCHAIN_PROOF_TYPE_MULTISIG_AND_GENERIC => {
+                // Validate multisig counts before processing
+                let sig_size = core::mem::size_of::<MultisigSignatureEntryZeroCopy>();
+                if !multisig_signatures_bytes.is_empty() {
+                    if multisig_signatures_bytes.len() % sig_size != 0 {
+                        return Err("multisig_signatures_bytes has invalid length".into());
+                    }
+                    let sig_count = multisig_signatures_bytes.len() / sig_size;
+                    if sig_count != aggchain_data_zero_copy.multisig_signatures_count as usize {
+                        return Err(format!(
+                            "Signature count mismatch: header={}, bytes={}",
+                            aggchain_data_zero_copy.multisig_signatures_count, sig_count
+                        )
+                        .into());
+                    }
+                }
+
+                if !multisig_expected_signers_bytes.is_empty() {
+                    if multisig_expected_signers_bytes.len() % 20 != 0 {
+                        return Err(
+                            "multisig_expected_signers_bytes length must be multiple of 20".into(),
+                        );
+                    }
+                    let exp_count = multisig_expected_signers_bytes.len() / 20;
+                    if exp_count != aggchain_data_zero_copy.multisig_expected_signers_count as usize
+                    {
+                        return Err(format!(
+                            "Expected signers count mismatch: header={}, bytes={}",
+                            aggchain_data_zero_copy.multisig_expected_signers_count, exp_count
+                        )
+                        .into());
+                    }
+                }
+
+                // Handle both multisig and aggchain proof
+                let aggchain_params = Digest(aggchain_data_zero_copy.generic_params.0);
+                let aggchain_vkey = aggchain_data_zero_copy.generic_vkey.0;
+                let aggchain_proof = AggchainProof {
+                    aggchain_params,
+                    aggchain_vkey,
+                };
+
+                // Deserialize multisig data
+                let signatures = if multisig_signatures_bytes.is_empty() {
+                    Vec::new()
+                } else {
+                    let signatures_zero_copy: &[MultisigSignatureEntryZeroCopy] =
+                        bytemuck::try_cast_slice(multisig_signatures_bytes).map_err(|e| {
+                            format!("Failed to cast multisig_signatures_bytes: {e}")
+                        })?;
+                    signatures_zero_copy
+                        .iter()
+                        .map(|entry| {
+                            // Convert EcdsaSignatureData back to Signature
+                            let mut sig_bytes = [0u8; 65];
+                            sig_bytes[..64].copy_from_slice(&entry.signature.rs_data);
+                            sig_bytes[64] = entry.signature.v_data;
+                            let signature = Signature::try_from(sig_bytes.as_slice())
+                                .map_err(|e| format!("Failed to convert signature: {e}"))?;
+                            Ok((entry.signer_index as usize, signature))
+                        })
+                        .collect::<Result<Vec<_>, Box<dyn std::error::Error + Send + Sync>>>()?
+                };
+
+                let expected_signers = if multisig_expected_signers_bytes.is_empty() {
+                    Vec::new()
+                } else {
+                    // Address is [u8; 20], so we can cast to &[[u8; 20]] and convert
+                    let signers_zero_copy: &[[u8; 20]] =
+                        bytemuck::try_cast_slice(multisig_expected_signers_bytes).map_err(|e| {
+                            format!("Failed to cast multisig_expected_signers_bytes: {e}")
+                        })?;
+                    signers_zero_copy
+                        .iter()
+                        .map(|bytes| Address::from(*bytes))
+                        .collect()
+                };
+
+                let multisig = MultiSignature {
+                    signatures,
+                    expected_signers,
+                    threshold: aggchain_data_zero_copy.multisig_threshold as usize,
+                };
+
+                Ok(AggchainData::MultisigAndAggchainProof {
+                    multisig,
+                    aggchain_proof,
+                })
+            }
+            _ => Err(format!(
+                "Invalid aggchain proof type: {}",
+                aggchain_data_zero_copy.aggchain_proof_type
+            )
+            .into()),
+        }
+    }
+
     /// Returns the commitment on the imported bridge exits.
     pub fn commit_imported_bridge_exits(&self) -> ImportedBridgeExitCommitmentValues {
         ImportedBridgeExitCommitmentValues {
@@ -45,6 +1316,1394 @@ impl MultiBatchHeader {
                 .iter()
                 .map(|(exit, _)| exit.to_indexed_exit_hash())
                 .collect(),
+        }
+    }
+}
+
+impl From<&MultiBatchHeader> for MultiBatchHeaderZeroCopy {
+    fn from(self_: &MultiBatchHeader) -> Self {
+        MultiBatchHeaderZeroCopy {
+            height: self_.height,
+            origin_network: self_.origin_network.to_u32(),
+            bridge_exits_count: self_.bridge_exits.len() as u32,
+            imported_bridge_exits_count: self_.imported_bridge_exits.len() as u32,
+            balances_proofs_count: self_.balances_proofs.len() as u32,
+            prev_pessimistic_root: self_.prev_pessimistic_root.0,
+            l1_info_root: self_.l1_info_root.0,
+            aggchain_data: (&self_.aggchain_data).into(),
+            certificate_id: self_.certificate_id.0,
+        }
+    }
+}
+
+impl TryFrom<&MultiBatchHeaderZeroCopy> for MultiBatchHeader {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(zero_copy: &MultiBatchHeaderZeroCopy) -> Result<Self, Self::Error> {
+        let origin_network = NetworkId::new(zero_copy.origin_network);
+        let prev_pessimistic_root = Digest(zero_copy.prev_pessimistic_root);
+        let l1_info_root = Digest(zero_copy.l1_info_root);
+
+        let aggchain_data = AggchainData::try_from(&zero_copy.aggchain_data)?;
+
+        Ok(MultiBatchHeader {
+            origin_network,
+            height: zero_copy.height,
+            prev_pessimistic_root,
+            bridge_exits: Vec::new(), // Should be deserialized separately for full data integrity
+            imported_bridge_exits: Vec::new(), /* Should be deserialized separately for full data
+                                       * integrity */
+            l1_info_root,
+            balances_proofs: Vec::new(), /* Should be deserialized separately for full data
+                                          * integrity */
+            aggchain_data,
+            certificate_id: Digest(zero_copy.certificate_id),
+        })
+    }
+}
+
+/// This struct contains all the byte arrays needed for zero-copy
+/// serialization of a MultiBatchHeader.
+#[derive(Debug, Clone)]
+pub struct ZeroCopyComponents {
+    /// Serialized header bytes
+    pub header_bytes: Vec<u8>,
+    /// Serialized bridge exits bytes
+    pub bridge_exits_bytes: Vec<u8>,
+    /// Serialized imported bridge exits bytes
+    pub imported_bridge_exits_bytes: Vec<u8>,
+    /// Serialized nullifier paths bytes
+    pub nullifier_paths_bytes: Vec<u8>,
+    /// Serialized balance proofs bytes
+    pub balances_proofs_bytes: Vec<u8>,
+    /// Serialized balance merkle paths bytes
+    pub balance_merkle_paths_bytes: Vec<u8>,
+    /// Serialized multisig signatures bytes
+    pub multisig_signatures_bytes: Vec<u8>,
+    /// Serialized multisig expected signers bytes
+    pub multisig_expected_signers_bytes: Vec<u8>,
+}
+
+// Specific implementation for MultiBatchHeader with zero-copy component helpers
+impl MultiBatchHeader {
+    /// Verify that `bytes.len()` is exactly `size_of::<T>()` for a single
+    /// struct.
+    fn verify_exact_struct_len<T>(
+        bytes: &[u8],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let expected_len = core::mem::size_of::<T>();
+        if bytes.len() != expected_len {
+            return Err("Invalid byte array length".into());
+        }
+        Ok(())
+    }
+
+    /// Reconstruct a MultiBatchHeaderRef (borrowed view) from zero-copy
+    /// components. This is the complete reconstruction pattern used in SP1
+    /// zkvm environments. Returns a borrowed view to avoid allocations for
+    /// variable fields.
+    pub fn from_zero_copy_components<'a>(
+        header_bytes: &'a [u8],
+        bridge_exits_bytes: &'a [u8],
+        imported_bridge_exits_bytes: &'a [u8],
+        nullifier_paths_bytes: &'a [u8],
+        balances_proofs_bytes: &'a [u8],
+        balance_merkle_paths_bytes: &'a [u8],
+        multisig_signatures_bytes: &'a [u8],
+        multisig_expected_signers_bytes: &'a [u8],
+    ) -> Result<MultiBatchHeaderRef<'a>, Box<dyn std::error::Error + Send + Sync>> {
+        // 1) Validate header blob size matches exactly one header
+        Self::verify_exact_struct_len::<MultiBatchHeaderZeroCopy>(header_bytes)?;
+
+        // Deserialize header using pod_read_unaligned for robustness against alignment
+        // issues
+        let header_zero_copy =
+            bytemuck::pod_read_unaligned::<MultiBatchHeaderZeroCopy>(header_bytes);
+
+        // 2) Create borrowed slices for zero-copy components using try_cast_slice first
+        // Doing this before count validation ensures that alignment/multiple-of-size
+        // errors surface as casting errors (as expected by tests), rather than
+        // length errors.
+        let be_count = header_zero_copy.bridge_exits_count as usize;
+        let ibe_count = header_zero_copy.imported_bridge_exits_count as usize;
+        let bp_count = header_zero_copy.balances_proofs_count as usize;
+
+        let bridge_exits: &'a [BridgeExitZeroCopy] = if bridge_exits_bytes.is_empty() {
+            &[]
+        } else {
+            bytemuck::try_cast_slice(bridge_exits_bytes)
+                .map_err(|e| format!("Failed to cast bridge_exits_bytes: {e}"))?
+        };
+
+        let imported_bridge_exits: &'a [ImportedBridgeExitZeroCopy] =
+            if imported_bridge_exits_bytes.is_empty() {
+                &[]
+            } else {
+                bytemuck::try_cast_slice(imported_bridge_exits_bytes)
+                    .map_err(|e| format!("Failed to cast imported_bridge_exits_bytes: {e}"))?
+            };
+
+        let nullifier_paths: &'a [SmtNonInclusionProofZeroCopy] =
+            if nullifier_paths_bytes.is_empty() {
+                &[]
+            } else {
+                bytemuck::try_cast_slice(nullifier_paths_bytes)
+                    .map_err(|e| format!("Failed to cast nullifier_paths_bytes: {e}"))?
+            };
+
+        let balances_proofs: &'a [BalanceProofEntryZeroCopy] = if balances_proofs_bytes.is_empty() {
+            &[]
+        } else {
+            bytemuck::try_cast_slice(balances_proofs_bytes)
+                .map_err(|e| format!("Failed to cast balances_proofs_bytes: {e}"))?
+        };
+
+        let balance_merkle_paths: &'a [BalanceMerkleProofZeroCopy] =
+            if balance_merkle_paths_bytes.is_empty() {
+                &[]
+            } else {
+                bytemuck::try_cast_slice(balance_merkle_paths_bytes)
+                    .map_err(|e| format!("Failed to cast balance_merkle_paths_bytes: {e}"))?
+            };
+
+        // 3) Cross-validate array counts where required using the casted slice lengths
+        if bridge_exits.len() != be_count {
+            return Err(format!(
+                "bridge_exits_bytes count {} does not match bridge_exits_count {}",
+                bridge_exits.len(),
+                be_count
+            )
+            .into());
+        }
+        if imported_bridge_exits.len() != ibe_count {
+            return Err(format!(
+                "imported_bridge_exits_bytes count {} does not match imported_bridge_exits_count \
+                 {}",
+                imported_bridge_exits.len(),
+                ibe_count
+            )
+            .into());
+        }
+        if balances_proofs.len() != bp_count {
+            return Err(format!(
+                "balances_proofs_bytes count {} does not match balances_proofs_count {}",
+                balances_proofs.len(),
+                bp_count
+            )
+            .into());
+        }
+
+        // For nullifier_paths and balance_merkle_paths, derive counts from the slice
+        // lengths
+        let derived_nullifier_count = nullifier_paths.len();
+        let derived_balance_paths_count = balance_merkle_paths.len();
+
+        if derived_nullifier_count != ibe_count {
+            return Err(format!(
+                "nullifier_paths_bytes count {derived_nullifier_count} does not match \
+                 imported_bridge_exits_count {ibe_count}"
+            )
+            .into());
+        }
+        if derived_balance_paths_count != bp_count {
+            return Err(format!(
+                "balance_merkle_paths_bytes count {derived_balance_paths_count} does not match \
+                 balances_proofs_count {bp_count}"
+            )
+            .into());
+        }
+
+        // 5) has_metadata consistency check: if has_metadata == 0 then metadata_hash
+        //    must be 0s. Also validate leaf_type discriminants.
+        for (idx, be) in bridge_exits.iter().enumerate() {
+            if be.has_metadata == 0 && be.metadata_hash != [0u8; 32] {
+                return Err(format!(
+                    "bridge_exits_bytes[{idx}]: has_metadata=0 but metadata_hash is non-zero"
+                )
+                .into());
+            }
+            <LeafType as core::convert::TryFrom<u8>>::try_from(be.leaf_type).map_err(|_| {
+                format!(
+                    "bridge_exits_bytes[{}]: invalid leaf_type {}",
+                    idx, be.leaf_type
+                )
+            })?;
+        }
+
+        // has_metadata consistency for imported bridge exits' inner bridge_exit too
+        // and validate leaf_type for nested bridge exits
+        for (idx, ibe) in imported_bridge_exits.iter().enumerate() {
+            let be = &ibe.bridge_exit;
+            if be.has_metadata == 0 && be.metadata_hash != [0u8; 32] {
+                return Err(format!(
+                    "imported_bridge_exits_bytes[{idx}].bridge_exit: has_metadata=0 but \
+                     metadata_hash is non-zero"
+                )
+                .into());
+            }
+            <LeafType as core::convert::TryFrom<u8>>::try_from(be.leaf_type).map_err(|_| {
+                format!(
+                    "imported_bridge_exits_bytes[{}]: invalid leaf_type {}",
+                    idx, be.leaf_type
+                )
+            })?;
+        }
+
+        // 6) Validate SmtNonInclusionProofZeroCopy.num_siblings bounds (avoid asserts)
+        for (idx, np) in nullifier_paths.iter().enumerate() {
+            if np.num_siblings == 0 || np.num_siblings > 64 {
+                return Err(format!(
+                    "nullifier_paths_bytes[{}]: num_siblings={} out of bounds (expected 1..=64)",
+                    idx, np.num_siblings
+                )
+                .into());
+            }
+        }
+
+        // Extract aggchain_data from header and separate multisig data (following
+        // bridge exits pattern)
+        let aggchain_data = Self::reconstruct_aggchain_data(
+            &header_zero_copy.aggchain_data,
+            multisig_signatures_bytes,
+            multisig_expected_signers_bytes,
+        )?;
+
+        // Reconstruct the MultiBatchHeaderRef from zero-copy components
+        let origin_network = NetworkId::new(header_zero_copy.origin_network);
+        let prev_pessimistic_root = Digest(header_zero_copy.prev_pessimistic_root);
+        let l1_info_root = Digest(header_zero_copy.l1_info_root);
+
+        Ok(MultiBatchHeaderRef {
+            origin_network,
+            height: header_zero_copy.height,
+            prev_pessimistic_root,
+            bridge_exits,
+            imported_bridge_exits,
+            nullifier_paths,
+            l1_info_root,
+            balances_proofs,
+            balance_merkle_paths,
+            aggchain_data,
+            certificate_id: Digest(header_zero_copy.certificate_id),
+        })
+    }
+
+    /// Prepare zero-copy components for serialization.
+    /// This returns all the components needed for zero-copy serialization.
+    pub fn to_zero_copy_components(
+        &self,
+    ) -> Result<ZeroCopyComponents, Box<dyn std::error::Error + Send + Sync>> {
+        // Convert header to zero-copy
+        let header_zero_copy: MultiBatchHeaderZeroCopy = self.into();
+        let header_bytes = bytemuck::bytes_of(&header_zero_copy).to_vec();
+
+        // Convert bridge_exits to zero-copy - stream directly to bytes
+        let mut bridge_exits_bytes = Vec::with_capacity(
+            self.bridge_exits.len() * core::mem::size_of::<BridgeExitZeroCopy>(),
+        );
+        for be in &self.bridge_exits {
+            let zc: BridgeExitZeroCopy = be.into();
+            bridge_exits_bytes.extend_from_slice(bytemuck::bytes_of(&zc));
+        }
+
+        // Convert imported_bridge_exits to zero-copy - stream directly to bytes
+        let mut imported_bridge_exits_bytes = Vec::with_capacity(
+            self.imported_bridge_exits.len() * core::mem::size_of::<ImportedBridgeExitZeroCopy>(),
+        );
+        for (ibe, _) in &self.imported_bridge_exits {
+            let zc = ImportedBridgeExitZeroCopy::try_from(ibe)?;
+            imported_bridge_exits_bytes.extend_from_slice(bytemuck::bytes_of(&zc));
+        }
+
+        // Extract nullifier paths - stream directly to bytes
+        let mut nullifier_paths_bytes = Vec::with_capacity(
+            self.imported_bridge_exits.len() * core::mem::size_of::<SmtNonInclusionProofZeroCopy>(),
+        );
+        for (_, path) in &self.imported_bridge_exits {
+            let zc: SmtNonInclusionProofZeroCopy = path.into();
+            nullifier_paths_bytes.extend_from_slice(bytemuck::bytes_of(&zc));
+        }
+
+        // Convert balances_proofs to zero-copy - stream directly to bytes
+        let mut balances_proofs_bytes = Vec::with_capacity(
+            self.balances_proofs.len() * core::mem::size_of::<BalanceProofEntryZeroCopy>(),
+        );
+        for (token_info, (balance, _)) in &self.balances_proofs {
+            let zc = BalanceProofEntryZeroCopy {
+                token_info: token_info.into(),
+                balance: balance.to_be_bytes(),
+                _padding: [0; 8],
+            };
+            balances_proofs_bytes.extend_from_slice(bytemuck::bytes_of(&zc));
+        }
+
+        // Extract balance Merkle paths - stream directly to bytes
+        let mut balance_merkle_paths_bytes = Vec::with_capacity(
+            self.balances_proofs.len() * core::mem::size_of::<BalanceMerkleProofZeroCopy>(),
+        );
+        for (_, (_, path)) in &self.balances_proofs {
+            let zc = balance_merkle_proof_to_zero_copy(path);
+            balance_merkle_paths_bytes.extend_from_slice(bytemuck::bytes_of(&zc));
+        }
+
+        // Serialize multisig data (following bridge exits pattern)
+        let (multisig_signatures_bytes, multisig_expected_signers_bytes) =
+            self.serialize_aggchain_multisig_data()?;
+
+        Ok(ZeroCopyComponents {
+            header_bytes,
+            bridge_exits_bytes,
+            imported_bridge_exits_bytes,
+            nullifier_paths_bytes,
+            balances_proofs_bytes,
+            balance_merkle_paths_bytes,
+            multisig_signatures_bytes,
+            multisig_expected_signers_bytes,
+        })
+    }
+
+    /// Serialize multisig data from aggchain_data (following bridge exits
+    /// pattern)
+    fn serialize_aggchain_multisig_data(
+        &self,
+    ) -> Result<(Vec<u8>, Vec<u8>), Box<dyn std::error::Error + Send + Sync>> {
+        match &self.aggchain_data {
+            AggchainData::MultisigOnly(multisig) => {
+                let signatures_bytes = Self::serialize_multisig_signatures(&multisig.signatures)?;
+                let signers_bytes = {
+                    let mut bytes = Vec::new();
+                    for addr in &multisig.expected_signers {
+                        bytes.extend_from_slice(addr.as_slice());
+                    }
+                    bytes
+                };
+                Ok((signatures_bytes, signers_bytes))
+            }
+            AggchainData::MultisigAndAggchainProof { multisig, .. } => {
+                let signatures_bytes = Self::serialize_multisig_signatures(&multisig.signatures)?;
+                let signers_bytes = {
+                    let mut bytes = Vec::new();
+                    for addr in &multisig.expected_signers {
+                        bytes.extend_from_slice(addr.as_slice());
+                    }
+                    bytes
+                };
+                Ok((signatures_bytes, signers_bytes))
+            }
+            // No multisig data for other variants
+            _ => Ok((Vec::new(), Vec::new())),
+        }
+    }
+
+    /// Serialize multisig signatures into zero-copy format
+    fn serialize_multisig_signatures(
+        signatures: &[(usize, agglayer_primitives::Signature)],
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+        let signatures_zero_copy: Vec<MultisigSignatureEntryZeroCopy> = signatures
+            .iter()
+            .map(|(index, signature)| {
+                let sig_bytes = signature.as_bytes();
+                let mut rs_data = [0u8; 64];
+                rs_data.copy_from_slice(&sig_bytes[..64]);
+                Ok(MultisigSignatureEntryZeroCopy {
+                    signer_index: *index as u32,
+                    signature: EcdsaSignatureData {
+                        rs_data,
+                        v_data: sig_bytes[64],
+                        _padding: [0; 3],
+                    },
+                    _padding: [0; 4],
+                })
+            })
+            .collect::<Result<Vec<_>, Box<dyn std::error::Error + Send + Sync>>>()?;
+
+        // Stream directly into pre-sized Vec<u8> to avoid intermediate allocation
+        let mut out = Vec::with_capacity(
+            signatures_zero_copy.len() * core::mem::size_of::<MultisigSignatureEntryZeroCopy>(),
+        );
+        for entry in &signatures_zero_copy {
+            out.extend_from_slice(bytemuck::bytes_of(entry));
+        }
+        Ok(out)
+    }
+}
+
+/// Zero-copy borrowed view of MultiBatchHeader that avoids allocations for
+/// variable fields. This struct holds borrowed slices for large variable-length
+/// data while keeping small fields owned.
+#[derive(Debug, Clone)]
+pub struct MultiBatchHeaderRef<'a> {
+    /// Network that emitted this [MultiBatchHeaderRef].
+    pub origin_network: NetworkId,
+    /// Current certificate height of the L2 chain.
+    pub height: u64,
+    /// Previous pessimistic root.
+    pub prev_pessimistic_root: Digest,
+    /// List of bridge exits created in this batch (borrowed).
+    pub bridge_exits: &'a [BridgeExitZeroCopy],
+    /// List of imported bridge exits claimed in this batch (borrowed).
+    pub imported_bridge_exits: &'a [ImportedBridgeExitZeroCopy],
+    /// Nullifier paths for imported bridge exits (borrowed).
+    pub nullifier_paths: &'a [SmtNonInclusionProofZeroCopy],
+    /// L1 info root used to import bridge exits.
+    pub l1_info_root: Digest,
+    /// Token balances of the origin network before processing bridge events
+    /// (borrowed).
+    pub balances_proofs: &'a [BalanceProofEntryZeroCopy],
+    /// Balance Merkle paths (borrowed).
+    pub balance_merkle_paths: &'a [BalanceMerkleProofZeroCopy],
+    /// Aggchain data.
+    pub aggchain_data: AggchainData,
+    /// Certificate id.
+    pub certificate_id: Digest,
+}
+
+// Implementation for MultiBatchHeaderRef
+impl MultiBatchHeaderRef<'_> {
+    /// Convert to owned MultiBatchHeader by cloning all borrowed data.
+    pub fn to_owned(&self) -> Result<MultiBatchHeader, Box<dyn std::error::Error + Send + Sync>> {
+        // Convert bridge_exits
+        let bridge_exits: Vec<BridgeExit> = self.bridge_exits.iter().map(|be| be.into()).collect();
+
+        // Convert imported_bridge_exits and nullifier_paths
+        let imported_bridge_exits: Vec<(ImportedBridgeExit, NullifierPath)> = self
+            .imported_bridge_exits
+            .iter()
+            .zip(self.nullifier_paths.iter())
+            .map(|(ibe, path)| {
+                let imported_bridge_exit = ImportedBridgeExit::try_from(ibe)?;
+                let nullifier_path = path.into();
+                Ok((imported_bridge_exit, nullifier_path))
+            })
+            .collect::<Result<_, Box<dyn std::error::Error + Send + Sync>>>()?;
+
+        // Convert balances_proofs and balance_merkle_paths
+        let balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath))> = self
+            .balances_proofs
+            .iter()
+            .zip(self.balance_merkle_paths.iter())
+            .map(|(bp, path)| {
+                let token_info = (&bp.token_info).into();
+                let balance = U256::from_be_bytes(bp.balance);
+                let merkle_path = balance_merkle_proof_from_zero_copy(path);
+                (token_info, (balance, merkle_path))
+            })
+            .collect();
+
+        Ok(MultiBatchHeader {
+            origin_network: self.origin_network,
+            height: self.height,
+            prev_pessimistic_root: self.prev_pessimistic_root,
+            bridge_exits,
+            imported_bridge_exits,
+            l1_info_root: self.l1_info_root,
+            balances_proofs,
+            aggchain_data: self.aggchain_data.clone(),
+            certificate_id: self.certificate_id,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Deep comparison function to check for lossy conversions
+    /// This function compares all fields including nested structures
+    /// Uses Eq where available, manual comparison where needed
+    fn deep_equals(original: &MultiBatchHeader, reconstructed: &MultiBatchHeader) -> bool {
+        // Compare basic fields (all have Eq)
+        if original.origin_network != reconstructed.origin_network
+            || original.height != reconstructed.height
+            || original.prev_pessimistic_root != reconstructed.prev_pessimistic_root
+            || original.bridge_exits != reconstructed.bridge_exits
+            || original.l1_info_root != reconstructed.l1_info_root
+            || original.aggchain_data != reconstructed.aggchain_data
+            || original.certificate_id != reconstructed.certificate_id
+        {
+            return false;
+        }
+
+        // Compare imported_bridge_exits (most fields have Eq, only nullifier paths need
+        // manual comparison)
+        if original.imported_bridge_exits.len() != reconstructed.imported_bridge_exits.len() {
+            return false;
+        }
+        for (orig, rec) in original
+            .imported_bridge_exits
+            .iter()
+            .zip(reconstructed.imported_bridge_exits.iter())
+        {
+            // Compare ImportedBridgeExit (has Eq)
+            if orig.0 != rec.0 {
+                return false;
+            }
+            // Compare nullifier paths manually (SmtNonInclusionProof doesn't have Eq)
+            if orig.1.siblings != rec.1.siblings {
+                return false;
+            }
+        }
+
+        // Compare balances_proofs (most fields have Eq, only merkle paths need manual
+        // comparison)
+        if original.balances_proofs.len() != reconstructed.balances_proofs.len() {
+            return false;
+        }
+        for (orig, rec) in original
+            .balances_proofs
+            .iter()
+            .zip(reconstructed.balances_proofs.iter())
+        {
+            // Compare TokenInfo and U256 (both have Eq)
+            if orig.0 != rec.0 || orig.1 .0 != rec.1 .0 {
+                return false;
+            }
+            // Compare merkle paths manually (SmtMerkleProof doesn't have Eq)
+            if orig.1 .1.siblings != rec.1 .1.siblings {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Test helper to create a sample BridgeExit
+    fn create_sample_bridge_exit() -> BridgeExit {
+        BridgeExit {
+            leaf_type: LeafType::Message,
+            token_info: TokenInfo {
+                origin_network: NetworkId::new(1),
+                origin_token_address: Address::from([1u8; 20]),
+            },
+            dest_network: NetworkId::new(2),
+            dest_address: Address::from([2u8; 20]),
+            amount: U256::from(1000u64),
+            metadata: Some(Digest([3u8; 32])),
+        }
+    }
+
+    /// Test helper to create a sample ImportedBridgeExit
+    fn create_sample_imported_bridge_exit() -> ImportedBridgeExit {
+        ImportedBridgeExit {
+            bridge_exit: create_sample_bridge_exit(),
+            claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
+                proof_leaf_mer: MerkleProof {
+                    proof: LETMerkleProof {
+                        siblings: [Digest([4u8; 32]); 32],
+                    },
+                    root: Digest([5u8; 32]),
+                },
+                proof_ger_l1root: MerkleProof {
+                    proof: LETMerkleProof {
+                        siblings: [Digest([6u8; 32]); 32],
+                    },
+                    root: Digest([7u8; 32]),
+                },
+                l1_leaf: L1InfoTreeLeaf {
+                    l1_info_tree_index: 42,
+                    rer: Digest([8u8; 32]),
+                    mer: Digest([9u8; 32]),
+                    inner: L1InfoTreeLeafInner {
+                        block_hash: Digest([10u8; 32]),
+                        timestamp: 1234567890,
+                        global_exit_root: Digest([11u8; 32]),
+                    },
+                },
+            })),
+            global_index: GlobalIndex::new(NetworkId::new(3), 123),
+        }
+    }
+
+    /// Test helper to create a sample ImportedBridgeExit with Rollup claim
+    fn create_sample_imported_bridge_exit_rollup() -> ImportedBridgeExit {
+        ImportedBridgeExit {
+            bridge_exit: create_sample_bridge_exit(),
+            claim_data: Claim::Rollup(Box::new(ClaimFromRollup {
+                proof_leaf_ler: MerkleProof {
+                    proof: LETMerkleProof {
+                        siblings: [Digest([12u8; 32]); 32],
+                    },
+                    root: Digest([13u8; 32]),
+                },
+                proof_ler_rer: MerkleProof {
+                    proof: LETMerkleProof {
+                        siblings: [Digest([14u8; 32]); 32],
+                    },
+                    root: Digest([15u8; 32]),
+                },
+                proof_ger_l1root: MerkleProof {
+                    proof: LETMerkleProof {
+                        siblings: [Digest([16u8; 32]); 32],
+                    },
+                    root: Digest([17u8; 32]),
+                },
+                l1_leaf: L1InfoTreeLeaf {
+                    l1_info_tree_index: 43,
+                    rer: Digest([18u8; 32]),
+                    mer: Digest([19u8; 32]),
+                    inner: L1InfoTreeLeafInner {
+                        block_hash: Digest([20u8; 32]),
+                        timestamp: 1234567891,
+                        global_exit_root: Digest([21u8; 32]),
+                    },
+                },
+            })),
+            global_index: GlobalIndex::new(NetworkId::new(4), 124),
+        }
+    }
+
+    /// Test helper to create a sample TokenInfo
+    fn create_sample_token_info() -> TokenInfo {
+        TokenInfo {
+            origin_network: NetworkId::new(4),
+            origin_token_address: Address::from([12u8; 20]),
+        }
+    }
+
+    /// Test helper to create a sample BalanceMerkleProof
+    fn create_sample_balance_merkle_proof() -> BalanceMerkleProof {
+        BalanceMerkleProof {
+            siblings: [Digest([13u8; 32]); 192],
+        }
+    }
+
+    /// Test helper to create a sample NullifierNonInclusionProof
+    fn create_sample_nullifier_non_inclusion_proof() -> NullifierNonInclusionProof {
+        NullifierNonInclusionProof {
+            siblings: vec![Digest([14u8; 32]); 64],
+        }
+    }
+
+    /// Test helper to create a sample NullifierNonInclusionProof with fewer
+    /// siblings
+    fn create_sample_nullifier_non_inclusion_proof_partial() -> NullifierNonInclusionProof {
+        NullifierNonInclusionProof {
+            siblings: vec![Digest([15u8; 32]); 32], // Only 32 siblings instead of 64
+        }
+    }
+
+    /// Test helper to create a sample MultiBatchHeader
+    fn create_sample_multi_batch_header() -> MultiBatchHeader {
+        MultiBatchHeader {
+            origin_network: NetworkId::new(5),
+            height: 1000,
+            prev_pessimistic_root: Digest([15u8; 32]),
+            bridge_exits: vec![create_sample_bridge_exit()],
+            imported_bridge_exits: vec![(
+                create_sample_imported_bridge_exit(),
+                create_sample_nullifier_non_inclusion_proof(),
+            )],
+            l1_info_root: Digest([16u8; 32]),
+            balances_proofs: vec![(
+                create_sample_token_info(),
+                (U256::from(5000u64), create_sample_balance_merkle_proof()),
+            )],
+            aggchain_data: AggchainData::LegacyEcdsa {
+                signer: Address::from([17u8; 20]),
+                signature: Signature::new(U256::from(18u64), U256::from(19u64), true),
+            },
+            certificate_id: Digest([20u8; 32]),
+        }
+    }
+
+    /// Test helper to create a sample MultiBatchHeader with Generic aggchain
+    /// proof
+    fn create_sample_multi_batch_header_generic() -> MultiBatchHeader {
+        MultiBatchHeader {
+            origin_network: NetworkId::new(6),
+            height: 2000,
+            prev_pessimistic_root: Digest([20u8; 32]),
+            bridge_exits: vec![create_sample_bridge_exit()],
+            imported_bridge_exits: vec![(
+                create_sample_imported_bridge_exit(),
+                create_sample_nullifier_non_inclusion_proof(),
+            )],
+            l1_info_root: Digest([21u8; 32]),
+            balances_proofs: vec![(
+                create_sample_token_info(),
+                (U256::from(7000u64), create_sample_balance_merkle_proof()),
+            )],
+            aggchain_data: AggchainData::AggchainProofOnly(crate::aggchain_data::AggchainProof {
+                aggchain_params: Digest([22u8; 32]),
+                aggchain_vkey: [23u32, 24u32, 25u32, 26u32, 27u32, 28u32, 29u32, 30u32],
+            }),
+            certificate_id: Digest([21u8; 32]),
+        }
+    }
+
+    /// Test helper to create a sample MultiBatchHeader with Rollup claims
+    fn create_sample_multi_batch_header_rollup() -> MultiBatchHeader {
+        MultiBatchHeader {
+            origin_network: NetworkId::new(7),
+            height: 3000,
+            prev_pessimistic_root: Digest([30u8; 32]),
+            bridge_exits: vec![create_sample_bridge_exit()],
+            imported_bridge_exits: vec![(
+                create_sample_imported_bridge_exit_rollup(),
+                create_sample_nullifier_non_inclusion_proof(),
+            )],
+            l1_info_root: Digest([31u8; 32]),
+            balances_proofs: vec![(
+                create_sample_token_info(),
+                (U256::from(8000u64), create_sample_balance_merkle_proof()),
+            )],
+            aggchain_data: AggchainData::LegacyEcdsa {
+                signer: Address::from([32u8; 20]),
+                signature: Signature::new(U256::from(33u64), U256::from(34u64), false),
+            },
+            certificate_id: Digest([31u8; 32]),
+        }
+    }
+
+    /// Test helper to create a sample MultiBatchHeader with mixed claims
+    fn create_sample_multi_batch_header_mixed() -> MultiBatchHeader {
+        MultiBatchHeader {
+            origin_network: NetworkId::new(8),
+            height: 4000,
+            prev_pessimistic_root: Digest([40u8; 32]),
+            bridge_exits: vec![create_sample_bridge_exit()],
+            imported_bridge_exits: vec![
+                (
+                    create_sample_imported_bridge_exit(),
+                    create_sample_nullifier_non_inclusion_proof(),
+                ),
+                (
+                    create_sample_imported_bridge_exit_rollup(),
+                    create_sample_nullifier_non_inclusion_proof(),
+                ),
+            ],
+            l1_info_root: Digest([41u8; 32]),
+            balances_proofs: vec![(
+                create_sample_token_info(),
+                (U256::from(9000u64), create_sample_balance_merkle_proof()),
+            )],
+            aggchain_data: AggchainData::AggchainProofOnly(crate::aggchain_data::AggchainProof {
+                aggchain_params: Digest([42u8; 32]),
+                aggchain_vkey: [43u32, 44u32, 45u32, 46u32, 47u32, 48u32, 49u32, 50u32],
+            }),
+            certificate_id: Digest([41u8; 32]),
+        }
+    }
+
+    #[test]
+    fn test_bridge_exit_zero_copy_edge_cases() {
+        // Test with maximum values
+        let mut bridge_exit = create_sample_bridge_exit();
+        bridge_exit.amount = U256::MAX;
+        bridge_exit.metadata = Some(Digest([0xFFu8; 32]));
+
+        let zero_copy: BridgeExitZeroCopy = (&bridge_exit).into();
+        let reconstructed: BridgeExit = (&zero_copy).into();
+
+        assert_eq!(bridge_exit.amount, reconstructed.amount);
+        assert_eq!(bridge_exit.metadata, reconstructed.metadata);
+        assert_eq!(zero_copy.has_metadata, 1);
+
+        // Test with zero values
+        let mut bridge_exit = create_sample_bridge_exit();
+        bridge_exit.amount = U256::ZERO;
+        bridge_exit.metadata = None;
+
+        let zero_copy: BridgeExitZeroCopy = (&bridge_exit).into();
+        let reconstructed: BridgeExit = (&zero_copy).into();
+
+        assert_eq!(bridge_exit.amount, reconstructed.amount);
+        assert_eq!(bridge_exit.metadata, reconstructed.metadata);
+        assert_eq!(zero_copy.has_metadata, 0);
+
+        // Test with zero metadata hash but has_metadata = 1 (should preserve the hash)
+        let mut bridge_exit = create_sample_bridge_exit();
+        bridge_exit.metadata = Some(Digest([0u8; 32])); // Zero hash
+
+        let zero_copy: BridgeExitZeroCopy = (&bridge_exit).into();
+        let reconstructed: BridgeExit = (&zero_copy).into();
+
+        assert_eq!(bridge_exit.metadata, reconstructed.metadata);
+        assert_eq!(zero_copy.has_metadata, 1);
+        assert_eq!(zero_copy.metadata_hash, [0u8; 32]);
+    }
+
+    #[test]
+    fn test_invalid_aggchain_proof_type() {
+        let original = create_sample_multi_batch_header();
+        let mut zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
+        zero_copy.aggchain_data.aggchain_proof_type = 255; // Invalid type
+
+        let result: Result<MultiBatchHeader, _> = MultiBatchHeader::try_from(&zero_copy);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid aggchain proof type"));
+    }
+
+    /// Test demonstrating full recovery and borrowed view functionality for all
+    /// claim types and aggchain proof types.
+    #[test]
+    fn test_zero_copy_recovery_and_borrowed_view() {
+        let test_cases = vec![
+            ("ECDSA + Mainnet", create_sample_multi_batch_header()),
+            (
+                "Generic + Mainnet",
+                create_sample_multi_batch_header_generic(),
+            ),
+            ("ECDSA + Rollup", create_sample_multi_batch_header_rollup()),
+            ("Generic + Mixed", create_sample_multi_batch_header_mixed()),
+        ];
+
+        for (_case_name, original) in test_cases {
+            // Test full recovery
+            test_zero_copy_recovery(&original);
+
+            // Test borrowed view recovery
+            test_borrowed_view_recovery(&original);
+        }
+    }
+
+    /// Test that alignment errors are handled correctly when using
+    /// try_cast_slice.
+    #[test]
+    fn test_alignment_error_handling() {
+        let original = create_sample_multi_batch_header();
+        let components = original
+            .to_zero_copy_components()
+            .expect("Failed to convert to zero-copy components");
+
+        // Test with misaligned data by adding a single byte
+        let mut misaligned_bridge_exits = vec![0u8];
+        misaligned_bridge_exits.extend_from_slice(&components.bridge_exits_bytes);
+
+        let result = MultiBatchHeader::from_zero_copy_components(
+            &components.header_bytes,
+            &misaligned_bridge_exits,
+            &components.imported_bridge_exits_bytes,
+            &components.nullifier_paths_bytes,
+            &components.balances_proofs_bytes,
+            &components.balance_merkle_paths_bytes,
+            &components.multisig_signatures_bytes,
+            &components.multisig_expected_signers_bytes,
+        );
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to cast bridge_exits_bytes"));
+    }
+
+    /// Helper function to test zero-copy recovery for a given MultiBatchHeader
+    fn test_zero_copy_recovery(original: &MultiBatchHeader) {
+        // Use the new helper function to get all zero-copy components
+        let components = original
+            .to_zero_copy_components()
+            .expect("Failed to convert to zero-copy components");
+
+        // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
+        let borrowed_view = MultiBatchHeader::from_zero_copy_components(
+            &components.header_bytes,
+            &components.bridge_exits_bytes,
+            &components.imported_bridge_exits_bytes,
+            &components.nullifier_paths_bytes,
+            &components.balances_proofs_bytes,
+            &components.balance_merkle_paths_bytes,
+            &components.multisig_signatures_bytes,
+            &components.multisig_expected_signers_bytes,
+        )
+        .expect("Failed to reconstruct MultiBatchHeaderRef");
+
+        // Convert to owned for deep comparison
+        let reconstructed = borrowed_view
+            .to_owned()
+            .expect("Failed to convert to owned");
+
+        // Verify full recovery using comprehensive deep comparison
+        // This will catch any lossy conversions in any field
+        assert!(
+            deep_equals(original, &reconstructed),
+            "Deep comparison failed - there are lossy conversions!"
+        );
+    }
+
+    /// Helper function to test borrowed view recovery for a given
+    /// MultiBatchHeader
+    fn test_borrowed_view_recovery(original: &MultiBatchHeader) {
+        // Use the new helper function to get all zero-copy components
+        let components = original
+            .to_zero_copy_components()
+            .expect("Failed to convert to zero-copy components");
+
+        // Reconstruct the MultiBatchHeaderRef (borrowed view) from zero-copy components
+        let borrowed_view = MultiBatchHeader::from_zero_copy_components(
+            &components.header_bytes,
+            &components.bridge_exits_bytes,
+            &components.imported_bridge_exits_bytes,
+            &components.nullifier_paths_bytes,
+            &components.balances_proofs_bytes,
+            &components.balance_merkle_paths_bytes,
+            &components.multisig_signatures_bytes,
+            &components.multisig_expected_signers_bytes,
+        )
+        .expect("Failed to reconstruct MultiBatchHeaderRef");
+
+        // Convert to owned and verify full recovery
+        let reconstructed = borrowed_view
+            .to_owned()
+            .expect("Failed to convert to owned");
+
+        // Verify full recovery using comprehensive deep comparison
+        // This will catch any lossy conversions in any field
+        assert!(
+            deep_equals(original, &reconstructed),
+            "Deep comparison failed - there are lossy conversions in borrowed view!"
+        );
+
+        // Verify that the borrowed view has the correct counts
+        assert_eq!(
+            borrowed_view.bridge_exits.len(),
+            original.bridge_exits.len()
+        );
+        assert_eq!(
+            borrowed_view.imported_bridge_exits.len(),
+            original.imported_bridge_exits.len()
+        );
+        assert_eq!(
+            borrowed_view.nullifier_paths.len(),
+            original.imported_bridge_exits.len()
+        );
+        assert_eq!(
+            borrowed_view.balances_proofs.len(),
+            original.balances_proofs.len()
+        );
+        assert_eq!(
+            borrowed_view.balance_merkle_paths.len(),
+            original.balances_proofs.len()
+        );
+
+        // Verify that the borrowed view has the correct basic fields
+        assert_eq!(borrowed_view.origin_network, original.origin_network);
+        assert_eq!(borrowed_view.height, original.height);
+        assert_eq!(
+            borrowed_view.prev_pessimistic_root,
+            original.prev_pessimistic_root
+        );
+        assert_eq!(borrowed_view.l1_info_root, original.l1_info_root);
+    }
+
+    /// Test that ClaimZeroCopy correctly handles both Mainnet and Rollup
+    /// claims.
+    #[test]
+    fn test_claim_zero_copy_conversion() {
+        // Test Mainnet claim
+        let mainnet_imported_exit = create_sample_imported_bridge_exit();
+        let mainnet_claim_zero_copy = ClaimZeroCopy::from(&mainnet_imported_exit.claim_data);
+        let reconstructed_mainnet_claim = Claim::try_from(&mainnet_claim_zero_copy).unwrap();
+
+        match (
+            &mainnet_imported_exit.claim_data,
+            &reconstructed_mainnet_claim,
+        ) {
+            (Claim::Mainnet(orig), Claim::Mainnet(rec)) => {
+                assert_eq!(orig.proof_leaf_mer.root, rec.proof_leaf_mer.root);
+                assert_eq!(orig.proof_ger_l1root.root, rec.proof_ger_l1root.root);
+                assert_eq!(
+                    orig.l1_leaf.l1_info_tree_index,
+                    rec.l1_leaf.l1_info_tree_index
+                );
+            }
+            _ => panic!("Expected Mainnet claims"),
+        }
+
+        // Test Rollup claim
+        let rollup_imported_exit = create_sample_imported_bridge_exit_rollup();
+        let rollup_claim_zero_copy = ClaimZeroCopy::from(&rollup_imported_exit.claim_data);
+        let reconstructed_rollup_claim = Claim::try_from(&rollup_claim_zero_copy).unwrap();
+
+        match (
+            &rollup_imported_exit.claim_data,
+            &reconstructed_rollup_claim,
+        ) {
+            (Claim::Rollup(orig), Claim::Rollup(rec)) => {
+                assert_eq!(orig.proof_leaf_ler.root, rec.proof_leaf_ler.root);
+                assert_eq!(orig.proof_ler_rer.root, rec.proof_ler_rer.root);
+                assert_eq!(orig.proof_ger_l1root.root, rec.proof_ger_l1root.root);
+                assert_eq!(
+                    orig.l1_leaf.l1_info_tree_index,
+                    rec.l1_leaf.l1_info_tree_index
+                );
+            }
+            _ => panic!("Expected Rollup claims"),
+        }
+    }
+
+    /// Test that invalid claim types are handled correctly.
+    #[test]
+    fn test_invalid_claim_type() {
+        let mut claim_zero_copy =
+            ClaimZeroCopy::from(&create_sample_imported_bridge_exit().claim_data);
+        claim_zero_copy.claim_type = 255; // Invalid type
+
+        let result = Claim::try_from(&claim_zero_copy);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid claim type"));
+    }
+
+    /// Test that SmtNonInclusionProofZeroCopy correctly handles variable-length
+    /// siblings.
+    #[test]
+    fn test_smt_non_inclusion_proof_variable_length() {
+        // Test with full-length proof (64 siblings)
+        let full_proof = create_sample_nullifier_non_inclusion_proof();
+        let full_zero_copy = SmtNonInclusionProofZeroCopy::from(&full_proof);
+        let reconstructed_full: NullifierNonInclusionProof = (&full_zero_copy).into();
+
+        assert_eq!(full_proof.siblings.len(), reconstructed_full.siblings.len());
+        assert_eq!(full_proof.siblings, reconstructed_full.siblings);
+        assert_eq!(full_zero_copy.num_siblings, 64);
+
+        // Test with partial-length proof (32 siblings)
+        let partial_proof = create_sample_nullifier_non_inclusion_proof_partial();
+        let partial_zero_copy = SmtNonInclusionProofZeroCopy::from(&partial_proof);
+        let reconstructed_partial: NullifierNonInclusionProof = (&partial_zero_copy).into();
+
+        assert_eq!(
+            partial_proof.siblings.len(),
+            reconstructed_partial.siblings.len()
+        );
+        assert_eq!(partial_proof.siblings, reconstructed_partial.siblings);
+        assert_eq!(partial_zero_copy.num_siblings, 32);
+
+        // Verify that the zero-copy struct has the correct size
+        assert_eq!(core::mem::size_of::<SmtNonInclusionProofZeroCopy>(), 2052);
+    }
+
+    /// Test that signature reconstruction correctly handles Ethereum v values
+    /// (27/28).
+    #[test]
+    fn test_signature_reconstruction_ethereum_v() {
+        // Create a sample MultiBatchHeader with ECDSA signature
+        let original = create_sample_multi_batch_header();
+
+        // Convert to zero-copy and back
+        let zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
+        let reconstructed: MultiBatchHeader = MultiBatchHeader::try_from(&zero_copy).unwrap();
+
+        // Verify that the signature was reconstructed correctly
+        match (&original.aggchain_data, &reconstructed.aggchain_data) {
+            (
+                AggchainData::LegacyEcdsa {
+                    signer: orig_signer,
+                    signature: orig_sig,
+                },
+                AggchainData::LegacyEcdsa {
+                    signer: rec_signer,
+                    signature: rec_sig,
+                },
+            ) => {
+                assert_eq!(orig_signer, rec_signer);
+                assert_eq!(orig_sig.r(), rec_sig.r());
+                assert_eq!(orig_sig.s(), rec_sig.s());
+                assert_eq!(orig_sig.v(), rec_sig.v());
+            }
+            _ => panic!("Expected ECDSA signatures"),
+        }
+    }
+
+    /// Test that struct sizes and alignments are as expected.
+    /// This test verifies both compile-time and runtime struct layouts.
+    #[test]
+    fn test_struct_sizes_and_alignments() {
+        // Compile-time size and alignment assertions
+        assert_eq!(core::mem::size_of::<BridgeExitZeroCopy>(), 116);
+        assert_eq!(core::mem::size_of::<BalanceMerkleProofZeroCopy>(), 6144);
+        assert_eq!(core::mem::size_of::<SmtNonInclusionProofZeroCopy>(), 2052);
+        assert_eq!(core::mem::size_of::<ClaimZeroCopy>(), 3592);
+        assert_eq!(core::mem::size_of::<MultiBatchHeaderZeroCopy>(), 296);
+        assert_eq!(core::mem::size_of::<BalanceProofEntryZeroCopy>(), 64);
+        assert_eq!(core::mem::size_of::<AggchainDataZeroCopy>(), 176);
+
+        // Compile-time alignment assertions
+        assert_eq!(core::mem::align_of::<BridgeExitZeroCopy>(), 4);
+        assert_eq!(core::mem::align_of::<BalanceMerkleProofZeroCopy>(), 1);
+        assert_eq!(core::mem::align_of::<SmtNonInclusionProofZeroCopy>(), 1);
+        assert_eq!(core::mem::align_of::<ClaimZeroCopy>(), 1);
+        #[cfg(target_pointer_width = "64")]
+        {
+            assert_eq!(core::mem::align_of::<MultiBatchHeaderZeroCopy>(), 8);
+            assert_eq!(core::mem::align_of::<AggchainDataZeroCopy>(), 8);
+        }
+        assert_eq!(core::mem::align_of::<BalanceProofEntryZeroCopy>(), 4);
+
+        // Runtime size and alignment verification for large structs
+        let balance_proof = BalanceMerkleProofZeroCopy {
+            chunks: [Hash256Chunk32([[0u8; 32]; 32]); 6],
+        };
+        assert_eq!(core::mem::size_of_val(&balance_proof), 6144);
+        assert_eq!(core::mem::align_of_val(&balance_proof), 1);
+
+        let smt_non_inclusion_proof = SmtNonInclusionProofZeroCopy {
+            num_siblings: 64,
+            _padding: [0; 3],
+            chunks: [Hash256Chunk32([[0u8; 32]; 32]); 2],
+        };
+        assert_eq!(core::mem::size_of_val(&smt_non_inclusion_proof), 2052);
+        assert_eq!(core::mem::align_of_val(&smt_non_inclusion_proof), 1);
+
+        let claim = ClaimZeroCopy {
+            claim_type: CLAIM_TYPE_MAINNET,
+            _padding: [0; 7],
+            chunks: [ClaimDataChunk256([0u8; 256]); 14],
+        };
+        assert_eq!(core::mem::size_of_val(&claim), 3592);
+        assert_eq!(core::mem::align_of_val(&claim), 1);
+
+        let header = MultiBatchHeaderZeroCopy {
+            height: 0,
+            origin_network: 0,
+            bridge_exits_count: 0,
+            imported_bridge_exits_count: 0,
+            balances_proofs_count: 0,
+            prev_pessimistic_root: [0u8; 32],
+            l1_info_root: [0u8; 32],
+            aggchain_data: AggchainDataZeroCopy {
+                multisig_threshold: 0,
+                ecdsa_signer: EcdsaSignerData([0; 20]),
+                ecdsa_signature: EcdsaSignatureData {
+                    rs_data: [0; 64],
+                    v_data: 0,
+                    _padding: [0; 3],
+                },
+                generic_params: GenericParamsData([0; 32]),
+                generic_vkey: GenericVkeyData([0; 8]),
+                multisig_expected_signers_count: 0,
+                multisig_signatures_count: 0,
+                aggchain_proof_type: 0,
+                _padding: [0; 7],
+            },
+            certificate_id: [0u8; 32],
+        };
+        assert_eq!(core::mem::size_of_val(&header), 296);
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(core::mem::align_of_val(&header), 8);
+    }
+
+    /// Test edge cases and serialization for AggchainDataZeroCopy.
+    #[test]
+    fn test_aggchain_data_zero_copy_edge_cases() {
+        // Test with maximum values for ECDSA
+        let max_ecdsa = AggchainData::LegacyEcdsa {
+            signer: Address::from([0xFFu8; 20]),
+            signature: Signature::new(U256::MAX, U256::MAX, true),
+        };
+
+        let zero_copy = AggchainDataZeroCopy::from(&max_ecdsa);
+        let reconstructed = AggchainData::try_from(&zero_copy).unwrap();
+
+        match (&max_ecdsa, &reconstructed) {
+            (
+                AggchainData::LegacyEcdsa {
+                    signer: orig_signer,
+                    signature: orig_sig,
+                },
+                AggchainData::LegacyEcdsa {
+                    signer: rec_signer,
+                    signature: rec_sig,
+                },
+            ) => {
+                assert_eq!(orig_signer, rec_signer);
+                assert_eq!(orig_sig.r(), rec_sig.r());
+                assert_eq!(orig_sig.s(), rec_sig.s());
+                assert_eq!(orig_sig.v(), rec_sig.v());
+            }
+            _ => panic!("Expected ECDSA variants"),
+        }
+
+        // Test with maximum values for Generic
+        let max_generic = AggchainData::AggchainProofOnly(crate::aggchain_data::AggchainProof {
+            aggchain_params: Digest([0xFFu8; 32]),
+            aggchain_vkey: [u32::MAX; 8],
+        });
+
+        let zero_copy = AggchainDataZeroCopy::from(&max_generic);
+        let reconstructed = AggchainData::try_from(&zero_copy).unwrap();
+
+        match (&max_generic, &reconstructed) {
+            (
+                AggchainData::AggchainProofOnly(orig_proof),
+                AggchainData::AggchainProofOnly(rec_proof),
+            ) => {
+                assert_eq!(orig_proof.aggchain_params, rec_proof.aggchain_params);
+                assert_eq!(orig_proof.aggchain_vkey, rec_proof.aggchain_vkey);
+            }
+            _ => panic!("Expected AggchainProofOnly variants"),
+        }
+
+        // Test with zero values
+        let zero_ecdsa = AggchainData::LegacyEcdsa {
+            signer: Address::from([0u8; 20]),
+            signature: Signature::new(U256::ZERO, U256::ZERO, false),
+        };
+
+        let zero_copy = AggchainDataZeroCopy::from(&zero_ecdsa);
+        let reconstructed = AggchainData::try_from(&zero_copy).unwrap();
+
+        match (&zero_ecdsa, &reconstructed) {
+            (
+                AggchainData::LegacyEcdsa {
+                    signer: orig_signer,
+                    signature: orig_sig,
+                },
+                AggchainData::LegacyEcdsa {
+                    signer: rec_signer,
+                    signature: rec_sig,
+                },
+            ) => {
+                assert_eq!(orig_signer, rec_signer);
+                assert_eq!(orig_sig.r(), rec_sig.r());
+                assert_eq!(orig_sig.s(), rec_sig.s());
+                assert_eq!(orig_sig.v(), rec_sig.v());
+            }
+            _ => panic!("Expected ECDSA variants"),
+        }
+
+        // Test that padding doesn't interfere with data
+        let mut zero_copy_with_padding = AggchainDataZeroCopy::from(&max_ecdsa);
+        zero_copy_with_padding._padding = [0xAAu8; 7]; // Set padding to non-zero values to verify it's ignored
+
+        let reconstructed = AggchainData::try_from(&zero_copy_with_padding).unwrap();
+
+        match (&max_ecdsa, &reconstructed) {
+            (
+                AggchainData::LegacyEcdsa {
+                    signer: orig_signer,
+                    signature: orig_sig,
+                },
+                AggchainData::LegacyEcdsa {
+                    signer: rec_signer,
+                    signature: rec_sig,
+                },
+            ) => {
+                assert_eq!(orig_signer, rec_signer);
+                assert_eq!(orig_sig.r(), rec_sig.r());
+                assert_eq!(orig_sig.s(), rec_sig.s());
+                assert_eq!(orig_sig.v(), rec_sig.v());
+            }
+            _ => panic!("Expected ECDSA variants"),
+        }
+
+        // Test Generic serialization through MultiBatchHeader
+        let original = create_sample_multi_batch_header_generic();
+        let zero_copy: MultiBatchHeaderZeroCopy = (&original).into();
+        let reconstructed: MultiBatchHeader = MultiBatchHeader::try_from(&zero_copy).unwrap();
+
+        match (&original.aggchain_data, &reconstructed.aggchain_data) {
+            (
+                AggchainData::AggchainProofOnly(orig_proof),
+                AggchainData::AggchainProofOnly(rec_proof),
+            ) => {
+                assert_eq!(orig_proof.aggchain_params, rec_proof.aggchain_params);
+                assert_eq!(orig_proof.aggchain_vkey, rec_proof.aggchain_vkey);
+            }
+            _ => panic!("Expected AggchainProofOnly aggchain data"),
+        }
+    }
+
+    /// Test comprehensive lossless conversion for all AggchainData variants.
+    /// This verifies that the enhanced zerocopy implementation can handle
+    /// multisig data.
+    #[test]
+    fn test_aggchain_data_all_variants_lossless() {
+        // Test 1: LegacyEcdsa
+        let legacy_ecdsa = AggchainData::LegacyEcdsa {
+            signer: Address::from([0x42u8; 20]),
+            signature: Signature::new(U256::from(12345u64), U256::from(67890u64), true),
+        };
+
+        let (header, multisig_components) = legacy_ecdsa.to_zero_copy_components().unwrap();
+        assert!(multisig_components.is_none()); // No multisig data
+        let reconstructed =
+            AggchainData::from_zero_copy_with_multisig_data(&header, multisig_components.as_ref())
+                .unwrap();
+        assert_eq!(legacy_ecdsa, reconstructed);
+
+        // Test 2: AggchainProofOnly
+        let aggchain_only = AggchainData::AggchainProofOnly(AggchainProof {
+            aggchain_params: Digest([0x33u8; 32]),
+            aggchain_vkey: [1, 2, 3, 4, 5, 6, 7, 8],
+        });
+
+        let (header, multisig_components) = aggchain_only.to_zero_copy_components().unwrap();
+        assert!(multisig_components.is_none()); // No multisig data
+        let reconstructed =
+            AggchainData::from_zero_copy_with_multisig_data(&header, multisig_components.as_ref())
+                .unwrap();
+        assert_eq!(aggchain_only, reconstructed);
+
+        // Test 3: MultisigOnly
+        let multisig_only = AggchainData::MultisigOnly(MultiSignature {
+            signatures: vec![
+                (
+                    0,
+                    Signature::new(U256::from(111u64), U256::from(222u64), false),
+                ),
+                (
+                    2,
+                    Signature::new(U256::from(333u64), U256::from(444u64), true),
+                ),
+            ],
+            expected_signers: vec![
+                Address::from([0x11u8; 20]),
+                Address::from([0x22u8; 20]),
+                Address::from([0x33u8; 20]),
+            ],
+            threshold: 2,
+        });
+
+        let (header, multisig_components) = multisig_only.to_zero_copy_components().unwrap();
+        assert!(multisig_components.is_some()); // Has multisig data
+        let reconstructed =
+            AggchainData::from_zero_copy_with_multisig_data(&header, multisig_components.as_ref())
+                .unwrap();
+        assert_eq!(multisig_only, reconstructed);
+
+        // Test 4: MultisigAndAggchainProof
+        let multisig_and_aggchain = AggchainData::MultisigAndAggchainProof {
+            multisig: MultiSignature {
+                signatures: vec![(
+                    1,
+                    Signature::new(U256::from(555u64), U256::from(666u64), false),
+                )],
+                expected_signers: vec![Address::from([0x44u8; 20]), Address::from([0x55u8; 20])],
+                threshold: 1,
+            },
+            aggchain_proof: AggchainProof {
+                aggchain_params: Digest([0x99u8; 32]),
+                aggchain_vkey: [10, 20, 30, 40, 50, 60, 70, 80],
+            },
+        };
+
+        let (header, multisig_components) =
+            multisig_and_aggchain.to_zero_copy_components().unwrap();
+        assert!(multisig_components.is_some()); // Has multisig data
+        let reconstructed =
+            AggchainData::from_zero_copy_with_multisig_data(&header, multisig_components.as_ref())
+                .unwrap();
+        assert_eq!(multisig_and_aggchain, reconstructed);
+
+        // Test 5: Verify that regular TryFrom now works for multisig variants (with
+        // empty data)
+        let (header, _) = multisig_only.to_zero_copy_components().unwrap();
+        let result = AggchainData::try_from(&header);
+        assert!(result.is_ok());
+        // Should create multisig with empty data
+        match result.unwrap() {
+            AggchainData::MultisigOnly(multisig) => {
+                assert_eq!(multisig.signatures.len(), 0);
+                assert_eq!(multisig.expected_signers.len(), 0);
+            }
+            _ => panic!("Expected MultisigOnly variant"),
         }
     }
 }
