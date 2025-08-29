@@ -177,6 +177,8 @@ where
                 }))
                 .map_err(CertificationError::Other)?;
             }
+            AggchainData::MultisigOnly(_) => todo!(),
+            AggchainData::MultisigAndAggchainProof { .. } => todo!(),
         };
 
         // SP1 native execution which includes the aggchain proof stark verification

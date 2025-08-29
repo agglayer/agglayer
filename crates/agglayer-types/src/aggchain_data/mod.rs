@@ -41,6 +41,8 @@ impl TryFrom<AggchainData> for global::Payload {
                     public_values,
                 },
             },
+            AggchainData::MultisigOnly(_) => todo!(),
+            AggchainData::MultisigAndAggchainProof { .. } => todo!(),
         })
     }
 }
