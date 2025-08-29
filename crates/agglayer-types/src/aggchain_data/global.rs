@@ -38,11 +38,6 @@ pub enum Payload {
         signature: Signature,
     },
     MultisigOnly(multisig::Payload),
-    AggchainProofOnly {
-        /// ECDSA Signature from the trusted sequencer.
-        signature: Signature,
-        aggchain_proof: aggchain_proof::Payload,
-    },
     MultisigAndAggchainProof {
         multisig: multisig::Payload,
         aggchain_proof: aggchain_proof::Payload,
@@ -57,7 +52,6 @@ pub enum Context {
         signer: Address,
     },
     MultisigOnly(multisig::Ctx),
-    AggchainProofOnly(aggchain_proof::Context),
     MultisigAndAggchainProof {
         multisig_ctx: multisig::Ctx,
         aggchain_proof_ctx: aggchain_proof::Context,
@@ -93,12 +87,6 @@ impl TryInto<core::AggchainData> for PayloadWithCtx<Payload, Context> {
                         .map_err(AggchainDataError::InvalidMultisig)?,
                 ))
             }
-            (
-                Payload::AggchainProofOnly { aggchain_proof, .. },
-                Context::AggchainProofOnly(ctx),
-            ) => Ok(core::AggchainData::AggchainProofOnly(
-                PayloadWithCtx(aggchain_proof, ctx).into(),
-            )),
             (
                 Payload::MultisigAndAggchainProof {
                     multisig,
