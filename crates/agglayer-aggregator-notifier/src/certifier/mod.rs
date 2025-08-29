@@ -173,6 +173,8 @@ where
         stdin.write_vec(components.nullifier_paths_bytes);
         stdin.write_vec(components.balances_proofs_bytes);
         stdin.write_vec(components.balance_merkle_paths_bytes);
+        stdin.write_vec(components.multisig_signatures_bytes);
+        stdin.write_vec(components.multisig_expected_signers_bytes);
 
         // Writing the proof to the stdin if needed
         // At this point, we have the proof and the verifying key coming from the chain
