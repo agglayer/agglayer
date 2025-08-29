@@ -94,7 +94,7 @@ impl KMS {
                 .await
                 .map_err(|e| {
                     Error::KmsError(
-                        anyhow::Error::new(e).context("Unable to create GoogleApiClient"),
+                        eyre::Error::new(e).wrap_err("Unable to create GoogleApiClient"),
                     )
                 })?;
 
@@ -102,7 +102,7 @@ impl KMS {
         let gcp_signer = GcpSigner::new(client, specifier, Some(self.chain_id))
             .await
             .map_err(|e| {
-                Error::KmsError(anyhow::Error::new(e).context("Unable to create GcpSigner"))
+                Error::KmsError(eyre::Error::new(e).wrap_err("Unable to create GcpSigner"))
             })?;
 
         Ok(KmsSigner::new(gcp_signer))

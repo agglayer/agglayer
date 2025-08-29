@@ -1009,12 +1009,18 @@ async fn timeout_certifier() {
     state
         .expect_update_certificate_header_status()
         .once()
-        .with(
-            eq(certificate_id),
-            eq(CertificateStatus::error(
-                CertificateStatusError::InternalError(expected_error),
-            )),
-        )
+        .withf(move |id, status| {
+            if *id != certificate_id {
+                return false;
+            }
+            let CertificateStatus::InError { error } = status else {
+                return false;
+            };
+            let CertificateStatusError::InternalError(error) = &**error else {
+                return false;
+            };
+            error.starts_with(&expected_error)
+        })
         .returning(|_, _| Ok(()));
 
     state

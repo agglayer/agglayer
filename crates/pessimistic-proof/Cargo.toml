@@ -32,6 +32,9 @@ rand = "0.9.0"
 rs_merkle = { version = "1.4", default-features = false }
 
 [build-dependencies]
+color-eyre.workspace = true
+eyre.workspace = true
+
 agglayer-elf-build.workspace = true
 
 [lints]

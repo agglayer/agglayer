@@ -9,9 +9,9 @@ workspace = true
 
 [dependencies]
 alloy.workspace = true
-anyhow.workspace = true
 arc-swap.workspace = true
 buildstructor.workspace = true
+eyre.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
 futures.workspace = true
 hex.workspace = true

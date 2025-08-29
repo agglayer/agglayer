@@ -33,7 +33,7 @@ impl KmsSigner {
         self.signer
             .sign_message(message.as_ref())
             .await
-            .map_err(|e| Error::KmsError(anyhow::Error::new(e).context("Unable to sign message")))
+            .map_err(|e| Error::KmsError(eyre::Error::new(e).wrap_err("Unable to sign message")))
     }
 
     /// Signs a transaction using the internal signer, this method can fail if
@@ -45,7 +45,7 @@ impl KmsSigner {
             .sign_transaction(&mut tx_clone)
             .await
             .map_err(|e| {
-                Error::KmsError(anyhow::Error::new(e).context("Unable to sign transaction"))
+                Error::KmsError(eyre::Error::new(e).wrap_err("Unable to sign transaction"))
             })
     }
 

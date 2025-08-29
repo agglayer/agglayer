@@ -209,7 +209,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
-    ) -> anyhow::Result<JoinHandle<()>> {
+    ) -> eyre::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
             clock,
             data_receiver,

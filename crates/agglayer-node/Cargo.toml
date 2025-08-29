@@ -9,7 +9,6 @@ workspace = true
 
 [dependencies]
 alloy.workspace = true
-anyhow.workspace = true
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }
 arc-swap.workspace = true
 buildstructor.workspace = true

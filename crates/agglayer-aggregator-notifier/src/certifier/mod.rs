@@ -12,7 +12,7 @@ use agglayer_types::{
     aggchain_proof::AggchainData, bincode, Certificate, Digest, Height, LocalNetworkStateData,
     NetworkId, Proof,
 };
-use eyre::Context as _;
+use eyre::{eyre, Context as _};
 use pessimistic_proof::{
     core::{commitment::StateCommitment, generate_pessimistic_proof},
     local_state::LocalNetworkState,
@@ -177,6 +177,8 @@ where
                 }))
                 .map_err(CertificationError::Other)?;
             }
+            AggchainData::MultisigOnly(_) => todo!(),
+            AggchainData::MultisigAndAggchainProof { .. } => todo!(),
         };
 
         // SP1 native execution which includes the aggchain proof stark verification
@@ -195,7 +197,7 @@ where
             })
             .await
             .map_err(CertificationError::Other)?
-            .map_err(CertificationError::Sp1ExecuteFailed)?;
+            .map_err(|e| CertificationError::Sp1ExecuteFailed(eyre!(e)))?;
 
             let pv_sp1_execute: PessimisticProofOutput = PessimisticProofOutput::bincode_codec()
                 .deserialize(pv.as_slice())

@@ -6,8 +6,8 @@ edition.workspace = true
 [dependencies]
 alloy = {workspace = true, features = ["signers", "signer-local", "signer-gcp"]}
 alloy-primitives.workspace = true
-anyhow.workspace = true
 async-trait.workspace = true
+eyre.workspace = true
 gcloud-sdk.workspace = true
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true

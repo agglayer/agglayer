@@ -1,3 +1,4 @@
+use eyre::eyre;
 use pessimistic_proof::NetworkState;
 pub use pessimistic_proof::{multi_batch_header::MultiBatchHeader, PessimisticProofOutput};
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
@@ -49,9 +50,13 @@ impl Runner {
         &self,
         state: &NetworkState,
         batch_header: &MultiBatchHeader,
-    ) -> anyhow::Result<(PessimisticProofOutput, ExecutionReport)> {
+    ) -> eyre::Result<(PessimisticProofOutput, ExecutionReport)> {
         let stdin = Self::prepare_stdin(state, batch_header);
-        let (public_vals, report) = self.client.execute(PESSIMISTIC_PROOF_ELF, &stdin).run()?;
+        let (public_vals, report) = self
+            .client
+            .execute(PESSIMISTIC_PROOF_ELF, &stdin)
+            .run()
+            .map_err(|e| eyre!(e))?;
 
         let output = Self::extract_output(public_vals);
 
@@ -68,7 +73,7 @@ impl Runner {
         &self,
         state: &NetworkState,
         batch_header: &MultiBatchHeader,
-    ) -> anyhow::Result<(
+    ) -> eyre::Result<(
         SP1ProofWithPublicValues,
         SP1VerifyingKey,
         PessimisticProofOutput,
@@ -76,7 +81,12 @@ impl Runner {
         let stdin = Self::prepare_stdin(state, batch_header);
         let (pk, vk) = self.client.setup(PESSIMISTIC_PROOF_ELF);
 
-        let proof = self.client.prove(&pk, &stdin).plonk().run()?;
+        let proof = self
+            .client
+            .prove(&pk, &stdin)
+            .plonk()
+            .run()
+            .map_err(|e| eyre!(e))?;
         let output = Self::extract_output(proof.public_values.clone());
 
         Ok((proof, vk, output))

@@ -17,7 +17,6 @@ prover-config.workspace = true
 prover-executor.workspace = true
 agglayer-prover-config.workspace = true
 
-anyhow.workspace = true
 async-trait.workspace = true
 arc-swap.workspace = true
 alloy.workspace = true

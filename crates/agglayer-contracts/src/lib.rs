@@ -81,7 +81,7 @@ pub enum L1RpcError {
     #[error("Unable to get transaction")]
     UnableToGetTransaction {
         #[source]
-        source: Box<anyhow::Error>,
+        source: eyre::Error,
     },
     #[error("Unable to parse aggchain vkey")]
     UnableToParseAggchainVkey,

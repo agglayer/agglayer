@@ -1,8 +1,7 @@
 use agglayer_config::log::LogFormat;
-use anyhow::Result;
 use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
 
-pub(crate) fn tracing(config: &agglayer_config::Log) -> Result<()> {
+pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<()> {
     // TODO: Support multiple outputs.
     let writer = config.outputs.first().cloned().unwrap_or_default();
 

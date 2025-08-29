@@ -6,8 +6,8 @@ license.workspace = true
 
 [dependencies]
 alloy.workspace = true
-anyhow.workspace = true
 async-trait.workspace = true
+eyre.workspace = true
 fail.workspace = true
 hex.workspace = true
 num-traits = "0.2"
