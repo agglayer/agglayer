@@ -3,25 +3,29 @@ use std::sync::Arc;
 use agglayer_grpc_server::node::v1::node_state_service_server::NodeStateService;
 use agglayer_grpc_types::{
     compat::v1::Error,
-    node::v1::{
-        GetCertificateHeaderErrorKind, GetCertificateHeaderRequest, GetCertificateHeaderResponse,
-        GetLatestCertificateHeaderErrorKind, GetLatestCertificateHeaderRequest,
-        GetLatestCertificateHeaderResponse, GetNetworkStatusErrorKind, GetNetworkStatusRequest,
-        GetNetworkStatusResponse, LatestCertificateRequestType,
+    node::{
+        types::v1::NetworkType,
+        v1::{
+            GetCertificateHeaderErrorKind, GetCertificateHeaderRequest,
+            GetCertificateHeaderResponse, GetLatestCertificateHeaderErrorKind,
+            GetLatestCertificateHeaderRequest, GetLatestCertificateHeaderResponse,
+            GetNetworkStateErrorKind, GetNetworkStateRequest, GetNetworkStateResponse,
+            LatestCertificateRequestType,
+        },
     },
 };
 use agglayer_interop::grpc::v1::FixedBytes32;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::stores::{DebugReader, PendingCertificateReader, StateReader};
 use tonic_types::{ErrorDetails, StatusExt as _};
-use tracing::{error, warn};
+use tracing::error;
 
 const GET_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_certificate_header";
 const GET_LATEST_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_latest_certificate_header";
-const GET_NETWORK_STATUS_METHOD_PATH: &str =
-    "agglayer-node.grpc-api.v1.node-state-service.get_network_status";
+const GET_NETWORK_STATE_METHOD_PATH: &str =
+    "agglayer-node.grpc-api.v1.node-state-service.GET_NETWORK_STATE";
 
 pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore> {
     pub(crate) service: Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>>,
@@ -141,10 +145,10 @@ where
     }
 
     #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty))]
-    async fn get_network_status(
+    async fn get_network_state(
         &self,
-        request: tonic::Request<GetNetworkStatusRequest>,
-    ) -> Result<tonic::Response<GetNetworkStatusResponse>, tonic::Status> {
+        request: tonic::Request<GetNetworkStateRequest>,
+    ) -> Result<tonic::Response<GetNetworkStateResponse>, tonic::Status> {
         let request_id = uuid::Uuid::new_v4().to_string();
         tracing::Span::current().record("request_id", &request_id);
         let request = request.into_inner();
@@ -162,8 +166,8 @@ where
                     tonic::Code::NotFound,
                     "Failed to get latest settled certificate",
                     ErrorDetails::with_error_info(
-                        GetNetworkStatusErrorKind::MissingLatestSettledCertificate.as_str_name(),
-                        GET_NETWORK_STATUS_METHOD_PATH,
+                        GetNetworkStateErrorKind::MissingLatestSettledCertificate.as_str_name(),
+                        GET_NETWORK_STATE_METHOD_PATH,
                         [],
                     ),
                 )
@@ -178,8 +182,8 @@ where
                     tonic::Code::NotFound,
                     "Failed to get latest pending certificate",
                     ErrorDetails::with_error_info(
-                        GetNetworkStatusErrorKind::MissingLatestPendingCertificate.as_str_name(),
-                        GET_NETWORK_STATUS_METHOD_PATH,
+                        GetNetworkStateErrorKind::MissingLatestPendingCertificate.as_str_name(),
+                        GET_NETWORK_STATE_METHOD_PATH,
                         [],
                     ),
                 )
@@ -193,28 +197,36 @@ where
             Ok(Some(certificate)) => {
                 // Determine network type based on aggchain_data variant
                 match certificate.aggchain_data {
-                    agglayer_types::aggchain_proof::AggchainData::ECDSA { .. } => "ECDSA",
-                    agglayer_types::aggchain_proof::AggchainData::Generic { .. } => "Generic",
+                    agglayer_types::aggchain_proof::AggchainData::ECDSA { .. } => {
+                        Ok(NetworkType::Ecdsa)
+                    }
+                    agglayer_types::aggchain_proof::AggchainData::Generic { .. } => {
+                        Ok(NetworkType::Generic)
+                    }
                 }
             }
-            Ok(None) => {
-                // No certificate found, use default/unknown type
-                warn!(
-                    "No certificate found for network {}, using default network type",
-                    network_id
-                );
-                "Unknown"
-            }
+            Ok(None) => Err(tonic::Status::with_error_details(
+                tonic::Code::Internal,
+                "Unable to determine network type",
+                ErrorDetails::with_error_info(
+                    GetNetworkStateErrorKind::UnknownNetworkType.as_str_name(),
+                    GET_NETWORK_STATE_METHOD_PATH,
+                    [],
+                ),
+            )),
             Err(error) => {
-                // Error retrieving certificate, log and use default
-                warn!(
-                    ?error,
-                    "Failed to get certificate for network {}, using default network type",
-                    network_id
-                );
-                "Unknown"
+                error!(?error, "Unable to determine network type");
+                Err(tonic::Status::with_error_details(
+                    tonic::Code::Internal,
+                    "Unable to determine network type",
+                    ErrorDetails::with_error_info(
+                        GetNetworkStateErrorKind::UnknownNetworkType.as_str_name(),
+                        GET_NETWORK_STATE_METHOD_PATH,
+                        [],
+                    ),
+                ))
             }
-        };
+        }?;
 
         // TODO: Define network status. Could represent the healthiness of the network
         // in regard to the agglayer-node. We could have multiple kind of status
@@ -227,21 +239,20 @@ where
             .as_ref()
             .map(|cert| {
                 (
-                    cert.height.as_u64(),
+                    Some(cert.height.as_u64()),
                     Some(cert.certificate_id.into()),
                     cert.epoch_number,
                 )
             })
-            .unwrap_or((0, None, None));
+            .unwrap_or((None, None, None));
 
         // Get pending certificate error if exists
-        let pending_error = latest_pending_certificate
+        let latest_pending_error = latest_pending_certificate
             .as_ref()
             .and_then(|cert| match &cert.status {
-                agglayer_types::CertificateStatus::InError { error } => Some(error.to_string()),
+                agglayer_types::CertificateStatus::InError { error } => Some(*error.clone()),
                 _ => None,
-            })
-            .unwrap_or_default();
+            });
 
         // Get epoch with latest settlement from settled certificate header
         let latest_epoch_with_settlement = latest_settled_certificate
@@ -291,8 +302,8 @@ where
                     tonic::Code::Internal,
                     "Failed to get latest network local state",
                     ErrorDetails::with_error_info(
-                        GetNetworkStatusErrorKind::NetworkLocalStateError.as_str_name(),
-                        GET_NETWORK_STATUS_METHOD_PATH,
+                        GetNetworkStateErrorKind::NetworkLocalStateError.as_str_name(),
+                        GET_NETWORK_STATE_METHOD_PATH,
                         [],
                     ),
                 )
@@ -300,16 +311,11 @@ where
             .map(|local_network_state| {
                 // We return the leaf count of the latest local exit tree
                 local_network_state.exit_tree.leaf_count as u64
-            })
-            .unwrap_or_else(|| {
-                // If no local state is found, we assume 0 leaves
-                warn!("No local network state found, assuming 0 leaves");
-                0
             });
 
-        let network_status = agglayer_grpc_types::node::types::v1::NetworkStatus {
+        let network_status = agglayer_grpc_types::node::types::v1::NetworkState {
             network_status: network_status.to_string(),
-            network_type: network_type.to_string(),
+            network_type: network_type.into(),
             network_id: network_id.into(),
             settled_height,
             settled_certificate_id: settled_cert_id,
@@ -322,17 +328,32 @@ where
             settled_claim: None,
             latest_pending_height: latest_pending_certificate
                 .as_ref()
-                .map(|cert| cert.height.as_u64())
-                .unwrap_or(0),
-            latest_pending_status: latest_pending_certificate
-                .as_ref()
-                .map(|cert| format!("{}", cert.status))
-                .unwrap_or_else(|| "Unknown".to_string()),
-            latest_pending_error: pending_error,
-            latest_epoch_with_settlement,
+                .map(|cert| cert.height.as_u64()),
+            latest_pending_status: latest_pending_certificate.as_ref().map(|cert| {
+                let grpc_status = match cert.status {
+                    agglayer_types::CertificateStatus::Pending => {
+                        agglayer_grpc_types::node::types::v1::CertificateStatus::Pending
+                    }
+                    agglayer_types::CertificateStatus::Proven => {
+                        agglayer_grpc_types::node::types::v1::CertificateStatus::Proven
+                    }
+                    agglayer_types::CertificateStatus::Candidate => {
+                        agglayer_grpc_types::node::types::v1::CertificateStatus::Candidate
+                    }
+                    agglayer_types::CertificateStatus::InError { .. } => {
+                        agglayer_grpc_types::node::types::v1::CertificateStatus::InError
+                    }
+                    agglayer_types::CertificateStatus::Settled => {
+                        agglayer_grpc_types::node::types::v1::CertificateStatus::Settled
+                    }
+                };
+                grpc_status as i32
+            }),
+            latest_pending_error: latest_pending_error.map(Into::into),
+            latest_epoch_with_settlement: Some(latest_epoch_with_settlement),
         };
 
-        Ok(tonic::Response::new(GetNetworkStatusResponse {
+        Ok(tonic::Response::new(GetNetworkStateResponse {
             network_status: Some(network_status),
         }))
     }

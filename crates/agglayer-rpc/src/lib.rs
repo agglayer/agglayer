@@ -19,7 +19,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
 pub use self::error::{CertificateRetrievalError, CertificateSubmissionError};
-use crate::error::GetNetworkStatusError;
+use crate::error::GetNetworkStateError;
 
 pub mod error;
 
@@ -141,12 +141,12 @@ where
     pub fn get_latest_available_certificate_for_network(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<Certificate>, GetNetworkStatusError> {
+    ) -> Result<Option<Certificate>, GetNetworkStateError> {
         debug!("Received request to get the latest available certificate for rollup {network_id}");
 
         let latest_certificate_header = self
             .get_latest_known_certificate_header(network_id)
-            .map_err(|error| GetNetworkStatusError::UnknownCertificateHeader {
+            .map_err(|error| GetNetworkStateError::UnknownCertificateHeader {
                 network_id,
                 source: error,
             })?;
@@ -171,7 +171,7 @@ where
                             certificate_id,
                             certificate.hash()
                         );
-                        return Err(GetNetworkStatusError::CertificateIdHashMismatch {
+                        return Err(GetNetworkStateError::CertificateIdHashMismatch {
                             expected: certificate_id,
                             got: certificate.hash(),
                         });
@@ -195,7 +195,7 @@ where
                     "Certificate {} at height {} not found in any store",
                     certificate_id, height
                 );
-                Err(GetNetworkStatusError::CertificateNotFound { certificate_id })
+                Err(GetNetworkStateError::CertificateNotFound { certificate_id })
             }
         }
     }
@@ -243,7 +243,7 @@ where
     pub fn get_proof(
         &self,
         certificate_id: CertificateId,
-    ) -> Result<Option<agglayer_types::Proof>, GetNetworkStatusError> {
+    ) -> Result<Option<agglayer_types::Proof>, GetNetworkStateError> {
         self.pending_store
             .get_proof(certificate_id)
             .map_err(|error| {
@@ -251,14 +251,14 @@ where
                     ?error,
                     "Failed to get proof for certificate {certificate_id}",
                 );
-                GetNetworkStatusError::ProofNotFound { certificate_id }
+                GetNetworkStateError::ProofNotFound { certificate_id }
             })
     }
 
     pub fn get_local_network_state(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<agglayer_types::LocalNetworkStateData>, GetNetworkStatusError> {
+    ) -> Result<Option<agglayer_types::LocalNetworkStateData>, GetNetworkStateError> {
         self.state
             .read_local_network_state(network_id)
             .map_err(|error| {
@@ -266,7 +266,7 @@ where
                     ?error,
                     "Failed to get local network state for network {network_id}"
                 );
-                GetNetworkStatusError::LocalNetworkStateError { network_id, error }
+                GetNetworkStateError::LocalNetworkStateError { network_id, error }
             })
     }
 

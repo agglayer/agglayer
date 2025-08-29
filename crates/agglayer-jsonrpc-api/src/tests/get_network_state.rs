@@ -7,13 +7,13 @@ use jsonrpsee::{
 use crate::testutils::TestContext;
 
 #[test_log::test(tokio::test)]
-async fn get_network_status_for_network_with_no_certificates() {
+async fn get_network_state_for_network_with_no_certificates() {
     let context = TestContext::new_with_config(TestContext::get_default_config()).await;
     let network_id = NetworkId::new(1);
 
     let result: Result<NetworkStatus, ClientError> = context
         .api_client
-        .request("interop_getNetworkStatus", rpc_params![network_id])
+        .request("interop_GetNetworkState", rpc_params![network_id])
         .await;
 
     // Should succeed and return a NetworkStatus with default values when no
@@ -36,7 +36,7 @@ async fn get_network_status_for_network_with_no_certificates() {
 }
 
 #[test_log::test(tokio::test)]
-async fn get_network_status_for_network_with_certificates() {
+async fn get_network_state_for_network_with_certificates() {
     let mut config = TestContext::get_default_config();
     config.proof_signers.insert(
         1,
@@ -60,7 +60,7 @@ async fn get_network_status_for_network_with_certificates() {
 
     let result: Result<NetworkStatus, ClientError> = context
         .api_client
-        .request("interop_getNetworkStatus", rpc_params![network_id])
+        .request("interop_GetNetworkState", rpc_params![network_id])
         .await;
 
     // Should succeed and return a NetworkStatus
@@ -79,11 +79,11 @@ async fn get_network_status_for_network_with_certificates() {
 }
 
 #[test_log::test(tokio::test)]
-async fn get_network_status_validates_network_id() {
+async fn get_network_state_validates_network_id() {
     let context = TestContext::new_with_config(TestContext::get_default_config()).await;
     let result: Result<NetworkStatus, ClientError> = context
         .api_client
-        .request("interop_getNetworkStatus", rpc_params![])
+        .request("interop_GetNetworkState", rpc_params![])
         .await;
 
     // Should return an error for invalid parameters

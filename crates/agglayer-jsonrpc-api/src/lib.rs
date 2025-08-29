@@ -81,8 +81,8 @@ trait Agglayer {
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>>;
 
-    #[method(name = "getNetworkStatus")]
-    async fn get_network_status(&self, network_id: NetworkId) -> RpcResult<NetworkStatus>;
+    #[method(name = "GetNetworkState")]
+    async fn get_network_state(&self, network_id: NetworkId) -> RpcResult<NetworkStatus>;
 }
 
 /// The RPC agglayer service implementation.
@@ -263,7 +263,7 @@ where
         Ok(header)
     }
 
-    async fn get_network_status(&self, network_id: NetworkId) -> RpcResult<NetworkStatus> {
+    async fn get_network_state(&self, network_id: NetworkId) -> RpcResult<NetworkStatus> {
         // Gather all the network status information needed to build the response
 
         // Get the latest settled certificate for the network

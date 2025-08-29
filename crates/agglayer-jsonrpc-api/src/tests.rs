@@ -5,4 +5,4 @@ mod get_latest_known_certificate_header;
 mod get_tx_status;
 mod send_certificate;
 
-mod get_network_status;
+mod get_network_state;

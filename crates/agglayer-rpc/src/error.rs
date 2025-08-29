@@ -104,7 +104,7 @@ impl SignatureVerificationError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum GetNetworkStatusError {
+pub enum GetNetworkStateError {
     #[error("Proof for certificate {certificate_id} not found")]
     ProofNotFound { certificate_id: CertificateId },
 
