@@ -35,23 +35,18 @@ fn test(#[case] json_file_name: &str) {
             }) => AggchainHashValues::ConsensusType1 {
                 aggchain_vkey: Some(u8x32_to_u32x8_be(*aggchain_vkey)),
                 aggchain_params: Some(aggchain_params.into()),
-                multisig_hash: Some(multisig_hash.into()),
+                multisig_hash: multisig_hash.into(),
             }
             .hash(),
         };
 
         let expect = expected_output.as_hash();
-        // let prefix = if *expect == *computed { "✅" } else { "❌" };
 
-        // println!("{prefix} expected hash: {:?}", expect);
-        // println!("{prefix} got hash: {:?}", computed);
-
-        // println!("");
         assert_eq!(*expect, *computed);
     }
 }
 
-// Big-endian: [u8;32] -> [u32;8], groups b[0..4] as the first u32, etc.
+// Convert [u8;32] to [u32;8] in big endian
 fn u8x32_to_u32x8_be(b: [u8; 32]) -> [u32; 8] {
     core::array::from_fn(|i| {
         u32::from_be_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]])

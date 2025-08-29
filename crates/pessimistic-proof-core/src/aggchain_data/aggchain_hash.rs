@@ -13,7 +13,7 @@ pub enum AggchainHashValues {
     ConsensusType1 {
         aggchain_vkey: Option<Vkey>,
         aggchain_params: Option<Digest>,
-        multisig_hash: Option<Digest>,
+        multisig_hash: Digest,
     },
 }
 
@@ -56,7 +56,6 @@ impl AggchainHashValues {
                     .unwrap_or(*Self::EMPTY_AGGCHAIN_VKEY);
 
                 let aggchain_params = aggchain_params.unwrap_or(Self::EMPTY_AGGCHAIN_PARAMS);
-                let multisig_hash = multisig_hash.unwrap_or(Self::EMPTY_MULTISIG_HASH);
 
                 keccak256_combine([
                     &consensus_type.to_be_bytes(),
@@ -75,19 +74,17 @@ impl From<&AggchainData> for AggchainHashValues {
             AggchainData::LegacyEcdsa { signer, signature } => AggchainHashValues::ConsensusType1 {
                 aggchain_vkey: None,
                 aggchain_params: None,
-                multisig_hash: Some(
-                    MultiSignature {
-                        signatures: vec![(0, *signature)],
-                        expected_signers: vec![*signer],
-                        threshold: 1,
-                    }
-                    .multisig_hash(),
-                ),
+                multisig_hash: MultiSignature {
+                    signatures: vec![(0, *signature)],
+                    expected_signers: vec![*signer],
+                    threshold: 1,
+                }
+                .multisig_hash(),
             },
             AggchainData::MultisigOnly(multisig) => AggchainHashValues::ConsensusType1 {
                 aggchain_vkey: None,
                 aggchain_params: None,
-                multisig_hash: Some(multisig.multisig_hash()),
+                multisig_hash: multisig.multisig_hash(),
             },
             AggchainData::MultisigAndAggchainProof {
                 multisig,
@@ -99,7 +96,7 @@ impl From<&AggchainData> for AggchainHashValues {
             } => AggchainHashValues::ConsensusType1 {
                 aggchain_vkey: Some(*aggchain_vkey),
                 aggchain_params: Some(*aggchain_params),
-                multisig_hash: Some(multisig.multisig_hash()),
+                multisig_hash: multisig.multisig_hash(),
             },
         }
     }
