@@ -79,7 +79,7 @@ impl Certificate {
             self.new_local_exit_root.as_ref(),
             commit_bridge_exits.as_slice(),
             commit_imported_bridge_exits.as_slice(),
-            Metadata::DEFAULT.as_slice(),
+            self.metadata.0.as_slice(),
         ]))
     }
 
