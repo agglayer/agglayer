@@ -53,12 +53,12 @@ agglayer-tries = "0.10.0"
 unified-bridge = "0.10.0"
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
-prover-alloy = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
