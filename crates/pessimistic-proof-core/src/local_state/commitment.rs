@@ -168,7 +168,7 @@ impl SignatureCommitmentValues {
                         .as_slice(),
                     self.height.to_le_bytes().as_slice(),
                     self.aggchain_params
-                        .unwrap_or_else(AggchainHashValues::empty_aggchain_params)
+                        .unwrap_or(AggchainHashValues::EMPTY_AGGCHAIN_PARAMS)
                         .as_slice(),
                 ])
             }
@@ -181,7 +181,7 @@ impl SignatureCommitmentValues {
                         .as_slice(),
                     self.height.to_le_bytes().as_slice(),
                     self.aggchain_params
-                        .unwrap_or_else(AggchainHashValues::empty_aggchain_params)
+                        .unwrap_or(AggchainHashValues::EMPTY_AGGCHAIN_PARAMS)
                         .as_slice(),
                     self.certificate_id.as_slice(),
                 ])

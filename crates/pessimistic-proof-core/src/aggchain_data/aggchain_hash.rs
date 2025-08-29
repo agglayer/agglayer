@@ -3,6 +3,7 @@ use agglayer_primitives::{
     keccak::keccak256_combine,
     Digest,
 };
+use hex_literal::hex;
 
 use crate::aggchain_data::{aggchain_proof::AggchainProof, AggchainData, MultiSignature, Vkey};
 
@@ -12,7 +13,7 @@ pub enum AggchainHashValues {
     ConsensusType1 {
         aggchain_vkey: Option<Vkey>,
         aggchain_params: Option<Digest>,
-        signers_commit: Option<Digest>,
+        multisig_hash: Option<Digest>,
     },
 }
 
@@ -25,50 +26,43 @@ impl From<&AggchainHashValues> for ConsensusType {
 }
 
 impl AggchainHashValues {
-    /// Returns the commitment on signers in case of no signer.
-    pub fn empty_signers() -> Digest {
-        keccak256_combine([Digest::default()])
-    }
+    /// Value if no multisig.
+    pub const EMPTY_MULTISIG_HASH: Digest = Digest(hex!(
+        "290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"
+    ));
 
-    /// Returns the empty vkey used in case of no aggchain proof
-    pub fn empty_sp1_vkey() -> Vkey {
-        Vkey::default()
-    }
+    /// Value if no aggchain vkey.
+    pub const EMPTY_AGGCHAIN_VKEY: Digest = Digest::ZERO;
 
-    /// Returns empty threshold
-    pub fn empty_threshold() -> u32 {
-        0u32
-    }
-
-    pub fn empty_aggchain_params() -> Digest {
-        Digest::default()
-    }
+    /// Value if no aggchain params.
+    pub const EMPTY_AGGCHAIN_PARAMS: Digest = Digest::ZERO;
 
     /// Computes the aggchain hash with the right default values.
-    pub(crate) fn hash(&self) -> Digest {
+    pub fn hash(&self) -> Digest {
         let consensus_type: u32 = ConsensusType::from(self).0;
 
         match self {
             AggchainHashValues::ConsensusType1 {
-                aggchain_vkey,
+                aggchain_vkey: aggchain_vkey_u32,
                 aggchain_params,
-                signers_commit,
+                multisig_hash,
             } => {
-                let aggchain_vkey_hash = {
-                    let vkey = aggchain_vkey.unwrap_or_else(Self::empty_sp1_vkey);
-                    let mut aggchain_vkey_hash = [0u8; 32];
-                    BigEndian::write_u32_into(&vkey, &mut aggchain_vkey_hash);
-                    aggchain_vkey_hash
-                };
+                let aggchain_vkey_hash = aggchain_vkey_u32
+                    .map(|vkey| {
+                        let mut aggchain_vkey_hash = [0u8; 32];
+                        BigEndian::write_u32_into(&vkey, &mut aggchain_vkey_hash);
+                        aggchain_vkey_hash
+                    })
+                    .unwrap_or(*Self::EMPTY_AGGCHAIN_VKEY);
 
-                let aggchain_params = aggchain_params.unwrap_or_else(Self::empty_aggchain_params);
-                let signers = signers_commit.unwrap_or_else(Self::empty_signers);
+                let aggchain_params = aggchain_params.unwrap_or(Self::EMPTY_AGGCHAIN_PARAMS);
+                let multisig_hash = multisig_hash.unwrap_or(Self::EMPTY_MULTISIG_HASH);
 
                 keccak256_combine([
                     &consensus_type.to_be_bytes(),
                     aggchain_vkey_hash.as_slice(),
                     aggchain_params.as_slice(),
-                    signers.as_slice(),
+                    multisig_hash.as_slice(),
                 ])
             }
         }
@@ -81,19 +75,19 @@ impl From<&AggchainData> for AggchainHashValues {
             AggchainData::LegacyEcdsa { signer, signature } => AggchainHashValues::ConsensusType1 {
                 aggchain_vkey: None,
                 aggchain_params: None,
-                signers_commit: Some(
+                multisig_hash: Some(
                     MultiSignature {
                         signatures: vec![(0, *signature)],
                         expected_signers: vec![*signer],
                         threshold: 1,
                     }
-                    .signers_commit(),
+                    .multisig_hash(),
                 ),
             },
             AggchainData::MultisigOnly(multisig) => AggchainHashValues::ConsensusType1 {
                 aggchain_vkey: None,
                 aggchain_params: None,
-                signers_commit: Some(multisig.signers_commit()),
+                multisig_hash: Some(multisig.multisig_hash()),
             },
             AggchainData::MultisigAndAggchainProof {
                 multisig,
@@ -105,7 +99,7 @@ impl From<&AggchainData> for AggchainHashValues {
             } => AggchainHashValues::ConsensusType1 {
                 aggchain_vkey: Some(*aggchain_vkey),
                 aggchain_params: Some(*aggchain_params),
-                signers_commit: Some(multisig.signers_commit()),
+                multisig_hash: Some(multisig.multisig_hash()),
             },
         }
     }

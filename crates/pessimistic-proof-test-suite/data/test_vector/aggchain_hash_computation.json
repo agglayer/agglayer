@@ -1,0 +1,38 @@
+{
+    "specification": "MULTI-ECDSA + SP1-VERIFY aggchain_hash computation",
+    "test_vectors": [
+        {
+            "inputs": {
+                "consensus_type": 1,
+                "aggchain_vkey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                "aggchain_params": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "multisig_hash": "0x3333333333333333333333333333333333333333333333333333333333333333"
+            },
+            "expected_output": {
+                "aggchain_hash": "0x3f237a02f576ee839ec056e8ff088299456adf6fd012bbbae6f9804ea7a71672"
+            }
+        },
+        {
+            "inputs": {
+                "consensus_type": 1,
+                "aggchain_vkey": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "aggchain_params": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "multisig_hash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "expected_output": {
+                "aggchain_hash": "0x38f0bdfc9dcc49a1532fdbe0db4b07cd61e3062dd20c1e3d7299a489b0f1cc5a"
+            }
+        },
+        {
+            "inputs": {
+                "consensus_type": 1,
+                "aggchain_vkey": "0xdead00000000000000000000000000000000000000000000000000000000dead",
+                "aggchain_params": "0xa1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+                "multisig_hash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+            },
+            "expected_output": {
+                "aggchain_hash": "0x278166299e8938bbfe79234036b635a0228aa7375787e07756e36eb8b5fa60bf"
+            }
+        }
+    ]
+}

@@ -113,9 +113,9 @@ impl AggchainData {
                 .map_err(|_| ProofError::InvalidSignature)
         };
 
-        let target_pp_root_version = if is_signed_with_version(SignatureCommitmentVersion::V5)? {
-            PessimisticRootCommitmentVersion::V3
-        } else if is_signed_with_version(SignatureCommitmentVersion::V3)? {
+        let target_pp_root_version = if is_signed_with_version(SignatureCommitmentVersion::V3)?
+            || is_signed_with_version(SignatureCommitmentVersion::V5)?
+        {
             PessimisticRootCommitmentVersion::V3
         } else if is_signed_with_version(SignatureCommitmentVersion::V2)? {
             PessimisticRootCommitmentVersion::V2
