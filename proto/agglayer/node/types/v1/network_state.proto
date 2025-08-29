@@ -54,6 +54,7 @@ enum NetworkType {
   NETWORK_TYPE_GENERIC = 2;
 }
 
+// Status of the particular network, as seen by this node.
 enum NetworkStatus {
     // Unspecified status.
 	NETWORK_STATUS_UNSPECIFIED = 0;
