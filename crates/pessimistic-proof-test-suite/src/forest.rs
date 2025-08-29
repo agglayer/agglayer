@@ -264,6 +264,8 @@ impl Forest {
         let signature = match certificate.aggchain_data {
             AggchainData::ECDSA { signature } => signature,
             AggchainData::Generic { .. } => unimplemented!("SP1 handling not implemented"),
+            AggchainData::MultisigOnly(_) => todo!(),
+            AggchainData::MultisigAndAggchainProof { .. } => todo!(),
         };
 
         let (aggchain_proof, aggchain_vkey, aggchain_params) =

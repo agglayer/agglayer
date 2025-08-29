@@ -180,6 +180,8 @@ impl Certificate {
 
                 recovered == expected_signer
             }
+            AggchainData::MultisigOnly(_) => todo!(),
+            AggchainData::MultisigAndAggchainProof { .. } => todo!(),
         };
 
         recovered_expected_signer
@@ -203,6 +205,8 @@ impl Certificate {
                     .commitment(SignatureCommitmentVersion::V4);
                 (signature.as_ref(), commitment)
             }
+            AggchainData::MultisigOnly(_) => todo!(),
+            AggchainData::MultisigAndAggchainProof { .. } => todo!(),
         };
 
         signature
@@ -216,6 +220,8 @@ impl Certificate {
             AggchainData::Generic {
                 aggchain_params, ..
             } => Some(aggchain_params),
+            AggchainData::MultisigOnly(_) => todo!(),
+            AggchainData::MultisigAndAggchainProof { .. } => todo!(),
         }
     }
 }

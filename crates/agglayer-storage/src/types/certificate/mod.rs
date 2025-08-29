@@ -251,6 +251,8 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
                     },
                 }
             }
+            AggchainData::MultisigOnly(_) => todo!(),
+            AggchainData::MultisigAndAggchainProof { .. } => todo!(),
         }
     }
 }

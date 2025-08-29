@@ -44,21 +44,21 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = { git = "https://github.com/agglayer/interop.git", rev = "99f2f2d12f839c77e67b3b3a3c4f94bd8ab82249" }
-agglayer-interop = { git = "https://github.com/agglayer/interop.git", rev = "99f2f2d12f839c77e67b3b3a3c4f94bd8ab82249" }
-agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", rev = "99f2f2d12f839c77e67b3b3a3c4f94bd8ab82249" }
-agglayer-elf-build = { git = "https://github.com/agglayer/interop.git", rev = "99f2f2d12f839c77e67b3b3a3c4f94bd8ab82249" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "99f2f2d12f839c77e67b3b3a3c4f94bd8ab82249" }
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "99f2f2d12f839c77e67b3b3a3c4f94bd8ab82249" }
-unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "99f2f2d12f839c77e67b3b3a3c4f94bd8ab82249" }
+agglayer-bincode = "0.10.0"
+agglayer-interop = "0.10.0"
+agglayer-interop-types = "0.10.0"
+agglayer-elf-build = "0.10.0"
+agglayer-primitives = "0.10.0"
+agglayer-tries = "0.10.0"
+unified-bridge = "0.10.0"
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", branch = "ekleog/eyre-a-bit" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", branch = "ekleog/eyre-a-bit" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", branch = "ekleog/eyre-a-bit" }
-prover-alloy = { git = "https://github.com/agglayer/provers.git", branch = "ekleog/eyre-a-bit" }
-prover-config = { git = "https://github.com/agglayer/provers.git", branch = "ekleog/eyre-a-bit" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", branch = "ekleog/eyre-a-bit" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
+prover-config = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", rev = "f3fe82dbbe7c84e123f3a0a8ac177f8534757a34" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
