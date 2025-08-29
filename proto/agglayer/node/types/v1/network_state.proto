@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package agglayer.node.types.v1;
+
+import "agglayer/interop/types/v1/bytes.proto";
+import "agglayer/node/types/v1/certificate_id.proto";
+import "agglayer/node/types/v1/certificate_header.proto";
+
+// NetworkState represents the current state of a network in the AggLayer.
+message NetworkState {
+  // The current status of the network (e.g., "active", "syncing", "error").
+  NetworkStatus network_status = 1;
+  // The aggchain type of network
+  NetworkType network_type = 2;
+  // The unique identifier for this network.
+  uint32 network_id = 3;
+  // The height of the latest settled certificate.
+  optional uint64 settled_height = 4;
+  // The ID of the latest settled certificate.
+  types.v1.CertificateId settled_certificate_id = 5;
+  // The pessimistic proof root of the latest settled certificate.
+  agglayer.interop.types.v1.FixedBytes32 settled_pp_root = 6;
+  // The local exit root of the latest settled certificate.
+  agglayer.interop.types.v1.FixedBytes32 settled_ler = 7;
+  // The leaf count of the latest settled local exit tree.
+  optional uint64 settled_let_leaf_count = 8;
+  // Info about the latest settled claim in the network.
+  SettledClaim settled_claim = 9;
+  // The height of the latest pending certificate.
+  optional uint64 latest_pending_height = 10;
+  // The status of the latest pending certificate (e.g., "Proven", "Pending", "InError").
+  optional CertificateStatus latest_pending_status = 11;
+  // Any error message associated with the latest pending certificate.
+  optional CertificateStatusError latest_pending_error = 12;
+  // The epoch number of the latest settlement.
+  optional uint64 latest_epoch_with_settlement = 13;
+}
+
+/// SettledClaim represents information about the settled claim.
+message SettledClaim {
+  // Global index, indicating uniquely which tree leaf is claimed.
+  agglayer.interop.types.v1.FixedBytes32 global_index = 1;
+  /// Hash of the claimed imported bridge exit.
+  agglayer.interop.types.v1.FixedBytes32 bridge_exit_hash = 2;
+}
+
+ // The aggchain type of network
+enum NetworkType {
+  // Unspecified network type.
+  NETWORK_TYPE_UNSPECIFIED = 0;
+  // ECDSA-based network type.
+  NETWORK_TYPE_ECDSA = 1;
+  // Generic network type.
+  NETWORK_TYPE_GENERIC = 2;
+}
+
+// Status of the particular network, as seen by this node.
+enum NetworkStatus {
+    // Unspecified status.
+	NETWORK_STATUS_UNSPECIFIED = 0;
+	// The network is active and functioning normally.
+	NETWORK_STATUS_ACTIVE = 1;
+	// The network is currently syncing.
+	NETWORK_STATUS_SYNCING = 2;
+	// The network is experiencing an error.
+	NETWORK_STATUS_ERROR = 3;
+}
