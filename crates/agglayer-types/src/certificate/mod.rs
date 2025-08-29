@@ -196,9 +196,11 @@ impl Certificate {
             .recover_address_from_prehash(&commitment)
             .map_err(SignerError::Recovery)?;
 
-        (recovered == expected_signer)
-            .then_some(())
-            .ok_or(SignerError::InvalidPessimisticProofSignature { expected_signer })
+        if recovered != expected_signer {
+            return Err(SignerError::InvalidPessimisticProofSignature { expected_signer });
+        }
+
+        Ok(())
     }
 
     pub fn verify_multisig(

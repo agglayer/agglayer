@@ -27,6 +27,12 @@ pub struct Payload {
     signatures: Vec<Signature>,
 }
 
+impl From<Vec<Signature>> for Payload {
+    fn from(signatures: Vec<Signature>) -> Self {
+        Self { signatures }
+    }
+}
+
 impl From<&[Signature]> for Payload {
     fn from(signatures: &[Signature]) -> Self {
         Self {
@@ -167,7 +173,7 @@ mod tests {
         let signatures = signatures_from_indices(&signer_indices, &prehash);
 
         let payload_with_ctx = PayloadWithCtx(
-            Payload::from(signatures.as_slice()),
+            Payload::from(signatures),
             Ctx {
                 signers,
                 threshold,
