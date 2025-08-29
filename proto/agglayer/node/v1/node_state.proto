@@ -119,5 +119,5 @@ message GetNetworkStateRequest {
 // GetNetworkStateResponse contains the current status information for a network.
 message GetNetworkStateResponse {
   // The current status of the network.
-  types.v1.NetworkState network_status = 1;
+  types.v1.NetworkState network_state = 1;
 }

@@ -168,7 +168,7 @@ where
         };
 
         Ok(tonic::Response::new(GetNetworkStateResponse {
-            network_status: Some(network_state),
+            network_state: Some(network_state),
         }))
     }
 }

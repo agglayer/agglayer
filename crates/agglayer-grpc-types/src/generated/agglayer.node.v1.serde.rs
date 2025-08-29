@@ -961,12 +961,12 @@ impl serde::Serialize for GetNetworkStateResponse {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if self.network_status.is_some() {
+        if self.network_state.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetNetworkStateResponse", len)?;
-        if let Some(v) = self.network_status.as_ref() {
-            struct_ser.serialize_field("networkStatus", v)?;
+        if let Some(v) = self.network_state.as_ref() {
+            struct_ser.serialize_field("networkState", v)?;
         }
         struct_ser.end()
     }
@@ -978,13 +978,13 @@ impl<'de> serde::Deserialize<'de> for GetNetworkStateResponse {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "network_status",
-            "networkStatus",
+            "network_state",
+            "networkState",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
-            NetworkStatus,
+            NetworkState,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -1006,7 +1006,7 @@ impl<'de> serde::Deserialize<'de> for GetNetworkStateResponse {
                         E: serde::de::Error,
                     {
                         match value {
-                            "networkStatus" | "network_status" => Ok(GeneratedField::NetworkStatus),
+                            "networkState" | "network_state" => Ok(GeneratedField::NetworkState),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -1026,19 +1026,19 @@ impl<'de> serde::Deserialize<'de> for GetNetworkStateResponse {
                 where
                     V: serde::de::MapAccess<'de>,
             {
-                let mut network_status__ = None;
+                let mut network_state__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
-                        GeneratedField::NetworkStatus => {
-                            if network_status__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("networkStatus"));
+                        GeneratedField::NetworkState => {
+                            if network_state__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("networkState"));
                             }
-                            network_status__ = map_.next_value()?;
+                            network_state__ = map_.next_value()?;
                         }
                     }
                 }
                 Ok(GetNetworkStateResponse {
-                    network_status: network_status__,
+                    network_state: network_state__,
                 })
             }
         }
