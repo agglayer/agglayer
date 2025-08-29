@@ -9,7 +9,7 @@ import "agglayer/node/types/v1/certificate_header.proto";
 // NetworkState represents the current state of a network in the AggLayer.
 message NetworkState {
   // The current status of the network (e.g., "active", "syncing", "error").
-  string network_status = 1;
+  NetworkStatus network_status = 1;
   // The aggchain type of network
   NetworkType network_type = 2;
   // The unique identifier for this network.
@@ -46,10 +46,21 @@ message SettledClaim {
 
  // The aggchain type of network
 enum NetworkType {
+  // Unspecified network type.
+  NETWORK_TYPE_UNSPECIFIED = 0;
   // ECDSA-based network type.
-  NETWORK_TYPE_ECDSA = 0;
+  NETWORK_TYPE_ECDSA = 1;
   // Generic network type.
-  NETWORK_TYPE_GENERIC = 1;
-  // Unknown network type.
-  NETWORK_TYPE_UNKNOWN = 2;
+  NETWORK_TYPE_GENERIC = 2;
+}
+
+enum NetworkStatus {
+    // Unspecified status.
+	NETWORK_STATUS_UNSPECIFIED = 0;
+	// The network is active and functioning normally.
+	NETWORK_STATUS_ACTIVE = 1;
+	// The network is currently syncing.
+	NETWORK_STATUS_SYNCING = 2;
+	// The network is experiencing an error.
+	NETWORK_STATUS_ERROR = 3;
 }

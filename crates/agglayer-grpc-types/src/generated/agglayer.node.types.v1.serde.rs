@@ -942,7 +942,7 @@ impl serde::Serialize for NetworkState {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.network_status.is_empty() {
+        if self.network_status != 0 {
             len += 1;
         }
         if self.network_type != 0 {
@@ -982,8 +982,10 @@ impl serde::Serialize for NetworkState {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.types.v1.NetworkState", len)?;
-        if !self.network_status.is_empty() {
-            struct_ser.serialize_field("networkStatus", &self.network_status)?;
+        if self.network_status != 0 {
+            let v = NetworkStatus::try_from(self.network_status)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.network_status)))?;
+            struct_ser.serialize_field("networkStatus", &v)?;
         }
         if self.network_type != 0 {
             let v = NetworkType::try_from(self.network_type)
@@ -1158,7 +1160,7 @@ impl<'de> serde::Deserialize<'de> for NetworkState {
                             if network_status__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("networkStatus"));
                             }
-                            network_status__ = Some(map_.next_value()?);
+                            network_status__ = Some(map_.next_value::<NetworkStatus>()? as i32);
                         }
                         GeneratedField::NetworkType => {
                             if network_type__.is_some() {
@@ -1264,6 +1266,83 @@ impl<'de> serde::Deserialize<'de> for NetworkState {
         deserializer.deserialize_struct("agglayer.node.types.v1.NetworkState", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for NetworkStatus {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "NETWORK_STATUS_UNSPECIFIED",
+            Self::Active => "NETWORK_STATUS_ACTIVE",
+            Self::Syncing => "NETWORK_STATUS_SYNCING",
+            Self::Error => "NETWORK_STATUS_ERROR",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for NetworkStatus {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "NETWORK_STATUS_UNSPECIFIED",
+            "NETWORK_STATUS_ACTIVE",
+            "NETWORK_STATUS_SYNCING",
+            "NETWORK_STATUS_ERROR",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = NetworkStatus;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "NETWORK_STATUS_UNSPECIFIED" => Ok(NetworkStatus::Unspecified),
+                    "NETWORK_STATUS_ACTIVE" => Ok(NetworkStatus::Active),
+                    "NETWORK_STATUS_SYNCING" => Ok(NetworkStatus::Syncing),
+                    "NETWORK_STATUS_ERROR" => Ok(NetworkStatus::Error),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
 impl serde::Serialize for NetworkType {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -1271,9 +1350,9 @@ impl serde::Serialize for NetworkType {
         S: serde::Serializer,
     {
         let variant = match self {
+            Self::Unspecified => "NETWORK_TYPE_UNSPECIFIED",
             Self::Ecdsa => "NETWORK_TYPE_ECDSA",
             Self::Generic => "NETWORK_TYPE_GENERIC",
-            Self::Unknown => "NETWORK_TYPE_UNKNOWN",
         };
         serializer.serialize_str(variant)
     }
@@ -1285,9 +1364,9 @@ impl<'de> serde::Deserialize<'de> for NetworkType {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
+            "NETWORK_TYPE_UNSPECIFIED",
             "NETWORK_TYPE_ECDSA",
             "NETWORK_TYPE_GENERIC",
-            "NETWORK_TYPE_UNKNOWN",
         ];
 
         struct GeneratedVisitor;
@@ -1328,9 +1407,9 @@ impl<'de> serde::Deserialize<'de> for NetworkType {
                 E: serde::de::Error,
             {
                 match value {
+                    "NETWORK_TYPE_UNSPECIFIED" => Ok(NetworkType::Unspecified),
                     "NETWORK_TYPE_ECDSA" => Ok(NetworkType::Ecdsa),
                     "NETWORK_TYPE_GENERIC" => Ok(NetworkType::Generic),
-                    "NETWORK_TYPE_UNKNOWN" => Ok(NetworkType::Unknown),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
