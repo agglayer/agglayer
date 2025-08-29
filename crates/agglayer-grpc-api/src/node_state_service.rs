@@ -3,10 +3,14 @@ use std::sync::Arc;
 use agglayer_grpc_server::node::v1::node_state_service_server::NodeStateService;
 use agglayer_grpc_types::{
     compat::v1::Error,
-    node::v1::{
-        GetCertificateHeaderErrorKind, GetCertificateHeaderRequest, GetCertificateHeaderResponse,
-        GetLatestCertificateHeaderErrorKind, GetLatestCertificateHeaderRequest,
-        GetLatestCertificateHeaderResponse, LatestCertificateRequestType,
+    node::{
+        types::v1::{NetworkState, NetworkType},
+        v1::{
+            GetCertificateHeaderErrorKind, GetCertificateHeaderRequest,
+            GetCertificateHeaderResponse, GetLatestCertificateHeaderErrorKind,
+            GetLatestCertificateHeaderRequest, GetLatestCertificateHeaderResponse,
+            GetNetworkStateRequest, GetNetworkStateResponse, LatestCertificateRequestType,
+        },
     },
 };
 use agglayer_rpc::AgglayerService;
@@ -18,6 +22,8 @@ const GET_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_certificate_header";
 const GET_LATEST_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_latest_certificate_header";
+const GET_NETWORK_STATE_METHOD_PATH: &str =
+    "agglayer-node.grpc-api.v1.node-state-service.get_network_state";
 
 pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore> {
     pub(crate) service: Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>>,
@@ -133,6 +139,36 @@ where
 
         Ok(tonic::Response::new(GetLatestCertificateHeaderResponse {
             certificate_header: header.map(Into::into),
+        }))
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty))]
+    async fn get_network_state(
+        &self,
+        request: tonic::Request<GetNetworkStateRequest>,
+    ) -> Result<tonic::Response<GetNetworkStateResponse>, tonic::Status> {
+        let request_id = uuid::Uuid::new_v4().to_string();
+        tracing::Span::current().record("request_id", &request_id);
+
+        // Dummy implementation - return a basic network state
+        let network_state = NetworkState {
+            network_status: "default".to_string(),
+            network_type: NetworkType::Unknown as i32,
+            network_id: request.into_inner().network_id,
+            settled_height: None,
+            settled_certificate_id: None,
+            settled_pp_root: None,
+            settled_ler: None,
+            settled_let_leaf_count: None,
+            settled_claim: None,
+            latest_pending_height: None,
+            latest_pending_status: None,
+            latest_pending_error: None,
+            latest_epoch_with_settlement: None,
+        };
+
+        Ok(tonic::Response::new(GetNetworkStateResponse {
+            network_status: Some(network_state),
         }))
     }
 }
