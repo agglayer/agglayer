@@ -394,5 +394,34 @@ pub mod node_state_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_network_state(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetNetworkStateRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetNetworkStateResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/agglayer.node.v1.NodeStateService/GetNetworkState",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "agglayer.node.v1.NodeStateService",
+                        "GetNetworkState",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
