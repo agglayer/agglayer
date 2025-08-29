@@ -1,3 +1,6 @@
+#[cfg(not(target_endian = "little"))]
+compile_error!("This crate requires a little-endian target (x86_64/aarch64/wasm32).");
+
 pub use agglayer_primitives::keccak;
 
 pub mod proof;

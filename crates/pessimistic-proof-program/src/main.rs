@@ -18,6 +18,8 @@ pub fn main() {
     let nullifier_paths_bytes = sp1_zkvm::io::read_vec();
     let balances_proofs_bytes = sp1_zkvm::io::read_vec();
     let balance_merkle_paths_bytes = sp1_zkvm::io::read_vec();
+    let multisig_signatures_bytes = sp1_zkvm::io::read_vec();
+    let multisig_expected_signers_bytes = sp1_zkvm::io::read_vec();
 
     // Reconstruct the MultiBatchHeaderRef from zero-copy components using the
     // helper function
@@ -28,6 +30,8 @@ pub fn main() {
         &nullifier_paths_bytes,
         &balances_proofs_bytes,
         &balance_merkle_paths_bytes,
+        &multisig_signatures_bytes,
+        &multisig_expected_signers_bytes,
     )
     .expect("Failed to reconstruct MultiBatchHeaderRef");
 
