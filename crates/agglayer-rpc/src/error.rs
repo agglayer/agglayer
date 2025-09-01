@@ -108,8 +108,27 @@ impl SignatureVerificationError {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum NetworkStateRetrievalError {
-    //TODO: add more specific errors as needed for the
-    // get network status implementation
+#[derive(thiserror::Error, Debug)]
+pub enum GetNetworkStateError {
+    #[error("Proof for certificate {certificate_id} not found")]
+    ProofNotFound { certificate_id: CertificateId },
+
+    #[error("Data for certificate {certificate_id} not found")]
+    CertificateNotFound { certificate_id: CertificateId },
+
+    #[error("Certificate id and hash mismatch - expected certificate_id: {expected} got: {got}")]
+    CertificateIdHashMismatch {
+        expected: CertificateId,
+        got: CertificateId,
+    },
+
+    #[error("Failed to get latest known certificate header for network {network_id}")]
+    UnknownCertificateHeader {
+        network_id: NetworkId,
+        #[source]
+        source: CertificateRetrievalError,
+    },
+
+    #[error("Unable to determine network type for network {network_id}")]
+    UnknownNetworkType { network_id: NetworkId },
 }

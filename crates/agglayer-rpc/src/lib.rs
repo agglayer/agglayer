@@ -20,9 +20,9 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
 pub use self::error::{
-    CertificateRetrievalError, CertificateSubmissionError, NetworkStateRetrievalError,
+    CertificateRetrievalError, CertificateSubmissionError, GetNetworkStateError,
 };
-use crate::network_state::NetworkState;
+use crate::network_state::{NetworkState, NetworkType};
 
 pub mod error;
 
@@ -189,13 +189,122 @@ where
             .ok_or(CertificateRetrievalError::NotFound { certificate_id })
     }
 
+    /// Get latest available certificate data for a network.
+    /// Note: also using debug storage to cover all cases. This includes pending
+    /// certificates, proven certificates and settled certificates. If no
+    /// certificate is found, return None.
+    pub fn get_latest_available_certificate_for_network(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<Certificate>, GetNetworkStateError> {
+        debug!("Received request to get the latest available certificate for rollup {network_id}");
+
+        let latest_certificate_header = self
+            .get_latest_known_certificate_header(network_id)
+            .map_err(|error| GetNetworkStateError::UnknownCertificateHeader {
+                network_id,
+                source: error,
+            })?;
+
+        match latest_certificate_header {
+            None => Ok(None),
+            Some(CertificateHeader {
+                certificate_id,
+                height,
+                ..
+            }) => {
+                // First try to get the full certificate from pending store
+                if let Ok(Some(certificate)) =
+                    self.pending_store.get_certificate(network_id, height)
+                {
+                    // Verify that this is indeed the certificate we're looking for
+                    if certificate.hash() == certificate_id {
+                        return Ok(Some(certificate));
+                    } else {
+                        error!(
+                            "Pending certificate hash mismatch: expected {}, got {}",
+                            certificate_id,
+                            certificate.hash()
+                        );
+                        return Err(GetNetworkStateError::CertificateIdHashMismatch {
+                            expected: certificate_id,
+                            got: certificate.hash(),
+                        });
+                    }
+                }
+
+                // If not found in pending store, try to get from debug store.
+                // This covers settled certificates and any other certificates stored in debug
+                // storage.
+                match self.debug_store.get_certificate(&certificate_id) {
+                    Ok(Some(certificate)) => {
+                        debug!("Found certificate {} in debug store", certificate_id);
+                        return Ok(Some(certificate));
+                    }
+                    _ => {
+                        debug!("Certificate {certificate_id} not found in debug store");
+                    }
+                }
+
+                warn!(
+                    "Certificate {} at height {} not found in any store",
+                    certificate_id, height
+                );
+                Err(GetNetworkStateError::CertificateNotFound { certificate_id })
+            }
+        }
+    }
+
     /// Assemble the current state of the specified network from
     /// the data in various sources.
     pub fn get_network_state(
         &self,
         network_id: NetworkId,
-    ) -> Result<NetworkState, NetworkStateRetrievalError> {
+    ) -> Result<NetworkState, GetNetworkStateError> {
         // TODO: Implement the logic to retrieve the actual network state.
+        debug!("Received request to get the network state for rollup {network_id}",);
+
+        // Get the latest settled certificate for the network
+        let latest_settled_certificate = self
+            .get_latest_settled_certificate_header(network_id)
+            .inspect_err(|error| {
+                warn!(?error, "Failed to get latest settled certificate");
+            })
+            .unwrap_or_default();
+
+        let latest_pending_certificate = self
+            .get_latest_pending_certificate_header(network_id)
+            .inspect_err(|error| {
+                warn!(?error, "Failed to get latest pending certificate");
+            })
+            .unwrap_or_default();
+
+        // Determine network type from the latest available certificate
+        let network_type = match self.get_latest_available_certificate_for_network(network_id) {
+            Ok(Some(certificate)) => {
+                // Determine network type based on aggchain_data variant
+                match certificate.aggchain_data {
+                    agglayer_types::aggchain_proof::AggchainData::ECDSA { .. } => {
+                        Ok(NetworkType::Ecdsa)
+                    }
+                    agglayer_types::aggchain_proof::AggchainData::Generic { .. } => {
+                        Ok(NetworkType::Generic)
+                    }
+                    agglayer_types::aggchain_proof::AggchainData::MultisigOnly { .. } => {
+                        Ok(NetworkType::MultisigOnly)
+                    }
+                    agglayer_types::aggchain_proof::AggchainData::MultisigAndAggchainProof {
+                        ..
+                    } => Ok(NetworkType::MultisigAndAggchainProof),
+                }
+            }
+            Ok(None) => Err(GetNetworkStateError::UnknownNetworkType { network_id }),
+            Err(error) => {
+                error!(?error, "Unable to determine network type");
+                Err(GetNetworkStateError::UnknownNetworkType { network_id })
+            }
+        }?;
+
         Ok(NetworkState {
             network_status: network_state::NetworkStatus::Active,
             network_type: network_state::NetworkType::Generic,

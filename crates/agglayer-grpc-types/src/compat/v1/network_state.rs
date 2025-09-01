@@ -22,6 +22,8 @@ impl From<AgglayerRpcNetworkType> for v1::NetworkType {
         match value {
             AgglayerRpcNetworkType::Ecdsa => v1::NetworkType::Ecdsa,
             AgglayerRpcNetworkType::Generic => v1::NetworkType::Generic,
+            AgglayerRpcNetworkType::MultisigOnly => v1::NetworkType::MultisigOnly,
+
         }
     }
 }
