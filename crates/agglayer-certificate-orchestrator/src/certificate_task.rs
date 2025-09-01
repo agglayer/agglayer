@@ -87,7 +87,7 @@ where
                     error!(?error, "Internal error in certificate processing");
                 }
                 _ => {
-                    let error = anyhow::Error::from(error.clone());
+                    let error = eyre::Error::from(error.clone());
                     debug!(?error, "Error in certificate processing");
                 }
             }
@@ -155,7 +155,7 @@ where
                 Ok(())
             }
             CertificateStatus::InError { error } => {
-                warn!(error = ?anyhow::Error::from(error.clone()), "Certificate is already in error");
+                warn!(error = ?eyre::Error::from(error.clone()), "Certificate is already in error");
                 Err(*error.clone())
             }
         }

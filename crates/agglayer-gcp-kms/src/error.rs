@@ -15,5 +15,5 @@ pub enum Error {
 
     /// An error occurred while interacting with the KMS provider.
     #[error("KMS error: {0}")]
-    KmsError(anyhow::Error),
+    KmsError(eyre::Error),
 }

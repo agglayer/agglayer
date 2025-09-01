@@ -28,7 +28,7 @@ agglayer-interop = { workspace = true, features = ["testutils"] }
 agglayer-types = { workspace = true, features = ["testutils"] }
 
 
-anyhow.workspace = true
 bolero.workspace = true
+eyre.workspace = true
 insta.workspace = true
 rstest.workspace = true
