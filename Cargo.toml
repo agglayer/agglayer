@@ -82,6 +82,7 @@ base64 = "0.22.0"
 bolero = { version = "0.13.0", features = ["arbitrary"] }
 buildstructor = "0.5.4"
 clap = { version = "4.5", features = ["derive", "env"] }
+color-eyre = { version = "0.6.5" }
 criterion = "0.5.1"
 derive_more = "2.0"
 dirs = "5.0"
@@ -101,6 +102,8 @@ insta = { git = "https://github.com/freyskeyd/insta", branch = "chore/updating-d
     "toml",
     "yaml",
     "json",
+    "redactions",
+    "filters",
 ] }
 jsonrpsee = { version = "0.24.7", features = ["full"] }
 lazy_static = "1.5"
@@ -126,6 +129,7 @@ tonic = { version = "0.12.3", default-features = false }
 tonic-reflection = "0.12.3"
 tonic-types = "0.12.3"
 tower = "0.4.13"
+tower-http = { version = "0.6.2", features = ["full"] }
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
