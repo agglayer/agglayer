@@ -249,6 +249,14 @@ impl From<agglayer_rpc::CertificateRetrievalError> for Error {
     }
 }
 
+impl From<agglayer_rpc::NetworkStateRetrievalError> for Error {
+    fn from(err: agglayer_rpc::NetworkStateRetrievalError) -> Self {
+        // Since NetworkStateRetrievalError is currently empty, convert to internal
+        // error
+        Self::internal(format!("Network state retrieval error: {err}"))
+    }
+}
+
 // This impl establishes the integration with `jsonrpsee` errors.
 impl From<Error> for ErrorObjectOwned {
     fn from(err: Error) -> Self {

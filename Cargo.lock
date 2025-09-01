@@ -303,6 +303,7 @@ name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
  "agglayer-interop",
+ "agglayer-rpc",
  "agglayer-types",
  "anyhow",
  "bolero",
@@ -554,11 +555,15 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
+ "agglayer-interop",
+ "agglayer-primitives",
  "agglayer-rate-limiting",
  "agglayer-storage",
+ "agglayer-tries",
  "agglayer-types",
  "alloy",
  "futures",
+ "serde",
  "thiserror 2.0.16",
  "tokio",
  "tracing",
