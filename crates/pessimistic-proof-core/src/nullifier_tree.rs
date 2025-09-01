@@ -1,8 +1,5 @@
 use agglayer_primitives::{Digest, FromBool};
-use agglayer_tries::{
-    proof::{SmtNonInclusionProof, ToBits},
-    utils::empty_hash_at_height,
-};
+use agglayer_tries::proof::{SmtNonInclusionProof, ToBits};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use unified_bridge::{GlobalIndex, NetworkId};

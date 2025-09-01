@@ -21,9 +21,7 @@ use std::borrow::Cow;
 
 use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
-    aggchain_proof::{AggchainData, AggchainProof, Proof},
-    primitives::Digest,
-    Certificate, Height, Metadata, NetworkId, Signature,
+    aggchain_proof::{AggchainData, AggchainProof, Proof, MultisigPayload}, primitives::Digest, Certificate, Height, Metadata, NetworkId, Signature
 };
 use pessimistic_proof::unified_bridge::{
     AggchainProofPublicValues, BridgeExit, ImportedBridgeExit,
@@ -216,11 +214,11 @@ pub enum AggchainDataV1<'a> {
     },
 
     Multisig {
-        multisig: Cow<'a, [Signature]>,
+        multisig: Cow<'a, [Option<Signature>]>,
     },
 
     GenericWithMultisig {
-        multisig: Cow<'a, [Signature]>,
+        multisig: Cow<'a, [Option<Signature>]>,
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
         public_values: Option<Cow<'a, Box<AggchainProofPublicValues>>>,
@@ -233,7 +231,6 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
             AggchainData::ECDSA { signature } => Self::ECDSA {
                 signature: *signature,
             },
-
             AggchainData::Generic {
                 proof,
                 aggchain_params,
@@ -264,13 +261,13 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
             }
 
             AggchainData::MultisigOnly(multisig) => AggchainDataV1::Multisig {
-                multisig: Cow::Borrowed(multisig),
+                multisig: Cow::Borrowed(multisig.0.as_slice()),
             },
             AggchainData::MultisigAndAggchainProof {
                 multisig,
                 aggchain_proof,
             } => AggchainDataV1::GenericWithMultisig {
-                multisig: Cow::Borrowed(multisig),
+                multisig: Cow::Borrowed(multisig.0.as_slice()),
                 proof: Cow::Borrowed(&aggchain_proof.proof),
                 aggchain_params: aggchain_proof.aggchain_params,
                 public_values: aggchain_proof.public_values.as_ref().map(Cow::Borrowed),
@@ -313,14 +310,14 @@ impl From<AggchainDataV1<'_>> for AggchainData {
                 signature,
                 public_values: Some(public_values.into_owned()),
             },
-            AggchainDataV1::Multisig { multisig } => Self::MultisigOnly(multisig.into_owned()),
+            AggchainDataV1::Multisig { multisig } => Self::MultisigOnly(MultisigPayload(multisig.into_owned())),
             AggchainDataV1::GenericWithMultisig {
                 multisig,
                 proof,
                 aggchain_params,
                 public_values,
             } => Self::MultisigAndAggchainProof {
-                multisig: multisig.into_owned(),
+                multisig: MultisigPayload(multisig.into_owned()),
                 aggchain_proof: AggchainProof {
                     proof: proof.into_owned(),
                     aggchain_params,

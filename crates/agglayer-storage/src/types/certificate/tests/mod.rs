@@ -8,7 +8,6 @@ use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
 
-
 mod header;
 mod status;
 mod structure;
@@ -118,19 +117,31 @@ impl AggchainDataV1<'static> {
 
     fn test4() -> Self {
         AggchainDataV1::Multisig {
-            multisig: Cow::Owned(vec![sig(0x11, 0x22), sig(0x33, 0x44)]),
+            multisig: Cow::Owned(vec![
+                None,
+                None,
+                Some(sig(0x11, 0x22)),
+                None,
+                Some(sig(0x33, 0x44)),
+            ]),
         }
     }
 
     fn test5() -> Self {
         let aggchain_params = Digest([0x61; 32]);
         AggchainDataV1::GenericWithMultisig {
-            multisig: Cow::Owned(vec![sig(0x55, 0x66), sig(0x77, 0x88)]),
+            multisig: Cow::Owned(vec![
+                Some(sig(0x55, 0x66)),
+                None,
+                Some(sig(0x77, 0x88)),
+                None,
+                None,
+            ]),
             proof: Cow::Owned(Self::proof0()),
             aggchain_params,
-            public_values: Some(Cow::Owned(Box::new(
-                Self::aggchain_proof_public_values0(aggchain_params),
-            ))),
+            public_values: Some(Cow::Owned(Box::new(Self::aggchain_proof_public_values0(
+                aggchain_params,
+            )))),
         }
     }
 }
