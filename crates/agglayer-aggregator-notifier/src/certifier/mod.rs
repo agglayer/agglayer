@@ -167,6 +167,7 @@ where
         // the multibatch header is configured to use the hash from L1
         match certificate.aggchain_data {
             AggchainData::ECDSA { .. } => {}
+            AggchainData::MultisigOnly(_) => {}
             AggchainData::Generic { ref proof, .. } => {
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
 
@@ -177,8 +178,18 @@ where
                 }))
                 .map_err(CertificationError::Other)?;
             }
-            AggchainData::MultisigOnly(_) => todo!(),
-            AggchainData::MultisigAndAggchainProof { .. } => todo!(),
+            AggchainData::MultisigAndAggchainProof {
+                ref aggchain_proof, ..
+            } => {
+                let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) =
+                    &aggchain_proof.proof;
+                // This operation is unwind safe: if it errors, we will discard stdin and
+                // stark_proof anyway.
+                sp1_fast(AssertUnwindSafe(|| {
+                    stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone());
+                }))
+                .map_err(CertificationError::Other)?;
+            }
         };
 
         // SP1 native execution which includes the aggchain proof stark verification
