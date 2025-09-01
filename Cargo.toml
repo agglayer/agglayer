@@ -102,6 +102,8 @@ insta = { git = "https://github.com/freyskeyd/insta", branch = "chore/updating-d
     "toml",
     "yaml",
     "json",
+    "redactions",
+    "filters",
 ] }
 jsonrpsee = { version = "0.24.7", features = ["full"] }
 lazy_static = "1.5"
