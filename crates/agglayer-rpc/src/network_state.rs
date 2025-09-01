@@ -26,6 +26,10 @@ pub enum NetworkType {
     Ecdsa = 0,
     /// Generic network type.
     Generic = 1,
+    /// Multisig-only network type.
+    MultisigOnly = 2,
+    /// Multisig and aggchain proof network type.
+    MultisigAndAggchainProof = 3,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
