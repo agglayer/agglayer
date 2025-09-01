@@ -16,10 +16,17 @@ use crate::node::types::v1;
 fn error_messages(#[case] name: &str, #[case] error: Error) {
     insta::assert_snapshot!(format!("{name}/display"), error);
     insta::assert_debug_snapshot!(format!("{name}/kind"), error.kind());
-    insta::assert_snapshot!(
-        format!("{name}/debug"),
-        format!("{:?}", eyre::Error::from(error))
-    );
+    insta::with_settings!({
+        filters => vec![
+            // Remove the whole "Location:" block (common eyre pretty format)
+            (r"(?m)^Location:\n([ \t]+.*\n?)+", "Location:\n    <REDACTED>\n"),
+        ],
+    }, {
+        insta::assert_snapshot!(
+            format!("{name}/debug"),
+            format!("{:?}", eyre::Error::from(error))
+        );
+    });
 }
 
 macro_rules! make_parser_fuzzers {
