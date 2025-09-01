@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
 pub use self::error::{
-    CertificateRetrievalError, CertificateSubmissionError, NetworkStateRetrievalError,
+    CertificateRetrievalError, CertificateSubmissionError, GetNetworkStateError,
 };
 use crate::network_state::NetworkState;
 
@@ -194,7 +194,7 @@ where
     pub fn get_network_state(
         &self,
         network_id: NetworkId,
-    ) -> Result<NetworkState, NetworkStateRetrievalError> {
+    ) -> Result<NetworkState, GetNetworkStateError> {
         // TODO: Implement the logic to retrieve the actual network state.
         Ok(NetworkState {
             network_status: network_state::NetworkStatus::Active,
