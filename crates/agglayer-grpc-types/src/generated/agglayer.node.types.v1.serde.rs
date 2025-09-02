@@ -1353,6 +1353,8 @@ impl serde::Serialize for NetworkType {
             Self::Unspecified => "NETWORK_TYPE_UNSPECIFIED",
             Self::Ecdsa => "NETWORK_TYPE_ECDSA",
             Self::Generic => "NETWORK_TYPE_GENERIC",
+            Self::MultisigOnly => "NETWORK_TYPE_MULTISIG_ONLY",
+            Self::MultisigAndAggchainProof => "NETWORK_TYPE_MULTISIG_AND_AGGCHAIN_PROOF",
         };
         serializer.serialize_str(variant)
     }
@@ -1367,6 +1369,8 @@ impl<'de> serde::Deserialize<'de> for NetworkType {
             "NETWORK_TYPE_UNSPECIFIED",
             "NETWORK_TYPE_ECDSA",
             "NETWORK_TYPE_GENERIC",
+            "NETWORK_TYPE_MULTISIG_ONLY",
+            "NETWORK_TYPE_MULTISIG_AND_AGGCHAIN_PROOF",
         ];
 
         struct GeneratedVisitor;
@@ -1410,6 +1414,8 @@ impl<'de> serde::Deserialize<'de> for NetworkType {
                     "NETWORK_TYPE_UNSPECIFIED" => Ok(NetworkType::Unspecified),
                     "NETWORK_TYPE_ECDSA" => Ok(NetworkType::Ecdsa),
                     "NETWORK_TYPE_GENERIC" => Ok(NetworkType::Generic),
+                    "NETWORK_TYPE_MULTISIG_ONLY" => Ok(NetworkType::MultisigOnly),
+                    "NETWORK_TYPE_MULTISIG_AND_AGGCHAIN_PROOF" => Ok(NetworkType::MultisigAndAggchainProof),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

@@ -12,8 +12,10 @@ compat = ["dep:agglayer-types", "dep:thiserror"]
 workspace = true
 
 [dependencies]
-agglayer-types = { workspace = true, optional = true }
 agglayer-interop = { workspace = true, features = ["grpc-compat"] }
+agglayer-rpc.workspace = true
+agglayer-types = { workspace = true, optional = true }
+
 
 hex.workspace = true
 pbjson = "0.8.0"
@@ -22,8 +24,9 @@ serde.workspace = true
 thiserror = { workspace = true, optional = true }
 
 [dev-dependencies]
-agglayer-types = { workspace = true, features = ["testutils"] }
 agglayer-interop = { workspace = true, features = ["testutils"] }
+agglayer-types = { workspace = true, features = ["testutils"] }
+
 
 bolero.workspace = true
 eyre.workspace = true

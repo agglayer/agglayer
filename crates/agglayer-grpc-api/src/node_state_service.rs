@@ -3,14 +3,11 @@ use std::sync::Arc;
 use agglayer_grpc_server::node::v1::node_state_service_server::NodeStateService;
 use agglayer_grpc_types::{
     compat::v1::Error,
-    node::{
-        types::v1::{NetworkState, NetworkStatus, NetworkType},
-        v1::{
-            GetCertificateHeaderErrorKind, GetCertificateHeaderRequest,
-            GetCertificateHeaderResponse, GetLatestCertificateHeaderErrorKind,
-            GetLatestCertificateHeaderRequest, GetLatestCertificateHeaderResponse,
-            GetNetworkStateRequest, GetNetworkStateResponse, LatestCertificateRequestType,
-        },
+    node::v1::{
+        GetCertificateHeaderErrorKind, GetCertificateHeaderRequest, GetCertificateHeaderResponse,
+        GetLatestCertificateHeaderErrorKind, GetLatestCertificateHeaderRequest,
+        GetLatestCertificateHeaderResponse, GetNetworkStateErrorKind, GetNetworkStateRequest,
+        GetNetworkStateResponse, LatestCertificateRequestType,
     },
 };
 use agglayer_rpc::AgglayerService;
@@ -22,7 +19,7 @@ const GET_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_certificate_header";
 const GET_LATEST_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_latest_certificate_header";
-const _GET_NETWORK_STATE_METHOD_PATH: &str =
+const GET_NETWORK_STATE_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_network_state";
 
 pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore> {
@@ -150,22 +147,23 @@ where
         let request_id = uuid::Uuid::new_v4().to_string();
         tracing::Span::current().record("request_id", &request_id);
 
-        // Dummy implementation - return a basic network state
-        let network_state = NetworkState {
-            network_status: NetworkStatus::Unspecified as i32,
-            network_type: NetworkType::Unspecified as i32,
-            network_id: request.into_inner().network_id,
-            settled_height: None,
-            settled_certificate_id: None,
-            settled_pp_root: None,
-            settled_ler: None,
-            settled_let_leaf_count: None,
-            settled_claim: None,
-            latest_pending_height: None,
-            latest_pending_status: None,
-            latest_pending_error: None,
-            latest_epoch_with_settlement: None,
-        };
+        let network_state: agglayer_grpc_types::node::types::v1::NetworkState = self
+            .service
+            .get_network_state(request.into_inner().network_id.into())
+            .map_err(|error| {
+                error!(?error, "Failed to get network state");
+                tonic::Status::with_error_details(
+                    tonic::Code::Internal,
+                    "Failed to get network state",
+                    // TODO: more specific error handling in sync with agglayer rpc erors
+                    ErrorDetails::with_error_info(
+                        GetNetworkStateErrorKind::Unspecified.as_str_name(),
+                        GET_NETWORK_STATE_METHOD_PATH,
+                        [],
+                    ),
+                )
+            })?
+            .into();
 
         Ok(tonic::Response::new(GetNetworkStateResponse {
             network_state: Some(network_state),
