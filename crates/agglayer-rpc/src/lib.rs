@@ -281,13 +281,35 @@ where
             Ok(Some(proof)) => Ok(Some(proof)),
             Ok(None) => {
                 // If not found in pending store, check the epoch store
-                self.epoch_store.get_proof(certificate_id).map_err(|error| {
-                    error!(
-                        ?error,
-                        "Failed to get proof for certificate {certificate_id} from epoch store",
-                    );
-                    ProofRetrievalError::NotFound { certificate_id }
-                })
+                // First get the certificate header to obtain epoch_number and certificate_index
+                match self.fetch_certificate_header(certificate_id) {
+                    Ok(header) => {
+                        if let (Some(epoch_number), Some(certificate_index)) =
+                            (header.epoch_number, header.certificate_index)
+                        {
+                            // Call the epoch store's get_proof method with epoch_number and
+                            // certificate_index
+                            self.epochs_store
+                                .get_proof(epoch_number, certificate_index)
+                                .map_err(|error| {
+                                    error!(
+                                        ?error,
+                                        "Failed to get proof for certificate {certificate_id} \
+                                         from epoch store",
+                                    );
+                                    ProofRetrievalError::NotFound { certificate_id }
+                                })
+                        } else {
+                            // Certificate doesn't have epoch information, so no proof in epoch
+                            // store
+                            Ok(None)
+                        }
+                    }
+                    Err(_) => {
+                        // Certificate header not found, so no proof in epoch store
+                        Ok(None)
+                    }
+                }
             }
             Err(error) => {
                 error!(

@@ -560,6 +560,7 @@ dependencies = [
  "agglayer-types",
  "alloy",
  "futures",
+ "pessimistic-proof",
  "serde",
  "thiserror 2.0.16",
  "tokio",
