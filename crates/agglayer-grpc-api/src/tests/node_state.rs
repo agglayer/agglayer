@@ -6,10 +6,13 @@ use agglayer_grpc_types::node::v1::GetCertificateHeaderRequest;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
     storage::backup::BackupClient,
-    stores::{debug::DebugStore, pending::PendingStore, state::StateStore, StateWriter as _},
+    stores::{
+        debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
+        StateWriter as _,
+    },
     tests::TempDBDir,
 };
-use agglayer_types::{CertificateId, CertificateStatus, Digest, Height};
+use agglayer_types::{CertificateId, CertificateStatus, Digest, EpochNumber, Height};
 use tokio::{net::TcpListener, sync::oneshot};
 use tonic::{
     transport::{server::TcpIncoming, Server},
@@ -24,9 +27,15 @@ struct L1Rpc {}
 async fn get_certificate_header() {
     let tmp = TempDBDir::new();
     let config = Config::new(&tmp.path);
+    let config_epoch = Config::new(&tmp.path);
 
-    let state_store =
-        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap();
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let debug_store = Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap());
+
     let certificate = agglayer_types::Certificate::new_for_test(1.into(), Height::ZERO);
     state_store
         .insert_certificate_header(&certificate, CertificateStatus::Pending)
@@ -37,9 +46,19 @@ async fn get_certificate_header() {
     let (sender, _receiver) = tokio::sync::mpsc::channel(10);
     let service = Arc::new(AgglayerService::new(
         sender,
-        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap()),
-        Arc::new(state_store),
-        Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap()),
+        pending_store.clone(),
+        state_store.clone(),
+        debug_store,
+        Arc::new(
+            EpochsStore::new(
+                Arc::new(config_epoch),
+                EpochNumber::ZERO,
+                pending_store,
+                state_store,
+                BackupClient::noop(),
+            )
+            .unwrap(),
+        ),
         Arc::new(config),
         Arc::new(L1Rpc {}),
     ));

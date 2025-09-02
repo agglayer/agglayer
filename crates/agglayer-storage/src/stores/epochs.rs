@@ -3,12 +3,13 @@ use std::{
     sync::Arc,
 };
 
-use agglayer_types::{EpochNumber, Height, NetworkId};
+use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Height, NetworkId};
 use parking_lot::RwLock;
 
 use super::{
     per_epoch::PerEpochStore, EpochStoreReader, EpochStoreWriter, MetadataWriter,
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
+    interfaces::reader::PerEpochReader,
 };
 use crate::{error::Error, storage::backup::BackupClient};
 
@@ -80,4 +81,12 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateWriter + MetadataWriter + StateReader,
 {
+    fn get_certificate(
+        &self,
+        epoch_number: EpochNumber,
+        index: CertificateIndex,
+    ) -> Result<Option<Certificate>, Error> {
+        let per_epoch_store = self.open(epoch_number)?;
+        per_epoch_store.get_certificate_at_index(index)
+    }
 }
