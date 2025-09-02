@@ -25,7 +25,11 @@ impl TryFrom<v1::Certificate> for Certificate {
                 .collect::<Result<_, _>>()
                 .map_err(|e: Error| e.inside_field("imported_bridge_exits"))?,
             aggchain_data: required_field!(value, aggchain_data),
-            metadata: Metadata::new(required_field!(value, metadata)),
+            metadata: if let Some(metadata) = value.metadata {
+                Metadata::new(metadata.try_into()?)
+            } else {
+                Metadata::default()
+            },
             custom_chain_data: value.custom_chain_data.to_vec(),
             l1_info_tree_leaf_count: value.l1_info_tree_leaf_count,
         })

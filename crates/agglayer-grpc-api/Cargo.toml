@@ -15,8 +15,8 @@ agglayer-storage.workspace = true
 agglayer-types.workspace = true
 
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }
-anyhow = { workspace = true }
 alloy.workspace = true
+eyre.workspace = true
 http.workspace = true
 prost.workspace = true
 serde.workspace = true

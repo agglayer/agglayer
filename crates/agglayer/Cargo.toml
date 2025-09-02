@@ -4,7 +4,6 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-anyhow.workspace = true
 clap = { workspace = true, features = ["derive", "env", "string"] }
 dirs.workspace = true
 dotenvy.workspace = true
@@ -16,11 +15,11 @@ tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 
-agglayer-config = { path = "../agglayer-config" }
-agglayer-node = { path = "../agglayer-node" }
-agglayer-prover-config = { workspace = true }
+agglayer-config.workspace = true
+agglayer-node.workspace = true
+agglayer-prover-config.workspace = true
 agglayer-prover.workspace = true
-agglayer-storage = { path = "../agglayer-storage" }
+agglayer-storage.workspace = true
 pessimistic-proof.workspace = true
 
 [dev-dependencies]
@@ -28,4 +27,6 @@ assert_cmd = "2.0.14"
 insta.workspace = true
 
 [build-dependencies]
+color-eyre.workspace = true
+eyre.workspace = true
 vergen-git2 = { version = "1.0.0", features = ["build"] }

@@ -1,8 +1,11 @@
 ---
 source: crates/agglayer-grpc-types/src/compat/v1/tests.rs
-expression: "format!(\"{:?}\", anyhow::Error::from(error))"
+expression: "format!(\"{:?}\", eyre::Error::from(error))"
 ---
 failed to parse signature
 
 Caused by:
     invalid parity: 5
+
+Location:
+    <REDACTED>

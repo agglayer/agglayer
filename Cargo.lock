@@ -48,9 +48,9 @@ dependencies = [
  "agglayer-prover",
  "agglayer-prover-config",
  "agglayer-storage",
- "anyhow",
  "assert_cmd",
  "clap",
+ "color-eyre",
  "dirs",
  "dotenvy",
  "eyre",
@@ -78,7 +78,6 @@ dependencies = [
  "agglayer-storage",
  "agglayer-types",
  "alloy",
- "anyhow",
  "arc-swap",
  "async-trait",
  "eyre",
@@ -126,7 +125,6 @@ dependencies = [
  "agglayer-test-suite",
  "agglayer-types",
  "alloy",
- "anyhow",
  "arc-swap",
  "async-trait",
  "buildstructor",
@@ -200,8 +198,8 @@ version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
  "alloy",
- "anyhow",
  "async-trait",
+ "eyre",
  "fail",
  "hex",
  "num-derive",
@@ -245,8 +243,8 @@ dependencies = [
  "agglayer-config",
  "alloy",
  "alloy-primitives",
- "anyhow",
  "async-trait",
+ "eyre",
  "gcloud-sdk",
  "serde",
  "thiserror 2.0.16",
@@ -266,8 +264,8 @@ dependencies = [
  "agglayer-storage",
  "agglayer-types",
  "alloy",
- "anyhow",
  "axum 0.8.4",
+ "eyre",
  "http",
  "prost 0.13.5",
  "rstest",
@@ -304,8 +302,8 @@ version = "0.1.0"
 dependencies = [
  "agglayer-interop",
  "agglayer-types",
- "anyhow",
  "bolero",
+ "eyre",
  "hex",
  "insta",
  "pbjson 0.8.0",
@@ -373,9 +371,9 @@ dependencies = [
  "agglayer-telemetry 0.1.0",
  "agglayer-types",
  "alloy",
- "anyhow",
  "axum 0.8.4",
  "buildstructor",
+ "eyre",
  "fail",
  "futures",
  "hex",
@@ -428,7 +426,6 @@ dependencies = [
  "agglayer-telemetry 0.1.0",
  "agglayer-types",
  "alloy",
- "anyhow",
  "arc-swap",
  "axum 0.8.4",
  "buildstructor",
@@ -592,6 +589,7 @@ dependencies = [
  "alloy-primitives",
  "chrono",
  "criterion",
+ "eyre",
  "hex",
  "insta",
  "mockall",
@@ -2468,10 +2466,11 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.34"
+version = "1.2.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42bc4aea80032b7bf409b0bc7ccad88853858911b7713a8062fdc0623867bedc"
+checksum = "590f9024a68a8c40351881787f1934dc11afd69090f5edb6831464694d836ea3"
 dependencies = [
+ "find-msvc-tools",
  "jobserver",
  "libc",
  "shlex",
@@ -2654,6 +2653,33 @@ dependencies = [
  "sha2",
  "sha3",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "color-eyre"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5920befb47832a6d61ee3a3a846565cfa39b331331e68a3b1d1116630f2f26d"
+dependencies = [
+ "backtrace",
+ "color-spantrace",
+ "eyre",
+ "indenter",
+ "once_cell",
+ "owo-colors",
+ "tracing-error",
+]
+
+[[package]]
+name = "color-spantrace"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8b88ea9df13354b55bc7234ebcce36e6ef896aca2e42a15de9e10edce01b427"
+dependencies = [
+ "once_cell",
+ "owo-colors",
+ "tracing-core",
+ "tracing-error",
 ]
 
 [[package]]
@@ -3604,6 +3630,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "find-msvc-tools"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e178e4fba8a2726903f6ba98a6d221e76f9c12c650d5dc0e6afdc50677b49650"
+
+[[package]]
 name = "fixed-hash"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4516,9 +4548,9 @@ dependencies = [
  "agglayer-telemetry 0.1.0",
  "agglayer-types",
  "alloy",
- "anyhow",
  "arc-swap",
  "buildstructor",
+ "eyre",
  "fail",
  "futures",
  "hex",
@@ -5640,6 +5672,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
+name = "owo-colors"
+version = "4.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48dd4f4a2c8405440fd0462561f0e5806bd0f77e86f51c761481bdd4018b545e"
+
+[[package]]
 name = "p256"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6073,6 +6111,7 @@ dependencies = [
  "agglayer-primitives",
  "agglayer-tries",
  "arbitrary",
+ "color-eyre",
  "eyre",
  "hex",
  "hex-literal 0.4.1",
@@ -6123,10 +6162,10 @@ dependencies = [
  "agglayer-tries",
  "agglayer-types",
  "alloy",
- "anyhow",
  "base64 0.22.1",
  "clap",
  "ecdsa-proof-lib",
+ "eyre",
  "hex",
  "hex-literal 0.4.1",
  "insta",
@@ -9188,6 +9227,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-error"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b1581020d7a273442f5b45074a6a57d5757ad0a47dac0e9f0bd57b81936f3db"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-forest"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9666,9 +9715,9 @@ dependencies = [
 
 [[package]]
 name = "wasmtimer"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8d49b5d6c64e8558d9b1b065014426f35c18de636895d24893dbbd329743446"
+checksum = "1c598d6b99ea013e35844697fc4670d08339d5cda15588f193c6beedd12f644b"
 dependencies = [
  "futures",
  "js-sys",

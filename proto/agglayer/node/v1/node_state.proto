@@ -5,6 +5,7 @@ package agglayer.node.v1;
 import "agglayer/node/types/v1/certificate.proto";
 import "agglayer/node/types/v1/certificate_header.proto";
 import "agglayer/node/types/v1/certificate_id.proto";
+import "agglayer/node/types/v1/network_state.proto";
 
 // Service for querying node state.
 service NodeStateService {
@@ -13,6 +14,9 @@ service NodeStateService {
 
   // Method used to get the latest known certificate header for a network.
   rpc GetLatestCertificateHeader(GetLatestCertificateHeaderRequest) returns (GetLatestCertificateHeaderResponse);
+
+  // Method used to get current network state as seen by this node.
+  rpc GetNetworkState(GetNetworkStateRequest) returns (GetNetworkStateResponse);
 }
 
 // Error kind for GetCertificateHeader RPC.
@@ -43,6 +47,27 @@ enum GetLatestCertificateHeaderErrorKind {
 
   // Certificate not found.
   GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND = 3;
+}
+
+// Error kind for GetNetworkState RPC.
+enum GetNetworkStateErrorKind {
+  // Unspecified error.
+  GET_NETWORK_STATE_ERROR_KIND_UNSPECIFIED = 0;
+
+  // Missing latest settled certificate.
+  GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE = 1;
+
+  // Missing latest pending certificate.
+  GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE = 2;
+
+  // Invalid network ID/network not found.
+  GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID = 3;
+
+  // Invalid network local state.
+  GET_NETWORK_STATE_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR = 4;
+
+  // Could not determine network type
+  GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE = 5;
 }
 
 // Request to get a CertificateHeader for a particular CertificateId.
@@ -82,4 +107,17 @@ enum LatestCertificateRequestType {
 message GetLatestCertificateHeaderResponse {
   // The latest certificate header.
   types.v1.CertificateHeader certificate_header = 1;
+}
+
+
+// Request to get the current state of the network, as seen by this node.
+message GetNetworkStateRequest {
+  // The network identifier.
+  uint32 network_id = 1;
+}
+
+// GetNetworkStateResponse contains the current state information for a network.
+message GetNetworkStateResponse {
+  // The current state of the network.
+  types.v1.NetworkState network_state = 1;
 }
