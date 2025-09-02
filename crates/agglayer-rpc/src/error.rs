@@ -125,6 +125,15 @@ impl SignatureVerificationError {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum ProofRetrievalError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error("Proof for certificate {certificate_id} not found")]
+    NotFound { certificate_id: CertificateId },
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum GetNetworkStateError {
     #[error("Unable to determine network type for network {network_id}")]
     UnknownNetworkType { network_id: NetworkId },

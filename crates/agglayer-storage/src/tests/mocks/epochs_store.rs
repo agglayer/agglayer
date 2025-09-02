@@ -1,4 +1,4 @@
-use agglayer_types::{Certificate, CertificateIndex, EpochNumber};
+use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Proof};
 use mockall::mock;
 
 use super::MockPerEpochStore;
@@ -26,5 +26,11 @@ mock! {
             epoch_number: EpochNumber,
             index: CertificateIndex,
         ) -> Result<Option<Certificate>, Error>;
+
+        fn get_proof(
+            &self,
+            epoch_number: EpochNumber,
+            index: CertificateIndex,
+        ) -> Result<Option<Proof>, Error>;
     }
 }

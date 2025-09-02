@@ -89,4 +89,13 @@ where
         let per_epoch_store = self.open(epoch_number)?;
         per_epoch_store.get_certificate_at_index(index)
     }
+
+    fn get_proof(
+        &self,
+        epoch_number: EpochNumber,
+        index: CertificateIndex,
+    ) -> Result<Option<agglayer_types::Proof>, Error> {
+        let per_epoch_store = self.open(epoch_number)?;
+        per_epoch_store.get_proof_at_index(index)
+    }
 }

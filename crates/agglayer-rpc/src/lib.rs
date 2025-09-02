@@ -22,7 +22,10 @@ use tracing::{debug, error, info, instrument, warn};
 pub use self::error::{
     CertificateRetrievalError, CertificateSubmissionError, GetNetworkStateError,
 };
-use crate::network_state::{NetworkState, NetworkType};
+use crate::{
+    error::ProofRetrievalError,
+    network_state::{NetworkState, NetworkType},
+};
 
 pub mod error;
 
@@ -268,6 +271,34 @@ where
             .ok_or(CertificateRetrievalError::NotFound { certificate_id })
     }
 
+    /// Get the proof for a certificate by certificate ID
+    pub fn get_proof(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<Option<agglayer_types::Proof>, ProofRetrievalError> {
+        // First try to get the proof from the pending store
+        match self.pending_store.get_proof(certificate_id) {
+            Ok(Some(proof)) => Ok(Some(proof)),
+            Ok(None) => {
+                // If not found in pending store, check the epoch store
+                self.epoch_store.get_proof(certificate_id).map_err(|error| {
+                    error!(
+                        ?error,
+                        "Failed to get proof for certificate {certificate_id} from epoch store",
+                    );
+                    ProofRetrievalError::NotFound { certificate_id }
+                })
+            }
+            Err(error) => {
+                error!(
+                    ?error,
+                    "Failed to get proof for certificate {certificate_id} from pending store",
+                );
+                Err(ProofRetrievalError::Storage(error))
+            }
+        }
+    }
+
     /// Assemble the current state of the specified network from
     /// the data in various sources.
     pub fn get_network_state(
@@ -329,6 +360,37 @@ where
             .as_ref()
             .map(|cert| cert.certificate_id);
 
+        // Extract settled_pp_root from the settled certificate's proof public values
+        let settled_pp_root = latest_settled_certificate.as_ref().and_then(|cert| {
+            // Get the proof for the settled certificate
+            self.get_proof(cert.certificate_id)
+                .inspect_err(|error| {
+                    error!(
+                        ?error,
+                        "get network status: failed to get proof for settled certificate"
+                    );
+                })
+                .ok()
+                .flatten()
+                .and_then(|proof| {
+                    // Deserialize the proof's public values to get PessimisticProofOutput
+                    let agglayer_types::Proof::SP1(sp1_proof) = proof;
+                    pessimistic_proof::PessimisticProofOutput::bincode_codec()
+                        .deserialize::<pessimistic_proof::PessimisticProofOutput>(
+                            sp1_proof.public_values.as_slice(),
+                        )
+                        .inspect_err(|error| {
+                            error!(
+                                ?error,
+                                "get network status: failed to deserialize pessimistic proof \
+                                 output"
+                            );
+                        })
+                        .ok()
+                        .map(|output| output.new_pessimistic_root)
+                })
+        });
+
         let settled_ler = latest_settled_certificate
             .as_ref()
             .map(|cert| cert.new_local_exit_root);
@@ -372,8 +434,6 @@ where
 
         // TODO: implement settled claim retrieval
         let settled_claim = None;
-
-        let settled_pp_root = None;
 
         Ok(NetworkState {
             network_status,
