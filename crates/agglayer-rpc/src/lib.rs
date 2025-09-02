@@ -19,9 +19,14 @@ use error::SignatureVerificationError;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
-pub use self::error::{CertificateRetrievalError, CertificateSubmissionError};
+pub use self::error::{
+    CertificateRetrievalError, CertificateSubmissionError, GetNetworkStateError,
+};
+use crate::network_state::NetworkState;
 
 pub mod error;
+
+pub mod network_state;
 
 /// The RPC agglayer service implementation.
 pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore> {
@@ -182,6 +187,30 @@ where
             .get_certificate_header(&certificate_id)
             .inspect_err(|err| error!("Failed to get certificate header: {err}"))?
             .ok_or(CertificateRetrievalError::NotFound { certificate_id })
+    }
+
+    /// Assemble the current state of the specified network from
+    /// the data in various sources.
+    pub fn get_network_state(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<NetworkState, GetNetworkStateError> {
+        // TODO: Implement the logic to retrieve the actual network state.
+        Ok(NetworkState {
+            network_status: network_state::NetworkStatus::Active,
+            network_type: network_state::NetworkType::Generic,
+            network_id,
+            settled_height: None,
+            settled_certificate_id: None,
+            settled_pp_root: None,
+            settled_ler: None,
+            settled_let_leaf_count: None,
+            settled_claim: None,
+            latest_pending_height: None,
+            latest_pending_status: None,
+            latest_pending_error: None,
+            latest_epoch_with_settlement: None,
+        })
     }
 }
 

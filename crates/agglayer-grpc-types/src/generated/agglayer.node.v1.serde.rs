@@ -776,6 +776,275 @@ impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderResponse {
         deserializer.deserialize_struct("agglayer.node.v1.GetLatestCertificateHeaderResponse", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for GetNetworkStateErrorKind {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "GET_NETWORK_STATE_ERROR_KIND_UNSPECIFIED",
+            Self::MissingLatestSettledCertificate => "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE",
+            Self::MissingLatestPendingCertificate => "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE",
+            Self::InvalidNetworkId => "GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID",
+            Self::NetworkLocalStateError => "GET_NETWORK_STATE_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR",
+            Self::UnknownNetworkType => "GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetNetworkStateErrorKind {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "GET_NETWORK_STATE_ERROR_KIND_UNSPECIFIED",
+            "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE",
+            "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE",
+            "GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID",
+            "GET_NETWORK_STATE_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR",
+            "GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetNetworkStateErrorKind;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "GET_NETWORK_STATE_ERROR_KIND_UNSPECIFIED" => Ok(GetNetworkStateErrorKind::Unspecified),
+                    "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE" => Ok(GetNetworkStateErrorKind::MissingLatestSettledCertificate),
+                    "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE" => Ok(GetNetworkStateErrorKind::MissingLatestPendingCertificate),
+                    "GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID" => Ok(GetNetworkStateErrorKind::InvalidNetworkId),
+                    "GET_NETWORK_STATE_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR" => Ok(GetNetworkStateErrorKind::NetworkLocalStateError),
+                    "GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE" => Ok(GetNetworkStateErrorKind::UnknownNetworkType),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GetNetworkStateRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.network_id != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetNetworkStateRequest", len)?;
+        if self.network_id != 0 {
+            struct_ser.serialize_field("networkId", &self.network_id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetNetworkStateRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "network_id",
+            "networkId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            NetworkId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "networkId" | "network_id" => Ok(GeneratedField::NetworkId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetNetworkStateRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.node.v1.GetNetworkStateRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetNetworkStateRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut network_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::NetworkId => {
+                            if network_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("networkId"));
+                            }
+                            network_id__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(GetNetworkStateRequest {
+                    network_id: network_id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.node.v1.GetNetworkStateRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GetNetworkStateResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.network_state.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetNetworkStateResponse", len)?;
+        if let Some(v) = self.network_state.as_ref() {
+            struct_ser.serialize_field("networkState", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetNetworkStateResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "network_state",
+            "networkState",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            NetworkState,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "networkState" | "network_state" => Ok(GeneratedField::NetworkState),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetNetworkStateResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.node.v1.GetNetworkStateResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetNetworkStateResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut network_state__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::NetworkState => {
+                            if network_state__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("networkState"));
+                            }
+                            network_state__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(GetNetworkStateResponse {
+                    network_state: network_state__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.node.v1.GetNetworkStateResponse", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for LatestCertificateRequestType {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
