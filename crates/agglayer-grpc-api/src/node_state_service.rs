@@ -80,6 +80,12 @@ where
                     ),
                 ))
             }
+            Err(error) => {
+                error!(?error, "unexpected error when fetching certificate header");
+                Err(tonic::Status::internal(
+                    "Internal certificate fetching error",
+                ))
+            }
             Ok(header) => Ok(tonic::Response::new(GetCertificateHeaderResponse {
                 certificate_header: Some(header.into()),
             })),
@@ -135,6 +141,13 @@ where
                         [],
                     ),
                 )
+            }
+            other => {
+                error!(
+                    ?other,
+                    "unexpected error when fetching latest certificate header"
+                );
+                tonic::Status::internal("Internal certificate fetching error")
             }
         })?;
 

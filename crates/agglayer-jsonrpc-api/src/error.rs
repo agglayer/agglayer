@@ -245,6 +245,19 @@ impl From<agglayer_rpc::CertificateRetrievalError> for Error {
             agglayer_rpc::CertificateRetrievalError::NotFound { certificate_id } => {
                 Self::ResourceNotFound(format!("Certificate({certificate_id})"))
             }
+            agglayer_rpc::CertificateRetrievalError::UnknownCertificateHeader {
+                network_id,
+                source,
+            } => Self::internal(format!(
+                "Failed to get latest known certificate header for network {network_id}: {source}"
+            )),
+            agglayer_rpc::CertificateRetrievalError::CertificateIdHashMismatch {
+                expected,
+                got,
+            } => Self::internal(format!(
+                "Invalid certificate retrieval - certificate id and hash mismatch - expected \
+                 certificate_id: {expected} got: {got}"
+            )),
         }
     }
 }
