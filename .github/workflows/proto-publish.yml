@@ -11,47 +11,25 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
     paths:
       - "proto/**"
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or tag to use for the workflow"
+        required: false
+        default: "main"
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  extract-labels:
-    name: Extract labels
-    runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && contains(github.event.head_commit.modified, 'proto/')) ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
-    steps:
-      - name: Determine labels
-        id: labels
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            BRANCH_NAME=${GITHUB_REF#refs/heads/}
-            echo "labels=${BRANCH_NAME}" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "labels=main" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            echo "labels=main" >> $GITHUB_OUTPUT
-          else
-            echo "labels=" >> $GITHUB_OUTPUT
-          fi
-    outputs:
-      labels: ${{ steps.labels.outputs.labels }}
-
   publish:
-    needs:
-      - extract-labels
     name: Publish protobuf to BSR
     uses: agglayer/reusable-workflows/.github/workflows/proto-publish.yml@main
     permissions:
       contents: read
     with:
-      labels: ${{ needs.extract-labels.outputs.labels }}
+      ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.ref }}
     secrets: inherit
