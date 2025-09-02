@@ -26,8 +26,7 @@ struct L1Rpc {}
 #[tokio::test]
 async fn get_certificate_header() {
     let tmp = TempDBDir::new();
-    let config = Config::new(&tmp.path);
-    let config_epoch = Config::new(&tmp.path);
+    let config = Arc::new(Config::new(&tmp.path));
 
     let pending_store =
         Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
@@ -51,7 +50,7 @@ async fn get_certificate_header() {
         debug_store,
         Arc::new(
             EpochsStore::new(
-                Arc::new(config_epoch),
+                config.clone(),
                 EpochNumber::ZERO,
                 pending_store,
                 state_store,
@@ -59,7 +58,7 @@ async fn get_certificate_header() {
             )
             .unwrap(),
         ),
-        Arc::new(config),
+        config,
         Arc::new(L1Rpc {}),
     ));
     let (tx, rx) = oneshot::channel::<()>();
