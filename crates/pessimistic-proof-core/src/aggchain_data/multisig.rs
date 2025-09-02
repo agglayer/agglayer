@@ -110,21 +110,6 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::aggchain_data::AggchainHashValues;
-
-    #[test]
-    fn nil_set() {
-        let empty = MultiSignature {
-            signatures: vec![], // not involved in the hash
-            expected_signers: vec![],
-            threshold: 0,
-        };
-
-        assert_eq!(
-            empty.multisig_hash(),
-            AggchainHashValues::EMPTY_MULTISIG_HASH
-        );
-    }
 
     fn prehash() -> B256 {
         let h = keccak256(b"prehash");

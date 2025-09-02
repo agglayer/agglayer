@@ -28,6 +28,7 @@ impl From<&AggchainHashValues> for ConsensusType {
 impl AggchainHashValues {
     /// Value if no multisig.
     pub const EMPTY_MULTISIG_HASH: Digest = Digest(hex!(
+        // NOTE: value covered in test at the end of this module.
         "290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"
     ));
 
@@ -99,5 +100,24 @@ impl From<&AggchainData> for AggchainHashValues {
                 multisig_hash: multisig.multisig_hash(),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::aggchain_data::{AggchainHashValues, MultiSignature};
+
+    #[test]
+    fn nil_set() {
+        let empty = MultiSignature {
+            signatures: vec![], // not involved in the hash
+            expected_signers: vec![],
+            threshold: 0,
+        };
+
+        assert_eq!(
+            empty.multisig_hash(),
+            AggchainHashValues::EMPTY_MULTISIG_HASH
+        );
     }
 }
