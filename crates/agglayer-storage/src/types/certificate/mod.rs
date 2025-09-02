@@ -213,11 +213,11 @@ pub enum AggchainDataV1<'a> {
         public_values: Cow<'a, Box<AggchainProofPublicValues>>,
     },
 
-    Multisig {
+    MultisigOnly {
         multisig: Cow<'a, [Option<Signature>]>,
     },
 
-    GenericWithMultisig {
+    MultisigAndAggchainProof {
         multisig: Cow<'a, [Option<Signature>]>,
         proof: Cow<'a, Proof>,
         aggchain_params: Digest,
@@ -260,13 +260,13 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
                 }
             }
 
-            AggchainData::MultisigOnly(multisig) => AggchainDataV1::Multisig {
+            AggchainData::MultisigOnly(multisig) => AggchainDataV1::MultisigOnly {
                 multisig: Cow::Borrowed(multisig.0.as_slice()),
             },
             AggchainData::MultisigAndAggchainProof {
                 multisig,
                 aggchain_proof,
-            } => AggchainDataV1::GenericWithMultisig {
+            } => AggchainDataV1::MultisigAndAggchainProof {
                 multisig: Cow::Borrowed(multisig.0.as_slice()),
                 proof: Cow::Borrowed(&aggchain_proof.proof),
                 aggchain_params: aggchain_proof.aggchain_params,
@@ -310,8 +310,8 @@ impl From<AggchainDataV1<'_>> for AggchainData {
                 signature,
                 public_values: Some(public_values.into_owned()),
             },
-            AggchainDataV1::Multisig { multisig } => Self::MultisigOnly(MultisigPayload(multisig.into_owned())),
-            AggchainDataV1::GenericWithMultisig {
+            AggchainDataV1::MultisigOnly { multisig } => Self::MultisigOnly(MultisigPayload(multisig.into_owned())),
+            AggchainDataV1::MultisigAndAggchainProof {
                 multisig,
                 proof,
                 aggchain_params,

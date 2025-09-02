@@ -116,7 +116,7 @@ impl AggchainDataV1<'static> {
     }
 
     fn test4() -> Self {
-        AggchainDataV1::Multisig {
+        AggchainDataV1::MultisigOnly {
             multisig: Cow::Owned(vec![
                 None,
                 None,
@@ -129,7 +129,7 @@ impl AggchainDataV1<'static> {
 
     fn test5() -> Self {
         let aggchain_params = Digest([0x61; 32]);
-        AggchainDataV1::GenericWithMultisig {
+        AggchainDataV1::MultisigAndAggchainProof {
             multisig: Cow::Owned(vec![
                 Some(sig(0x55, 0x66)),
                 None,
@@ -286,15 +286,15 @@ impl CertificateV1<'_> {
                     signature,
                     public_values: Cow::Owned(public_values.into_owned()),
                 },
-                AggchainDataV1::Multisig { multisig } => AggchainDataV1::Multisig {
+                AggchainDataV1::MultisigOnly { multisig } => AggchainDataV1::MultisigOnly {
                     multisig: Cow::Owned(multisig.into_owned()),
                 },
-                AggchainDataV1::GenericWithMultisig {
+                AggchainDataV1::MultisigAndAggchainProof {
                     multisig,
                     proof,
                     aggchain_params,
                     public_values,
-                } => AggchainDataV1::GenericWithMultisig {
+                } => AggchainDataV1::MultisigAndAggchainProof {
                     multisig: Cow::Owned(multisig.into_owned()),
                     proof: Cow::Owned(proof.into_owned()),
                     aggchain_params,
