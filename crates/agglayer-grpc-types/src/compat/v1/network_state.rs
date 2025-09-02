@@ -3,7 +3,7 @@ use agglayer_rpc::network_state::{
     NetworkState as AgglayerRpcNetworkState, NetworkStatus as AgglayerRpcNetworkStatus,
     NetworkType as AgglayerRpcNetworkType,
 };
-use agglayer_types::CertificateStatus;
+use agglayer_types::CertificateStatus as AgglayerCertificateStatus;
 
 use crate::node::types::v1;
 
@@ -30,6 +30,18 @@ impl From<AgglayerRpcNetworkType> for v1::NetworkType {
     }
 }
 
+impl From<AgglayerCertificateStatus> for v1::CertificateStatus {
+    fn from(value: AgglayerCertificateStatus) -> Self {
+        match value {
+            AgglayerCertificateStatus::Pending => v1::CertificateStatus::Pending,
+            AgglayerCertificateStatus::Proven => v1::CertificateStatus::Proven,
+            AgglayerCertificateStatus::Candidate => v1::CertificateStatus::Candidate,
+            AgglayerCertificateStatus::InError { .. } => v1::CertificateStatus::InError,
+            AgglayerCertificateStatus::Settled => v1::CertificateStatus::Settled,
+        }
+    }
+}
+
 impl From<AgglayerRpcNetworkState> for v1::NetworkState {
     fn from(value: AgglayerRpcNetworkState) -> Self {
         let network_status: v1::NetworkStatus = value.network_status.into();
@@ -42,13 +54,8 @@ impl From<AgglayerRpcNetworkState> for v1::NetworkState {
             bridge_exit_hash: Some(FixedBytes32::from(claim.bridge_exit_hash)),
         });
 
-        let latest_pending_status = value.latest_pending_status.map(|status| match status {
-            CertificateStatus::Pending => 1,
-            CertificateStatus::Proven => 2,
-            CertificateStatus::Candidate => 3,
-            CertificateStatus::InError { .. } => 4,
-            CertificateStatus::Settled => 5,
-        });
+        let latest_pending_status: Option<v1::CertificateStatus> =
+            value.latest_pending_status.map(v1::CertificateStatus::from);
 
         let latest_pending_error =
             value
@@ -68,7 +75,7 @@ impl From<AgglayerRpcNetworkState> for v1::NetworkState {
             settled_let_leaf_count: value.settled_let_leaf_count,
             settled_claim,
             latest_pending_height: value.latest_pending_height,
-            latest_pending_status,
+            latest_pending_status: latest_pending_status.map(|status| status as i32),
             latest_pending_error,
             latest_epoch_with_settlement: value.latest_epoch_with_settlement,
         }

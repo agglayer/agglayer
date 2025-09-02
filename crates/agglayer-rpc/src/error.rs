@@ -110,6 +110,6 @@ impl SignatureVerificationError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum GetNetworkStateError {
-    //TODO: add more specific errors as needed for the
+    // TODO: add more specific errors as needed for the
     // get network status implementation
 }
