@@ -245,7 +245,7 @@ impl From<agglayer_rpc::CertificateRetrievalError> for Error {
             agglayer_rpc::CertificateRetrievalError::NotFound { certificate_id } => {
                 Self::ResourceNotFound(format!("Certificate({certificate_id})"))
             }
-            agglayer_rpc::CertificateRetrievalError::UnknownCertificateHeader {
+            agglayer_rpc::CertificateRetrievalError::UnknownLatestCertificateHeader {
                 network_id,
                 source,
             } => Self::internal(format!(

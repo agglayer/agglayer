@@ -159,7 +159,7 @@ where
         let latest_certificate_header = self
             .get_latest_known_certificate_header(network_id)
             .map_err(
-                |error| CertificateRetrievalError::UnknownCertificateHeader {
+                |error| CertificateRetrievalError::UnknownLatestCertificateHeader {
                     network_id,
                     source: Box::new(error),
                 },

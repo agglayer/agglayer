@@ -16,7 +16,7 @@ pub enum CertificateRetrievalError {
     NotFound { certificate_id: CertificateId },
 
     #[error("Failed to get latest known certificate header for network {network_id}")]
-    UnknownCertificateHeader {
+    UnknownLatestCertificateHeader {
         network_id: NetworkId,
         #[source]
         source: Box<CertificateRetrievalError>,
