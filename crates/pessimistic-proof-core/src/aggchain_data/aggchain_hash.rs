@@ -32,7 +32,7 @@ impl AggchainHashValues {
     ));
 
     /// Value if no aggchain vkey.
-    pub const EMPTY_AGGCHAIN_VKEY: Digest = Digest::ZERO;
+    pub const EMPTY_AGGCHAIN_VKEY_HASH: Digest = Digest::ZERO;
 
     /// Value if no aggchain params.
     pub const EMPTY_AGGCHAIN_PARAMS: Digest = Digest::ZERO;
@@ -53,7 +53,7 @@ impl AggchainHashValues {
                         BigEndian::write_u32_into(&vkey, &mut aggchain_vkey_hash);
                         aggchain_vkey_hash
                     })
-                    .unwrap_or(*Self::EMPTY_AGGCHAIN_VKEY);
+                    .unwrap_or(*Self::EMPTY_AGGCHAIN_VKEY_HASH);
 
                 let aggchain_params = aggchain_params.unwrap_or(Self::EMPTY_AGGCHAIN_PARAMS);
 

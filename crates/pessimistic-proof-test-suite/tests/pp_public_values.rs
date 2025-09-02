@@ -22,13 +22,12 @@ fn test(#[case] json_file_name: &str) {
 
         let computed = match inputs {
             Inputs::Multisig(MultisigInputs { threshold, signers }) => MultiSignature {
-                signatures: vec![], // not needed
+                signatures: vec![],
                 expected_signers: signers,
                 threshold: threshold as usize,
             }
             .multisig_hash(),
             Inputs::Aggchain(AggchainInputs {
-                consensus_type: _, // not needed
                 aggchain_vkey,
                 aggchain_params,
                 multisig_hash,

@@ -161,6 +161,8 @@ impl SignatureCommitmentValues {
             }
             SignatureCommitmentVersion::V4 => {
                 // Added the aggchain params to support the aggchain proof
+                // NOTE: this commitment isn't used anywhere anymore.
+                // Keeping it to understand the history.
                 keccak256_combine([
                     self.new_local_exit_root.as_ref(),
                     self.commit_imported_bridge_exits

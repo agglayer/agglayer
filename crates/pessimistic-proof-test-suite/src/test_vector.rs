@@ -29,7 +29,6 @@ pub struct MultisigInputs {
 
 #[derive(Debug, Deserialize)]
 pub struct AggchainInputs {
-    pub consensus_type: u8,
     pub aggchain_vkey: B256,
     pub aggchain_params: B256,
     pub multisig_hash: B256,
