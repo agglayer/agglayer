@@ -54,20 +54,14 @@ enum GetNetworkStateErrorKind {
   // Unspecified error.
   GET_NETWORK_STATE_ERROR_KIND_UNSPECIFIED = 0;
 
-  // Missing latest settled certificate.
-  GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE = 1;
-
-  // Missing latest pending certificate.
-  GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE = 2;
-
   // Invalid network ID/network not found.
-  GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID = 3;
+  GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID = 1;
 
-  // Invalid network local state.
-  GET_NETWORK_STATE_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR = 4;
+  // Invalid network state.
+  GET_NETWORK_STATE_ERROR_KIND_NETWORK_STATE_ERROR = 2;
 
   // Could not determine network type
-  GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE = 5;
+  GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE = 3;
 }
 
 // Request to get a CertificateHeader for a particular CertificateId.

@@ -158,12 +158,12 @@ where
 
         let latest_certificate_header = self
             .get_latest_known_certificate_header(network_id)
-            .map_err(|error| {
-                GetLatestCertificateError::UnknownLatestCertificateHeader {
+            .map_err(
+                |error| GetLatestCertificateError::UnknownLatestCertificateHeader {
                     network_id,
                     source: Box::new(error),
-                }
-            })?;
+                },
+            )?;
 
         match latest_certificate_header {
             None => Ok(None),
@@ -187,12 +187,10 @@ where
                             certificate_id,
                             certificate.hash()
                         );
-                        return Err(
-                            GetLatestCertificateError::CertificateIdHashMismatch {
-                                expected: certificate_id,
-                                got: certificate.hash(),
-                            },
-                        );
+                        return Err(GetLatestCertificateError::CertificateIdHashMismatch {
+                            expected: certificate_id,
+                            got: certificate.hash(),
+                        });
                     }
                 }
 
