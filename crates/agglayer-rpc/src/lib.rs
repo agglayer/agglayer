@@ -23,7 +23,7 @@ pub use self::error::{
     CertificateRetrievalError, CertificateSubmissionError, GetNetworkStateError,
 };
 use crate::{
-    error::ProofRetrievalError,
+    error::{GetLatestCertificateError, ProofRetrievalError},
     network_state::{NetworkState, NetworkType},
 };
 
@@ -153,17 +153,17 @@ where
     pub fn get_latest_available_certificate_for_network(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<Certificate>, CertificateRetrievalError> {
+    ) -> Result<Option<Certificate>, GetLatestCertificateError> {
         debug!("Received request to get the latest available certificate for rollup {network_id}");
 
         let latest_certificate_header = self
             .get_latest_known_certificate_header(network_id)
-            .map_err(
-                |error| CertificateRetrievalError::UnknownLatestCertificateHeader {
+            .map_err(|error| {
+                GetLatestCertificateError::UnknownLatestCertificateHeader {
                     network_id,
                     source: Box::new(error),
-                },
-            )?;
+                }
+            })?;
 
         match latest_certificate_header {
             None => Ok(None),
@@ -187,10 +187,12 @@ where
                             certificate_id,
                             certificate.hash()
                         );
-                        return Err(CertificateRetrievalError::CertificateIdHashMismatch {
-                            expected: certificate_id,
-                            got: certificate.hash(),
-                        });
+                        return Err(
+                            GetLatestCertificateError::CertificateIdHashMismatch {
+                                expected: certificate_id,
+                                got: certificate.hash(),
+                            },
+                        );
                     }
                 }
 
@@ -216,7 +218,7 @@ where
                     "Certificate {} at height {} not found in any store",
                     certificate_id, height
                 );
-                Err(CertificateRetrievalError::NotFound { certificate_id })
+                Err(GetLatestCertificateError::NotFound { certificate_id })
             }
         }
     }

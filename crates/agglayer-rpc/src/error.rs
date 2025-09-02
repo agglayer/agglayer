@@ -14,22 +14,6 @@ pub enum CertificateRetrievalError {
 
     #[error("Data for certificate {certificate_id} not found")]
     NotFound { certificate_id: CertificateId },
-
-    #[error("Failed to get latest known certificate header for network {network_id}")]
-    UnknownLatestCertificateHeader {
-        network_id: NetworkId,
-        #[source]
-        source: Box<CertificateRetrievalError>,
-    },
-
-    #[error(
-        "Invalid certificate retrieval - certificate id and hash mismatch - expected \
-         certificate_id: {expected} got: {got}"
-    )]
-    CertificateIdHashMismatch {
-        expected: CertificateId,
-        got: CertificateId,
-    },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -130,6 +114,31 @@ pub enum ProofRetrievalError {
     Storage(#[from] StorageError),
 
     #[error("Proof for certificate {certificate_id} not found")]
+    NotFound { certificate_id: CertificateId },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GetLatestCertificateError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error("Failed to get latest known certificate header for network {network_id}")]
+    UnknownLatestCertificateHeader {
+        network_id: NetworkId,
+        #[source]
+        source: Box<CertificateRetrievalError>,
+    },
+
+    #[error(
+        "Invalid certificate retrieval - certificate id and hash mismatch - expected \
+         certificate_id: {expected} got: {got}"
+    )]
+    CertificateIdHashMismatch {
+        expected: CertificateId,
+        got: CertificateId,
+    },
+
+    #[error("Latest certificate header for certificate {certificate_id} not found")]
     NotFound { certificate_id: CertificateId },
 }
 
