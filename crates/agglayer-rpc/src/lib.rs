@@ -5,6 +5,7 @@ use agglayer_contracts::{L1TransactionFetcher, RollupContract};
 use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
+    error::Error,
     stores::{
         DebugReader, DebugWriter, EpochStoreReader, PendingCertificateReader,
         PendingCertificateWriter, StateReader, StateWriter,
@@ -330,19 +331,43 @@ where
         debug!("Received request to get the network state for rollup {network_id}");
 
         // Get the latest settled certificate for the network
-        let latest_settled_certificate = self
-            .get_latest_settled_certificate_header(network_id)
-            .inspect_err(|error| {
-                warn!(?error, "Failed to get latest settled certificate");
-            })
-            .unwrap_or_default();
+        let latest_settled_certificate =
+            match self.get_latest_settled_certificate_header(network_id) {
+                Ok(cert) => cert,
+                Err(CertificateRetrievalError::NotFound { .. }) => {
+                    warn!("No settled certificate found for network {network_id}");
+                    None
+                }
+                Err(error) => {
+                    error!(
+                        ?error,
+                        "Failed to get latest settled certificate for network {network_id}"
+                    );
+                    return Err(GetNetworkStateError::InternalError {
+                        network_id,
+                        source: error.into(),
+                    });
+                }
+            };
 
-        let latest_pending_certificate = self
-            .get_latest_pending_certificate_header(network_id)
-            .inspect_err(|error| {
-                warn!(?error, "Failed to get latest pending certificate");
-            })
-            .unwrap_or_default();
+        let latest_pending_certificate =
+            match self.get_latest_pending_certificate_header(network_id) {
+                Ok(cert) => cert,
+                Err(CertificateRetrievalError::NotFound { .. }) => {
+                    info!("No latest pending certificate found for network {network_id}");
+                    None
+                }
+                Err(error) => {
+                    error!(
+                        ?error,
+                        "Failed to get latest pending certificate for network {network_id}"
+                    );
+                    return Err(GetNetworkStateError::InternalError {
+                        network_id,
+                        source: error.into(),
+                    });
+                }
+            };
 
         // Determine network type from the latest available certificate
         let network_type = match self.get_latest_available_certificate_for_network(network_id) {
@@ -366,7 +391,10 @@ where
             Ok(None) => Err(GetNetworkStateError::UnknownNetworkType { network_id }),
             Err(error) => {
                 error!(?error, "Unable to determine network type");
-                Err(GetNetworkStateError::UnknownNetworkType { network_id })
+                Err(GetNetworkStateError::InternalError {
+                    network_id,
+                    source: error.into(),
+                })
             }
         }?;
 
@@ -383,55 +411,101 @@ where
             .map(|cert| cert.certificate_id);
 
         // Extract settled_pp_root from the settled certificate's proof public values
-        let settled_pp_root = latest_settled_certificate.as_ref().and_then(|cert| {
-            // Get the proof for the settled certificate
-            self.get_proof(cert.certificate_id)
-                .inspect_err(|error| {
-                    error!(
-                        ?error,
-                        "get network status: failed to get proof for settled certificate"
-                    );
-                })
-                .ok()
-                .flatten()
-                .and_then(|proof| {
-                    // Deserialize the proof's public values to get PessimisticProofOutput
-                    let agglayer_types::Proof::SP1(sp1_proof) = proof;
-                    pessimistic_proof::PessimisticProofOutput::bincode_codec()
+        let settled_pp_root = if let Some(cert) = latest_settled_certificate.as_ref() {
+            match self.get_proof(cert.certificate_id) {
+                Ok(Some(agglayer_types::Proof::SP1(sp1_proof))) => {
+                    match pessimistic_proof::PessimisticProofOutput::bincode_codec()
                         .deserialize::<pessimistic_proof::PessimisticProofOutput>(
-                            sp1_proof.public_values.as_slice(),
-                        )
-                        .inspect_err(|error| {
+                        sp1_proof.public_values.as_slice(),
+                    ) {
+                        Ok(output) => Some(output.new_pessimistic_root),
+                        Err(error) => {
                             error!(
                                 ?error,
                                 "get network status: failed to deserialize pessimistic proof \
                                  output"
                             );
-                        })
-                        .ok()
-                        .map(|output| output.new_pessimistic_root)
-                })
-        });
+                            return Err(GetNetworkStateError::InternalError {
+                                network_id,
+                                source: error.into(),
+                            });
+                        }
+                    }
+                }
+                Ok(None) => None,
+                Err(ProofRetrievalError::NotFound { .. }) => None,
+                Err(error) => {
+                    error!(
+                        ?error,
+                        "get network status: failed to get proof for settled certificate \
+                         {certificate_id}",
+                        certificate_id = cert.certificate_id
+                    );
+                    return Err(GetNetworkStateError::InternalError {
+                        network_id,
+                        source: error.into(),
+                    });
+                }
+            }
+        } else {
+            None
+        };
 
         let settled_ler = latest_settled_certificate
             .as_ref()
             .map(|cert| cert.new_local_exit_root);
 
-        let settled_let_leaf_count = self
-            .state
-            .read_local_network_state(network_id)
-            .inspect_err(|error| {
-                error!(
-                    ?error,
-                    "Failed to get local network state for network {network_id}"
-                );
-            })
-            .ok()
-            .flatten()
-            .map(|local_network_state| {
-                // We return the leaf count of the latest local exit tree
-                local_network_state.exit_tree.leaf_count as u64
-            });
+        let settled_let_leaf_count =
+            match self
+                .state
+                .read_local_network_state(network_id)
+                .map(|local_network_state| {
+                    // We return the leaf count of the latest local exit tree
+                    local_network_state.map(|v| v.exit_tree.leaf_count as u64)
+                }) {
+                Ok(leaf_count) => leaf_count,
+                Err(Error::DBError(error)) => {
+                    error!(
+                        ?error,
+                        "get network status: failed to read local network state for network \
+                         {network_id}"
+                    );
+                    return Err(GetNetworkStateError::InternalError {
+                        network_id,
+                        source: error.into(),
+                    });
+                }
+                Err(Error::Unexpected(message)) => {
+                    error!(
+                        ?message,
+                        "get network status: unexpected error reading local network state for \
+                         network {network_id}"
+                    );
+                    return Err(GetNetworkStateError::InternalError {
+                        network_id,
+                        source: eyre::eyre!(message),
+                    });
+                }
+                Err(Error::InconsistentState { network_id }) => {
+                    error!(
+                        ?network_id,
+                        "get network status: inconsistent state error reading local network state \
+                         for network {network_id}"
+                    );
+                    return Err(GetNetworkStateError::InternalError {
+                        network_id,
+                        source: eyre::eyre!("Inconsistent network state error"),
+                    });
+                }
+                Err(error) => {
+                    error!(
+                        ?error,
+                        "get network status: failed to read local network state for network \
+                         {network_id}"
+                    );
+                    None
+                }
+            };
 
         let latest_pending_height = latest_pending_certificate
             .as_ref()
@@ -445,7 +519,9 @@ where
         let latest_pending_error = latest_pending_certificate
             .as_ref()
             .and_then(|cert| match &cert.status {
-                agglayer_types::CertificateStatus::InError { error } => Some((*error).clone()),
+                agglayer_types::CertificateStatus::InError { error } => {
+                    Some(error.as_ref().clone())
+                }
                 _ => None,
             });
 

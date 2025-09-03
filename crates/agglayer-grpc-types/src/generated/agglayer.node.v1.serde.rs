@@ -787,6 +787,7 @@ impl serde::Serialize for GetNetworkStateErrorKind {
             Self::InvalidNetworkId => "GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID",
             Self::NetworkStateError => "GET_NETWORK_STATE_ERROR_KIND_NETWORK_STATE_ERROR",
             Self::UnknownNetworkType => "GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE",
+            Self::InternalError => "GET_NETWORK_STATE_ERROR_KIND_INTERNAL_ERROR",
         };
         serializer.serialize_str(variant)
     }
@@ -802,6 +803,7 @@ impl<'de> serde::Deserialize<'de> for GetNetworkStateErrorKind {
             "GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID",
             "GET_NETWORK_STATE_ERROR_KIND_NETWORK_STATE_ERROR",
             "GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE",
+            "GET_NETWORK_STATE_ERROR_KIND_INTERNAL_ERROR",
         ];
 
         struct GeneratedVisitor;
@@ -846,6 +848,7 @@ impl<'de> serde::Deserialize<'de> for GetNetworkStateErrorKind {
                     "GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID" => Ok(GetNetworkStateErrorKind::InvalidNetworkId),
                     "GET_NETWORK_STATE_ERROR_KIND_NETWORK_STATE_ERROR" => Ok(GetNetworkStateErrorKind::NetworkStateError),
                     "GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE" => Ok(GetNetworkStateErrorKind::UnknownNetworkType),
+                    "GET_NETWORK_STATE_ERROR_KIND_INTERNAL_ERROR" => Ok(GetNetworkStateErrorKind::InternalError),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

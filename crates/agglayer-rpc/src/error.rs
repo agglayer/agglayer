@@ -146,4 +146,11 @@ pub enum GetLatestCertificateError {
 pub enum GetNetworkStateError {
     #[error("Unable to determine network type for network {network_id}")]
     UnknownNetworkType { network_id: NetworkId },
+
+    #[error("Could not get network status for network {network_id}, internal error: {source}")]
+    InternalError {
+        network_id: NetworkId,
+        #[source]
+        source: eyre::Error,
+    },
 }

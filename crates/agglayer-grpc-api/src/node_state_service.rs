@@ -168,6 +168,17 @@ where
                             ),
                         )
                     }
+                    agglayer_rpc::GetNetworkStateError::InternalError { source, .. } => {
+                        tonic::Status::with_error_details(
+                            tonic::Code::Internal,
+                            "Internal error",
+                            ErrorDetails::with_error_info(
+                                GetNetworkStateErrorKind::InternalError.as_str_name(),
+                                GET_NETWORK_STATE_METHOD_PATH,
+                                [("error".into(), format!("{source:?}"))],
+                            ),
+                        )
+                    }
                 }
             })?
             .into();

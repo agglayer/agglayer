@@ -17,11 +17,13 @@ pessimistic-proof.workspace = true
 
 
 alloy.workspace = true
+eyre.workspace = true
 futures.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+log = "0.4.27"
 
 [lints]
 workspace = true

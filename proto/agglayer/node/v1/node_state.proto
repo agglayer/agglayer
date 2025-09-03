@@ -62,6 +62,9 @@ enum GetNetworkStateErrorKind {
 
   // Could not determine network type
   GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE = 3;
+
+  // Internal service error.
+  GET_NETWORK_STATE_ERROR_KIND_INTERNAL_ERROR = 4;
 }
 
 // Request to get a CertificateHeader for a particular CertificateId.
