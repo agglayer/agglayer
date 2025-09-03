@@ -6,8 +6,7 @@
 //! For now, this is constraint to be either one ECDSA signature, or one SP1
 //! stark proof proving a specified statement which can be abstracted here.
 
-use agglayer_primitives::{Address, Digest, Signature};
-use alloy_primitives::B256;
+use agglayer_primitives::{alloy_primitives::B256, Address, Digest, Signature};
 use serde::{Deserialize, Serialize};
 
 pub use crate::aggchain_data::{
@@ -32,7 +31,7 @@ pub type Vkey = [u32; 8];
 
 /// Chain proof which include either multisig, aggchain proof, or both.
 /// Explicit enum which forbid the case where we have none of them.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum AggchainData {
     /// Legacy signature with migration logic
     LegacyEcdsa {
