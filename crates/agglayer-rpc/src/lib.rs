@@ -445,7 +445,7 @@ where
         let latest_pending_error = latest_pending_certificate
             .as_ref()
             .and_then(|cert| match &cert.status {
-                agglayer_types::CertificateStatus::InError { error } => Some(*error.clone()),
+                agglayer_types::CertificateStatus::InError { error } => Some((*error).clone()),
                 _ => None,
             });
 
