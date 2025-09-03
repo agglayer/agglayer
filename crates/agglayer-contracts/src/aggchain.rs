@@ -1,4 +1,4 @@
-use agglayer_primitives::Address;
+use agglayer_primitives::{Address, U256};
 use alloy::primitives::Bytes;
 use tracing::error;
 
@@ -30,6 +30,11 @@ pub trait AggchainContract {
         rollup_address: Address,
         aggchain_data: Bytes,
     ) -> Result<[u8; 32], L1RpcError>;
+
+    async fn get_multisig_context(
+        &self,
+        rollup_address: Address,
+    ) -> Result<(Vec<Address>, usize), L1RpcError>;
 }
 
 #[async_trait::async_trait]
@@ -73,5 +78,44 @@ where
 
                 L1RpcError::AggchainHashFetchFailed
             })
+    }
+
+    async fn get_multisig_context(
+        &self,
+        rollup_address: Address,
+    ) -> Result<(Vec<Address>, usize), L1RpcError> {
+        let signers = AggchainBase::new(rollup_address.into(), self.rpc.clone())
+            .getAggchainSigners()
+            .call()
+            .await
+            .map(|alloy_vec| {
+                alloy_vec
+                    .iter()
+                    .map(|addr| Address::from_alloy(*addr))
+                    .collect()
+            })
+            .map_err(|error| {
+                error!(?error, "Unable to fetch the aggchain signers");
+
+                L1RpcError::AggchainHashFetchFailed //todo dedicated error
+            })?;
+
+        let threshold: usize = {
+            let threshold_u256: U256 = AggchainBase::new(rollup_address.into(), self.rpc.clone())
+                .getThreshold()
+                .call()
+                .await
+                .map_err(|error| {
+                    error!(?error, "Unable to fetch the multisig threshold");
+                    L1RpcError::AggchainHashFetchFailed //todo dedicated error
+                })?;
+
+            threshold_u256.try_into().map_err(|error| {
+                error!(?error, "Threshold too large: {threshold_u256}",);
+                L1RpcError::AggchainHashFetchFailed //todo dedicated error
+            })?
+        };
+
+        Ok((signers, threshold))
     }
 }

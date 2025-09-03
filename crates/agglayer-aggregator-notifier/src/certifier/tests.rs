@@ -236,6 +236,11 @@ mockall::mock! {
             rollup_address: agglayer_types::primitives::Address,
             aggchain_data: Bytes,
         ) -> Result<[u8; 32], L1RpcError>;
+
+        async fn get_multisig_context(
+            &self,
+            rollup_address: agglayer_types::Address,
+        ) -> Result<(Vec<agglayer_types::Address>, usize), L1RpcError>;
     }
 
     #[async_trait::async_trait]

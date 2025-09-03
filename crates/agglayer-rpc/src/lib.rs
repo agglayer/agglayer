@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
-use agglayer_contracts::{L1TransactionFetcher, RollupContract};
+use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -225,7 +225,7 @@ where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
-    L1Rpc: RollupContract + L1TransactionFetcher + 'static,
+    L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static,
 {
     fn get_known_certificate_id_at_height(
         &self,
@@ -349,35 +349,63 @@ where
         cert: &Certificate,
     ) -> Result<(), SignatureVerificationError> {
         // Verify any signature related data, fetch L1 context when needed.
-        let sequencer_address = self
-            .l1_rpc_provider
-            .get_trusted_sequencer_address(
-                cert.network_id.to_u32(),
-                self.config.proof_signers.clone(),
-            )
-            .await
-            .map_err(|_| {
-                SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(cert.network_id)
-            })?;
+        let fetch_sequencer_address = || async {
+            self.l1_rpc_provider
+                .get_trusted_sequencer_address(
+                    cert.network_id.to_u32(),
+                    self.config.proof_signers.clone(),
+                )
+                .await
+                .map_err(|_| {
+                    SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(
+                        cert.network_id,
+                    )
+                })
+        };
 
-        let multisig_ctx = MultisigCtx {
-            signers: Default::default(), // TODO: to fetch from L1
-            threshold: 1,                // TODO: to fetch from L1
-            prehash: cert.signature_commitment_values().multisig_commitment(),
+        // Fetching rollup contract address
+        let fetch_multisig_context = || async {
+            let rollup_address = self
+                .l1_rpc_provider
+                .get_rollup_contract_address(cert.network_id.into())
+                .await
+                .map_err(|_| {
+                    SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(
+                        cert.network_id,
+                    )
+                    //todo error
+                })?;
+
+            let (signers, threshold) = self
+                .l1_rpc_provider
+                .get_multisig_context(rollup_address)
+                .await
+                .map_err(|_| {
+                    SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(
+                        cert.network_id,
+                    )
+                    //todo error
+                })?;
+
+            Ok::<MultisigCtx, SignatureVerificationError>(MultisigCtx {
+                signers,
+                threshold: threshold as usize,
+                prehash: cert.signature_commitment_values().multisig_commitment(),
+            })
         };
 
         match &cert.aggchain_data {
             AggchainData::ECDSA { signature } => {
-                cert.verify_legacy_ecdsa(sequencer_address, signature)
+                cert.verify_legacy_ecdsa(fetch_sequencer_address().await?, signature)
             }
             AggchainData::Generic { signature, .. } => {
-                cert.verify_aggchain_proof_signature(sequencer_address, signature)
+                cert.verify_aggchain_proof_signature(fetch_sequencer_address().await?, signature)
             }
             AggchainData::MultisigOnly(multisig) => {
-                cert.verify_multisig(multisig.into(), multisig_ctx)
+                cert.verify_multisig(multisig.into(), fetch_multisig_context().await?)
             }
             AggchainData::MultisigAndAggchainProof { multisig, .. } => {
-                cert.verify_multisig(multisig.into(), multisig_ctx)
+                cert.verify_multisig(multisig.into(), fetch_multisig_context().await?)
             }
         }
         .map_err(SignatureVerificationError::from_signer_error)
