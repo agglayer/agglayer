@@ -149,7 +149,7 @@ where
     }
 
     /// Get latest available certificate data for a network.
-    /// Note: This includes pending certificates, proven certificates
+    /// Note: This includes proven certificates
     /// and settled certificates. If no certificate is found, return None.
     pub fn get_latest_available_certificate_for_network(
         &self,
@@ -157,14 +157,38 @@ where
     ) -> Result<Option<Certificate>, GetLatestCertificateError> {
         debug!("Received request to get the latest available certificate for rollup {network_id}");
 
-        let latest_certificate_header = self
-            .get_latest_known_certificate_header(network_id)
-            .map_err(
-                |error| GetLatestCertificateError::UnknownLatestCertificateHeader {
-                    network_id,
-                    source: Box::new(error),
-                },
-            )?;
+        let proven_certificate_id_and_height = self
+            .pending_store
+            .get_latest_proven_certificate_per_network(&network_id)
+            .inspect_err(|e| error!("Failed to get latest proven certificate: {e}"))?
+            .map(|(_, height, id)| (id, height));
+
+        let settled_certificate_id_and_height = self
+            .state
+            .get_latest_settled_certificate_per_network(&network_id)
+            .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
+            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
+
+        let certificate_id = [
+            proven_certificate_id_and_height,
+            settled_certificate_id_and_height,
+        ]
+        .into_iter()
+        .flatten()
+        .max_by(|x, y| x.1.cmp(&y.1))
+        .map(|v| v.0);
+
+        let latest_certificate_header = match certificate_id {
+            None => Ok(None),
+            Some(certificate_id) => self.fetch_certificate_header(certificate_id).map(Some),
+        }
+        .map_err(|error| {
+            error!(?error, "Failed to get latest known certificate header");
+            GetLatestCertificateError::UnknownLatestCertificateHeader {
+                network_id,
+                source: Box::new(error),
+            }
+        })?;
 
         match latest_certificate_header {
             None => Ok(None),
