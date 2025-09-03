@@ -7,28 +7,23 @@ use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
-        DebugReader, DebugWriter, EpochStoreReader, PendingCertificateReader,
+        DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
         PendingCertificateWriter, StateReader, StateWriter,
     },
 };
 use agglayer_types::{
     aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Address, Certificate,
     CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId,
-    Signature,
+    NetworkInfo, NetworkStatus, NetworkType, SettledClaim, Signature,
 };
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
 pub use self::error::{CertificateRetrievalError, CertificateSubmissionError, GetNetworkInfoError};
-use crate::{
-    error::{GetLatestCertificateError, GetLatestSettledClaimError, ProofRetrievalError},
-    network_info::{NetworkInfo, NetworkType, SettledClaim},
-};
+use crate::error::{GetLatestCertificateError, GetLatestSettledClaimError, ProofRetrievalError};
 
 pub mod error;
-
-pub mod network_info;
 
 /// The RPC agglayer service implementation.
 pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
@@ -100,7 +95,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
     AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
     PendingStore: PendingCertificateReader + 'static,
-    StateStore: StateReader + 'static,
+    StateStore: NetworkInfoReader + StateReader + 'static,
     DebugStore: DebugReader + 'static,
     L1Rpc: Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,
@@ -511,7 +506,7 @@ where
         // in regard to the agglayer-node. We could have multiple kind of status
         // that could represent a network sending too many unprovable certs,
         // or even a network that didn't settle for N epochs and such (optional).
-        let network_status = network_info::NetworkStatus::Active;
+        let network_status = NetworkStatus::Active;
 
         // Extract settled certificate data
         let settled_height = latest_settled_certificate.as_ref().map(|cert| cert.height);
@@ -630,6 +625,31 @@ where
             latest_pending_status,
             latest_pending_error,
             latest_epoch_with_settlement,
+        })
+    }
+}
+
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+where
+    PendingStore: Send + Sync + 'static,
+    StateStore: NetworkInfoReader + 'static,
+    DebugStore: Send + Sync + 'static,
+    L1Rpc: Send + Sync + 'static,
+    EpochsStore: EpochStoreReader + 'static,
+{
+    /// Assemble the current state of the specified network from
+    /// the data in various sources.
+    pub fn get_network_state(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<NetworkInfo>, GetNetworkInfoError> {
+        // TODO: Implement the logic to retrieve the actual network state.
+        self.state.get_network_info(network_id).map_err(|source| {
+            GetNetworkInfoError::InternalError {
+                network_id,
+                source: source.into(),
+            }
         })
     }
 }

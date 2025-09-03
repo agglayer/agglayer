@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package agglayer.storage.v0;
+
+// All the possible values that can be stored in the network info.
+message NetworkInfoValue {
+  // The type of value being stored.
+  oneof value {
+    // The network type
+    NetworkType network_type = 1;
+    // Represents the current settled certificate for a given network.
+    SettledCertificate settled_certificate = 4;
+    // Info about the latest settled claim in the network.
+    SettledClaim settled_claim = 2;
+    // The height of the latest pending certificate.
+    LatestPendingHeight latest_pending_height = 3;
+  }
+}
+
+// Represents the current settled certificate for a given network.
+message SettledCertificate {
+  // The ID of the latest settled certificate.
+  SettledCertificateId certificate_id = 1;
+  // The pessimistic proof root of the latest settled certificate.
+  SettledPessimisticProofRoot new_pp_root = 2;
+  // The leaf count of the latest settled local exit tree.
+  SettledLocalExitTreeLeafCount let_leaf_count = 3;
+}
+
+// The network type
+enum NetworkType {
+  // Unspecified network type.
+  NETWORK_TYPE_UNSPECIFIED = 0;
+  // ECDSA-based network type.
+  NETWORK_TYPE_ECDSA = 1;
+  // Generic network type.
+  NETWORK_TYPE_GENERIC = 2;
+  /// Multisig-only network type.
+  NETWORK_TYPE_MULTISIG_ONLY = 3;
+  /// Multisig and aggchain proof network type.
+  NETWORK_TYPE_MULTISIG_AND_AGGCHAIN_PROOF = 4;
+}
+
+// Represents the current settled height for a given network.
+message SettledHeight {
+  // The actual certificate height settled
+  uint64 height = 1;
+}
+
+// SettledCertificateId represents the ID of the latest settled certificate.
+message SettledCertificateId {
+  // The certificate ID in bytes
+  bytes id = 1;
+}
+
+// The pessimistic proof root of the latest settled certificate.
+message SettledPessimisticProofRoot {
+  // The root hash
+  bytes root = 1;
+}
+
+// The local exit root of the latest settled certificate.
+message SettledLocalExitRoot {
+  // The root hash
+  bytes root = 1;
+}
+
+// The leaf count of the latest settled local exit tree.
+message SettledLocalExitTreeLeafCount {
+  // The leaf count
+  uint64 settled_let_leaf_count = 1;
+}
+
+// Info about the latest settled claim in the network.
+message SettledClaim {
+  // Global index, indicating uniquely which tree leaf is claimed.
+  bytes global_index = 1;
+  /// Hash of the claimed imported bridge exit.
+  bytes bridge_exit_hash = 2;
+}
+
+// The height of the latest pending certificate.
+message LatestPendingHeight {
+  // The actual certificate height that is in pending
+  uint64 latest_pending_height = 1;
+}

@@ -1,11 +1,14 @@
 use agglayer_types::{
-    primitives::Digest, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, Proof
+    primitives::Digest, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
+    NetworkId, Proof,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::columns::Codec;
 
 mod certificate;
+mod generated;
+pub(crate) mod network_info;
 
 macro_rules! default_codec_impl {
     ($($ident: ident),+) => {

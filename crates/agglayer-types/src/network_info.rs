@@ -1,10 +1,8 @@
-use agglayer_interop::types::NetworkId;
 use agglayer_primitives::Digest;
 use agglayer_tries::roots::LocalExitRoot;
-use agglayer_types::{CertificateStatus, CertificateStatusError};
 use serde::{Deserialize, Serialize};
 
-use crate::{CertificateId, Height};
+use crate::{CertificateId, CertificateStatus, CertificateStatusError, Height, NetworkId};
 
 /// The status of a network.
 /// TODO: implement more detailed status tracking including
@@ -22,14 +20,15 @@ pub enum NetworkStatus {
 // The aggchain type of network
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkType {
+    Unspecified = 0,
     /// ECDSA-based network type.
-    Ecdsa = 0,
+    Ecdsa = 1,
     /// Generic network type.
-    Generic = 1,
+    Generic = 2,
     /// Multisig-only network type.
-    MultisigOnly = 2,
+    MultisigOnly = 3,
     /// Multisig and aggchain proof network type.
-    MultisigAndAggchainProof = 3,
+    MultisigAndAggchainProof = 4,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -68,4 +67,24 @@ pub struct NetworkInfo {
     pub latest_pending_error: Option<CertificateStatusError>,
     /// The epoch number of the latest settlement.
     pub latest_epoch_with_settlement: Option<u64>,
+}
+
+impl NetworkInfo {
+    pub fn with_network_id(network_id: NetworkId) -> Self {
+        Self {
+            network_status: NetworkStatus::Active,
+            network_type: NetworkType::Unspecified,
+            network_id,
+            settled_height: None,
+            settled_certificate_id: None,
+            settled_pp_root: None,
+            settled_ler: None,
+            settled_let_leaf_count: None,
+            settled_claim: None,
+            latest_pending_height: None,
+            latest_pending_status: None,
+            latest_pending_error: None,
+            latest_epoch_with_settlement: None,
+        }
+    }
 }
