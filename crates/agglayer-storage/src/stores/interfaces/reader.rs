@@ -17,7 +17,14 @@ pub trait DebugReader: Send + Sync {
         -> Result<Option<Certificate>, Error>;
 }
 
-pub trait EpochStoreReader: Send + Sync {}
+pub trait EpochStoreReader: Send + Sync {
+    /// Get a certificate from a specific epoch by its index
+    fn get_certificate(
+        &self,
+        epoch_number: EpochNumber,
+        index: CertificateIndex,
+    ) -> Result<Option<Certificate>, Error>;
+}
 
 pub trait PendingCertificateReader: Send + Sync {
     fn get_latest_pending_certificate_for_network(
