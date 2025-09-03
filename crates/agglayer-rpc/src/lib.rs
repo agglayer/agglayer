@@ -573,10 +573,6 @@ where
             latest_epoch_with_settlement,
         })
     }
-
-    pub fn get_current_epoch(&self) -> Option<agglayer_types::EpochNumber> {
-        None // TODO: implement
-    }
 }
 
 impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
