@@ -161,6 +161,8 @@ impl SignatureCommitmentValues {
             }
             SignatureCommitmentVersion::V4 => {
                 // Added the aggchain params to support the aggchain proof
+                // NOTE: this commitment isn't used anywhere anymore.
+                // Keeping it to understand the history.
                 keccak256_combine([
                     self.new_local_exit_root.as_ref(),
                     self.commit_imported_bridge_exits
@@ -168,7 +170,7 @@ impl SignatureCommitmentValues {
                         .as_slice(),
                     self.height.to_le_bytes().as_slice(),
                     self.aggchain_params
-                        .unwrap_or_else(AggchainHashValues::empty_aggchain_params)
+                        .unwrap_or(AggchainHashValues::EMPTY_AGGCHAIN_PARAMS)
                         .as_slice(),
                 ])
             }
@@ -181,7 +183,7 @@ impl SignatureCommitmentValues {
                         .as_slice(),
                     self.height.to_le_bytes().as_slice(),
                     self.aggchain_params
-                        .unwrap_or_else(AggchainHashValues::empty_aggchain_params)
+                        .unwrap_or(AggchainHashValues::EMPTY_AGGCHAIN_PARAMS)
                         .as_slice(),
                     self.certificate_id.as_slice(),
                 ])
