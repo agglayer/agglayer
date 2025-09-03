@@ -166,6 +166,7 @@ impl Certificate {
         let signature_commitment_values = self.signature_commitment_values();
 
         let recovered_expected_signer = [
+            SignatureCommitmentVersion::V5,
             SignatureCommitmentVersion::V3,
             SignatureCommitmentVersion::V2,
         ]
@@ -191,7 +192,7 @@ impl Certificate {
         let signature_commitment_values = self.signature_commitment_values();
 
         let signature = signature.as_ref().ok_or(SignerError::Missing)?;
-        let commitment = signature_commitment_values.commitment(SignatureCommitmentVersion::V4); // NOTE: will be upgraded to V5 eventually
+        let commitment = signature_commitment_values.commitment(SignatureCommitmentVersion::V5);
         let recovered = signature
             .recover_address_from_prehash(&commitment)
             .map_err(SignerError::Recovery)?;
