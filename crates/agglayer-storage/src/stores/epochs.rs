@@ -86,7 +86,14 @@ where
         epoch_number: EpochNumber,
         index: CertificateIndex,
     ) -> Result<Option<Certificate>, Error> {
-        let per_epoch_store = self.open(epoch_number)?;
+        // Use readonly access to prevent concurrency issues when multiple processes
+        // are accessing the database
+        let per_epoch_store = PerEpochStore::try_open_readonly(
+            self.config.clone(),
+            epoch_number,
+            self.pending_store.clone(),
+            self.state_store.clone(),
+        )?;
         per_epoch_store.get_certificate_at_index(index)
     }
 }
