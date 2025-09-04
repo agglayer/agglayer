@@ -369,27 +369,27 @@ where
                 .l1_rpc_provider
                 .get_rollup_contract_address(cert.network_id.into())
                 .await
-                .map_err(|_| {
-                    SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(
-                        cert.network_id,
-                    )
-                    //todo error
+                .map_err(|source| {
+                    SignatureVerificationError::UnableToRetrieveRollupContractAddress {
+                        source,
+                        network_id: cert.network_id,
+                    }
                 })?;
 
             let (signers, threshold) = self
                 .l1_rpc_provider
                 .get_multisig_context(rollup_address)
                 .await
-                .map_err(|_| {
-                    SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(
-                        cert.network_id,
-                    )
-                    //todo error
-                })?;
+                .map_err(
+                    |source| SignatureVerificationError::UnableToRetrieveMultisigContext {
+                        source,
+                        network_id: cert.network_id,
+                    },
+                )?;
 
             Ok::<MultisigCtx, SignatureVerificationError>(MultisigCtx {
                 signers,
-                threshold: threshold as usize,
+                threshold,
                 prehash: cert.signature_commitment_values().multisig_commitment(),
             })
         };

@@ -137,7 +137,7 @@ where
             .l1_rpc
             .get_multisig_context(rollup_address)
             .await
-            .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?; //todo dedicated error
+            .map_err(CertificationError::MultisigContextFetchFailed)?;
 
         Ok(MultisigCtx {
             signers,

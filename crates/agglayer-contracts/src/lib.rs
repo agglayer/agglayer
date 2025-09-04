@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use agglayer_primitives::U256;
 use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, FixedBytes, B256},
@@ -91,6 +92,12 @@ pub enum L1RpcError {
     AggchainHashFetchFailed,
     #[error("The rollup contract is either invalid or not set for the specified rollup id {0}")]
     InvalidRollupContract(u32),
+    #[error("Unable to fetch the multisig signers: {0}")]
+    MultisigSignersFetchFailed(#[source] alloy::contract::Error),
+    #[error("Unable to fetch the multisig threshold: {0}")]
+    MultisigThresholdFetchFailed(#[source] alloy::contract::Error),
+    #[error("Threshold value is too large to fit in usize. fetched value: {fetched}")]
+    ThresholdTypeOverflow { fetched: U256 },
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
@@ -279,7 +286,7 @@ mod tests {
     }
 
     #[tokio::test]
-    //#[ignore = "reaches external endpoint"]
+    #[ignore = "reaches external endpoint"]
     async fn test_fetch_multisig_context() {
         let rpc_url = std::env::var("L1_RPC_ENDPOINT")
             .expect("L1_RPC_ENDPOINT must be defined")

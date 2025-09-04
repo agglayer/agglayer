@@ -128,6 +128,11 @@ pub enum CertificationError {
 
     #[error(transparent)]
     Other(eyre::Error),
+
+    /// Multisig context (e.g., signers and threshold) fail to be fetched from
+    /// the L1.
+    #[error("Unable to fetch the multisig context: {0}")]
+    MultisigContextFetchFailed(#[source] L1RpcError),
 }
 
 impl From<CertificationError> for CertificateStatusError {

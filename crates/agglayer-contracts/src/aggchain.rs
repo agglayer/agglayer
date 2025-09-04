@@ -94,26 +94,20 @@ where
                     .map(|addr| Address::from_alloy(*addr))
                     .collect()
             })
-            .map_err(|error| {
-                error!(?error, "Unable to fetch the aggchain signers");
-
-                L1RpcError::AggchainHashFetchFailed //todo dedicated error
-            })?;
+            .map_err(L1RpcError::MultisigSignersFetchFailed)?;
 
         let threshold: usize = {
             let threshold_u256: U256 = AggchainBase::new(rollup_address.into(), self.rpc.clone())
                 .getThreshold()
                 .call()
                 .await
-                .map_err(|error| {
-                    error!(?error, "Unable to fetch the multisig threshold");
-                    L1RpcError::AggchainHashFetchFailed //todo dedicated error
-                })?;
+                .map_err(L1RpcError::MultisigThresholdFetchFailed)?;
 
-            threshold_u256.try_into().map_err(|error| {
-                error!(?error, "Threshold too large: {threshold_u256}",);
-                L1RpcError::AggchainHashFetchFailed //todo dedicated error
-            })?
+            threshold_u256
+                .try_into()
+                .map_err(|_| L1RpcError::ThresholdTypeOverflow {
+                    fetched: threshold_u256,
+                })?
         };
 
         Ok((signers, threshold))
