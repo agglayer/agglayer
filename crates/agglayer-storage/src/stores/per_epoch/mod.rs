@@ -5,7 +5,7 @@ use std::{
         Arc,
     },
 };
-use std::path::PathBuf;
+
 use agglayer_types::{
     Certificate, CertificateId, CertificateIndex, EpochNumber, ExecutionMode, Height, NetworkId,
     Proof,
@@ -47,15 +47,8 @@ pub struct PerEpochStore<PendingStore, StateStore> {
     backup_client: BackupClient,
 }
 
-fn epoch_db_path(config: Arc<agglayer_config::Config>, epoch_number: EpochNumber) -> PathBuf {
-    config
-        .storage
-        .epochs_db_path
-        .join(format!("{epoch_number}"))
-}
-
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
-    
+
     pub fn try_open(
         config: Arc<agglayer_config::Config>,
         epoch_number: EpochNumber,
@@ -66,7 +59,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     ) -> Result<Self, Error> {
 
 
-        let db = Arc::new(DB::open_cf(&epoch_db_path(config, epoch_number), epochs_db_cf_definitions())?);
+        let db = Arc::new(DB::open_cf(&config.storage.epoch_db_path(epoch_number), epochs_db_cf_definitions())?);
         
         Self::try_open_with_db(
             db,
@@ -88,7 +81,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
         
-        let db = Arc::new(DB::open_cf_readonly(&epoch_db_path(config, epoch_number), epochs_db_cf_definitions())?);
+        let db = Arc::new(DB::open_cf_readonly(&config.storage.epoch_db_path(epoch_number), epochs_db_cf_definitions())?);
         
         Self::try_open_with_db(
             db,
