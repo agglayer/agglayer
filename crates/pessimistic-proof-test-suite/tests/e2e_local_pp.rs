@@ -8,7 +8,7 @@ use pessimistic_proof::{
             PessimisticRootCommitmentValues, PessimisticRootCommitmentVersion,
             SignatureCommitmentVersion,
         },
-        generate_pessimistic_proof, AggchainData, AggchainProof,
+        generate_pessimistic_proof, AggchainData, AggchainProof, MultiSignature,
     },
     local_state::LocalNetworkState,
     unified_bridge::TokenInfo,
@@ -331,7 +331,7 @@ fn test_sp1_simple() {
     let bridge_events = vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))];
 
     let initial_state = forest.state_b.clone();
-    let (certificate, aggchain_vkey, aggchain_params, aggchain_proof) =
+    let (certificate, aggchain_vkey, aggchain_params, aggchain_proof, signature) =
         forest.apply_events_with_aggchain_proof(&imported_bridge_events, &bridge_events);
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
@@ -351,10 +351,17 @@ fn test_sp1_simple() {
         .unwrap();
 
     // Set the aggchain proof to the sp1 variant
-    multi_batch_header.aggchain_data = AggchainData::AggchainProofOnly(AggchainProof {
-        aggchain_params: aggchain_params.into(),
-        aggchain_vkey: aggchain_vkey.hash_u32(),
-    });
+    multi_batch_header.aggchain_data = AggchainData::MultisigAndAggchainProof {
+        multisig: MultiSignature {
+            signatures: vec![Some(signature)],
+            expected_signers: vec![forest.get_signer()],
+            threshold: 1,
+        },
+        aggchain_proof: AggchainProof {
+            aggchain_params: aggchain_params.into(),
+            aggchain_vkey: aggchain_vkey.hash_u32(),
+        },
+    };
 
     let initial_state: NetworkState = LocalNetworkState::from(initial_state).into();
     let mut stdin = SP1Stdin::new();

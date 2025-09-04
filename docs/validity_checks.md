@@ -5,26 +5,23 @@ These are verified either on the agglayer, or in the PP, or both.
 
 This document summarizes what is verified and where.
 
-The PP has a public input called `aggchain_hash`, whose composition depends on the consensus type.
+The PP has a public input called `aggchain_hash`. As of the version 0.3.5, all paths are now `consensus type 1`.
 
-## Consensus type 0
+Each case corresponds to what the chain may submit to the agglayer.
 
-| #   | Case       | Verified in Agglayer | Verified in PP | Commitment Version                 |
-| --- | ---------- | -------------------- | -------------- | ---------------------------------- |
-| 1   | ECDSA only | ECDSA                | ECDSA          | currently V2 or V3, must become V5 |
-
-## Consensus type 1
-
-| #   | Case             | Verified in Agglayer | Verified in PP   | Commitment Version             |
-| --- | ---------------- | -------------------- | ---------------- | ------------------------------ |
-| 1   | Multisig only    | Multisig             | Multisig         | V5                             |
-| 2   | STARK + ECDSA    | STARK + ECDSA        | STARK            | (currently V4, must become V5) |
-| 3   | STARK + Multisig | STARK + Multisig     | STARK + Multisig | V5                             |
+| #   | Case             | Verified in Agglayer | Verified in PP   | Commitment Version           |
+| --- | ---------------- | -------------------- | ---------------- | ---------------------------- |
+| 1   | Legacy ECDSA     | ECDSA                | Multisig 1-of-1  | V2, post-migration: V3 or V5 |
+| 2   | Multisig only    | Multisig             | Multisig         | V5                           |
+| 3   | STARK + Multisig | STARK + Multisig     | STARK + Multisig | V5                           |
 
 Notes:
 
-- Aggchain proof alone isn’t accepted by the Agglayer; it must be accompanied by at least one ECDSA signature from the trusted sequencer (see https://github.com/agglayer/protocol-research/issues/141).
-- Cases 2 and 3 can be merged (single ECDSA treated as 1-of-1 multisig) only if the permissionless chain has a registered multisig committee that includes the trusted sequencer; otherwise we need to keep them separated because the PP cannot provide a valid `aggchain_hash` for the trusted sequencer as single signer without a registered multisig committee.
+- Case 1 corresponds to all chains with a simple ecdsa performed by the trusted sequencer.
+  - For each of them, the signer is registered in the L1 as a multisig 1-of-1.
+- Katana fits in the case 3
+  - Single signer is registered in the L1 as a multisig 1-of-1.
+  - Agglayer and PP verify this multisig alongside the FEP aggchain proof.
 
 ## Commitments
 

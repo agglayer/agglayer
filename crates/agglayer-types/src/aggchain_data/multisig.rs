@@ -21,7 +21,7 @@ pub enum MultisigError {
 /// Multisig data from the chain.
 #[derive(Clone, Debug)]
 pub struct Payload {
-    signatures: Vec<Option<Signature>>,
+    pub(crate) signatures: Vec<Option<Signature>>,
 }
 
 impl From<Vec<Option<Signature>>> for Payload {
