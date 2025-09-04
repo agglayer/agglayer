@@ -479,57 +479,50 @@ where
             .as_ref()
             .map(|cert| cert.new_local_exit_root);
 
-        let settled_let_leaf_count =
-            match self
-                .state
-                .read_local_network_state(network_id)
-                .map(|local_network_state| {
-                    // We return the leaf count of the latest local exit tree
-                    local_network_state.map(|v| v.exit_tree.leaf_count as u64)
-                }) {
-                Ok(leaf_count) => leaf_count,
-                Err(Error::DBError(error)) => {
-                    error!(
-                        ?error,
-                        "get network status: failed to read local network state for network \
-                         {network_id}"
-                    );
-                    return Err(GetNetworkStateError::InternalError {
-                        network_id,
-                        source: error.into(),
-                    });
-                }
-                Err(Error::Unexpected(message)) => {
-                    error!(
-                        ?message,
-                        "get network status: unexpected error reading local network state for \
-                         network {network_id}"
-                    );
-                    return Err(GetNetworkStateError::InternalError {
-                        network_id,
-                        source: eyre::eyre!(message),
-                    });
-                }
-                Err(Error::InconsistentState { network_id }) => {
-                    error!(
-                        ?network_id,
-                        "get network status: inconsistent state error reading local network state \
-                         for network {network_id}"
-                    );
-                    return Err(GetNetworkStateError::InternalError {
-                        network_id,
-                        source: eyre::eyre!("Inconsistent network state error"),
-                    });
-                }
-                Err(error) => {
-                    error!(
-                        ?error,
-                        "get network status: failed to read local network state for network \
-                         {network_id}"
-                    );
-                    None
-                }
-            };
+        let settled_let_leaf_count = match self.state.read_local_network_state(network_id) {
+            Ok(local_network_state) => local_network_state.map(|v| v.exit_tree.leaf_count as u64),
+            Err(Error::DBError(error)) => {
+                error!(
+                    ?error,
+                    "get network status: failed to read local network state for network \
+                     {network_id}"
+                );
+                return Err(GetNetworkStateError::InternalError {
+                    network_id,
+                    source: error.into(),
+                });
+            }
+            Err(Error::Unexpected(message)) => {
+                error!(
+                    ?message,
+                    "get network status: unexpected error reading local network state for network \
+                     {network_id}"
+                );
+                return Err(GetNetworkStateError::InternalError {
+                    network_id,
+                    source: eyre::eyre!(message),
+                });
+            }
+            Err(Error::InconsistentState { network_id }) => {
+                error!(
+                    ?network_id,
+                    "get network status: inconsistent state error reading local network state for \
+                     network {network_id}"
+                );
+                return Err(GetNetworkStateError::InternalError {
+                    network_id,
+                    source: eyre::eyre!("Inconsistent network state error"),
+                });
+            }
+            Err(error) => {
+                error!(
+                    ?error,
+                    "get network status: failed to read local network state for network \
+                     {network_id}"
+                );
+                None
+            }
+        };
 
         let latest_pending_height = latest_pending_certificate
             .as_ref()

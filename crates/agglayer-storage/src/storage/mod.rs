@@ -29,7 +29,7 @@ pub enum DBError {
     #[error("Trying to access an unknown ColumnFamily")]
     ColumnFamilyNotFound,
 
-    #[error("Database is opened in read-only mode")]
+    #[error("Database was opened in read-only mode")]
     ReadOnlyMode,
 }
 
