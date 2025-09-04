@@ -1,7 +1,6 @@
 ---
 source: crates/agglayer-storage/src/types/certificate/tests/structure.rs
 expression: "&registry"
-snapshot_kind: text
 ---
 {
   "AggchainDataError": {
@@ -174,20 +173,15 @@ snapshot_kind: text
         }
       },
       "1": {
-        "HasInvalidSignature": "UNIT"
-      },
-      "2": {
-        "HasDuplicateSigner": {
+        "HasInvalidSignature": {
           "STRUCT": [
             {
-              "signer": {
-                "TYPENAME": "agglayer_primitives::Address"
-              }
+              "idx": "U64"
             }
           ]
         }
       },
-      "3": {
+      "2": {
         "OutOfBoundSignerIndex": {
           "STRUCT": [
             {
@@ -710,17 +704,6 @@ snapshot_kind: text
             {
               "prehash": {
                 "TYPENAME": "agglayer_primitives::Digest"
-              }
-            }
-          ]
-        }
-      },
-      "3": {
-        "HasDuplicateSigner": {
-          "STRUCT": [
-            {
-              "signer": {
-                "TYPENAME": "agglayer_primitives::Address"
               }
             }
           ]
