@@ -1,0 +1,35 @@
+name: Protobuf publish
+
+on:
+  workflow_run:
+    workflows:
+      - "Test"
+    types:
+      - completed
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    paths:
+      - "proto/**"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or tag to use for the workflow"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish protobuf to BSR
+    uses: agglayer/reusable-workflows/.github/workflows/proto-publish.yml@main
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.ref }}
+    secrets: inherit
