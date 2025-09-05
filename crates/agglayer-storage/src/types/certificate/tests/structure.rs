@@ -23,7 +23,6 @@ fn trace() -> serde_reflection::Result<serde_reflection::Registry> {
     dbg!(tracer.trace_type::<pessimistic_proof::ProofError>(&samples)?);
     dbg!(tracer.trace_type::<pessimistic_proof::error::ProofVerificationError>(&samples)?);
     dbg!(tracer.trace_type::<agglayer_tries::error::SmtError>(&samples)?);
-    dbg!(tracer.trace_type::<agglayer_types::aggchain_data::MultisigError>(&samples)?);
     dbg!(tracer.trace_type::<agglayer_types::aggchain_data::AggchainDataError>(&samples)?);
     dbg!(tracer.trace_type::<agglayer_types::Error>(&samples)?);
     dbg!(tracer.trace_type::<agglayer_types::CertificateStatusError>(&samples)?);

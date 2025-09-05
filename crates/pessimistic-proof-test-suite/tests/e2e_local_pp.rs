@@ -353,7 +353,7 @@ fn test_sp1_simple() {
     // Set the aggchain proof to the sp1 variant
     multi_batch_header.aggchain_data = AggchainData::MultisigAndAggchainProof {
         multisig: MultiSignature {
-            signatures: vec![(0, signature)],
+            signatures: vec![Some(signature)],
             expected_signers: vec![forest.get_signer()],
             threshold: 1,
         },

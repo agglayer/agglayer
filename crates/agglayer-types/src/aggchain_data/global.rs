@@ -18,15 +18,11 @@
 //!   - multisig
 
 use agglayer_primitives::{Address, Signature};
-use pessimistic_proof::core::{self};
+use pessimistic_proof::core::{self, MultisigError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::aggchain_data::{
-    aggchain_proof::{self},
-    multisig::{self, MultisigError},
-    PayloadWithCtx,
-};
+use crate::aggchain_data::{aggchain_proof, multisig, PayloadWithCtx};
 
 /// Represents the data needed from the API/Certificate to verify aggchain
 /// proofs and multisig.
@@ -81,11 +77,12 @@ impl TryInto<core::AggchainData> for PayloadWithCtx<Payload, Context> {
                 Ok(core::AggchainData::LegacyEcdsa { signer, signature })
             }
             (Payload::MultisigOnly(payload), Context::MultisigOnly(ctx)) => {
-                Ok(core::AggchainData::MultisigOnly(
-                    PayloadWithCtx(payload, ctx)
-                        .try_into()
-                        .map_err(AggchainDataError::InvalidMultisig)?,
-                ))
+                let prehash = ctx.prehash;
+                let multisig = core::MultiSignature::from(PayloadWithCtx(payload, ctx));
+                multisig
+                    .verify(prehash)
+                    .map_err(AggchainDataError::InvalidMultisig)?;
+                Ok(core::AggchainData::MultisigOnly(multisig))
             }
             (
                 Payload::MultisigAndAggchainProof {
@@ -96,12 +93,17 @@ impl TryInto<core::AggchainData> for PayloadWithCtx<Payload, Context> {
                     multisig_ctx,
                     aggchain_proof_ctx,
                 },
-            ) => Ok(core::AggchainData::MultisigAndAggchainProof {
-                multisig: PayloadWithCtx(multisig, multisig_ctx)
-                    .try_into()
-                    .map_err(AggchainDataError::InvalidMultisig)?,
-                aggchain_proof: PayloadWithCtx(aggchain_proof, aggchain_proof_ctx).into(),
-            }),
+            ) => {
+                let prehash = multisig_ctx.prehash;
+                let multisig = core::MultiSignature::from(PayloadWithCtx(multisig, multisig_ctx));
+                multisig
+                    .verify(prehash)
+                    .map_err(AggchainDataError::InvalidMultisig)?;
+                Ok(core::AggchainData::MultisigAndAggchainProof {
+                    multisig,
+                    aggchain_proof: PayloadWithCtx(aggchain_proof, aggchain_proof_ctx).into(),
+                })
+            }
             (payload, context) => Err(AggchainDataError::InvalidVariant(format!(
                 "payload: {payload}, context: {context}"
             ))),

@@ -76,7 +76,7 @@ impl From<&AggchainData> for AggchainHashValues {
                 aggchain_vkey: None,
                 aggchain_params: None,
                 multisig_hash: MultiSignature {
-                    signatures: vec![(0, *signature)],
+                    signatures: vec![Some(*signature)],
                     expected_signers: vec![*signer],
                     threshold: 1,
                 }
