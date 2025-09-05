@@ -24,6 +24,13 @@ pub trait EpochStoreReader: Send + Sync {
         epoch_number: EpochNumber,
         index: CertificateIndex,
     ) -> Result<Option<Certificate>, Error>;
+
+    /// Get a proof from a specific epoch by its index
+    fn get_proof(
+        &self,
+        epoch_number: EpochNumber,
+        index: CertificateIndex,
+    ) -> Result<Option<Proof>, Error>;
 }
 
 pub trait PendingCertificateReader: Send + Sync {

@@ -784,11 +784,10 @@ impl serde::Serialize for GetNetworkStateErrorKind {
     {
         let variant = match self {
             Self::Unspecified => "GET_NETWORK_STATE_ERROR_KIND_UNSPECIFIED",
-            Self::MissingLatestSettledCertificate => "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE",
-            Self::MissingLatestPendingCertificate => "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE",
             Self::InvalidNetworkId => "GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID",
-            Self::NetworkLocalStateError => "GET_NETWORK_STATE_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR",
+            Self::NetworkStateError => "GET_NETWORK_STATE_ERROR_KIND_NETWORK_STATE_ERROR",
             Self::UnknownNetworkType => "GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE",
+            Self::InternalError => "GET_NETWORK_STATE_ERROR_KIND_INTERNAL_ERROR",
         };
         serializer.serialize_str(variant)
     }
@@ -801,11 +800,10 @@ impl<'de> serde::Deserialize<'de> for GetNetworkStateErrorKind {
     {
         const FIELDS: &[&str] = &[
             "GET_NETWORK_STATE_ERROR_KIND_UNSPECIFIED",
-            "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE",
-            "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE",
             "GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID",
-            "GET_NETWORK_STATE_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR",
+            "GET_NETWORK_STATE_ERROR_KIND_NETWORK_STATE_ERROR",
             "GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE",
+            "GET_NETWORK_STATE_ERROR_KIND_INTERNAL_ERROR",
         ];
 
         struct GeneratedVisitor;
@@ -847,11 +845,10 @@ impl<'de> serde::Deserialize<'de> for GetNetworkStateErrorKind {
             {
                 match value {
                     "GET_NETWORK_STATE_ERROR_KIND_UNSPECIFIED" => Ok(GetNetworkStateErrorKind::Unspecified),
-                    "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_SETTLED_CERTIFICATE" => Ok(GetNetworkStateErrorKind::MissingLatestSettledCertificate),
-                    "GET_NETWORK_STATE_ERROR_KIND_MISSING_LATEST_PENDING_CERTIFICATE" => Ok(GetNetworkStateErrorKind::MissingLatestPendingCertificate),
                     "GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID" => Ok(GetNetworkStateErrorKind::InvalidNetworkId),
-                    "GET_NETWORK_STATE_ERROR_KIND_NETWORK_LOCAL_STATE_ERROR" => Ok(GetNetworkStateErrorKind::NetworkLocalStateError),
+                    "GET_NETWORK_STATE_ERROR_KIND_NETWORK_STATE_ERROR" => Ok(GetNetworkStateErrorKind::NetworkStateError),
                     "GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE" => Ok(GetNetworkStateErrorKind::UnknownNetworkType),
+                    "GET_NETWORK_STATE_ERROR_KIND_INTERNAL_ERROR" => Ok(GetNetworkStateErrorKind::InternalError),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

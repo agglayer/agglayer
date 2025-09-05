@@ -156,16 +156,30 @@ where
             .get_network_state(request.into_inner().network_id.into())
             .map_err(|error| {
                 error!(?error, "Failed to get network state");
-                tonic::Status::with_error_details(
-                    tonic::Code::Internal,
-                    "Failed to get network state",
-                    // TODO: more specific error handling in sync with agglayer rpc erors
-                    ErrorDetails::with_error_info(
-                        GetNetworkStateErrorKind::Unspecified.as_str_name(),
-                        GET_NETWORK_STATE_METHOD_PATH,
-                        [],
-                    ),
-                )
+                match error {
+                    agglayer_rpc::GetNetworkStateError::UnknownNetworkType { .. } => {
+                        tonic::Status::with_error_details(
+                            tonic::Code::NotFound,
+                            "Network type could not be determined",
+                            ErrorDetails::with_error_info(
+                                GetNetworkStateErrorKind::UnknownNetworkType.as_str_name(),
+                                GET_NETWORK_STATE_METHOD_PATH,
+                                [],
+                            ),
+                        )
+                    }
+                    agglayer_rpc::GetNetworkStateError::InternalError { source, .. } => {
+                        tonic::Status::with_error_details(
+                            tonic::Code::Internal,
+                            "Internal error",
+                            ErrorDetails::with_error_info(
+                                GetNetworkStateErrorKind::InternalError.as_str_name(),
+                                GET_NETWORK_STATE_METHOD_PATH,
+                                [("error".into(), format!("{source:?}"))],
+                            ),
+                        )
+                    }
+                }
             })?
             .into();
 

@@ -48,6 +48,7 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
+
     pub fn try_open(
         config: Arc<agglayer_config::Config>,
         epoch_number: EpochNumber,
@@ -56,12 +57,9 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         optional_start_checkpoint: Option<BTreeMap<NetworkId, Height>>,
         backup_client: BackupClient,
     ) -> Result<Self, Error> {
-        let path = config
-            .storage
-            .epochs_db_path
-            .join(format!("{epoch_number}"));
 
-        let db = Arc::new(DB::open_cf(&path, epochs_db_cf_definitions())?);
+
+        let db = Arc::new(DB::open_cf(&config.storage.epoch_db_path(epoch_number), epochs_db_cf_definitions())?);
         
         Self::try_open_with_db(
             db,
@@ -82,12 +80,8 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
-        let path = config
-            .storage
-            .epochs_db_path
-            .join(format!("{epoch_number}"));
-
-        let db = Arc::new(DB::open_cf_readonly(&path, epochs_db_cf_definitions())?);
+        
+        let db = Arc::new(DB::open_cf_readonly(&config.storage.epoch_db_path(epoch_number), epochs_db_cf_definitions())?);
         
         Self::try_open_with_db(
             db,

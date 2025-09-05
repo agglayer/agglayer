@@ -1,5 +1,6 @@
 use std::path::{Component, Path, PathBuf};
 
+use agglayer_types::EpochNumber;
 use backup::BackupConfig;
 use serde::{Deserialize, Serialize};
 
@@ -72,6 +73,10 @@ impl StorageConfig {
             debug_db_path: db_path.join(DEBUG_DB_PATH),
             backup: BackupConfig::default(),
         }
+    }
+
+    pub fn epoch_db_path(&self, epoch_number: EpochNumber) -> PathBuf {
+        self.epochs_db_path.join(format!("{epoch_number}"))
     }
 }
 

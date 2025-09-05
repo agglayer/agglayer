@@ -178,6 +178,14 @@ impl EpochStoreReader for DummyPendingStore {
         // This is a dummy implementation for testing
         Ok(None)
     }
+
+    fn get_proof(
+        &self,
+        _epoch_number: EpochNumber,
+        _index: CertificateIndex,
+    ) -> Result<Option<Proof>, agglayer_storage::error::Error> {
+        Ok(None)
+    }
 }
 
 impl EpochStoreWriter for DummyPendingStore {
