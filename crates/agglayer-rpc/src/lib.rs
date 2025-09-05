@@ -403,7 +403,10 @@ where
                 Some(cert) => cert,
                 None => {
                     // Settled certificate not found, return an error indicating inconsistent state
-                    error!("Settled certificate not found in epoch store for network {network_id}");
+                    error!(
+                        "Settled certificate not found in epoch store for network {network_id} at \
+                         height {current_height}, inconsistent state"
+                    );
                     return Err(GetLatestSettledClaimError::InconsistentState {
                         network_id,
                         height: settled_height,
