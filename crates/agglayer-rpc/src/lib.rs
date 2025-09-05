@@ -169,26 +169,26 @@ where
             .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
             .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
 
-        let certificate_id = [
+        let certificate_id = std::cmp::max_by_key(
             proven_certificate_id_and_height,
             settled_certificate_id_and_height,
-        ]
-        .into_iter()
-        .flatten()
-        .max_by(|x, y| x.1.cmp(&y.1))
+            |v| v.map(|(_, ht)| ht),
+        )
         .map(|v| v.0);
 
         let latest_certificate_header = match certificate_id {
             None => Ok(None),
-            Some(certificate_id) => self.fetch_certificate_header(certificate_id).map(Some),
-        }
-        .map_err(|error| {
-            error!(?error, "Failed to get latest known certificate header");
-            GetLatestCertificateError::UnknownLatestCertificateHeader {
-                network_id,
-                source: Box::new(error),
-            }
-        })?;
+            Some(certificate_id) => self
+                .fetch_certificate_header(certificate_id)
+                .map(Some)
+                .map_err(|error| {
+                    error!(?error, "Failed to get latest known certificate header");
+                    GetLatestCertificateError::UnknownLatestCertificateHeader {
+                        network_id,
+                        source: Box::new(error),
+                    }
+                }),
+        }?;
 
         match latest_certificate_header {
             None => Ok(None),
@@ -228,7 +228,7 @@ where
                         .get_certificate(epoch_number, certificate_index)
                     {
                         Ok(Some(certificate)) => {
-                            debug!("Found certificate {} in epoch store", certificate_id);
+                            debug!("Found certificate {certificate_id} in epoch store");
                             return Ok(Some(certificate));
                         }
                         _ => {
@@ -302,9 +302,18 @@ where
         certificate_id: CertificateId,
     ) -> Result<Option<agglayer_types::Proof>, ProofRetrievalError> {
         // First try to get the proof from the pending store
-        match self.pending_store.get_proof(certificate_id) {
-            Ok(Some(proof)) => Ok(Some(proof)),
-            Ok(None) => {
+        match self
+            .pending_store
+            .get_proof(certificate_id)
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to get proof for certificate {certificate_id} from pending store",
+                );
+                ProofRetrievalError::Storage(error)
+            })? {
+            Some(proof) => Ok(Some(proof)),
+            None => {
                 // If not found in pending store, check the epoch store
                 // First get the certificate header to obtain epoch_number and certificate_index
                 match self.fetch_certificate_header(certificate_id) {
@@ -335,13 +344,6 @@ where
                         Ok(None)
                     }
                 }
-            }
-            Err(error) => {
-                error!(
-                    ?error,
-                    "Failed to get proof for certificate {certificate_id} from pending store",
-                );
-                Err(ProofRetrievalError::Storage(error))
             }
         }
     }

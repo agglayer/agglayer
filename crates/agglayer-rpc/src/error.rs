@@ -122,16 +122,15 @@ pub enum GetLatestCertificateError {
     #[error(transparent)]
     Storage(#[from] StorageError),
 
-    #[error("Failed to get latest known certificate header for network {network_id}")]
+    #[error("Unknown latest certificate header for network {network_id}")]
     UnknownLatestCertificateHeader {
         network_id: NetworkId,
-        #[source]
         source: Box<CertificateRetrievalError>,
     },
 
     #[error(
-        "Invalid certificate retrieval - certificate id and hash mismatch - expected \
-         certificate_id: {expected} got: {got}"
+        "Mismatch on the certificate id. expected: {expected}, re-computed from the certificate \
+         in DB: {got}"
     )]
     CertificateIdHashMismatch {
         expected: CertificateId,
