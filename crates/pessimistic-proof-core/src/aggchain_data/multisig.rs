@@ -1,5 +1,5 @@
-use agglayer_primitives::{keccak::keccak256_combine, Address, Digest, Signature};
-use alloy_primitives::B256;
+use agglayer_primitives::{Address, Digest, Signature};
+use alloy_primitives::{keccak256, B256, U256};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -30,16 +30,22 @@ pub enum MultisigError {
 
 impl MultiSignature {
     /// Commitment on the signers and threshold.
-    pub fn signers_commit(&self) -> Digest {
-        // addresses does not need to be padded in 32bytes because
-        // addresses won't be decoded in solidity, just encoded from the contract
-        // storage.
-        let mut buf = Vec::with_capacity(self.expected_signers.len());
-        buf.extend_from_slice(self.threshold.to_be_bytes().as_slice());
-        for addr in &self.expected_signers {
-            buf.extend_from_slice(addr.as_slice()); // address (20bytes)
+    pub fn multisig_hash(&self) -> Digest {
+        const ADDRESS_BYTES: usize = core::mem::size_of::<Address>(); // 20-bytes
+        const THRESHOLD_BYTES: usize = u32::BITS as usize; // 32-bytes
+
+        let mut buf =
+            Vec::with_capacity(THRESHOLD_BYTES + ADDRESS_BYTES * self.expected_signers.len());
+
+        // 32-bytes threshold
+        buf.extend(U256::from(self.threshold).to_be_bytes::<32>());
+
+        // 20-bytes per signer (no padding)
+        for a in &self.expected_signers {
+            buf.extend_from_slice(&a.into_array());
         }
-        keccak256_combine([buf.as_slice()])
+
+        keccak256(&buf).into()
     }
 
     /// Ensure that the signatures refer to unique and existing signer.
