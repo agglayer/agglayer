@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
+use agglayer_primitives::Hashable;
 use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -364,6 +365,10 @@ where
 
                 None => {
                     // No certificate at this height, return an error indicating inconsistent state
+                    error!(
+                        "No certificate header found for network {network_id} at height \
+                         {current_height}, inconsistent state"
+                    );
                     return Err(GetLatestSettledClaimError::InconsistentState {
                         network_id,
                         height: settled_height,
@@ -377,6 +382,10 @@ where
                     (Some(epoch), Some(idx)) => (epoch, idx),
                     _ => {
                         // Missing epoch information, return an error indicating inconsistent state
+                        error!(
+                            "Missing epoch information in certificate header for network \
+                             {network_id} at height {current_height}, inconsistent state"
+                        );
                         return Err(GetLatestSettledClaimError::InconsistentState {
                             network_id,
                             height: settled_height,
@@ -394,6 +403,7 @@ where
                 Some(cert) => cert,
                 None => {
                     // Settled certificate not found, return an error indicating inconsistent state
+                    error!("Settled certificate not found in epoch store for network {network_id}");
                     return Err(GetLatestSettledClaimError::InconsistentState {
                         network_id,
                         height: settled_height,
