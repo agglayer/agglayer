@@ -13,7 +13,7 @@ expression: "&registry"
       "1": {
         "InvalidMultisig": {
           "NEWTYPE": {
-            "TYPENAME": "agglayer_types::aggchain_data::MultisigError"
+            "TYPENAME": "MultisigError"
           }
         }
       },
@@ -161,6 +161,18 @@ expression: "&registry"
   "MultisigError": {
     "ENUM": {
       "0": {
+        "TooManySigners": {
+          "STRUCT": [
+            {
+              "num": "U64"
+            },
+            {
+              "max": "U64"
+            }
+          ]
+        }
+      },
+      "1": {
         "UnderThreshold": {
           "STRUCT": [
             {
@@ -172,8 +184,8 @@ expression: "&registry"
           ]
         }
       },
-      "1": {
-        "HasInvalidSignature": {
+      "2": {
+        "InvalidSignature": {
           "STRUCT": [
             {
               "idx": "U64"
@@ -181,14 +193,11 @@ expression: "&registry"
           ]
         }
       },
-      "2": {
-        "OutOfBoundSignerIndex": {
+      "3": {
+        "InvalidSigner": {
           "STRUCT": [
             {
               "idx": "U64"
-            },
-            {
-              "total": "U64"
             }
           ]
         }
@@ -672,41 +681,6 @@ expression: "&registry"
           "NEWTYPE": {
             "TYPENAME": "AggchainDataError"
           }
-        }
-      }
-    }
-  },
-  "agglayer_types::aggchain_data::MultisigError": {
-    "ENUM": {
-      "0": {
-        "UnderThreshold": {
-          "STRUCT": [
-            {
-              "got": "U64"
-            },
-            {
-              "expected": "U64"
-            }
-          ]
-        }
-      },
-      "1": {
-        "InvalidSignature": "UNIT"
-      },
-      "2": {
-        "UnknownRecoveredSigner": {
-          "STRUCT": [
-            {
-              "recovered": {
-                "TYPENAME": "agglayer_primitives::Address"
-              }
-            },
-            {
-              "prehash": {
-                "TYPENAME": "agglayer_primitives::Digest"
-              }
-            }
-          ]
         }
       }
     }

@@ -15,14 +15,17 @@ pub struct MultiSignature {
 
 #[derive(Clone, Debug, Error, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MultisigError {
+    #[error("Too many signers provided. got: {num}, committee size: {max}.")]
+    TooManySigners { num: usize, max: usize },
+
     #[error("Multisig is under the required threshold. got: {got}, expected: {expected}")]
     UnderThreshold { got: usize, expected: usize },
 
-    #[error("Signature {idx} is invalid or from an unregistered signer.")]
-    HasInvalidSignature { idx: usize },
+    #[error("Signature claimed to be from signer {idx} is invalid.")]
+    InvalidSignature { idx: usize },
 
-    #[error("Out of bounds signer index: signer index: {idx}, committee size: {total}.")]
-    OutOfBoundSignerIndex { idx: usize, total: usize },
+    #[error("Signature claimed to be from signer {idx} is from another signer.")]
+    InvalidSigner { idx: usize },
 }
 
 impl MultiSignature {
@@ -48,9 +51,9 @@ impl MultiSignature {
     /// Verify signatures and ensure they are all from the expected set.
     pub fn verify(&self, commitment: B256) -> Result<(), MultisigError> {
         if self.signatures.len() > self.expected_signers.len() {
-            return Err(MultisigError::OutOfBoundSignerIndex {
-                idx: self.signatures.len() - 1,
-                total: self.expected_signers.len(),
+            return Err(MultisigError::TooManySigners {
+                num: self.signatures.len(),
+                max: self.expected_signers.len(),
             });
         }
 
@@ -66,12 +69,12 @@ impl MultiSignature {
             let Some(signature) = signature else {
                 continue; // No signature is a valid signature
             };
-            let Ok(recovered) = signature.recover_address_from_prehash(&commitment) else {
-                return Err(MultisigError::HasInvalidSignature { idx }); // Failed to recover from prehash
-            };
+            let recovered = signature
+                .recover_address_from_prehash(&commitment)
+                .map_err(|_| MultisigError::InvalidSignature { idx })?;
             let expected = self.expected_signers[idx];
             if recovered != expected {
-                return Err(MultisigError::HasInvalidSignature { idx }); // Signer doesn't match
+                return Err(MultisigError::InvalidSigner { idx });
             }
         }
 
@@ -102,7 +105,7 @@ mod tests {
     #[rstest]
     #[case(vec![true, true], 2, Ok(()))]
     #[case(vec![true, false], 2, Err(MultisigError::UnderThreshold { got: 1, expected: 2 }))]
-    #[case(vec![false, false, true], 1, Err(MultisigError::OutOfBoundSignerIndex { idx: 2, total: 2 }))]
+    #[case(vec![false, false, true], 1, Err(MultisigError::TooManySigners { num: 3, max: 2 }))]
     fn verify_cases(
         #[case] signers: Vec<bool>,
         #[case] threshold: usize,

@@ -1,22 +1,7 @@
-use agglayer_primitives::{Address, Digest, Signature, B256};
+use agglayer_primitives::{Address, Signature, B256};
 use pessimistic_proof::core;
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 use crate::aggchain_data::PayloadWithCtx;
-
-#[derive(Clone, Debug, Error, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename = "agglayer_types::aggchain_data::MultisigError")]
-pub enum MultisigError {
-    #[error("Multisig is under the required threshold. got: {got}, expected: {expected}")]
-    UnderThreshold { got: usize, expected: usize },
-
-    #[error("Multisig contains at least one invalid signature.")]
-    InvalidSignature,
-
-    #[error("Unknown signer or invalid prehash. prehash: {prehash:?}, recovered: {recovered}")]
-    UnknownRecoveredSigner { recovered: Address, prehash: Digest },
-}
 
 /// Multisig data from the chain.
 #[derive(Clone, Debug)]
@@ -58,16 +43,14 @@ pub struct Ctx {
 }
 
 // Generate the prover inputs from the chain payload and the L1 context.
-impl TryInto<core::MultiSignature> for PayloadWithCtx<Payload, Ctx> {
-    type Error = MultisigError;
+impl From<PayloadWithCtx<Payload, Ctx>> for core::MultiSignature {
+    fn from(d: PayloadWithCtx<Payload, Ctx>) -> core::MultiSignature {
+        let PayloadWithCtx(Payload { signatures }, multisig) = d;
 
-    fn try_into(self) -> Result<core::MultiSignature, Self::Error> {
-        let PayloadWithCtx(Payload { signatures }, multisig) = self;
-
-        Ok(core::MultiSignature {
+        core::MultiSignature {
             signatures,
             expected_signers: multisig.signers,
             threshold: multisig.threshold,
-        })
+        }
     }
 }

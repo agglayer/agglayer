@@ -12,7 +12,7 @@ pub use crate::aggchain_data::{
         AggchainDataError, Context as CertificateAggchainDataCtx,
         Payload as CertificateAggchainData,
     },
-    multisig::{Ctx as MultisigCtx, MultisigError, Payload as MultisigPayload},
+    multisig::{Ctx as MultisigCtx, Payload as MultisigPayload},
     PayloadWithCtx as CertificateAggchainDataWithCtx,
 };
 
