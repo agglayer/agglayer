@@ -1,7 +1,7 @@
 use std::{convert::Infallible, sync::Arc};
 
 use agglayer_config::Config;
-use agglayer_contracts::{L1TransactionFetcher, RollupContract};
+use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_grpc_server::node::v1::{
     certificate_submission_service_server::CertificateSubmissionServiceServer,
     configuration_service_server::ConfigurationServiceServer,
@@ -89,7 +89,7 @@ impl Server {
         >,
     ) -> ServerBuilder
     where
-        L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
+        L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + Send + Sync + 'static,
         PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
         StateStore: StateReader + StateWriter + 'static,
         DebugStore: DebugReader + DebugWriter + 'static,

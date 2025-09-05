@@ -90,6 +90,22 @@ pub enum SignatureVerificationError {
     /// The multisig is invalid.
     #[error("invalid multisig: {0}")]
     InvalidMultisig(#[source] SignerError),
+
+    /// The rollup contract (zkevm or aggchain base contract) fails to be
+    /// retrieved from the L1.
+    #[error("unable to retrieve the rollup contract for the network {network_id}: {source}")]
+    UnableToRetrieveRollupContractAddress {
+        source: L1RpcError,
+        network_id: NetworkId,
+    },
+
+    /// The multisig context (signers or threshold) fails to be retrieved from
+    /// the L1.
+    #[error("unable to retrieve the multisig context for the network {network_id}: {source}")]
+    UnableToRetrieveMultisigContext {
+        source: L1RpcError,
+        network_id: NetworkId,
+    },
 }
 
 impl SignatureVerificationError {

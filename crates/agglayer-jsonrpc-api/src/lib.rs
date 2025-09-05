@@ -5,7 +5,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use agglayer_contracts::{L1TransactionFetcher, RollupContract};
+use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_rpc::network_state::NetworkState;
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, EpochStoreReader, PendingCertificateReader, PendingCertificateWriter,
@@ -121,7 +121,7 @@ impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
     AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
     V0Rpc: Provider + Clone + 'static,
-    Rpc: RollupContract + L1TransactionFetcher + 'static + Send + Sync,
+    Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
@@ -197,7 +197,7 @@ impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore> AgglayerServ
     for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
     V0Rpc: Provider + Clone + 'static,
-    Rpc: RollupContract + L1TransactionFetcher + 'static + Send + Sync,
+    Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
