@@ -570,16 +570,19 @@ where
             .as_ref()
             .and_then(|cert| cert.epoch_number.map(|num| num.as_u64()));
 
-        // TODO: implement settled claim retrieval
-        let settled_claim = self
-            .get_last_settled_claim(network_id, settled_height.unwrap_or(Height::from(0)))
-            .map_err(|error| {
-                error!(?error, "Failed to get last settled claim");
-                GetNetworkStateError::InternalError {
-                    network_id,
-                    source: error.into(),
-                }
-            })?;
+        // Get the last settled claim if we have a settled height
+        let settled_claim = if let Some(height) = settled_height {
+            self.get_last_settled_claim(network_id, height)
+                .map_err(|error| {
+                    error!(?error, "Failed to get last settled claim");
+                    GetNetworkStateError::InternalError {
+                        network_id,
+                        source: error.into(),
+                    }
+                })?
+        } else {
+            None
+        };
 
         Ok(NetworkState {
             network_status,
