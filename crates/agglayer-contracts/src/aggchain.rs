@@ -88,12 +88,7 @@ where
             .getAggchainSigners()
             .call()
             .await
-            .map(|alloy_vec| {
-                alloy_vec
-                    .iter()
-                    .map(|addr| Address::from_alloy(*addr))
-                    .collect()
-            })
+            .map(|alloy_vec| alloy_vec.into_iter().map(Address::from_alloy).collect())
             .map_err(L1RpcError::MultisigSignersFetchFailed)?;
 
         let threshold: usize = {
