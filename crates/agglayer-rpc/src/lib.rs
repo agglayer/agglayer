@@ -351,10 +351,10 @@ where
     pub fn get_last_settled_claim(
         &self,
         network_id: NetworkId,
-        height: Height,
+        settled_height: Height,
     ) -> Result<Option<SettledClaim>, GetLatestSettledClaimError> {
         // Iterate from the given height down to 0
-        for current_height in (0..=height.as_u64()).rev().map(Height::from) {
+        for current_height in (0..=settled_height.as_u64()).rev().map(Height::from) {
             // Fetch certificate header for the current height
             let header_opt = self
                 .state
@@ -362,14 +362,27 @@ where
 
             let header = match header_opt {
                 Some(h) => h,
-                None => continue, // No certificate at this height, continue to next lower height
+
+                None => {
+                    // No certificate at this height, return an error indicating inconsistent state
+                    return Err(GetLatestSettledClaimError::InconsistentState {
+                        network_id,
+                        height: settled_height,
+                    });
+                }
             };
 
             // Only proceed if both epoch_number and certificate_index are present
             let (epoch_number, certificate_index) =
                 match (header.epoch_number, header.certificate_index) {
                     (Some(epoch), Some(idx)) => (epoch, idx),
-                    _ => continue,
+                    _ => {
+                        // Missing epoch information, return an error indicating inconsistent state
+                        return Err(GetLatestSettledClaimError::InconsistentState {
+                            network_id,
+                            height: settled_height,
+                        });
+                    }
                 };
 
             // Fetch the certificate from the epoch store
@@ -380,7 +393,13 @@ where
 
             let certificate = match certificate_opt {
                 Some(cert) => cert,
-                None => continue,
+                None => {
+                    // Settled certificate not found, return an error indicating inconsistent state
+                    return Err(GetLatestSettledClaimError::InconsistentState {
+                        network_id,
+                        height: settled_height,
+                    });
+                }
             };
 
             // Check for imported bridge exits
