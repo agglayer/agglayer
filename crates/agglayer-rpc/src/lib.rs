@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
 use agglayer_contracts::{L1TransactionFetcher, RollupContract};
+use agglayer_primitives::Hashable;
 use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -23,8 +24,8 @@ pub use self::error::{
     CertificateRetrievalError, CertificateSubmissionError, GetNetworkStateError,
 };
 use crate::{
-    error::{GetLatestCertificateError, ProofRetrievalError},
-    network_state::{NetworkState, NetworkType},
+    error::{GetLatestCertificateError, GetLatestSettledClaimError, ProofRetrievalError},
+    network_state::{NetworkState, NetworkType, SettledClaim},
 };
 
 pub mod error;
@@ -347,6 +348,57 @@ where
         }
     }
 
+    pub fn get_last_settled_claim(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+    ) -> Result<Option<SettledClaim>, GetLatestSettledClaimError> {
+        // Iterate from the given height down to 0
+        for current_height in (0..=height.as_u64()).rev().map(Height::from) {
+            // Fetch certificate header for the current height
+            let header_opt = self
+                .state
+                .get_certificate_header_by_cursor(network_id, current_height)?;
+
+            let header = match header_opt {
+                Some(h) => h,
+                None => continue, // No certificate at this height, continue to next lower height
+            };
+
+            // Only proceed if both epoch_number and certificate_index are present
+            let (epoch_number, certificate_index) =
+                match (header.epoch_number, header.certificate_index) {
+                    (Some(epoch), Some(idx)) => (epoch, idx),
+                    _ => continue,
+                };
+
+            // Fetch the certificate from the epoch store
+            let certificate_opt = self
+                .epochs_store
+                .get_certificate(epoch_number, certificate_index)
+                .map_err(GetLatestSettledClaimError::from)?;
+
+            let certificate = match certificate_opt {
+                Some(cert) => cert,
+                None => continue,
+            };
+
+            // Check for imported bridge exits
+            if let Some(last_imported_exit) = certificate.imported_bridge_exits.last() {
+                let global_index_hash = last_imported_exit.global_index.hash();
+                let bridge_exit_hash = last_imported_exit.bridge_exit.hash();
+
+                return Ok(Some(SettledClaim {
+                    global_index: global_index_hash,
+                    bridge_exit_hash,
+                }));
+            }
+        }
+
+        // No imported bridge exits found in any certificate from height down to 0
+        Ok(None)
+    }
+
     /// Assemble the current state of the specified network from
     /// the data in various sources.
     pub fn get_network_state(
@@ -519,7 +571,15 @@ where
             .and_then(|cert| cert.epoch_number.map(|num| num.as_u64()));
 
         // TODO: implement settled claim retrieval
-        let settled_claim = None;
+        let settled_claim = self
+            .get_last_settled_claim(network_id, settled_height.unwrap_or(Height::from(0)))
+            .map_err(|error| {
+                error!(?error, "Failed to get last settled claim");
+                GetNetworkStateError::InternalError {
+                    network_id,
+                    source: error.into(),
+                }
+            })?;
 
         Ok(NetworkState {
             network_status,

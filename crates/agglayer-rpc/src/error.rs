@@ -142,6 +142,12 @@ pub enum GetLatestCertificateError {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum GetLatestSettledClaimError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum GetNetworkStateError {
     #[error("Unable to determine network type for network {network_id}")]
     UnknownNetworkType { network_id: NetworkId },
