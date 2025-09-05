@@ -1,6 +1,6 @@
 use std::{str::FromStr, sync::Arc};
 
-use agglayer_contracts::{L1TransactionFetcher, RollupContract};
+use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_grpc_server::node::v1::certificate_submission_service_server::CertificateSubmissionService;
 use agglayer_grpc_types::node::v1::{
     SubmitCertificateErrorKind, SubmitCertificateRequest, SubmitCertificateResponse,
@@ -36,7 +36,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
-    L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
+    L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
     #[instrument(skip(self, request), level = "debug", fields(certificate_id = tracing::field::Empty))]

@@ -6,10 +6,9 @@ use agglayer_types::{
         CertificateAggchainDataCtx, MultisigCtx,
     },
     aggchain_proof::AggchainData,
-    Address, Certificate, Digest, L1WitnessCtx, PessimisticRootInput, B256,
+    Address, Certificate, Digest, L1WitnessCtx, PessimisticRootInput,
 };
 use eyre::Context as _;
-use pessimistic_proof::core::commitment::{SignatureCommitmentValues, SignatureCommitmentVersion};
 use prover_executor::sp1_fast;
 use sp1_sdk::HashableKey;
 
@@ -41,6 +40,13 @@ where
             source: agglayer_types::Error::InvalidChainData(source),
         })?;
 
+        // Fetching rollup contract address
+        let rollup_address = self
+            .l1_rpc
+            .get_rollup_contract_address(certificate.network_id.to_u32())
+            .await
+            .map_err(CertificationError::RollupContractAddressNotFound)?;
+
         // Fetch context based on the aggchain data type that we received from the
         // chain.
         let aggchain_data_ctx: CertificateAggchainDataCtx = match aggchain_data_paylaod {
@@ -56,13 +62,13 @@ where
                 CertificateAggchainDataCtx::LegacyEcdsa { signer }
             }
             CertificateAggchainData::MultisigOnly(_) => CertificateAggchainDataCtx::MultisigOnly(
-                self.fetch_multisig_ctx(certificate).await?,
+                self.fetch_multisig_ctx(rollup_address, certificate).await?,
             ),
             CertificateAggchainData::MultisigAndAggchainProof { aggchain_proof, .. } => {
                 CertificateAggchainDataCtx::MultisigAndAggchainProof {
-                    multisig_ctx: self.fetch_multisig_ctx(certificate).await?,
+                    multisig_ctx: self.fetch_multisig_ctx(rollup_address, certificate).await?,
                     aggchain_proof_ctx: self
-                        .fetch_aggchain_proof_ctx(certificate, &aggchain_proof)
+                        .fetch_aggchain_proof_ctx(rollup_address, certificate, &aggchain_proof)
                         .await?,
                 }
             }
@@ -77,16 +83,10 @@ where
 
     pub async fn fetch_aggchain_proof_ctx(
         &self,
+        rollup_address: Address,
         certificate: &Certificate,
         aggchain_proof_payload: &AggchainProofPayload,
     ) -> Result<AggchainProofCtx, CertificationError> {
-        // Fetching rollup contract address
-        let rollup_address = self
-            .l1_rpc
-            .get_rollup_contract_address(certificate.network_id.to_u32())
-            .await
-            .map_err(CertificationError::RollupContractAddressNotFound)?;
-
         let aggchain_vkey_selector = certificate
             .custom_chain_data
             .first_chunk::<2>()
@@ -130,21 +130,21 @@ where
 
     pub async fn fetch_multisig_ctx(
         &self,
+        rollup_address: Address,
         certificate: &Certificate,
     ) -> Result<MultisigCtx, CertificationError> {
-        let (_multisig_signers, _multisig_threshold): (Vec<Address>, usize) = {
-            // TODO: To fetch from the L1: https://github.com/agglayer/agglayer/issues/941
-            Default::default()
-        };
+        let (signers, threshold) = self
+            .l1_rpc
+            .get_multisig_context(rollup_address)
+            .await
+            .map_err(CertificationError::MultisigContextFetchFailed)?;
 
         Ok(MultisigCtx {
-            signers: _multisig_signers,
-            threshold: _multisig_threshold,
-            prehash: B256::new(
-                SignatureCommitmentValues::from(certificate)
-                    .commitment(SignatureCommitmentVersion::V5)
-                    .0,
-            ),
+            signers,
+            threshold,
+            prehash: certificate
+                .signature_commitment_values()
+                .multisig_commitment(),
         })
     }
 
