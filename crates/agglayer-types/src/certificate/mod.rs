@@ -44,6 +44,7 @@ pub use testutils::compute_signature_info;
 /// Note: be mindful to update the [`Self::hash`] method accordingly
 /// upon modifying the fields of this structure.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "testutils", derive(Eq, PartialEq))]
 pub struct Certificate {
     /// NetworkID of the origin network.
     pub network_id: NetworkId,
