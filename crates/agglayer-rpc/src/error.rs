@@ -158,7 +158,7 @@ pub enum GetLatestCertificateError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum GetLastSettledClaimError {
+pub enum GetLatestSettledClaimError {
     #[error(transparent)]
     Storage(#[from] StorageError),
 

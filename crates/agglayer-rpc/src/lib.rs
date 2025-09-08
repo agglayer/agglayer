@@ -24,7 +24,7 @@ pub use self::error::{
     CertificateRetrievalError, CertificateSubmissionError, GetNetworkStateError,
 };
 use crate::{
-    error::{GetLastSettledClaimError, GetLatestCertificateError, ProofRetrievalError},
+    error::{GetLatestSettledClaimError, GetLatestCertificateError, ProofRetrievalError},
     network_state::{NetworkState, NetworkType, SettledClaim},
 };
 
@@ -348,11 +348,11 @@ where
         }
     }
 
-    pub fn get_last_settled_claim(
+    pub fn get_latest_settled_claim(
         &self,
         network_id: NetworkId,
         settled_height: Height,
-    ) -> Result<Option<SettledClaim>, GetLastSettledClaimError> {
+    ) -> Result<Option<SettledClaim>, GetLatestSettledClaimError> {
         // Iterate from the given height down to 0
         for current_height in (0..=settled_height.as_u64()).rev().map(Height::from) {
             // Fetch certificate header for the current height
@@ -369,7 +369,7 @@ where
                         "No certificate header found for network {network_id} at height \
                          {current_height}, inconsistent state"
                     );
-                    return Err(GetLastSettledClaimError::InconsistentState {
+                    return Err(GetLatestSettledClaimError::InconsistentState {
                         network_id,
                         height: settled_height,
                     });
@@ -386,7 +386,7 @@ where
                             "Missing epoch information in certificate header for network \
                              {network_id} at height {current_height}, inconsistent state"
                         );
-                        return Err(GetLastSettledClaimError::InconsistentState {
+                        return Err(GetLatestSettledClaimError::InconsistentState {
                             network_id,
                             height: settled_height,
                         });
@@ -397,7 +397,7 @@ where
             let certificate_opt = self
                 .epochs_store
                 .get_certificate(epoch_number, certificate_index)
-                .map_err(GetLastSettledClaimError::from)?;
+                .map_err(GetLatestSettledClaimError::from)?;
 
             let certificate = match certificate_opt {
                 Some(cert) => cert,
@@ -407,7 +407,7 @@ where
                         "Settled certificate not found in epoch store for network {network_id} at \
                          height {current_height}, inconsistent state"
                     );
-                    return Err(GetLastSettledClaimError::InconsistentState {
+                    return Err(GetLatestSettledClaimError::InconsistentState {
                         network_id,
                         height: settled_height,
                     });
@@ -606,7 +606,7 @@ where
 
         // Get the last settled claim if we have a settled height
         let settled_claim = if let Some(height) = settled_height {
-            self.get_last_settled_claim(network_id, height)
+            self.get_latest_settled_claim(network_id, height)
                 .map_err(|error| {
                     error!(?error, "Failed to get last settled claim");
                     GetNetworkStateError::InternalError {
