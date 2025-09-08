@@ -3,11 +3,11 @@ syntax = "proto3";
 package agglayer.node.types.v1;
 
 import "agglayer/interop/types/v1/bytes.proto";
-import "agglayer/node/types/v1/certificate_id.proto";
 import "agglayer/node/types/v1/certificate_header.proto";
+import "agglayer/node/types/v1/certificate_id.proto";
 
-// NetworkState represents the current state of a network in the AggLayer.
-message NetworkState {
+// NetworkInfo represents the current info of a network in the AggLayer.
+message NetworkInfo {
   // The current status of the network (e.g., "active", "syncing", "error").
   NetworkStatus network_status = 1;
   // The aggchain type of network
@@ -44,7 +44,7 @@ message SettledClaim {
   agglayer.interop.types.v1.FixedBytes32 bridge_exit_hash = 2;
 }
 
- // The aggchain type of network
+// The aggchain type of network
 enum NetworkType {
   // Unspecified network type.
   NETWORK_TYPE_UNSPECIFIED = 0;
@@ -60,12 +60,12 @@ enum NetworkType {
 
 // Status of the particular network, as seen by this node.
 enum NetworkStatus {
-    // Unspecified status.
-	NETWORK_STATUS_UNSPECIFIED = 0;
-	// The network is active and functioning normally.
-	NETWORK_STATUS_ACTIVE = 1;
-	// The network is currently syncing.
-	NETWORK_STATUS_SYNCING = 2;
-	// The network is experiencing an error.
-	NETWORK_STATUS_ERROR = 3;
+  // Unspecified status.
+  NETWORK_STATUS_UNSPECIFIED = 0;
+  // The network is active and functioning normally.
+  NETWORK_STATUS_ACTIVE = 1;
+  // The network is currently syncing.
+  NETWORK_STATUS_SYNCING = 2;
+  // The network is experiencing an error.
+  NETWORK_STATUS_ERROR = 3;
 }

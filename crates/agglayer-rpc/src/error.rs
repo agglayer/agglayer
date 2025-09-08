@@ -170,7 +170,7 @@ pub enum GetLatestSettledClaimError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum GetNetworkStateError {
+pub enum GetNetworkInfoError {
     #[error("Unable to determine network type for network {network_id}")]
     UnknownNetworkType { network_id: NetworkId },
 

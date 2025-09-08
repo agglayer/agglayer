@@ -6,7 +6,7 @@ use std::{
 };
 
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
-use agglayer_rpc::network_state::NetworkState;
+use agglayer_rpc::network_info::NetworkInfo;
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, EpochStoreReader, PendingCertificateReader, PendingCertificateWriter,
     StateReader, StateWriter,
@@ -81,8 +81,8 @@ trait Agglayer {
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>>;
 
-    #[method(name = "getNetworkState")]
-    async fn get_network_state(&self, network_id: NetworkId) -> RpcResult<NetworkState>;
+    #[method(name = "getNetworkInfo")]
+    async fn get_network_info(&self, network_id: NetworkId) -> RpcResult<NetworkInfo>;
 }
 
 /// The RPC agglayer service implementation.
@@ -267,8 +267,8 @@ where
         Ok(header)
     }
 
-    async fn get_network_state(&self, network_id: NetworkId) -> RpcResult<NetworkState> {
-        let state = self.rpc_service.get_network_state(network_id)?;
+    async fn get_network_info(&self, network_id: NetworkId) -> RpcResult<NetworkInfo> {
+        let state = self.rpc_service.get_network_info(network_id)?;
         Ok(state)
     }
 }

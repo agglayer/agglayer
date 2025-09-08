@@ -6,8 +6,8 @@ use agglayer_grpc_types::{
     node::v1::{
         GetCertificateHeaderErrorKind, GetCertificateHeaderRequest, GetCertificateHeaderResponse,
         GetLatestCertificateHeaderErrorKind, GetLatestCertificateHeaderRequest,
-        GetLatestCertificateHeaderResponse, GetNetworkStateErrorKind, GetNetworkStateRequest,
-        GetNetworkStateResponse, LatestCertificateRequestType,
+        GetLatestCertificateHeaderResponse, GetNetworkInfoErrorKind, GetNetworkInfoRequest,
+        GetNetworkInfoResponse, LatestCertificateRequestType,
     },
 };
 use agglayer_rpc::AgglayerService;
@@ -21,7 +21,7 @@ const GET_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_certificate_header";
 const GET_LATEST_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_latest_certificate_header";
-const GET_NETWORK_STATE_METHOD_PATH: &str =
+const GET_NETWORK_INFO_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_network_state";
 
 pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
@@ -144,37 +144,37 @@ where
     }
 
     #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty))]
-    async fn get_network_state(
+    async fn get_network_info(
         &self,
-        request: tonic::Request<GetNetworkStateRequest>,
-    ) -> Result<tonic::Response<GetNetworkStateResponse>, tonic::Status> {
+        request: tonic::Request<GetNetworkInfoRequest>,
+    ) -> Result<tonic::Response<GetNetworkInfoResponse>, tonic::Status> {
         let request_id = uuid::Uuid::new_v4().to_string();
         tracing::Span::current().record("request_id", &request_id);
 
-        let network_state: agglayer_grpc_types::node::types::v1::NetworkState = self
+        let network_info: agglayer_grpc_types::node::types::v1::NetworkInfo = self
             .service
-            .get_network_state(request.into_inner().network_id.into())
+            .get_network_info(request.into_inner().network_id.into())
             .map_err(|error| {
                 error!(?error, "Failed to get network state");
                 match error {
-                    agglayer_rpc::GetNetworkStateError::UnknownNetworkType { .. } => {
+                    agglayer_rpc::GetNetworkInfoError::UnknownNetworkType { .. } => {
                         tonic::Status::with_error_details(
                             tonic::Code::NotFound,
                             "Network type could not be determined",
                             ErrorDetails::with_error_info(
-                                GetNetworkStateErrorKind::UnknownNetworkType.as_str_name(),
-                                GET_NETWORK_STATE_METHOD_PATH,
+                                GetNetworkInfoErrorKind::UnknownNetworkType.as_str_name(),
+                                GET_NETWORK_INFO_METHOD_PATH,
                                 [],
                             ),
                         )
                     }
-                    agglayer_rpc::GetNetworkStateError::InternalError { source, .. } => {
+                    agglayer_rpc::GetNetworkInfoError::InternalError { source, .. } => {
                         tonic::Status::with_error_details(
                             tonic::Code::Internal,
                             "Internal error",
                             ErrorDetails::with_error_info(
-                                GetNetworkStateErrorKind::InternalError.as_str_name(),
-                                GET_NETWORK_STATE_METHOD_PATH,
+                                GetNetworkInfoErrorKind::InternalError.as_str_name(),
+                                GET_NETWORK_INFO_METHOD_PATH,
                                 [("error".into(), format!("{source:?}"))],
                             ),
                         )
@@ -183,8 +183,8 @@ where
             })?
             .into();
 
-        Ok(tonic::Response::new(GetNetworkStateResponse {
-            network_state: Some(network_state),
+        Ok(tonic::Response::new(GetNetworkInfoResponse {
+            network_info: Some(network_info),
         }))
     }
 }
