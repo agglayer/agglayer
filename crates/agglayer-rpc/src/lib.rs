@@ -24,7 +24,7 @@ pub use self::error::{
     CertificateRetrievalError, CertificateSubmissionError, GetNetworkStateError,
 };
 use crate::{
-    error::{GetLatestSettledClaimError, GetLatestCertificateError, ProofRetrievalError},
+    error::{GetLatestCertificateError, GetLatestSettledClaimError, ProofRetrievalError},
     network_state::{NetworkState, NetworkType, SettledClaim},
 };
 
