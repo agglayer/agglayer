@@ -258,12 +258,17 @@ impl Forest {
         &mut self,
         imported_bridge_events: &[(TokenInfo, U256)],
         bridge_events: &[(TokenInfo, U256)],
-    ) -> (Certificate, SP1VerifyingKey, [u8; 32], SP1Proof) {
-        let certificate = self.apply_events(imported_bridge_events, bridge_events);
+    ) -> (Certificate, SP1VerifyingKey, [u8; 32], SP1Proof, Signature) {
+        let certificate = self.apply_events_with_version(
+            imported_bridge_events,
+            bridge_events,
+            SignatureCommitmentVersion::V5,
+        );
 
-        let signature = match certificate.aggchain_data {
-            AggchainData::ECDSA { signature } => signature,
-            AggchainData::Generic { .. } => unimplemented!("SP1 handling not implemented"),
+        let agglayer_types::aggchain_proof::AggchainData::ECDSA { signature } =
+            certificate.aggchain_data
+        else {
+            panic!("inconsistent test data")
         };
 
         let (aggchain_proof, aggchain_vkey, aggchain_params) =
@@ -282,7 +287,13 @@ impl Forest {
                 origin_network: self.network_id,
             });
 
-        (certificate, aggchain_vkey, aggchain_params, aggchain_proof)
+        (
+            certificate,
+            aggchain_vkey,
+            aggchain_params,
+            aggchain_proof,
+            signature,
+        )
     }
 
     pub fn get_signer(&self) -> Address {

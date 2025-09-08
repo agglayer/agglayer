@@ -28,6 +28,9 @@ pub enum DBError {
 
     #[error("Trying to access an unknown ColumnFamily")]
     ColumnFamilyNotFound,
+
+    #[error("Database was opened in read-only mode")]
+    ReadOnlyMode,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -45,7 +48,7 @@ pub enum BackupError {
 /// A physical storage storage component with an active RocksDB.
 pub struct DB {
     rocksdb: rocksdb::DB,
-    default_write_options: WriteOptions,
+    default_write_options: Option<WriteOptions>,
 }
 
 impl DB {
@@ -60,7 +63,20 @@ impl DB {
 
         Ok(DB {
             rocksdb: rocksdb::DB::open_cf_descriptors(&options, path, cfs)?,
-            default_write_options: writeopts,
+            default_write_options: Some(writeopts),
+        })
+    }
+
+    /// Open a RocksDB instance in read-only mode at the given path with some column families.
+    /// This prevents concurrency issues when multiple processes need to read from the database.
+    pub fn open_cf_readonly(path: &Path, cfs: Vec<ColumnFamilyDescriptor>) -> Result<DB, DBError> {
+        let mut options = Options::default();
+        options.create_if_missing(false); // Don't create if missing in readonly mode
+        options.create_missing_column_families(false); // Don't create missing column families
+
+        Ok(DB {
+            rocksdb: rocksdb::DB::open_cf_descriptors_read_only(&options, path, cfs, false)?,
+            default_write_options: None,
         })
     }
 
@@ -116,8 +132,10 @@ impl DB {
             .cf_handle(C::COLUMN_FAMILY_NAME)
             .ok_or(DBError::ColumnFamilyNotFound)?;
 
+        let write_options = self.default_write_options.as_ref().ok_or(DBError::ReadOnlyMode)?;
+
         self.rocksdb
-            .put_cf_opt(&cf, key, value, &self.default_write_options)?;
+            .put_cf_opt(&cf, key, value, write_options)?;
 
         Ok(())
     }
@@ -202,8 +220,10 @@ impl DB {
             .ok_or(DBError::ColumnFamilyNotFound)?;
         let key = key.encode()?;
 
+        let write_options = self.default_write_options.as_ref().ok_or(DBError::ReadOnlyMode)?;
+
         Ok(self
             .rocksdb
-            .delete_cf_opt(&cf, key, &self.default_write_options)?)
+            .delete_cf_opt(&cf, key, write_options)?)
     }
 }

@@ -12,7 +12,7 @@ use agglayer_types::{
     aggchain_proof::AggchainData, bincode, Certificate, Digest, Height, LocalNetworkStateData,
     NetworkId, Proof,
 };
-use eyre::Context as _;
+use eyre::{eyre, Context as _};
 use pessimistic_proof::{
     core::{commitment::StateCommitment, generate_pessimistic_proof},
     local_state::LocalNetworkState,
@@ -167,6 +167,7 @@ where
         // the multibatch header is configured to use the hash from L1
         match certificate.aggchain_data {
             AggchainData::ECDSA { .. } => {}
+            AggchainData::MultisigOnly(_) => {}
             AggchainData::Generic { ref proof, .. } => {
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
 
@@ -174,6 +175,18 @@ where
                 // stark_proof anyway.
                 sp1_fast(AssertUnwindSafe(|| {
                     stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone())
+                }))
+                .map_err(CertificationError::Other)?;
+            }
+            AggchainData::MultisigAndAggchainProof {
+                ref aggchain_proof, ..
+            } => {
+                let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) =
+                    &aggchain_proof.proof;
+                // This operation is unwind safe: if it errors, we will discard stdin and
+                // stark_proof anyway.
+                sp1_fast(AssertUnwindSafe(|| {
+                    stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone());
                 }))
                 .map_err(CertificationError::Other)?;
             }
@@ -195,7 +208,7 @@ where
             })
             .await
             .map_err(CertificationError::Other)?
-            .map_err(CertificationError::Sp1ExecuteFailed)?;
+            .map_err(|e| CertificationError::Sp1ExecuteFailed(eyre!(e)))?;
 
             let pv_sp1_execute: PessimisticProofOutput = PessimisticProofOutput::bincode_codec()
                 .deserialize(pv.as_slice())

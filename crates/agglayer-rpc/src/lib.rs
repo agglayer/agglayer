@@ -1,39 +1,50 @@
 use std::sync::Arc;
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
-use agglayer_contracts::{L1TransactionFetcher, RollupContract};
+use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
+use agglayer_primitives::Hashable;
 use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
-        DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-        StateWriter,
+        DebugReader, DebugWriter, EpochStoreReader, PendingCertificateReader,
+        PendingCertificateWriter, StateReader, StateWriter,
     },
 };
 use agglayer_types::{
-    Address, Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration,
-    Height, NetworkId, Signature,
+    aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Address, Certificate,
+    CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId,
+    Signature,
 };
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
-pub use self::error::{CertificateRetrievalError, CertificateSubmissionError};
+pub use self::error::{
+    CertificateRetrievalError, CertificateSubmissionError, GetNetworkStateError,
+};
+use crate::{
+    error::{GetLatestCertificateError, GetLatestSettledClaimError, ProofRetrievalError},
+    network_state::{NetworkState, NetworkType, SettledClaim},
+};
 
 pub mod error;
 
+pub mod network_state;
+
 /// The RPC agglayer service implementation.
-pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore> {
+pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pub(crate) pending_store: Arc<PendingStore>,
     pub(crate) state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
+    epochs_store: Arc<EpochsStore>,
     config: Arc<Config>,
     l1_rpc_provider: Arc<L1Rpc>,
 }
 
-impl<L1Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 {
     /// Create an instance of the RPC agglayer service.
     pub fn new(
@@ -41,6 +52,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore>
         pending_store: Arc<PendingStore>,
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
+        epochs_store: Arc<EpochsStore>,
         config: Arc<Config>,
         l1_rpc_provider: Arc<L1Rpc>,
     ) -> Self {
@@ -49,6 +61,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore>
             pending_store,
             state,
             debug_store,
+            epochs_store,
             config,
             l1_rpc_provider,
         }
@@ -58,6 +71,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore>
     pub fn config(&self) -> &Config {
         &self.config
     }
+
     pub fn get_epoch_configuration(&self) -> Option<EpochConfiguration> {
         info!("Received request to get epoch configuration");
 
@@ -76,21 +90,22 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore>
     }
 }
 
-impl<L1Rpc, PendingStore, StateStore, DebugStore> Drop
-    for AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> Drop
+    for AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer RPC service");
     }
 }
 
-impl<L1Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
     PendingStore: PendingCertificateReader + 'static,
     StateStore: StateReader + 'static,
     DebugStore: DebugReader + 'static,
     L1Rpc: Send + Sync + 'static,
+    EpochsStore: EpochStoreReader + 'static,
 {
     pub fn get_latest_known_certificate_header(
         &self,
@@ -130,6 +145,104 @@ where
         match certificate_id {
             None => Ok(None),
             Some(certificate_id) => self.fetch_certificate_header(certificate_id).map(Some),
+        }
+    }
+
+    /// Get latest available certificate data for a network.
+    /// Note: This includes proven certificates
+    /// and settled certificates. If no certificate is found, return None.
+    pub fn get_latest_available_certificate_for_network(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<Certificate>, GetLatestCertificateError> {
+        debug!("Received request to get the latest available certificate for rollup {network_id}");
+
+        let proven_certificate_id_and_height = self
+            .pending_store
+            .get_latest_proven_certificate_per_network(&network_id)
+            .inspect_err(|e| error!("Failed to get latest proven certificate: {e}"))?
+            .map(|(_, height, id)| (id, height));
+
+        let settled_certificate_id_and_height = self
+            .state
+            .get_latest_settled_certificate_per_network(&network_id)
+            .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
+            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
+
+        let certificate_id = std::cmp::max_by_key(
+            proven_certificate_id_and_height,
+            settled_certificate_id_and_height,
+            |v| v.map(|(_, ht)| ht),
+        )
+        .map(|v| v.0);
+
+        let latest_certificate_header = match certificate_id {
+            None => Ok(None),
+            Some(certificate_id) => self
+                .fetch_certificate_header(certificate_id)
+                .map(Some)
+                .map_err(|error| {
+                    error!(?error, "Failed to get latest known certificate header");
+                    GetLatestCertificateError::UnknownLatestCertificateHeader {
+                        network_id,
+                        source: Box::new(error),
+                    }
+                }),
+        }?;
+
+        match latest_certificate_header {
+            None => Ok(None),
+            Some(CertificateHeader {
+                certificate_id,
+                height,
+                epoch_number,
+                certificate_index,
+                ..
+            }) => {
+                // First try to get the full certificate from pending store
+                if let Ok(Some(certificate)) =
+                    self.pending_store.get_certificate(network_id, height)
+                {
+                    // Verify that this is indeed the certificate we're looking for
+                    if certificate.hash() == certificate_id {
+                        return Ok(Some(certificate));
+                    } else {
+                        error!(
+                            "Pending certificate hash mismatch: expected {}, got {}",
+                            certificate_id,
+                            certificate.hash()
+                        );
+                        return Err(GetLatestCertificateError::CertificateIdHashMismatch {
+                            expected: certificate_id,
+                            got: certificate.hash(),
+                        });
+                    }
+                }
+
+                // If not found in pending store, try to get from epoch store.
+                if let (Some(epoch_number), Some(certificate_index)) =
+                    (epoch_number, certificate_index)
+                {
+                    match self
+                        .epochs_store
+                        .get_certificate(epoch_number, certificate_index)
+                    {
+                        Ok(Some(certificate)) => {
+                            debug!("Found certificate {certificate_id} in epoch store");
+                            return Ok(Some(certificate));
+                        }
+                        _ => {
+                            debug!("Certificate {certificate_id} not found in debug store");
+                        }
+                    }
+                }
+
+                warn!(
+                    "Certificate {} at height {} not found in any store",
+                    certificate_id, height
+                );
+                Err(GetLatestCertificateError::NotFound { certificate_id })
+            }
         }
     }
 
@@ -182,15 +295,354 @@ where
             .inspect_err(|err| error!("Failed to get certificate header: {err}"))?
             .ok_or(CertificateRetrievalError::NotFound { certificate_id })
     }
+
+    /// Get the proof for a certificate by certificate ID
+    pub fn get_proof(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<Option<agglayer_types::Proof>, ProofRetrievalError> {
+        // First try to get the proof from the pending store
+        match self
+            .pending_store
+            .get_proof(certificate_id)
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to get proof for certificate {certificate_id} from pending store",
+                );
+                ProofRetrievalError::Storage(error)
+            })? {
+            Some(proof) => Ok(Some(proof)),
+            None => {
+                // If not found in pending store, check the epoch store
+                // First get the certificate header to obtain epoch_number and certificate_index
+                match self.fetch_certificate_header(certificate_id) {
+                    Ok(header) => {
+                        if let (Some(epoch_number), Some(certificate_index)) =
+                            (header.epoch_number, header.certificate_index)
+                        {
+                            // Call the epoch store's get_proof method with epoch_number and
+                            // certificate_index
+                            self.epochs_store
+                                .get_proof(epoch_number, certificate_index)
+                                .map_err(|error| {
+                                    error!(
+                                        ?error,
+                                        "Failed to get proof for certificate {certificate_id} \
+                                         from epoch store",
+                                    );
+                                    ProofRetrievalError::NotFound { certificate_id }
+                                })
+                        } else {
+                            // Certificate doesn't have epoch information, so no proof in epoch
+                            // store
+                            Ok(None)
+                        }
+                    }
+                    Err(_) => {
+                        // Certificate header not found, so no proof in epoch store
+                        Ok(None)
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn get_latest_settled_claim(
+        &self,
+        network_id: NetworkId,
+        settled_height: Height,
+    ) -> Result<Option<SettledClaim>, GetLatestSettledClaimError> {
+        // Iterate from the given height down to 0
+        for current_height in (0..=settled_height.as_u64()).rev().map(Height::from) {
+            // Fetch certificate header for the current height
+            let header_opt = self
+                .state
+                .get_certificate_header_by_cursor(network_id, current_height)?;
+
+            let header = match header_opt {
+                Some(h) => h,
+
+                None => {
+                    // No certificate at this height, return an error indicating inconsistent state
+                    error!(
+                        "No certificate header found for network {network_id} at height \
+                         {current_height}, inconsistent state"
+                    );
+                    return Err(GetLatestSettledClaimError::InconsistentState {
+                        network_id,
+                        height: settled_height,
+                    });
+                }
+            };
+
+            // Only proceed if both epoch_number and certificate_index are present
+            let (epoch_number, certificate_index) =
+                match (header.epoch_number, header.certificate_index) {
+                    (Some(epoch), Some(idx)) => (epoch, idx),
+                    _ => {
+                        // Missing epoch information, return an error indicating inconsistent state
+                        error!(
+                            "Missing epoch information in certificate header for network \
+                             {network_id} at height {current_height}, inconsistent state"
+                        );
+                        return Err(GetLatestSettledClaimError::InconsistentState {
+                            network_id,
+                            height: settled_height,
+                        });
+                    }
+                };
+
+            // Fetch the certificate from the epoch store
+            let certificate_opt = self
+                .epochs_store
+                .get_certificate(epoch_number, certificate_index)
+                .map_err(GetLatestSettledClaimError::from)?;
+
+            let certificate = match certificate_opt {
+                Some(cert) => cert,
+                None => {
+                    // Settled certificate not found, return an error indicating inconsistent state
+                    error!(
+                        "Settled certificate not found in epoch store for network {network_id} at \
+                         height {current_height}, inconsistent state"
+                    );
+                    return Err(GetLatestSettledClaimError::InconsistentState {
+                        network_id,
+                        height: settled_height,
+                    });
+                }
+            };
+
+            // Check for imported bridge exits
+            if let Some(last_imported_exit) = certificate.imported_bridge_exits.last() {
+                let global_index_hash = last_imported_exit.global_index.hash();
+                let bridge_exit_hash = last_imported_exit.bridge_exit.hash();
+
+                return Ok(Some(SettledClaim {
+                    global_index: global_index_hash,
+                    bridge_exit_hash,
+                }));
+            }
+            // Keep iterating downwards if no imported bridge exits found and no
+            // error happened
+        }
+
+        // No imported bridge exits found in any certificate from `settled_height` down
+        // to 0
+        Ok(None)
+    }
+
+    /// Assemble the current state of the specified network from
+    /// the data in various sources.
+    pub fn get_network_state(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<NetworkState, GetNetworkStateError> {
+        debug!("Received request to get the network state for rollup {network_id}");
+
+        // Get the latest settled certificate for the network
+        let latest_settled_certificate =
+            match self.get_latest_settled_certificate_header(network_id) {
+                Ok(cert) => cert,
+                Err(CertificateRetrievalError::NotFound { .. }) => {
+                    warn!("No settled certificate found for network {network_id}");
+                    None
+                }
+                Err(error) => {
+                    error!(
+                        ?error,
+                        "Failed to get latest settled certificate for network {network_id}"
+                    );
+                    return Err(GetNetworkStateError::InternalError {
+                        network_id,
+                        source: error.into(),
+                    });
+                }
+            };
+
+        let latest_pending_certificate =
+            match self.get_latest_pending_certificate_header(network_id) {
+                Ok(cert) => cert,
+                Err(CertificateRetrievalError::NotFound { .. }) => {
+                    info!("No latest pending certificate found for network {network_id}");
+                    None
+                }
+                Err(error) => {
+                    error!(
+                        ?error,
+                        "Failed to get latest pending certificate for network {network_id}"
+                    );
+                    return Err(GetNetworkStateError::InternalError {
+                        network_id,
+                        source: error.into(),
+                    });
+                }
+            };
+
+        // Determine network type from the latest available certificate
+        let network_type = match self.get_latest_available_certificate_for_network(network_id) {
+            Ok(Some(certificate)) => {
+                // Determine network type based on aggchain_data variant
+                match certificate.aggchain_data {
+                    agglayer_types::aggchain_proof::AggchainData::ECDSA { .. } => {
+                        Ok(NetworkType::Ecdsa)
+                    }
+                    agglayer_types::aggchain_proof::AggchainData::Generic { .. } => {
+                        Ok(NetworkType::Generic)
+                    }
+                    agglayer_types::aggchain_proof::AggchainData::MultisigOnly { .. } => {
+                        Ok(NetworkType::MultisigOnly)
+                    }
+                    agglayer_types::aggchain_proof::AggchainData::MultisigAndAggchainProof {
+                        ..
+                    } => Ok(NetworkType::MultisigAndAggchainProof),
+                }
+            }
+            Ok(None) => Err(GetNetworkStateError::UnknownNetworkType { network_id }),
+            Err(error) => {
+                error!(?error, "Unable to determine network type");
+                Err(GetNetworkStateError::InternalError {
+                    network_id,
+                    source: error.into(),
+                })
+            }
+        }?;
+
+        // TODO: Define network status. Could represent the healthiness of the network
+        // in regard to the agglayer-node. We could have multiple kind of status
+        // that could represent a network sending too many unprovable certs,
+        // or even a network that didn't settle for N epochs and such (optional).
+        let network_status = network_state::NetworkStatus::Active;
+
+        // Extract settled certificate data
+        let settled_height = latest_settled_certificate.as_ref().map(|cert| cert.height);
+        let settled_certificate_id = latest_settled_certificate
+            .as_ref()
+            .map(|cert| cert.certificate_id);
+
+        // Extract settled_pp_root from the settled certificate's proof public values
+        let settled_pp_root = if let Some(cert) = latest_settled_certificate.as_ref() {
+            match self.get_proof(cert.certificate_id) {
+                Ok(Some(agglayer_types::Proof::SP1(sp1_proof))) => {
+                    match pessimistic_proof::PessimisticProofOutput::bincode_codec()
+                        .deserialize::<pessimistic_proof::PessimisticProofOutput>(
+                        sp1_proof.public_values.as_slice(),
+                    ) {
+                        Ok(output) => Some(output.new_pessimistic_root),
+                        Err(error) => {
+                            error!(
+                                ?error,
+                                "get network status: failed to deserialize pessimistic proof \
+                                 output"
+                            );
+                            return Err(GetNetworkStateError::InternalError {
+                                network_id,
+                                source: error.into(),
+                            });
+                        }
+                    }
+                }
+                Ok(None) => None,
+                Err(ProofRetrievalError::NotFound { .. }) => None,
+                Err(error) => {
+                    error!(
+                        ?error,
+                        "get network status: failed to get proof for settled certificate \
+                         {certificate_id}",
+                        certificate_id = cert.certificate_id
+                    );
+                    return Err(GetNetworkStateError::InternalError {
+                        network_id,
+                        source: error.into(),
+                    });
+                }
+            }
+        } else {
+            None
+        };
+
+        let settled_ler = latest_settled_certificate
+            .as_ref()
+            .map(|cert| cert.new_local_exit_root);
+
+        let settled_let_leaf_count = match self.state.read_local_network_state(network_id) {
+            Ok(local_network_state) => local_network_state.map(|v| v.exit_tree.leaf_count as u64),
+            Err(error) => {
+                error!(
+                    ?error,
+                    "get network status: failed to read local network state for network \
+                     {network_id}"
+                );
+                return Err(GetNetworkStateError::InternalError {
+                    network_id,
+                    source: error.into(),
+                });
+            }
+        };
+
+        let latest_pending_height = latest_pending_certificate
+            .as_ref()
+            .map(|cert| cert.height.as_u64());
+
+        let latest_pending_status = latest_pending_certificate
+            .as_ref()
+            .map(|cert| cert.status.clone());
+
+        // Get pending certificate error if exists
+        let latest_pending_error = latest_pending_certificate
+            .as_ref()
+            .and_then(|cert| match &cert.status {
+                agglayer_types::CertificateStatus::InError { error } => {
+                    Some(error.as_ref().clone())
+                }
+                _ => None,
+            });
+
+        // Get epoch with latest settlement from settled certificate header
+        let latest_epoch_with_settlement = latest_settled_certificate
+            .as_ref()
+            .and_then(|cert| cert.epoch_number.map(|num| num.as_u64()));
+
+        // Get the last settled claim if we have a settled height
+        let settled_claim = if let Some(height) = settled_height {
+            self.get_latest_settled_claim(network_id, height)
+                .map_err(|error| {
+                    error!(?error, "Failed to get last settled claim");
+                    GetNetworkStateError::InternalError {
+                        network_id,
+                        source: error.into(),
+                    }
+                })?
+        } else {
+            None
+        };
+
+        Ok(NetworkState {
+            network_status,
+            network_type,
+            network_id,
+            settled_height,
+            settled_certificate_id,
+            settled_pp_root,
+            settled_ler,
+            settled_let_leaf_count,
+            settled_claim,
+            latest_pending_height,
+            latest_pending_status,
+            latest_pending_error,
+            latest_epoch_with_settlement,
+        })
+    }
 }
 
-impl<L1Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
-    L1Rpc: RollupContract + L1TransactionFetcher + 'static,
+    L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static,
 {
     fn get_known_certificate_id_at_height(
         &self,
@@ -313,19 +765,67 @@ where
         &self,
         cert: &Certificate,
     ) -> Result<(), SignatureVerificationError> {
-        let sequencer_address = self
-            .l1_rpc_provider
-            .get_trusted_sequencer_address(
-                cert.network_id.to_u32(),
-                self.config.proof_signers.clone(),
-            )
-            .await
-            .map_err(|_| {
-                SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(cert.network_id)
-            })?;
+        // Verify any signature related data, fetch L1 context when needed.
+        let fetch_sequencer_address = || async {
+            self.l1_rpc_provider
+                .get_trusted_sequencer_address(
+                    cert.network_id.to_u32(),
+                    self.config.proof_signers.clone(),
+                )
+                .await
+                .map_err(|_| {
+                    SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(
+                        cert.network_id,
+                    )
+                })
+        };
 
-        cert.verify_cert_signature(sequencer_address)
-            .map_err(SignatureVerificationError::from_signer_error)
+        // Fetching rollup contract address
+        let fetch_multisig_context = || async {
+            let rollup_address = self
+                .l1_rpc_provider
+                .get_rollup_contract_address(cert.network_id.into())
+                .await
+                .map_err(|source| {
+                    SignatureVerificationError::UnableToRetrieveRollupContractAddress {
+                        source,
+                        network_id: cert.network_id,
+                    }
+                })?;
+
+            let (signers, threshold) = self
+                .l1_rpc_provider
+                .get_multisig_context(rollup_address)
+                .await
+                .map_err(
+                    |source| SignatureVerificationError::UnableToRetrieveMultisigContext {
+                        source,
+                        network_id: cert.network_id,
+                    },
+                )?;
+
+            Ok::<MultisigCtx, SignatureVerificationError>(MultisigCtx {
+                signers,
+                threshold,
+                prehash: cert.signature_commitment_values().multisig_commitment(),
+            })
+        };
+
+        match &cert.aggchain_data {
+            AggchainData::ECDSA { signature } => {
+                cert.verify_legacy_ecdsa(fetch_sequencer_address().await?, signature)
+            }
+            AggchainData::Generic { signature, .. } => {
+                cert.verify_aggchain_proof_signature(fetch_sequencer_address().await?, signature)
+            }
+            AggchainData::MultisigOnly(multisig) => {
+                cert.verify_multisig(multisig.into(), fetch_multisig_context().await?)
+            }
+            AggchainData::MultisigAndAggchainProof { multisig, .. } => {
+                cert.verify_multisig(multisig.into(), fetch_multisig_context().await?)
+            }
+        }
+        .map_err(SignatureVerificationError::from_signer_error)
     }
 
     /// Verify the extra [`Certificate`] signature.

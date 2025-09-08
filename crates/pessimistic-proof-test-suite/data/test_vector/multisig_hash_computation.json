@@ -1,0 +1,50 @@
+{
+    "specification": "multisig_hash computation",
+    "test_vectors": [
+        {
+            "inputs": {
+                "threshold": 1,
+                "signers": [
+                    "0x1111111111111111111111111111111111111111"
+                ]
+            },
+            "expected_output": {
+                "multisig_hash": "0xf3a32c19d9d554e98004558d3580c44928e7dbe91df1a07d7fc42101acefef8e"
+            }
+        },
+        {
+            "inputs": {
+                "threshold": 2,
+                "signers": [
+                    "0x1111111111111111111111111111111111111111",
+                    "0x2222222222222222222222222222222222222222"
+                ]
+            },
+            "expected_output": {
+                "multisig_hash": "0xd032fdedf62320ed8e19e72d0fc0814a9fffed00e28893dd7cea13f48b51ea77"
+            }
+        },
+        {
+            "inputs": {
+                "threshold": 2,
+                "signers": [
+                    "0x1111111111111111111111111111111111111111",
+                    "0x2222222222222222222222222222222222222222",
+                    "0x3333333333333333333333333333333333333333"
+                ]
+            },
+            "expected_output": {
+                "multisig_hash": "0xdfef7a1da1865195481a5d4d51c8afa936d6b046336b90b1e609c10e468ed223"
+            }
+        },
+        {
+            "inputs": {
+                "threshold": 0,
+                "signers": []
+            },
+            "expected_output": {
+                "multisig_hash": "0x290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"
+            }
+        }
+    ]
+}

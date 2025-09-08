@@ -3,12 +3,13 @@ use std::{
     sync::Arc,
 };
 
-use agglayer_types::{EpochNumber, Height, NetworkId};
+use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Height, NetworkId};
 use parking_lot::RwLock;
 
 use super::{
     per_epoch::PerEpochStore, EpochStoreReader, EpochStoreWriter, MetadataWriter,
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
+    interfaces::reader::PerEpochReader,
 };
 use crate::{error::Error, storage::backup::BackupClient};
 
@@ -80,4 +81,28 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: StateWriter + MetadataWriter + StateReader,
 {
+    fn get_certificate(
+        &self,
+        epoch_number: EpochNumber,
+        index: CertificateIndex,
+    ) -> Result<Option<Certificate>, Error> {
+        // Use readonly access to prevent concurrency issues when multiple processes
+        // are accessing the database
+        let per_epoch_store = PerEpochStore::try_open_readonly(
+            self.config.clone(),
+            epoch_number,
+            self.pending_store.clone(),
+            self.state_store.clone(),
+        )?;
+        per_epoch_store.get_certificate_at_index(index)
+    }
+
+    fn get_proof(
+        &self,
+        epoch_number: EpochNumber,
+        index: CertificateIndex,
+    ) -> Result<Option<agglayer_types::Proof>, Error> {
+        let per_epoch_store = self.open(epoch_number)?;
+        per_epoch_store.get_proof_at_index(index)
+    }
 }

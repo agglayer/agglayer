@@ -80,7 +80,7 @@ where
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
 {
-    pub async fn start(self) -> anyhow::Result<axum::Router> {
+    pub async fn start(self) -> eyre::Result<axum::Router> {
         // Create the RPC service
         let config = self.config.clone();
 

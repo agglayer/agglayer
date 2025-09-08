@@ -86,6 +86,26 @@ pub enum SignatureVerificationError {
     /// The pessimistic proof signature is invalid.
     #[error("invalid pessimistic proof signature: {0}")]
     InvalidPessimisticProofSignature(#[source] SignerError),
+
+    /// The multisig is invalid.
+    #[error("invalid multisig: {0}")]
+    InvalidMultisig(#[source] SignerError),
+
+    /// The rollup contract (zkevm or aggchain base contract) fails to be
+    /// retrieved from the L1.
+    #[error("unable to retrieve the rollup contract for the network {network_id}: {source}")]
+    UnableToRetrieveRollupContractAddress {
+        source: L1RpcError,
+        network_id: NetworkId,
+    },
+
+    /// The multisig context (signers or threshold) fails to be retrieved from
+    /// the L1.
+    #[error("unable to retrieve the multisig context for the network {network_id}: {source}")]
+    UnableToRetrieveMultisigContext {
+        source: L1RpcError,
+        network_id: NetworkId,
+    },
 }
 
 impl SignatureVerificationError {
@@ -99,6 +119,65 @@ impl SignatureVerificationError {
             e @ agglayer_types::SignerError::InvalidPessimisticProofSignature { .. } => {
                 Self::InvalidPessimisticProofSignature(e)
             }
+            e @ agglayer_types::SignerError::InvalidMultisig(_) => Self::InvalidMultisig(e),
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ProofRetrievalError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error("Proof for certificate {certificate_id} not found")]
+    NotFound { certificate_id: CertificateId },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GetLatestCertificateError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error("Unknown latest certificate header for network {network_id}")]
+    UnknownLatestCertificateHeader {
+        network_id: NetworkId,
+        source: Box<CertificateRetrievalError>,
+    },
+
+    #[error(
+        "Mismatch on the certificate id. expected: {expected}, re-computed from the certificate \
+         in DB: {got}"
+    )]
+    CertificateIdHashMismatch {
+        expected: CertificateId,
+        got: CertificateId,
+    },
+
+    #[error("Latest certificate header for certificate {certificate_id} not found")]
+    NotFound { certificate_id: CertificateId },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GetLatestSettledClaimError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error("Cound not get latest settled claim, inconsistent state for {network_id}")]
+    InconsistentState {
+        network_id: NetworkId,
+        height: Height,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GetNetworkStateError {
+    #[error("Unable to determine network type for network {network_id}")]
+    UnknownNetworkType { network_id: NetworkId },
+
+    #[error("Could not get network status for network {network_id}, internal error: {source}")]
+    InternalError {
+        network_id: NetworkId,
+        #[source]
+        source: eyre::Error,
+    },
 }

@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use agglayer_primitives::U256;
 use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, FixedBytes, B256},
@@ -81,7 +82,7 @@ pub enum L1RpcError {
     #[error("Unable to get transaction")]
     UnableToGetTransaction {
         #[source]
-        source: Box<anyhow::Error>,
+        source: eyre::Error,
     },
     #[error("Unable to parse aggchain vkey")]
     UnableToParseAggchainVkey,
@@ -91,6 +92,12 @@ pub enum L1RpcError {
     AggchainHashFetchFailed,
     #[error("The rollup contract is either invalid or not set for the specified rollup id {0}")]
     InvalidRollupContract(u32),
+    #[error("Unable to fetch the multisig signers: {0}")]
+    MultisigSignersFetchFailed(#[source] alloy::contract::Error),
+    #[error("Unable to fetch the multisig threshold: {0}")]
+    MultisigThresholdFetchFailed(#[source] alloy::contract::Error),
+    #[error("Threshold value is too large to fit in usize. fetched value: {fetched}")]
+    ThresholdTypeOverflow { fetched: U256 },
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
@@ -208,7 +215,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{str::FromStr, sync::Arc};
+    use std::sync::Arc;
 
     use prover_alloy::build_alloy_fill_provider;
     use url::Url;
@@ -216,32 +223,45 @@ mod tests {
     use super::*;
     use crate::rollup::RollupContract;
 
+    struct ContractSetup {
+        rollup_manager: Address,
+        ger_contract: Address,
+    }
+
+    impl ContractSetup {
+        pub fn new() -> Self {
+            Self {
+                rollup_manager: "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff" // bali: 0xe2ef6215adc132df6913c8dd16487abf118d1764
+                    .parse()
+                    .unwrap(),
+                ger_contract: "0xAd1490c248c5d3CbAE399Fd529b79B42984277DF" // bali: 0x2968d6d736178f8fe7393cc33c87f29d9c287e78
+                    .parse()
+                    .unwrap(),
+            }
+        }
+    }
+
     #[tokio::test]
     #[ignore = "reaches external endpoint"]
     async fn test_fetch_proper_default_l1_leaf_count() {
+        let rpc_url = std::env::var("L1_RPC_ENDPOINT")
+            .expect("L1_RPC_ENDPOINT must be defined")
+            .parse::<Url>()
+            .expect("Invalid URL format");
+
         let rpc = build_alloy_fill_provider(
-            &Url::from_str("https://sepolia.gateway.tenderly.co/adEEbh8f3HykepCfd151V").unwrap(),
+            &rpc_url,
             prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
             prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
         )
         .expect("valid alloy provider");
 
-        // Cardona contracts
-        let rollup_manager_contract: agglayer_primitives::Address =
-            "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff" // bali: 0xe2ef6215adc132df6913c8dd16487abf118d1764
-                .parse()
-                .unwrap();
-
-        let ger_contract: agglayer_primitives::Address =
-            "0xAd1490c248c5d3CbAE399Fd529b79B42984277DF" // bali: 0x2968d6d736178f8fe7393cc33c87f29d9c287e78
-                .parse()
-                .unwrap();
-
+        let contracts = ContractSetup::new();
         let l1_rpc = Arc::new(
             L1RpcClient::try_new(
                 Arc::new(rpc.clone()),
-                contracts::PolygonRollupManager::new(rollup_manager_contract.into(), rpc),
-                ger_contract.into(),
+                contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
+                contracts.ger_contract,
                 100,
             )
             .await
@@ -263,5 +283,52 @@ mod tests {
             "L1 info root for leaf count {latest_l1_leaf} is: {}",
             FixedBytes::<32>::from(_l1_info_root)
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "reaches external endpoint"]
+    async fn test_fetch_multisig_context() {
+        let rpc_url = std::env::var("L1_RPC_ENDPOINT")
+            .expect("L1_RPC_ENDPOINT must be defined")
+            .parse::<Url>()
+            .expect("Invalid URL format");
+
+        let rpc = build_alloy_fill_provider(
+            &rpc_url,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
+        )
+        .expect("valid alloy provider");
+
+        let contracts = ContractSetup::new();
+        let l1_rpc = Arc::new(
+            L1RpcClient::try_new(
+                Arc::new(rpc.clone()),
+                contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
+                contracts.ger_contract,
+                100,
+            )
+            .await
+            .unwrap(),
+        );
+
+        let rollup_contract_address: agglayer_primitives::Address =
+            "0x5D884D7808DF483CB575Df8B4C480a1880462B74"
+                .parse()
+                .unwrap();
+
+        let (signers, threshold) = l1_rpc
+            .get_multisig_context(rollup_contract_address)
+            .await
+            .unwrap();
+
+        let expected_signers: Vec<agglayer_primitives::Address> =
+            vec!["0x0cae25c8623761783fe4ce241c9b428126a7612a"
+                .parse()
+                .unwrap()];
+        let expected_threshold = 1;
+
+        assert_eq!(signers, expected_signers);
+        assert_eq!(threshold, expected_threshold);
     }
 }

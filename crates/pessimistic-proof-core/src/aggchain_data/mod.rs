@@ -7,7 +7,6 @@
 //! stark proof proving a specified statement which can be abstracted here.
 
 use agglayer_primitives::{Address, Digest, Signature};
-use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
 
 pub use crate::aggchain_data::{
@@ -43,8 +42,6 @@ pub enum AggchainData {
     },
     /// Multisig only
     MultisigOnly(MultiSignature),
-    /// Aggchain proof only (stark proof)
-    AggchainProofOnly(AggchainProof),
     /// Multisig and an aggchain proof
     MultisigAndAggchainProof {
         /// Multisig
@@ -77,10 +74,6 @@ impl AggchainData {
                     .verify(commitment)
                     .map_err(ProofError::InvalidMultisig)?;
             }
-            AggchainData::AggchainProofOnly(aggchain_proof) => {
-                // Panic upon invalid proof.
-                aggchain_proof.verify_aggchain_proof(&constrained_values);
-            }
             AggchainData::MultisigAndAggchainProof {
                 multisig,
                 aggchain_proof,
@@ -110,32 +103,24 @@ impl AggchainData {
         signature: &Signature,
         constrained_values: ConstrainedValues,
     ) -> Result<PessimisticRootCommitmentVersion, ProofError> {
-        let verify_signature = |prehash: B256, signature: &Signature| {
+        let signature_values = SignatureCommitmentValues::new(&constrained_values, None);
+
+        let is_signed_with_version = |version: SignatureCommitmentVersion| {
+            let prehash = signature_values.commitment(version);
             signature
                 .recover_address_from_prehash(&prehash)
+                .map(|recovered| *signer == recovered)
                 .map_err(|_| ProofError::InvalidSignature)
         };
 
-        let signature_commitment = SignatureCommitmentValues::new(&constrained_values, None);
-
-        let target_pp_root_version = {
-            if *signer
-                == verify_signature(
-                    signature_commitment.commitment(SignatureCommitmentVersion::V3),
-                    signature,
-                )?
-            {
-                PessimisticRootCommitmentVersion::V3
-            } else if *signer
-                == verify_signature(
-                    signature_commitment.commitment(SignatureCommitmentVersion::V2),
-                    signature,
-                )?
-            {
-                PessimisticRootCommitmentVersion::V2
-            } else {
-                return Err(ProofError::InvalidSignature);
-            }
+        let target_pp_root_version = if is_signed_with_version(SignatureCommitmentVersion::V3)?
+            || is_signed_with_version(SignatureCommitmentVersion::V5)?
+        {
+            PessimisticRootCommitmentVersion::V3
+        } else if is_signed_with_version(SignatureCommitmentVersion::V2)? {
+            PessimisticRootCommitmentVersion::V2
+        } else {
+            return Err(ProofError::InvalidSignature);
         };
 
         // Verify initial state commitment and PP root matches

@@ -33,8 +33,29 @@ impl TryFrom<AggchainData> for global::Payload {
                 aggchain_params,
                 signature,
                 public_values,
-            } => global::Payload::AggchainProofOnly {
-                signature: *signature.ok_or(AggchainDataError::MissingSignature)?,
+            } => global::Payload::MultisigAndAggchainProof {
+                aggchain_proof: aggchain_proof::Payload {
+                    proof,
+                    aggchain_params,
+                    public_values,
+                },
+                multisig: multisig::Payload {
+                    signatures: vec![*signature.ok_or(AggchainDataError::MissingSignature)?],
+                },
+            },
+            AggchainData::MultisigOnly(multisig) => {
+                global::Payload::MultisigOnly(multisig::Payload::from(&multisig))
+            }
+            AggchainData::MultisigAndAggchainProof {
+                multisig,
+                aggchain_proof:
+                    agglayer_interop_types::aggchain_proof::AggchainProof {
+                        proof,
+                        aggchain_params,
+                        public_values,
+                    },
+            } => global::Payload::MultisigAndAggchainProof {
+                multisig: multisig::Payload::from(&multisig),
                 aggchain_proof: aggchain_proof::Payload {
                     proof,
                     aggchain_params,

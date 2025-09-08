@@ -5,7 +5,7 @@ use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainVkeyHash, L1RpcError, Settler};
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
-use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
+use agglayer_types::{Address, Height, LocalNetworkStateData, NetworkId};
 use alloy::{
     contract::Error as ContractError,
     network::Ethereum,
@@ -70,6 +70,11 @@ async fn happy_path() {
         .expect_get_trusted_sequencer_address()
         .once()
         .returning(move |_, _| Ok(signer));
+
+    l1_rpc
+        .expect_get_rollup_contract_address()
+        .once()
+        .returning(|_| Ok(Address::ZERO));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -172,6 +177,11 @@ async fn prover_timeout() {
         .returning(move |_, _| Ok(signer));
 
     l1_rpc
+        .expect_get_rollup_contract_address()
+        .once()
+        .returning(|_| Ok(Address::ZERO));
+
+    l1_rpc
         .expect_default_l1_info_tree_entry()
         .once()
         .returning(|| (0u32, [1u8; 32]));
@@ -236,6 +246,11 @@ mockall::mock! {
             rollup_address: agglayer_types::primitives::Address,
             aggchain_data: Bytes,
         ) -> Result<[u8; 32], L1RpcError>;
+
+        async fn get_multisig_context(
+            &self,
+            rollup_address: agglayer_types::Address,
+        ) -> Result<(Vec<agglayer_types::Address>, usize), L1RpcError>;
     }
 
     #[async_trait::async_trait]

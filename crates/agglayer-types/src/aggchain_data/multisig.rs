@@ -24,12 +24,28 @@ pub enum MultisigError {
 /// Multisig data from the chain.
 #[derive(Clone, Debug)]
 pub struct Payload {
-    signatures: Vec<Signature>,
+    pub(crate) signatures: Vec<Signature>,
 }
 
 impl From<Vec<Signature>> for Payload {
     fn from(signatures: Vec<Signature>) -> Self {
         Self { signatures }
+    }
+}
+
+impl From<&[Signature]> for Payload {
+    fn from(signatures: &[Signature]) -> Self {
+        Self {
+            signatures: signatures.to_vec(),
+        }
+    }
+}
+
+impl From<&agglayer_interop_types::aggchain_proof::MultisigPayload> for Payload {
+    fn from(value: &agglayer_interop_types::aggchain_proof::MultisigPayload) -> Self {
+        Self {
+            signatures: value.0.clone().into_iter().flatten().collect(),
+        }
     }
 }
 

@@ -44,7 +44,7 @@ pub enum CertificationError {
     /// SP1 native execute call which includes the aggchain proof stark
     /// verification failed.
     #[error("Sp1-native execution failed.")]
-    Sp1ExecuteFailed(#[source] anyhow::Error),
+    Sp1ExecuteFailed(#[source] eyre::Error),
 
     /// The PP public values differ between the ones computed during the
     /// rust native execution, and the ones computed by the sp1 zkvm execution.
@@ -128,6 +128,11 @@ pub enum CertificationError {
 
     #[error(transparent)]
     Other(eyre::Error),
+
+    /// Multisig context (e.g., signers and threshold) fail to be fetched from
+    /// the L1.
+    #[error("Unable to fetch the multisig context: {0}")]
+    MultisigContextFetchFailed(#[source] L1RpcError),
 }
 
 impl From<CertificationError> for CertificateStatusError {
@@ -161,7 +166,7 @@ impl From<CertificationError> for CertificateStatusError {
                 CertificateStatusError::TypeConversionError(source)
             }
             error => {
-                let error = anyhow::Error::from(error);
+                let error = eyre::Error::from(error);
                 CertificateStatusError::InternalError(format!("{error:?}"))
             }
         }
