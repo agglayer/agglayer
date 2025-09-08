@@ -41,7 +41,7 @@ pub struct SettledClaim {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct NetworkState {
+pub struct NetworkInfo {
     /// The current status of the network (e.g., "active", "syncing", "error").
     pub network_status: NetworkStatus,
     /// The aggchain type of a network
