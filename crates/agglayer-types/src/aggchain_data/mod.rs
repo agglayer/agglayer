@@ -12,7 +12,7 @@ pub use crate::aggchain_data::{
         AggchainDataError, Context as CertificateAggchainDataCtx,
         Payload as CertificateAggchainData,
     },
-    multisig::{Ctx as MultisigCtx, MultisigError, Payload as MultisigPayload},
+    multisig::{Ctx as MultisigCtx, Payload as MultisigPayload},
     PayloadWithCtx as CertificateAggchainDataWithCtx,
 };
 
@@ -40,7 +40,7 @@ impl TryFrom<AggchainData> for global::Payload {
                     public_values,
                 },
                 multisig: multisig::Payload {
-                    signatures: vec![*signature.ok_or(AggchainDataError::MissingSignature)?],
+                    signatures: vec![Some(*signature.ok_or(AggchainDataError::MissingSignature)?)],
                 },
             },
             AggchainData::MultisigOnly(multisig) => {

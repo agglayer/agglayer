@@ -6,7 +6,7 @@ use thiserror::Error;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiSignature {
     /// Set of the indexed signatures
-    pub signatures: Vec<(usize, Signature)>,
+    pub signatures: Vec<Option<Signature>>,
     /// Set of all registered signers
     pub expected_signers: Vec<Address>,
     /// Inclusive minimal number of signers.
@@ -15,17 +15,25 @@ pub struct MultiSignature {
 
 #[derive(Clone, Debug, Error, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MultisigError {
+    #[error("Too many signers provided. got: {num}, committee size: {max}.")]
+    TooManySigners { num: usize, max: usize },
+
     #[error("Multisig is under the required threshold. got: {got}, expected: {expected}")]
     UnderThreshold { got: usize, expected: usize },
 
-    #[error("At least one signature is invalid or from an unregistered signer.")]
-    HasInvalidSignature,
+    #[error("Signature claimed to be from signer {idx} is invalid.")]
+    InvalidSignature { idx: usize },
 
-    #[error("At least one signer comes duplicated. signer: {signer}.")]
-    HasDuplicateSigner { signer: Address },
-
-    #[error("Out of bounds signer index: signer index: {idx}, committee size: {total}.")]
-    OutOfBoundSignerIndex { idx: usize, total: usize },
+    #[error(
+        "Signature #{idx} is wrong. Expected signer {expected_signer}, but commitment \
+         {commitment} recovers signer {recovered_signer}."
+    )]
+    InvalidSigner {
+        idx: usize,
+        expected_signer: Address,
+        recovered_signer: Address,
+        commitment: Digest,
+    },
 }
 
 impl MultiSignature {
@@ -48,53 +56,39 @@ impl MultiSignature {
         keccak256(&buf).into()
     }
 
-    /// Ensure that the signatures refer to unique and existing signer.
-    fn unique_signers(&self) -> Result<(), MultisigError> {
-        let total = self.expected_signers.len();
-        let mut seen = vec![false; total];
-
-        for &(idx, _) in &self.signatures {
-            if idx >= total {
-                return Err(MultisigError::OutOfBoundSignerIndex { idx, total });
-            }
-
-            if seen[idx] {
-                return Err(MultisigError::HasDuplicateSigner {
-                    signer: self.expected_signers[idx],
-                });
-            }
-
-            seen[idx] = true;
-        }
-
-        Ok(())
-    }
-
     /// Verify signatures and ensure they are all from the expected set.
     pub fn verify(&self, commitment: B256) -> Result<(), MultisigError> {
-        self.unique_signers()?;
-
-        let has_invalid_signature = self.signatures.iter().any(|&(signer_idx, signature)| {
-            self.expected_signers
-                .get(signer_idx)
-                .and_then(|expected| {
-                    signature
-                        .recover_address_from_prehash(&commitment)
-                        .ok()
-                        .map(|recovered| recovered != *expected)
-                })
-                .unwrap_or(true)
-        });
-
-        if has_invalid_signature {
-            return Err(MultisigError::HasInvalidSignature);
+        if self.signatures.len() > self.expected_signers.len() {
+            return Err(MultisigError::TooManySigners {
+                num: self.signatures.len(),
+                max: self.expected_signers.len(),
+            });
         }
 
-        if self.signatures.len() < self.threshold {
+        let nb_signatures = self.signatures.iter().filter(|s| s.is_some()).count();
+        if nb_signatures < self.threshold {
             return Err(MultisigError::UnderThreshold {
-                got: self.signatures.len(),
+                got: nb_signatures,
                 expected: self.threshold,
             });
+        }
+
+        for (idx, signature) in self.signatures.iter().enumerate() {
+            let Some(signature) = signature else {
+                continue; // No signature is a valid signature
+            };
+            let recovered_signer = signature
+                .recover_address_from_prehash(&commitment)
+                .map_err(|_| MultisigError::InvalidSignature { idx })?;
+            let expected_signer = self.expected_signers[idx];
+            if recovered_signer != expected_signer {
+                return Err(MultisigError::InvalidSigner {
+                    idx,
+                    expected_signer,
+                    recovered_signer,
+                    commitment: Digest::from(commitment),
+                });
+            }
         }
 
         Ok(())
@@ -122,16 +116,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case(vec![0, 1], 2, Ok(()))]
-    #[case(vec![0], 2, Err(MultisigError::UnderThreshold { got: 1, expected: 2 }))]
-    #[case(vec![2], 1, Err(MultisigError::OutOfBoundSignerIndex { idx: 2, total: 2 }))]
-    #[case(
-        vec![0, 0],
-        2,
-        Err(MultisigError::HasDuplicateSigner { signer: wallet(0).address().into() })
-    )]
+    #[case(vec![true, true], 2, Ok(()))]
+    #[case(vec![true, false], 2, Err(MultisigError::UnderThreshold { got: 1, expected: 2 }))]
+    #[case(vec![false, false, true], 1, Err(MultisigError::TooManySigners { num: 3, max: 2 }))]
     fn verify_cases(
-        #[case] signer_indices: Vec<usize>,
+        #[case] signers: Vec<bool>,
         #[case] threshold: usize,
         #[case] expected: Result<(), MultisigError>,
     ) {
@@ -144,11 +133,11 @@ mod tests {
             .map(|sk| sk.address().into())
             .collect();
 
-        let signatures: Vec<(usize, Signature)> = signer_indices
+        let signatures: Vec<Option<Signature>> = signers
             .iter()
-            .map(|&idx| {
-                let sig = wallet(idx).sign_hash_sync(&prehash).unwrap().into();
-                (idx, sig)
+            .enumerate()
+            .map(|(idx, enabled)| {
+                enabled.then(|| wallets[idx].sign_hash_sync(&prehash).unwrap().into())
             })
             .collect();
 

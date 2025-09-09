@@ -1,7 +1,6 @@
 ---
 source: crates/agglayer-storage/src/types/certificate/tests/structure.rs
 expression: "&registry"
-snapshot_kind: text
 ---
 {
   "AggchainDataError": {
@@ -14,7 +13,7 @@ snapshot_kind: text
       "1": {
         "InvalidMultisig": {
           "NEWTYPE": {
-            "TYPENAME": "agglayer_types::aggchain_data::MultisigError"
+            "TYPENAME": "MultisigError"
           }
         }
       },
@@ -162,6 +161,18 @@ snapshot_kind: text
   "MultisigError": {
     "ENUM": {
       "0": {
+        "TooManySigners": {
+          "STRUCT": [
+            {
+              "num": "U64"
+            },
+            {
+              "max": "U64"
+            }
+          ]
+        }
+      },
+      "1": {
         "UnderThreshold": {
           "STRUCT": [
             {
@@ -173,28 +184,35 @@ snapshot_kind: text
           ]
         }
       },
-      "1": {
-        "HasInvalidSignature": "UNIT"
-      },
       "2": {
-        "HasDuplicateSigner": {
+        "InvalidSignature": {
           "STRUCT": [
             {
-              "signer": {
-                "TYPENAME": "agglayer_primitives::Address"
-              }
+              "idx": "U64"
             }
           ]
         }
       },
       "3": {
-        "OutOfBoundSignerIndex": {
+        "InvalidSigner": {
           "STRUCT": [
             {
               "idx": "U64"
             },
             {
-              "total": "U64"
+              "expected_signer": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "recovered_signer": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "commitment": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
             }
           ]
         }
@@ -678,52 +696,6 @@ snapshot_kind: text
           "NEWTYPE": {
             "TYPENAME": "AggchainDataError"
           }
-        }
-      }
-    }
-  },
-  "agglayer_types::aggchain_data::MultisigError": {
-    "ENUM": {
-      "0": {
-        "UnderThreshold": {
-          "STRUCT": [
-            {
-              "got": "U64"
-            },
-            {
-              "expected": "U64"
-            }
-          ]
-        }
-      },
-      "1": {
-        "InvalidSignature": "UNIT"
-      },
-      "2": {
-        "UnknownRecoveredSigner": {
-          "STRUCT": [
-            {
-              "recovered": {
-                "TYPENAME": "agglayer_primitives::Address"
-              }
-            },
-            {
-              "prehash": {
-                "TYPENAME": "agglayer_primitives::Digest"
-              }
-            }
-          ]
-        }
-      },
-      "3": {
-        "HasDuplicateSigner": {
-          "STRUCT": [
-            {
-              "signer": {
-                "TYPENAME": "agglayer_primitives::Address"
-              }
-            }
-          ]
         }
       }
     }
