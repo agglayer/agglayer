@@ -20,17 +20,15 @@ use error::SignatureVerificationError;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
-pub use self::error::{
-    CertificateRetrievalError, CertificateSubmissionError, GetNetworkStateError,
-};
+pub use self::error::{CertificateRetrievalError, CertificateSubmissionError, GetNetworkInfoError};
 use crate::{
     error::{GetLatestCertificateError, GetLatestSettledClaimError, ProofRetrievalError},
-    network_state::{NetworkState, NetworkType, SettledClaim},
+    network_info::{NetworkInfo, NetworkType, SettledClaim},
 };
 
 pub mod error;
 
-pub mod network_state;
+pub mod network_info;
 
 /// The RPC agglayer service implementation.
 pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
@@ -433,12 +431,12 @@ where
         Ok(None)
     }
 
-    /// Assemble the current state of the specified network from
+    /// Assemble the current information of the specified network from
     /// the data in various sources.
-    pub fn get_network_state(
+    pub fn get_network_info(
         &self,
         network_id: NetworkId,
-    ) -> Result<NetworkState, GetNetworkStateError> {
+    ) -> Result<NetworkInfo, GetNetworkInfoError> {
         debug!("Received request to get the network state for rollup {network_id}");
 
         // Get the latest settled certificate for the network
@@ -454,7 +452,7 @@ where
                         ?error,
                         "Failed to get latest settled certificate for network {network_id}"
                     );
-                    return Err(GetNetworkStateError::InternalError {
+                    return Err(GetNetworkInfoError::InternalError {
                         network_id,
                         source: error.into(),
                     });
@@ -473,7 +471,7 @@ where
                         ?error,
                         "Failed to get latest pending certificate for network {network_id}"
                     );
-                    return Err(GetNetworkStateError::InternalError {
+                    return Err(GetNetworkInfoError::InternalError {
                         network_id,
                         source: error.into(),
                     });
@@ -499,10 +497,10 @@ where
                     } => Ok(NetworkType::MultisigAndAggchainProof),
                 }
             }
-            Ok(None) => Err(GetNetworkStateError::UnknownNetworkType { network_id }),
+            Ok(None) => Err(GetNetworkInfoError::UnknownNetworkType { network_id }),
             Err(error) => {
                 error!(?error, "Unable to determine network type");
-                Err(GetNetworkStateError::InternalError {
+                Err(GetNetworkInfoError::InternalError {
                     network_id,
                     source: error.into(),
                 })
@@ -513,7 +511,7 @@ where
         // in regard to the agglayer-node. We could have multiple kind of status
         // that could represent a network sending too many unprovable certs,
         // or even a network that didn't settle for N epochs and such (optional).
-        let network_status = network_state::NetworkStatus::Active;
+        let network_status = network_info::NetworkStatus::Active;
 
         // Extract settled certificate data
         let settled_height = latest_settled_certificate.as_ref().map(|cert| cert.height);
@@ -536,7 +534,7 @@ where
                                 "get network status: failed to deserialize pessimistic proof \
                                  output"
                             );
-                            return Err(GetNetworkStateError::InternalError {
+                            return Err(GetNetworkInfoError::InternalError {
                                 network_id,
                                 source: error.into(),
                             });
@@ -552,7 +550,7 @@ where
                          {certificate_id}",
                         certificate_id = cert.certificate_id
                     );
-                    return Err(GetNetworkStateError::InternalError {
+                    return Err(GetNetworkInfoError::InternalError {
                         network_id,
                         source: error.into(),
                     });
@@ -574,7 +572,7 @@ where
                     "get network status: failed to read local network state for network \
                      {network_id}"
                 );
-                return Err(GetNetworkStateError::InternalError {
+                return Err(GetNetworkInfoError::InternalError {
                     network_id,
                     source: error.into(),
                 });
@@ -609,7 +607,7 @@ where
             self.get_latest_settled_claim(network_id, height)
                 .map_err(|error| {
                     error!(?error, "Failed to get last settled claim");
-                    GetNetworkStateError::InternalError {
+                    GetNetworkInfoError::InternalError {
                         network_id,
                         source: error.into(),
                     }
@@ -618,7 +616,7 @@ where
             None
         };
 
-        Ok(NetworkState {
+        Ok(NetworkInfo {
             network_status,
             network_type,
             network_id,

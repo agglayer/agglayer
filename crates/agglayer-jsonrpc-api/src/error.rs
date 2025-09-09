@@ -249,8 +249,8 @@ impl From<agglayer_rpc::CertificateRetrievalError> for Error {
     }
 }
 
-impl From<agglayer_rpc::GetNetworkStateError> for Error {
-    fn from(err: agglayer_rpc::GetNetworkStateError) -> Self {
+impl From<agglayer_rpc::GetNetworkInfoError> for Error {
+    fn from(err: agglayer_rpc::GetNetworkInfoError) -> Self {
         // Since NetworkStateRetrievalError is currently empty, convert to internal
         // error
         Self::internal(format!("Network state retrieval error: {err}"))

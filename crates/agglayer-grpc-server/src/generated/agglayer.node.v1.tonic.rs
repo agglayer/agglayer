@@ -398,11 +398,11 @@ pub mod node_state_service_server {
             tonic::Response<super::GetLatestCertificateHeaderResponse>,
             tonic::Status,
         >;
-        async fn get_network_state(
+        async fn get_network_info(
             &self,
-            request: tonic::Request<super::GetNetworkStateRequest>,
+            request: tonic::Request<super::GetNetworkInfoRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetNetworkStateResponse>,
+            tonic::Response<super::GetNetworkInfoResponse>,
             tonic::Status,
         >;
     }
@@ -585,25 +585,25 @@ pub mod node_state_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/agglayer.node.v1.NodeStateService/GetNetworkState" => {
+                "/agglayer.node.v1.NodeStateService/GetNetworkInfo" => {
                     #[allow(non_camel_case_types)]
-                    struct GetNetworkStateSvc<T: NodeStateService>(pub Arc<T>);
+                    struct GetNetworkInfoSvc<T: NodeStateService>(pub Arc<T>);
                     impl<
                         T: NodeStateService,
-                    > tonic::server::UnaryService<super::GetNetworkStateRequest>
-                    for GetNetworkStateSvc<T> {
-                        type Response = super::GetNetworkStateResponse;
+                    > tonic::server::UnaryService<super::GetNetworkInfoRequest>
+                    for GetNetworkInfoSvc<T> {
+                        type Response = super::GetNetworkInfoResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::GetNetworkStateRequest>,
+                            request: tonic::Request<super::GetNetworkInfoRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as NodeStateService>::get_network_state(&inner, request)
+                                <T as NodeStateService>::get_network_info(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -615,7 +615,7 @@ pub mod node_state_service_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = GetNetworkStateSvc(inner);
+                        let method = GetNetworkInfoSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
