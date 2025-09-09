@@ -1,14 +1,11 @@
 use agglayer_interop_types::LocalExitRoot;
 use agglayer_primitives::{Address, SignatureError};
 use agglayer_tries::error::SmtError;
-use pessimistic_proof::{error::ProofVerificationError, ProofError};
+use pessimistic_proof::{core::MultisigError, error::ProofVerificationError, ProofError};
 use serde::{Deserialize, Serialize};
 use unified_bridge::{GlobalIndex, LocalExitTreeError, NetworkId, TokenInfo};
 
-use crate::{
-    aggchain_data::{AggchainDataError, MultisigError},
-    Digest, GenerationType,
-};
+use crate::{aggchain_data::AggchainDataError, Digest, GenerationType};
 
 #[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename = "agglayer_types::Error")]

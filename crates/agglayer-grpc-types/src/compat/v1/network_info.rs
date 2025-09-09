@@ -1,6 +1,6 @@
 use agglayer_interop::grpc::v1::FixedBytes32;
-use agglayer_rpc::network_state::{
-    NetworkState as AgglayerRpcNetworkState, NetworkStatus as AgglayerRpcNetworkStatus,
+use agglayer_rpc::network_info::{
+    NetworkInfo as AgglayerRpcNetworkInfo, NetworkStatus as AgglayerRpcNetworkStatus,
     NetworkType as AgglayerRpcNetworkType,
 };
 use agglayer_types::CertificateStatus as AgglayerCertificateStatus;
@@ -42,8 +42,8 @@ impl From<AgglayerCertificateStatus> for v1::CertificateStatus {
     }
 }
 
-impl From<AgglayerRpcNetworkState> for v1::NetworkState {
-    fn from(value: AgglayerRpcNetworkState) -> Self {
+impl From<AgglayerRpcNetworkInfo> for v1::NetworkInfo {
+    fn from(value: AgglayerRpcNetworkInfo) -> Self {
         let network_status: v1::NetworkStatus = value.network_status.into();
         let network_type: v1::NetworkType = value.network_type.into();
         let settled_pp_root = value.settled_pp_root.map(FixedBytes32::from);
@@ -64,7 +64,7 @@ impl From<AgglayerRpcNetworkState> for v1::NetworkState {
                     message: error.to_string().into_bytes().into(),
                 });
 
-        v1::NetworkState {
+        v1::NetworkInfo {
             network_status: network_status as i32,
             network_type: network_type as i32,
             network_id: value.network_id.into(),

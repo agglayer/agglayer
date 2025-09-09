@@ -158,7 +158,19 @@ pub enum GetLatestCertificateError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum GetNetworkStateError {
+pub enum GetLatestSettledClaimError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error("Cound not get latest settled claim, inconsistent state for {network_id}")]
+    InconsistentState {
+        network_id: NetworkId,
+        height: Height,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GetNetworkInfoError {
     #[error("Unable to determine network type for network {network_id}")]
     UnknownNetworkType { network_id: NetworkId },
 

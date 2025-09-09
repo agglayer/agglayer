@@ -14,7 +14,7 @@ mod certificate_header;
 mod certificate_id;
 mod epoch_configuration;
 mod error_kinds;
-mod network_state;
+mod network_info;
 
 pub use agglayer_interop::grpc::compat::v1::{Error, ErrorKind};
 

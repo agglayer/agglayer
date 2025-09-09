@@ -394,11 +394,11 @@ pub mod node_state_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
-        pub async fn get_network_state(
+        pub async fn get_network_info(
             &mut self,
-            request: impl tonic::IntoRequest<super::GetNetworkStateRequest>,
+            request: impl tonic::IntoRequest<super::GetNetworkInfoRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetNetworkStateResponse>,
+            tonic::Response<super::GetNetworkInfoResponse>,
             tonic::Status,
         > {
             self.inner
@@ -411,14 +411,14 @@ pub mod node_state_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/agglayer.node.v1.NodeStateService/GetNetworkState",
+                "/agglayer.node.v1.NodeStateService/GetNetworkInfo",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
                         "agglayer.node.v1.NodeStateService",
-                        "GetNetworkState",
+                        "GetNetworkInfo",
                     ),
                 );
             self.inner.unary(req, path, codec).await

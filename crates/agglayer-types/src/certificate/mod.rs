@@ -210,13 +210,13 @@ impl Certificate {
         signatures: MultisigPayload,
         ctx: MultisigCtx,
     ) -> Result<(), SignerError> {
-        let multisig_with_ctx = PayloadWithCtx(signatures, ctx);
-
         // Verify the multisig from the chain payload and the L1 context
-        let _witness_data: pessimistic_proof::core::MultiSignature =
-            multisig_with_ctx
-                .try_into()
-                .map_err(SignerError::InvalidMultisig)?;
+        let prehash = ctx.prehash;
+        let multisig_with_ctx = PayloadWithCtx(signatures, ctx);
+        let witness_data: pessimistic_proof::core::MultiSignature = multisig_with_ctx.into();
+        witness_data
+            .verify(prehash)
+            .map_err(SignerError::InvalidMultisig)?;
 
         Ok(())
     }

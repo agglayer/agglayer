@@ -5,7 +5,7 @@ package agglayer.node.v1;
 import "agglayer/node/types/v1/certificate.proto";
 import "agglayer/node/types/v1/certificate_header.proto";
 import "agglayer/node/types/v1/certificate_id.proto";
-import "agglayer/node/types/v1/network_state.proto";
+import "agglayer/node/types/v1/network_info.proto";
 
 // Service for querying node state.
 service NodeStateService {
@@ -15,8 +15,8 @@ service NodeStateService {
   // Method used to get the latest known certificate header for a network.
   rpc GetLatestCertificateHeader(GetLatestCertificateHeaderRequest) returns (GetLatestCertificateHeaderResponse);
 
-  // Method used to get current network state as seen by this node.
-  rpc GetNetworkState(GetNetworkStateRequest) returns (GetNetworkStateResponse);
+  // Method used to get current network info as seen by this node.
+  rpc GetNetworkInfo(GetNetworkInfoRequest) returns (GetNetworkInfoResponse);
 }
 
 // Error kind for GetCertificateHeader RPC.
@@ -49,22 +49,22 @@ enum GetLatestCertificateHeaderErrorKind {
   GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND = 3;
 }
 
-// Error kind for GetNetworkState RPC.
-enum GetNetworkStateErrorKind {
+// Error kind for GetNetworkInfo RPC.
+enum GetNetworkInfoErrorKind {
   // Unspecified error.
-  GET_NETWORK_STATE_ERROR_KIND_UNSPECIFIED = 0;
+  GET_NETWORK_INFO_ERROR_KIND_UNSPECIFIED = 0;
 
   // Invalid network ID/network not found.
-  GET_NETWORK_STATE_ERROR_KIND_INVALID_NETWORK_ID = 1;
+  GET_NETWORK_INFO_ERROR_KIND_INVALID_NETWORK_ID = 1;
 
   // Invalid network state.
-  GET_NETWORK_STATE_ERROR_KIND_NETWORK_STATE_ERROR = 2;
+  GET_NETWORK_INFO_ERROR_KIND_NETWORK_INFO_ERROR = 2;
 
   // Could not determine network type
-  GET_NETWORK_STATE_ERROR_KIND_UNKNOWN_NETWORK_TYPE = 3;
+  GET_NETWORK_INFO_ERROR_KIND_UNKNOWN_NETWORK_TYPE = 3;
 
   // Internal service error.
-  GET_NETWORK_STATE_ERROR_KIND_INTERNAL_ERROR = 4;
+  GET_NETWORK_INFO_ERROR_KIND_INTERNAL_ERROR = 4;
 }
 
 // Request to get a CertificateHeader for a particular CertificateId.
@@ -106,15 +106,14 @@ message GetLatestCertificateHeaderResponse {
   types.v1.CertificateHeader certificate_header = 1;
 }
 
-
 // Request to get the current state of the network, as seen by this node.
-message GetNetworkStateRequest {
+message GetNetworkInfoRequest {
   // The network identifier.
   uint32 network_id = 1;
 }
 
-// GetNetworkStateResponse contains the current state information for a network.
-message GetNetworkStateResponse {
+// GetNetworkInfoResponse contains the current state information for a network.
+message GetNetworkInfoResponse {
   // The current state of the network.
-  types.v1.NetworkState network_state = 1;
+  types.v1.NetworkInfo network_info = 1;
 }
