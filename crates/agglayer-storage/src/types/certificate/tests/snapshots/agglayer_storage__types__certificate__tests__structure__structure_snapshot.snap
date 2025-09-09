@@ -198,6 +198,21 @@ expression: "&registry"
           "STRUCT": [
             {
               "idx": "U64"
+            },
+            {
+              "expected_signer": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "recovered_signer": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "commitment": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
             }
           ]
         }

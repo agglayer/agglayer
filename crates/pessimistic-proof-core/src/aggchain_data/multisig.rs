@@ -24,8 +24,16 @@ pub enum MultisigError {
     #[error("Signature claimed to be from signer {idx} is invalid.")]
     InvalidSignature { idx: usize },
 
-    #[error("Signature claimed to be from signer {idx} is from another signer.")]
-    InvalidSigner { idx: usize },
+    #[error(
+        "Signature #{idx} is wrong. Expected signer {expected_signer}, but commitment \
+         {commitment} recovers signer {recovered_signer}."
+    )]
+    InvalidSigner {
+        idx: usize,
+        expected_signer: Address,
+        recovered_signer: Address,
+        commitment: Digest,
+    },
 }
 
 impl MultiSignature {
@@ -69,12 +77,17 @@ impl MultiSignature {
             let Some(signature) = signature else {
                 continue; // No signature is a valid signature
             };
-            let recovered = signature
+            let recovered_signer = signature
                 .recover_address_from_prehash(&commitment)
                 .map_err(|_| MultisigError::InvalidSignature { idx })?;
-            let expected = self.expected_signers[idx];
-            if recovered != expected {
-                return Err(MultisigError::InvalidSigner { idx });
+            let expected_signer = self.expected_signers[idx];
+            if recovered_signer != expected_signer {
+                return Err(MultisigError::InvalidSigner {
+                    idx,
+                    expected_signer,
+                    recovered_signer,
+                    commitment: Digest::from(commitment),
+                });
             }
         }
 
