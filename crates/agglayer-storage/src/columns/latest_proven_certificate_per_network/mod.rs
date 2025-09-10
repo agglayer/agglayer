@@ -1,7 +1,7 @@
 use agglayer_types::{CertificateId, Height, NetworkId};
 use serde::{Deserialize, Serialize};
 
-use super::{Codec, ColumnSchema, LATEST_PROVEN_CERTIFICATE_PER_NETWORK_CF};
+use super::{ColumnSchema, LATEST_PROVEN_CERTIFICATE_PER_NETWORK_CF};
 
 /// Column family for the latest proven certificate per network.
 /// The key is the network_id and the value is the certificateID and
@@ -19,7 +19,7 @@ pub struct ProvenCertificate(pub CertificateId, pub NetworkId, pub Height);
 
 pub type Key = NetworkId;
 
-impl Codec for ProvenCertificate {}
+impl_codec_using_bincode_for!(ProvenCertificate);
 
 impl ColumnSchema for LatestProvenCertificatePerNetworkColumn {
     type Key = Key;
