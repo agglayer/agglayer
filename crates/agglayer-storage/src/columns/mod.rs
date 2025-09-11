@@ -1,3 +1,5 @@
+pub use std::io;
+
 use agglayer_types::bincode;
 
 #[derive(Debug, thiserror::Error)]
@@ -50,7 +52,14 @@ pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
 pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
 
 pub trait Codec: Sized {
-    fn encode(&self) -> Result<Vec<u8>, CodecError>;
+    #[inline]
+    fn encode(&self) -> Result<Vec<u8>, CodecError> {
+        let mut buffer = Vec::new();
+        self.encode_into(&mut buffer)?;
+        Ok(buffer)
+    }
+
+    fn encode_into<W: io::Write>(&self, writer: W) -> Result<(), CodecError>;
 
     fn decode(buf: &[u8]) -> Result<Self, CodecError>;
 }
@@ -59,8 +68,11 @@ macro_rules! impl_codec_using_bincode_for {
     ($($type:ty),* $(,)?) => {
         $(
             impl $crate::columns::Codec for $type {
-                fn encode(&self) -> Result<Vec<u8>, $crate::columns::CodecError> {
-                    Ok($crate::columns::bincode_codec().serialize(self)?)
+                fn encode_into<W: $crate::columns::io::Write>(
+                    &self,
+                    writer: W,
+                ) -> Result<(), $crate::columns::CodecError> {
+                    Ok($crate::columns::bincode_codec().serialize_into(writer, self)?)
                 }
 
                 fn decode(buf: &[u8]) -> Result<Self, $crate::columns::CodecError> {
