@@ -70,7 +70,7 @@ pub struct NetworkInfo {
 }
 
 impl NetworkInfo {
-    pub fn with_network_id(network_id: NetworkId) -> Self {
+    pub fn from_network_id(network_id: NetworkId) -> Self {
         Self {
             network_status: NetworkStatus::Active,
             network_type: NetworkType::Unspecified,

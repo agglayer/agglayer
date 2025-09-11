@@ -4,7 +4,7 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NetworkInfoValue {
     /// The type of value being stored.
-    #[prost(oneof="network_info_value::Value", tags="1, 4, 2, 3")]
+    #[prost(oneof="network_info_value::Value", tags="1, 2, 3, 4")]
     pub value: ::core::option::Option<network_info_value::Value>,
 }
 /// Nested message and enum types in `NetworkInfoValue`.
@@ -16,14 +16,14 @@ pub mod network_info_value {
         #[prost(enumeration="super::NetworkType", tag="1")]
         NetworkType(i32),
         /// Represents the current settled certificate for a given network.
-        #[prost(message, tag="4")]
+        #[prost(message, tag="2")]
         SettledCertificate(super::SettledCertificate),
         /// Info about the latest settled claim in the network.
-        #[prost(message, tag="2")]
-        SettledClaim(super::SettledClaim),
-        /// The height of the latest pending certificate.
         #[prost(message, tag="3")]
-        LatestPendingHeight(super::LatestPendingHeight),
+        SettledClaim(super::SettledClaim),
+        /// The latest pending certificate.
+        #[prost(message, tag="4")]
+        LatestPendingCertificateInfo(super::LatestPendingCertificateInfo),
     }
 }
 /// Represents the current settled certificate for a given network.
@@ -38,13 +38,6 @@ pub struct SettledCertificate {
     /// The leaf count of the latest settled local exit tree.
     #[prost(message, optional, tag="3")]
     pub let_leaf_count: ::core::option::Option<SettledLocalExitTreeLeafCount>,
-}
-/// Represents the current settled height for a given network.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct SettledHeight {
-    /// The actual certificate height settled
-    #[prost(uint64, tag="1")]
-    pub height: u64,
 }
 /// SettledCertificateId represents the ID of the latest settled certificate.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -84,12 +77,15 @@ pub struct SettledClaim {
     #[prost(bytes="bytes", tag="2")]
     pub bridge_exit_hash: ::prost::bytes::Bytes,
 }
-/// The height of the latest pending certificate.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct LatestPendingHeight {
+/// The latest pending certificate.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LatestPendingCertificateInfo {
     /// The actual certificate height that is in pending
     #[prost(uint64, tag="1")]
-    pub latest_pending_height: u64,
+    pub height: u64,
+    /// The ID of the latest pending certificate.
+    #[prost(bytes="bytes", tag="2")]
+    pub id: ::prost::bytes::Bytes,
 }
 /// The network type
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

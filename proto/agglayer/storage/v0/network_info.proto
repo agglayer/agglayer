@@ -9,11 +9,11 @@ message NetworkInfoValue {
     // The network type
     NetworkType network_type = 1;
     // Represents the current settled certificate for a given network.
-    SettledCertificate settled_certificate = 4;
+    SettledCertificate settled_certificate = 2;
     // Info about the latest settled claim in the network.
-    SettledClaim settled_claim = 2;
-    // The height of the latest pending certificate.
-    LatestPendingHeight latest_pending_height = 3;
+    SettledClaim settled_claim = 3;
+    // The latest pending certificate.
+    LatestPendingCertificateInfo latest_pending_certificate_info = 4;
   }
 }
 
@@ -39,12 +39,6 @@ enum NetworkType {
   NETWORK_TYPE_MULTISIG_ONLY = 3;
   /// Multisig and aggchain proof network type.
   NETWORK_TYPE_MULTISIG_AND_AGGCHAIN_PROOF = 4;
-}
-
-// Represents the current settled height for a given network.
-message SettledHeight {
-  // The actual certificate height settled
-  uint64 height = 1;
 }
 
 // SettledCertificateId represents the ID of the latest settled certificate.
@@ -79,8 +73,10 @@ message SettledClaim {
   bytes bridge_exit_hash = 2;
 }
 
-// The height of the latest pending certificate.
-message LatestPendingHeight {
+// The latest pending certificate.
+message LatestPendingCertificateInfo {
   // The actual certificate height that is in pending
-  uint64 latest_pending_height = 1;
+  uint64 height = 1;
+  // The ID of the latest pending certificate.
+  bytes id = 2;
 }

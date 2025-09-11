@@ -1,5 +1,5 @@
 // @generated
-impl serde::Serialize for LatestPendingHeight {
+impl serde::Serialize for LatestPendingCertificateInfo {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -7,32 +7,41 @@ impl serde::Serialize for LatestPendingHeight {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if self.latest_pending_height != 0 {
+        if self.height != 0 {
             len += 1;
         }
-        let mut struct_ser = serializer.serialize_struct("agglayer.storage.v0.LatestPendingHeight", len)?;
-        if self.latest_pending_height != 0 {
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.storage.v0.LatestPendingCertificateInfo", len)?;
+        if self.height != 0 {
             #[allow(clippy::needless_borrow)]
             #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("latestPendingHeight", ToString::to_string(&self.latest_pending_height).as_str())?;
+            struct_ser.serialize_field("height", ToString::to_string(&self.height).as_str())?;
+        }
+        if !self.id.is_empty() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("id", pbjson::private::base64::encode(&self.id).as_str())?;
         }
         struct_ser.end()
     }
 }
-impl<'de> serde::Deserialize<'de> for LatestPendingHeight {
+impl<'de> serde::Deserialize<'de> for LatestPendingCertificateInfo {
     #[allow(deprecated)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "latest_pending_height",
-            "latestPendingHeight",
+            "height",
+            "id",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
-            LatestPendingHeight,
+            Height,
+            Id,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -54,7 +63,8 @@ impl<'de> serde::Deserialize<'de> for LatestPendingHeight {
                         E: serde::de::Error,
                     {
                         match value {
-                            "latestPendingHeight" | "latest_pending_height" => Ok(GeneratedField::LatestPendingHeight),
+                            "height" => Ok(GeneratedField::Height),
+                            "id" => Ok(GeneratedField::Id),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -64,35 +74,45 @@ impl<'de> serde::Deserialize<'de> for LatestPendingHeight {
         }
         struct GeneratedVisitor;
         impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = LatestPendingHeight;
+            type Value = LatestPendingCertificateInfo;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct agglayer.storage.v0.LatestPendingHeight")
+                formatter.write_str("struct agglayer.storage.v0.LatestPendingCertificateInfo")
             }
 
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<LatestPendingHeight, V::Error>
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<LatestPendingCertificateInfo, V::Error>
                 where
                     V: serde::de::MapAccess<'de>,
             {
-                let mut latest_pending_height__ = None;
+                let mut height__ = None;
+                let mut id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
-                        GeneratedField::LatestPendingHeight => {
-                            if latest_pending_height__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("latestPendingHeight"));
+                        GeneratedField::Height => {
+                            if height__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("height"));
                             }
-                            latest_pending_height__ = 
+                            height__ = 
                                 Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = 
+                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
                             ;
                         }
                     }
                 }
-                Ok(LatestPendingHeight {
-                    latest_pending_height: latest_pending_height__.unwrap_or_default(),
+                Ok(LatestPendingCertificateInfo {
+                    height: height__.unwrap_or_default(),
+                    id: id__.unwrap_or_default(),
                 })
             }
         }
-        deserializer.deserialize_struct("agglayer.storage.v0.LatestPendingHeight", FIELDS, GeneratedVisitor)
+        deserializer.deserialize_struct("agglayer.storage.v0.LatestPendingCertificateInfo", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for NetworkInfoValue {
@@ -120,8 +140,8 @@ impl serde::Serialize for NetworkInfoValue {
                 network_info_value::Value::SettledClaim(v) => {
                     struct_ser.serialize_field("settledClaim", v)?;
                 }
-                network_info_value::Value::LatestPendingHeight(v) => {
-                    struct_ser.serialize_field("latestPendingHeight", v)?;
+                network_info_value::Value::LatestPendingCertificateInfo(v) => {
+                    struct_ser.serialize_field("latestPendingCertificateInfo", v)?;
                 }
             }
         }
@@ -141,8 +161,8 @@ impl<'de> serde::Deserialize<'de> for NetworkInfoValue {
             "settledCertificate",
             "settled_claim",
             "settledClaim",
-            "latest_pending_height",
-            "latestPendingHeight",
+            "latest_pending_certificate_info",
+            "latestPendingCertificateInfo",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -150,7 +170,7 @@ impl<'de> serde::Deserialize<'de> for NetworkInfoValue {
             NetworkType,
             SettledCertificate,
             SettledClaim,
-            LatestPendingHeight,
+            LatestPendingCertificateInfo,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -175,7 +195,7 @@ impl<'de> serde::Deserialize<'de> for NetworkInfoValue {
                             "networkType" | "network_type" => Ok(GeneratedField::NetworkType),
                             "settledCertificate" | "settled_certificate" => Ok(GeneratedField::SettledCertificate),
                             "settledClaim" | "settled_claim" => Ok(GeneratedField::SettledClaim),
-                            "latestPendingHeight" | "latest_pending_height" => Ok(GeneratedField::LatestPendingHeight),
+                            "latestPendingCertificateInfo" | "latest_pending_certificate_info" => Ok(GeneratedField::LatestPendingCertificateInfo),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -218,11 +238,11 @@ impl<'de> serde::Deserialize<'de> for NetworkInfoValue {
                             value__ = map_.next_value::<::std::option::Option<_>>()?.map(network_info_value::Value::SettledClaim)
 ;
                         }
-                        GeneratedField::LatestPendingHeight => {
+                        GeneratedField::LatestPendingCertificateInfo => {
                             if value__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("latestPendingHeight"));
+                                return Err(serde::de::Error::duplicate_field("latestPendingCertificateInfo"));
                             }
-                            value__ = map_.next_value::<::std::option::Option<_>>()?.map(network_info_value::Value::LatestPendingHeight)
+                            value__ = map_.next_value::<::std::option::Option<_>>()?.map(network_info_value::Value::LatestPendingCertificateInfo)
 ;
                         }
                     }
@@ -654,101 +674,6 @@ impl<'de> serde::Deserialize<'de> for SettledClaim {
             }
         }
         deserializer.deserialize_struct("agglayer.storage.v0.SettledClaim", FIELDS, GeneratedVisitor)
-    }
-}
-impl serde::Serialize for SettledHeight {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if self.height != 0 {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("agglayer.storage.v0.SettledHeight", len)?;
-        if self.height != 0 {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("height", ToString::to_string(&self.height).as_str())?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for SettledHeight {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "height",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            Height,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "height" => Ok(GeneratedField::Height),
-                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = SettledHeight;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct agglayer.storage.v0.SettledHeight")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<SettledHeight, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut height__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::Height => {
-                            if height__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("height"));
-                            }
-                            height__ = 
-                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
-                            ;
-                        }
-                    }
-                }
-                Ok(SettledHeight {
-                    height: height__.unwrap_or_default(),
-                })
-            }
-        }
-        deserializer.deserialize_struct("agglayer.storage.v0.SettledHeight", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for SettledLocalExitRoot {

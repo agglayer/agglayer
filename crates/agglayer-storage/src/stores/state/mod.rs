@@ -42,7 +42,10 @@ use crate::{
     types::{
         network_info::{
             self,
-            v0::{NetworkInfoValue, SettledLocalExitTreeLeafCount, SettledPessimisticProofRoot},
+            v0::{
+                LatestPendingCertificateInfo, NetworkInfoValue, SettledLocalExitTreeLeafCount,
+                SettledPessimisticProofRoot,
+            },
         },
         MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue,
     },
@@ -607,7 +610,7 @@ macro_rules! expected_type_or_fail {
 }
 impl NetworkInfoReader for StateStore {
     fn get_network_info(&self, network_id: NetworkId) -> Result<Option<NetworkInfo>, Error> {
-        let mut state = NetworkInfo::with_network_id(network_id);
+        let mut state = NetworkInfo::from_network_id(network_id);
         let keys = network_info::Key::all_keys_for_network(network_id);
         self.db
             .atomic_multi_get::<NetworkInfoColumn>(keys.clone())?
@@ -727,11 +730,14 @@ impl NetworkInfoReader for StateStore {
                     network_info::KeyKind::LatestPendingHeight => {
                         state.latest_pending_height = expected_type_or_fail!(
                             maybe_value,
-                            network_info::v0::network_info_value::Value::LatestPendingHeight(
-                                height,
+                            network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(
+                                LatestPendingCertificateInfo{
+                                    height,..
+
+                                },
                             ),
-                            height.latest_pending_height,
-                            "Wrong value type decoded, was expecting LatestPendingHeight, decoded \
+                            height,
+                            "Wrong value type decoded, was expecting LatestPendingCertificateInfo, decoded \
                              another type"
                         )?
                     }
@@ -753,8 +759,10 @@ impl NetworkInfoReader for StateStore {
             .and_then(|value| {
                 expected_type_or_fail!(
                     value,
-                    network_info::v0::network_info_value::Value::LatestPendingHeight(height,),
-                    height.latest_pending_height.into(),
+                    network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(
+                        LatestPendingCertificateInfo { height, .. }
+                    ),
+                    height.into(),
                     "Wrong value type decoded, was expecting LatestPendingHeight, decoded another \
                      type"
                 )
