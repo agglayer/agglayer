@@ -1,6 +1,27 @@
 [tasks.generate-proto]
+dependencies = [
+    "install-buf",
+    "install-protoc-gen-prost",
+    "install-protoc-gen-prost-serde",
+    "install-protoc-gen-prost-crate",
+    "install-protoc-gen-tonic",
+    "generate-proto-node",
+    "generate-proto-storage"
+]
+
+[tasks.generate-proto-storage]
 command = "buf"
-args = ["generate", "--template", "buf.rust.gen.yaml"]
+args = ["generate", "--template", "buf.storage.gen.yaml", "--path", "proto/agglayer/storage"]
+dependencies = [
+    "install-buf",
+    "install-protoc-gen-prost",
+    "install-protoc-gen-prost-serde",
+    "install-protoc-gen-prost-crate",
+]
+
+[tasks.generate-proto-node]
+command = "buf"
+args = ["generate", "--template", "buf.rust.gen.yaml", "--path", "proto/agglayer/node"]
 dependencies = [
     "install-buf",
     "install-protoc-gen-prost",

@@ -14,9 +14,20 @@ pub enum CodecError {
     #[error(r#"Unrecognized certificate storage format version {version}.
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
     BadCertificateVersion { version: u8 },
+
+    #[error(r#"Serialization error: {0}
+        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
+    ProtobufSerialization(#[from] prost::EncodeError),
+
+    #[error(r#"Deserialization error: {0}
+           This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
+    ProtobufDeserialization(#[from] prost::DecodeError),
+
+    #[error(r#"Invalid enum variant {0}"#)]
+    InvalidEnumVariant(String),
 }
 
-pub fn bincode_codec() -> bincode::Codec<impl bincode::Options>  {
+pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
     bincode::default()
 }
 
@@ -25,6 +36,7 @@ pub const CERTIFICATE_PER_NETWORK_CF: &str = "certificate_per_network_cf";
 pub const NULLIFIER_TREE_PER_NETWORK_CF: &str = "nullifier_tree_per_network_cf";
 pub const BALANCE_TREE_PER_NETWORK_CF: &str = "balance_tree_per_network_cf";
 pub const LOCAL_EXIT_TREE_PER_NETWORK_CF: &str = "local_exit_tree_per_network_cf";
+pub const NETWORK_STATE_CF: &str = "network_state_cf";
 
 // Metadata CFs
 pub const CERTIFICATE_HEADER_CF: &str = "certificate_header_cf";
@@ -71,6 +83,7 @@ pub trait ColumnSchema {
 pub(crate) mod balance_tree_per_network;
 pub(crate) mod certificate_per_network;
 pub(crate) mod local_exit_tree_per_network;
+pub(crate) mod network_info;
 pub(crate) mod nullifier_tree_per_network;
 
 // Pending

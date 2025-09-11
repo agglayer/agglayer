@@ -13,12 +13,11 @@ workspace = true
 
 [dependencies]
 agglayer-interop = { workspace = true, features = ["grpc-compat"] }
-agglayer-rpc.workspace = true
 agglayer-types = { workspace = true, optional = true }
 
 
 hex.workspace = true
-pbjson = "0.8.0"
+pbjson.workspace = true
 prost.workspace = true
 serde.workspace = true
 thiserror = { workspace = true, optional = true }

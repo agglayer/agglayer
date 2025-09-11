@@ -35,6 +35,7 @@ agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
 agglayer-rpc = { path = "crates/agglayer-rpc" }
 agglayer-signer = { path = "crates/agglayer-signer" }
 agglayer-storage = { path = "crates/agglayer-storage" }
+agglayer-storage-types = { path = "crates/agglayer-storage-types" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
 agglayer-types = { path = "crates/agglayer-types" }
 agglayer-utils = { path = "crates/agglayer-utils" }
@@ -109,6 +110,7 @@ jsonrpsee = { version = "0.24.7", features = ["full"] }
 lazy_static = "1.5"
 mockall = "0.13.1"
 parking_lot = "0.12.3"
+pbjson = "0.8.0"
 pin-project = "1.1"
 prost = "0.13.4"
 rand = "0.9.0"

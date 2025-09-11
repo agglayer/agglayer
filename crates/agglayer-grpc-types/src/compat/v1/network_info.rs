@@ -1,9 +1,8 @@
 use agglayer_interop::grpc::v1::FixedBytes32;
-use agglayer_rpc::network_info::{
-    NetworkInfo as AgglayerRpcNetworkInfo, NetworkStatus as AgglayerRpcNetworkStatus,
-    NetworkType as AgglayerRpcNetworkType,
+use agglayer_types::{
+    CertificateStatus as AgglayerCertificateStatus, NetworkInfo as AgglayerRpcNetworkInfo,
+    NetworkStatus as AgglayerRpcNetworkStatus, NetworkType as AgglayerRpcNetworkType,
 };
-use agglayer_types::CertificateStatus as AgglayerCertificateStatus;
 
 use crate::node::types::v1;
 
@@ -20,6 +19,7 @@ impl From<AgglayerRpcNetworkStatus> for v1::NetworkStatus {
 impl From<AgglayerRpcNetworkType> for v1::NetworkType {
     fn from(value: AgglayerRpcNetworkType) -> Self {
         match value {
+            AgglayerRpcNetworkType::Unspecified => v1::NetworkType::Unspecified,
             AgglayerRpcNetworkType::Ecdsa => v1::NetworkType::Ecdsa,
             AgglayerRpcNetworkType::Generic => v1::NetworkType::Generic,
             AgglayerRpcNetworkType::MultisigOnly => v1::NetworkType::MultisigOnly,
