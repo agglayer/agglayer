@@ -47,7 +47,7 @@ pub enum SmtValue {
     Leaf(Digest),
 }
 
-impl_codec_using_bincode_for!(
+crate::columns::impl_codec_using_bincode_for!(
     u64,
     u32,
     CertificateId,

@@ -19,7 +19,7 @@ pub struct PendingCertificate(pub CertificateId, pub Height);
 
 pub type Key = NetworkId;
 
-impl_codec_using_bincode_for!(PendingCertificate);
+crate::columns::impl_codec_using_bincode_for!(PendingCertificate);
 
 impl ColumnSchema for LatestPendingCertificatePerNetworkColumn {
     type Key = Key;

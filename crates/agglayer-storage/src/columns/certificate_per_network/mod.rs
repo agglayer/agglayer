@@ -21,7 +21,7 @@ pub struct Key {
     pub(crate) height: Height,
 }
 
-impl_codec_using_bincode_for!(Key);
+crate::columns::impl_codec_using_bincode_for!(Key);
 
 impl ColumnSchema for CertificatePerNetworkColumn {
     type Key = Key;

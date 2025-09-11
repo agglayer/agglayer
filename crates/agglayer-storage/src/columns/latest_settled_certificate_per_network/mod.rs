@@ -27,7 +27,7 @@ pub struct SettledCertificate(
 
 pub type Key = NetworkId;
 
-impl_codec_using_bincode_for!(SettledCertificate);
+crate::columns::impl_codec_using_bincode_for!(SettledCertificate);
 
 impl ColumnSchema for LatestSettledCertificatePerNetworkColumn {
     type Key = Key;

@@ -15,7 +15,7 @@ pub enum CodecError {
     BadCertificateVersion { version: u8 },
 }
 
-pub fn bincode_codec() -> bincode::Codec<impl bincode::Options>  {
+pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
     bincode::default()
 }
 
@@ -54,6 +54,24 @@ pub trait Codec: Sized {
 
     fn decode(buf: &[u8]) -> Result<Self, CodecError>;
 }
+
+macro_rules! impl_codec_using_bincode_for {
+    ($($type:ty),* $(,)?) => {
+        $(
+            impl $crate::columns::Codec for $type {
+                fn encode(&self) -> Result<Vec<u8>, $crate::columns::CodecError> {
+                    Ok($crate::columns::bincode_codec().serialize(self)?)
+                }
+
+                fn decode(buf: &[u8]) -> Result<Self, $crate::columns::CodecError> {
+                    Ok($crate::columns::bincode_codec().deserialize(buf)?)
+                }
+            }
+        )*
+    };
+}
+
+pub(crate) use impl_codec_using_bincode_for;
 
 pub trait ColumnSchema {
     type Key: Codec;
