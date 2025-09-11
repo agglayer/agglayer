@@ -1,7 +1,7 @@
 use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height, NetworkId};
 use serde::{Deserialize, Serialize};
 
-use super::{Codec, ColumnSchema, LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF};
+use super::{ColumnSchema, LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF};
 
 #[cfg(test)]
 mod tests;
@@ -27,7 +27,7 @@ pub struct SettledCertificate(
 
 pub type Key = NetworkId;
 
-impl Codec for SettledCertificate {}
+crate::columns::impl_codec_using_bincode_for!(SettledCertificate);
 
 impl ColumnSchema for LatestSettledCertificatePerNetworkColumn {
     type Key = Key;

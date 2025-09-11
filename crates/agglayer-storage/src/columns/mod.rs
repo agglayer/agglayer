@@ -1,5 +1,6 @@
+pub use std::io;
+
 use agglayer_types::bincode;
-use serde::{de::DeserializeOwned, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CodecError {
@@ -16,7 +17,7 @@ pub enum CodecError {
     BadCertificateVersion { version: u8 },
 }
 
-pub fn bincode_codec() -> bincode::Codec<impl bincode::Options>  {
+pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
     bincode::default()
 }
 
@@ -50,15 +51,39 @@ pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
 // debug CFs
 pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
 
-pub trait Codec: Sized + Serialize + DeserializeOwned {
+pub trait Codec: Sized {
+    #[inline]
     fn encode(&self) -> Result<Vec<u8>, CodecError> {
-        Ok(bincode_codec().serialize(self)?)
+        let mut buffer = Vec::new();
+        self.encode_into(&mut buffer)?;
+        Ok(buffer)
     }
 
-    fn decode(buf: &[u8]) -> Result<Self, CodecError> {
-        Ok(bincode_codec().deserialize(buf)?)
-    }
+    fn encode_into<W: io::Write>(&self, writer: W) -> Result<(), CodecError>;
+
+    fn decode(buf: &[u8]) -> Result<Self, CodecError>;
 }
+
+macro_rules! impl_codec_using_bincode_for {
+    ($($type:ty),* $(,)?) => {
+        $(
+            impl $crate::columns::Codec for $type {
+                fn encode_into<W: $crate::columns::io::Write>(
+                    &self,
+                    writer: W,
+                ) -> Result<(), $crate::columns::CodecError> {
+                    Ok($crate::columns::bincode_codec().serialize_into(writer, self)?)
+                }
+
+                fn decode(buf: &[u8]) -> Result<Self, $crate::columns::CodecError> {
+                    Ok($crate::columns::bincode_codec().deserialize(buf)?)
+                }
+            }
+        )*
+    };
+}
+
+pub(crate) use impl_codec_using_bincode_for;
 
 pub trait ColumnSchema {
     type Key: Codec;
