@@ -130,7 +130,7 @@ impl SignedTx {
     /// Attempt to recover the address of the signer.
     pub(crate) fn signer(&self) -> Result<Address, alloy::primitives::SignatureError> {
         self.signature
-            .recover_address_from_msg(self.hash())
+            .recover_address_from_prehash(&self.hash())
             .map(Into::into)
     }
 
