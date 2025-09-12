@@ -9,12 +9,14 @@ use crate::{CertificateId, CertificateStatus, CertificateStatusError, Height, Ne
 /// separate service that would monitor status of the network.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkStatus {
+    /// Unknown status.
+    Unknown = 0,
     /// The network is active and functioning normally.
-    Active = 0,
+    Active = 1,
     /// The network is currently syncing.
-    Syncing = 1,
+    Syncing = 2,
     /// The network is experiencing an error.
-    Error = 2,
+    Error = 3,
 }
 
 // The aggchain type of network
@@ -60,7 +62,7 @@ pub struct NetworkInfo {
     /// Info about the latest settled claim in the network.
     pub settled_claim: Option<SettledClaim>,
     /// The height of the latest pending certificate.
-    pub latest_pending_height: Option<u64>,
+    pub latest_pending_height: Option<Height>,
     /// The status of the latest pending certificate.
     pub latest_pending_status: Option<CertificateStatus>,
     /// Any error message associated with the latest pending certificate.
@@ -72,7 +74,7 @@ pub struct NetworkInfo {
 impl NetworkInfo {
     pub fn from_network_id(network_id: NetworkId) -> Self {
         Self {
-            network_status: NetworkStatus::Active,
+            network_status: NetworkStatus::Unknown,
             network_type: NetworkType::Unspecified,
             network_id,
             settled_height: None,

@@ -7,8 +7,7 @@ use std::{
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
-    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, NetworkInfo,
-    SettlementTxHash,
+    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
@@ -29,7 +28,6 @@ use crate::{
         },
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
-        network_info::NetworkInfoColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
         ColumnSchema,
     },
@@ -38,17 +36,7 @@ use crate::{
         backup::{BackupClient, BackupRequest},
         DB,
     },
-    stores::interfaces::reader::network_info_reader::NetworkInfoReader,
-    types::{
-        network_info::{
-            self,
-            v0::{
-                LatestPendingCertificateInfo, NetworkInfoValue, SettledLocalExitTreeLeafCount,
-                SettledPessimisticProofRoot,
-            },
-        },
-        MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue,
-    },
+    types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
 };
 
 #[cfg(test)]
@@ -59,6 +47,8 @@ pub struct StateStore {
     db: Arc<DB>,
     backup_client: BackupClient,
 }
+
+mod network_info;
 
 impl StateStore {
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
@@ -593,212 +583,6 @@ impl MetadataReader for StateStore {
                             .to_string(),
                     )),
                 })
-            })
-    }
-}
-
-macro_rules! expected_type_or_fail {
-    ($value:expr, $pattern:pat, $return_value:expr, $err_msg:expr) => {
-        match $value {
-            Some(NetworkInfoValue {
-                value: Some($pattern),
-            }) => Ok(Some($return_value)),
-            None => Ok(None),
-            _ => Err(Error::Unexpected($err_msg.to_string())),
-        }
-    };
-}
-impl NetworkInfoReader for StateStore {
-    fn get_network_info(&self, network_id: NetworkId) -> Result<Option<NetworkInfo>, Error> {
-        let mut state = NetworkInfo::from_network_id(network_id);
-        let keys = network_info::Key::all_keys_for_network(network_id);
-        self.db
-            .atomic_multi_get::<NetworkInfoColumn>(keys.clone())?
-            .into_iter()
-            .zip(keys)
-            .try_for_each(|(maybe_value, network_info::Key { kind, .. })| {
-                match kind {
-                    network_info::KeyKind::LatestSettledClaim => {
-                        state.settled_claim = expected_type_or_fail!(
-                            maybe_value,
-                            network_info::v0::network_info_value::Value::SettledClaim(claim,),
-                            agglayer_types::SettledClaim {
-                                global_index: Digest::try_from(&*claim.global_index).map_err(
-                                    |_| {
-                                        Error::Unexpected(
-                                            "Unable to deserialize GlobalIndex into a Digest"
-                                                .to_string(),
-                                        )
-                                    }
-                                )?,
-                                bridge_exit_hash: Digest::try_from(&*claim.bridge_exit_hash)
-                                    .map_err(|_| {
-                                        Error::Unexpected(
-                                            "Unable to deserialize GlobalIndex into a Digest"
-                                                .to_string(),
-                                        )
-                                    })?,
-                            },
-                            "Wrong value type decoded, was expecting SettledClaim, decoded \
-                             another type"
-                        )?;
-                    }
-                    network_info::KeyKind::LatestSettledCertificate => {
-                        let maybe_settled_certificate = expected_type_or_fail!(
-                            maybe_value,
-                            network_info::v0::network_info_value::Value::SettledCertificate(
-                                settled_certificate
-                            ),
-                            settled_certificate,
-                            "Wrong value type decoded, was expecting SettledLer, decoded another \
-                             type"
-                        )?;
-
-                        if let Some(network_info::v0::SettledCertificate {
-                            certificate_id: Some(network_info::v0::SettledCertificateId { id }),
-                            new_pp_root,
-                            let_leaf_count,
-                        }) = maybe_settled_certificate
-                        {
-                            let certificate_id = Digest::try_from(&*id)
-                                .map_err(|_| {
-                                    Error::Unexpected(
-                                        "Unable to deserialize CertificateId into a Digest"
-                                            .to_string(),
-                                    )
-                                })?
-                                .into();
-                            if let Some(header) = self.get_certificate_header(&certificate_id)? {
-                                state.settled_certificate_id = Some(certificate_id);
-                                state.settled_height = Some(header.height);
-                                state.settled_ler = Some(header.new_local_exit_root);
-                                if let Some(SettledLocalExitTreeLeafCount {
-                                    settled_let_leaf_count,
-                                }) = let_leaf_count
-                                {
-                                    state.settled_let_leaf_count = Some(settled_let_leaf_count);
-                                } else {
-                                    return Err(Error::Unexpected(
-                                        "Settled certificate is missing the LET leaf count"
-                                            .to_string(),
-                                    ));
-                                }
-
-                                if let Some(SettledPessimisticProofRoot { root }) = new_pp_root {
-                                    state.settled_pp_root =
-                                        Some(Digest::try_from(&*root).map_err(|_| {
-                                            Error::Unexpected(
-                                                "Unable to deserialize PessimisticProofRoot into \
-                                                 a Digest"
-                                                    .to_string(),
-                                            )
-                                        })?);
-                                } else {
-                                    return Err(Error::Unexpected(
-                                        "Settled certificate is missing the pessimistic proof root"
-                                            .to_string(),
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                    network_info::KeyKind::NetworkType => {
-                        state.network_type = expected_type_or_fail!(
-                            maybe_value,
-                            network_info::v0::network_info_value::Value::NetworkType(network_type,),
-                            network_info::v0::NetworkType::try_from(network_type)
-                                .map_err(|_| {
-                                    Error::Unexpected(
-                                        "Unable to deserialize NetworkType from integer"
-                                            .to_string(),
-                                    )
-                                })?
-                                .try_into()
-                                .map_err(|_| Error::Unexpected(
-                                    "Unable to convert storage NetworkType to \
-                                     agglayer_types::NetworkType"
-                                        .to_string(),
-                                ))?,
-                            "Wrong value type decode, was expecting NetworkType, decoded another \
-                             type"
-                        )?
-                        .ok_or(Error::Unexpected(
-                            "Unable to decode NetworkType".to_string(),
-                        ))?;
-                    }
-
-                    network_info::KeyKind::LatestPendingHeight => {
-                        state.latest_pending_height = expected_type_or_fail!(
-                            maybe_value,
-                            network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(
-                                LatestPendingCertificateInfo{
-                                    height,..
-
-                                },
-                            ),
-                            height,
-                            "Wrong value type decoded, was expecting LatestPendingCertificateInfo, decoded \
-                             another type"
-                        )?
-                    }
-                }
-
-                Ok::<(), Error>(())
-            })?;
-
-        Ok(Some(state))
-    }
-
-    fn get_latest_pending_height(&self, network_id: NetworkId) -> Result<Option<Height>, Error> {
-        self.db
-            .get::<NetworkInfoColumn>(&network_info::Key {
-                network_id: network_id.to_u32(),
-                kind: network_info::KeyKind::LatestPendingHeight,
-            })
-            .map_err(Into::into)
-            .and_then(|value| {
-                expected_type_or_fail!(
-                    value,
-                    network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(
-                        LatestPendingCertificateInfo { height, .. }
-                    ),
-                    height.into(),
-                    "Wrong value type decoded, was expecting LatestPendingHeight, decoded another \
-                     type"
-                )
-            })
-    }
-
-    fn get_latest_settled_certificate_id(
-        &self,
-        network_id: NetworkId,
-    ) -> Result<Option<CertificateId>, Error> {
-        self.db
-            .get::<NetworkInfoColumn>(&network_info::Key {
-                network_id: network_id.to_u32(),
-                kind: network_info::KeyKind::LatestSettledCertificate,
-            })
-            .map_err(Into::into)
-            .and_then(|value| {
-                expected_type_or_fail!(
-                    value,
-                    network_info::v0::network_info_value::Value::SettledCertificate(
-                        network_info::v0::SettledCertificate {
-                            certificate_id: Some(network_info::v0::SettledCertificateId { id }),
-                            ..
-                        }
-                    ),
-                    Digest::try_from(&*id)
-                        .map_err(|_| {
-                            Error::Unexpected(
-                                "Unable to deserialize SettledCertificateId into a Digest"
-                                    .to_string(),
-                            )
-                        })?
-                        .into(),
-                    "Wrong value type decoded, was expecting SettledCertificateId, decoded \
-                     another type"
-                )
             })
     }
 }

@@ -36,7 +36,7 @@ pub const CERTIFICATE_PER_NETWORK_CF: &str = "certificate_per_network_cf";
 pub const NULLIFIER_TREE_PER_NETWORK_CF: &str = "nullifier_tree_per_network_cf";
 pub const BALANCE_TREE_PER_NETWORK_CF: &str = "balance_tree_per_network_cf";
 pub const LOCAL_EXIT_TREE_PER_NETWORK_CF: &str = "local_exit_tree_per_network_cf";
-pub const NETWORK_STATE_CF: &str = "network_state_cf";
+pub const NETWORK_INFO_CF: &str = "network_info_cf";
 
 // Metadata CFs
 pub const CERTIFICATE_HEADER_CF: &str = "certificate_header_cf";

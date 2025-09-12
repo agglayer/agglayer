@@ -8,7 +8,7 @@ pub const CFS: [&str; 8] = [
     crate::columns::LOCAL_EXIT_TREE_PER_NETWORK_CF,
     crate::columns::BALANCE_TREE_PER_NETWORK_CF,
     crate::columns::NULLIFIER_TREE_PER_NETWORK_CF,
-    crate::columns::NETWORK_STATE_CF,
+    crate::columns::NETWORK_INFO_CF,
 ];
 
 /// Definitions for the column families in the state storage.

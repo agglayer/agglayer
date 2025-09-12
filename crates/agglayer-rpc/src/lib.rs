@@ -16,6 +16,7 @@ use agglayer_types::{
     CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId,
     NetworkInfo, NetworkStatus, NetworkType, SettledClaim, Signature,
 };
+use alloy::network;
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
@@ -24,6 +25,8 @@ pub use self::error::{CertificateRetrievalError, CertificateSubmissionError, Get
 use crate::error::{GetLatestCertificateError, GetLatestSettledClaimError, ProofRetrievalError};
 
 pub mod error;
+#[cfg(test)]
+mod tests;
 
 /// The RPC agglayer service implementation.
 pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
@@ -434,50 +437,161 @@ where
     ) -> Result<NetworkInfo, GetNetworkInfoError> {
         debug!("Received request to get the network state for rollup {network_id}");
 
-        // Get the latest settled certificate for the network
-        let latest_settled_certificate =
-            match self.get_latest_settled_certificate_header(network_id) {
-                Ok(cert) => cert,
-                Err(CertificateRetrievalError::NotFound { .. }) => {
-                    warn!("No settled certificate found for network {network_id}");
-                    None
-                }
-                Err(error) => {
-                    error!(
-                        ?error,
-                        "Failed to get latest settled certificate for network {network_id}"
-                    );
-                    return Err(GetNetworkInfoError::InternalError {
-                        network_id,
-                        source: error.into(),
-                    });
-                }
-            };
+        let mut network_info = self.state.get_network_info(network_id).map_err(|error| {
+            error!(
+                ?error,
+                "Failed to retrieve network info for network {network_id}"
+            );
+            GetNetworkInfoError::InternalError {
+                network_id,
+                source: error.into(),
+            }
+        })?;
 
-        let latest_pending_certificate =
-            match self.get_latest_pending_certificate_header(network_id) {
-                Ok(cert) => cert,
-                Err(CertificateRetrievalError::NotFound { .. }) => {
-                    info!("No latest pending certificate found for network {network_id}");
-                    None
-                }
-                Err(error) => {
-                    error!(
-                        ?error,
-                        "Failed to get latest pending certificate for network {network_id}"
-                    );
-                    return Err(GetNetworkInfoError::InternalError {
-                        network_id,
-                        source: error.into(),
-                    });
-                }
-            };
+        if network_info.settled_certificate_id.is_none() {
+            // Get the latest settled certificate for the network
+            let latest_settled_certificate =
+                match self.get_latest_settled_certificate_header(network_id) {
+                    Ok(cert) => cert,
+                    Err(CertificateRetrievalError::NotFound { .. }) => {
+                        warn!("No settled certificate found for network {network_id}");
+                        None
+                    }
+                    Err(error) => {
+                        error!(
+                            ?error,
+                            "Failed to get latest settled certificate for network {network_id}"
+                        );
+                        return Err(GetNetworkInfoError::InternalError {
+                            network_id,
+                            source: error.into(),
+                        });
+                    }
+                };
 
-        // Determine network type from the latest available certificate
-        let network_type = match self.get_latest_available_certificate_for_network(network_id) {
-            Ok(Some(certificate)) => {
-                // Determine network type based on aggchain_data variant
-                match certificate.aggchain_data {
+            latest_settled_certificate.map(|cert| {
+                network_info.settled_certificate_id = Some(cert.certificate_id);
+                network_info.settled_height = Some(cert.height);
+                network_info.settled_ler = Some(cert.new_local_exit_root);
+                network_info.latest_epoch_with_settlement =
+                    cert.epoch_number.map(|num| num.as_u64());
+
+                if network_info.settled_pp_root.is_none() {
+                    // Extract settled_pp_root from the settled certificate's proof public values
+                    network_info.settled_pp_root = match self.get_proof(cert.certificate_id) {
+                        Ok(Some(agglayer_types::Proof::SP1(sp1_proof))) => {
+                            match pessimistic_proof::PessimisticProofOutput::bincode_codec()
+                                .deserialize::<pessimistic_proof::PessimisticProofOutput>(
+                                sp1_proof.public_values.as_slice(),
+                            ) {
+                                Ok(output) => Some(output.new_pessimistic_root),
+                                Err(error) => {
+                                    error!(
+                                        ?error,
+                                        "get network status: failed to deserialize pessimistic \
+                                         proof output"
+                                    );
+                                    return Err(GetNetworkInfoError::InternalError {
+                                        network_id,
+                                        source: error.into(),
+                                    });
+                                }
+                            }
+                        }
+                        Ok(None) => None,
+                        Err(ProofRetrievalError::NotFound { .. }) => None,
+                        Err(error) => {
+                            error!(
+                                ?error,
+                                "get network status: failed to get proof for settled certificate \
+                                 {certificate_id}",
+                                certificate_id = cert.certificate_id
+                            );
+                            return Err(GetNetworkInfoError::InternalError {
+                                network_id,
+                                source: error.into(),
+                            });
+                        }
+                    };
+
+                    if network_info.settled_let_leaf_count.is_none() {
+                        network_info.settled_let_leaf_count =
+                            match self.state.read_local_network_state(network_id) {
+                                Ok(local_network_state) => {
+                                    local_network_state.map(|v| v.exit_tree.leaf_count as u64)
+                                }
+                                Err(error) => {
+                                    error!(
+                                        ?error,
+                                        "get network status: failed to read local network state \
+                                         for network {network_id}"
+                                    );
+                                    return Err(GetNetworkInfoError::InternalError {
+                                        network_id,
+                                        source: error.into(),
+                                    });
+                                }
+                            };
+                    }
+
+                    if network_info.settled_claim.is_none() && network_info.settled_height.is_some()
+                    {
+                        // We can unwrap here because we just checked it's Some
+                        let height = network_info.settled_height.unwrap();
+                        // Get the last settled claim if we have a settled height
+                        network_info.settled_claim = self
+                            .get_latest_settled_claim(network_id, height)
+                            .map_err(|error| {
+                                error!(?error, "Failed to get last settled claim");
+                                GetNetworkInfoError::InternalError {
+                                    network_id,
+                                    source: error.into(),
+                                }
+                            })?;
+                    }
+                }
+
+                Ok(())
+            });
+        }
+
+        if network_info.latest_pending_height.is_none() {
+            let latest_pending_certificate =
+                match self.get_latest_pending_certificate_header(network_id) {
+                    Ok(cert) => cert,
+                    Err(CertificateRetrievalError::NotFound { .. }) => {
+                        info!("No latest pending certificate found for network {network_id}");
+                        None
+                    }
+                    Err(error) => {
+                        error!(
+                            ?error,
+                            "Failed to get latest pending certificate for network {network_id}"
+                        );
+                        return Err(GetNetworkInfoError::InternalError {
+                            network_id,
+                            source: error.into(),
+                        });
+                    }
+                };
+
+            if let Some(cert) = latest_pending_certificate {
+                network_info.latest_pending_height = Some(cert.height);
+                if let CertificateStatus::InError { ref error } = &cert.status {
+                    network_info.latest_pending_error = Some(*error.clone());
+                }
+
+                network_info.latest_pending_status = Some(cert.status);
+            }
+        }
+
+        if network_info.network_type == NetworkType::Unspecified {
+            // Determine network type from the latest available certificate
+            network_info.network_type =
+                match self.get_latest_available_certificate_for_network(network_id) {
+                    Ok(Some(certificate)) => {
+                        // Determine network type based on aggchain_data variant
+                        match certificate.aggchain_data {
                     agglayer_types::aggchain_proof::AggchainData::ECDSA { .. } => {
                         Ok(NetworkType::Ecdsa)
                     }
@@ -491,141 +605,34 @@ where
                         ..
                     } => Ok(NetworkType::MultisigAndAggchainProof),
                 }
-            }
-            Ok(None) => Err(GetNetworkInfoError::UnknownNetworkType { network_id }),
-            Err(error) => {
-                error!(?error, "Unable to determine network type");
-                Err(GetNetworkInfoError::InternalError {
-                    network_id,
-                    source: error.into(),
-                })
-            }
-        }?;
-
-        // TODO: Define network status. Could represent the healthiness of the network
-        // in regard to the agglayer-node. We could have multiple kind of status
-        // that could represent a network sending too many unprovable certs,
-        // or even a network that didn't settle for N epochs and such (optional).
-        let network_status = NetworkStatus::Active;
-
-        // Extract settled certificate data
-        let settled_height = latest_settled_certificate.as_ref().map(|cert| cert.height);
-        let settled_certificate_id = latest_settled_certificate
-            .as_ref()
-            .map(|cert| cert.certificate_id);
-
-        // Extract settled_pp_root from the settled certificate's proof public values
-        let settled_pp_root = if let Some(cert) = latest_settled_certificate.as_ref() {
-            match self.get_proof(cert.certificate_id) {
-                Ok(Some(agglayer_types::Proof::SP1(sp1_proof))) => {
-                    match pessimistic_proof::PessimisticProofOutput::bincode_codec()
-                        .deserialize::<pessimistic_proof::PessimisticProofOutput>(
-                        sp1_proof.public_values.as_slice(),
-                    ) {
-                        Ok(output) => Some(output.new_pessimistic_root),
-                        Err(error) => {
-                            error!(
-                                ?error,
-                                "get network status: failed to deserialize pessimistic proof \
-                                 output"
-                            );
-                            return Err(GetNetworkInfoError::InternalError {
-                                network_id,
-                                source: error.into(),
-                            });
-                        }
                     }
-                }
-                Ok(None) => None,
-                Err(ProofRetrievalError::NotFound { .. }) => None,
-                Err(error) => {
-                    error!(
-                        ?error,
-                        "get network status: failed to get proof for settled certificate \
-                         {certificate_id}",
-                        certificate_id = cert.certificate_id
-                    );
-                    return Err(GetNetworkInfoError::InternalError {
-                        network_id,
-                        source: error.into(),
-                    });
-                }
-            }
-        } else {
-            None
-        };
-
-        let settled_ler = latest_settled_certificate
-            .as_ref()
-            .map(|cert| cert.new_local_exit_root);
-
-        let settled_let_leaf_count = match self.state.read_local_network_state(network_id) {
-            Ok(local_network_state) => local_network_state.map(|v| v.exit_tree.leaf_count as u64),
-            Err(error) => {
-                error!(
-                    ?error,
-                    "get network status: failed to read local network state for network \
-                     {network_id}"
-                );
-                return Err(GetNetworkInfoError::InternalError {
-                    network_id,
-                    source: error.into(),
-                });
-            }
-        };
-
-        let latest_pending_height = latest_pending_certificate
-            .as_ref()
-            .map(|cert| cert.height.as_u64());
-
-        let latest_pending_status = latest_pending_certificate
-            .as_ref()
-            .map(|cert| cert.status.clone());
-
-        // Get pending certificate error if exists
-        let latest_pending_error = latest_pending_certificate
-            .as_ref()
-            .and_then(|cert| match &cert.status {
-                agglayer_types::CertificateStatus::InError { error } => {
-                    Some(error.as_ref().clone())
-                }
-                _ => None,
-            });
-
-        // Get epoch with latest settlement from settled certificate header
-        let latest_epoch_with_settlement = latest_settled_certificate
-            .as_ref()
-            .and_then(|cert| cert.epoch_number.map(|num| num.as_u64()));
-
-        // Get the last settled claim if we have a settled height
-        let settled_claim = if let Some(height) = settled_height {
-            self.get_latest_settled_claim(network_id, height)
-                .map_err(|error| {
-                    error!(?error, "Failed to get last settled claim");
-                    GetNetworkInfoError::InternalError {
-                        network_id,
-                        source: error.into(),
+                    Ok(None) => Err(GetNetworkInfoError::UnknownNetworkType { network_id }),
+                    Err(error) => {
+                        error!(?error, "Unable to determine network type");
+                        Err(GetNetworkInfoError::InternalError {
+                            network_id,
+                            source: error.into(),
+                        })
                     }
-                })?
-        } else {
-            None
-        };
+                }?;
+        }
 
-        Ok(NetworkInfo {
-            network_status,
-            network_type,
-            network_id,
-            settled_height,
-            settled_certificate_id,
-            settled_pp_root,
-            settled_ler,
-            settled_let_leaf_count,
-            settled_claim,
-            latest_pending_height,
-            latest_pending_status,
-            latest_pending_error,
-            latest_epoch_with_settlement,
-        })
+        match network_info.latest_pending_status {
+            None => {
+                // No pending certificate means the network status is unknown
+                network_info.network_status = NetworkStatus::Unknown;
+            }
+            Some(CertificateStatus::InError { .. }) => {
+                // Network is in error if the latest pending certificate is in error
+                network_info.network_status = NetworkStatus::Error;
+            }
+            _ => {
+                // Otherwise, the network is active
+                network_info.network_status = NetworkStatus::Active;
+            }
+        }
+
+        Ok(network_info)
     }
 }
 
@@ -643,7 +650,7 @@ where
     pub fn get_network_state(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<NetworkInfo>, GetNetworkInfoError> {
+    ) -> Result<NetworkInfo, GetNetworkInfoError> {
         // TODO: Implement the logic to retrieve the actual network state.
         self.state.get_network_info(network_id).map_err(|source| {
             GetNetworkInfoError::InternalError {

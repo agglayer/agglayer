@@ -81,7 +81,7 @@ trait Agglayer {
     ) -> RpcResult<Option<CertificateHeader>>;
 
     #[method(name = "getNetworkInfo")]
-    async fn get_network_info(&self, network_id: NetworkId) -> RpcResult<Option<NetworkInfo>>;
+    async fn get_network_info(&self, network_id: NetworkId) -> RpcResult<NetworkInfo>;
 }
 
 /// The RPC agglayer service implementation.
@@ -266,9 +266,10 @@ where
         Ok(header)
     }
 
-    async fn get_network_info(&self, network_id: NetworkId) -> RpcResult<Option<NetworkInfo>> {
+    async fn get_network_info(&self, network_id: NetworkId) -> RpcResult<NetworkInfo> {
         let state = self.rpc_service.get_network_info(network_id)?;
-        Ok(Some(state))
+
+        Ok(state)
     }
 }
 

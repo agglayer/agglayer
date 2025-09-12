@@ -27,7 +27,7 @@ impl Key {
             },
             Key {
                 network_id: network_id.to_u32(),
-                kind: KeyKind::LatestPendingHeight,
+                kind: KeyKind::LatestPendingCertificate,
             },
         ]
     }
@@ -38,7 +38,7 @@ pub enum KeyKind {
     NetworkType,
     LatestSettledCertificate,
     LatestSettledClaim,
-    LatestPendingHeight,
+    LatestPendingCertificate,
 }
 
 impl Codec for Key {}
