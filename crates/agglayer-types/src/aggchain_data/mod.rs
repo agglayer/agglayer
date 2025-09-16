@@ -43,7 +43,7 @@ impl TryFrom<AggchainData> for global::Payload {
                     signatures: vec![Some(*signature.ok_or(AggchainDataError::MissingSignature)?)],
                 },
             },
-            AggchainData::MultisigOnly(multisig) => {
+            AggchainData::MultisigOnly { multisig } => {
                 global::Payload::MultisigOnly(multisig::Payload::from(&multisig))
             }
             AggchainData::MultisigAndAggchainProof {

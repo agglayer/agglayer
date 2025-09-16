@@ -392,8 +392,8 @@ where
             AggchainData::Generic { signature, .. } => {
                 cert.verify_aggchain_proof_signature(sequencer_address, signature)
             }
-            AggchainData::MultisigOnly(signatures) => {
-                cert.verify_multisig(signatures.into(), multisig_ctx)
+            AggchainData::MultisigOnly { multisig } => {
+                cert.verify_multisig(multisig.into(), multisig_ctx)
             }
             AggchainData::MultisigAndAggchainProof { multisig, .. } => {
                 cert.verify_multisig(multisig.into(), multisig_ctx)

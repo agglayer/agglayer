@@ -44,13 +44,13 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = "0.10.0"
-agglayer-interop = "0.10.0"
-agglayer-interop-types = "0.10.0"
-agglayer-elf-build = "0.10.0"
-agglayer-primitives = "0.10.0"
-agglayer-tries = "0.10.0"
-unified-bridge = "0.10.0"
+agglayer-bincode = "0.11.0"
+agglayer-interop = "0.11.0"
+agglayer-interop-types = "0.11.0"
+agglayer-elf-build = "0.11.0"
+agglayer-primitives = "0.11.0"
+agglayer-tries = "0.11.0"
+unified-bridge = "0.11.0"
 
 # Provers
 agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.3.0" }
