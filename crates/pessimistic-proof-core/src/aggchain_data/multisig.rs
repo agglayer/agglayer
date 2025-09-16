@@ -48,7 +48,7 @@ impl MultiSignature {
         // 32-bytes threshold
         buf.extend(U256::from(self.threshold).to_be_bytes::<32>());
 
-        // 20-bytes per signer
+        // 20-bytes per signer (padded in 32bytes)
         for a in &self.expected_signers {
             buf.extend_from_slice(&[0u8; 12]);
             buf.extend_from_slice(&a.into_array());
