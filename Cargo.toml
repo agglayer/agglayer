@@ -3,6 +3,7 @@ resolver = "2"
 default-members = ["crates/agglayer"]
 members = ["crates/*", "tests/integrations"]
 exclude = [
+    "crates/aggregation-proof-program",
     "crates/pessimistic-proof-program",
     "crates/pessimistic-proof-test-suite/aggchain-proof-ecdsa-example/program/",
 ]

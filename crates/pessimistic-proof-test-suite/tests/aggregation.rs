@@ -1,14 +1,18 @@
 use std::collections::BTreeMap;
 
-use agglayer_types::{PessimisticRootInput, U256};
-use pessimistic_proof::{NetworkState, ELF as PESSIMISTIC_PROOF_ELF};
+use agglayer_types::{
+    aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx, PessimisticRootInput, U256,
+};
+use pessimistic_proof::{
+    core::commitment::{PessimisticRootCommitmentVersion, SignatureCommitmentVersion},
+    NetworkState, ELF as PESSIMISTIC_PROOF_ELF,
+};
 use pessimistic_proof_test_suite::{
     forest::Forest,
     sample_data::{self as data, ETH, USDC},
-    AGGREGATION_PROOF_ELF,
 };
 use sp1_sdk::{ProverClient, SP1Proof, SP1Stdin};
-use unified_bridge::{CommitmentVersion, NetworkId};
+use unified_bridge::NetworkId;
 
 /// Contiguious pessimistic proofs per network.
 #[derive(Default)]
@@ -20,16 +24,24 @@ pub struct AggregationData {
 pub fn generate_pp(state: &mut Forest, n_exits: usize) -> Result<SP1Proof, ()> {
     let bridge_exits = data::sample_bridge_exits_01().take(n_exits);
     let initial_state: NetworkState = state.local_state().into();
-    let certificate = state.clone().apply_bridge_exits([], bridge_exits);
+    let certificate =
+        state
+            .clone()
+            .apply_bridge_exits([], bridge_exits, SignatureCommitmentVersion::V3);
 
     let multi_batch_header = state
         .state_b
         .apply_certificate(
             &certificate,
-            state.get_signer(),
-            certificate.l1_info_root().unwrap().unwrap_or_default(),
-            PessimisticRootInput::Computed(CommitmentVersion::V2),
-            None,
+            L1WitnessCtx {
+                l1_info_root: certificate.l1_info_root().unwrap().unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V3,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa {
+                    signer: state.get_signer(),
+                },
+            },
         )
         .unwrap();
 

@@ -96,7 +96,7 @@ impl Forest {
         self
     }
 
-    pub fn with_local_exit_tree(mut self, local_exit_tree: LocalExitTree<Keccak256Hasher>) -> Self {
+    pub fn with_local_exit_tree(mut self, local_exit_tree: LocalExitTree) -> Self {
         self.state_b.exit_tree = local_exit_tree;
         self
     }
