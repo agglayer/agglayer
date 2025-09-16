@@ -80,6 +80,12 @@ impl DB {
         })
     }
 
+    fn write_options(&self) -> Result<&WriteOptions, DBError> {
+        self.default_write_options
+            .as_ref()
+            .ok_or(DBError::ReadOnlyMode)
+    }
+
     /// Try to get the value for the given key.
     pub fn get<C: ColumnSchema>(&self, key: &C::Key) -> Result<Option<C::Value>, DBError> {
         let key = key.encode()?;
@@ -132,16 +138,15 @@ impl DB {
             .cf_handle(C::COLUMN_FAMILY_NAME)
             .ok_or(DBError::ColumnFamilyNotFound)?;
 
-        let write_options = self.default_write_options.as_ref().ok_or(DBError::ReadOnlyMode)?;
-
-        self.rocksdb
-            .put_cf_opt(&cf, key, value, write_options)?;
+        let write_options = self.write_options()?;
+        self.rocksdb.put_cf_opt(&cf, key, value, write_options)?;
 
         Ok(())
     }
 
     pub fn write_batch(&self, batch: WriteBatch) -> Result<(), DBError> {
-        self.rocksdb.write(batch)?;
+        let write_options = self.write_options()?;
+        self.rocksdb.write_opt(batch, write_options)?;
 
         Ok(())
     }
@@ -220,10 +225,7 @@ impl DB {
             .ok_or(DBError::ColumnFamilyNotFound)?;
         let key = key.encode()?;
 
-        let write_options = self.default_write_options.as_ref().ok_or(DBError::ReadOnlyMode)?;
-
-        Ok(self
-            .rocksdb
-            .delete_cf_opt(&cf, key, write_options)?)
+        let write_options = self.write_options()?;
+        Ok(self.rocksdb.delete_cf_opt(&cf, key, write_options)?)
     }
 }
