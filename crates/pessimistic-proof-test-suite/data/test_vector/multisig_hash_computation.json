@@ -9,7 +9,7 @@
                 ]
             },
             "expected_output": {
-                "multisig_hash": "0xf3a32c19d9d554e98004558d3580c44928e7dbe91df1a07d7fc42101acefef8e"
+                "multisig_hash": "0xe0c7a9983a810c24cb2fe92669f4f7e99cdccb534b2d47678b3ca9b9c903bb11"
             }
         },
         {
@@ -21,7 +21,7 @@
                 ]
             },
             "expected_output": {
-                "multisig_hash": "0xd032fdedf62320ed8e19e72d0fc0814a9fffed00e28893dd7cea13f48b51ea77"
+                "multisig_hash": "0xb8ccb2211ff0679ef8f99d2fe40271dc543230dd5710560b7c94eea3474ce34b"
             }
         },
         {
@@ -34,7 +34,7 @@
                 ]
             },
             "expected_output": {
-                "multisig_hash": "0xdfef7a1da1865195481a5d4d51c8afa936d6b046336b90b1e609c10e468ed223"
+                "multisig_hash": "0x61fc820be3285c548dffb964b0da879d58070935008b9de796d2b813d1cfb354"
             }
         },
         {
@@ -44,6 +44,17 @@
             },
             "expected_output": {
                 "multisig_hash": "0x290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"
+            }
+        },
+        {
+            "inputs": {
+                "threshold": 1,
+                "signers": [
+                    "0x3fe9A33F4159962b0193074E0B3f4C0362181703"
+                ]
+            },
+            "expected_output": {
+                "multisig_hash": "0x5a8d33e0fc84feed00090b93230e2e616d44d1b6847eba82780d7d0da53a3ed1"
             }
         }
     ]

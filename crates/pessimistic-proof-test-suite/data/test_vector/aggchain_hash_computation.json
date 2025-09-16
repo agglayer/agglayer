@@ -3,12 +3,52 @@
     "test_vectors": [
         {
             "inputs": {
+                "aggchain_vkey": "0x6666666666666666666666666666666666666666666666666666666666666666",
+                "aggchain_params": "0x2ab0a4443bbea3fbe4d0e1503d11ff1367842fb0c8b28a5c8550f27599a40751",
+                "multisig_hash": "0x2ab0a4443bbea3fbe4d0e1503d11ff1367842fb0c8b28a5c8550f27599a40751"
+            },
+            "expected_output": {
+                "aggchain_hash": "0xcd8b12214a0f1dc095d9568690dc7cd630b25590487d799c79af9b8890c1237d"
+            }
+        },
+        {
+            "inputs": {
                 "aggchain_vkey": "0x1111111111111111111111111111111111111111111111111111111111111111",
-                "aggchain_params": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "aggchain_params": "0x1234567891234567891234567891234567891234567891234567891234567891",
+                "multisig_hash": "0x2222222222222222222222222222222222222222222222222222222222222222"
+            },
+            "expected_output": {
+                "aggchain_hash": "0x82d6030d032dc846925db745815bf2a46f86e243debe9bcff206905af2beafac"
+            }
+        },
+        {
+            "inputs": {
+                "aggchain_vkey": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "aggchain_params": "0x3333333333333333333333333333333333333333333333333333333333333333",
+                "multisig_hash": "0x4444444444444444444444444444444444444444444444444444444444444444"
+            },
+            "expected_output": {
+                "aggchain_hash": "0x814624d96cb8d3d477d1fc3e086113b7fce2c33f64354a4e4f609f26a010bc70"
+            }
+        },
+        {
+            "inputs": {
+                "aggchain_vkey": "0x1234567891234567891234567891234567891234567891234567891234567891",
+                "aggchain_params": "0x1111111111111111111111111111111111111111111111111111111111111111",
                 "multisig_hash": "0x3333333333333333333333333333333333333333333333333333333333333333"
             },
             "expected_output": {
-                "aggchain_hash": "0x3f237a02f576ee839ec056e8ff088299456adf6fd012bbbae6f9804ea7a71672"
+                "aggchain_hash": "0x09d6c442275429418d8f4083e7bfc8de6c5dc6e32fd428409916cfa4ec30410b"
+            }
+        },
+        {
+            "inputs": {
+                "aggchain_vkey": "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+                "aggchain_params": "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+                "multisig_hash": "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+            },
+            "expected_output": {
+                "aggchain_hash": "0x73392c2bda8b3dcf1c0f29c97478ba0064f08056050e57b25db511df914474cd"
             }
         },
         {
@@ -19,16 +59,6 @@
             },
             "expected_output": {
                 "aggchain_hash": "0x38f0bdfc9dcc49a1532fdbe0db4b07cd61e3062dd20c1e3d7299a489b0f1cc5a"
-            }
-        },
-        {
-            "inputs": {
-                "aggchain_vkey": "0xdead00000000000000000000000000000000000000000000000000000000dead",
-                "aggchain_params": "0xa1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
-                "multisig_hash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
-            },
-            "expected_output": {
-                "aggchain_hash": "0x278166299e8938bbfe79234036b635a0228aa7375787e07756e36eb8b5fa60bf"
             }
         }
     ]
