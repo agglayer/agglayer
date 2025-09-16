@@ -39,8 +39,8 @@ pub enum MultisigError {
 impl MultiSignature {
     /// Commitment on the signers and threshold.
     pub fn multisig_hash(&self) -> Digest {
-        const ADDRESS_BYTES: usize = core::mem::size_of::<Address>(); // 20-bytes
-        const THRESHOLD_BYTES: usize = u32::BITS as usize; // 32-bytes
+        const ADDRESS_BYTES: usize = 32; // 32-bytes because padded 20bytes address
+        const THRESHOLD_BYTES: usize = 32; // 32-bytes
 
         let mut buf =
             Vec::with_capacity(THRESHOLD_BYTES + ADDRESS_BYTES * self.expected_signers.len());
