@@ -668,31 +668,6 @@ where
 impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
     AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
-    PendingStore: Send + Sync + 'static,
-    StateStore: NetworkInfoReader + 'static,
-    DebugStore: Send + Sync + 'static,
-    L1Rpc: Send + Sync + 'static,
-    EpochsStore: EpochStoreReader + 'static,
-{
-    /// Assemble the current state of the specified network from
-    /// the data in various sources.
-    pub fn get_network_state(
-        &self,
-        network_id: NetworkId,
-    ) -> Result<NetworkInfo, GetNetworkInfoError> {
-        // TODO: Implement the logic to retrieve the actual network state.
-        self.state.get_network_info(network_id).map_err(|source| {
-            GetNetworkInfoError::InternalError {
-                network_id,
-                source: source.into(),
-            }
-        })
-    }
-}
-
-impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
-    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
-where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
