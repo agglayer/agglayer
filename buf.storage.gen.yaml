@@ -10,8 +10,8 @@ plugins:
       - bytes=.
       - compile_well_known_types
 
-  - local: protoc-gen-prost-serde
-    out: crates/agglayer-storage/src/types/generated
+  # - local: protoc-gen-prost-serde
+  #   out: crates/agglayer-storage/src/types/generated
 
   - local: protoc-gen-prost-crate
     out: crates/agglayer-storage/src/types/generated/

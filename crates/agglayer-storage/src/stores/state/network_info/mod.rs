@@ -12,8 +12,8 @@ use crate::{
     types::network_info::{
         self,
         v0::{
-            LatestPendingCertificateInfo, SettledLocalExitTreeLeafCount,
-            SettledPessimisticProofRoot,
+            LatestPendingCertificateHeight, LatestPendingCertificateInfo, SettledClaim,
+            SettledLocalExitTreeLeafCount, SettledPessimisticProofRoot,
         },
     },
 };
@@ -31,10 +31,10 @@ impl crate::stores::NetworkInfoReader for StateStore {
                     network_info::KeyKind::LatestSettledClaim => {
                         state.settled_claim = expected_type_or_fail!(
                             maybe_value,
-                            network_info::v0::network_info_value::Value::SettledClaim(claim,),
+                            network_info::v0::network_info_value::Value::SettledClaim(SettledClaim { global_index: Some(global_index), bridge_exit_hash: Some(bridge_exit_hash) }),
                             agglayer_types::SettledClaim {
-                                global_index: try_digest!(&*claim.global_index, "GlobalIndex")?,
-                                bridge_exit_hash: try_digest!(&*claim.bridge_exit_hash, "GlobalIndex")?,
+                                global_index: try_digest!(&*global_index.value, "GlobalIndex")?,
+                                bridge_exit_hash: try_digest!(&*bridge_exit_hash.bridge_exit_hash, "BridgeExitHash")?,
                             },
                             "Wrong value type decoded, was expecting SettledClaim, decoded \
                              another type"
@@ -116,7 +116,8 @@ impl crate::stores::NetworkInfoReader for StateStore {
                             maybe_value,
                             network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(
                                 LatestPendingCertificateInfo{
-                                    height,..
+                                    height: Some(LatestPendingCertificateHeight { height }),
+                                    ..
                                 },
                             ),
                             height.into(),
@@ -143,7 +144,10 @@ impl crate::stores::NetworkInfoReader for StateStore {
                 expected_type_or_fail!(
                     value,
                     network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(
-                        LatestPendingCertificateInfo { height, .. }
+                        LatestPendingCertificateInfo {
+                            height: Some(LatestPendingCertificateHeight { height }),
+                            ..
+                        }
                     ),
                     height.into(),
                     "Wrong value type decoded, was expecting LatestPendingHeight, decoded another \

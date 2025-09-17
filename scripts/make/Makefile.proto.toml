@@ -12,23 +12,10 @@ dependencies = [
 [tasks.generate-proto-storage]
 command = "buf"
 args = ["generate", "--template", "buf.storage.gen.yaml", "--path", "proto/agglayer/storage"]
-dependencies = [
-    "install-buf",
-    "install-protoc-gen-prost",
-    "install-protoc-gen-prost-serde",
-    "install-protoc-gen-prost-crate",
-]
 
 [tasks.generate-proto-node]
 command = "buf"
 args = ["generate", "--template", "buf.rust.gen.yaml", "--path", "proto/agglayer/node"]
-dependencies = [
-    "install-buf",
-    "install-protoc-gen-prost",
-    "install-protoc-gen-prost-serde",
-    "install-protoc-gen-prost-crate",
-    "install-protoc-gen-tonic",
-]
 
 [tasks.install-buf]
 condition = { env_not_set = ["GITHUB_RUN_ID"] }

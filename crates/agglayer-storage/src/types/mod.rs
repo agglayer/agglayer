@@ -66,4 +66,5 @@ crate::columns::impl_codec_using_bincode_for!(
     Proof,
     SmtKey,
     SmtValue,
+    network_info::Key
 );

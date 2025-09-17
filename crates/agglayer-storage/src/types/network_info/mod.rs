@@ -1,4 +1,6 @@
-use prost::Message;
+use std::io;
+
+use prost::{bytes::BytesMut, Message};
 use serde::{Deserialize, Serialize};
 
 pub use super::generated::agglayer::storage::v0;
@@ -11,8 +13,10 @@ pub struct Key {
 }
 
 impl Key {
-    pub(crate) fn all_keys_for_network(network_id: agglayer_types::NetworkId) -> Vec<Self> {
-        vec![
+    pub(crate) fn all_keys_for_network(
+        network_id: agglayer_types::NetworkId,
+    ) -> impl ExactSizeIterator<Item = Self> + Clone {
+        [
             Key {
                 network_id: network_id.to_u32(),
                 kind: KeyKind::NetworkType,
@@ -30,6 +34,7 @@ impl Key {
                 kind: KeyKind::LatestPendingCertificate,
             },
         ]
+        .into_iter()
     }
 }
 
@@ -41,17 +46,21 @@ pub enum KeyKind {
     LatestPendingCertificate,
 }
 
-impl Codec for Key {}
-
 pub type Value = super::generated::agglayer::storage::v0::NetworkInfoValue;
 
 impl Codec for Value {
-    fn encode(&self) -> Result<Vec<u8>, crate::columns::CodecError> {
-        let expected_length = self.encoded_len();
-        let mut buf = Vec::with_capacity(expected_length);
+    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {
+        let len = self.encoded_len();
+
+        let mut buf = BytesMut::new();
+        buf.reserve(len);
         <Value as prost::Message>::encode(self, &mut buf)?;
 
-        Ok(buf)
+        writer
+            .write_all(&buf[..])
+            .map_err(crate::columns::CodecError::UnableToWriteEncodedBytes)?;
+
+        Ok(())
     }
 
     fn decode(buf: &[u8]) -> Result<Self, crate::columns::CodecError> {

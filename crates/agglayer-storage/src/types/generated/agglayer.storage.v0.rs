@@ -71,9 +71,23 @@ pub struct SettledLocalExitTreeLeafCount {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SettledClaim {
     /// Global index, indicating uniquely which tree leaf is claimed.
+    #[prost(message, optional, tag="1")]
+    pub global_index: ::core::option::Option<GlobalIndex>,
+    /// Hash of the claimed imported bridge exit.
+    #[prost(message, optional, tag="2")]
+    pub bridge_exit_hash: ::core::option::Option<BridgeExitHash>,
+}
+/// Global index, indicating uniquely which tree leaf is claimed.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GlobalIndex {
+    /// The global index in bytes
     #[prost(bytes="bytes", tag="1")]
-    pub global_index: ::prost::bytes::Bytes,
-    /// / Hash of the claimed imported bridge exit.
+    pub value: ::prost::bytes::Bytes,
+}
+/// / Hash of the claimed imported bridge exit.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BridgeExitHash {
+    /// The bridge exit hash in bytes
     #[prost(bytes="bytes", tag="2")]
     pub bridge_exit_hash: ::prost::bytes::Bytes,
 }
@@ -81,10 +95,24 @@ pub struct SettledClaim {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LatestPendingCertificateInfo {
     /// The actual certificate height that is in pending
+    #[prost(message, optional, tag="1")]
+    pub height: ::core::option::Option<LatestPendingCertificateHeight>,
+    /// The ID of the latest pending certificate.
+    #[prost(message, optional, tag="2")]
+    pub id: ::core::option::Option<LatestPendingCertificateId>,
+}
+/// The actual certificate height that is in pending
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct LatestPendingCertificateHeight {
+    /// The height
     #[prost(uint64, tag="1")]
     pub height: u64,
-    /// The ID of the latest pending certificate.
-    #[prost(bytes="bytes", tag="2")]
+}
+/// The ID of the latest pending certificate.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LatestPendingCertificateId {
+    /// The certificate ID in bytes
+    #[prost(bytes="bytes", tag="1")]
     pub id: ::prost::bytes::Bytes,
 }
 /// The network type
@@ -128,5 +156,4 @@ impl NetworkType {
         }
     }
 }
-include!("agglayer.storage.v0.serde.rs");
 // @@protoc_insertion_point(module)

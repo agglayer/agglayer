@@ -26,6 +26,9 @@ pub enum CodecError {
 
     #[error(r#"Invalid enum variant {0}"#)]
     InvalidEnumVariant(String),
+
+    #[error(r#"Unable to write encoded bytes: {0}"#)]
+    UnableToWriteEncodedBytes(#[from] std::io::Error),
 }
 
 pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {

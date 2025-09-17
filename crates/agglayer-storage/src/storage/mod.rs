@@ -112,13 +112,13 @@ impl DB {
             .map(|k| k.encode().map(|key| (cf, key)))
             .collect();
 
-        let results: Result<Vec<Option<_>>, _> = snapshot
+        let results = snapshot
             .multi_get_cf(keys?)
             .into_iter()
             .map(|r| r.map_err(DBError::from))
-            .collect();
+            .collect::<Result<Vec<Option<_>>, _>>()?;
 
-        results?
+        results
             .into_iter()
             .map(|bytes| match bytes {
                 Some(bytes) => C::Value::decode(&bytes[..]).map_err(Into::into).map(Some),

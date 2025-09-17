@@ -68,15 +68,39 @@ message SettledLocalExitTreeLeafCount {
 // Info about the latest settled claim in the network.
 message SettledClaim {
   // Global index, indicating uniquely which tree leaf is claimed.
-  bytes global_index = 1;
-  /// Hash of the claimed imported bridge exit.
+  GlobalIndex global_index = 1;
+  // Hash of the claimed imported bridge exit.
+  BridgeExitHash bridge_exit_hash = 2;
+}
+
+// Global index, indicating uniquely which tree leaf is claimed.
+message GlobalIndex {
+  // The global index in bytes
+  bytes value = 1;
+}
+
+/// Hash of the claimed imported bridge exit.
+message BridgeExitHash {
+  // The bridge exit hash in bytes
   bytes bridge_exit_hash = 2;
 }
 
 // The latest pending certificate.
 message LatestPendingCertificateInfo {
   // The actual certificate height that is in pending
-  uint64 height = 1;
+  LatestPendingCertificateHeight height = 1;
   // The ID of the latest pending certificate.
-  bytes id = 2;
+  LatestPendingCertificateId id = 2;
+}
+
+// The actual certificate height that is in pending
+message LatestPendingCertificateHeight {
+  // The height
+  uint64 height = 1;
+}
+
+// The ID of the latest pending certificate.
+message LatestPendingCertificateId {
+  // The certificate ID in bytes
+  bytes id = 1;
 }
