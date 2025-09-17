@@ -132,7 +132,7 @@ impl Certificate {
                     .commitment(SignatureCommitmentVersion::V4);
                 (signature.as_ref(), commitment)
             }
-            AggchainData::MultisigOnly(_) => unimplemented!("adapt tests for multisig"),
+            AggchainData::MultisigOnly { .. } => unimplemented!("adapt tests for multisig"),
             AggchainData::MultisigAndAggchainProof { .. } => {
                 unimplemented!("adapt tests for multisig")
             }

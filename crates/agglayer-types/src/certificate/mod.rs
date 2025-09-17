@@ -226,7 +226,7 @@ impl Certificate {
             AggchainData::Generic {
                 aggchain_params, ..
             } => Some(*aggchain_params),
-            AggchainData::MultisigOnly(_) => None,
+            AggchainData::MultisigOnly { .. } => None,
             AggchainData::MultisigAndAggchainProof {
                 aggchain_proof:
                     agglayer_interop_types::aggchain_proof::AggchainProof {

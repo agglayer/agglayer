@@ -167,7 +167,7 @@ where
         // the multibatch header is configured to use the hash from L1
         match certificate.aggchain_data {
             AggchainData::ECDSA { .. } => {}
-            AggchainData::MultisigOnly(_) => {}
+            AggchainData::MultisigOnly { .. } => {}
             AggchainData::Generic { ref proof, .. } => {
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
 
