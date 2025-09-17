@@ -16,7 +16,6 @@ use agglayer_types::{
     CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId,
     NetworkInfo, NetworkStatus, NetworkType, SettledClaim, Signature,
 };
-use alloy::network;
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
@@ -587,34 +586,64 @@ where
 
         if network_info.network_type == NetworkType::Unspecified {
             // Determine network type from the latest available certificate
-            network_info.network_type =
-                match self.get_latest_available_certificate_for_network(network_id) {
-                    Ok(Some(certificate)) => {
-                        // Determine network type based on aggchain_data variant
-                        match certificate.aggchain_data {
+            let aggchain_data = match self.get_latest_available_certificate_for_network(network_id)
+            {
+                Ok(Some(certificate)) => {
+                    Ok(Some(certificate.aggchain_data))
+                    // Determine network type based on aggchain_data variant
+                }
+                Ok(None) if network_info.latest_pending_height.is_some() => {
+                    // If there's no latest available certificate but we have a pending height,
+                    // We can unwrap
+                    let height = network_info.latest_pending_height.unwrap();
+                    self.pending_store
+                        .get_certificate(network_id, height)
+                        .map_err(|error| {
+                            error!(
+                                ?error,
+                                "Failed to get pending certificate at height {height} for network \
+                                 {network_id}"
+                            );
+                            GetNetworkInfoError::InternalError {
+                                network_id,
+                                source: error.into(),
+                            }
+                        })
+                        .map(|maybe_cert| maybe_cert.map(|cert| cert.aggchain_data))
+                }
+                Ok(None) => {
+                    // No certificates at all, cannot determine network type
+                    warn!(
+                        "No certificates found for network {network_id}, cannot determine network \
+                         type"
+                    );
+                    return Err(GetNetworkInfoError::UnknownNetworkType { network_id });
+                }
+                Err(error) => {
+                    error!(?error, "Unable to determine network type");
+                    Err(GetNetworkInfoError::InternalError {
+                        network_id,
+                        source: error.into(),
+                    })
+                }
+            }?;
+
+            if let Some(aggchain_data) = aggchain_data {
+                network_info.network_type = match aggchain_data {
                     agglayer_types::aggchain_proof::AggchainData::ECDSA { .. } => {
-                        Ok(NetworkType::Ecdsa)
+                        NetworkType::Ecdsa
                     }
                     agglayer_types::aggchain_proof::AggchainData::Generic { .. } => {
-                        Ok(NetworkType::Generic)
+                        NetworkType::Generic
                     }
                     agglayer_types::aggchain_proof::AggchainData::MultisigOnly { .. } => {
-                        Ok(NetworkType::MultisigOnly)
+                        NetworkType::MultisigOnly
                     }
                     agglayer_types::aggchain_proof::AggchainData::MultisigAndAggchainProof {
                         ..
-                    } => Ok(NetworkType::MultisigAndAggchainProof),
-                }
-                    }
-                    Ok(None) => Err(GetNetworkInfoError::UnknownNetworkType { network_id }),
-                    Err(error) => {
-                        error!(?error, "Unable to determine network type");
-                        Err(GetNetworkInfoError::InternalError {
-                            network_id,
-                            source: error.into(),
-                        })
-                    }
-                }?;
+                    } => NetworkType::MultisigAndAggchainProof,
+                };
+            }
         }
 
         match network_info.latest_pending_status {

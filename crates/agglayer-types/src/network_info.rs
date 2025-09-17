@@ -72,7 +72,7 @@ pub struct NetworkInfo {
 }
 
 impl NetworkInfo {
-    pub fn from_network_id(network_id: NetworkId) -> Self {
+    pub const fn from_network_id(network_id: NetworkId) -> Self {
         Self {
             network_status: NetworkStatus::Unknown,
             network_type: NetworkType::Unspecified,

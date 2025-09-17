@@ -1,6 +1,6 @@
 use agglayer_interop::grpc::v1::FixedBytes32;
 use agglayer_types::{
-    CertificateStatus as AgglayerCertificateStatus, Height, NetworkInfo as AgglayerRpcNetworkInfo,
+    CertificateStatus as AgglayerCertificateStatus, NetworkInfo as AgglayerRpcNetworkInfo,
     NetworkStatus as AgglayerRpcNetworkStatus, NetworkType as AgglayerRpcNetworkType,
 };
 
