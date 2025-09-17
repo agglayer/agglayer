@@ -14,7 +14,7 @@ use agglayer_storage::{
 use agglayer_types::{
     aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Address, Certificate,
     CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId,
-    NetworkInfo, NetworkStatus, NetworkType, SettledClaim, Signature,
+    NetworkInfo, NetworkStatus, NetworkType, SettledClaim, Signature, U256,
 };
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
@@ -411,11 +411,11 @@ where
 
             // Check for imported bridge exits
             if let Some(last_imported_exit) = certificate.imported_bridge_exits.last() {
-                let global_index_hash = last_imported_exit.global_index.hash();
+                let global_index: U256 = last_imported_exit.global_index.into();
                 let bridge_exit_hash = last_imported_exit.bridge_exit.hash();
 
                 return Ok(Some(SettledClaim {
-                    global_index: global_index_hash,
+                    global_index: global_index.to_be_bytes().into(),
                     bridge_exit_hash,
                 }));
             }

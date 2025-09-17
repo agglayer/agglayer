@@ -4149,7 +4149,7 @@ dependencies = [
 
 [[package]]
 name = "pessimistic-proof-program"
-version = "7.0.0"
+version = "8.0.0"
 dependencies = [
  "pessimistic-proof-core",
  "sp1-cli",

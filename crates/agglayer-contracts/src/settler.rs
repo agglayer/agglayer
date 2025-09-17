@@ -63,6 +63,10 @@ where
             custom_chain_data,
         );
 
+        debug!(
+            "Building the L1 settlement tx with calldata: {:?}",
+            tx_call.calldata()
+        );
         // This is a fail point for testing purposes, it simulates low gas conditions.
         // Check if the low gas fail point is active and set the low gas if it is.
         #[cfg(feature = "testutils")]
