@@ -30,8 +30,9 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agglayer-bincode"
-version = "0.10.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Feq#104ce78d94e273f67b3092ef1f2e42023a36a206"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac0c0aff83f8c70b7dbb09e1869b46974c146bad91b6b79e9251425b2a30ce53"
 dependencies = [
  "bincode",
  "serde",
@@ -39,8 +40,9 @@ dependencies = [
 
 [[package]]
 name = "agglayer-primitives"
-version = "0.10.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Feq#104ce78d94e273f67b3092ef1f2e42023a36a206"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2820422f2ac1ba52d6e4cbe0539c26d01a7590d32a2a343009cfa72d43e9858"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -53,8 +55,9 @@ dependencies = [
 
 [[package]]
 name = "agglayer-tries"
-version = "0.10.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Feq#104ce78d94e273f67b3092ef1f2e42023a36a206"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78d7a68fb7e0ccd9500d0e075f195363b968db1d178cf0c0b298e8b5e3a61a2c"
 dependencies = [
  "agglayer-primitives",
  "hex",
@@ -4146,7 +4149,7 @@ dependencies = [
 
 [[package]]
 name = "pessimistic-proof-program"
-version = "7.0.0"
+version = "8.0.0"
 dependencies = [
  "pessimistic-proof-core",
  "sp1-cli",
@@ -6665,8 +6668,9 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "unified-bridge"
-version = "0.10.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Feq#104ce78d94e273f67b3092ef1f2e42023a36a206"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1ab409cc369315fad9e2bf4f207511ce5de2aa18590778fc75aab9e8eac5fc1"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",

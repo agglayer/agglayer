@@ -14,7 +14,7 @@ use agglayer_types::{
 };
 use eyre::{eyre, Context as _};
 use pessimistic_proof::{
-    core::{commitment::StateCommitment, generate_pessimistic_proof},
+    core::{commitment::StateCommitment, generate_pessimistic_proof, AggchainHashValues},
     local_state::LocalNetworkState,
     multi_batch_header::MultiBatchHeader,
     unified_bridge::{
@@ -167,7 +167,7 @@ where
         // the multibatch header is configured to use the hash from L1
         match certificate.aggchain_data {
             AggchainData::ECDSA { .. } => {}
-            AggchainData::MultisigOnly(_) => {}
+            AggchainData::MultisigOnly { .. } => {}
             AggchainData::Generic { ref proof, .. } => {
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
 
@@ -224,7 +224,10 @@ where
             });
         }
 
-        info!("Successfully executed the PP program locally");
+        info!(
+            public_inputs = ?pv_sp1_execute,
+            "Successfully executed the PP program locally"
+        );
 
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
@@ -358,11 +361,25 @@ where
         // Fetch all the necessary context from the L1
         let ctx_from_l1 = self.fetch_l1_context(certificate).await?;
 
+        debug!("Context fetched from the L1: {ctx_from_l1:?}");
+
         let initial_state = LocalNetworkState::from(state.clone());
 
         let multi_batch_header = state
             .apply_certificate(certificate, ctx_from_l1)
             .map_err(|source| CertificationError::Types { source })?;
+
+        let aggchain_hash_values = AggchainHashValues::from(&multi_batch_header.aggchain_data);
+
+        debug!(
+            "Unrolled aggchain data values: {:?}",
+            multi_batch_header.aggchain_data
+        );
+        debug!("Unrolled aggchain hash values: {:?}", aggchain_hash_values);
+        debug!(
+            "Aggchain hash computed by the agglayer node and PP: {:?}",
+            aggchain_hash_values.hash()
+        );
 
         let targets_witness_generation: StateCommitment = {
             let ns: LocalNetworkState = state.clone().into();

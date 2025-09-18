@@ -9,6 +9,7 @@ use crate::aggchain_data::{aggchain_proof::AggchainProof, AggchainData, MultiSig
 
 struct ConsensusType(u32);
 
+#[derive(Debug)]
 pub enum AggchainHashValues {
     ConsensusType1 {
         aggchain_vkey: Option<Vkey>,

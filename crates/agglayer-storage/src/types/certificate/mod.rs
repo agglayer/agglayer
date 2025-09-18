@@ -264,7 +264,7 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
                 }
             }
 
-            AggchainData::MultisigOnly(multisig) => AggchainDataV1::MultisigOnly {
+            AggchainData::MultisigOnly { multisig } => AggchainDataV1::MultisigOnly {
                 multisig: Cow::Borrowed(multisig.0.as_slice()),
             },
             AggchainData::MultisigAndAggchainProof {
@@ -314,9 +314,9 @@ impl From<AggchainDataV1<'_>> for AggchainData {
                 signature,
                 public_values: Some(public_values.into_owned()),
             },
-            AggchainDataV1::MultisigOnly { multisig } => {
-                Self::MultisigOnly(MultisigPayload(multisig.into_owned()))
-            }
+            AggchainDataV1::MultisigOnly { multisig } => Self::MultisigOnly {
+                multisig: MultisigPayload(multisig.into_owned()),
+            },
             AggchainDataV1::MultisigAndAggchainProof {
                 multisig,
                 proof,
@@ -344,9 +344,8 @@ fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
 }
 
 impl crate::columns::Codec for Certificate {
-    fn encode(&self) -> Result<Vec<u8>, CodecError> {
-        // TODO get rid of the clones <https://github.com/agglayer/agglayer/issues/618>
-        Ok(bincode_codec().serialize(&CurrentCertificate::from(self))?)
+    fn encode_into<W: std::io::Write>(&self, writer: W) -> Result<(), CodecError> {
+        Ok(bincode_codec().serialize_into(writer, &CurrentCertificate::from(self))?)
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
