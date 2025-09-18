@@ -6,7 +6,11 @@ license.workspace = true
 
 [features]
 default = []
-testutils = ["dep:arbitrary", "pessimistic-proof/testutils"]
+testutils = [
+    "dep:arbitrary",
+    "pessimistic-proof/testutils",
+    "agglayer-interop-types/testutils",
+]
 
 [[bench]]
 name = "criterion"
