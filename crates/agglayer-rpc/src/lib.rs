@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
@@ -36,6 +39,7 @@ pub struct AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsSt
     epochs_store: Arc<EpochsStore>,
     config: Arc<Config>,
     l1_rpc_provider: Arc<L1Rpc>,
+    readiness: Arc<AtomicBool>,
 }
 
 impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
@@ -50,6 +54,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
         epochs_store: Arc<EpochsStore>,
         config: Arc<Config>,
         l1_rpc_provider: Arc<L1Rpc>,
+        readiness: Arc<AtomicBool>,
     ) -> Self {
         Self {
             certificate_sender,
@@ -59,6 +64,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
             epochs_store,
             config,
             l1_rpc_provider,
+            readiness,
         }
     }
 
@@ -878,6 +884,8 @@ where
         certificate: Certificate,
         extra_signature: Option<Signature>,
     ) -> Result<CertificateId, CertificateSubmissionError> {
+        self.readiness.store(false, Ordering::Relaxed);
+
         let hash = certificate.hash();
         let hash_string = hash.to_string();
         tracing::Span::current().record("hash", &hash_string);
@@ -941,6 +949,8 @@ where
                 error!("Failed to send certificate: {error}");
                 CertificateSubmissionError::OrchestratorNotResponsive
             })?;
+
+        self.readiness.store(true, Ordering::Relaxed);
 
         Ok(hash)
     }
