@@ -12,8 +12,8 @@ use crate::{
     types::network_info::{
         self,
         v0::{
-            LatestPendingCertificateHeight, LatestPendingCertificateInfo, SettledClaim,
-            SettledLocalExitTreeLeafCount, SettledPessimisticProofRoot,
+            network_info_value, LatestPendingCertificateHeight, LatestPendingCertificateInfo,
+            SettledClaim, SettledLocalExitTreeLeafCount, SettledPessimisticProofRoot,
         },
     },
 };
@@ -28,7 +28,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
             .zip(keys)
             .try_for_each(|(maybe_value, network_info::Key { kind, .. })| {
                 match kind {
-                    network_info::KeyKind::LatestSettledClaim => {
+                    network_info_value::ValueDiscriminants::SettledClaim => {
                         state.settled_claim = expected_type_or_fail!(
                             maybe_value,
                             network_info::v0::network_info_value::Value::SettledClaim(SettledClaim { global_index: Some(global_index), bridge_exit_hash: Some(bridge_exit_hash) }),
@@ -40,7 +40,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
                              another type"
                         )?;
                     }
-                    network_info::KeyKind::LatestSettledCertificate => {
+                    network_info_value::ValueDiscriminants::SettledCertificate => {
                         let maybe_settled_certificate = expected_type_or_fail!(
                             maybe_value,
                             network_info::v0::network_info_value::Value::SettledCertificate(
@@ -86,7 +86,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
                             }
                         }
                     }
-                    network_info::KeyKind::NetworkType => {
+                    network_info_value::ValueDiscriminants::NetworkType => {
                         state.network_type = expected_type_or_fail!(
                             maybe_value,
                             network_info::v0::network_info_value::Value::NetworkType(network_type,),
@@ -111,7 +111,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
                         ))?;
                     }
 
-                    network_info::KeyKind::LatestPendingCertificate => {
+                    network_info_value::ValueDiscriminants::LatestPendingCertificateInfo => {
                         state.latest_pending_height = expected_type_or_fail!(
                             maybe_value,
                             network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(
@@ -137,7 +137,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
         self.db
             .get::<NetworkInfoColumn>(&network_info::Key {
                 network_id: network_id.to_u32(),
-                kind: network_info::KeyKind::LatestPendingCertificate,
+                kind: network_info_value::ValueDiscriminants::LatestPendingCertificateInfo,
             })
             .map_err(Into::into)
             .and_then(|value| {
@@ -163,7 +163,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
         self.db
             .get::<NetworkInfoColumn>(&network_info::Key {
                 network_id: network_id.to_u32(),
-                kind: network_info::KeyKind::LatestSettledCertificate,
+                kind: network_info_value::ValueDiscriminants::SettledCertificate,
             })
             .map_err(Into::into)
             .and_then(|value| {

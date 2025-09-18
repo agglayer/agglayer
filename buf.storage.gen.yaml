@@ -9,9 +9,8 @@ plugins:
     opt:
       - bytes=.
       - compile_well_known_types
-
-  # - local: protoc-gen-prost-serde
-  #   out: crates/agglayer-storage/src/types/generated
+      - type_attribute=.agglayer.storage.v0.NetworkInfoValue.value=#[derive(strum_macros::EnumIter\, strum_macros::EnumDiscriminants)]
+      - type_attribute=.agglayer.storage.v0.NetworkInfoValue.value=#[strum_discriminants(derive(strum_macros::EnumIter\, strum_macros::FromRepr\, strum_macros::EnumCount))]
 
   - local: protoc-gen-prost-crate
     out: crates/agglayer-storage/src/types/generated/

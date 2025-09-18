@@ -612,6 +612,8 @@ dependencies = [
  "serde",
  "serde-reflection",
  "sp1-sdk",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "thiserror 2.0.16",
  "tokio",
  "tokio-util",

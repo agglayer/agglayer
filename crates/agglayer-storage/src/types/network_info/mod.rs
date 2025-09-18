@@ -2,48 +2,56 @@ use std::io;
 
 use prost::{bytes::BytesMut, Message};
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 
 pub use super::generated::agglayer::storage::v0;
-use crate::{columns::Codec, types::network_info::v0::NetworkType};
+use crate::{
+    columns::Codec,
+    types::network_info::v0::{
+        network_info_value::{self, ValueDiscriminants},
+        NetworkType,
+    },
+};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Key {
     pub(crate) network_id: u32,
-    pub(crate) kind: KeyKind,
+    #[serde(
+        serialize_with = "serialize_kind",
+        deserialize_with = "deserialize_kind"
+    )]
+    pub(crate) kind: ValueDiscriminants,
+}
+
+fn serialize_kind<S>(kind: &ValueDiscriminants, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_u32(*kind as u32)
+}
+
+fn deserialize_kind<'de, D>(deserializer: D) -> Result<ValueDiscriminants, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value: usize = u32::deserialize(deserializer)?
+        .try_into()
+        .map_err(|error| {
+            serde::de::Error::custom(format!("Invalid u32 to usize conversion: {}", error))
+        })?;
+
+    ValueDiscriminants::from_repr(value).ok_or_else(|| {
+        serde::de::Error::custom(format!("Invalid ValueDiscriminants value: {}", value))
+    })
 }
 
 impl Key {
     pub(crate) fn all_keys_for_network(
         network_id: agglayer_types::NetworkId,
     ) -> impl ExactSizeIterator<Item = Self> + Clone {
-        [
-            Key {
-                network_id: network_id.to_u32(),
-                kind: KeyKind::NetworkType,
-            },
-            Key {
-                network_id: network_id.to_u32(),
-                kind: KeyKind::LatestSettledCertificate,
-            },
-            Key {
-                network_id: network_id.to_u32(),
-                kind: KeyKind::LatestSettledClaim,
-            },
-            Key {
-                network_id: network_id.to_u32(),
-                kind: KeyKind::LatestPendingCertificate,
-            },
-        ]
-        .into_iter()
+        let network_id = network_id.to_u32();
+        network_info_value::ValueDiscriminants::iter().map(move |kind| Key { network_id, kind })
     }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub enum KeyKind {
-    NetworkType,
-    LatestSettledCertificate,
-    LatestSettledClaim,
-    LatestPendingCertificate,
 }
 
 pub type Value = super::generated::agglayer::storage::v0::NetworkInfoValue;
@@ -79,6 +87,37 @@ impl TryFrom<v0::NetworkType> for agglayer_types::NetworkType {
             NetworkType::MultisigOnly => Ok(agglayer_types::NetworkType::MultisigOnly),
             NetworkType::MultisigAndAggchainProof => {
                 Ok(agglayer_types::NetworkType::MultisigAndAggchainProof)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use strum::EnumCount;
+
+    use crate::types::network_info::v0::network_info_value::ValueDiscriminants;
+
+    #[test]
+    fn test_discriminant_from_u32() {
+        assert_eq!(ValueDiscriminants::COUNT, 4, "Expected 4 discriminants");
+        for i in 0..ValueDiscriminants::COUNT {
+            let discriminant = ValueDiscriminants::from_repr(i);
+            assert!(discriminant.is_some());
+
+            match discriminant.unwrap() {
+                ValueDiscriminants::NetworkType => {
+                    assert_eq!(i, 0, "NetworkType should be at index 0")
+                }
+                ValueDiscriminants::SettledCertificate => {
+                    assert_eq!(i, 1, "SettledCertificate should be at index 1")
+                }
+                ValueDiscriminants::SettledClaim => {
+                    assert_eq!(i, 2, "SettledClaim should be at index 2")
+                }
+                ValueDiscriminants::LatestPendingCertificateInfo => {
+                    assert_eq!(i, 3, "LatestPendingCertificateInfo should be at index 3")
+                }
             }
         }
     }

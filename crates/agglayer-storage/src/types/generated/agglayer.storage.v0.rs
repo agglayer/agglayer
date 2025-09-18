@@ -10,6 +10,8 @@ pub struct NetworkInfoValue {
 /// Nested message and enum types in `NetworkInfoValue`.
 pub mod network_info_value {
     /// The type of value being stored.
+    #[derive(strum_macros::EnumIter, strum_macros::EnumDiscriminants)]
+    #[strum_discriminants(derive(strum_macros::EnumIter, strum_macros::FromRepr, strum_macros::EnumCount))]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Value {
         /// The network type
