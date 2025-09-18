@@ -44,6 +44,7 @@ pub use testutils::compute_signature_info;
 /// Note: be mindful to update the [`Self::hash`] method accordingly
 /// upon modifying the fields of this structure.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "testutils", derive(Eq, PartialEq))]
 pub struct Certificate {
     /// NetworkID of the origin network.
     pub network_id: NetworkId,
@@ -226,7 +227,7 @@ impl Certificate {
             AggchainData::Generic {
                 aggchain_params, ..
             } => Some(*aggchain_params),
-            AggchainData::MultisigOnly(_) => None,
+            AggchainData::MultisigOnly { .. } => None,
             AggchainData::MultisigAndAggchainProof {
                 aggchain_proof:
                     agglayer_interop_types::aggchain_proof::AggchainProof {

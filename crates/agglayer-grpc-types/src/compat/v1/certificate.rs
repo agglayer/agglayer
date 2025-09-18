@@ -13,7 +13,7 @@ impl TryFrom<v1::Certificate> for Certificate {
         let has_multisig = matches!(
             aggchain_data,
             AggchainData::Generic { .. } // 1-of-1
-                | AggchainData::MultisigOnly(_)
+                | AggchainData::MultisigOnly { .. }
                 | AggchainData::MultisigAndAggchainProof { .. }
         );
 
