@@ -110,12 +110,14 @@ where
             .context("Failed to hash SP1 vkey")
             .map_err(CertificationError::Other)?;
 
-        let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::new(vkey_hash_bytes);
+        let vkey_digest = Digest::from(vkey_hash_bytes);
+
+        let proof_vk_hash = agglayer_contracts::aggchain::VKeyHash::from(vkey_digest);
 
         if aggchain_vkey != proof_vk_hash {
             return Err(CertificationError::AggchainProofVkeyMismatch {
-                expected: aggchain_vkey.to_hex(),
-                actual: proof_vk_hash.to_hex(),
+                expected: aggchain_vkey.to_bytes().to_string(),
+                actual: proof_vk_hash.to_bytes().to_string(),
             });
         }
 
