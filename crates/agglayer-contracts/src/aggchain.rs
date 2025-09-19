@@ -1,5 +1,4 @@
 pub use agglayer_primitives::vkey_hash::VKeyHash;
-
 use agglayer_primitives::{Address, U256};
 use alloy::primitives::Bytes;
 use tracing::error;
