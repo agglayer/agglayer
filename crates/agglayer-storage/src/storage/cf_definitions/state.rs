@@ -1,6 +1,6 @@
 use rocksdb::ColumnFamilyDescriptor;
 
-pub const CFS: [&str; 7] = [
+pub const CFS: [&str; 8] = [
     crate::columns::CERTIFICATE_HEADER_CF,
     crate::columns::CERTIFICATE_PER_NETWORK_CF,
     crate::columns::LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF,
@@ -8,6 +8,7 @@ pub const CFS: [&str; 7] = [
     crate::columns::LOCAL_EXIT_TREE_PER_NETWORK_CF,
     crate::columns::BALANCE_TREE_PER_NETWORK_CF,
     crate::columns::NULLIFIER_TREE_PER_NETWORK_CF,
+    crate::columns::NETWORK_INFO_CF,
 ];
 
 /// Definitions for the column families in the state storage.

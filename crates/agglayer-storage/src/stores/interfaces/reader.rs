@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
+    LocalNetworkStateData, NetworkId, Proof,
 };
 
 use crate::{
@@ -11,6 +12,8 @@ use crate::{
     },
     error::Error,
 };
+
+pub mod network_info_reader;
 
 pub trait DebugReader: Send + Sync {
     fn get_certificate(&self, certificate_id: &CertificateId)

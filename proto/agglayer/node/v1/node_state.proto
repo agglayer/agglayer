@@ -106,14 +106,14 @@ message GetLatestCertificateHeaderResponse {
   types.v1.CertificateHeader certificate_header = 1;
 }
 
-// Request to get the current state of the network, as seen by this node.
+// Request to get the current info of the network, as seen by this node.
 message GetNetworkInfoRequest {
   // The network identifier.
   uint32 network_id = 1;
 }
 
-// GetNetworkInfoResponse contains the current state information for a network.
+// GetNetworkInfoResponse contains the current information for a network.
 message GetNetworkInfoResponse {
-  // The current state of the network.
+  // The current information of the network.
   types.v1.NetworkInfo network_info = 1;
 }

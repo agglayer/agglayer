@@ -13,10 +13,10 @@ pub(crate) mod iterators;
 
 pub mod backup;
 
-pub use cf_definitions::debug::debug_db_cf_definitions;
-pub use cf_definitions::epochs::epochs_db_cf_definitions;
-pub use cf_definitions::pending::pending_db_cf_definitions;
-pub use cf_definitions::state::state_db_cf_definitions;
+pub use cf_definitions::{
+    debug::debug_db_cf_definitions, epochs::epochs_db_cf_definitions,
+    pending::pending_db_cf_definitions, state::state_db_cf_definitions,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
@@ -67,8 +67,9 @@ impl DB {
         })
     }
 
-    /// Open a RocksDB instance in read-only mode at the given path with some column families.
-    /// This prevents concurrency issues when multiple processes need to read from the database.
+    /// Open a RocksDB instance in read-only mode at the given path with some
+    /// column families. This prevents concurrency issues when multiple
+    /// processes need to read from the database.
     pub fn open_cf_readonly(path: &Path, cfs: Vec<ColumnFamilyDescriptor>) -> Result<DB, DBError> {
         let mut options = Options::default();
         options.create_if_missing(false); // Don't create if missing in readonly mode
@@ -103,6 +104,36 @@ impl DB {
             // If the value is not found, return None.
             // If the value is found, decode it and wrap it in Some to propagate decode error.
             .map_or(Ok(None), |v| v.map(Some))
+    }
+
+    pub fn atomic_multi_get<C: ColumnSchema>(
+        &self,
+        keys: impl IntoIterator<Item = C::Key>,
+    ) -> Result<Vec<Option<C::Value>>, DBError> {
+        let snapshot = self.rocksdb.snapshot();
+        let cf = self
+            .rocksdb
+            .cf_handle(C::COLUMN_FAMILY_NAME)
+            .ok_or(DBError::ColumnFamilyNotFound)?;
+
+        let keys: Result<Vec<_>, _> = keys
+            .into_iter()
+            .map(|k| k.encode().map(|key| (cf, key)))
+            .collect();
+
+        let results = snapshot
+            .multi_get_cf(keys?)
+            .into_iter()
+            .map(|r| r.map_err(DBError::from))
+            .collect::<Result<Vec<Option<_>>, _>>()?;
+
+        results
+            .into_iter()
+            .map(|bytes| match bytes {
+                Some(bytes) => C::Value::decode(&bytes[..]).map_err(Into::into).map(Some),
+                None => Ok(None),
+            })
+            .collect()
     }
 
     pub fn multi_get<C: ColumnSchema>(

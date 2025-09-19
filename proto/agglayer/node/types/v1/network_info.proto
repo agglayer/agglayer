@@ -6,7 +6,7 @@ import "agglayer/interop/types/v1/bytes.proto";
 import "agglayer/node/types/v1/certificate_header.proto";
 import "agglayer/node/types/v1/certificate_id.proto";
 
-// NetworkInfo represents the current info of a network in the AggLayer.
+// NetworkInfo represents the current information related to a network in the AggLayer.
 message NetworkInfo {
   // The current status of the network (e.g., "active", "syncing", "error").
   NetworkStatus network_status = 1;
