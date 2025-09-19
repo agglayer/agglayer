@@ -43,7 +43,7 @@ where
             .getAggchainVKey(alloy::primitives::FixedBytes(aggchain_selector))
             .call()
             .await
-            .map(|arg0| VKeyHash::from(arg0))
+            .map(VKeyHash::from)
             .map_err(|error| {
                 error!(?error, "Unable to fetch the aggchain vkey");
 
