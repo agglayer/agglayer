@@ -10,6 +10,7 @@ use agglayer_types::{
     Height, NetworkId,
 };
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
+use tokio::sync::mpsc;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::{error, info, instrument, warn};
 
@@ -36,6 +37,7 @@ pub(crate) trait AdminAgglayer {
         &self,
         certificate_id: CertificateId,
         status: CertificateStatus,
+        process_now: bool,
     ) -> RpcResult<()>;
 
     #[method(name = "setLatestPendingCertificate")]
@@ -58,6 +60,7 @@ pub(crate) trait AdminAgglayer {
 
 /// The Admin RPC agglayer service implementation.
 pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+    certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
@@ -67,12 +70,14 @@ pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
 impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
     /// Create an instance of the admin RPC agglayer service.
     pub fn new(
+        certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
         pending_store: Arc<PendingStore>,
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
         config: Arc<Config>,
     ) -> Self {
         Self {
+            certificate_sender,
             pending_store,
             state,
             debug_store,
@@ -231,6 +236,7 @@ where
         &self,
         certificate_id: CertificateId,
         status: CertificateStatus,
+        process_now: bool,
     ) -> RpcResult<()> {
         warn!(
             ?certificate_id,
@@ -243,6 +249,26 @@ where
                 error!(?error, "Failed to update certificate status");
                 Error::internal("Unable to update certificate status")
             })?;
+        if process_now {
+            let header = self
+                .state
+                .get_certificate_header(&certificate_id)
+                .map_err(|error| {
+                    error!(?error, "Failed to get certificate header");
+                    Error::internal("Unable to get certificate header")
+                })?
+                .ok_or_else(|| {
+                    error!("Certificate header not found");
+                    Error::ResourceNotFound(format!("CertificateHeader({certificate_id})"))
+                })?;
+            self.certificate_sender
+                .send((header.network_id, header.height, certificate_id))
+                .await
+                .map_err(|error| {
+                    error!(?error, "Failed to send certificate to orchestrator");
+                    Error::internal("Unable to send certificate to orchestrator")
+                })?;
+        }
         Ok(())
     }
 

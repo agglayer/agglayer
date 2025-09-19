@@ -222,7 +222,7 @@ async fn pending_certificate_in_error_force_set_status() {
     let mut config = Config::new(&path.path);
     config.debug_mode = true;
 
-    let context = TestContext::new_with_config(config).await;
+    let mut context = TestContext::new_with_config(config).await;
     let network_id = 1.into();
 
     let pending_certificate = Certificate::new_for_test(network_id, Height::ZERO);
@@ -280,11 +280,43 @@ async fn pending_certificate_in_error_force_set_status() {
         .admin_client
         .request(
             "admin_forceSetCertificateStatus",
-            rpc_params![pending_certificate.hash(), CertificateStatus::Candidate],
+            rpc_params![
+                pending_certificate.hash(),
+                CertificateStatus::Candidate,
+                false
+            ],
         )
         .await;
 
     assert!(res.is_ok());
+    assert!(context.certificate_receiver.try_recv().is_err());
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert!(res.settlement_tx_hash.is_some());
+    assert_eq!(res.status, CertificateStatus::Candidate);
+
+    let res: Result<(), _> = context
+        .admin_client
+        .request(
+            "admin_forceSetCertificateStatus",
+            rpc_params![
+                pending_certificate.hash(),
+                CertificateStatus::Candidate,
+                true
+            ],
+        )
+        .await;
+
+    assert!(res.is_ok());
+    assert_eq!(
+        context.certificate_receiver.try_recv(),
+        Ok((network_id, Height::ZERO, certificate_id))
+    );
 
     let res: CertificateHeader = context
         .state_store

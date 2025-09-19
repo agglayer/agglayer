@@ -254,7 +254,7 @@ impl Node {
         // Set up the core service object.
         let service = Arc::new(AgglayerService::new(core));
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
-            data_sender,
+            data_sender.clone(),
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
@@ -264,6 +264,7 @@ impl Node {
         ));
 
         let admin_router = AdminAgglayerImpl::new(
+            data_sender,
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
