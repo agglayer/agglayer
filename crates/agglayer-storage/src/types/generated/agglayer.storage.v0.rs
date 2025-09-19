@@ -36,10 +36,13 @@ pub struct SettledCertificate {
     pub certificate_id: ::core::option::Option<SettledCertificateId>,
     /// The pessimistic proof root of the latest settled certificate.
     #[prost(message, optional, tag="2")]
-    pub new_pp_root: ::core::option::Option<SettledPessimisticProofRoot>,
+    pub pp_root: ::core::option::Option<SettledPessimisticProofRoot>,
     /// The leaf count of the latest settled local exit tree.
     #[prost(message, optional, tag="3")]
     pub let_leaf_count: ::core::option::Option<SettledLocalExitTreeLeafCount>,
+    /// The local exit root of the latest settled certificate.
+    #[prost(message, optional, tag="4")]
+    pub ler: ::core::option::Option<SettledLocalExitRoot>,
 }
 /// SettledCertificateId represents the ID of the latest settled certificate.
 #[derive(Clone, PartialEq, ::prost::Message)]

@@ -22,9 +22,11 @@ message SettledCertificate {
   // The ID of the latest settled certificate.
   SettledCertificateId certificate_id = 1;
   // The pessimistic proof root of the latest settled certificate.
-  SettledPessimisticProofRoot new_pp_root = 2;
+  SettledPessimisticProofRoot pp_root = 2;
   // The leaf count of the latest settled local exit tree.
   SettledLocalExitTreeLeafCount let_leaf_count = 3;
+  // The local exit root of the latest settled certificate.
+  SettledLocalExitRoot ler = 4;
 }
 
 // The network type
