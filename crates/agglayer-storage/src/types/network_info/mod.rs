@@ -16,33 +16,7 @@ use crate::{
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Key {
     pub(crate) network_id: u32,
-    #[serde(
-        serialize_with = "serialize_kind",
-        deserialize_with = "deserialize_kind"
-    )]
     pub(crate) kind: ValueDiscriminants,
-}
-
-fn serialize_kind<S>(kind: &ValueDiscriminants, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    serializer.serialize_u32(*kind as u32)
-}
-
-fn deserialize_kind<'de, D>(deserializer: D) -> Result<ValueDiscriminants, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let value: usize = u32::deserialize(deserializer)?
-        .try_into()
-        .map_err(|error| {
-            serde::de::Error::custom(format!("Invalid u32 to usize conversion: {}", error))
-        })?;
-
-    ValueDiscriminants::from_repr(value).ok_or_else(|| {
-        serde::de::Error::custom(format!("Invalid ValueDiscriminants value: {}", value))
-    })
 }
 
 impl Key {
@@ -57,18 +31,18 @@ impl Key {
 pub type Value = super::generated::agglayer::storage::v0::NetworkInfoValue;
 
 impl Codec for Value {
-    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {
+    fn encode(&self) -> Result<Vec<u8>, crate::columns::CodecError> {
         let len = self.encoded_len();
 
         let mut buf = BytesMut::new();
         buf.reserve(len);
         <Value as prost::Message>::encode(self, &mut buf)?;
 
-        writer
-            .write_all(&buf[..])
-            .map_err(crate::columns::CodecError::UnableToWriteEncodedBytes)?;
+        Ok(buf.to_vec())
+    }
 
-        Ok(())
+    fn encode_into<W: io::Write>(&self, _writer: W) -> Result<(), crate::columns::CodecError> {
+        unimplemented!()
     }
 
     fn decode(buf: &[u8]) -> Result<Self, crate::columns::CodecError> {

@@ -1,3 +1,4 @@
+use agglayer_interop_types::aggchain_proof;
 use agglayer_primitives::Digest;
 use agglayer_tries::roots::LocalExitRoot;
 use serde::{Deserialize, Serialize};
@@ -31,6 +32,19 @@ pub enum NetworkType {
     MultisigOnly = 3,
     /// Multisig and aggchain proof network type.
     MultisigAndAggchainProof = 4,
+}
+
+impl From<&aggchain_proof::AggchainData> for NetworkType {
+    fn from(value: &aggchain_proof::AggchainData) -> Self {
+        match value {
+            aggchain_proof::AggchainData::ECDSA { .. } => NetworkType::Ecdsa,
+            aggchain_proof::AggchainData::Generic { .. } => NetworkType::Generic,
+            aggchain_proof::AggchainData::MultisigOnly { .. } => NetworkType::MultisigOnly,
+            aggchain_proof::AggchainData::MultisigAndAggchainProof { .. } => {
+                NetworkType::MultisigAndAggchainProof
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

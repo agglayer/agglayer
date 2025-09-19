@@ -11,7 +11,7 @@ pub struct NetworkInfoValue {
 pub mod network_info_value {
     /// The type of value being stored.
     #[derive(strum_macros::EnumIter, strum_macros::EnumDiscriminants)]
-    #[strum_discriminants(derive(strum_macros::EnumIter, strum_macros::FromRepr, strum_macros::EnumCount))]
+    #[strum_discriminants(derive(strum_macros::EnumIter, strum_macros::FromRepr, strum_macros::EnumCount, serde::Serialize, serde::Deserialize))]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Value {
         /// The network type

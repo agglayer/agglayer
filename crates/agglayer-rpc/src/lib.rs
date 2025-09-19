@@ -588,10 +588,7 @@ where
             // Determine network type from the latest available certificate
             let aggchain_data = match self.get_latest_available_certificate_for_network(network_id)
             {
-                Ok(Some(certificate)) => {
-                    Ok(Some(certificate.aggchain_data))
-                    // Determine network type based on aggchain_data variant
-                }
+                Ok(Some(certificate)) => Ok(Some(certificate.aggchain_data)),
                 Ok(None) if network_info.latest_pending_height.is_some() => {
                     // If there's no latest available certificate but we have a pending height,
                     // We can unwrap
@@ -628,21 +625,8 @@ where
                 }
             }?;
 
-            if let Some(aggchain_data) = aggchain_data {
-                network_info.network_type = match aggchain_data {
-                    agglayer_types::aggchain_proof::AggchainData::ECDSA { .. } => {
-                        NetworkType::Ecdsa
-                    }
-                    agglayer_types::aggchain_proof::AggchainData::Generic { .. } => {
-                        NetworkType::Generic
-                    }
-                    agglayer_types::aggchain_proof::AggchainData::MultisigOnly { .. } => {
-                        NetworkType::MultisigOnly
-                    }
-                    agglayer_types::aggchain_proof::AggchainData::MultisigAndAggchainProof {
-                        ..
-                    } => NetworkType::MultisigAndAggchainProof,
-                };
+            if let Some(ref aggchain_data) = aggchain_data {
+                network_info.network_type = aggchain_data.into();
             }
         }
 
