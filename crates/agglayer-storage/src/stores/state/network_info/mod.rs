@@ -53,8 +53,10 @@ impl crate::stores::NetworkInfoReader for StateStore {
 
                         if let Some(network_info::v0::SettledCertificate {
                             certificate_id: Some(network_info::v0::SettledCertificateId { id }),
-                            new_pp_root,
+                            pp_root,
                             let_leaf_count,
+                            ..
+
                         }) = maybe_settled_certificate
                         {
                             let certificate_id = try_digest!(&*id, "CertificateId")?
@@ -75,7 +77,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
                                     ));
                                 }
 
-                                if let Some(SettledPessimisticProofRoot { root }) = new_pp_root {
+                                if let Some(SettledPessimisticProofRoot { root }) = pp_root {
                                     state.settled_pp_root = Some(try_digest!(&*root, "PessimisticProofRoot")?);
                                 } else {
                                     return Err(Error::Unexpected(
