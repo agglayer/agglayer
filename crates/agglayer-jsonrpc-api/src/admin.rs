@@ -31,6 +31,13 @@ pub(crate) trait AdminAgglayer {
         status: CertificateStatus,
     ) -> RpcResult<()>;
 
+    #[method(name = "forceSetCertificateStatus")]
+    async fn force_set_certificate_status(
+        &self,
+        certificate_id: CertificateId,
+        status: CertificateStatus,
+    ) -> RpcResult<()>;
+
     #[method(name = "setLatestPendingCertificate")]
     async fn set_latest_pending_certificate(&self, certificate_id: CertificateId) -> RpcResult<()>;
 
@@ -218,6 +225,27 @@ where
             }
         }
     }
+
+    #[instrument(skip(self), level = "debug")]
+    async fn force_set_certificate_status(
+        &self,
+        certificate_id: CertificateId,
+        status: CertificateStatus,
+    ) -> RpcResult<()> {
+        warn!(
+            ?certificate_id,
+            ?status,
+            "(ADMIN) Forcing status of certificate"
+        );
+        self.state
+            .update_certificate_header_status(&certificate_id, &status)
+            .map_err(|error| {
+                error!(?error, "Failed to update certificate status");
+                Error::internal("Unable to update certificate status")
+            })?;
+        Ok(())
+    }
+
     #[instrument(skip(self, certificate_id), level = "debug")]
     async fn set_latest_pending_certificate(&self, certificate_id: CertificateId) -> RpcResult<()> {
         warn!(

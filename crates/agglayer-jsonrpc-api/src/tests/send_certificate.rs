@@ -214,3 +214,84 @@ async fn pending_certificate_in_error_force_push() {
     assert!(res.settlement_tx_hash.is_some());
     assert_eq!(res.status, CertificateStatus::Candidate);
 }
+
+#[test_log::test(tokio::test)]
+async fn pending_certificate_in_error_force_set_status() {
+    let path = TempDBDir::new();
+
+    let mut config = Config::new(&path.path);
+    config.debug_mode = true;
+
+    let context = TestContext::new_with_config(config).await;
+    let network_id = 1.into();
+
+    let pending_certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let certificate_id = pending_certificate.hash();
+
+    context
+        .state_store
+        .insert_certificate_header(&pending_certificate, CertificateStatus::Pending)
+        .expect("unable to insert pending certificate header");
+
+    context
+        .state_store
+        .update_settlement_tx_hash(
+            &certificate_id,
+            SettlementTxHash::from(Digest::from([1; 32])),
+        )
+        .expect("unable to update settlement tx hash");
+
+    context
+        .pending_store
+        .insert_pending_certificate(network_id, Height::ZERO, &pending_certificate)
+        .expect("unable to insert pending certificate");
+
+    let res: Result<CertificateId, _> = context
+        .api_client
+        .request(
+            "interop_sendCertificate",
+            rpc_params![pending_certificate.clone()],
+        )
+        .await;
+
+    assert!(res.is_err());
+
+    context
+        .state_store
+        .update_certificate_header_status(
+            &certificate_id,
+            &CertificateStatus::error(agglayer_types::CertificateStatusError::InternalError(
+                "testing".to_string(),
+            )),
+        )
+        .expect("Unable to update certificate header status");
+
+    let res: Result<CertificateId, _> = context
+        .api_client
+        .request(
+            "interop_sendCertificate",
+            rpc_params![pending_certificate.clone()],
+        )
+        .await;
+
+    assert!(res.is_err());
+
+    let res: Result<(), _> = context
+        .admin_client
+        .request(
+            "admin_forceSetCertificateStatus",
+            rpc_params![pending_certificate.hash(), CertificateStatus::Candidate],
+        )
+        .await;
+
+    assert!(res.is_ok());
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert!(res.settlement_tx_hash.is_some());
+    assert_eq!(res.status, CertificateStatus::Candidate);
+}
