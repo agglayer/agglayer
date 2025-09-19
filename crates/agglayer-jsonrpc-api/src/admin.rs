@@ -209,6 +209,20 @@ where
             "(ADMIN) Forcing push of pending certificate: {}",
             certificate.hash()
         );
+        let header = self
+            .state
+            .get_certificate_header(&certificate.hash())
+            .map_err(|error| {
+                error!(?error, "Failed to get certificate header");
+                Error::internal("Unable to get certificate header")
+            })?;
+        if let Some(header) = header {
+            if header.status == CertificateStatus::Settled {
+                return Err(Error::InvalidArgument(
+                    "Cannot change status of a settled certificate".to_string(),
+                ));
+            }
+        }
         match self.pending_store.insert_pending_certificate(
             certificate.network_id,
             certificate.height,
@@ -243,6 +257,22 @@ where
             ?status,
             "(ADMIN) Forcing status of certificate"
         );
+        let header = self
+            .state
+            .get_certificate_header(&certificate_id)
+            .map_err(|error| {
+                error!(?error, "Failed to get certificate header");
+                Error::internal("Unable to get certificate header")
+            })?
+            .ok_or_else(|| {
+                error!("Certificate header not found");
+                Error::ResourceNotFound(format!("CertificateHeader({certificate_id})"))
+            })?;
+        if header.status == CertificateStatus::Settled {
+            return Err(Error::InvalidArgument(
+                "Cannot change status of a settled certificate".to_string(),
+            ));
+        }
         self.state
             .update_certificate_header_status(&certificate_id, &status)
             .map_err(|error| {
@@ -250,17 +280,6 @@ where
                 Error::internal("Unable to update certificate status")
             })?;
         if process_now {
-            let header = self
-                .state
-                .get_certificate_header(&certificate_id)
-                .map_err(|error| {
-                    error!(?error, "Failed to get certificate header");
-                    Error::internal("Unable to get certificate header")
-                })?
-                .ok_or_else(|| {
-                    error!("Certificate header not found");
-                    Error::ResourceNotFound(format!("CertificateHeader({certificate_id})"))
-                })?;
             self.certificate_sender
                 .send((header.network_id, header.height, certificate_id))
                 .await
