@@ -87,8 +87,8 @@ dependencies = [
  "mockall",
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
- "prover-config",
- "prover-executor",
+ "prover-config 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
+ "prover-executor 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.4.0)",
  "reqwest",
  "rstest",
  "serde",
@@ -561,9 +561,9 @@ dependencies = [
  "buildstructor",
  "eyre",
  "prost 0.13.5",
- "prover-engine",
- "prover-executor",
- "prover-logger",
+ "prover-engine 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
+ "prover-executor 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
+ "prover-logger 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
  "sp1-sdk",
  "tokio",
  "tokio-util",
@@ -579,9 +579,9 @@ name = "agglayer-prover-config"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git?tag=v1.3.0#f3fe82dbbe7c84e123f3a0a8ac177f8534757a34"
 dependencies = [
- "prover-config",
- "prover-logger",
- "prover-utils",
+ "prover-config 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
+ "prover-logger 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
+ "prover-utils 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
  "serde",
  "thiserror 2.0.16",
  "toml",
@@ -595,7 +595,7 @@ dependencies = [
  "agglayer-interop 0.10.0",
  "pbjson 0.7.0",
  "prost 0.13.5",
- "prover-executor",
+ "prover-executor 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
  "serde",
  "sp1-sdk",
  "thiserror 2.0.16",
@@ -6799,7 +6799,18 @@ name = "prover-config"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git?tag=v1.3.0#f3fe82dbbe7c84e123f3a0a8ac177f8534757a34"
 dependencies = [
- "prover-utils",
+ "prover-utils 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
+ "serde",
+ "serde_with",
+ "url",
+]
+
+[[package]]
+name = "prover-config"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.0#f2494fcae4456812a6af2b1f0b684dd653aff58a"
+dependencies = [
+ "prover-utils 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.4.0)",
  "serde",
  "serde_with",
  "url",
@@ -6826,6 +6837,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "prover-engine"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.0#f2494fcae4456812a6af2b1f0b684dd653aff58a"
+dependencies = [
+ "agglayer-telemetry 0.2.1",
+ "anyhow",
+ "axum 0.8.4",
+ "eyre",
+ "http",
+ "http-body-util",
+ "tokio",
+ "tokio-util",
+ "tonic 0.12.3",
+ "tonic-health",
+ "tonic-reflection",
+ "tower 0.4.13",
+ "tracing",
+]
+
+[[package]]
 name = "prover-executor"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git?tag=v1.3.0#f3fe82dbbe7c84e123f3a0a8ac177f8534757a34"
@@ -6834,9 +6865,36 @@ dependencies = [
  "buildstructor",
  "eyre",
  "futures",
- "prover-config",
- "prover-engine",
- "prover-logger",
+ "prover-config 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
+ "prover-engine 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
+ "prover-logger 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.3.0)",
+ "serde",
+ "sp1-prover",
+ "sp1-sdk",
+ "thiserror 2.0.16",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tonic 0.12.3",
+ "tonic-health",
+ "tonic-reflection",
+ "tower 0.4.13",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "prover-executor"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.0#f2494fcae4456812a6af2b1f0b684dd653aff58a"
+dependencies = [
+ "anyhow",
+ "buildstructor",
+ "eyre",
+ "futures",
+ "prover-config 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.4.0)",
+ "prover-engine 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.4.0)",
+ "prover-logger 0.1.0 (git+https://github.com/agglayer/provers.git?tag=v1.4.0)",
  "serde",
  "sp1-prover",
  "sp1-sdk",
@@ -6864,9 +6922,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "prover-logger"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.0#f2494fcae4456812a6af2b1f0b684dd653aff58a"
+dependencies = [
+ "serde",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "prover-utils"
 version = "0.1.0"
 source = "git+https://github.com/agglayer/provers.git?tag=v1.3.0#f3fe82dbbe7c84e123f3a0a8ac177f8534757a34"
+dependencies = [
+ "humantime-serde",
+ "serde",
+ "serde_with",
+ "toml",
+]
+
+[[package]]
+name = "prover-utils"
+version = "0.1.0"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.0#f2494fcae4456812a6af2b1f0b684dd653aff58a"
 dependencies = [
  "humantime-serde",
  "serde",
