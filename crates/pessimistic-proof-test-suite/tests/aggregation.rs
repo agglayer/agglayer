@@ -5,7 +5,7 @@ use agglayer_types::{
 };
 use pessimistic_proof::{
     core::commitment::{PessimisticRootCommitmentVersion, SignatureCommitmentVersion},
-    NetworkState, ELF as PESSIMISTIC_PROOF_ELF,
+    NetworkState, PessimisticProofOutput, ELF as PESSIMISTIC_PROOF_ELF,
 };
 use pessimistic_proof_test_suite::{
     forest::Forest,
@@ -14,20 +14,34 @@ use pessimistic_proof_test_suite::{
 use sp1_sdk::{ProverClient, SP1Proof, SP1Stdin};
 use unified_bridge::NetworkId;
 
-/// Contiguious pessimistic proofs per network.
+fn u(x: u64) -> U256 {
+    x.try_into().unwrap()
+}
+/// Contiguous pessimistic proofs per network.
 #[derive(Default)]
 pub struct AggregationData {
     pub proofs_per_network: BTreeMap<NetworkId, Vec<SP1Proof>>,
 }
 
+pub fn initial_forest() -> Forest {
+    let large_amount = U256::MAX.checked_div(U256::from(2u64)).unwrap(); // not max to allow importing bridge exits
+    let balances = [(ETH, large_amount), (USDC, large_amount)];
+
+    Forest::default()
+        .with_network_id(18)
+        .with_initial_balances(balances)
+}
+
 /// Generates on PP and returns the SP1Proof.
-pub fn generate_pp(state: &mut Forest, n_exits: usize) -> Result<SP1Proof, ()> {
+pub fn generate_pp(state: &mut Forest, n_exits: usize, with_preconf: bool) -> Result<SP1Proof, ()> {
     let bridge_exits = data::sample_bridge_exits_01().take(n_exits);
     let initial_state: NetworkState = state.local_state().into();
-    let certificate =
-        state
-            .clone()
-            .apply_bridge_exits([], bridge_exits, SignatureCommitmentVersion::V3);
+    let certificate = state.clone().apply_bridge_exits_with_preconf(
+        vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))],
+        bridge_exits,
+        SignatureCommitmentVersion::V3,
+        true,
+    );
 
     let multi_batch_header = state
         .state_b
@@ -52,11 +66,17 @@ pub fn generate_pp(state: &mut Forest, n_exits: usize) -> Result<SP1Proof, ()> {
     let client = ProverClient::from_env();
 
     // Execute to get cycle numbers
-    let (_, report) = client
+    let (pv, report) = client
         .execute(PESSIMISTIC_PROOF_ELF, &stdin)
         .run()
         .expect("execution failed");
-    println!("successful execution");
+
+    let pv_sp1_execute: PessimisticProofOutput = PessimisticProofOutput::bincode_codec()
+        .deserialize(pv.as_slice())
+        .unwrap();
+
+    println!("successful execution: {report:?}");
+    println!("public values: {pv_sp1_execute:?}");
     Err(())
 }
 
@@ -67,14 +87,10 @@ pub fn generate_pp_for_chain(_origin_network: NetworkId, _nb_proofs: usize) -> V
 
 /// Generate a set of PP per network
 pub fn generate_aggregation_data() -> Result<AggregationData, ()> {
-    let large_amount = U256::MAX.checked_div(U256::from(2u64)).unwrap(); // not max to allow importing bridge exits
-    let balances = [(ETH, large_amount), (USDC, large_amount)];
-    let mut forest_a = Forest::default()
-        .with_network_id(18)
-        .with_initial_balances(balances);
+    let mut forest = initial_forest();
 
     let nb_exits = 1;
-    let pp = generate_pp(&mut forest_a, nb_exits);
+    let pp = generate_pp(&mut forest, nb_exits, false);
 
     Ok(Default::default())
 }
@@ -82,4 +98,16 @@ pub fn generate_aggregation_data() -> Result<AggregationData, ()> {
 #[test]
 fn test_aggregation() {
     generate_aggregation_data().unwrap();
+}
+
+// -----
+
+#[test]
+fn test_preconf() {
+    generate_aggregation_data().unwrap();
+    // generate 2 certs referring to preconf LER
+
+    // generate PP for those
+
+    // generate aggregation of those PP
 }

@@ -1,7 +1,17 @@
+use std::collections::BTreeMap;
+
+use agglayer_bincode as bincode;
 use agglayer_primitives::Digest;
 use pessimistic_proof_core::PessimisticProofOutput;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as ShaDigest, Sha256};
+use unified_bridge::{MerkleProof, NetworkId};
+
+// /// LUT on the subinclusion of each preconfirmed LERs
+// #[derive(Deserialize, Serialize, Default, Debug)]
+// pub struct LutPreconfirmedLERs {
+//     pub sublet: BTreeMap<NetworkId, Vec<Digest>>,
+// }
 
 /// Witness for the aggregation proof.
 #[derive(Deserialize, Serialize, Default, Debug)]
@@ -10,6 +20,8 @@ pub struct AggregationWitness {
     pub public_values: Vec<PessimisticProofOutput>,
     /// Pessimistic proof vkey
     pub pp_vkey: [u32; 8],
+    // Sub inclusions of preconfirmed LERs
+    //   pub sublet: BTreeMap<NetworkId, Vec<MerkleProof>>,
 }
 
 #[derive(Deserialize, Serialize, Default, Debug)]
@@ -18,6 +30,12 @@ pub struct AggregationPublicValues {
     pub hash_chain_pp_inputs: Digest,
     /// Pessimistic proof vkey
     pub pp_vkey: [u32; 8],
+}
+
+impl AggregationPublicValues {
+    pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
+        bincode::contracts()
+    }
 }
 
 impl AggregationWitness {
@@ -36,16 +54,14 @@ impl AggregationWitness {
 
     /// Computes and returns the public values.
     pub fn public_values(&self) -> AggregationPublicValues {
-        todo!();
+        AggregationPublicValues {
+            hash_chain_pp_inputs: self.hash_chain_pub_values(),
+            pp_vkey: self.pp_vkey,
+        }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        assert!(true);
+    /// Hash chain on the PP public values.
+    pub fn hash_chain_pub_values(&self) -> Digest {
+        Digest::default() // todo
     }
 }

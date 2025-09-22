@@ -14,8 +14,8 @@ use pessimistic_proof::{
     local_state::LocalNetworkState,
     proof::zero_if_empty_local_exit_root,
     unified_bridge::{
-        BridgeExit, Claim, ClaimFromMainnet, GlobalIndex, ImportedBridgeExit, L1InfoTreeLeaf,
-        L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
+        BridgeExit, Claim, ClaimFromMainnet, ClaimFromPreconf, GlobalIndex, ImportedBridgeExit,
+        L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
     },
     PessimisticProofOutput,
 };
@@ -131,10 +131,10 @@ impl Forest {
         }
     }
 
-    /// Imported bridge exits from network A to network B.
-    pub fn imported_bridge_exits(
+    pub fn imported_bridge_exits_with_preconf(
         &mut self,
         events: impl IntoIterator<Item = (TokenInfo, U256)>,
+        with_preconf: bool,
     ) -> Vec<ImportedBridgeExit> {
         let mut res = Vec::new();
 
@@ -148,28 +148,45 @@ impl Forest {
             self.local_exit_tree_data_a.add_leaf(exit.hash()).unwrap();
         }
 
-        let (rer, mer, ger) = {
-            let rer = Digest::default();
-            let mer = self.local_exit_tree_data_a.get_root();
-            (rer, mer, keccak256_combine([mer, rer]))
-        };
+        let mut compute_claim_data = |index| {
+            let proof_leaf_ler = MerkleProof {
+                proof: self.local_exit_tree_data_a.get_proof(index).unwrap(),
+                root: self.local_exit_tree_data_a.get_root(),
+            };
 
-        let l1_leaf = L1InfoTreeLeaf {
-            l1_info_tree_index: 0,
-            rer,
-            mer,
-            inner: L1InfoTreeLeafInner {
-                block_hash: Digest::default(),
-                timestamp: 0,
-                global_exit_root: ger,
-            },
-        };
+            if with_preconf {
+                Claim::Preconf(Box::new(ClaimFromPreconf { proof_leaf_ler }))
+            } else {
+                let (rer, mer, ger) = {
+                    let rer = Digest::default();
+                    let mer = proof_leaf_ler.root;
+                    (rer, mer, keccak256_combine([mer, rer]))
+                };
 
-        self.l1_info_tree.add_leaf(l1_leaf.hash()).unwrap();
+                let l1_leaf = L1InfoTreeLeaf {
+                    l1_info_tree_index: 0,
+                    rer,
+                    mer,
+                    inner: L1InfoTreeLeafInner {
+                        block_hash: Digest::default(),
+                        timestamp: 0,
+                        global_exit_root: ger,
+                    },
+                };
 
-        let proof_ger_l1root = MerkleProof {
-            proof: self.l1_info_tree.get_proof(0).unwrap(),
-            root: self.l1_info_tree.get_root(),
+                self.l1_info_tree.add_leaf(l1_leaf.hash()).unwrap();
+
+                let proof_ger_l1root = MerkleProof {
+                    proof: self.l1_info_tree.get_proof(0).unwrap(),
+                    root: self.l1_info_tree.get_root(),
+                };
+
+                Claim::Mainnet(Box::new(ClaimFromMainnet {
+                    proof_leaf_mer: proof_leaf_ler,
+                    proof_ger_l1root: proof_ger_l1root.clone(),
+                    l1_leaf: l1_leaf.clone(),
+                }))
+            }
         };
 
         // Generate them as imported bridge exits
@@ -178,19 +195,20 @@ impl Forest {
             let imported_exit = ImportedBridgeExit {
                 bridge_exit: exit,
                 global_index: GlobalIndex::new(NETWORK_A, index),
-                claim_data: Claim::Mainnet(Box::new(ClaimFromMainnet {
-                    proof_leaf_mer: MerkleProof {
-                        proof: self.local_exit_tree_data_a.get_proof(index).unwrap(),
-                        root: self.local_exit_tree_data_a.get_root(),
-                    },
-                    proof_ger_l1root: proof_ger_l1root.clone(),
-                    l1_leaf: l1_leaf.clone(),
-                })),
+                claim_data: compute_claim_data(idx as u32),
             };
             res.push(imported_exit);
         }
 
         res
+    }
+
+    /// Imported bridge exits from network A to network B.
+    pub fn imported_bridge_exits(
+        &mut self,
+        events: impl IntoIterator<Item = (TokenInfo, U256)>,
+    ) -> Vec<ImportedBridgeExit> {
+        self.imported_bridge_exits_with_preconf(events, false)
     }
 
     /// Local state associated with this forest.
@@ -207,15 +225,17 @@ impl Forest {
     }
 
     /// Apply a sequence of events and return the corresponding [`Certificate`].
-    pub fn apply_bridge_exits(
+    pub fn apply_bridge_exits_with_preconf(
         &mut self,
         imported_bridge_events: impl IntoIterator<Item = (TokenInfo, U256)>,
         bridge_exits: impl IntoIterator<Item = BridgeExit>,
         version: SignatureCommitmentVersion,
+        with_preconf: bool,
     ) -> Certificate {
         let prev_local_exit_root = self.state_b.exit_tree.get_root().into();
 
-        let imported_bridge_exits = self.imported_bridge_exits(imported_bridge_events);
+        let imported_bridge_exits =
+            self.imported_bridge_exits_with_preconf(imported_bridge_events, with_preconf);
         let bridge_exits = bridge_exits
             .into_iter()
             .inspect(|exit| {
@@ -246,6 +266,16 @@ impl Forest {
             custom_chain_data: vec![],
             l1_info_tree_leaf_count: None,
         }
+    }
+
+    /// Apply a sequence of events and return the corresponding [`Certificate`].
+    pub fn apply_bridge_exits(
+        &mut self,
+        imported_bridge_events: impl IntoIterator<Item = (TokenInfo, U256)>,
+        bridge_exits: impl IntoIterator<Item = BridgeExit>,
+        version: SignatureCommitmentVersion,
+    ) -> Certificate {
+        self.apply_bridge_exits_with_preconf(imported_bridge_events, bridge_exits, version, false)
     }
 
     /// Apply a sequence of events and return the corresponding [`Certificate`].

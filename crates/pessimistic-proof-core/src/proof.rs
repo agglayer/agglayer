@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use agglayer_bincode as bincode;
 use agglayer_primitives::{Address, Digest};
 use agglayer_tries::roots::LocalExitRoot;
@@ -166,6 +168,8 @@ pub struct PessimisticProofOutput {
     pub new_local_exit_root: LocalExitRoot,
     /// The new pessimistic root.
     pub new_pessimistic_root: Digest,
+    /// The list of pre-confirmed LERs per origin network.
+    pub preconfirmed_lers: BTreeMap<NetworkId, Vec<LocalExitRoot>>,
 }
 
 impl PessimisticProofOutput {
@@ -249,6 +253,12 @@ pub fn generate_pessimistic_proof(
     }
     .compute_pp_root(target_pp_root_version);
 
+    // let preconfirmed_lers: Vec<_> = batch_header
+    //     .imported_bridge_exits
+    //     .iter()
+    //     .filter_map(|(ib, _)| ib.preconfirmed_ler())
+    //     .collect();
+
     Ok((
         PessimisticProofOutput {
             prev_local_exit_root: zero_if_empty_local_exit_root(initial_state_commitment.exit_root),
@@ -258,6 +268,7 @@ pub fn generate_pessimistic_proof(
             aggchain_hash: batch_header.aggchain_data.aggchain_hash(),
             new_local_exit_root: zero_if_empty_local_exit_root(final_state_commitment.exit_root),
             new_pessimistic_root,
+            preconfirmed_lers: BTreeMap::new(),
         },
         final_state_commitment,
     ))
