@@ -30,26 +30,27 @@ impl<D> Port<D> {
     pub const fn as_u16(&self) -> u16 {
         self.port
     }
+
+    pub fn from_env_var(env_var: &str) -> Option<Self> {
+        env::var(env_var)
+            .inspect_err(|err| match err {
+                env::VarError::NotPresent => (),
+                env::VarError::NotUnicode(_) => warn!("Contents of ${env_var} not Unicode"),
+            })
+            .ok()?
+            .parse()
+            .inspect_err(|_| warn!("Variable ${env_var} not a valid port number"))
+            .ok()
+    }
 }
 
 impl<D: PortDefaults> Port<D> {
+    pub fn from_env() -> Option<Self> {
+        Self::from_env_var(D::ENV_VAR?)
+    }
+
     pub fn from_env_or_default() -> Self {
-        D::ENV_VAR
-            .and_then(|env_var| {
-                let port_str = env::var(env_var)
-                    .inspect_err(|err| match err {
-                        env::VarError::NotPresent => (),
-                        env::VarError::NotUnicode(_) => {
-                            warn!("Contents of ${env_var} not Unicode")
-                        }
-                    })
-                    .ok()?;
-                port_str
-                    .parse()
-                    .inspect_err(|_| warn!("Variable ${env_var} not a valid port number"))
-                    .ok()
-            })
-            .unwrap_or(Self::new(D::DEFAULT))
+        Self::from_env().unwrap_or(Self::new(D::DEFAULT))
     }
 }
 
