@@ -18,13 +18,13 @@ pub trait PortDefaults {
 #[serde(from = "u16", into = "u16")]
 pub struct Port<D> {
     port: u16,
-    _config: std::marker::PhantomData<fn() -> D>,
+    _defaults: std::marker::PhantomData<fn() -> D>,
 }
 
 impl<D> Port<D> {
     pub const fn new(port: u16) -> Self {
-        let _config = std::marker::PhantomData;
-        Self { port, _config }
+        let _defaults = std::marker::PhantomData;
+        Self { port, _defaults }
     }
 
     pub const fn as_u16(&self) -> u16 {
