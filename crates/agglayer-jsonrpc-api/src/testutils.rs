@@ -146,7 +146,7 @@ impl TestContext {
 
         // Create agglayer_rpc::AgglayerService with the provider
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
-            certificate_sender,
+            certificate_sender.clone(),
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
@@ -161,6 +161,7 @@ impl TestContext {
         // Create the routers
         let router = agglayer_impl.start().await.unwrap();
         let admin_router = AdminAgglayerImpl::new(
+            certificate_sender,
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),

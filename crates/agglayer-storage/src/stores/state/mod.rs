@@ -6,9 +6,8 @@ use std::{
 
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
-    primitives::Digest, Certificate,
-    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId, SettlementTxHash,
+    primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
+    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
@@ -48,6 +47,8 @@ pub struct StateStore {
     db: Arc<DB>,
     backup_client: BackupClient,
 }
+
+mod network_info;
 
 impl StateStore {
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
@@ -358,10 +359,7 @@ impl StateStore {
         Ok(())
     }
 
-    fn read_local_exit_tree(
-        &self,
-        network_id: NetworkId,
-    ) -> Result<Option<LocalExitTree>, Error> {
+    fn read_local_exit_tree(&self, network_id: NetworkId) -> Result<Option<LocalExitTree>, Error> {
         let leaf_count = if let Some(leaf_count_value) =
             self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
                 network_id: network_id.into(),
@@ -393,9 +391,7 @@ impl StateStore {
             frontier[i] = Digest(*l);
         }
 
-        Ok(Some(LocalExitTree::from_parts(
-            leaf_count, frontier,
-        )))
+        Ok(Some(LocalExitTree::from_parts(leaf_count, frontier)))
     }
 
     fn read_smt<C, const DEPTH: usize>(
@@ -405,11 +401,10 @@ impl StateStore {
     where
         C: ColumnSchema<Key = SmtKey, Value = SmtValue>,
     {
-        let root_node: Node = if let Some(root_node_value) =
-            self.db.get::<C>(&SmtKey {
-                network_id: network_id.into(),
-                key_type: SmtKeyType::Root,
-            })? {
+        let root_node: Node = if let Some(root_node_value) = self.db.get::<C>(&SmtKey {
+            network_id: network_id.into(),
+            key_type: SmtKeyType::Root,
+        })? {
             match root_node_value {
                 SmtValue::Node(left, right) => Node {
                     left: Digest(*left.as_bytes()),

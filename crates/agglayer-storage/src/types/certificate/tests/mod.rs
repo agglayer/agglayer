@@ -327,11 +327,9 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
     let bytes = bincode_codec().serialize(&orig).unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();
-    let converted: Certificate = orig.into();
+    let converted = orig.into();
 
-    // This should really compare the certificates directly but that requires adding
-    // whole bunch of `Eq` impl to many types.
-    assert_eq!(format!("{converted:?}"), format!("{decoded:?}"));
+    assert_eq!(converted, decoded);
 }
 
 #[rstest::rstest]
@@ -350,7 +348,7 @@ fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> 
 #[case("aggdata_v1_05", AggchainDataV1::test5())]
 fn encoding<T>(#[case] name: &str, #[case] value: T)
 where
-    T: Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
+    T: Serialize + serde::de::DeserializeOwned + std::fmt::Debug + std::cmp::Eq,
 {
     // Snapshots for types where the encoding must stay stable.
     let bytes = Bytes::from(bincode::default().serialize(&value).unwrap());
@@ -361,9 +359,7 @@ where
         .deserialize(bytes.as_ref())
         .expect("deserialization failed");
 
-    // This should really compare the certificates directly but that requires adding
-    // whole bunch of `Eq` impl to many types.
-    assert_eq!(format!("{from_bytes:?}"), format!("{value:?}"));
+    assert_eq!(from_bytes, value);
 }
 
 #[rstest::rstest]
@@ -377,8 +373,7 @@ fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
     let bytes = load_sample_bytes(&format!("encoded/v0-{cert_name}.hex"));
     let from_bytes = Certificate::decode(&bytes).expect("v0 certificate to decode successfully");
 
-    // Again comparing debug output due to lack of `Eq`.
-    assert_eq!(format!("{from_bytes:?}"), format!("{from_json:?}"));
+    assert_eq!(from_bytes, from_json);
 }
 
 #[rstest::rstest]

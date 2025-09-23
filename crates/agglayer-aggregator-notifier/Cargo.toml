@@ -9,6 +9,7 @@ agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrat
 agglayer-config = { path = "../agglayer-config" }
 agglayer-contracts = { path = "../agglayer-contracts" }
 agglayer-storage = { path = "../agglayer-storage" }
+agglayer-primitives.workspace = true
 agglayer-types.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
 

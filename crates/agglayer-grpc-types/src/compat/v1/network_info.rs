@@ -1,15 +1,15 @@
 use agglayer_interop::grpc::v1::FixedBytes32;
-use agglayer_rpc::network_info::{
-    NetworkInfo as AgglayerRpcNetworkInfo, NetworkStatus as AgglayerRpcNetworkStatus,
-    NetworkType as AgglayerRpcNetworkType,
+use agglayer_types::{
+    CertificateStatus as AgglayerCertificateStatus, NetworkInfo as AgglayerRpcNetworkInfo,
+    NetworkStatus as AgglayerRpcNetworkStatus, NetworkType as AgglayerRpcNetworkType,
 };
-use agglayer_types::CertificateStatus as AgglayerCertificateStatus;
 
 use crate::node::types::v1;
 
 impl From<AgglayerRpcNetworkStatus> for v1::NetworkStatus {
     fn from(value: AgglayerRpcNetworkStatus) -> Self {
         match value {
+            AgglayerRpcNetworkStatus::Unknown => v1::NetworkStatus::Unspecified,
             AgglayerRpcNetworkStatus::Active => v1::NetworkStatus::Active,
             AgglayerRpcNetworkStatus::Syncing => v1::NetworkStatus::Syncing,
             AgglayerRpcNetworkStatus::Error => v1::NetworkStatus::Error,
@@ -20,6 +20,7 @@ impl From<AgglayerRpcNetworkStatus> for v1::NetworkStatus {
 impl From<AgglayerRpcNetworkType> for v1::NetworkType {
     fn from(value: AgglayerRpcNetworkType) -> Self {
         match value {
+            AgglayerRpcNetworkType::Unspecified => v1::NetworkType::Unspecified,
             AgglayerRpcNetworkType::Ecdsa => v1::NetworkType::Ecdsa,
             AgglayerRpcNetworkType::Generic => v1::NetworkType::Generic,
             AgglayerRpcNetworkType::MultisigOnly => v1::NetworkType::MultisigOnly,
@@ -74,7 +75,7 @@ impl From<AgglayerRpcNetworkInfo> for v1::NetworkInfo {
             settled_ler,
             settled_let_leaf_count: value.settled_let_leaf_count,
             settled_claim,
-            latest_pending_height: value.latest_pending_height,
+            latest_pending_height: value.latest_pending_height.map(|value| value.as_u64()),
             latest_pending_status: latest_pending_status.map(|status| status as i32),
             latest_pending_error,
             latest_epoch_with_settlement: value.latest_epoch_with_settlement,

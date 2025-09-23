@@ -1,9 +1,12 @@
 use agglayer_types::{
-    primitives::Digest, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, Proof
+    primitives::Digest, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
+    NetworkId, Proof,
 };
 use serde::{Deserialize, Serialize};
 
 mod certificate;
+mod generated;
+pub(crate) mod network_info;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataKey {
@@ -63,4 +66,5 @@ crate::columns::impl_codec_using_bincode_for!(
     Proof,
     SmtKey,
     SmtValue,
+    network_info::Key
 );
