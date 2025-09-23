@@ -72,7 +72,7 @@ dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-primitives 0.11.0",
+ "agglayer-primitives",
  "agglayer-prover",
  "agglayer-prover-config",
  "agglayer-prover-types",
