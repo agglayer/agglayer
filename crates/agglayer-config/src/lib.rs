@@ -3,7 +3,7 @@
 //! The agglayer is configured via its TOML configuration file, `agglayer.toml`
 //! by default, which is deserialized into the [`Config`] struct.
 
-use std::{collections::HashMap, path::Path, str::FromStr};
+use std::{collections::HashMap, path::Path};
 
 use agglayer_primitives::Address;
 use agglayer_prover_config::GrpcConfig;
@@ -193,17 +193,17 @@ impl Config {
 
     /// Get the target ReadRPC socket address from the configuration.
     pub fn readrpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.readrpc_port))
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.readrpc_port.as_u16()))
     }
 
     /// Get the target gRPC socket address from the configuration.
     pub fn public_grpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.grpc_port))
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.grpc_port.as_u16()))
     }
 
     /// Get the admin RPC socket address from the configuration.
     pub fn admin_rpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_port))
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_port.as_u16()))
     }
 
     pub fn path_contextualized(mut self, base_path: &Path) -> Self {
@@ -271,12 +271,4 @@ fn is_false(b: &bool) -> bool {
 
 pub(crate) fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     *t == Default::default()
-}
-
-/// Get an environment variable or a default value if it is not set.
-fn from_env_or_default<T: FromStr>(key: &str, default: T) -> T {
-    std::env::var(key)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(default)
 }
