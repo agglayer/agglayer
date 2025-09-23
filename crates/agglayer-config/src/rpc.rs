@@ -56,26 +56,31 @@ pub struct RpcConfig {
         default = "default_body_size"
     )]
     pub max_request_body_size: u32,
+
     /// The maximum size of the response body in bytes.
     #[serde(
         skip_serializing_if = "same_as_default_body_size",
         default = "default_body_size"
     )]
     pub max_response_body_size: u32,
+
     /// The maximum number of connections.
     #[serde(
         skip_serializing_if = "same_as_default_max_connections",
         default = "default_max_connections"
     )]
     pub max_connections: u32,
+
     /// The maximum number of requests in a batch request. If `None`, the
     /// batch request limit is unlimited.
     #[serde(skip_serializing_if = "crate::is_default")]
     pub batch_request_limit: Option<u32>,
+
     /// The interval at which to send ping messages
     #[serde(skip)]
     #[serde_as(as = "Option<crate::with::HumanDuration>")]
     pub ping_interval: Option<Duration>,
+
     /// Timeout for completion of an RPC request to the AggLayer node.
     #[serde_as(as = "crate::with::HumanDuration")]
     #[serde(default = "default_request_timeout")]
