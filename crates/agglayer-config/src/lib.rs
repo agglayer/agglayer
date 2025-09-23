@@ -17,21 +17,22 @@ pub use self::telemetry::TelemetryConfig;
 
 pub mod prover;
 
-pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
+const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
 
-pub(crate) mod auth;
+mod auth;
 pub mod certificate_orchestrator;
 pub mod epoch;
-pub(crate) mod l1;
-pub(crate) mod l2;
+mod l1;
+mod l2;
 pub mod log;
 pub mod outbound;
 mod port;
 pub mod rate_limiting;
-pub(crate) mod rpc;
+mod rpc;
 pub mod shutdown;
 pub mod storage;
-pub(crate) mod telemetry;
+mod telemetry;
+mod tls;
 mod with;
 
 pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
@@ -43,6 +44,7 @@ use port::{Port, PortDefaults};
 use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
+pub use tls::TlsConfig;
 
 /// The Agglayer configuration.
 #[serde_with::serde_as]
@@ -57,6 +59,9 @@ pub struct Config {
     /// endpoint.
     #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub full_node_rpcs: HashMap<u32, Url>,
+
+    #[serde(default)]
+    pub tls: Option<TlsConfig>,
 
     #[serde(default)]
     pub l2: L2,
@@ -170,6 +175,7 @@ impl Config {
         Self {
             storage: storage::StorageConfig::new_from_path(base_path),
             full_node_rpcs: Default::default(),
+            tls: Default::default(),
             proof_signers: Default::default(),
             log: Default::default(),
             rpc: Default::default(),
@@ -204,6 +210,21 @@ impl Config {
     /// Get the admin RPC socket address from the configuration.
     pub fn admin_rpc_addr(&self) -> std::net::SocketAddr {
         std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_port.as_u16()))
+    }
+
+    /// Get the admin TLS RPC socket address from the configuration.
+    pub fn admin_tls_rpc_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_tls_port.as_u16()))
+    }
+
+    /// Get the ReadRPC TLS socket address from the configuration.
+    pub fn readrpc_tls_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.readrpc_tls_port.as_u16()))
+    }
+
+    /// Get the gRPC TLS socket address from the configuration.
+    pub fn public_grpc_tls_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.grpc_tls_port.as_u16()))
     }
 
     pub fn path_contextualized(mut self, base_path: &Path) -> Self {

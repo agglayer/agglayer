@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 dirs.workspace = true
 alloy-primitives.workspace = true
+axum-server.workspace = true
 educe.workspace = true
 humantime-serde = "1.1.1"
 jsonrpsee.workspace = true

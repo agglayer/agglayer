@@ -21,6 +21,9 @@ format = "pretty"
 grpc-port = 9089
 readrpc-port = 9090
 admin-port = 9091
+admin-tls-port = 9491
+readrpc-tls-port = 9490
+grpc-tls-port = 9489
 host = "0.0.0.0"
 request-timeout = "3m"
 
