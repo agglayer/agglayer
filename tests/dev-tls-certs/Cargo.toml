@@ -1,0 +1,16 @@
+[package]
+name = "dev-tls-certs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[build-dependencies]
+rcgen = "0.14"
+
+[dev-dependencies]
+rstest.workspace = true
+
+[lints]
+workspace = true
