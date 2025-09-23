@@ -186,6 +186,7 @@ dependencies = [
  "agglayer-types",
  "alloy-primitives",
  "dirs",
+ "educe",
  "humantime-serde",
  "insta",
  "jsonrpsee",
