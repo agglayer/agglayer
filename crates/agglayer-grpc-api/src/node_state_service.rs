@@ -22,7 +22,7 @@ const GET_CERTIFICATE_HEADER_METHOD_PATH: &str =
 const GET_LATEST_CERTIFICATE_HEADER_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_latest_certificate_header";
 const GET_NETWORK_INFO_METHOD_PATH: &str =
-    "agglayer-node.grpc-api.v1.node-state-service.get_network_state";
+    "agglayer-node.grpc-api.v1.node-state-service.get_network_info";
 
 pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
     pub(crate) service:
