@@ -1,35 +1,50 @@
-use agglayer_interop::types::NetworkId;
+use agglayer_interop_types::aggchain_proof;
 use agglayer_primitives::Digest;
 use agglayer_tries::roots::LocalExitRoot;
-use agglayer_types::{CertificateStatus, CertificateStatusError};
 use serde::{Deserialize, Serialize};
 
-use crate::{CertificateId, Height};
+use crate::{CertificateId, CertificateStatus, CertificateStatusError, Height, NetworkId};
 
 /// The status of a network.
 /// TODO: implement more detailed status tracking including
 /// separate service that would monitor status of the network.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkStatus {
+    /// Unknown status.
+    Unknown = 0,
     /// The network is active and functioning normally.
-    Active = 0,
+    Active = 1,
     /// The network is currently syncing.
-    Syncing = 1,
+    Syncing = 2,
     /// The network is experiencing an error.
-    Error = 2,
+    Error = 3,
 }
 
 // The aggchain type of network
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkType {
+    Unspecified = 0,
     /// ECDSA-based network type.
-    Ecdsa = 0,
+    Ecdsa = 1,
     /// Generic network type.
-    Generic = 1,
+    Generic = 2,
     /// Multisig-only network type.
-    MultisigOnly = 2,
+    MultisigOnly = 3,
     /// Multisig and aggchain proof network type.
-    MultisigAndAggchainProof = 3,
+    MultisigAndAggchainProof = 4,
+}
+
+impl From<&aggchain_proof::AggchainData> for NetworkType {
+    fn from(value: &aggchain_proof::AggchainData) -> Self {
+        match value {
+            aggchain_proof::AggchainData::ECDSA { .. } => NetworkType::Ecdsa,
+            aggchain_proof::AggchainData::Generic { .. } => NetworkType::Generic,
+            aggchain_proof::AggchainData::MultisigOnly { .. } => NetworkType::MultisigOnly,
+            aggchain_proof::AggchainData::MultisigAndAggchainProof { .. } => {
+                NetworkType::MultisigAndAggchainProof
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,11 +76,31 @@ pub struct NetworkInfo {
     /// Info about the latest settled claim in the network.
     pub settled_claim: Option<SettledClaim>,
     /// The height of the latest pending certificate.
-    pub latest_pending_height: Option<u64>,
+    pub latest_pending_height: Option<Height>,
     /// The status of the latest pending certificate.
     pub latest_pending_status: Option<CertificateStatus>,
     /// Any error message associated with the latest pending certificate.
     pub latest_pending_error: Option<CertificateStatusError>,
     /// The epoch number of the latest settlement.
     pub latest_epoch_with_settlement: Option<u64>,
+}
+
+impl NetworkInfo {
+    pub const fn from_network_id(network_id: NetworkId) -> Self {
+        Self {
+            network_status: NetworkStatus::Unknown,
+            network_type: NetworkType::Unspecified,
+            network_id,
+            settled_height: None,
+            settled_certificate_id: None,
+            settled_pp_root: None,
+            settled_ler: None,
+            settled_let_leaf_count: None,
+            settled_claim: None,
+            latest_pending_height: None,
+            latest_pending_status: None,
+            latest_pending_error: None,
+            latest_epoch_with_settlement: None,
+        }
+    }
 }
