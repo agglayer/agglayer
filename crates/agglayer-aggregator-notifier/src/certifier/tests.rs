@@ -2,7 +2,8 @@ use std::{sync::Arc, thread, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
 use agglayer_config::Config;
-use agglayer_contracts::{aggchain::AggchainVkeyHash, L1RpcError, Settler};
+use agglayer_contracts::{L1RpcError, Settler};
+use agglayer_primitives::vkey_hash::VKeyHash;
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{Address, Height, LocalNetworkStateData, NetworkId};
@@ -239,7 +240,7 @@ mockall::mock! {
             &self,
             rollup_address: agglayer_types::Address,
             aggchain_vkey_selector: u16,
-        ) -> Result<AggchainVkeyHash, L1RpcError>;
+        ) -> Result<VKeyHash, L1RpcError>;
 
         async fn get_aggchain_hash(
             &self,
