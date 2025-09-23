@@ -304,8 +304,10 @@ impl Node {
         let public_grpc_server = axum::serve(public_grpc_listener, public_grpc_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
-        let admin_server = axum::serve(admin_listener, admin_router)
-            .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
+        let admin_handle = axum_server::Handle::new();
+        let admin_server = axum_server::from_tcp(admin_listener.into_std()?)
+            .handle(admin_handle.clone())
+            .serve(admin_router.into_make_service());
 
         let rpc_handle = tokio::spawn(async move {
             tokio::select! {
@@ -315,7 +317,8 @@ impl Node {
                 _ = cancellation_token.cancelled() => {
                     debug!("Node RPC shutdown requested.");
                 }
-            }
+            };
+            admin_handle.graceful_shutdown(None); // TODO specify timeout
         });
 
         let node = Self {

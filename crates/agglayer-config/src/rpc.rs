@@ -24,6 +24,12 @@ impl PortDefaults for AdminService {
     const ENV_VAR: Option<&str> = Some("AGGLAYER_ADMIN_PORT");
 }
 
+pub enum AdminServiceTls {}
+impl PortDefaults for AdminServiceTls {
+    const DEFAULT: u16 = 9491;
+    const ENV_VAR: Option<&str> = Some("AGGLAYER_ADMIN_TLS_PORT");
+}
+
 /// The local RPC server configuration.
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -46,6 +52,12 @@ pub struct RpcConfig {
     /// 9091.
     #[serde(default)]
     pub admin_port: Port<AdminService>,
+
+    /// The default port for the local AdminRPC TLS server.
+    /// Overridden by `AGGLAYER_ADMIN_TLS_PORT` environment variable, defaults to
+    /// 9491.
+    #[serde(default)]
+    pub admin_tls_port: Port<AdminServiceTls>,
 
     #[serde(default = "default_host")]
     pub host: Ipv4Addr,
@@ -93,6 +105,7 @@ impl Default for RpcConfig {
             grpc_port: Default::default(),
             readrpc_port: Default::default(),
             admin_port: Default::default(),
+            admin_tls_port: Default::default(),
             host: default_host(),
             max_request_body_size: default_body_size(),
             max_response_body_size: default_body_size(),
