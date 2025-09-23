@@ -12,7 +12,9 @@ use unified_bridge::{
 use crate::{
     aggchain_data::MultisigError,
     local_state::{
-        commitment::{PessimisticRootCommitmentValues, StateCommitment},
+        commitment::{
+            PessimisticRootCommitmentValues, PessimisticRootCommitmentVersion, StateCommitment,
+        },
         NetworkState,
     },
     multi_batch_header::MultiBatchHeader,
@@ -189,6 +191,7 @@ pub struct ConstrainedValues {
     pub initial_state_commitment: StateCommitment,
     pub final_state_commitment: StateCommitment,
     pub prev_pessimistic_root: Digest,
+    pub prev_pessimistic_root_version: PessimisticRootCommitmentVersion,
     pub height: u64,
     pub origin_network: NetworkId,
     pub l1_info_root: Digest,
@@ -197,12 +200,25 @@ pub struct ConstrainedValues {
 }
 
 impl ConstrainedValues {
-    fn new(
+    fn try_new(
         batch_header: &MultiBatchHeader,
         initial_state_commitment: &StateCommitment,
         final_state_commitment: &StateCommitment,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, ProofError> {
+        let settled_prev_pp_root = batch_header.prev_pessimistic_root;
+
+        // Infer the version of the settled prev pp root based on the constrained
+        // values. Return error if unable to re-compute a matching prev pp root.
+        let prev_pessimistic_root_version = PessimisticRootCommitmentValues {
+            balance_root: initial_state_commitment.balance_root,
+            nullifier_root: initial_state_commitment.nullifier_root,
+            ler_leaf_count: initial_state_commitment.ler_leaf_count,
+            height: batch_header.height,
+            origin_network: batch_header.origin_network,
+        }
+        .infer_settled_pp_root_version(settled_prev_pp_root)?;
+
+        Ok(Self {
             initial_state_commitment: initial_state_commitment.clone(),
             final_state_commitment: final_state_commitment.clone(),
             height: batch_header.height,
@@ -210,8 +226,9 @@ impl ConstrainedValues {
             l1_info_root: batch_header.l1_info_root,
             commit_imported_bridge_exits: batch_header.commit_imported_bridge_exits(),
             certificate_id: batch_header.certificate_id,
-            prev_pessimistic_root: batch_header.prev_pessimistic_root,
-        }
+            prev_pessimistic_root: settled_prev_pp_root,
+            prev_pessimistic_root_version,
+        })
     }
 }
 
@@ -226,11 +243,12 @@ pub fn generate_pessimistic_proof(
     let mut network_state: NetworkState = initial_network_state;
     let final_state_commitment = network_state.apply_batch_header(batch_header)?;
 
-    let constrained_values = ConstrainedValues::new(
+    // Also verify initial state commitment and PP root matches
+    let constrained_values = ConstrainedValues::try_new(
         batch_header,
         &initial_state_commitment,
         &final_state_commitment,
-    );
+    )?;
 
     // Verify multisig, aggchain proof, or both.
     let target_pp_root_version = batch_header.aggchain_data.verify(constrained_values)?;

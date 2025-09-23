@@ -16,8 +16,7 @@ pub use crate::aggchain_data::{
 };
 use crate::{
     local_state::commitment::{
-        PessimisticRootCommitmentValues, PessimisticRootCommitmentVersion,
-        SignatureCommitmentValues, SignatureCommitmentVersion,
+        PessimisticRootCommitmentVersion, SignatureCommitmentValues, SignatureCommitmentVersion,
     },
     proof::ConstrainedValues,
     ProofError,
@@ -123,11 +122,10 @@ impl AggchainData {
             return Err(ProofError::InvalidSignature);
         };
 
-        // Verify initial state commitment and PP root matches
-        let base_pp_root_version = PessimisticRootCommitmentValues::from(&constrained_values)
-            .infer_settled_pp_root_version(constrained_values.prev_pessimistic_root)?;
-
-        match (base_pp_root_version, target_pp_root_version) {
+        match (
+            constrained_values.prev_pessimistic_root_version,
+            target_pp_root_version,
+        ) {
             // From V2 to V2: OK
             (PessimisticRootCommitmentVersion::V2, PessimisticRootCommitmentVersion::V2) => {}
             // From V3 to V3: OK
