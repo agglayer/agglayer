@@ -35,11 +35,11 @@ impl<D> Port<D> {
         env::var(env_var)
             .inspect_err(|err| match err {
                 env::VarError::NotPresent => (),
-                env::VarError::NotUnicode(_) => warn!("Contents of ${env_var} not Unicode"),
+                env::VarError::NotUnicode(_) => warn!("Contents of ${env_var} are not Unicode"),
             })
             .ok()?
             .parse()
-            .inspect_err(|_| warn!("Variable ${env_var} not a valid port number"))
+            .inspect_err(|_| warn!("Variable ${env_var} is not a valid port number"))
             .ok()
     }
 }
