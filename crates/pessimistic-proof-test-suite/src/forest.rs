@@ -277,10 +277,9 @@ impl Forest {
                     .retrieve_signer(SignatureCommitmentVersion::V2)
                     .unwrap(),
                 signature,
-                commit_imported_bridge_exits:
-                    SignatureCommitmentValues::from(&certificate) // FIXME: ImportedBridgeExitCommitmentValue
-                        .commitment(SignatureCommitmentVersion::V2)
-                        .0,
+                commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
+                    .commitment(SignatureCommitmentVersion::V2)
+                    .0,
                 prev_local_exit_root: certificate.prev_local_exit_root,
                 new_local_exit_root: certificate.new_local_exit_root,
                 l1_info_root: *certificate.l1_info_root().unwrap().unwrap(),
