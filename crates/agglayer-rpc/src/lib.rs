@@ -436,16 +436,16 @@ where
     ) -> Result<NetworkInfo, GetNetworkInfoError> {
         debug!("Received request to get the network state for rollup {network_id}");
 
-        let mut network_info = self.state.get_network_info(network_id).map_err(|error| {
-            error!(
-                ?error,
-                "Failed to retrieve network info for network {network_id}"
-            );
-            GetNetworkInfoError::InternalError {
-                network_id,
-                source: error.into(),
-            }
-        })?;
+        let mut network_info = self
+            .state
+            .get_network_info(network_id)
+            .inspect_err(|error| {
+                warn!(
+                    ?error,
+                    "Failed to retrieve network info for network {network_id} from the storage"
+                );
+            })
+            .unwrap_or_else(|_| NetworkInfo::from_network_id(network_id));
 
         if network_info.settled_certificate_id.is_none() {
             // Get the latest settled certificate for the network
