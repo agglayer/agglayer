@@ -64,12 +64,12 @@ fn equal_state(lhs: &LocalNetworkStateData, rhs: &LocalNetworkStateData) -> bool
 }
 
 #[fixture]
-fn network_id() -> NetworkId {
+pub(crate) fn network_id() -> NetworkId {
     0.into()
 }
 
 #[fixture]
-fn store() -> StateStore {
+pub(crate) fn store() -> StateStore {
     let tmp = TempDBDir::new();
     let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
 
