@@ -88,6 +88,7 @@ criterion = "0.5.1"
 derive_more = "2.0"
 dirs = "5.0"
 dotenvy = "0.15.7"
+educe = { version = "0.6", features = ["Debug", "Clone", "Eq", "Ord"] }
 ethers = "2.0"
 ethers-gcp-kms-signer = "0.1.5"
 ethers-signers = "2.0"
