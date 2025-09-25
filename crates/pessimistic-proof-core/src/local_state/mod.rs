@@ -60,7 +60,6 @@ impl NetworkState {
         &mut self,
         multi_batch_header: &MultiBatchHeader,
     ) -> Result<StateCommitment, ProofError> {
-        // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
         let mut new_balances = BTreeMap::new();
         for (k, v) in &multi_batch_header.balances_proofs {
             if new_balances.insert(*k, U512::from(v.0)).is_some() {
@@ -164,8 +163,7 @@ impl NetworkState {
         }
 
         // Verify that the original balances were correct and update the local balance
-        // tree with the new balances. TODO: implement batch `verify_and_update`
-        // for the LBT
+        // tree with the new balances.
         for (token, (old_balance, balance_path)) in &multi_batch_header.balances_proofs {
             let new_balance = new_balances[token];
             let new_balance = U256::uint_try_from(new_balance)

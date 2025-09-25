@@ -4,7 +4,6 @@ pub use pessimistic_proof_core::local_balance_tree::{LocalBalancePath, LOCAL_BAL
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-// TODO: This is basically the same as the nullifier tree, consider refactoring
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
