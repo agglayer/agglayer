@@ -1,4 +1,4 @@
-use std::{num::NonZeroU64, sync::Arc};
+use std::{future::Future, net::SocketAddr, num::NonZeroU64, sync::Arc};
 
 use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
@@ -293,7 +293,6 @@ impl Node {
 
         let readrpc_listener = tokio::net::TcpListener::bind(config.readrpc_addr()).await?;
         let public_grpc_listener = tokio::net::TcpListener::bind(config.public_grpc_addr()).await?;
-        let admin_listener = tokio::net::TcpListener::bind(config.admin_rpc_addr()).await?;
         info!(on = %config.readrpc_addr(), "ReadRPC listening");
         info!(on = %config.public_grpc_addr(), "Public gRPC listening");
         info!(on = %config.admin_rpc_addr(), "AdminRPC listening");
@@ -304,10 +303,13 @@ impl Node {
         let public_grpc_server = axum::serve(public_grpc_listener, public_grpc_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
-        let admin_handle = axum_server::Handle::new();
-        let admin_server = axum_server::from_tcp(admin_listener.into_std()?)
-            .handle(admin_handle.clone())
-            .serve(admin_router.into_make_service());
+        let admin_server = Self::serve_rpc(
+            "AdminRPC",
+            config.admin_rpc_addr(),
+            config.admin_tls_rpc_addr(),
+            admin_router,
+            None, // TODO
+        );
 
         let rpc_handle = tokio::spawn(async move {
             tokio::select! {
@@ -318,7 +320,6 @@ impl Node {
                     debug!("Node RPC shutdown requested.");
                 }
             };
-            admin_handle.graceful_shutdown(None); // TODO specify timeout
         });
 
         let node = Self {
@@ -327,6 +328,39 @@ impl Node {
         };
 
         Ok(node)
+    }
+
+    fn serve_rpc(
+        name: &str,
+        addr_plain: SocketAddr,
+        addr_tls: SocketAddr,
+        router: axum::Router,
+        tls_config: Option<&axum_server::tls_rustls::RustlsConfig>,
+    ) -> impl Future<Output = ()> {
+        let plain_server_fut =
+            axum_server::bind(addr_plain).serve(router.clone().into_make_service());
+        info!(on = %addr_plain, "Plaintext {name} listening");
+
+        let tls_server_fut = tls_config.map(|config| {
+            let tls_server_fut = axum_server::bind_rustls(addr_tls, config.clone())
+                .serve(router.into_make_service());
+            info!(on = %addr_tls, "TLS {name} listening");
+            tls_server_fut
+        });
+
+        let tls_server_fut = async {
+            match tls_server_fut {
+                Some(tls_server_fut) => tls_server_fut.await,
+                None => std::future::pending().await,
+            }
+        };
+
+        async move {
+            tokio::select! {
+                _ = plain_server_fut => {},
+                _ = tls_server_fut => {},
+            }
+        }
     }
 
     pub(crate) async fn await_shutdown(self) {
