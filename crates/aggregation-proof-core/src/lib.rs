@@ -35,10 +35,6 @@ pub struct PessimisticProof {
     pub lookup_imported_lers: Vec<(u32, (NetworkId, LocalExitRoot))>,
     /// Config number, pointing to a specific multisig set
     pub config_number: usize,
-    /// Pessimistic proof vkey hash
-    /// NOTE: we can also enforce to be the same for absolutely all the PPs of
-    /// this aggregation
-    pub leaf_pp_vkey_hash: [u32; 8],
     /// Index of the sub-l1 info tree inclusion proof
     pub sub_l1_info_tree_inclusion_proof_idx: u32,
 }
@@ -52,13 +48,13 @@ impl PessimisticProof {
     ///
     /// NOTE: the verification will panic upon wrong proof (enforced by the sp1
     /// zkvm)
-    pub fn verify_pp_stark_proof(&self) -> Result<(), Error> {
+    pub fn verify_pp_stark_proof(&self, pp_vkey_hash: &[u32; 8]) -> Result<(), Error> {
         let pv_serialized = PessimisticProofOutput::bincode_codec()
             .serialize(&self.public_values)
             .map_err(Error::InvalidSerialization)?;
         let pv_digest = Sha256::digest(pv_serialized);
         // panic upon invalid proof because sp1
-        sp1_zkvm::lib::verify::verify_sp1_proof(&self.leaf_pp_vkey_hash, &pv_digest.into());
+        sp1_zkvm::lib::verify::verify_sp1_proof(pp_vkey_hash, &pv_digest.into());
         Ok(())
     }
 
@@ -98,7 +94,7 @@ impl RangePP {
     }
 
     /// Ensures that all the starks are successfully verified
-    pub fn verify_pp_validity(&self) -> Result<(), Error> {
+    pub fn verify_pp_validity(&self, pp_vkey_hash: &[u32; 8]) -> Result<(), Error> {
         // verify that all PP are from the same and correct network
         let intruder_pp = self
             .proofs
@@ -113,7 +109,7 @@ impl RangePP {
 
         // verify all the starks
         for pp in &self.proofs {
-            pp.verify_pp_stark_proof()?
+            pp.verify_pp_stark_proof(pp_vkey_hash)?
         }
 
         Ok(())
@@ -123,6 +119,9 @@ impl RangePP {
 /// Witness for the aggregation proof.
 #[derive(Deserialize, Serialize, Default, Debug)]
 pub struct AggregationWitness {
+    /// PP vkey hash considered for this aggregation
+    pub pp_vkey_hash: [u32; 8],
+
     /// One contiguous range of PP per origin network
     pub pp_per_network: Vec<RangePP>,
 
@@ -140,10 +139,15 @@ pub struct AggregationWitness {
     pub new_agglayer_rer: BTreeMap<NetworkId, LocalExitRoot>,
 
     /// Target L1 info root against which we prove the inclusion of all the PP's
-    /// l1 info root
+    /// l1 info root.
+    /// NOTE: chosen by the agglayer-node during witness generation for the
+    /// aggregation proof, can be against the root of the latest synchronized
+    /// l1 info tree
     pub target_l1_info_root: Digest,
 
     /// Sub-L1 info tree inclusion proofs.
+    /// NOTE: Computed by the agglayer-node, needs synchronization of the l1
+    /// info tree.
     pub sub_l1_info_tree_inclusion_proofs: Vec<SubLetInclusionProof>,
 }
 
@@ -157,7 +161,7 @@ impl AggregationWitness {
             pp_range.verify_pp_contiguity()?;
 
             // all the PPs must be successfully verified starks
-            pp_range.verify_pp_validity()?;
+            pp_range.verify_pp_validity(&self.pp_vkey_hash)?;
         }
 
         // Verify the agglayer rollup exit tree transition
@@ -290,14 +294,7 @@ impl AggregationWitness {
     pub fn public_values(&self) -> AggregationPublicValues {
         AggregationPublicValues {
             hash_chain_pp_inputs: self.hash_chain_pub_values(),
-            pp_vkey: self
-                .pp_per_network
-                .first()
-                .unwrap()
-                .proofs
-                .first()
-                .unwrap()
-                .leaf_pp_vkey_hash,
+            pp_vkey: self.pp_vkey_hash,
             l1_info_root: self.target_l1_info_root,
         }
     }
