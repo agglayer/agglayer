@@ -125,8 +125,9 @@ async fn start_server_with_configuration_service(
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let incoming =
-        TcpIncoming::from_listener(listener, true, Some(Duration::from_secs(1))).unwrap();
+    let incoming = TcpIncoming::from(listener)
+        .with_nodelay(Some(true))
+        .with_keepalive(Some(Duration::from_secs(1)));
 
     let jh = tokio::spawn(async move {
         Server::builder()

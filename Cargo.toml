@@ -54,12 +54,12 @@ agglayer-tries = "0.11.0"
 unified-bridge = "0.11.0"
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
-prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
+agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.5.0-rc.01" }
+agglayer-prover-config = { git = "https://github.com/agglayer/provers.git",  tag = "v1.5.0-rc.01" }
+agglayer-prover-types = { git = "https://github.com/agglayer/provers.git",  tag = "v1.5.0-rc.01" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.5.0-rc.01" }
+prover-config = { git = "https://github.com/agglayer/provers.git",  tag = "v1.5.0-rc.01" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.5.0-rc.01" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
@@ -129,9 +129,9 @@ tokio = { version = "1.43", features = ["full"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 tokio-util = "0.7.13"
 toml = "0.8.20"
-tonic = { version = "0.12.3", default-features = false }
-tonic-reflection = "0.12.3"
-tonic-types = "0.12.3"
+tonic = { version = "0.13.1", default-features = false }
+tonic-reflection = "0.13.1"
+tonic-types = "0.13.1"
 tower = "0.4.13"
 tower-http = { version = "0.6.2", features = ["full"] }
 tracing = "0.1.41"
