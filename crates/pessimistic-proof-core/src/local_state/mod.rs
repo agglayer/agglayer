@@ -91,16 +91,6 @@ impl NetworkState {
                     global_index: imported_bridge_exit.global_index,
                 })?;
 
-            // let imported_lers = Vec::new();
-
-            // // If from preconf, we accumulate the imported LER
-            // if matches!(
-            //     imported_bridge_exit.claim_data,
-            //     unified_bridge::Claim::Preconf(claim_from_preconf)
-            // ) {
-
-            // }
-
             // Check the nullifier non-inclusion path and update the nullifier tree
             let nullifier_key: NullifierKey = imported_bridge_exit.global_index.into();
             self.nullifier_tree

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use agglayer_bincode as bincode;
 use agglayer_primitives::{Address, Digest};
@@ -169,7 +169,7 @@ pub struct PessimisticProofOutput {
     /// The new pessimistic root.
     pub new_pessimistic_root: Digest,
     /// The list of pre-confirmed LERs per origin network.
-    pub preconfirmed_lers: BTreeMap<NetworkId, Vec<LocalExitRoot>>,
+    pub preconfirmed_lers: BTreeMap<NetworkId, BTreeSet<LocalExitRoot>>, // todo: hash
 }
 
 impl PessimisticProofOutput {
@@ -253,11 +253,24 @@ pub fn generate_pessimistic_proof(
     }
     .compute_pp_root(target_pp_root_version);
 
-    // let preconfirmed_lers: Vec<_> = batch_header
-    //     .imported_bridge_exits
-    //     .iter()
-    //     .filter_map(|(ib, _)| ib.preconfirmed_ler())
-    //     .collect();
+    let preconfirmed_lers = {
+        let ilers: Vec<_> = batch_header
+            .imported_bridge_exits
+            .iter()
+            .filter_map(|(ib, _)| ib.preconfirmed_ler())
+            .collect();
+
+        let mut imported_ler_per_origin: BTreeMap<NetworkId, BTreeSet<LocalExitRoot>> =
+            BTreeMap::new();
+        for (origin_network, imported_ler) in ilers {
+            imported_ler_per_origin
+                .entry(origin_network)
+                .or_default()
+                .insert(imported_ler.into());
+        }
+
+        imported_ler_per_origin
+    };
 
     Ok((
         PessimisticProofOutput {
@@ -268,7 +281,7 @@ pub fn generate_pessimistic_proof(
             aggchain_hash: batch_header.aggchain_data.aggchain_hash(),
             new_local_exit_root: zero_if_empty_local_exit_root(final_state_commitment.exit_root),
             new_pessimistic_root,
-            preconfirmed_lers: BTreeMap::new(),
+            preconfirmed_lers,
         },
         final_state_commitment,
     ))

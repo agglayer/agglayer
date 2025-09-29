@@ -20,6 +20,8 @@ use crate::{
 
 pub const NETWORK_A: NetworkId = NetworkId::new(0);
 pub const NETWORK_B: NetworkId = NetworkId::new(1);
+pub const NETWORK_C: NetworkId = NetworkId::new(2);
+
 pub const USDC: TokenInfo = TokenInfo {
     origin_network: NETWORK_A,
     origin_token_address: address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),

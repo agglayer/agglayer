@@ -9,7 +9,7 @@ use pessimistic_proof::{
 };
 use pessimistic_proof_test_suite::{
     forest::Forest,
-    sample_data::{self as data, ETH, USDC},
+    sample_data::{self as data, ETH, NETWORK_B, USDC},
 };
 use sp1_sdk::{ProverClient, SP1Proof, SP1Stdin};
 use unified_bridge::NetworkId;
@@ -23,12 +23,12 @@ pub struct AggregationData {
     pub proofs_per_network: BTreeMap<NetworkId, Vec<SP1Proof>>,
 }
 
-pub fn initial_forest() -> Forest {
+pub fn initial_forest(network_id: NetworkId) -> Forest {
     let large_amount = U256::MAX.checked_div(U256::from(2u64)).unwrap(); // not max to allow importing bridge exits
     let balances = [(ETH, large_amount), (USDC, large_amount)];
 
     Forest::default()
-        .with_network_id(18)
+        .with_network_id(network_id)
         .with_initial_balances(balances)
 }
 
@@ -59,6 +59,7 @@ pub fn generate_pp(state: &mut Forest, n_exits: usize, with_preconf: bool) -> Re
         )
         .unwrap();
 
+    println!("origin-network: {:?}", multi_batch_header.origin_network);
     let mut stdin = SP1Stdin::new();
     stdin.write(&initial_state);
     stdin.write(&multi_batch_header);
@@ -75,7 +76,6 @@ pub fn generate_pp(state: &mut Forest, n_exits: usize, with_preconf: bool) -> Re
         .deserialize(pv.as_slice())
         .unwrap();
 
-    println!("successful execution: {report:?}");
     println!("public values: {pv_sp1_execute:?}");
     Err(())
 }
@@ -87,7 +87,7 @@ pub fn generate_pp_for_chain(_origin_network: NetworkId, _nb_proofs: usize) -> V
 
 /// Generate a set of PP per network
 pub fn generate_aggregation_data() -> Result<AggregationData, ()> {
-    let mut forest = initial_forest();
+    let mut forest = initial_forest(NETWORK_B.into());
 
     let nb_exits = 1;
     let pp = generate_pp(&mut forest, nb_exits, false);

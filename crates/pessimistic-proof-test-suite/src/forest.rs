@@ -19,13 +19,15 @@ use pessimistic_proof::{
     },
     PessimisticProofOutput,
 };
-use rand::random;
 use sp1_sdk::{ProverClient, SP1Proof, SP1Stdin, SP1VerifyingKey};
 
 type NetworkId = u32;
 
 use super::sample_data::{NETWORK_A, NETWORK_B};
-use crate::AGGCHAIN_PROOF_ECDSA_ELF;
+use crate::{
+    sample_data::{NETWORK_C, USDC},
+    AGGCHAIN_PROOF_ECDSA_ELF,
+};
 
 pub fn compute_aggchain_proof(
     aggchain_ecdsa_witness: AggchainECDSA,
@@ -50,7 +52,8 @@ pub struct Forest {
     pub network_id: NetworkId,
     pub wallet: PrivateKeySigner,
     pub l1_info_tree: LocalExitTreeData,
-    pub local_exit_tree_data_a: LocalExitTreeData,
+    pub local_exit_tree_data_a: LocalExitTreeData, // mainnet
+    pub local_exit_tree_data_c: LocalExitTreeData, // emitting preconf
     pub state_b: LocalNetworkStateData,
 }
 
@@ -128,6 +131,7 @@ impl Forest {
                 balance_tree: local_balance_tree,
                 nullifier_tree: Smt::new(),
             },
+            local_exit_tree_data_c: LocalExitTreeData::new(),
         }
     }
 
@@ -143,15 +147,15 @@ impl Forest {
             .map(|(token, amount)| exit_to_b(token, amount))
             .collect();
 
-        // Append all the leafs in LET A (mainnet)
+        // Append all the leafs in LET C
         for exit in &exits {
-            self.local_exit_tree_data_a.add_leaf(exit.hash()).unwrap();
+            self.local_exit_tree_data_c.add_leaf(exit.hash()).unwrap();
         }
 
         let mut compute_claim_data = |index| {
             let proof_leaf_ler = MerkleProof {
-                proof: self.local_exit_tree_data_a.get_proof(index).unwrap(),
-                root: self.local_exit_tree_data_a.get_root(),
+                proof: self.local_exit_tree_data_c.get_proof(index).unwrap(),
+                root: self.local_exit_tree_data_c.get_root(),
             };
 
             if with_preconf {
@@ -194,7 +198,7 @@ impl Forest {
             let index = idx as u32;
             let imported_exit = ImportedBridgeExit {
                 bridge_exit: exit,
-                global_index: GlobalIndex::new(NETWORK_A, index),
+                global_index: GlobalIndex::new(NETWORK_C, index),
                 claim_data: compute_claim_data(idx as u32),
             };
             res.push(imported_exit);
@@ -372,7 +376,7 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
         leaf_type: LeafType::Transfer,
         token_info,
         dest_network: dest_network.into(),
-        dest_address: random::<[u8; 20]>().into(),
+        dest_address: USDC.origin_token_address, //random::<[u8; 20]>().into(),
         amount,
         metadata: Some(keccak256(&[])),
     }
