@@ -97,6 +97,8 @@ pub enum L1RpcError {
     UnableToParseAggchainVkey,
     #[error("Unable to retrieve verifier type")]
     VerifierTypeRetrievalFailed,
+    #[error("Transaction receipt failure for tx {0}")]
+    TransactionReceiptFailure(String),
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>

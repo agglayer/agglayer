@@ -935,6 +935,7 @@ impl Certifier for Check {
         &self,
         _certificate: &agglayer_types::Certificate,
         _state: &mut LocalNetworkStateData,
+        prev_pessimistic_root_before_tx: Option<Digest>,
     ) -> Result<
         (
             MultiBatchHeader<Keccak256Hasher>,

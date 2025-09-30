@@ -1,5 +1,6 @@
 use agglayer_types::{
-    primitives::keccak::Keccak256Hasher, Certificate, Height, LocalNetworkStateData, NetworkId,
+    primitives::keccak::Keccak256Hasher, Certificate, Digest, Height, LocalNetworkStateData,
+    NetworkId,
 };
 use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
@@ -41,6 +42,7 @@ pub trait Certifier: Unpin + Send + Sync + 'static {
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
+        prev_pessimistic_root_before_tx: Option<Digest>,
     ) -> Result<
         (
             MultiBatchHeader<Keccak256Hasher>,

@@ -337,7 +337,7 @@ where
                 let mut new_state = self.local_state.clone();
                 let (_multi_batch_header, _initial_state, _targets) = self
                     .certifier_client
-                    .witness_generation(certificate, &mut new_state)
+                    .witness_generation(certificate, &mut new_state, Some(tx_hash))
                     .await
                     .map_err(|error| {
                         error!(hash, "Error while witnessing the execution: {}", error);
