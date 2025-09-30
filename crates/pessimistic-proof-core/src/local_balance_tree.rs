@@ -10,7 +10,6 @@ use crate::ProofError;
 /// id and 160 for token address).
 pub const LOCAL_BALANCE_TREE_DEPTH: usize = 192;
 
-// TODO: This is basically the same as the nullifier tree, consider refactoring
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
@@ -24,7 +23,6 @@ pub struct LocalBalanceTree {
 pub type LocalBalancePath = SmtMerkleProof<LOCAL_BALANCE_TREE_DEPTH>;
 
 impl LocalBalanceTree {
-    // TODO: Consider batching the updates per network for efficiency
     pub fn verify_and_update(
         &mut self,
         key: TokenInfo,

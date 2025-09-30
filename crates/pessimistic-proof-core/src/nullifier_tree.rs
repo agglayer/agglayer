@@ -7,12 +7,8 @@ use unified_bridge::{GlobalIndex, NetworkId};
 use crate::ProofError;
 
 // 32 bits for the network id and 32 bits for the LET index
-// TODO: consider using less than 32 bits for the network id - unlikely that
-// we'll have 4 billion chains :)
 pub const NULLIFIER_TREE_DEPTH: usize = 64;
 
-// TODO: This is basically the same as the local balance tree, consider
-// refactoring TODO: Consider using an Indexed Merkle Tree instead of an SMT. See https://docs.aztec.network/aztec/concepts/storage/trees/indexed_merkle_tree.
 /// A commitment to the set of per-network nullifier trees maintained by the
 /// local network
 #[serde_as]
@@ -53,7 +49,6 @@ impl ToBits<64> for NullifierKey {
 }
 
 impl NullifierTree {
-    // TODO: Consider batching the updates per network for efficiency
     pub fn verify_and_update(
         &mut self,
         key: NullifierKey,
