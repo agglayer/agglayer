@@ -60,10 +60,11 @@ impl AggchainData {
         &self,
         constrained_values: ConstrainedValues,
     ) -> Result<PessimisticRootCommitmentVersion, ProofError> {
-        match self {
+        let prev_pp_root_version = constrained_values.prev_pessimistic_root_version;
+
+        let target_pp_root_version = match self {
             AggchainData::LegacyEcdsa { signer, signature } => {
-                // Only this case is subject to pp root migration concerns.
-                return AggchainData::legacy_ecdsa(signer, signature, constrained_values);
+                AggchainData::legacy_ecdsa(signer, signature, constrained_values)?
             }
             AggchainData::MultisigOnly(multisig) => {
                 let commitment =
@@ -72,6 +73,9 @@ impl AggchainData {
                 multisig
                     .verify(commitment)
                     .map_err(ProofError::InvalidMultisig)?;
+
+                // Multisig is currently always on commitment v3
+                PessimisticRootCommitmentVersion::V3
             }
             AggchainData::MultisigAndAggchainProof {
                 multisig,
@@ -89,14 +93,29 @@ impl AggchainData {
 
                 // Panic upon invalid proof.
                 aggchain_proof.verify_aggchain_proof(&constrained_values);
+
+                // Multisig is currently always on commitment v3
+                PessimisticRootCommitmentVersion::V3
             }
         };
 
-        Ok(PessimisticRootCommitmentVersion::V3)
+        match (prev_pp_root_version, target_pp_root_version) {
+            // From V2 to V2: OK
+            (PessimisticRootCommitmentVersion::V2, PessimisticRootCommitmentVersion::V2) => {}
+            // From V3 to V3: OK
+            (PessimisticRootCommitmentVersion::V3, PessimisticRootCommitmentVersion::V3) => {}
+            // From V2 to V3: OK (migration)
+            (PessimisticRootCommitmentVersion::V2, PessimisticRootCommitmentVersion::V3) => {}
+            // Inconsistent signed payload.
+            _ => return Err(ProofError::InconsistentSignedPayload),
+        }
+
+        Ok(target_pp_root_version)
     }
 }
 
 impl AggchainData {
+    /// Returns the target PP root version based on the signature.
     pub fn legacy_ecdsa(
         signer: &Address,
         signature: &Signature,
@@ -121,20 +140,6 @@ impl AggchainData {
         } else {
             return Err(ProofError::InvalidSignature);
         };
-
-        match (
-            constrained_values.prev_pessimistic_root_version,
-            target_pp_root_version,
-        ) {
-            // From V2 to V2: OK
-            (PessimisticRootCommitmentVersion::V2, PessimisticRootCommitmentVersion::V2) => {}
-            // From V3 to V3: OK
-            (PessimisticRootCommitmentVersion::V3, PessimisticRootCommitmentVersion::V3) => {}
-            // From V2 to V3: OK (migration)
-            (PessimisticRootCommitmentVersion::V2, PessimisticRootCommitmentVersion::V3) => {}
-            // Inconsistent signed payload.
-            _ => return Err(ProofError::InconsistentSignedPayload),
-        }
 
         Ok(target_pp_root_version)
     }
