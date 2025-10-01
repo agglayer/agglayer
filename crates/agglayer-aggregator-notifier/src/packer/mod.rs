@@ -479,6 +479,8 @@ where
         |_| { Ok(None) }
     );
 
+    fail::fail_point!("notifier::packer::settle_certificate::receipt_future_ended::kill_node");
+
     receipt.map_err(|error| Error::SettlementError {
         certificate_id,
         error: error.to_string(),

@@ -4,7 +4,6 @@ const ELF: &[u8] =
 
 mod certifier;
 mod packer;
-mod proof;
 
 pub use certifier::CertifierClient;
 pub use packer::EpochPackerClient;

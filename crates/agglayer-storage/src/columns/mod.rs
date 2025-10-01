@@ -98,5 +98,4 @@ pub mod epochs {
     pub(crate) mod metadata;
     pub(crate) mod proofs;
     pub(crate) mod start_checkpoint;
-    mod transaction_hash_per_certificate_index;
 }

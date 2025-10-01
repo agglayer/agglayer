@@ -14,7 +14,7 @@ use agglayer_storage::{
 use agglayer_types::{
     aggchain_proof::AggchainData,
     primitives::{keccak::Keccak256Hasher, Address},
-    Certificate, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
+    Certificate, Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
 };
 use bincode::Options;
 use pessimistic_proof::{
@@ -136,8 +136,9 @@ where
         let verifying_key = self.verifying_key.clone();
 
         let mut state = state.clone();
-        let (multi_batch_header, initial_state, pv_native) =
-            self.witness_generation(&certificate, &mut state).await?;
+        let (multi_batch_header, initial_state, pv_native) = self
+            .witness_generation(&certificate, &mut state, None)
+            .await?;
 
         info!(
             "Successfully generated the witness for the PP for the Certificate {}",
@@ -325,6 +326,7 @@ where
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
+        certificate_tx_hash: Option<Digest>,
     ) -> Result<
         (
             MultiBatchHeader<Keccak256Hasher>,
@@ -344,9 +346,18 @@ where
 
         let prev_pessimistic_root = self
             .l1_rpc
-            .get_prev_pessimistic_root(network_id.to_u32())
+            .get_prev_pessimistic_root(
+                network_id.to_u32(),
+                certificate_tx_hash.map(|digest| digest.0.into()),
+            )
             .await
             .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
+
+        debug!(
+            from_specific_block = certificate_tx_hash.is_some(),
+            "Prev PP root from L1: {}",
+            Digest(prev_pessimistic_root)
+        );
 
         let declared_l1_info_root = certificate
             .l1_info_root()
@@ -474,8 +485,12 @@ where
         .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
         debug!(
-            "Witness generation target roots: {:?}. Native execution target roots: {:?}",
-            targets_witness_generation, targets_native_execution
+            "Witness generation target roots: {:?}. Native execution target roots: {:?}, \
+             prev_pproot: {}, new_pproot: {}",
+            targets_witness_generation,
+            targets_native_execution,
+            pv.prev_pessimistic_root,
+            pv.new_pessimistic_root
         );
 
         Ok((multi_batch_header, initial_state, pv))
