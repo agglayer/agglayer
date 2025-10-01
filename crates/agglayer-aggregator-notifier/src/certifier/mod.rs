@@ -11,6 +11,9 @@ use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWrite
 use agglayer_types::{
     aggchain_proof::AggchainData, bincode, Certificate, Digest, Height, LocalNetworkStateData,
     NetworkId, Proof,
+    aggchain_proof::AggchainData,
+    primitives::{keccak::Keccak256Hasher, Address},
+    Certificate, Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
 };
 use eyre::{eyre, Context as _};
 use pessimistic_proof::{
@@ -147,8 +150,9 @@ where
         let verifying_key = self.verifying_key.clone();
 
         let mut state = state.clone();
-        let (multi_batch_header, initial_state, pv_native) =
-            self.witness_generation(&certificate, &mut state).await?;
+        let (multi_batch_header, initial_state, pv_native) = self
+            .witness_generation(&certificate, &mut state, None)
+            .await?;
 
         info!("Successfully generated the witness for the PP for the Certificate {certificate_id}");
 

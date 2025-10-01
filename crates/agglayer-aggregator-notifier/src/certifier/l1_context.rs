@@ -22,14 +22,24 @@ where
     pub async fn fetch_l1_context(
         &self,
         certificate: &Certificate,
+        certificate_tx_hash: Option<Digest>,
     ) -> Result<L1WitnessCtx, CertificationError> {
         let network_id = certificate.network_id;
 
         let prev_pessimistic_root = self
             .l1_rpc
-            .get_prev_pessimistic_root(network_id.to_u32())
+            .get_prev_pessimistic_root(
+                network_id.to_u32(),
+                certificate_tx_hash.map(|digest| digest.0.into()),
+            )
             .await
             .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
+
+        debug!(
+            from_specific_block = certificate_tx_hash.is_some(),
+            "Prev PP root from L1: {}",
+            Digest(prev_pessimistic_root)
+        );
 
         let l1_info_root = self.fetch_l1_info_root(certificate).await?;
 

@@ -98,6 +98,8 @@ pub enum L1RpcError {
     MultisigThresholdFetchFailed(#[source] alloy::contract::Error),
     #[error("Threshold value is too large to fit in usize. fetched value: {fetched}")]
     ThresholdTypeOverflow { fetched: U256 },
+    #[error("Transaction receipt failure for tx {0}")]
+    TransactionReceiptFailure(String),
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>

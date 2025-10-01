@@ -39,7 +39,11 @@ pub trait RollupContract {
     ) -> Result<Address, L1RpcError>;
 
     async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<Address, L1RpcError>;
-    async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError>;
+    async fn get_prev_pessimistic_root(
+        &self,
+        rollup_id: u32,
+        before_tx: Option<H256>,
+    ) -> Result<[u8; 32], L1RpcError>;
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
     async fn get_verifier_type(&self, rollup_id: u32) -> Result<VerifierType, L1RpcError>;
@@ -209,11 +213,36 @@ where
 
         Ok(rollup_data.rollupContract.into())
     }
-    async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError> {
-        let rollup_data: RollupDataReturnV2 = self
-            .inner
-            .rollupIDToRollupDataV2(rollup_id)
-            .call()
+    async fn get_prev_pessimistic_root(
+        &self,
+        rollup_id: u32,
+        before_tx_hash: Option<H256>,
+    ) -> Result<[u8; 32], L1RpcError> {
+        let at_block = if let Some(tx_hash) = before_tx_hash {
+            let receipt = self
+                .rpc
+                .get_transaction_receipt(tx_hash)
+                .await
+                .map_err(|_| L1RpcError::UnableToFetchTransactionReceipt(tx_hash.to_string()))?
+                .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))?;
+
+            match receipt.status {
+                Some(n) if n != U64::from(0u64) => receipt.block_number.map(|block| {
+                    let block = block.saturating_sub(1.into());
+                    BlockId::Number(BlockNumber::Number(block))
+                }),
+                _ => {
+                    return Err(L1RpcError::TransactionReceiptFailure(tx_hash.to_string()));
+                }
+            }
+        } else {
+            None
+        };
+
+        let mut rollup_data_call = self.inner.rollup_id_to_rollup_data_v2(rollup_id);
+        rollup_data_call.block = at_block;
+
+        let rollup_data: RollupDataReturnV2 = rollup_data_call
             .await
             .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
 
