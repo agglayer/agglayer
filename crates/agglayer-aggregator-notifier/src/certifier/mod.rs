@@ -353,7 +353,12 @@ where
             .await
             .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
 
-        debug!("Prev PP root from L1: {}", Digest(prev_pessimistic_root));
+        debug!(
+            from_specific_block = certificate_tx_hash.is_some(),
+            "Prev PP root from L1: {}",
+            Digest(prev_pessimistic_root)
+        );
+
         let declared_l1_info_root = certificate
             .l1_info_root()
             .map_err(|source| CertificationError::Types { source })?;
