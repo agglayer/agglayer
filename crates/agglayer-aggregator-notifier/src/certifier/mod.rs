@@ -11,9 +11,6 @@ use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWrite
 use agglayer_types::{
     aggchain_proof::AggchainData, bincode, Certificate, Digest, Height, LocalNetworkStateData,
     NetworkId, Proof,
-    aggchain_proof::AggchainData,
-    primitives::{keccak::Keccak256Hasher, Address},
-    Certificate, Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
 };
 use eyre::{eyre, Context as _};
 use pessimistic_proof::{
@@ -360,10 +357,13 @@ where
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
+        certificate_tx_hash: Option<Digest>,
     ) -> Result<(MultiBatchHeader, LocalNetworkState, PessimisticProofOutput), CertificationError>
     {
         // Fetch all the necessary context from the L1
-        let ctx_from_l1 = self.fetch_l1_context(certificate).await?;
+        let ctx_from_l1 = self
+            .fetch_l1_context(certificate, certificate_tx_hash)
+            .await?;
 
         debug!("Context fetched from the L1: {ctx_from_l1:?}");
 

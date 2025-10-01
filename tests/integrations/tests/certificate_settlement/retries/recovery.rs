@@ -10,6 +10,7 @@ use integrations::{
     wait_for_settlement_or_error,
 };
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
+use pessimistic_proof::core::commitment::SignatureCommitmentVersion;
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 use tokio_util::sync::CancellationToken;
@@ -70,8 +71,6 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 #[timeout(Duration::from_secs(120))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
-    use pessimistic_proof::unified_bridge::CommitmentVersion;
-
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
@@ -106,13 +105,13 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     let withdrawals = vec![];
 
     let mut certificate = state.apply_events(&[], &withdrawals);
-    certificate.height = 1;
+    certificate.height = 1.into();
     let (_, signature, _) = compute_signature_info(
         certificate.new_local_exit_root,
         &certificate.imported_bridge_exits,
         &state.wallet,
         certificate.height,
-        CommitmentVersion::V3,
+        SignatureCommitmentVersion::V3,
     );
     certificate.aggchain_data = AggchainData::ECDSA { signature };
 

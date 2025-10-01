@@ -11,6 +11,7 @@ use agglayer_types::{
 use eyre::Context as _;
 use prover_executor::sp1_fast;
 use sp1_sdk::HashableKey;
+use tracing::debug;
 
 use crate::CertifierClient;
 

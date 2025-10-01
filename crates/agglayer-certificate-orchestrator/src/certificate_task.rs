@@ -183,7 +183,7 @@ where
         debug!("Recomputing new state for already-proven certificate");
         let _ = self
                 .certifier_client
-                .witness_generation(&self.certificate, &mut state)
+                .witness_generation(&self.certificate, &mut state, self.header.settlement_tx_hash.map(|h| h.into()))
                 .await
                 .map_err(|error| {
                     error!(%certificate_id, ?error, "Failed recomputing the new state for already-proven certificate");
