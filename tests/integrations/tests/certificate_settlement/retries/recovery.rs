@@ -13,7 +13,6 @@ use jsonrpsee::{core::client::ClientT as _, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 use tokio_util::sync::CancellationToken;
-use tower_http::ServiceExt;
 
 #[rstest]
 #[tokio::test]
