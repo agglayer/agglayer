@@ -326,7 +326,7 @@ where
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
-        prev_pessimistic_root_before_tx: Option<Digest>,
+        certificate_tx_hash: Option<Digest>,
     ) -> Result<
         (
             MultiBatchHeader<Keccak256Hasher>,
@@ -348,7 +348,7 @@ where
             .l1_rpc
             .get_prev_pessimistic_root(
                 network_id.to_u32(),
-                prev_pessimistic_root_before_tx.map(|digest| digest.0.into()),
+                certificate_tx_hash.map(|digest| digest.0.into()),
             )
             .await
             .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;

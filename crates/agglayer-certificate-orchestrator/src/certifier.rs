@@ -42,7 +42,7 @@ pub trait Certifier: Unpin + Send + Sync + 'static {
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
-        prev_pessimistic_root_before_tx: Option<Digest>,
+        certificate_tx_hash: Option<Digest>,
     ) -> Result<
         (
             MultiBatchHeader<Keccak256Hasher>,
