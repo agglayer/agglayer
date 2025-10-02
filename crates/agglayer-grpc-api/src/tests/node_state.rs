@@ -14,10 +14,8 @@ use agglayer_storage::{
 };
 use agglayer_types::{CertificateId, CertificateStatus, Digest, EpochNumber, Height};
 use tokio::{net::TcpListener, sync::oneshot};
-use tonic::{
-    transport::{server::TcpIncoming, Server},
-    Code,
-};
+use tonic::Code;
+use tower::ServiceExt as _;
 
 use crate::node_state_service::NodeStateServer;
 
@@ -66,14 +64,17 @@ async fn get_certificate_header() {
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let incoming = TcpIncoming::from(listener)
-        .with_nodelay(Some(true))
-        .with_keepalive(Some(Duration::from_secs(1)));
+
+    let app = axum::Router::new().route_service(
+        "/agglayer.node.v1.NodeStateService/{*rest}",
+        svc.map_request(|r: http::Request<axum::body::Body>| {
+            r.map(|b| tonic::body::Body::new(b))
+        }),
+    );
 
     let jh = tokio::spawn(async move {
-        Server::builder()
-            .add_service(svc)
-            .serve_with_incoming_shutdown(incoming, async { drop(rx.await) })
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async { drop(rx.await) })
             .await
             .unwrap();
     });
