@@ -484,7 +484,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0-rc.01#2d96042cbe23fd94a056a102b0702ebe18a04941"
+source = "git+https://github.com/agglayer/provers.git?branch=fix%2Fdecoding-size#a346750a406f45c721335b6946157b43c1eca27d"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
@@ -509,7 +509,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0-rc.01#2d96042cbe23fd94a056a102b0702ebe18a04941"
+source = "git+https://github.com/agglayer/provers.git?branch=fix%2Fdecoding-size#a346750a406f45c721335b6946157b43c1eca27d"
 dependencies = [
  "prover-config",
  "prover-logger",
@@ -522,7 +522,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0-rc.01#2d96042cbe23fd94a056a102b0702ebe18a04941"
+source = "git+https://github.com/agglayer/provers.git?branch=fix%2Fdecoding-size#a346750a406f45c721335b6946157b43c1eca27d"
 dependencies = [
  "agglayer-interop",
  "pbjson 0.7.0",
@@ -6663,7 +6663,7 @@ dependencies = [
 [[package]]
 name = "prover-alloy"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0-rc.01#2d96042cbe23fd94a056a102b0702ebe18a04941"
+source = "git+https://github.com/agglayer/provers.git?branch=fix%2Fdecoding-size#a346750a406f45c721335b6946157b43c1eca27d"
 dependencies = [
  "agglayer-evm-client",
  "alloy",
@@ -6679,7 +6679,7 @@ dependencies = [
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0-rc.01#2d96042cbe23fd94a056a102b0702ebe18a04941"
+source = "git+https://github.com/agglayer/provers.git?branch=fix%2Fdecoding-size#a346750a406f45c721335b6946157b43c1eca27d"
 dependencies = [
  "prover-utils",
  "serde",
@@ -6690,7 +6690,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0-rc.01#2d96042cbe23fd94a056a102b0702ebe18a04941"
+source = "git+https://github.com/agglayer/provers.git?branch=fix%2Fdecoding-size#a346750a406f45c721335b6946157b43c1eca27d"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -6711,7 +6711,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0-rc.01#2d96042cbe23fd94a056a102b0702ebe18a04941"
+source = "git+https://github.com/agglayer/provers.git?branch=fix%2Fdecoding-size#a346750a406f45c721335b6946157b43c1eca27d"
 dependencies = [
  "anyhow",
  "buildstructor",
@@ -6738,7 +6738,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0-rc.01#2d96042cbe23fd94a056a102b0702ebe18a04941"
+source = "git+https://github.com/agglayer/provers.git?branch=fix%2Fdecoding-size#a346750a406f45c721335b6946157b43c1eca27d"
 dependencies = [
  "serde",
  "tracing",
@@ -6749,7 +6749,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0-rc.01#2d96042cbe23fd94a056a102b0702ebe18a04941"
+source = "git+https://github.com/agglayer/provers.git?branch=fix%2Fdecoding-size#a346750a406f45c721335b6946157b43c1eca27d"
 dependencies = [
  "humantime-serde",
  "serde",
