@@ -126,9 +126,7 @@ async fn start_server_with_configuration_service(
 
     let app = axum::Router::new().route_service(
         "/agglayer.node.v1.ConfigurationService/{*rest}",
-        svc.map_request(|r: http::Request<axum::body::Body>| {
-            r.map(|b| tonic::body::Body::new(b))
-        }),
+        svc.map_request(|r: http::Request<axum::body::Body>| r.map(tonic::body::Body::new)),
     );
 
     let jh = tokio::spawn(async move {
