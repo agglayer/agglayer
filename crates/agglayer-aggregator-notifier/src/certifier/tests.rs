@@ -26,11 +26,20 @@ use crate::{CertifierClient, ELF};
 async fn happy_path() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();
-    let config = Config::new(&base_path.path);
+    let mut config = Config::new(&base_path.path);
 
     let mut pending_store = MockPendingStore::new();
     let mut l1_rpc = MockL1Rpc::new();
-    let prover_config = agglayer_prover_config::ProverConfig::default();
+    let prover_config = agglayer_prover_config::ProverConfig {
+        grpc_endpoint: next_available_addr(),
+        ..Default::default()
+    };
+
+    config.prover_entrypoint = format!(
+        "http://{}:{}",
+        prover_config.grpc_endpoint.ip(),
+        prover_config.grpc_endpoint.port()
+    );
 
     // spawning fake prover as we don't want to hit SP1
     let fake_prover = FakeProver::new(ELF).await.unwrap();
