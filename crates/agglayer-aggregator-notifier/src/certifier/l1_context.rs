@@ -37,9 +37,9 @@ where
             .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
 
         debug!(
-            from_specific_block = certificate_tx_hash.is_some(),
-            "Prev PP root from L1: {}",
-            Digest(prev_pessimistic_root)
+            certificate_tx_hash = certificate_tx_hash.map(tracing::field::display),
+            prev_pessimistic_root = tracing::field::display(Digest(prev_pessimistic_root)),
+            "Prev PP root from L1",
         );
 
         let l1_info_root = self.fetch_l1_info_root(certificate).await?;

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use agglayer_primitives::U256;
 use alloy::{
     eips::BlockNumberOrTag,
-    primitives::{Address, FixedBytes, B256},
+    primitives::{Address, FixedBytes, TxHash, B256},
     providers::Provider,
     rpc::types::{Filter, TransactionReceipt},
 };
@@ -98,8 +98,8 @@ pub enum L1RpcError {
     MultisigThresholdFetchFailed(#[source] alloy::contract::Error),
     #[error("Threshold value is too large to fit in usize. fetched value: {fetched}")]
     ThresholdTypeOverflow { fetched: U256 },
-    #[error("Transaction receipt failure for tx {0}")]
-    TransactionReceiptFailure(String),
+    #[error("Transaction receipt for tx {0} failed on L1")]
+    TransactionReceiptFailedOnL1(TxHash),
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>

@@ -282,7 +282,10 @@ where
         // No set_status: update_settlement_tx_hash already updates the status in the
         // database
         self.header.status = CertificateStatus::Candidate;
-        debug!(settlement_tx_hash = ?self.header.settlement_tx_hash, "Submitted certificate for settlement");
+        debug!(
+            settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
+            "Submitted certificate for settlement"
+        );
 
         self.process_from_candidate().await
     }
@@ -298,7 +301,10 @@ where
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
 
-        debug!(settlement_tx_hash = ?self.header.settlement_tx_hash, "Waiting for certificate settlement to complete");
+        debug!(
+            settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
+            "Waiting for certificate settlement to complete"
+        );
         let settlement_tx_hash = self.header.settlement_tx_hash.ok_or_else(|| {
             CertificateStatusError::SettlementError(
                 "Candidate certificate header has no settlement tx hash".into(),

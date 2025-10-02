@@ -231,14 +231,14 @@ where
                     .block_number
                     .map(|block| {
                         let block = block.saturating_sub(1);
-                        BlockId::Number(BlockNumberOrTag::Number(block))
+                        BlockId::number(block)
                     })
-                    .unwrap_or_default()
+                    .unwrap_or_else(BlockId::latest)
             } else {
-                return Err(L1RpcError::TransactionReceiptFailure(tx_hash.to_string()));
+                return Err(L1RpcError::TransactionReceiptFailedOnL1(tx_hash));
             }
         } else {
-            BlockId::default()
+            BlockId::latest()
         };
 
         let rollup_data: RollupDataReturnV2 = self

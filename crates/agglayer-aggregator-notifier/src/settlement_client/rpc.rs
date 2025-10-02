@@ -230,7 +230,7 @@ where
     RollupManagerRpc: L1TransactionFetcher,
     PerEpochStore: PerEpochWriter + PerEpochReader,
 {
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), fields(%settlement_tx_hash, %certificate_id))]
     async fn wait_for_settlement(
         &self,
         settlement_tx_hash: SettlementTxHash,
@@ -434,6 +434,8 @@ mod testutils {
                 error: "No transaction receipt found (simulated via fail point)".to_string(),
             });
         }
+
+        fail::fail_point!("notifier::packer::settle_certificate::receipt_future_ended::kill_node");
 
         Ok(())
     }
