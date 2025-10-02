@@ -952,6 +952,7 @@ impl Certifier for Check {
         &self,
         _certificate: &agglayer_types::Certificate,
         _state: &mut LocalNetworkStateData,
+        _certificate_tx_hash: Option<Digest>,
     ) -> Result<(MultiBatchHeader, LocalNetworkState, PessimisticProofOutput), CertificationError>
     {
         Err(CertificationError::InternalError(
