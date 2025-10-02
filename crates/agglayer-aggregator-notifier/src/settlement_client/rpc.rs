@@ -435,7 +435,7 @@ mod testutils {
             });
         }
 
-        fail::fail_point!("notifier::packer::settle_certificate::receipt_future_ended::kill_node");
+        fail::fail_point!("notifier::packer::settle_certificate::receipt_future_ended");
 
         Ok(())
     }

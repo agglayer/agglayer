@@ -95,14 +95,16 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 
     cancellation_token.cancel();
     _ = agglayer_shutdowned.await;
-    fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::kill_node",
-        "panic(killing node)",
+
+    let cancellation_token = CancellationToken::new();
+    let (agglayer_shutdowned, client, _) =
+        start_agglayer(&tmp_dir.path, &l1, None, Some(cancellation_token.clone())).await;
+    let withdrawals = vec![];
+    fail::cfg_callback(
+        "notifier::packer::settle_certificate::receipt_future_ended",
+        move || cancellation_token.cancel(),
     )
     .expect("Failed to configure failpoint");
-
-    let (agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
-    let withdrawals = vec![];
 
     let mut certificate = state.apply_events(&[], &withdrawals);
     certificate.height = 1.into();
@@ -125,7 +127,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     println!("Node killed, recovering...");
 
     fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::kill_node",
+        "notifier::packer::settle_certificate::receipt_future_ended",
         "off",
     )
     .expect("Failed to configure failpoint");
