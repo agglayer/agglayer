@@ -117,6 +117,10 @@ impl<const TREE_DEPTH: usize> LocalExitTreeData<TREE_DEPTH> {
 
         Ok(LETMerkleProof { siblings })
     }
+
+    pub fn leaf_count(&self) -> usize {
+        self.layers[0].len()
+    }
 }
 
 #[cfg(test)]

@@ -18,9 +18,9 @@ use crate::{
     forest::Forest,
 };
 
-pub const NETWORK_A: NetworkId = NetworkId::new(0);
-pub const NETWORK_B: NetworkId = NetworkId::new(1);
-pub const NETWORK_C: NetworkId = NetworkId::new(2);
+pub const NETWORK_A: NetworkId = NetworkId::new(1);
+pub const NETWORK_B: NetworkId = NetworkId::new(2);
+pub const NETWORK_C: NetworkId = NetworkId::new(3);
 
 pub const USDC: TokenInfo = TokenInfo {
     origin_network: NETWORK_A,

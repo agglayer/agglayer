@@ -228,6 +228,7 @@ pub fn generate_pessimistic_proof(
     // Get the initial state commitment
     let initial_state_commitment = initial_network_state.get_state_commitment();
     let mut network_state: NetworkState = initial_network_state;
+
     let final_state_commitment = network_state.apply_batch_header(batch_header)?;
 
     let constrained_values = ConstrainedValues::new(

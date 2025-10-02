@@ -1,5 +1,6 @@
 //! A collection of shared testing utilities.
 
+pub mod cert_graph;
 pub mod event_data;
 pub mod forest;
 pub mod runner;

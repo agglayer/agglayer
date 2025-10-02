@@ -3,7 +3,7 @@ use agglayer_types::{
     aggchain_proof::AggchainData,
     compute_signature_info,
     primitives::{keccak::keccak256, Hashable},
-    Address, Certificate, Digest, Height, LocalNetworkStateData, Signature, U256,
+    Address, Certificate, Digest, Height, LocalNetworkStateData, NetworkId, Signature, U256,
 };
 use alloy::signers::{local::PrivateKeySigner, SignerSync};
 use ecdsa_proof_lib::AggchainECDSA;
@@ -20,8 +20,6 @@ use pessimistic_proof::{
     PessimisticProofOutput,
 };
 use sp1_sdk::{ProverClient, SP1Proof, SP1Stdin, SP1VerifyingKey};
-
-type NetworkId = u32;
 
 use super::sample_data::{NETWORK_A, NETWORK_B};
 use crate::{
@@ -54,6 +52,7 @@ pub struct Forest {
     pub l1_info_tree: LocalExitTreeData,
     pub local_exit_tree_data_a: LocalExitTreeData, // mainnet
     pub local_exit_tree_data_c: LocalExitTreeData, // emitting preconf
+    pub preconf_source_network: NetworkId,
     pub state_b: LocalNetworkStateData,
 }
 
@@ -74,7 +73,7 @@ impl Forest {
 
     pub fn with_network_id(mut self, network_id: NetworkId) -> Self {
         self.network_id = network_id;
-        self.wallet = Certificate::wallet_for_test(network_id.into());
+        self.wallet = Certificate::wallet_for_test(network_id);
 
         self
     }
@@ -122,7 +121,7 @@ impl Forest {
         }
 
         Self {
-            network_id: NETWORK_B.to_u32(),
+            network_id: NETWORK_B,
             wallet: Certificate::wallet_for_test(NETWORK_B),
             local_exit_tree_data_a: LocalExitTreeData::new(),
             l1_info_tree: Default::default(),
@@ -132,7 +131,13 @@ impl Forest {
                 nullifier_tree: Smt::new(),
             },
             local_exit_tree_data_c: LocalExitTreeData::new(),
+            preconf_source_network: NETWORK_C,
         }
+    }
+
+    pub fn set_preconf_source(&mut self, source_network: NetworkId, data: &LocalExitTreeData) {
+        self.preconf_source_network = source_network;
+        self.local_exit_tree_data_c = data.clone();
     }
 
     pub fn imported_bridge_exits_with_preconf(
@@ -152,7 +157,31 @@ impl Forest {
             self.local_exit_tree_data_c.add_leaf(exit.hash()).unwrap();
         }
 
-        let mut compute_claim_data = |index| {
+        let (rer, mer, ger) = {
+            let rer = Digest::default();
+            let mer = self.local_exit_tree_data_c.get_root();
+            (rer, mer, keccak256_combine([mer, rer]))
+        };
+
+        let l1_leaf = L1InfoTreeLeaf {
+            l1_info_tree_index: 0,
+            rer,
+            mer,
+            inner: L1InfoTreeLeafInner {
+                block_hash: Digest::default(),
+                timestamp: 0,
+                global_exit_root: ger,
+            },
+        };
+
+        self.l1_info_tree.add_leaf(l1_leaf.hash()).unwrap();
+
+        let proof_ger_l1root = MerkleProof {
+            proof: self.l1_info_tree.get_proof(0).unwrap(),
+            root: self.l1_info_tree.get_root(),
+        };
+
+        let compute_claim_data = |index| {
             let proof_leaf_ler = MerkleProof {
                 proof: self.local_exit_tree_data_c.get_proof(index).unwrap(),
                 root: self.local_exit_tree_data_c.get_root(),
@@ -161,30 +190,6 @@ impl Forest {
             if with_preconf {
                 Claim::Preconf(Box::new(ClaimFromPreconf { proof_leaf_ler }))
             } else {
-                let (rer, mer, ger) = {
-                    let rer = Digest::default();
-                    let mer = proof_leaf_ler.root;
-                    (rer, mer, keccak256_combine([mer, rer]))
-                };
-
-                let l1_leaf = L1InfoTreeLeaf {
-                    l1_info_tree_index: 0,
-                    rer,
-                    mer,
-                    inner: L1InfoTreeLeafInner {
-                        block_hash: Digest::default(),
-                        timestamp: 0,
-                        global_exit_root: ger,
-                    },
-                };
-
-                self.l1_info_tree.add_leaf(l1_leaf.hash()).unwrap();
-
-                let proof_ger_l1root = MerkleProof {
-                    proof: self.l1_info_tree.get_proof(0).unwrap(),
-                    root: self.l1_info_tree.get_root(),
-                };
-
                 Claim::Mainnet(Box::new(ClaimFromMainnet {
                     proof_leaf_mer: proof_leaf_ler,
                     proof_ger_l1root: proof_ger_l1root.clone(),
@@ -198,7 +203,7 @@ impl Forest {
             let index = idx as u32;
             let imported_exit = ImportedBridgeExit {
                 bridge_exit: exit,
-                global_index: GlobalIndex::new(NETWORK_C, index),
+                global_index: GlobalIndex::new(self.preconf_source_network, index),
                 claim_data: compute_claim_data(idx as u32),
             };
             res.push(imported_exit);
@@ -240,6 +245,7 @@ impl Forest {
 
         let imported_bridge_exits =
             self.imported_bridge_exits_with_preconf(imported_bridge_events, with_preconf);
+
         let bridge_exits = bridge_exits
             .into_iter()
             .inspect(|exit| {
@@ -338,7 +344,7 @@ impl Forest {
                 prev_local_exit_root: certificate.prev_local_exit_root,
                 new_local_exit_root: certificate.new_local_exit_root,
                 l1_info_root: *certificate.l1_info_root().unwrap().unwrap(),
-                origin_network: self.network_id,
+                origin_network: self.network_id.into(),
             });
 
         (
@@ -383,9 +389,9 @@ fn exit(token_info: TokenInfo, dest_network: NetworkId, amount: U256) -> BridgeE
 }
 
 fn exit_to_a(token_info: TokenInfo, amount: U256) -> BridgeExit {
-    exit(token_info, NETWORK_A.to_u32(), amount)
+    exit(token_info, NETWORK_A, amount)
 }
 
 fn exit_to_b(token_info: TokenInfo, amount: U256) -> BridgeExit {
-    exit(token_info, NETWORK_B.to_u32(), amount)
+    exit(token_info, NETWORK_B, amount)
 }
