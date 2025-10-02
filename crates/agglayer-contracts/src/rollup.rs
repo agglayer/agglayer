@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use agglayer_primitives::Address;
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
-    primitives::U256,
+    primitives::{TxHash, U256},
     providers::Provider,
     rpc::types::Filter,
     signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
@@ -39,7 +39,11 @@ pub trait RollupContract {
     ) -> Result<Address, L1RpcError>;
 
     async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<Address, L1RpcError>;
-    async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError>;
+    async fn get_prev_pessimistic_root(
+        &self,
+        rollup_id: u32,
+        before_tx: Option<TxHash>,
+    ) -> Result<[u8; 32], L1RpcError>;
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
     async fn get_verifier_type(&self, rollup_id: u32) -> Result<VerifierType, L1RpcError>;
@@ -209,10 +213,38 @@ where
 
         Ok(rollup_data.rollupContract.into())
     }
-    async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError> {
+    async fn get_prev_pessimistic_root(
+        &self,
+        rollup_id: u32,
+        before_tx_hash: Option<TxHash>,
+    ) -> Result<[u8; 32], L1RpcError> {
+        let at_block = if let Some(tx_hash) = before_tx_hash {
+            let receipt = self
+                .rpc
+                .get_transaction_receipt(tx_hash)
+                .await
+                .map_err(|_| L1RpcError::UnableToFetchTransactionReceipt(tx_hash.to_string()))?
+                .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))?;
+
+            if receipt.status() {
+                receipt
+                    .block_number
+                    .map(|block| {
+                        let block = block.saturating_sub(1);
+                        BlockId::number(block)
+                    })
+                    .unwrap_or_else(BlockId::latest)
+            } else {
+                return Err(L1RpcError::TransactionReceiptFailedOnL1(tx_hash));
+            }
+        } else {
+            BlockId::latest()
+        };
+
         let rollup_data: RollupDataReturnV2 = self
             .inner
             .rollupIDToRollupDataV2(rollup_id)
+            .block(at_block)
             .call()
             .await
             .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;

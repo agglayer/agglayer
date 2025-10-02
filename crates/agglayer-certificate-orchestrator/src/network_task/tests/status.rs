@@ -277,9 +277,9 @@ async fn from_candidate_to_settle() {
     certifier.expect_certify().never();
     certifier
         .expect_witness_generation()
-        .withf(move |c, _| c.hash() == certificate_id)
+        .withf(move |c, _, _| c.hash() == certificate_id)
         .once()
-        .returning(move |cert, state| {
+        .returning(move |cert, state, _tx_hash| {
             let initial = LocalNetworkState::from(state.clone());
             let l1_info_root = cert.l1_info_root().unwrap().unwrap_or_default();
 
