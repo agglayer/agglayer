@@ -111,12 +111,14 @@ pub async fn start_agglayer(
     assert!(config.tls.is_some());
 
     let grpc_addr = next_available_addr();
+    let grpc_tls_addr = next_available_addr();
     let readrpc_addr = next_available_addr();
     let readrpc_tls_addr = next_available_addr();
     let admin_addr = next_available_addr();
     let admin_tls_addr = next_available_addr();
 
-    config.rpc.grpc_addr = grpc_addr.into();
+    config.rpc.grpc.plain = grpc_addr.into();
+    config.rpc.grpc.tls = grpc_tls_addr.into();
     config.rpc.readrpc_addr = readrpc_addr.into();
     config.rpc.readrpc_tls_addr = readrpc_tls_addr.into();
     config.rpc.admin_addr = admin_addr.into();

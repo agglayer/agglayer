@@ -204,7 +204,7 @@ impl Config {
 
     /// Get the target gRPC socket address from the configuration.
     pub fn public_grpc_addr(&self) -> std::net::SocketAddr {
-        self.rpc.grpc_addr.to_addr().into()
+        self.rpc.grpc.plain.to_addr().into()
     }
 
     /// Get the admin RPC socket address from the configuration.
@@ -224,7 +224,7 @@ impl Config {
 
     /// Get the gRPC TLS socket address from the configuration.
     pub fn public_grpc_tls_addr(&self) -> std::net::SocketAddr {
-        self.rpc.grpc_tls_addr.to_addr().into()
+        self.rpc.grpc.tls.to_addr().into()
     }
 
     pub fn path_contextualized(mut self, base_path: &Path) -> Self {
