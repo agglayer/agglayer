@@ -18,11 +18,12 @@ outputs = []
 format = "pretty"
 
 [rpc]
-grpc-port = 9089
-readrpc-port = 9090
-admin-port = 9091
-admin-tls-port = 9491
-readrpc-tls-port = 9490
+grpc-addr = "0.0.0.0:9089"
+grpc-tls-addr = "0.0.0.0:9489"
+readrpc-addr = "0.0.0.0:9090"
+readrpc-tls-addr = "0.0.0.0:9490"
+admin-addr = "127.0.0.1:9091"
+admin-tls-addr = "127.0.0.1:9491"
 host = "0.0.0.0"
 max-request-body-size = 104857600
 request-timeout = "3m"

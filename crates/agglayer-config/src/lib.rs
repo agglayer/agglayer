@@ -199,32 +199,32 @@ impl Config {
 
     /// Get the target ReadRPC socket address from the configuration.
     pub fn readrpc_addr(&self) -> std::net::SocketAddr {
-        self.rpc.readrpc_port.to_addr().into()
+        self.rpc.readrpc_addr.to_addr().into()
     }
 
     /// Get the target gRPC socket address from the configuration.
     pub fn public_grpc_addr(&self) -> std::net::SocketAddr {
-        self.rpc.grpc_port.to_addr().into()
+        self.rpc.grpc_addr.to_addr().into()
     }
 
     /// Get the admin RPC socket address from the configuration.
     pub fn admin_rpc_addr(&self) -> std::net::SocketAddr {
-        self.rpc.admin_port.to_addr().into()
+        self.rpc.admin_addr.to_addr().into()
     }
 
     /// Get the admin TLS RPC socket address from the configuration.
     pub fn admin_tls_rpc_addr(&self) -> std::net::SocketAddr {
-        self.rpc.admin_tls_port.to_addr().into()
+        self.rpc.admin_tls_addr.to_addr().into()
     }
 
     /// Get the ReadRPC TLS socket address from the configuration.
     pub fn readrpc_tls_addr(&self) -> std::net::SocketAddr {
-        self.rpc.readrpc_tls_port.to_addr().into()
+        self.rpc.readrpc_tls_addr.to_addr().into()
     }
 
     /// Get the gRPC TLS socket address from the configuration.
     pub fn public_grpc_tls_addr(&self) -> std::net::SocketAddr {
-        self.rpc.grpc_tls_port.to_addr().into()
+        self.rpc.grpc_tls_addr.to_addr().into()
     }
 
     pub fn path_contextualized(mut self, base_path: &Path) -> Self {
