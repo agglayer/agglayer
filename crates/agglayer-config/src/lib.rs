@@ -19,6 +19,7 @@ pub mod prover;
 
 const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
 
+mod addr;
 mod auth;
 pub mod certificate_orchestrator;
 pub mod epoch;
@@ -26,7 +27,6 @@ mod l1;
 mod l2;
 pub mod log;
 pub mod outbound;
-mod port;
 pub mod rate_limiting;
 mod rpc;
 pub mod shutdown;
@@ -35,12 +35,12 @@ mod telemetry;
 mod tls;
 mod with;
 
+pub use addr::{AddrConfig, AddrDefaults};
 pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
 pub use epoch::Epoch;
 pub use l1::L1;
 pub use l2::L2;
 pub use log::Log;
-use port::{AddrConfig, AddrDefaults};
 use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
