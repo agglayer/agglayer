@@ -137,7 +137,6 @@ impl StateWriter for StateStore {
             }
 
             certificate_header.settlement_tx_hash = None;
-            certificate_header.status = CertificateStatus::Proven;
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
