@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_contracts::contracts::{
-    PolygonRollupManager::{PolygonRollupManagerInstance, RollupDataReturnV2},
+    PolygonRollupManager::{
+        verifyBatchesTrustedAggregatorCall, PolygonRollupManagerInstance, RollupDataReturnV2,
+    },
     PolygonZkEvm::PolygonZkEvmInstance,
 };
 use agglayer_rate_limiting::RateLimiter;
@@ -11,12 +13,12 @@ use agglayer_rpc::error::SignatureVerificationError;
 use agglayer_types::Address;
 use alloy::{
     contract::Error as ContractError,
-    network::Ethereum,
     primitives::{BlockNumber, B256},
-    providers::{PendingTransactionBuilder, PendingTransactionError, Provider},
+    providers::{PendingTransactionError, Provider},
     rpc::types::TransactionReceipt,
     transports::{RpcError, TransportErrorKind},
 };
+use futures::TryFutureExt;
 use thiserror::Error;
 use tracing::{info, instrument, warn};
 
@@ -185,6 +187,9 @@ pub enum CheckTxStatusError {
     ProviderError(#[source] RpcError<TransportErrorKind>),
 }
 
+type VerifyBatchesMarker = std::marker::PhantomData<verifyBatchesTrustedAggregatorCall>;
+type VerifyBatchesBuilder<Rpc> = alloy::contract::CallBuilder<Arc<Rpc>, VerifyBatchesMarker>;
+
 impl<RpcProvider> Kernel<RpcProvider>
 where
     RpcProvider: Provider + Clone + 'static,
@@ -251,7 +256,7 @@ where
     pub(crate) async fn verify_batches_trusted_aggregator(
         &self,
         signed_tx: &SignedTx,
-    ) -> Result<PendingTransactionBuilder<Ethereum>, ContractError> {
+    ) -> Result<VerifyBatchesBuilder<RpcProvider>, ContractError> {
         let sequencer_address = self
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
@@ -259,7 +264,9 @@ where
         // TODO: pending state num is not yet supported
         const PENDING_STATE_NUM: u64 = 0;
 
-        self.get_rollup_manager_contract()
+        let rollup_manager_contract = self.get_rollup_manager_contract();
+        let proof_bytes = signed_tx.tx.zkp.proof.to_fixed_bytes().map(Into::into);
+        let call = rollup_manager_contract
             .verifyBatchesTrustedAggregator(
                 signed_tx.tx.rollup_id,
                 PENDING_STATE_NUM,
@@ -268,15 +275,11 @@ where
                 signed_tx.tx.zkp.new_local_exit_root,
                 signed_tx.tx.zkp.new_state_root,
                 sequencer_address.into(),
-                signed_tx
-                    .tx
-                    .zkp
-                    .proof
-                    .to_fixed_bytes()
-                    .map(|value| value.into()),
+                proof_bytes,
             )
-            .send()
-            .await
+            .with_cloned_provider();
+
+        Ok(call)
     }
 
     /// Verify that the signer of the given [`SignedTx`] is the trusted
@@ -318,6 +321,7 @@ where
 
         let pending_tx = self
             .verify_batches_trusted_aggregator(signed_tx)
+            .and_then(|call| async move { call.send().await })
             .await
             .map_err(SettlementError::ContractError)?;
 
