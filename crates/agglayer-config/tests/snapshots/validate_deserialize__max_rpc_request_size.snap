@@ -18,15 +18,21 @@ outputs = []
 format = "pretty"
 
 [rpc]
-grpc-addr = "0.0.0.0:9089"
-grpc-tls-addr = "0.0.0.0:9489"
-readrpc-addr = "0.0.0.0:9090"
-readrpc-tls-addr = "0.0.0.0:9490"
-admin-addr = "127.0.0.1:9091"
-admin-tls-addr = "127.0.0.1:9491"
 host = "0.0.0.0"
 max-request-body-size = 104857600
 request-timeout = "3m"
+
+[rpc.grpc]
+plain = "0.0.0.0:9089"
+tls = "0.0.0.0:9489"
+
+[rpc.readrpc]
+plain = "0.0.0.0:9090"
+tls = "0.0.0.0:9490"
+
+[rpc.admin]
+plain = "127.0.0.1:9091"
+tls = "127.0.0.1:9491"
 
 [rate-limiting]
 send-tx = "unlimited"

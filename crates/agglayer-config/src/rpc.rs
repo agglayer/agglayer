@@ -63,6 +63,36 @@ pub struct GrpcConfig {
     pub tls: AddrConfig<GrpcServiceTls>,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
+pub struct ReadRpcConfig {
+    /// The default port for the local ReadRPC server.
+    /// Overridden by `AGGLAYER_READRPC_PORT` environment variable, defaults to
+    /// 9090.
+    #[serde(default)]
+    pub plain: AddrConfig<ReadRpcService>,
+
+    /// The default port for the local ReadRPC TLS server.
+    /// Overridden by `AGGLAYER_READRPC_TLS_PORT` environment variable, defaults
+    /// to 9490.
+    #[serde(default)]
+    pub tls: AddrConfig<ReadRpcServiceTls>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
+pub struct AdminRpcConfig {
+    /// The default port for the local AdminRPC server.
+    /// Overridden by `AGGLAYER_ADMIN_PORT` environment variable, defaults to
+    /// 9091.
+    #[serde(default)]
+    pub plain: AddrConfig<AdminRpcService>,
+
+    /// The default port for the local AdminRPC TLS server.
+    /// Overridden by `AGGLAYER_ADMIN_TLS_PORT` environment variable, defaults
+    /// to 9491.
+    #[serde(default)]
+    pub tls: AddrConfig<AdminRpcServiceTls>,
+}
+
 /// The local RPC server configuration.
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -71,29 +101,11 @@ pub struct RpcConfig {
     #[serde(default)]
     pub grpc: GrpcConfig,
 
-    /// The default port for the local ReadRPC server.
-    /// Overridden by `AGGLAYER_READRPC_PORT` environment variable, defaults to
-    /// 9090.
     #[serde(default)]
-    pub readrpc_addr: AddrConfig<ReadRpcService>,
+    pub readrpc: ReadRpcConfig,
 
-    /// The default port for the local ReadRPC TLS server.
-    /// Overridden by `AGGLAYER_READRPC_TLS_PORT` environment variable, defaults
-    /// to 9490.
     #[serde(default)]
-    pub readrpc_tls_addr: AddrConfig<ReadRpcServiceTls>,
-
-    /// The default port for the local AdminRPC server.
-    /// Overridden by `AGGLAYER_ADMIN_PORT` environment variable, defaults to
-    /// 9091.
-    #[serde(default)]
-    pub admin_addr: AddrConfig<AdminRpcService>,
-
-    /// The default port for the local AdminRPC TLS server.
-    /// Overridden by `AGGLAYER_ADMIN_TLS_PORT` environment variable, defaults
-    /// to 9491.
-    #[serde(default)]
-    pub admin_tls_addr: AddrConfig<AdminRpcServiceTls>,
+    pub admin: AdminRpcConfig,
 
     #[serde(default = "default_host")]
     pub host: Ipv4Addr,
@@ -139,10 +151,8 @@ impl Default for RpcConfig {
     fn default() -> Self {
         Self {
             grpc: Default::default(),
-            readrpc_addr: Default::default(),
-            admin_addr: Default::default(),
-            admin_tls_addr: Default::default(),
-            readrpc_tls_addr: Default::default(),
+            readrpc: Default::default(),
+            admin: Default::default(),
             host: default_host(),
             max_request_body_size: default_body_size(),
             max_response_body_size: default_body_size(),

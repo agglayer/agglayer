@@ -199,7 +199,7 @@ impl Config {
 
     /// Get the target ReadRPC socket address from the configuration.
     pub fn readrpc_addr(&self) -> std::net::SocketAddr {
-        self.rpc.readrpc_addr.to_addr().into()
+        self.rpc.readrpc.plain.to_addr().into()
     }
 
     /// Get the target gRPC socket address from the configuration.
@@ -209,17 +209,17 @@ impl Config {
 
     /// Get the admin RPC socket address from the configuration.
     pub fn admin_rpc_addr(&self) -> std::net::SocketAddr {
-        self.rpc.admin_addr.to_addr().into()
+        self.rpc.admin.plain.to_addr().into()
     }
 
     /// Get the admin TLS RPC socket address from the configuration.
     pub fn admin_tls_rpc_addr(&self) -> std::net::SocketAddr {
-        self.rpc.admin_tls_addr.to_addr().into()
+        self.rpc.admin.tls.to_addr().into()
     }
 
     /// Get the ReadRPC TLS socket address from the configuration.
     pub fn readrpc_tls_addr(&self) -> std::net::SocketAddr {
-        self.rpc.readrpc_tls_addr.to_addr().into()
+        self.rpc.readrpc.tls.to_addr().into()
     }
 
     /// Get the gRPC TLS socket address from the configuration.

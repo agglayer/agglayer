@@ -119,10 +119,10 @@ pub async fn start_agglayer(
 
     config.rpc.grpc.plain = grpc_addr.into();
     config.rpc.grpc.tls = grpc_tls_addr.into();
-    config.rpc.readrpc_addr = readrpc_addr.into();
-    config.rpc.readrpc_tls_addr = readrpc_tls_addr.into();
-    config.rpc.admin_addr = admin_addr.into();
-    config.rpc.admin_tls_addr = admin_tls_addr.into();
+    config.rpc.readrpc.plain = readrpc_addr.into();
+    config.rpc.readrpc.tls = readrpc_tls_addr.into();
+    config.rpc.admin.plain = admin_addr.into();
+    config.rpc.admin.tls = admin_tls_addr.into();
 
     config.telemetry.addr = next_available_addr().into();
     config.log.level = LogLevel::Debug;
