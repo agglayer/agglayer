@@ -291,12 +291,7 @@ impl Node {
             .merge(health_router)
             .merge(json_rpc_router);
 
-        let public_grpc_listener = tokio::net::TcpListener::bind(config.public_grpc_addr()).await?;
-        info!(on = %config.public_grpc_addr(), "Public gRPC listening");
         info!(on = %config.admin_rpc_addr(), "AdminRPC listening");
-
-        let public_grpc_server = axum::serve(public_grpc_listener, public_grpc_router)
-            .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
         let tls_config = if let Some(tls) = config.tls.as_ref() {
             Some(tls.to_rustls_config().await?)
@@ -317,6 +312,14 @@ impl Node {
             config.admin_rpc_addr(),
             config.admin_tls_rpc_addr(),
             admin_router,
+            tls_config.as_ref(),
+        );
+
+        let public_grpc_server = Self::serve_rpc(
+            "gRPC",
+            config.public_grpc_addr(),
+            config.public_grpc_tls_addr(),
+            public_grpc_router,
             tls_config.as_ref(),
         );
 
