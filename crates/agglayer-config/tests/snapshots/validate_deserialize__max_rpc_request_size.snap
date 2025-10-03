@@ -18,14 +18,21 @@ outputs = []
 format = "pretty"
 
 [rpc]
-grpc-port = 9089
-readrpc-port = 9090
-admin-port = 9091
-admin-tls-port = 9491
-readrpc-tls-port = 9490
 host = "0.0.0.0"
 max-request-body-size = 104857600
 request-timeout = "3m"
+
+[rpc.grpc]
+plain = "0.0.0.0:9089"
+tls = "0.0.0.0:9489"
+
+[rpc.readrpc]
+plain = "0.0.0.0:9090"
+tls = "0.0.0.0:9490"
+
+[rpc.admin]
+plain = "127.0.0.1:9091"
+tls = "127.0.0.1:9491"
 
 [rate-limiting]
 send-tx = "unlimited"

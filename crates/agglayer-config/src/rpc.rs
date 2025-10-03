@@ -4,42 +4,93 @@ use jsonrpsee::core::TEN_MB_SIZE_BYTES;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{Port, PortDefaults};
+use crate::{AddrConfig, AddrDefaults};
 
 pub enum GrpcService {}
-impl PortDefaults for GrpcService {
-    const DEFAULT: u16 = 9089;
-    const ENV_VAR: Option<&str> = Some("AGGLAYER_GRPC_PORT");
-}
-
-pub enum ReadRpcService {}
-impl PortDefaults for ReadRpcService {
-    const DEFAULT: u16 = 9090;
-    const ENV_VAR: Option<&str> = Some("AGGLAYER_READRPC_PORT");
-}
-
-pub enum AdminService {}
-impl PortDefaults for AdminService {
-    const DEFAULT: u16 = 9091;
-    const ENV_VAR: Option<&str> = Some("AGGLAYER_ADMIN_PORT");
-}
-
-pub enum AdminServiceTls {}
-impl PortDefaults for AdminServiceTls {
-    const DEFAULT: u16 = 9491;
-    const ENV_VAR: Option<&str> = Some("AGGLAYER_ADMIN_TLS_PORT");
-}
-
-pub enum ReadRpcServiceTls {}
-impl PortDefaults for ReadRpcServiceTls {
-    const DEFAULT: u16 = 9490;
-    const ENV_VAR: Option<&str> = Some("AGGLAYER_READRPC_TLS_PORT");
+impl AddrDefaults for GrpcService {
+    const HOST: Ipv4Addr = Ipv4Addr::UNSPECIFIED;
+    const PORT: u16 = 9089;
+    const PORT_ENV_VAR: Option<&str> = Some("AGGLAYER_GRPC_PORT");
 }
 
 pub enum GrpcServiceTls {}
-impl PortDefaults for GrpcServiceTls {
-    const DEFAULT: u16 = 9489;
-    const ENV_VAR: Option<&str> = Some("AGGLAYER_GRPC_TLS_PORT");
+impl AddrDefaults for GrpcServiceTls {
+    const HOST: Ipv4Addr = Ipv4Addr::UNSPECIFIED;
+    const PORT: u16 = 9489;
+    const PORT_ENV_VAR: Option<&str> = Some("AGGLAYER_GRPC_TLS_PORT");
+}
+
+pub enum ReadRpcService {}
+impl AddrDefaults for ReadRpcService {
+    const HOST: Ipv4Addr = Ipv4Addr::UNSPECIFIED;
+    const PORT: u16 = 9090;
+    const PORT_ENV_VAR: Option<&str> = Some("AGGLAYER_READRPC_PORT");
+}
+
+pub enum ReadRpcServiceTls {}
+impl AddrDefaults for ReadRpcServiceTls {
+    const HOST: Ipv4Addr = Ipv4Addr::UNSPECIFIED;
+    const PORT: u16 = 9490;
+    const PORT_ENV_VAR: Option<&str> = Some("AGGLAYER_READRPC_TLS_PORT");
+}
+
+pub enum AdminRpcService {}
+impl AddrDefaults for AdminRpcService {
+    const HOST: Ipv4Addr = Ipv4Addr::LOCALHOST;
+    const PORT: u16 = 9091;
+    const PORT_ENV_VAR: Option<&str> = Some("AGGLAYER_ADMIN_PORT");
+}
+
+pub enum AdminRpcServiceTls {}
+impl AddrDefaults for AdminRpcServiceTls {
+    const HOST: Ipv4Addr = Ipv4Addr::LOCALHOST;
+    const PORT: u16 = 9491;
+    const PORT_ENV_VAR: Option<&str> = Some("AGGLAYER_ADMIN_TLS_PORT");
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
+pub struct GrpcConfig {
+    /// The default port for the local gRPC server.
+    /// Overridden by `AGGLAYER_GRPC_PORT` environment variable, defaults to
+    /// 9089.
+    #[serde(default)]
+    pub plain: AddrConfig<GrpcService>,
+
+    /// The default port for the local gRPC TLS server.
+    /// Overridden by `AGGLAYER_GRPC_TLS_PORT` environment variable, defaults
+    /// to 9489.
+    #[serde(default)]
+    pub tls: AddrConfig<GrpcServiceTls>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
+pub struct ReadRpcConfig {
+    /// The default port for the local ReadRPC server.
+    /// Overridden by `AGGLAYER_READRPC_PORT` environment variable, defaults to
+    /// 9090.
+    #[serde(default)]
+    pub plain: AddrConfig<ReadRpcService>,
+
+    /// The default port for the local ReadRPC TLS server.
+    /// Overridden by `AGGLAYER_READRPC_TLS_PORT` environment variable, defaults
+    /// to 9490.
+    #[serde(default)]
+    pub tls: AddrConfig<ReadRpcServiceTls>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
+pub struct AdminRpcConfig {
+    /// The default port for the local AdminRPC server.
+    /// Overridden by `AGGLAYER_ADMIN_PORT` environment variable, defaults to
+    /// 9091.
+    #[serde(default)]
+    pub plain: AddrConfig<AdminRpcService>,
+
+    /// The default port for the local AdminRPC TLS server.
+    /// Overridden by `AGGLAYER_ADMIN_TLS_PORT` environment variable, defaults
+    /// to 9491.
+    #[serde(default)]
+    pub tls: AddrConfig<AdminRpcServiceTls>,
 }
 
 /// The local RPC server configuration.
@@ -47,41 +98,14 @@ impl PortDefaults for GrpcServiceTls {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct RpcConfig {
-    /// The default port for the local gRPC server.
-    /// Overridden by `AGGLAYER_GRPC_PORT` environment variable, defaults to
-    /// 9089.
     #[serde(default)]
-    pub grpc_port: Port<GrpcService>,
+    pub grpc: GrpcConfig,
 
-    /// The default port for the local ReadRPC server.
-    /// Overridden by `AGGLAYER_READRPC_PORT` environment variable, defaults to
-    /// 9090.
     #[serde(default)]
-    pub readrpc_port: Port<ReadRpcService>,
+    pub readrpc: ReadRpcConfig,
 
-    /// The default port for the local AdminRPC server.
-    /// Overridden by `AGGLAYER_ADMIN_PORT` environment variable, defaults to
-    /// 9091.
     #[serde(default)]
-    pub admin_port: Port<AdminService>,
-
-    /// The default port for the local AdminRPC TLS server.
-    /// Overridden by `AGGLAYER_ADMIN_TLS_PORT` environment variable, defaults
-    /// to 9491.
-    #[serde(default)]
-    pub admin_tls_port: Port<AdminServiceTls>,
-
-    /// The default port for the local ReadRPC TLS server.
-    /// Overridden by `AGGLAYER_READRPC_TLS_PORT` environment variable, defaults
-    /// to 9490.
-    #[serde(default)]
-    pub readrpc_tls_port: Port<ReadRpcServiceTls>,
-
-    /// The default port for the local gRPC TLS server.
-    /// Overridden by `AGGLAYER_GRPC_TLS_PORT` environment variable, defaults
-    /// to 9489.
-    #[serde(default)]
-    pub grpc_tls_port: Port<GrpcServiceTls>,
+    pub admin: AdminRpcConfig,
 
     #[serde(default = "default_host")]
     pub host: Ipv4Addr,
@@ -126,12 +150,9 @@ pub struct RpcConfig {
 impl Default for RpcConfig {
     fn default() -> Self {
         Self {
-            grpc_port: Default::default(),
-            readrpc_port: Default::default(),
-            admin_port: Default::default(),
-            admin_tls_port: Default::default(),
-            readrpc_tls_port: Default::default(),
-            grpc_tls_port: Default::default(),
+            grpc: Default::default(),
+            readrpc: Default::default(),
+            admin: Default::default(),
             host: default_host(),
             max_request_body_size: default_body_size(),
             max_response_body_size: default_body_size(),

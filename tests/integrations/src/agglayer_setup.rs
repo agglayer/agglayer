@@ -70,9 +70,9 @@ pub async fn start_agglayer(
 
     let mut config = config.unwrap_or_else(|| agglayer_config::Config::new(config_path));
     let prover_config = agglayer_prover_config::ProverConfig {
-        grpc_endpoint: next_available_addr(),
+        grpc_endpoint: next_available_addr().into(),
         telemetry: agglayer_prover_config::TelemetryConfig {
-            addr: next_available_addr(),
+            addr: next_available_addr().into(),
         },
         ..Default::default()
     };
@@ -111,18 +111,20 @@ pub async fn start_agglayer(
     assert!(config.tls.is_some());
 
     let grpc_addr = next_available_addr();
+    let grpc_tls_addr = next_available_addr();
     let readrpc_addr = next_available_addr();
     let readrpc_tls_addr = next_available_addr();
     let admin_addr = next_available_addr();
     let admin_tls_addr = next_available_addr();
 
-    config.rpc.grpc_port = grpc_addr.port().into();
-    config.rpc.readrpc_port = readrpc_addr.port().into();
-    config.rpc.readrpc_tls_port = readrpc_tls_addr.port().into();
-    config.rpc.admin_port = admin_addr.port().into();
-    config.rpc.admin_tls_port = admin_tls_addr.port().into();
+    config.rpc.grpc.plain = grpc_addr.into();
+    config.rpc.grpc.tls = grpc_tls_addr.into();
+    config.rpc.readrpc.plain = readrpc_addr.into();
+    config.rpc.readrpc.tls = readrpc_tls_addr.into();
+    config.rpc.admin.plain = admin_addr.into();
+    config.rpc.admin.tls = admin_tls_addr.into();
 
-    config.telemetry.addr = next_available_addr();
+    config.telemetry.addr = next_available_addr().into();
     config.log.level = LogLevel::Debug;
     config.l1.node_url = l1.rpc.parse().unwrap();
     config.l1.ws_node_url = l1.ws.parse().unwrap();
