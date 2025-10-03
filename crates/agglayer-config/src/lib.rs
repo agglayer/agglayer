@@ -206,6 +206,11 @@ impl Config {
         std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_port.as_u16()))
     }
 
+    /// Get the health check RPC socket address from the configuration.
+    pub fn health_check_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.health_port.as_u16()))
+    }
+
     pub fn path_contextualized(mut self, base_path: &Path) -> Self {
         self.storage = self.storage.path_contextualized(base_path);
 

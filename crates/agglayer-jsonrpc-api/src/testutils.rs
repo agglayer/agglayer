@@ -1,4 +1,8 @@
-use std::{future::IntoFuture as _, net::SocketAddr, sync::Arc};
+use std::{
+    future::IntoFuture as _,
+    net::SocketAddr,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use agglayer_config::Config;
 use agglayer_contracts::L1RpcClient;
@@ -153,6 +157,7 @@ impl TestContext {
             epochs_store,
             config.clone(),
             Arc::new(l1_rpc_client),
+            Arc::new(AtomicBool::new(true)),
         ));
 
         // Create AgglayerImpl
@@ -301,6 +306,7 @@ impl TestContext {
             epochs_store,
             config.clone(),
             Arc::new(l1_rpc_client),
+            Arc::new(AtomicBool::new(true)),
         ));
 
         // Create AgglayerImpl

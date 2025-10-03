@@ -1,4 +1,7 @@
-use std::{num::NonZeroU64, sync::Arc};
+use std::{
+    num::NonZeroU64,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
@@ -36,6 +39,13 @@ pub(crate) mod api;
 pub(crate) struct Node {
     pub(crate) rpc_handle: JoinHandle<()>,
     pub(crate) certificate_orchestrator_handle: JoinHandle<()>,
+}
+
+#[derive(Clone)]
+pub(crate) struct ReadinessState {
+    pub(crate) storage: Arc<AtomicBool>,
+    pub(crate) certifier: Arc<AtomicBool>,
+    pub(crate) rpc: Arc<AtomicBool>,
 }
 
 #[buildstructor::buildstructor]
@@ -86,6 +96,13 @@ impl Node {
                  not in production environments."
             );
         }
+
+        // Initializing readiness state
+        let readiness = ReadinessState {
+            storage: Arc::new(AtomicBool::new(true)),
+            certifier: Arc::new(AtomicBool::new(true)),
+            rpc: Arc::new(AtomicBool::new(true)),
+        };
 
         // Initializing storage
         let pending_db = Arc::new(DB::open_cf(
@@ -261,6 +278,7 @@ impl Node {
             epochs_store.clone(),
             config.clone(),
             Arc::clone(&rollup_manager),
+            readiness.rpc.clone(),
         ));
 
         let admin_router = AdminAgglayerImpl::new(
@@ -275,7 +293,7 @@ impl Node {
         .context("Failed starting admin router")?;
 
         // Bind the core to the RPC server.
-        let json_rpc_router = AgglayerImpl::new(service, rpc_service.clone())
+        let readrpc_router = AgglayerImpl::new(service, rpc_service.clone())
             .start()
             .await
             .context("Failed starting JSON-RPC router")?;
@@ -285,18 +303,18 @@ impl Node {
                 .build()
                 .inspect_err(|err| error!(?err, "Failed to build public gRPC router"))?;
 
-        let health_router = api::rest::health_router();
-
-        let readrpc_router = axum::Router::new()
-            .merge(health_router)
-            .merge(json_rpc_router);
+        let health_router = axum::Router::new()
+            .merge(api::rest::health_router())
+            .merge(api::rest::readiness_router(readiness));
 
         let readrpc_listener = tokio::net::TcpListener::bind(config.readrpc_addr()).await?;
         let public_grpc_listener = tokio::net::TcpListener::bind(config.public_grpc_addr()).await?;
         let admin_listener = tokio::net::TcpListener::bind(config.admin_rpc_addr()).await?;
+        let health_listener = tokio::net::TcpListener::bind(config.health_check_addr()).await?;
         info!(on = %config.readrpc_addr(), "ReadRPC listening");
         info!(on = %config.public_grpc_addr(), "Public gRPC listening");
         info!(on = %config.admin_rpc_addr(), "AdminRPC listening");
+        info!(on = %config.health_check_addr(), "Health RPC listening");
 
         let readrpc_server = axum::serve(readrpc_listener, readrpc_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
@@ -307,11 +325,15 @@ impl Node {
         let admin_server = axum::serve(admin_listener, admin_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
+        let health_server = axum::serve(health_listener, health_router)
+            .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
+
         let rpc_handle = tokio::spawn(async move {
             tokio::select! {
                 _ = readrpc_server => {},
                 _ = public_grpc_server => {},
                 _ = admin_server => {},
+                _ = health_server => {},
                 _ = cancellation_token.cancelled() => {
                     debug!("Node RPC shutdown requested.");
                 }

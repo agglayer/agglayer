@@ -24,6 +24,12 @@ impl PortDefaults for AdminService {
     const ENV_VAR: Option<&str> = Some("AGGLAYER_ADMIN_PORT");
 }
 
+pub enum HealthService {}
+impl PortDefaults for HealthService {
+    const DEFAULT: u16 = 9092;
+    const ENV_VAR: Option<&str> = Some("AGGLAYER_HEALTH_PORT");
+}
+
 /// The local RPC server configuration.
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -46,6 +52,12 @@ pub struct RpcConfig {
     /// 9091.
     #[serde(default)]
     pub admin_port: Port<AdminService>,
+
+    /// The default port for the local HealthRPC server.
+    /// Overridden by `AGGLAYER_HEALTH_PORT` environment variable, defaults to
+    /// 9092.
+    #[serde(default)]
+    pub health_port: Port<HealthService>,
 
     #[serde(default = "default_host")]
     pub host: Ipv4Addr,
@@ -93,6 +105,7 @@ impl Default for RpcConfig {
             grpc_port: Default::default(),
             readrpc_port: Default::default(),
             admin_port: Default::default(),
+            health_port: Default::default(),
             host: default_host(),
             max_request_body_size: default_body_size(),
             max_response_body_size: default_body_size(),
