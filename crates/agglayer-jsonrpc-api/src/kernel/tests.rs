@@ -7,10 +7,11 @@ use alloy::{
     providers::{mock::Asserter, ProviderBuilder},
     signers::local::LocalSigner,
 };
+use futures::TryFutureExt;
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
 
 use crate::{
-    kernel::{Kernel, VerifyBatchesTrustedAggregatorQuery, ZkevmNodeVerificationError},
+    kernel::{Kernel, ZkevmNodeVerificationError},
     signed_tx::{Proof, SignedTx, HASH_LENGTH, PROOF_LENGTH},
     zkevm_node_client::BatchByNumberResponse,
 };
@@ -91,7 +92,8 @@ async fn interop_executor_verify_zkp() {
 
     // Execute the function under test
     let result = kernel
-        .verify_batches_trusted_aggregator::<VerifyBatchesTrustedAggregatorQuery>(&signed_tx)
+        .verify_batches_trusted_aggregator(&signed_tx)
+        .and_then(|call| async move { call.send().await })
         .await;
 
     // In a real implementation, with proper mocks, this should succeed
