@@ -4,8 +4,7 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use agglayer_contracts::contracts::{
     PolygonRollupManager::{
-        verifyBatchesTrustedAggregatorCall,
-        PolygonRollupManagerInstance, RollupDataReturnV2,
+        verifyBatchesTrustedAggregatorCall, PolygonRollupManagerInstance, RollupDataReturnV2,
     },
     PolygonZkEvm::PolygonZkEvmInstance,
 };
@@ -188,6 +187,9 @@ pub enum CheckTxStatusError {
     ProviderError(#[source] RpcError<TransportErrorKind>),
 }
 
+type VerifyBatchesMarker = std::marker::PhantomData<verifyBatchesTrustedAggregatorCall>;
+type VerifyBatchesBuilder<Rpc> = alloy::contract::CallBuilder<Arc<Rpc>, VerifyBatchesMarker>;
+
 impl<RpcProvider> Kernel<RpcProvider>
 where
     RpcProvider: Provider + Clone + 'static,
@@ -254,13 +256,7 @@ where
     pub(crate) async fn verify_batches_trusted_aggregator(
         &self,
         signed_tx: &SignedTx,
-    ) -> Result<
-        alloy::contract::CallBuilder<
-            std::sync::Arc<RpcProvider>,
-            std::marker::PhantomData<verifyBatchesTrustedAggregatorCall>,
-        >,
-        ContractError,
-    > {
+    ) -> Result<VerifyBatchesBuilder<RpcProvider>, ContractError> {
         let sequencer_address = self
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
