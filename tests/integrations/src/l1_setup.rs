@@ -55,7 +55,7 @@ impl Drop for L1Docker {
     }
 }
 
-pub fn next_available_addr() -> std::net::SocketAddr {
+pub fn next_available_addr() -> std::net::SocketAddrV4 {
     use std::net::{TcpListener, TcpStream};
 
     assert!(
@@ -67,6 +67,10 @@ pub fn next_available_addr() -> std::net::SocketAddr {
     // Request a random available port from the OS
     let listener = TcpListener::bind((host, 0)).expect("Can't bind to an available port");
     let addr = listener.local_addr().expect("Can't find an available port");
+    let addr = match addr {
+        std::net::SocketAddr::V4(addr) => addr,
+        std::net::SocketAddr::V6(addr) => panic!("Unexpected IPv6 address {addr}"),
+    };
 
     // Create and accept a connection (which we'll promptly drop) in order to force
     // the port into the TIME_WAIT state, ensuring that the port will be

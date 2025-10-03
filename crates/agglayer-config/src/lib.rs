@@ -40,7 +40,7 @@ pub use epoch::Epoch;
 pub use l1::L1;
 pub use l2::L2;
 pub use log::Log;
-use port::{Port, PortDefaults};
+use port::{AddrConfig, AddrDefaults};
 use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
@@ -199,32 +199,32 @@ impl Config {
 
     /// Get the target ReadRPC socket address from the configuration.
     pub fn readrpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.readrpc_port.as_u16()))
+        self.rpc.readrpc_port.to_addr().into()
     }
 
     /// Get the target gRPC socket address from the configuration.
     pub fn public_grpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.grpc_port.as_u16()))
+        self.rpc.grpc_port.to_addr().into()
     }
 
     /// Get the admin RPC socket address from the configuration.
     pub fn admin_rpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_port.as_u16()))
+        self.rpc.admin_port.to_addr().into()
     }
 
     /// Get the admin TLS RPC socket address from the configuration.
     pub fn admin_tls_rpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_tls_port.as_u16()))
+        self.rpc.admin_tls_port.to_addr().into()
     }
 
     /// Get the ReadRPC TLS socket address from the configuration.
     pub fn readrpc_tls_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.readrpc_tls_port.as_u16()))
+        self.rpc.readrpc_tls_port.to_addr().into()
     }
 
     /// Get the gRPC TLS socket address from the configuration.
     pub fn public_grpc_tls_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.grpc_tls_port.as_u16()))
+        self.rpc.grpc_tls_port.to_addr().into()
     }
 
     pub fn path_contextualized(mut self, base_path: &Path) -> Self {

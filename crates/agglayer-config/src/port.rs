@@ -1,37 +1,63 @@
-use std::env;
+use std::{
+    env,
+    net::{Ipv4Addr, SocketAddrV4},
+};
 
 use tracing::warn;
 
-/// Default port for given service.
-pub trait PortDefaults {
+/// Default port and IP address for given service.
+pub trait AddrDefaults {
+    /// The default IP address to listen on.
+    const HOST: Ipv4Addr;
+
     /// The default port number for this service.
-    const DEFAULT: u16;
+    const PORT: u16;
 
     /// Environment variable to load the port number from if it's not specified
     /// in the configuration file.
-    const ENV_VAR: Option<&str>;
+    const PORT_ENV_VAR: Option<&str>;
 }
 
 /// Port number parametrized by the defaults.
-#[derive(Copy, educe::Educe, serde::Serialize, serde::Deserialize)]
+#[derive(educe::Educe, serde::Serialize, serde::Deserialize)]
 #[educe(Debug, Eq, PartialEq, Ord, PartialOrd, Clone)]
-#[serde(from = "u16", into = "u16")]
-pub struct Port<D> {
-    port: u16,
+#[serde(
+    from = "AddrConfigOptions",
+    into = "AddrConfigOptions",
+    bound(deserialize = "D: AddrDefaults")
+)]
+pub struct AddrConfig<D> {
+    addr: SocketAddrV4,
     _defaults: std::marker::PhantomData<fn() -> D>,
 }
 
-impl<D> Port<D> {
-    pub const fn new(port: u16) -> Self {
+impl<D> AddrConfig<D> {
+    pub const fn new(addr: SocketAddrV4) -> Self {
         let _defaults = std::marker::PhantomData;
-        Self { port, _defaults }
+        Self { addr, _defaults }
     }
 
-    pub const fn as_u16(&self) -> u16 {
-        self.port
+    pub const fn port(&self) -> u16 {
+        self.addr.port()
     }
 
-    pub fn from_env_var(env_var: &str) -> Option<Self> {
+    pub const fn ip(&self) -> &Ipv4Addr {
+        self.addr.ip()
+    }
+
+    pub const fn addr(&self) -> &SocketAddrV4 {
+        &self.addr
+    }
+
+    pub const fn into_addr(self) -> SocketAddrV4 {
+        self.addr
+    }
+
+    pub fn to_addr(&self) -> SocketAddrV4 {
+        self.addr.clone().into()
+    }
+
+    fn port_from_env_var(env_var: &str) -> Option<u16> {
         env::var(env_var)
             .inspect_err(|err| match err {
                 env::VarError::NotPresent => (),
@@ -44,38 +70,75 @@ impl<D> Port<D> {
     }
 }
 
-impl<D: PortDefaults> Port<D> {
-    pub fn from_env() -> Option<Self> {
-        Self::from_env_var(D::ENV_VAR?)
+impl<D: AddrDefaults> AddrConfig<D> {
+    fn port_from_env() -> Option<u16> {
+        Self::port_from_env_var(D::PORT_ENV_VAR?)
     }
 
-    pub fn from_env_or_default() -> Self {
-        Self::from_env().unwrap_or(Self::new(D::DEFAULT))
+    fn port_from_env_or_default() -> u16 {
+        Self::port_from_env().unwrap_or(D::PORT)
+    }
+
+    fn from_optional_fields_with_defaults(host: Option<Ipv4Addr>, port: Option<u16>) -> Self {
+        let ip = host.unwrap_or(D::HOST);
+        let port = port.unwrap_or_else(Self::port_from_env_or_default);
+        Self::new(SocketAddrV4::new(ip, port))
+    }
+
+    fn from_addr_config_options(config_opts: AddrConfigOptions) -> Self {
+        match config_opts {
+            AddrConfigOptions::Full(addr) => Self::new(addr),
+            AddrConfigOptions::Parts { host, port } => {
+                Self::from_optional_fields_with_defaults(host, port)
+            }
+        }
     }
 }
 
-impl<D> From<u16> for Port<D> {
-    fn from(port: u16) -> Self {
-        Self::new(port)
-    }
-}
-
-impl<D> From<Port<D>> for u16 {
-    fn from(value: Port<D>) -> Self {
-        value.as_u16()
-    }
-}
-
-impl<D> std::str::FromStr for Port<D> {
-    type Err = <u16 as std::str::FromStr>::Err;
+impl<D> std::str::FromStr for AddrConfig<D> {
+    type Err = <SocketAddrV4 as std::str::FromStr>::Err;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.parse().map(Self::new)
     }
 }
 
-impl<D: PortDefaults> Default for Port<D> {
+impl<D> From<SocketAddrV4> for AddrConfig<D> {
+    fn from(addr: SocketAddrV4) -> Self {
+        Self::new(addr)
+    }
+}
+
+impl<D: AddrDefaults> Default for AddrConfig<D> {
     fn default() -> Self {
-        Self::from_env_or_default()
+        Self::from_optional_fields_with_defaults(None, None)
+    }
+}
+
+/// Defines how the config options look in the config file.
+#[derive(educe::Educe, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[educe(Default)]
+#[serde(untagged)]
+enum AddrConfigOptions {
+    Full(SocketAddrV4),
+
+    #[educe(Default)]
+    Parts {
+        #[serde(default)]
+        host: Option<Ipv4Addr>,
+        #[serde(default)]
+        port: Option<u16>,
+    },
+}
+
+impl<D> From<AddrConfig<D>> for AddrConfigOptions {
+    fn from(addr_config: AddrConfig<D>) -> Self {
+        Self::Full(addr_config.into_addr())
+    }
+}
+
+impl<D: AddrDefaults> From<AddrConfigOptions> for AddrConfig<D> {
+    fn from(config_opts: AddrConfigOptions) -> Self {
+        AddrConfig::from_addr_config_options(config_opts)
     }
 }
