@@ -373,7 +373,6 @@ dependencies = [
  "agglayer-telemetry 0.1.0",
  "agglayer-types",
  "alloy",
- "async-trait",
  "axum 0.8.4",
  "buildstructor",
  "eyre",

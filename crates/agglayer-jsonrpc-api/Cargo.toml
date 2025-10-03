@@ -14,7 +14,6 @@ agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 
 alloy.workspace = true
-async-trait.workspace = true
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }
 buildstructor.workspace = true
 eyre.workspace = true
