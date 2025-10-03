@@ -11,6 +11,7 @@ use agglayer_types::{
 use eyre::Context as _;
 use prover_executor::sp1_fast;
 use sp1_sdk::HashableKey;
+use tracing::debug;
 
 use crate::CertifierClient;
 
@@ -22,14 +23,24 @@ where
     pub async fn fetch_l1_context(
         &self,
         certificate: &Certificate,
+        certificate_tx_hash: Option<Digest>,
     ) -> Result<L1WitnessCtx, CertificationError> {
         let network_id = certificate.network_id;
 
         let prev_pessimistic_root = self
             .l1_rpc
-            .get_prev_pessimistic_root(network_id.to_u32())
+            .get_prev_pessimistic_root(
+                network_id.to_u32(),
+                certificate_tx_hash.map(|digest| digest.0.into()),
+            )
             .await
             .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
+
+        debug!(
+            certificate_tx_hash = certificate_tx_hash.map(tracing::field::display),
+            prev_pessimistic_root = tracing::field::display(Digest(prev_pessimistic_root)),
+            "Prev PP root from L1",
+        );
 
         let l1_info_root = self.fetch_l1_info_root(certificate).await?;
 
