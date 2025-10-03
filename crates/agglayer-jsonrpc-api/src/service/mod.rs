@@ -1,13 +1,10 @@
 use agglayer_telemetry::KeyValue;
 use alloy::{primitives::B256, providers::Provider};
-use futures::future::try_join;
+use futures::{future::try_join, TryFutureExt};
 use tracing::{debug, error, info, instrument};
 
 pub use self::error::{CertificateRetrievalError, SendTxError, TxStatusError};
-use crate::{
-    kernel::{Kernel, VerifyBatchesTrustedAggregatorDryRun},
-    signed_tx::SignedTx,
-};
+use crate::{kernel::Kernel, signed_tx::SignedTx};
 
 pub mod error;
 
@@ -75,7 +72,8 @@ where
         let _ = try_join(
             async {
                 self.kernel
-                    .verify_batches_trusted_aggregator::<VerifyBatchesTrustedAggregatorDryRun>(&tx)
+                    .verify_batches_trusted_aggregator(&tx)
+                    .and_then(|call| async move { call.call().await })
                     .await
                     .map_err(|e| {
                         error!(
