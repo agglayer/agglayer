@@ -10,7 +10,7 @@ use alloy::{
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
 
 use crate::{
-    kernel::{Kernel, ZkevmNodeVerificationError},
+    kernel::{Kernel, VerifyBatchesTrustedAggregatorQuery, ZkevmNodeVerificationError},
     signed_tx::{Proof, SignedTx, HASH_LENGTH, PROOF_LENGTH},
     zkevm_node_client::BatchByNumberResponse,
 };
@@ -90,7 +90,9 @@ async fn interop_executor_verify_zkp() {
     // proof_signers optimization works correctly.
 
     // Execute the function under test
-    let result = kernel.verify_batches_trusted_aggregator(&signed_tx).await;
+    let result = kernel
+        .verify_batches_trusted_aggregator::<VerifyBatchesTrustedAggregatorQuery>(&signed_tx)
+        .await;
 
     // In a real implementation, with proper mocks, this should succeed
     // For now, we verify that we get a specific error indicating the mock

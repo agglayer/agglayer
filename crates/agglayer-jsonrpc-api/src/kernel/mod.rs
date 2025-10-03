@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_contracts::contracts::{
-    PolygonRollupManager::{PolygonRollupManagerInstance, RollupDataReturnV2},
+    PolygonRollupManager::{
+        verifyBatchesTrustedAggregatorCall, verifyBatchesTrustedAggregatorReturn,
+        PolygonRollupManagerInstance, RollupDataReturnV2,
+    },
     PolygonZkEvm::PolygonZkEvmInstance,
 };
 use agglayer_rate_limiting::RateLimiter;
@@ -248,10 +251,12 @@ where
     /// constructs a [`FunctionCall`] that can be used to create a dry-run
     /// or send a transaction.
     #[instrument(skip(self), level = "debug")]
-    pub(crate) async fn verify_batches_trusted_aggregator(
+    pub(crate) async fn verify_batches_trusted_aggregator<
+        T: VerifyBatchesTrustedAggregatorQueryExt,
+    >(
         &self,
         signed_tx: &SignedTx,
-    ) -> Result<PendingTransactionBuilder<Ethereum>, ContractError> {
+    ) -> Result<T::Result, ContractError> {
         let sequencer_address = self
             .get_trusted_sequencer_address(signed_tx.tx.rollup_id)
             .await?;
@@ -259,24 +264,24 @@ where
         // TODO: pending state num is not yet supported
         const PENDING_STATE_NUM: u64 = 0;
 
-        self.get_rollup_manager_contract()
-            .verifyBatchesTrustedAggregator(
-                signed_tx.tx.rollup_id,
-                PENDING_STATE_NUM,
-                signed_tx.tx.last_verified_batch.as_limbs()[0],
-                signed_tx.tx.new_verified_batch.as_limbs()[0],
-                signed_tx.tx.zkp.new_local_exit_root,
-                signed_tx.tx.zkp.new_state_root,
-                sequencer_address.into(),
-                signed_tx
-                    .tx
-                    .zkp
-                    .proof
-                    .to_fixed_bytes()
-                    .map(|value| value.into()),
-            )
-            .send()
-            .await
+        let rollup_manager_contract = self.get_rollup_manager_contract();
+        let builder = rollup_manager_contract.verifyBatchesTrustedAggregator(
+            signed_tx.tx.rollup_id,
+            PENDING_STATE_NUM,
+            signed_tx.tx.last_verified_batch.as_limbs()[0],
+            signed_tx.tx.new_verified_batch.as_limbs()[0],
+            signed_tx.tx.zkp.new_local_exit_root,
+            signed_tx.tx.zkp.new_state_root,
+            sequencer_address.into(),
+            signed_tx
+                .tx
+                .zkp
+                .proof
+                .to_fixed_bytes()
+                .map(|value| value.into()),
+        );
+
+        T::into_result(builder).await
     }
 
     /// Verify that the signer of the given [`SignedTx`] is the trusted
@@ -317,7 +322,7 @@ where
         let hash = format!("{hex_hash:?}");
 
         let pending_tx = self
-            .verify_batches_trusted_aggregator(signed_tx)
+            .verify_batches_trusted_aggregator::<VerifyBatchesTrustedAggregatorQuery>(signed_tx)
             .await
             .map_err(SettlementError::ContractError)?;
 
@@ -400,5 +405,51 @@ where
             }
         }
         .map_err(SignatureVerificationError::from_signer_error)
+    }
+}
+
+#[async_trait::async_trait]
+pub trait VerifyBatchesTrustedAggregatorQueryExt {
+    type Result;
+
+    async fn into_result(
+        call_builder: alloy::contract::SolCallBuilder<
+            &impl alloy::providers::Provider,
+            verifyBatchesTrustedAggregatorCall,
+            Ethereum,
+        >,
+    ) -> Result<Self::Result, ContractError>;
+}
+
+struct VerifyBatchesTrustedAggregatorQuery;
+pub struct VerifyBatchesTrustedAggregatorDryRun;
+
+#[async_trait::async_trait]
+impl VerifyBatchesTrustedAggregatorQueryExt for VerifyBatchesTrustedAggregatorQuery {
+    type Result = PendingTransactionBuilder<Ethereum>;
+
+    async fn into_result(
+        call_builder: alloy::contract::SolCallBuilder<
+            &impl alloy::providers::Provider,
+            verifyBatchesTrustedAggregatorCall,
+            Ethereum,
+        >,
+    ) -> Result<Self::Result, alloy::contract::Error> {
+        call_builder.send().await
+    }
+}
+
+#[async_trait::async_trait]
+impl VerifyBatchesTrustedAggregatorQueryExt for VerifyBatchesTrustedAggregatorDryRun {
+    type Result = verifyBatchesTrustedAggregatorReturn;
+
+    async fn into_result(
+        call_builder: alloy::contract::SolCallBuilder<
+            &impl alloy::providers::Provider,
+            verifyBatchesTrustedAggregatorCall,
+            Ethereum,
+        >,
+    ) -> Result<Self::Result, alloy::contract::Error> {
+        call_builder.call().await
     }
 }
