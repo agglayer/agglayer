@@ -7,7 +7,7 @@ use agglayer_storage::stores::{
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
-    Height, NetworkId,
+    Height, NetworkId, SettlementTxHash,
 };
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use tokio::sync::mpsc;
@@ -38,6 +38,7 @@ pub(crate) trait AdminAgglayer {
         certificate_id: CertificateId,
         status: CertificateStatus,
         process_now: bool,
+        remove_settlement_tx_hash: Option<SettlementTxHash>,
     ) -> RpcResult<()>;
 
     #[method(name = "setLatestPendingCertificate")]
@@ -251,6 +252,7 @@ where
         certificate_id: CertificateId,
         status: CertificateStatus,
         process_now: bool,
+        remove_settlement_tx_hash: Option<SettlementTxHash>,
     ) -> RpcResult<()> {
         warn!(
             ?certificate_id,
@@ -272,6 +274,21 @@ where
             return Err(Error::InvalidArgument(
                 "Cannot change status of a settled certificate".to_string(),
             ));
+        }
+        if let Some(remove_settlement_tx_hash) = remove_settlement_tx_hash {
+            if header.settlement_tx_hash != Some(remove_settlement_tx_hash) {
+                return Err(Error::InvalidArgument(format!(
+                    "Provided settlement_tx_hash to remove ({remove_settlement_tx_hash:?}) does \
+                     not match the existing one ({:?})",
+                    header.settlement_tx_hash
+                )));
+            }
+            self.state
+                .remove_settlement_tx_hash(&certificate_id)
+                .map_err(|error| {
+                    error!(?error, "Failed to remove settlement_tx_hash");
+                    Error::internal("Unable to remove settlement_tx_hash")
+                })?;
         }
         self.state
             .update_certificate_header_status(&certificate_id, &status)
