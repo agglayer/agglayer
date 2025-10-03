@@ -291,6 +291,13 @@ impl StateWriter for DummyPendingStore {
         todo!()
     }
 
+    fn remove_settlement_tx_hash(
+        &self,
+        _certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
+
     fn assign_certificate_to_epoch(
         &self,
         _certificate_id: &CertificateId,
