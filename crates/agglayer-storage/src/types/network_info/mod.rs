@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn test_discriminant_from_u32() {
-        assert_eq!(ValueDiscriminants::COUNT, 4, "Expected 4 discriminants");
+        assert_eq!(ValueDiscriminants::COUNT, 5, "Expected 5 discriminants");
         for i in 0..ValueDiscriminants::COUNT {
             let discriminant = ValueDiscriminants::from_repr(i);
             assert!(discriminant.is_some());
@@ -83,14 +83,17 @@ mod tests {
                 ValueDiscriminants::NetworkType => {
                     assert_eq!(i, 0, "NetworkType should be at index 0")
                 }
-                ValueDiscriminants::SettledCertificate => {
-                    assert_eq!(i, 1, "SettledCertificate should be at index 1")
+                ValueDiscriminants::LatestSettledCertificate => {
+                    assert_eq!(i, 1, "LatestSettledCertificate should be at index 1")
                 }
-                ValueDiscriminants::SettledClaim => {
-                    assert_eq!(i, 2, "SettledClaim should be at index 2")
+                ValueDiscriminants::LatestSettledClaim => {
+                    assert_eq!(i, 2, "LatestSettledClaim should be at index 2")
                 }
                 ValueDiscriminants::LatestPendingCertificateInfo => {
                     assert_eq!(i, 3, "LatestPendingCertificateInfo should be at index 3")
+                }
+                ValueDiscriminants::LatestProvenCertificateInfo => {
+                    assert_eq!(i, 4, "LatestProvenCertificateInfo should be at index 4")
                 }
             }
         }

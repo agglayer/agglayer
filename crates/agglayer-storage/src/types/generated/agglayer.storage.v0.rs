@@ -4,7 +4,7 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NetworkInfoValue {
     /// The type of value being stored.
-    #[prost(oneof="network_info_value::Value", tags="1, 2, 3, 4")]
+    #[prost(oneof="network_info_value::Value", tags="1, 2, 3, 4, 5")]
     pub value: ::core::option::Option<network_info_value::Value>,
 }
 /// Nested message and enum types in `NetworkInfoValue`.
@@ -19,58 +19,63 @@ pub mod network_info_value {
         NetworkType(i32),
         /// Represents the current settled certificate for a given network.
         #[prost(message, tag="2")]
-        SettledCertificate(super::SettledCertificate),
+        LatestSettledCertificate(super::SettledCertificateInfo),
         /// Info about the latest settled claim in the network.
         #[prost(message, tag="3")]
-        SettledClaim(super::SettledClaim),
+        LatestSettledClaim(super::SettledClaim),
         /// The latest pending certificate.
         #[prost(message, tag="4")]
-        LatestPendingCertificateInfo(super::LatestPendingCertificateInfo),
+        LatestPendingCertificateInfo(super::PendingCertificateInfo),
+        /// The latest proven certificate.
+        #[prost(message, tag="5")]
+        LatestProvenCertificateInfo(super::ProvenCertificateInfo),
     }
 }
 /// Represents the current settled certificate for a given network.
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SettledCertificate {
+pub struct SettledCertificateInfo {
     /// The ID of the latest settled certificate.
     #[prost(message, optional, tag="1")]
-    pub certificate_id: ::core::option::Option<SettledCertificateId>,
+    pub certificate_id: ::core::option::Option<CertificateId>,
     /// The pessimistic proof root of the latest settled certificate.
     #[prost(message, optional, tag="2")]
-    pub pp_root: ::core::option::Option<SettledPessimisticProofRoot>,
+    pub pp_root: ::core::option::Option<PessimisticProofRoot>,
     /// The leaf count of the latest settled local exit tree.
     #[prost(message, optional, tag="3")]
-    pub let_leaf_count: ::core::option::Option<SettledLocalExitTreeLeafCount>,
+    pub let_leaf_count: ::core::option::Option<LocalExitTreeLeafCount>,
     /// The local exit root of the latest settled certificate.
     #[prost(message, optional, tag="4")]
-    pub ler: ::core::option::Option<SettledLocalExitRoot>,
-}
-/// SettledCertificateId represents the ID of the latest settled certificate.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SettledCertificateId {
-    /// The certificate ID in bytes
-    #[prost(bytes="bytes", tag="1")]
-    pub id: ::prost::bytes::Bytes,
+    pub ler: ::core::option::Option<LocalExitRoot>,
+    /// The height of the latest settled certificate.
+    #[prost(message, optional, tag="5")]
+    pub height: ::core::option::Option<Height>,
+    /// The epoch number in which the latest settled certificate was settled.
+    #[prost(message, optional, tag="6")]
+    pub epoch: ::core::option::Option<EpochNumber>,
+    /// The index of the certificate in the epoch.
+    #[prost(message, optional, tag="7")]
+    pub index_in_epoch: ::core::option::Option<CertificateIndexInEpoch>,
 }
 /// The pessimistic proof root of the latest settled certificate.
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SettledPessimisticProofRoot {
+pub struct PessimisticProofRoot {
     /// The root hash
     #[prost(bytes="bytes", tag="1")]
     pub root: ::prost::bytes::Bytes,
 }
 /// The local exit root of the latest settled certificate.
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SettledLocalExitRoot {
+pub struct LocalExitRoot {
     /// The root hash
     #[prost(bytes="bytes", tag="1")]
     pub root: ::prost::bytes::Bytes,
 }
 /// The leaf count of the latest settled local exit tree.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct SettledLocalExitTreeLeafCount {
+pub struct LocalExitTreeLeafCount {
     /// The leaf count
     #[prost(uint64, tag="1")]
-    pub settled_let_leaf_count: u64,
+    pub let_leaf_count: u64,
 }
 /// Info about the latest settled claim in the network.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -98,24 +103,48 @@ pub struct BridgeExitHash {
 }
 /// The latest pending certificate.
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct LatestPendingCertificateInfo {
+pub struct PendingCertificateInfo {
     /// The actual certificate height that is in pending
     #[prost(message, optional, tag="1")]
-    pub height: ::core::option::Option<LatestPendingCertificateHeight>,
+    pub height: ::core::option::Option<Height>,
     /// The ID of the latest pending certificate.
     #[prost(message, optional, tag="2")]
-    pub id: ::core::option::Option<LatestPendingCertificateId>,
+    pub id: ::core::option::Option<CertificateId>,
 }
-/// The actual certificate height that is in pending
+/// The latest proven certificate.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProvenCertificateInfo {
+    /// The actual certificate height that is proven
+    #[prost(message, optional, tag="1")]
+    pub height: ::core::option::Option<Height>,
+    /// The ID of the latest proven certificate.
+    #[prost(message, optional, tag="2")]
+    pub id: ::core::option::Option<CertificateId>,
+}
+/// The actual certificate height
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct LatestPendingCertificateHeight {
+pub struct Height {
     /// The height
     #[prost(uint64, tag="1")]
     pub height: u64,
 }
-/// The ID of the latest pending certificate.
+/// The epoch number
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct EpochNumber {
+    /// The epoch number
+    #[prost(uint64, tag="1")]
+    pub epoch_number: u64,
+}
+/// The index of the certificate in the epoch.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct CertificateIndexInEpoch {
+    /// The index in the epoch
+    #[prost(uint64, tag="1")]
+    pub index: u64,
+}
+/// The ID of a certificate.
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct LatestPendingCertificateId {
+pub struct CertificateId {
     /// The certificate ID in bytes
     #[prost(bytes="bytes", tag="1")]
     pub id: ::prost::bytes::Bytes,
