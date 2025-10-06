@@ -7,6 +7,7 @@ use alloy::{
     providers::{mock::Asserter, ProviderBuilder},
     signers::local::LocalSigner,
 };
+use futures::TryFutureExt;
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
 
 use crate::{
@@ -90,7 +91,10 @@ async fn interop_executor_verify_zkp() {
     // proof_signers optimization works correctly.
 
     // Execute the function under test
-    let result = kernel.verify_batches_trusted_aggregator(&signed_tx).await;
+    let result = kernel
+        .verify_batches_trusted_aggregator(&signed_tx)
+        .and_then(|call| async move { call.send().await })
+        .await;
 
     // In a real implementation, with proper mocks, this should succeed
     // For now, we verify that we get a specific error indicating the mock
