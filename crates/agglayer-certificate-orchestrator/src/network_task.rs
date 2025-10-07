@@ -3,7 +3,7 @@ use std::sync::Arc;
 use agglayer_clock::ClockRef;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
-    stores::{state, PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
+    stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
@@ -530,7 +530,7 @@ where
         pp_commitment_values.compute_pp_root(version)
     }
 
-    fn is_pending_pessimistic_root(&self, settled_pp_root: Digest, heighlt: Height) -> bool {
+    fn is_pending_pessimistic_root(&self, settled_pp_root: Digest, height: Height) -> bool {
         let computed_v2 =
             self.pending_pessimistic_root(height, PessimisticRootCommitmentVersion::V2);
         let computed_v3 =
