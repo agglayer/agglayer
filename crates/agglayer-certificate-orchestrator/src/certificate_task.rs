@@ -319,7 +319,14 @@ where
         })
         .await?;
 
-        let (epoch_number, certificate_index) = settlement_complete.await.map_err(recv_err)??;
+        let settlement_complete_result = settlement_complete.await.map_err(recv_err)?;
+        let (epoch_number, certificate_index) = match settlement_complete_result {
+            Ok((epoch_number, certificate_index)) => (epoch_number, certificate_index),
+            Err(error) => {
+                return self.handle_settlement_error(error).await;
+            }
+        };
+
         let settled_certificate =
             SettledCertificate(certificate_id, height, epoch_number, certificate_index);
         self.set_status(CertificateStatus::Settled)?;
@@ -342,6 +349,22 @@ where
         }
 
         Ok(())
+    }
+
+    async fn handle_settlement_error(
+        &mut self,
+        error: CertificateStatusError,
+    ) -> Result<(), CertificateStatusError> {
+        // Process the error here (in a function?)
+        // 1. Check in the contracts if certificate is maybe settled (with some
+        //    competing transaction maybe).
+        // 2. If it is timeout (not enough confirmations...) AND if certificate is not
+        //    settled, go back to the Prove state
+        //    (self.set_status(CertificateStatus::Settled)?;,
+        // recompute the state just in case (not needed probably) &&
+        // process_from_proven) In the third case, for any other error, just
+        // fail the certificate
+        return Err(error);
     }
 
     fn set_status(&mut self, status: CertificateStatus) -> Result<(), CertificateStatusError> {
