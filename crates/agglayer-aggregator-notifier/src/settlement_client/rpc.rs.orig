@@ -5,14 +5,16 @@ use agglayer_certificate_orchestrator::{
 };
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
+use agglayer_primitives::Digest;
 use agglayer_storage::stores::{
     PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
 };
 use agglayer_types::{
-    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
-    ExecutionMode, Proof, SettlementTxHash, U256,
+    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber,
+    ExecutionMode, Proof, SettlementTxHash,
 };
 use alloy::{
+    primitives::U256,
     providers::{PendingTransactionConfig, PendingTransactionError, Provider},
     rpc::types::TransactionReceipt,
 };
@@ -313,11 +315,27 @@ where
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<TransactionReceipt, Error> {
+<<<<<<< HEAD
+        // Increment counter for each call
+        let counter_value = self.counter.fetch_add(1, Ordering::SeqCst);
+        println!(">>>>>>>>>>>>>>>>> COUNTER_VALUE: {counter_value}");
+
+=======
+>>>>>>> parent of 82890595 (debug 01)
         let tx_hash = settlement_tx_hash.into();
         let timeout = self
             .config
             .retry_interval
             .mul_f64(self.config.max_retries as f64);
+<<<<<<< HEAD
+
+        if counter_value % 2 == 0 && counter_value != 0 {
+            timeout = Duration::from_secs(1);
+            println!(">>>>>>>>>>>>>>>>> TIMEOUT SMALL: {counter_value}");
+        }
+
+=======
+>>>>>>> parent of 82890595 (debug 01)
         let pending_tx_config = PendingTransactionConfig::new(tx_hash)
             .with_required_confirmations(self.config.confirmations as u64)
             .with_timeout(Some(timeout));
