@@ -11,6 +11,7 @@ use agglayer_certificate_orchestrator::{
 };
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
+use agglayer_primitives::Digest;
 use agglayer_storage::stores::{
     PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
 };
@@ -486,10 +487,13 @@ where
         self.l1_rpc.get_provider()
     }
 
+    /// Queries the L1 for the latest VerifyPessimisticStateTransition event for
+    /// the given network_id and returns its newPessimisticRoot along with the
+    /// transaction receipt of the transaction that has caused it.
     async fn get_last_settled_pp_root(
         &self,
         network_id: agglayer_types::NetworkId,
-    ) -> Result<Option<[u8; 32]>, Error> {
+    ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error> {
         use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
         use alloy::{providers::Provider, sol_types::SolEvent};
 
@@ -517,26 +521,43 @@ where
 
         // Get the most recent event (last in the list) and extract its new pessimistic
         // root
-        let latest_pp_root = events
+        let result = events
             .iter()
             .rev() // Iterate in reverse to get the most recent first
-            .find_map(|log| VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok())
-            .map(|decoded_event| <[u8; 32]>::from(decoded_event.newPessimisticRoot));
+            .find_map(|log| {
+                let latest_pp_root =
+                    VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok();
+                let tx_hash = log.transaction_hash.map(Digest::from);
+                match (
+                    latest_pp_root.map(|val| <[u8; 32]>::from(val.newPessimisticRoot)),
+                    tx_hash,
+                ) {
+                    (Some(pp_root), Some(tx_hash)) => {
+                        Some((pp_root, SettlementTxHash::new(tx_hash)))
+                    }
+                    _ => None,
+                }
+            });
 
-        if let Some(pp_root) = latest_pp_root {
-            debug!(
-                "Retrieved latest VerifyPessimisticStateTransition event for network {} latest \
-                 pp_root: {:?}",
-                network_id, pp_root
-            );
-        } else {
-            debug!(
-                "No VerifyPessimisticStateTransition events found for network {}",
-                network_id
-            );
-        }
+        let (pp_root, tx_hash) = match result {
+            Some((pp_root, tx_hash)) => {
+                debug!(
+                    "Retrieved latest VerifyPessimisticStateTransition event for network {} \
+                     latest pp_root: {:?}, tx_hash: {tx_hash}",
+                    network_id, pp_root
+                );
+                (Some(pp_root), Some(tx_hash))
+            }
+            None => {
+                debug!(
+                    "No VerifyPessimisticStateTransition events found for network {}",
+                    network_id
+                );
+                (None, None)
+            }
+        };
 
-        Ok(latest_pp_root)
+        Ok((pp_root, tx_hash))
     }
 }
 

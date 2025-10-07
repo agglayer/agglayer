@@ -41,5 +41,5 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     async fn get_last_settled_pp_root(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<[u8; 32]>, Error>;
+    ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error>;
 }

@@ -921,8 +921,8 @@ impl SettlementClient for Check {
     async fn get_last_settled_pp_root(
         &self,
         _network_id: NetworkId,
-    ) -> Result<Option<[u8; 32]>, Error> {
-        Ok(None)
+    ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error> {
+        Ok((None, None))
     }
 }
 

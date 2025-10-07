@@ -330,7 +330,7 @@ where
             CertificateSettlementResult::Error(error) => {
                 return Err(error);
             }
-            CertificateSettlementResult::TimeoutError(certificate_id) => {
+            CertificateSettlementResult::TimeoutError => {
                 // Retry the settlement transaction
                 info!(
                     "Retrying the settlement transaction after a timeout for certificate \
@@ -339,8 +339,18 @@ where
                 self.set_status(CertificateStatus::Proven)?;
                 return Box::pin(self.process_from_proven()).await;
             }
-            CertificateSettlementResult::SettledThroughOtherTx(_cert_id) => {
-                todo!("Finish the bureaucracy around this case");
+            CertificateSettlementResult::SettledThroughOtherTx(settlement_tx_hash) => {
+                info!(
+                    "Process alternative settlement transaction {settlement_tx_hash} for \
+                     certificate {certificate_id}"
+                );
+                self.header.settlement_tx_hash = Some(settlement_tx_hash);
+                self.state_store
+                    .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
+                // No set_status: update_settlement_tx_hash already updates the status in the
+                // database
+                self.header.status = CertificateStatus::Candidate;
+                return Box::pin(self.process_from_proven()).await;
             }
         };
 

@@ -101,9 +101,9 @@ pub enum NetworkTaskMessage {
 #[derive(Debug)]
 pub enum CertificateSettlementResult {
     Settled(EpochNumber, CertificateIndex),
-    TimeoutError(CertificateId),
+    TimeoutError,
     Error(CertificateStatusError),
-    SettledThroughOtherTx(CertificateId),
+    SettledThroughOtherTx(SettlementTxHash),
 }
 
 /// Network task that is responsible to certify the certificates for a network.
@@ -424,20 +424,20 @@ where
                                         });
 
                                 match latest_pp_root {
-                                    Ok(Some(latest_pp_root)) => {
+                                    Ok((Some(latest_pp_root), Some(latest_pp_root_tx_hash))) => {
                                             if self.is_pending_pessimistic_root(Digest::from(latest_pp_root), height) {
                                                 // Certificate has been settled through some other transaction
                                                 info!(%certificate_id, "Certificate {certificate_id} for height: {height} has been settled on L1 through some other transaction");
-                                                SettledThroughOtherTx(certificate_id)
+                                                SettledThroughOtherTx(latest_pp_root_tx_hash)
                                             }
                                             else {
                                                 warn!(%certificate_id, "Certificate {certificate_id} for height: {height} has NOT been settled on L1 through some other transaction,\
                                                     will retry settlement in the next epoch");
-                                                CertificateSettlementResult::TimeoutError(certificate_id)
+                                                CertificateSettlementResult::TimeoutError
                                             }
                                     }
                                     _ => {
-                                        CertificateSettlementResult::TimeoutError(certificate_id)
+                                        CertificateSettlementResult::TimeoutError
                                     }
                                 }
                             }
