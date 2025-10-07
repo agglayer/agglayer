@@ -38,6 +38,8 @@ mockall::mock! {
         async fn get_prev_pessimistic_root(&self, rollup_id: u32, before_tx: Option<TxHash>) -> Result<[u8; 32], L1RpcError>;
 
         async fn get_verifier_type(&self, rollup_id: u32) -> Result<agglayer_contracts::rollup::VerifierType, L1RpcError>;
+
+        fn get_rollup_manager_address(&self) -> Address;
     }
 
     #[async_trait::async_trait]

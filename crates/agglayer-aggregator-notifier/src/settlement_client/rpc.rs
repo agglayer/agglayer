@@ -351,7 +351,7 @@ where
             .retry_interval
             .mul_f64(self.config.max_retries as f64);
 
-        if counter_value % 3 == 0 && counter_value != 0 {
+        if counter_value % 2 == 0 && counter_value != 0 {
             timeout = Duration::from_secs(1);
             println!(">>>>>>>>>>>>>>>>> TIMEOUT SMALL: {counter_value}");
         }
@@ -485,21 +485,59 @@ where
         self.l1_rpc.get_provider()
     }
 
-    async fn get_logs(
+    async fn get_settlement_logs(
         &self,
-        filter: &alloy::rpc::types::Filter,
-    ) -> Result<Vec<alloy::rpc::types::Log>, Error> {
+        network_id: agglayer_types::NetworkId,
+    ) -> Result<Option<[u8;32]>, Error> {
         use alloy::providers::Provider;
 
-        self.l1_rpc
+        use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
+        use alloy::sol_types::SolEvent;
+
+        // Create a filter for the latest VerifyPessimisticStateTransition event for
+        // this network_id Using from_block Latest ensures we only get recent
+        // events
+        let rollup_address = self.l1_rpc.get_rollup_contract_address(network_id.to_u32()).await
+            .map_err(Error::L1CommunicationError)?;
+        let filter = alloy::rpc::types::Filter::new()
+            .address(rollup_address.into_alloy())
+            .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
+            //.topic1(Some(B256::from(self.network_id.to_be_bytes())))
+            .from_block(alloy::eips::BlockNumberOrTag::Earliest);
+
+        // Fetch the logs through settlement client
+        let events = self.l1_rpc
             .get_provider()
-            .get_logs(filter)
+            .get_logs(&filter)
             .await
             .map_err(|e| {
                 Error::L1CommunicationError(agglayer_contracts::L1RpcError::FailedToQueryEvents(
                     e.to_string(),
                 ))
-            })
+            })?;
+
+        // Get the most recent event (last in the list) and extract its new pessimistic
+        // root
+        let latest_pp_root = events
+            .iter()
+            .rev() // Iterate in reverse to get the most recent first
+            .find_map(|log| VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok())
+            .map(|decoded_event| <[u8; 32]>::from(decoded_event.newPessimisticRoot));
+
+        if let Some(pp_root) = latest_pp_root {
+            debug!(
+                "Retrieved latest VerifyPessimisticStateTransition event for network {} latest \
+                 pp_root: {:?}",
+                network_id, pp_root
+            );
+        } else {
+            debug!(
+                "No VerifyPessimisticStateTransition events found for network {}",
+                network_id
+            );
+        }
+
+        Ok(latest_pp_root)
     }
 }
 

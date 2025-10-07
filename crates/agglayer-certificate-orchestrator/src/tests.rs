@@ -918,11 +918,11 @@ impl SettlementClient for Check {
         unimplemented!("get_provider not needed in tests")
     }
 
-    async fn get_logs(
+    async fn get_settlement_logs(
         &self,
-        _filter: &alloy::rpc::types::Filter,
-    ) -> Result<Vec<alloy::rpc::types::Log>, Error> {
-        Ok(vec![])
+        _network_id: NetworkId,
+    ) -> Result<Option<[u8; 32]>, Error> {
+        Ok(None)
     }
 }
 

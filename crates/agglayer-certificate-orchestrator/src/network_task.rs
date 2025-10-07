@@ -400,10 +400,12 @@ where
                                 error!(%certificate_id, ">>>>>>>>>>>>>>>>> Error CertificateWaitingForSettlement: {e:?}");
                         });
 
-                        if matches!(result, Err(Error::PendingTransactionTimeout { ..})) {
+
+
+                        //if matches!(result, Err(Error::PendingTransactionTimeout { ..})) {
                             warn!(%certificate_id, "Settlement tx timeout, checking if the certificate {certificate_id} \
-                                has been settled on L1 through some other transaction");
-                            let latest_pp_root = self.retrieve_settled_cert_pp_root()
+                            for height: {height} has been settled on L1 through some other transaction");
+                            let latest_pp_root = self.settlement_client.get_settlement_logs(self.network_id)
                             .await
                             .inspect_err(|err| {
                                 error!(
@@ -416,7 +418,7 @@ where
 
                             let comparison = self.is_pending_pessimistic_root(digest, height);
                             println!(">>>>>>>>> COMPARING PP ROOTS: COMPARISON={comparison}");
-                        }
+                        //}
 
                         settlement_complete_notifier
                             .send(result.map_err(Into::into))
@@ -476,47 +478,6 @@ where
             .map_err(|e| Error::InternalError(format!("Certificate task panicked: {e}")))?;
 
         Ok(())
-    }
-
-    /// Retrieves the latest VerifyPessimisticStateTransition event's new PP
-    /// root from L1 for this network
-    async fn retrieve_settled_cert_pp_root(&mut self) -> Result<Option<[u8; 32]>, Error> {
-        use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
-        use alloy::sol_types::SolEvent;
-
-        // Create a filter for the latest VerifyPessimisticStateTransition event for
-        // this network_id Using from_block Latest ensures we only get recent
-        // events
-        let filter = alloy::rpc::types::Filter::new()
-            .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
-            .topic1(alloy::primitives::U256::from(self.network_id.to_u32()))
-            .from_block(alloy::eips::BlockNumberOrTag::Latest);
-
-        // Fetch the logs through settlement client
-        let events = self.settlement_client.get_logs(&filter).await?;
-
-        // Get the most recent event (last in the list) and extract its new pessimistic
-        // root
-        let latest_pp_root = events
-            .iter()
-            .rev() // Iterate in reverse to get the most recent first
-            .find_map(|log| VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok())
-            .map(|decoded_event| <[u8; 32]>::from(decoded_event.newPessimisticRoot));
-
-        if let Some(pp_root) = latest_pp_root {
-            debug!(
-                "Retrieved latest VerifyPessimisticStateTransition event for network {} latest \
-                 pp_root: {:?}",
-                self.network_id, pp_root
-            );
-        } else {
-            debug!(
-                "No VerifyPessimisticStateTransition events found for network {}",
-                self.network_id
-            );
-        }
-
-        Ok(latest_pp_root)
     }
 
     fn pending_pessimistic_root(

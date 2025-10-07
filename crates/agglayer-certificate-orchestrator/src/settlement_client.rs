@@ -1,4 +1,4 @@
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, SettlementTxHash};
+use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, SettlementTxHash, NetworkId};
 
 use crate::Error;
 
@@ -35,9 +35,13 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     /// Returns a reference to the provider for direct L1 queries
     fn get_provider(&self) -> &Self::Provider;
 
-    /// Queries event logs from L1 using the provided filter
-    async fn get_logs(
+    /// Returns the latest PP settlement root from the settlement logs
+    /// if any.
+    /// It queries the `VerifyPessimisticStateTransition` events from the l1.
+    async fn get_settlement_logs(
         &self,
-        filter: &alloy::rpc::types::Filter,
-    ) -> Result<Vec<alloy::rpc::types::Log>, Error>;
+        network_id: NetworkId
+    ) -> Result<Option<[u8; 32]>, Error>;
+
+
 }
