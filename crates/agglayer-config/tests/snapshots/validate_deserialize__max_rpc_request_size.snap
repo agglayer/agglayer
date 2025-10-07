@@ -36,6 +36,9 @@ retry-interval = "7s"
 confirmations = 1
 settlement-timeout = "20m"
 
+[outbound.rpc.settle.gas-price]
+ceiling = "400gwei"
+
 [l1]
 chain-id = 1337
 node-url = "http://zkevm-mock-l1-network:8545/"

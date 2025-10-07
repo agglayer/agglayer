@@ -1,18 +1,20 @@
 use std::{sync::Arc, time::Duration};
 
-use agglayer_certificate_orchestrator::{Error, SettlementClient};
+use agglayer_certificate_orchestrator::{
+    Error, Error::PendingTransactionTimeout, SettlementClient,
+};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
 use agglayer_storage::stores::{
     PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
 };
 use agglayer_types::{
-    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber,
-    ExecutionMode, Proof, SettlementTxHash,
+    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
+    ExecutionMode, Proof, SettlementTxHash, U256,
 };
 use alloy::{
-    providers::{PendingTransactionConfig, Provider},
-    rpc::types::TransactionReceipt,
+    providers::{PendingTransactionConfig, PendingTransactionError, Provider},
+    rpc::types::{FilterBlockOption, TransactionReceipt},
 };
 use arc_swap::ArcSwap;
 use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
@@ -64,6 +66,7 @@ where
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
+        nonce: Option<u64>,
     ) -> Result<SettlementTxHash, Error> {
         // Step 1: Get certificate header and validate
         let (network_id, height) = if let Some(CertificateHeader {
@@ -192,6 +195,7 @@ where
                 *output.new_pessimistic_root,
                 proof_with_selector.into(),
                 certificate.custom_chain_data.into(),
+                nonce,
             )
             .await
         {
@@ -200,18 +204,21 @@ where
                 pending_tx
             }
             Err(error) => {
-                let error_str = RollupManagerRpc::decode_contract_revert(&error)
+                // TODO: Differentiate between different error types, check if decoding works
+                // properly for custom errors as well.
+                let error_decoded = RollupManagerRpc::decode_contract_revert(&error)
                     .unwrap_or_else(|| error.to_string());
+                let error_message = error.to_string();
 
                 error!(
-                    error_code = %error,
-                    error = error_str,
+                    error_message,
+                    error_decoded = error_decoded,
                     "Failed to settle certificate"
                 );
 
                 return Err(Error::SettlementError {
                     certificate_id,
-                    error: error_str,
+                    error: error_message,
                 });
             }
         };
@@ -242,6 +249,10 @@ where
         let receipt = self
             .wait_for_transaction_receipt(settlement_tx_hash, certificate_id)
             .await?;
+
+        if !receipt.inner.tx_type().is_eip1559() {
+            warn!(tx = %settlement_tx_hash, "Settlement tx is not eip1559.");
+        }
 
         // Apply fail points if they are active for integration testing
         #[cfg(feature = "testutils")]
@@ -316,6 +327,7 @@ where
             .config
             .retry_interval
             .mul_f64(self.config.max_retries as f64);
+
         let pending_tx_config = PendingTransactionConfig::new(tx_hash)
             .with_required_confirmations(self.config.confirmations as u64)
             .with_timeout(Some(timeout));
@@ -325,9 +337,38 @@ where
             .get_provider()
             .watch_pending_transaction(pending_tx_config)
             .await
-            .map_err(|e| Error::SettlementError {
-                certificate_id,
-                error: format!("Failed to watch pending settlement transaction: {e}"),
+            .map_err(|error| {
+                if let PendingTransactionError::TxWatcher(alloy::providers::WatchTxError::Timeout) =
+                    error
+                {
+                    error!(
+                        %settlement_tx_hash,
+                        ?error,
+                        ?timeout,
+                        "Timeout while watching the pending settlement transaction"
+                    );
+                    PendingTransactionTimeout {
+                        certificate_id,
+                        error: format!(
+                            "Timeout while watching the pending settlement transaction {:?}, \
+                             error: {}",
+                            timeout, error
+                        ),
+                        settlement_tx_hash,
+                    }
+                } else {
+                    error!(
+                        %settlement_tx_hash,
+                        ?error,
+                        "Error watching the pending settlement transaction"
+                    );
+                    Error::SettlementError {
+                        certificate_id,
+                        error: format!(
+                            "Error watching the pending settlement transaction: {error}"
+                        ),
+                    }
+                }
             })?;
 
         match pending_tx.await {
@@ -353,15 +394,38 @@ where
                     })
             }
             Err(error) => {
-                error!(
-                    ?error,
-                    %settlement_tx_hash,
-                    "Failed to wait for the pending settlement transaction confirmation"
-                );
-                Err(Error::SettlementError {
-                    certificate_id,
-                    error: error.to_string(),
-                })
+                if let PendingTransactionError::TxWatcher(alloy::providers::WatchTxError::Timeout) =
+                    error
+                {
+                    error!(
+                        %settlement_tx_hash,
+                        ?error,
+                        ?timeout,
+                        "Timeout while waiting for the pending settlement transaction"
+                    );
+                    Err(PendingTransactionTimeout {
+                        certificate_id,
+                        error: format!(
+                            "Settlement pending transaction timeout after {:?}, error: {}",
+                            timeout, error
+                        ),
+
+                        settlement_tx_hash,
+                    })
+                } else {
+                    error!(
+                        %settlement_tx_hash,
+                        ?error,
+                        "Error while waiting for the pending settlement transaction to be mined"
+                    );
+                    Err(Error::SettlementError {
+                        certificate_id,
+                        error: format!(
+                            "Error while waiting for the pending settlement transaction to be \
+                             mined: {error}"
+                        ),
+                    })
+                }
             }
         }
     }
@@ -376,13 +440,15 @@ where
     RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
-    type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
+    type Provider = <RollupManagerRpc as L1TransactionFetcher>::Provider;
 
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
+        nonce: Option<u64>,
     ) -> Result<SettlementTxHash, Error> {
-        self.submit_certificate_settlement(certificate_id).await
+        self.submit_certificate_settlement(certificate_id, nonce)
+            .await
     }
 
     async fn wait_for_settlement(
@@ -392,6 +458,144 @@ where
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
         self.wait_for_settlement(settlement_tx_hash, certificate_id)
             .await
+    }
+
+    fn get_provider(&self) -> &Self::Provider {
+        self.l1_rpc.get_provider()
+    }
+
+    /// Queries the L1 for the latest `VerifyPessimisticStateTransition` event
+    /// for the given `network_id` and returns its `newPessimisticRoot`
+    /// along with the transaction receipt of the transaction that has
+    /// caused it.
+    async fn get_last_settled_pp_root(
+        &self,
+        network_id: agglayer_types::NetworkId,
+    ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error> {
+        use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
+        use alloy::{providers::Provider, sol_types::SolEvent};
+
+        // Create a filter for the latest VerifyPessimisticStateTransition event for
+        // this network_id Using from_block Latest ensures we only get recent
+        // events
+        let rollup_address = self.l1_rpc.get_rollup_manager_address();
+        // TODO: Set Latest instead of Earliest after testing
+        let filter = alloy::rpc::types::Filter::new()
+            .address(rollup_address.into_alloy())
+            .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
+            .topic1(U256::from(network_id.to_u32()))
+            .select(FilterBlockOption::Range {
+                from_block: Some(alloy::eips::BlockNumberOrTag::Earliest),
+                to_block: None,
+            });
+
+        // Fetch the logs through from the network.
+        let events = self
+            .l1_rpc
+            .get_provider()
+            .get_logs(&filter)
+            .await
+            .map_err(|e| {
+                Error::L1CommunicationError(agglayer_contracts::L1RpcError::FailedToQueryEvents(
+                    e.to_string(),
+                ))
+            })?;
+
+        // Get the most recent event (last in the list) and extract its new pessimistic
+        // root.
+        let result = events.iter().rev().find_map(|log| {
+            info!("Found VerifyPessimisticStateTransition event: {:?}", log);
+            let latest_pp_root =
+                VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok();
+            let tx_hash = log.transaction_hash.map(Digest::from);
+            match (
+                latest_pp_root.map(|val| <[u8; 32]>::from(val.newPessimisticRoot)),
+                tx_hash,
+            ) {
+                (Some(pp_root), Some(tx_hash)) => Some((pp_root, SettlementTxHash::new(tx_hash))),
+                _ => None,
+            }
+        });
+
+        let (pp_root, tx_hash) = match result {
+            Some((pp_root, tx_hash)) => {
+                debug!(
+                    "Retrieved latest VerifyPessimisticStateTransition event for network {} \
+                     latest pp_root: {}, tx_hash: {tx_hash}",
+                    network_id,
+                    Digest(pp_root)
+                );
+                (Some(pp_root), Some(tx_hash))
+            }
+            None => {
+                debug!(
+                    "No VerifyPessimisticStateTransition events found for network {}",
+                    network_id
+                );
+                (None, None)
+            }
+        };
+
+        Ok((pp_root, tx_hash))
+    }
+
+    async fn get_settlement_receipt_status(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<bool, Error> {
+        let tx_hash = settlement_tx_hash.into();
+
+        match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
+            Ok(receipt) => {
+                debug!(
+                    "Fetched receipt for settlement tx {}: {:?}",
+                    tx_hash, receipt
+                );
+                Ok(receipt.status())
+            }
+            Err(e) => Err(Error::L1CommunicationError(
+                agglayer_contracts::L1RpcError::TransactionReceiptNotFound(e.to_string()),
+            )),
+        }
+    }
+
+    /// Returns the nonce for a settlement tx.
+    async fn get_settlement_nonce(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<Option<u64>, Error> {
+        let tx_hash = settlement_tx_hash.into();
+
+        // First, get the transaction to extract the nonce.
+        let nonce = match self
+            .l1_rpc
+            .get_provider()
+            .get_transaction_by_hash(tx_hash)
+            .await
+            .map_err(|e| {
+                Error::L1CommunicationError(
+                    agglayer_contracts::L1RpcError::TransactionReceiptNotFound(e.to_string()),
+                )
+            })? {
+            Some(tx) => {
+                // Extract nonce from the inner transaction envelope.
+                // The inner field derefs to the transaction type which implements the
+                // Transaction trait.
+                use alloy::consensus::Transaction as _;
+                (*tx.inner).nonce()
+            }
+            None => {
+                warn!("Settlement tx not found on L1 for tx: {}", tx_hash);
+                return Err(Error::L1CommunicationError(
+                    agglayer_contracts::L1RpcError::TransactionReceiptNotFound(format!(
+                        "Transaction not found: {}",
+                        tx_hash
+                    )),
+                ));
+            }
+        };
+
+        Ok(Some(nonce))
     }
 }
 

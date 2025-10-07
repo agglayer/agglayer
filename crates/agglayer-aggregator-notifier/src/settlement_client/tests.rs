@@ -38,6 +38,8 @@ mockall::mock! {
         async fn get_prev_pessimistic_root(&self, rollup_id: u32, before_tx: Option<TxHash>) -> Result<[u8; 32], L1RpcError>;
 
         async fn get_verifier_type(&self, rollup_id: u32) -> Result<agglayer_contracts::rollup::VerifierType, L1RpcError>;
+
+        fn get_rollup_manager_address(&self) -> Address;
     }
 
     #[async_trait::async_trait]
@@ -61,6 +63,7 @@ mockall::mock! {
             new_pessimistic_root: [u8; 32],
             proof: Bytes,
             custom_chain_data: Bytes,
+            nonce: Option<u64>,
         ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, alloy::contract::Error>;
 
     }
@@ -159,7 +162,7 @@ async fn epoch_packer_can_settle_one_certificate() {
     );
 
     let settlement_tx_hash = epoch_packer
-        .submit_certificate_settlement(certificate_id)
+        .submit_certificate_settlement(certificate_id, None)
         .await
         .unwrap();
 

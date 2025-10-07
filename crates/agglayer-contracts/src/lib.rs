@@ -20,6 +20,27 @@ pub use aggchain::AggchainContract;
 pub use rollup::RollupContract;
 pub use settler::Settler;
 
+/// Gas price parameters for L1 transactions.
+#[derive(Debug, Clone)]
+pub struct GasPriceParams {
+    /// Gas price multiplier for transactions (scaled by 1000).
+    pub multiplier_per_1000: u64,
+    /// Minimum gas price floor (in wei) for transactions.
+    pub floor: u128,
+    /// Maximum gas price ceiling (in wei) for transactions.
+    pub ceiling: u128,
+}
+
+impl Default for GasPriceParams {
+    fn default() -> Self {
+        GasPriceParams {
+            multiplier_per_1000: 1000, // 1.0 scaled by 1000
+            floor: 0,
+            ceiling: u128::MAX,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 pub trait L1TransactionFetcher {
     type Provider: Provider;
@@ -45,6 +66,8 @@ pub struct L1RpcClient<RpcProvider> {
     default_l1_info_tree_entry: (u32, [u8; 32]),
     /// Gas multiplier factor for transactions.
     gas_multiplier_factor: u32,
+    /// Gas price parameters for transactions.
+    gas_price_params: GasPriceParams,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -100,6 +123,8 @@ pub enum L1RpcError {
     ThresholdTypeOverflow { fetched: U256 },
     #[error("Transaction receipt for tx {0} failed on L1")]
     TransactionReceiptFailedOnL1(TxHash),
+    #[error("Failed to get the events: {0}")]
+    FailedToQueryEvents(String),
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
@@ -112,6 +137,7 @@ where
         l1_info_tree: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
         gas_multiplier_factor: u32,
+        gas_price_params: GasPriceParams,
     ) -> Self {
         Self {
             rpc,
@@ -119,6 +145,7 @@ where
             l1_info_tree,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
+            gas_price_params,
         }
     }
 
@@ -127,6 +154,7 @@ where
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         l1_info_tree: Address,
         gas_multiplier_factor: u32,
+        gas_price_params: GasPriceParams,
     ) -> Result<Self, L1RpcInitializationError>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
@@ -188,6 +216,7 @@ where
             l1_info_tree,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
+            gas_price_params,
         ))
     }
 }
@@ -265,6 +294,7 @@ mod tests {
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
                 100,
+                GasPriceParams::default(),
             )
             .await
             .unwrap(),
@@ -309,6 +339,7 @@ mod tests {
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
                 100,
+                GasPriceParams::default(),
             )
             .await
             .unwrap(),

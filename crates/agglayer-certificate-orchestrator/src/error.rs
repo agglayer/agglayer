@@ -1,7 +1,7 @@
 use agglayer_contracts::L1RpcError;
 use agglayer_types::{
     aggchain_proof::AggchainProofPublicValues, bincode, CertificateId, CertificateStatusError,
-    Digest, Height, NetworkId,
+    Digest, Height, NetworkId, SettlementTxHash,
 };
 use pessimistic_proof::{
     core::commitment::StateCommitment, error::ProofVerificationError, PessimisticProofOutput,
@@ -202,6 +202,13 @@ pub enum Error {
         network_id: NetworkId,
     },
 
+    #[error("Pending transaction timeout {certificate_id}: {error}")]
+    PendingTransactionTimeout {
+        certificate_id: CertificateId,
+        error: String,
+        settlement_tx_hash: SettlementTxHash,
+    },
+
     #[error("Failed to settle the certificate {certificate_id}: {error}")]
     SettlementError {
         certificate_id: CertificateId,
@@ -246,6 +253,9 @@ impl From<Error> for CertificateStatusError {
             }
             Error::SettlementError { error, .. } => CertificateStatusError::SettlementError(error),
             Error::PersistenceError { error, .. } => {
+                CertificateStatusError::InternalError(error.to_string())
+            }
+            Error::PendingTransactionTimeout { error, .. } => {
                 CertificateStatusError::InternalError(error.to_string())
             }
         }
