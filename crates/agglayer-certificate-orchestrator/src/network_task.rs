@@ -10,6 +10,7 @@ use agglayer_types::{
     CertificateId, CertificateIndex, CertificateStatusError, EpochNumber, Height,
     LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
+use pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -509,5 +510,31 @@ where
         }
 
         Ok(latest_pp_root)
+    }
+
+    fn pending_pessimistic_root(
+        &self,
+        height: Height,
+        version: PessimisticRootCommitmentVersion,
+    ) -> Digest {
+        let state_commitment = self.local_state.get_roots();
+        let pp_commitment_values =
+            pessimistic_proof::core::commitment::PessimisticRootCommitmentValues {
+                height: height.as_u64(),
+                origin_network: self.network_id,
+
+                ler_leaf_count: state_commitment.ler_leaf_count,
+                balance_root: state_commitment.balance_root.into(),
+                nullifier_root: state_commitment.nullifier_root.into(),
+            };
+        pp_commitment_values.compute_pp_root(version)
+    }
+
+    fn is_pending_pessimistic_root(&self, settled_pp_root: Digest, height: Height) -> bool {
+        let computed_v2 =
+            self.pending_pessimistic_root(height, PessimisticRootCommitmentVersion::V2);
+        let computed_v3 =
+            self.pending_pessimistic_root(height, PessimisticRootCommitmentVersion::V3);
+        settled_pp_root == computed_v2 || settled_pp_root == computed_v3
     }
 }
