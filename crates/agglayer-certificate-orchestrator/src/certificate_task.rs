@@ -364,7 +364,7 @@ where
         // recompute the state just in case (not needed probably) &&
         // process_from_proven) In the third case, for any other error, just
         // fail the certificate
-        return Err(error);
+        Err(error)
     }
 
     fn set_status(&mut self, status: CertificateStatus) -> Result<(), CertificateStatusError> {
