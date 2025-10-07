@@ -350,7 +350,7 @@ where
                 // No set_status: update_settlement_tx_hash already updates the status in the
                 // database
                 self.header.status = CertificateStatus::Candidate;
-                return Box::pin(self.process_from_proven()).await;
+                return Box::pin(self.process_from_candidate()).await;
             }
         };
 
