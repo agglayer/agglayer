@@ -395,17 +395,12 @@ where
                         let result = self
                             .settlement_client
                             .wait_for_settlement(settlement_tx_hash, certificate_id)
-                            .await
-                            .inspect_err(|e| {
-                                error!(%certificate_id, ">>>>>>>>>>>>>>>>> Error CertificateWaitingForSettlement: {e:?}");
-                        });
+                            .await;
 
-
-
-                        //if matches!(result, Err(Error::PendingTransactionTimeout { ..})) {
+                        if matches!(result, Err(Error::PendingTransactionTimeout { ..})) {
                             warn!(%certificate_id, "Settlement tx timeout, checking if the certificate {certificate_id} \
                             for height: {height} has been settled on L1 through some other transaction");
-                            let latest_pp_root = self.settlement_client.get_settlement_logs(self.network_id)
+                            let latest_pp_root = self.settlement_client.get_last_settled_pp_root(self.network_id)
                             .await
                             .inspect_err(|err| {
                                 error!(
@@ -417,8 +412,8 @@ where
                             info!("Latest pessimistic root on L1 for network {}: {:?} Digest:{}", self.network_id, latest_pp_root, digest);
 
                             let comparison = self.is_pending_pessimistic_root(digest, height);
-                            println!(">>>>>>>>> COMPARING PP ROOTS: COMPARISON={comparison}");
-                        //}
+
+                        }
 
                         settlement_complete_notifier
                             .send(result.map_err(Into::into))

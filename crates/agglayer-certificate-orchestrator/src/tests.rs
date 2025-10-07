@@ -918,7 +918,7 @@ impl SettlementClient for Check {
         unimplemented!("get_provider not needed in tests")
     }
 
-    async fn get_settlement_logs(
+    async fn get_last_settled_pp_root(
         &self,
         _network_id: NetworkId,
     ) -> Result<Option<[u8; 32]>, Error> {

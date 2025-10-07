@@ -19,6 +19,7 @@ use agglayer_types::{
     ExecutionMode, Proof, SettlementTxHash,
 };
 use alloy::{
+    primitives::U256,
     providers::{PendingTransactionConfig, PendingTransactionError, Provider},
     rpc::types::TransactionReceipt,
 };
@@ -485,28 +486,26 @@ where
         self.l1_rpc.get_provider()
     }
 
-    async fn get_settlement_logs(
+    async fn get_last_settled_pp_root(
         &self,
         network_id: agglayer_types::NetworkId,
-    ) -> Result<Option<[u8;32]>, Error> {
-        use alloy::providers::Provider;
-
+    ) -> Result<Option<[u8; 32]>, Error> {
         use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
-        use alloy::sol_types::SolEvent;
+        use alloy::{providers::Provider, sol_types::SolEvent};
 
         // Create a filter for the latest VerifyPessimisticStateTransition event for
         // this network_id Using from_block Latest ensures we only get recent
         // events
-        let rollup_address = self.l1_rpc.get_rollup_contract_address(network_id.to_u32()).await
-            .map_err(Error::L1CommunicationError)?;
+        let rollup_address = self.l1_rpc.get_rollup_manager_address();
         let filter = alloy::rpc::types::Filter::new()
             .address(rollup_address.into_alloy())
             .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
-            //.topic1(Some(B256::from(self.network_id.to_be_bytes())))
+            .topic1(U256::from(network_id.to_u32()))
             .from_block(alloy::eips::BlockNumberOrTag::Earliest);
 
         // Fetch the logs through settlement client
-        let events = self.l1_rpc
+        let events = self
+            .l1_rpc
             .get_provider()
             .get_logs(&filter)
             .await

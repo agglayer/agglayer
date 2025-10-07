@@ -1,4 +1,4 @@
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, SettlementTxHash, NetworkId};
+use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, NetworkId, SettlementTxHash};
 
 use crate::Error;
 
@@ -38,10 +38,8 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     /// Returns the latest PP settlement root from the settlement logs
     /// if any.
     /// It queries the `VerifyPessimisticStateTransition` events from the l1.
-    async fn get_settlement_logs(
+    async fn get_last_settled_pp_root(
         &self,
-        network_id: NetworkId
+        network_id: NetworkId,
     ) -> Result<Option<[u8; 32]>, Error>;
-
-
 }
