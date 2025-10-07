@@ -913,6 +913,17 @@ impl SettlementClient for Check {
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
         Ok((EpochNumber::ZERO, CertificateIndex::ZERO))
     }
+
+    fn get_provider(&self) -> &Self::Provider {
+        unimplemented!("get_provider not needed in tests")
+    }
+
+    async fn get_logs(
+        &self,
+        _filter: &alloy::rpc::types::Filter,
+    ) -> Result<Vec<alloy::rpc::types::Log>, Error> {
+        Ok(vec![])
+    }
 }
 
 impl CertificateInput for () {

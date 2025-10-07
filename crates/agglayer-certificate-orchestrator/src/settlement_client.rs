@@ -31,4 +31,13 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<(EpochNumber, CertificateIndex), Error>;
+
+    /// Returns a reference to the provider for direct L1 queries
+    fn get_provider(&self) -> &Self::Provider;
+
+    /// Queries event logs from L1 using the provided filter
+    async fn get_logs(
+        &self,
+        filter: &alloy::rpc::types::Filter,
+    ) -> Result<Vec<alloy::rpc::types::Log>, Error>;
 }

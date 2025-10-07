@@ -202,6 +202,12 @@ pub enum Error {
         network_id: NetworkId,
     },
 
+    #[error("Pending transaction timeout {certificate_id}: {error}")]
+    PendingTransactionTimeout {
+        certificate_id: CertificateId,
+        error: String,
+    },
+
     #[error("Failed to settle the certificate {certificate_id}: {error}")]
     SettlementError {
         certificate_id: CertificateId,
@@ -246,6 +252,9 @@ impl From<Error> for CertificateStatusError {
             }
             Error::SettlementError { error, .. } => CertificateStatusError::SettlementError(error),
             Error::PersistenceError { error, .. } => {
+                CertificateStatusError::InternalError(error.to_string())
+            }
+            Error::PendingTransactionTimeout { error, .. } => {
                 CertificateStatusError::InternalError(error.to_string())
             }
         }

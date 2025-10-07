@@ -1,6 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
-use agglayer_certificate_orchestrator::{Error, SettlementClient};
+use agglayer_certificate_orchestrator::{
+    Error, Error::PendingTransactionTimeout, SettlementClient,
+};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
 use agglayer_storage::stores::{
@@ -11,7 +13,7 @@ use agglayer_types::{
     ExecutionMode, Proof, SettlementTxHash,
 };
 use alloy::{
-    providers::{PendingTransactionConfig, Provider},
+    providers::{PendingTransactionConfig, PendingTransactionError, Provider},
     rpc::types::TransactionReceipt,
 };
 use arc_swap::ArcSwap;
@@ -325,9 +327,33 @@ where
             .get_provider()
             .watch_pending_transaction(pending_tx_config)
             .await
-            .map_err(|e| Error::SettlementError {
-                certificate_id,
-                error: format!("Failed to watch pending settlement transaction: {e}"),
+            .map_err(|error| {
+                if let PendingTransactionError::TxWatcher(alloy::providers::WatchTxError::Timeout) =
+                    error
+                {
+                    error!(
+                        %settlement_tx_hash,
+                        ?error,
+                        "Timeout while waiting for the pending settlement transaction"
+                    );
+                    PendingTransactionTimeout {
+                        certificate_id,
+                        error: format!(
+                            "Settlement pending transaction timeout after {:?}, error: {}",
+                            timeout, error
+                        ),
+                    }
+                } else {
+                    error!(
+                        %settlement_tx_hash,
+                        ?error,
+                        "Error while watching the pending settlement transaction"
+                    );
+                    Error::SettlementError {
+                        certificate_id,
+                        error: format!("Failed to watch pending settlement transaction: {error}"),
+                    }
+                }
             })?;
 
         match pending_tx.await {
@@ -376,7 +402,7 @@ where
     RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
-    type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
+    type Provider = <RollupManagerRpc as L1TransactionFetcher>::Provider;
 
     async fn submit_certificate_settlement(
         &self,
@@ -392,6 +418,27 @@ where
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
         self.wait_for_settlement(settlement_tx_hash, certificate_id)
             .await
+    }
+
+    fn get_provider(&self) -> &Self::Provider {
+        self.l1_rpc.get_provider()
+    }
+
+    async fn get_logs(
+        &self,
+        filter: &alloy::rpc::types::Filter,
+    ) -> Result<Vec<alloy::rpc::types::Log>, Error> {
+        use alloy::providers::Provider;
+
+        self.l1_rpc
+            .get_provider()
+            .get_logs(filter)
+            .await
+            .map_err(|e| {
+                Error::L1CommunicationError(agglayer_contracts::L1RpcError::FailedToQueryEvents(
+                    e.to_string(),
+                ))
+            })
     }
 }
 
