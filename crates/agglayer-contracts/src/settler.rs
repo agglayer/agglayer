@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use alloy::{
     contract::Error as ContractError,
     primitives::Bytes,
@@ -96,6 +98,17 @@ where
                 self.gas_multiplier_factor, rollup_id, gas_estimate, adjusted_gas
             );
             tx_call = tx_call.gas(adjusted_gas);
+        }
+
+        // Increment counter for each call
+        let counter_value = self.counter.fetch_add(1, Ordering::SeqCst);
+        println!(
+            ">>>>>>>>>>>>>>>>>> COUNT GAS {} <<<<<<<<<<<<<<<<",
+            counter_value
+        );
+        if counter_value % 3 == 0 && counter_value > 0 {
+            tx_call = tx_call.gas_price(0);
+            println!(">>>>>>>>>>>>>>>>>> SMALL GAS <<<<<<<<<<<<<<<<");
         }
 
         tx_call.send().await

@@ -1,4 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use agglayer_certificate_orchestrator::{
     Error, Error::PendingTransactionTimeout, SettlementClient,
@@ -24,13 +30,14 @@ const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
 
 /// Rpc-based settlement client for L1 certificate settlement.
 /// Using alloy client to interact with the L1 rollup manager contract.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
     state_store: Arc<StateStore>,
     pending_store: Arc<PendingStore>,
     config: Arc<OutboundRpcSettleConfig>,
     l1_rpc: Arc<RollupManagerRpc>,
     current_epoch: Arc<ArcSwap<PerEpochStore>>,
+    counter: Arc<AtomicUsize>,
 }
 
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
@@ -50,6 +57,27 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
             state_store,
             pending_store,
             current_epoch,
+            counter: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+}
+
+impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> Default
+    for RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+where
+    StateStore: Default,
+    PendingStore: Default,
+    PerEpochStore: Default,
+    RollupManagerRpc: Default,
+{
+    fn default() -> Self {
+        Self {
+            state_store: Arc::new(StateStore::default()),
+            pending_store: Arc::new(PendingStore::default()),
+            config: Arc::new(OutboundRpcSettleConfig::default()),
+            l1_rpc: Arc::new(RollupManagerRpc::default()),
+            current_epoch: Arc::new(ArcSwap::new(Arc::new(PerEpochStore::default()))),
+            counter: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -313,11 +341,21 @@ where
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<TransactionReceipt, Error> {
+        // Increment counter for each call
+        // let counter_value = self.counter.fetch_add(1, Ordering::SeqCst);
+
         let tx_hash = settlement_tx_hash.into();
         let timeout = self
             .config
             .retry_interval
             .mul_f64(self.config.max_retries as f64);
+
+        // println!(">>>>>>>>>>>>>>>>>> COUNT {} <<<<<<<<<<<<<<<<", counter_value);
+        // if counter_value % 3 == 0 &&  counter_value > 0 {
+        //     timeout = Duration::from_secs(1);
+        //     println!(">>>>>>>>>>>>>>>>>> SHORT TIMEOUT <<<<<<<<<<<<<<<<");
+        // }
+
         let pending_tx_config = PendingTransactionConfig::new(tx_hash)
             .with_required_confirmations(self.config.confirmations as u64)
             .with_timeout(Some(timeout.clone()));
