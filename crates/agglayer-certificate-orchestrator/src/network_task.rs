@@ -389,12 +389,16 @@ where
                         fail::fail_point!("network_task::make_progress::settlement_submitted");
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier, .. }) => {
+                    Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier, height, ..}) => {
+                        println!(">>>>>>>>>>>>>> CertificateWaitingForSettlement for certificate_id={certificate_id} at height={height}");
                         // See comment on CertificateReadyForSettlement.
                         let result = self
                             .settlement_client
                             .wait_for_settlement(settlement_tx_hash, certificate_id)
-                            .await;
+                            .await
+                            .inspect_err(|e| {
+                                error!(%certificate_id, ">>>>>>>>>>>>>>>>> Error CertificateWaitingForSettlement: {e:?}");
+                        });
 
                         if matches!(result, Err(Error::PendingTransactionTimeout { ..})) {
                             warn!(%certificate_id, "Settlement tx timeout, checking if the certificate {certificate_id} \
@@ -407,8 +411,11 @@ where
                                     "Error retrieving latest pessimistic root from L1: {}", err
                                 )
                             }).unwrap_or_default();
-                            info!("Latest pessimistic root on L1 for network {}: {:?} Digest:{}", self.network_id,
-                                latest_pp_root, Digest::from(latest_pp_root.unwrap_or_default()));
+                            let digest = Digest::from(latest_pp_root.unwrap_or_default());
+                            info!("Latest pessimistic root on L1 for network {}: {:?} Digest:{}", self.network_id, latest_pp_root, digest);
+
+                            let comparison = self.is_pending_pessimistic_root(digest, height);
+                            println!(">>>>>>>>> COMPARING PP ROOTS: COMPARISON={comparison}");
                         }
 
                         settlement_complete_notifier
@@ -535,6 +542,10 @@ where
             self.pending_pessimistic_root(height, PessimisticRootCommitmentVersion::V2);
         let computed_v3 =
             self.pending_pessimistic_root(height, PessimisticRootCommitmentVersion::V3);
+        println!(
+            ">>>>>>>> COMPUTED PP ROOTS: height={height} V2={computed_v2}, V3={computed_v3}, \
+             SETTLED={settled_pp_root}"
+        );
         settled_pp_root == computed_v2 || settled_pp_root == computed_v3
     }
 }

@@ -343,15 +343,17 @@ where
     ) -> Result<TransactionReceipt, Error> {
         // Increment counter for each call
         let counter_value = self.counter.fetch_add(1, Ordering::SeqCst);
-        
+        println!(">>>>>>>>>>>>>>>>> COUNTER_VALUE: {counter_value}");
+
         let tx_hash = settlement_tx_hash.into();
         let mut timeout = self
             .config
             .retry_interval
             .mul_f64(self.config.max_retries as f64);
 
-        if counter_value % 3 == 0 {
+        if counter_value % 3 == 0 && counter_value != 0 {
             timeout = Duration::from_secs(1);
+            println!(">>>>>>>>>>>>>>>>> TIMEOUT SMALL: {counter_value}");
         }
 
         let pending_tx_config = PendingTransactionConfig::new(tx_hash)
@@ -370,12 +372,13 @@ where
                     error!(
                         %settlement_tx_hash,
                         ?error,
-                        "Timeout while waiting for the pending settlement transaction"
+                        "Timeout while watching the pending settlement transaction"
                     );
                     PendingTransactionTimeout {
                         certificate_id,
                         error: format!(
-                            "Settlement pending transaction timeout after {:?}, error: {}",
+                            "Timeout while watching the pending settlement transaction {:?}, \
+                             error: {}",
                             timeout, error
                         ),
                     }
@@ -383,11 +386,13 @@ where
                     error!(
                         %settlement_tx_hash,
                         ?error,
-                        "Error while watching the pending settlement transaction"
+                        "Error watching the pending settlement transaction"
                     );
                     Error::SettlementError {
                         certificate_id,
-                        error: format!("Failed to watch pending settlement transaction: {error}"),
+                        error: format!(
+                            "Error watching the pending settlement transaction: {error}"
+                        ),
                     }
                 }
             })?;
@@ -415,15 +420,35 @@ where
                     })
             }
             Err(error) => {
-                error!(
-                    ?error,
-                    %settlement_tx_hash,
-                    "Failed to wait for the pending settlement transaction confirmation"
-                );
-                Err(Error::SettlementError {
-                    certificate_id,
-                    error: error.to_string(),
-                })
+                if let PendingTransactionError::TxWatcher(alloy::providers::WatchTxError::Timeout) =
+                    error
+                {
+                    error!(
+                        %settlement_tx_hash,
+                        ?error,
+                        "Timeout while waiting for the pending settlement transaction"
+                    );
+                    Err(PendingTransactionTimeout {
+                        certificate_id,
+                        error: format!(
+                            "Settlement pending transaction timeout after {:?}, error: {}",
+                            timeout, error
+                        ),
+                    })
+                } else {
+                    error!(
+                        %settlement_tx_hash,
+                        ?error,
+                        "Error while waiting for the pending settlement transaction to be mined"
+                    );
+                    Err(Error::SettlementError {
+                        certificate_id,
+                        error: format!(
+                            "Error while waiting for the pending settlement transaction to be \
+                             mined: {error}"
+                        ),
+                    })
+                }
             }
         }
     }
