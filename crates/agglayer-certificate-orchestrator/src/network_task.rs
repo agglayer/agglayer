@@ -396,10 +396,17 @@ where
                             .wait_for_settlement(settlement_tx_hash, certificate_id)
                             .await;
 
-                        if matches!(result, Err(Error::PendingTransactionTimeout { certificate_id, error: _ })) {
+                        if matches!(result, Err(Error::PendingTransactionTimeout { ..})) {
                             warn!(%certificate_id, "Settlement tx timeout, checking if the certificate {certificate_id} \
                                 has been settled on L1 through some other transaction");
-                            let latest_pp_root = self.retrieve_settled_cert_pp_root().await?;
+                            let latest_pp_root = self.retrieve_settled_cert_pp_root()
+                            .await
+                            .inspect_err(|err| {
+                                error!(
+                                    %certificate_id,
+                                    "Error retrieving latest pessimistic root from L1: {}", err
+                                )
+                            }).unwrap_or_default();
                             info!("Latest pessimistic root on L1 for network {}: {:?} Digest:{}", self.network_id,
                                 latest_pp_root, Digest::from(latest_pp_root.unwrap_or_default()));
                         }
@@ -490,8 +497,9 @@ where
             .map(|decoded_event| <[u8; 32]>::from(decoded_event.newPessimisticRoot));
 
         if let Some(pp_root) = latest_pp_root {
-            info!(
-                "Retrieved latest VerifyPessimisticStateTransition event for network {}: {:?}",
+            debug!(
+                "Retrieved latest VerifyPessimisticStateTransition event for network {} latest \
+                 pp_root: {:?}",
                 self.network_id, pp_root
             );
         } else {
