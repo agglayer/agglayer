@@ -287,6 +287,7 @@ impl StateWriter for DummyPendingStore {
         &self,
         _certificate_id: &CertificateId,
         _tx_hash: SettlementTxHash,
+        _force: bool,
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }
