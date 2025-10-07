@@ -15,7 +15,11 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::{certificate_task::CertificateTask, Certifier, Error, SettlementClient};
+use crate::{
+    certificate_task::CertificateTask,
+    network_task::CertificateSettlementResult::SettledThroughOtherTx, Certifier, Error,
+    SettlementClient,
+};
 
 #[cfg(test)]
 mod tests;
@@ -75,8 +79,7 @@ pub enum NetworkTaskMessage {
         height: Height,
         certificate_id: CertificateId,
         settlement_tx_hash: SettlementTxHash,
-        settlement_complete_notifier:
-            oneshot::Sender<Result<(EpochNumber, CertificateIndex), CertificateStatusError>>,
+        settlement_complete_notifier: oneshot::Sender<CertificateSettlementResult>,
     },
 
     /// Notify the network task that a certificate has been successfully
@@ -93,6 +96,14 @@ pub enum NetworkTaskMessage {
         certificate_id: CertificateId,
         error: CertificateStatusError,
     },
+}
+
+#[derive(Debug)]
+pub enum CertificateSettlementResult {
+    Settled(EpochNumber, CertificateIndex),
+    TimeoutError(CertificateId),
+    Error(CertificateStatusError),
+    SettledThroughOtherTx(CertificateId),
 }
 
 /// Network task that is responsible to certify the certificates for a network.
@@ -397,26 +408,46 @@ where
                             .wait_for_settlement(settlement_tx_hash, certificate_id)
                             .await;
 
-                        if matches!(result, Err(Error::PendingTransactionTimeout { ..})) {
-                            warn!(%certificate_id, "Settlement tx timeout, checking if the certificate {certificate_id} \
-                            for height: {height} has been settled on L1 through some other transaction");
-                            let latest_pp_root = self.settlement_client.get_last_settled_pp_root(self.network_id)
-                            .await
-                            .inspect_err(|err| {
-                                error!(
-                                    %certificate_id,
-                                    "Error retrieving latest pessimistic root from L1: {}", err
-                                )
-                            }).unwrap_or_default();
-                            let digest = Digest::from(latest_pp_root.unwrap_or_default());
-                            info!("Latest pessimistic root on L1 for network {}: {:?} Digest:{}", self.network_id, latest_pp_root, digest);
+                        let result = match result {
+                            Ok((epoch, index)) => {
+                                // Certificate has been settled
+                                CertificateSettlementResult::Settled(epoch, index)
+                            }
+                            Err(Error::PendingTransactionTimeout { ..}) => {
+                                // On timeout, check if the certificate has been settled through some other transaction
+                                 warn!(%certificate_id, "Settlement tx timeout, checking if the certificate {certificate_id} \
+                                    for height: {height} has been settled on L1 through some other transaction");
+                                let latest_pp_root =
+                                    self.settlement_client.get_last_settled_pp_root(self.network_id).await
+                                        .inspect_err(|err| {
+                                            error!(%certificate_id,"Error retrieving latest pessimistic root from L1: {}", err)
+                                        });
 
-                            let comparison = self.is_pending_pessimistic_root(digest, height);
-
-                        }
+                                match latest_pp_root {
+                                    Ok(Some(latest_pp_root)) => {
+                                            if self.is_pending_pessimistic_root(Digest::from(latest_pp_root), height) {
+                                                // Certificate has been settled through some other transaction
+                                                info!(%certificate_id, "Certificate {certificate_id} for height: {height} has been settled on L1 through some other transaction");
+                                                SettledThroughOtherTx(certificate_id)
+                                            }
+                                            else {
+                                                warn!(%certificate_id, "Certificate {certificate_id} for height: {height} has NOT been settled on L1 through some other transaction,\
+                                                    will retry settlement in the next epoch");
+                                                CertificateSettlementResult::TimeoutError(certificate_id)
+                                            }
+                                    }
+                                    _ => {
+                                        CertificateSettlementResult::TimeoutError(certificate_id)
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                CertificateSettlementResult::Error(err.into())
+                            }
+                        };
 
                         settlement_complete_notifier
-                            .send(result.map_err(Into::into))
+                            .send(result)
                             .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
                         continue;
                     }

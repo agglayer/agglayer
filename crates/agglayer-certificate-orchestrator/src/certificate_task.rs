@@ -7,9 +7,12 @@ use agglayer_storage::{
 use agglayer_types::{Certificate, CertificateHeader, CertificateStatus, CertificateStatusError};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
-use crate::{network_task::NetworkTaskMessage, Certifier, Error};
+use crate::{
+    network_task::{CertificateSettlementResult, NetworkTaskMessage},
+    Certifier, Error,
+};
 
 /// A task that processes a certificate, including certifying it and settling
 /// it.
@@ -321,9 +324,23 @@ where
 
         let settlement_complete_result = settlement_complete.await.map_err(recv_err)?;
         let (epoch_number, certificate_index) = match settlement_complete_result {
-            Ok((epoch_number, certificate_index)) => (epoch_number, certificate_index),
-            Err(error) => {
-                return self.handle_settlement_error(error).await;
+            CertificateSettlementResult::Settled(epoch_number, certificate_index) => {
+                (epoch_number, certificate_index)
+            }
+            CertificateSettlementResult::Error(error) => {
+                return Err(error);
+            }
+            CertificateSettlementResult::TimeoutError(certificate_id) => {
+                // Retry the settlement transaction
+                info!(
+                    "Retrying the settlement transaction after a timeout for certificate \
+                     {certificate_id}"
+                );
+                self.set_status(CertificateStatus::Proven)?;
+                return Box::pin(self.process_from_proven()).await;
+            }
+            CertificateSettlementResult::SettledThroughOtherTx(_cert_id) => {
+                todo!("Finish the bureaucracy around this case");
             }
         };
 
@@ -349,22 +366,6 @@ where
         }
 
         Ok(())
-    }
-
-    async fn handle_settlement_error(
-        &mut self,
-        error: CertificateStatusError,
-    ) -> Result<(), CertificateStatusError> {
-        // Process the error here (in a function?)
-        // 1. Check in the contracts if certificate is maybe settled (with some
-        //    competing transaction maybe).
-        // 2. If it is timeout (not enough confirmations...) AND if certificate is not
-        //    settled, go back to the Prove state
-        //    (self.set_status(CertificateStatus::Settled)?;,
-        // recompute the state just in case (not needed probably) &&
-        // process_from_proven) In the third case, for any other error, just
-        // fail the certificate
-        Err(error)
     }
 
     fn set_status(&mut self, status: CertificateStatus) -> Result<(), CertificateStatusError> {
