@@ -85,7 +85,7 @@ impl RateLimitingConfig {
     }
 
     /// Get rate limiting configuration for given network.
-    pub fn config_for(&self, network_id: NetworkId) -> NetworkRateLimitingConfig {
+    pub fn config_for(&self, network_id: NetworkId) -> NetworkRateLimitingConfig<'_> {
         let overrides = self.override_for(network_id);
         let send_tx = overrides
             .and_then(|l| l.send_tx.as_ref())

@@ -6,45 +6,55 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = []
+testutils = [
+    "dep:agglayer-test-suite",
+    "dep:fail",
+    "dep:mockall",
+    "agglayer-clock/testutils",
+    "agglayer-config/testutils",
+    "agglayer-storage/testutils",
+    "agglayer-types/testutils",
+]
+
 [dependencies]
-async-trait.workspace = true
-anyhow.workspace = true
+alloy.workspace = true
 arc-swap.workspace = true
-bincode.workspace = true
+async-trait.workspace = true
 buildstructor.workspace = true
-ethers.workspace = true
+eyre.workspace = true
+fail = { workspace = true, optional = true }
+futures-util.workspace = true
 parking_lot.workspace = true
+reqwest.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
-futures-util = "0.3.31"
-agglayer-contracts.workspace = true
+
 agglayer-clock.workspace = true
+agglayer-config = { workspace = true, optional = true }
+agglayer-contracts.workspace = true
 agglayer-storage.workspace = true
+agglayer-test-suite = { workspace = true, optional = true }
 agglayer-types.workspace = true
-agglayer-prover-types.workspace = true
 pessimistic-proof.workspace = true
 
 # Optional dependencies
 mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
-agglayer-clock = { workspace = true, features = ["testutils"] }
-agglayer-config = { workspace = true, features = ["testutils"] }
-agglayer-storage = { workspace = true, features = ["testutils"] }
-agglayer-test-suite = { path = "../agglayer-test-suite" }
-agglayer-types = { workspace = true, features = ["testutils"] }
+agglayer-certificate-orchestrator = { workspace = true, features = [
+    "testutils",
+] }
+
 async-trait.workspace = true
-ethers.workspace = true
+alloy.workspace = true
 lazy_static.workspace = true
 mockall.workspace = true
 rstest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 test-log.workspace = true
-
-[features]
-default = []
-testutils = ["dep:mockall"]

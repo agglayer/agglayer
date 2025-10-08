@@ -1,15 +1,18 @@
 use std::time::Duration;
 
 use agglayer_config::Config;
-use agglayer_storage::stores::{PendingCertificateWriter, StateWriter};
-use agglayer_storage::tests::TempDBDir;
-use agglayer_types::{Certificate, CertificateHeader, CertificateStatus};
+use agglayer_storage::{
+    stores::{PendingCertificateWriter, StateWriter},
+    tests::TempDBDir,
+};
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateIndex, CertificateStatus, EpochNumber, Height,
+};
 use insta::assert_snapshot;
 use jsonrpsee::{core::client::ClientT, rpc_params};
 use serde_json::json;
 
-use crate::testutils::TestContext;
-use crate::AgglayerServer as _;
+use crate::{testutils::TestContext, AgglayerServer};
 
 #[test_log::test(tokio::test)]
 async fn returns_the_pending_certificate_header() {
@@ -19,9 +22,9 @@ async fn returns_the_pending_certificate_header() {
 
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, 0);
-    let proven_certificate = Certificate::new_for_test(network_id, 1);
-    let pending_certificate = Certificate::new_for_test(network_id, 2);
+    let settled_certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let proven_certificate = Certificate::new_for_test(network_id, Height::new(1));
+    let pending_certificate = Certificate::new_for_test(network_id, Height::new(2));
 
     context
         .state_store
@@ -40,25 +43,29 @@ async fn returns_the_pending_certificate_header() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &0,
+            &Height::ZERO,
             &settled_certificate.hash(),
-            &0,
-            &0,
+            &EpochNumber::ZERO,
+            &CertificateIndex::ZERO,
         )
         .expect("unable to set latest settled certificate");
 
     context
         .pending_store
-        .set_latest_proven_certificate_per_network(&network_id, &1, &proven_certificate.hash())
+        .set_latest_proven_certificate_per_network(
+            &network_id,
+            &Height::new(1),
+            &proven_certificate.hash(),
+        )
         .expect("unable to set latest proven certificate");
 
     context
         .pending_store
-        .insert_pending_certificate(network_id, 2, &pending_certificate)
+        .insert_pending_certificate(network_id, Height::new(2), &pending_certificate)
         .expect("unable to insert pending certificate");
 
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -102,8 +109,8 @@ async fn returns_the_proven_certificate_header() {
 
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, 0);
-    let proven_certificate = Certificate::new_for_test(network_id, 1);
+    let settled_certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let proven_certificate = Certificate::new_for_test(network_id, Height::new(1));
 
     context
         .state_store
@@ -120,13 +127,17 @@ async fn returns_the_proven_certificate_header() {
             &network_id,
             &settled_certificate.height,
             &settled_certificate.hash(),
-            &0,
-            &0,
+            &EpochNumber::ZERO,
+            &CertificateIndex::ZERO,
         )
         .expect("unable to set latest settled certificate");
     context
         .pending_store
-        .set_latest_proven_certificate_per_network(&network_id, &1, &proven_certificate.hash())
+        .set_latest_proven_certificate_per_network(
+            &network_id,
+            &Height::new(1),
+            &proven_certificate.hash(),
+        )
         .expect("unable to set latest proven certificate");
 
     drop(context);
@@ -137,7 +148,7 @@ async fn returns_the_proven_certificate_header() {
 
     let context = TestContext::new_with_config(config).await;
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -182,7 +193,7 @@ async fn returns_the_settled_certificate_header() {
 
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, 0);
+    let settled_certificate = Certificate::new_for_test(network_id, Height::ZERO);
 
     context
         .state_store
@@ -195,8 +206,8 @@ async fn returns_the_settled_certificate_header() {
             &network_id,
             &settled_certificate.height,
             &settled_certificate.hash(),
-            &0,
-            &0,
+            &EpochNumber::ZERO,
+            &CertificateIndex::ZERO,
         )
         .expect("unable to set latest settled certificate");
 
@@ -207,7 +218,7 @@ async fn returns_the_settled_certificate_header() {
     let context = TestContext::new_with_config(config).await;
 
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -255,7 +266,7 @@ async fn returns_no_certificate_header() {
     let network_id = 1;
 
     let payload: Option<CertificateHeader> = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -301,8 +312,8 @@ async fn returns_the_highest_height() {
 
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, 10);
-    let pending_certificate = Certificate::new_for_test(network_id, 3);
+    let settled_certificate = Certificate::new_for_test(network_id, Height::new(10));
+    let pending_certificate = Certificate::new_for_test(network_id, Height::new(3));
 
     context
         .state_store
@@ -317,16 +328,16 @@ async fn returns_the_highest_height() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &10,
+            &Height::new(10),
             &settled_certificate.hash(),
-            &0,
-            &0,
+            &EpochNumber::ZERO,
+            &CertificateIndex::ZERO,
         )
         .expect("unable to set latest settled certificate");
 
     context
         .pending_store
-        .insert_pending_certificate(network_id, 3, &pending_certificate)
+        .insert_pending_certificate(network_id, Height::new(3), &pending_certificate)
         .expect("unable to insert pending certificate");
 
     drop(context);
@@ -336,7 +347,7 @@ async fn returns_the_highest_height() {
     let context = TestContext::new_with_config(config).await;
 
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -346,7 +357,7 @@ async fn returns_the_highest_height() {
 
     assert_eq!(payload.certificate_id, settled_certificate.hash());
     assert_eq!(payload.status, CertificateStatus::Settled);
-    assert_eq!(payload.height, 10);
+    assert_eq!(payload.height, Height::new(10));
 
     drop(context);
 
@@ -381,14 +392,14 @@ async fn returns_the_settled_one_at_same_height() {
 
     let network_id = 1.into();
 
-    let settled_certificate = Certificate::new_for_test(network_id, 10);
+    let settled_certificate = Certificate::new_for_test(network_id, Height::new(10));
 
-    let mut pending_certificate = Certificate::new_for_test(network_id, 5);
-    pending_certificate.height = 10;
+    let mut pending_certificate = Certificate::new_for_test(network_id, Height::new(5));
+    pending_certificate.height = Height::new(10);
     let pending_certificate = pending_certificate.with_new_local_exit_root([2; 32].into());
 
-    let mut proven_certificate = Certificate::new_for_test(network_id, 3);
-    proven_certificate.height = 10;
+    let mut proven_certificate = Certificate::new_for_test(network_id, Height::new(3));
+    proven_certificate.height = Height::new(10);
     let proven_certificate = proven_certificate.with_new_local_exit_root([1; 32].into());
 
     context
@@ -408,21 +419,25 @@ async fn returns_the_settled_one_at_same_height() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &10,
+            &Height::new(10),
             &settled_certificate.hash(),
-            &0,
-            &0,
+            &EpochNumber::ZERO,
+            &CertificateIndex::ZERO,
         )
         .expect("unable to set latest settled certificate");
 
     context
         .pending_store
-        .insert_pending_certificate(network_id, 10, &pending_certificate)
+        .insert_pending_certificate(network_id, Height::new(10), &pending_certificate)
         .expect("unable to insert pending certificate");
 
     context
         .pending_store
-        .set_latest_proven_certificate_per_network(&network_id, &10, &proven_certificate.hash())
+        .set_latest_proven_certificate_per_network(
+            &network_id,
+            &Height::new(10),
+            &proven_certificate.hash(),
+        )
         .expect("unable to set latest proven certificate");
 
     drop(context);
@@ -432,7 +447,7 @@ async fn returns_the_settled_one_at_same_height() {
     let context = TestContext::new_with_config(config).await;
 
     let payload: CertificateHeader = context
-        .client
+        .api_client
         .request(
             "interop_getLatestKnownCertificateHeader",
             rpc_params![network_id],
@@ -442,7 +457,7 @@ async fn returns_the_settled_one_at_same_height() {
 
     assert_eq!(payload.certificate_id, settled_certificate.hash());
     assert_eq!(payload.status, CertificateStatus::Settled);
-    assert_eq!(payload.height, 10);
+    assert_eq!(payload.height, Height::new(10));
 
     drop(context);
 

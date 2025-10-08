@@ -1,0 +1,731 @@
+---
+source: crates/agglayer-storage/src/types/certificate/tests/structure.rs
+expression: "&registry"
+---
+{
+  "AggchainDataError": {
+    "ENUM": {
+      "0": {
+        "InvalidVariant": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "1": {
+        "InvalidMultisig": {
+          "NEWTYPE": {
+            "TYPENAME": "MultisigError"
+          }
+        }
+      },
+      "2": {
+        "MissingSignature": "UNIT"
+      }
+    }
+  },
+  "CertificateStatus": {
+    "ENUM": {
+      "0": {
+        "Pending": "UNIT"
+      },
+      "1": {
+        "Proven": "UNIT"
+      },
+      "2": {
+        "Candidate": "UNIT"
+      },
+      "3": {
+        "InError": {
+          "STRUCT": [
+            {
+              "error": {
+                "TYPENAME": "CertificateStatusError"
+              }
+            }
+          ]
+        }
+      },
+      "4": {
+        "Settled": "UNIT"
+      }
+    }
+  },
+  "CertificateStatusError": {
+    "ENUM": {
+      "0": {
+        "ProofGenerationError": {
+          "STRUCT": [
+            {
+              "generation_type": {
+                "TYPENAME": "GenerationType"
+              }
+            },
+            {
+              "source": {
+                "TYPENAME": "ProofError"
+              }
+            }
+          ]
+        }
+      },
+      "1": {
+        "ProofVerificationFailed": {
+          "NEWTYPE": {
+            "TYPENAME": "ProofVerificationError"
+          }
+        }
+      },
+      "2": {
+        "TypeConversionError": {
+          "NEWTYPE": {
+            "TYPENAME": "agglayer_types::Error"
+          }
+        }
+      },
+      "3": {
+        "TrustedSequencerNotFound": {
+          "NEWTYPE": {
+            "TYPENAME": "NetworkId"
+          }
+        }
+      },
+      "4": {
+        "InternalError": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "5": {
+        "SettlementError": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "6": {
+        "PreCertificationError": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "7": {
+        "CertificationError": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "8": {
+        "L1InfoRootNotFound": {
+          "NEWTYPE": "U32"
+        }
+      },
+      "9": {
+        "LastPessimisticRootNotFound": {
+          "NEWTYPE": {
+            "TYPENAME": "NetworkId"
+          }
+        }
+      }
+    }
+  },
+  "GenerationType": {
+    "ENUM": {
+      "0": {
+        "Native": "UNIT"
+      },
+      "1": {
+        "Prover": "UNIT"
+      }
+    }
+  },
+  "GlobalIndex": {
+    "STRUCT": [
+      {
+        "mainnet_flag": "BOOL"
+      },
+      {
+        "rollup_index": "U32"
+      },
+      {
+        "leaf_index": "U32"
+      }
+    ]
+  },
+  "LocalExitTreeError": {
+    "ENUM": {
+      "0": {
+        "LeafIndexOverflow": "UNIT"
+      },
+      "1": {
+        "IndexOutOfBounds": "UNIT"
+      },
+      "2": {
+        "FrontierIndexOutOfBounds": "UNIT"
+      }
+    }
+  },
+  "MultisigError": {
+    "ENUM": {
+      "0": {
+        "TooManySigners": {
+          "STRUCT": [
+            {
+              "num": "U64"
+            },
+            {
+              "max": "U64"
+            }
+          ]
+        }
+      },
+      "1": {
+        "UnderThreshold": {
+          "STRUCT": [
+            {
+              "got": "U64"
+            },
+            {
+              "expected": "U64"
+            }
+          ]
+        }
+      },
+      "2": {
+        "InvalidSignature": {
+          "STRUCT": [
+            {
+              "idx": "U64"
+            }
+          ]
+        }
+      },
+      "3": {
+        "InvalidSigner": {
+          "STRUCT": [
+            {
+              "idx": "U64"
+            },
+            {
+              "expected_signer": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "recovered_signer": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "commitment": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "NetworkId": {
+    "NEWTYPESTRUCT": "U32"
+  },
+  "ProofError": {
+    "ENUM": {
+      "0": {
+        "InvalidPreviousLocalExitRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "1": {
+        "InvalidPreviousBalanceRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "2": {
+        "InvalidPreviousNullifierRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "3": {
+        "InvalidNewLocalExitRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "4": {
+        "InvalidNewBalanceRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "5": {
+        "InvalidNewNullifierRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "6": {
+        "InvalidImportedBridgeExit": {
+          "STRUCT": [
+            {
+              "source": {
+                "TYPENAME": "unified_bridge::Error"
+              }
+            },
+            {
+              "global_index": {
+                "TYPENAME": "GlobalIndex"
+              }
+            }
+          ]
+        }
+      },
+      "7": {
+        "InvalidImportedExitsRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "8": {
+        "MismatchImportedExitsRoot": "UNIT"
+      },
+      "9": {
+        "InvalidNullifierPath": "UNIT"
+      },
+      "10": {
+        "InvalidBalancePath": "UNIT"
+      },
+      "11": {
+        "BalanceOverflowInBridgeExit": "UNIT"
+      },
+      "12": {
+        "BalanceUnderflowInBridgeExit": "UNIT"
+      },
+      "13": {
+        "CannotExitToSameNetwork": "UNIT"
+      },
+      "14": {
+        "InvalidMessageOriginNetwork": "UNIT"
+      },
+      "15": {
+        "InvalidL1TokenInfo": {
+          "NEWTYPE": {
+            "TYPENAME": "TokenInfo"
+          }
+        }
+      },
+      "16": {
+        "MissingTokenBalanceProof": {
+          "NEWTYPE": {
+            "TYPENAME": "TokenInfo"
+          }
+        }
+      },
+      "17": {
+        "DuplicateTokenBalanceProof": {
+          "NEWTYPE": {
+            "TYPENAME": "TokenInfo"
+          }
+        }
+      },
+      "18": {
+        "InvalidSignature": "UNIT"
+      },
+      "19": {
+        "InvalidSigner": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "recovered": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            }
+          ]
+        }
+      },
+      "20": {
+        "InvalidLocalExitTreeOperation": {
+          "NEWTYPE": {
+            "TYPENAME": "LocalExitTreeError"
+          }
+        }
+      },
+      "21": {
+        "Unknown": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "22": {
+        "InvalidPreviousPessimisticRoot": {
+          "STRUCT": [
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed_v2": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "computed_v3": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "23": {
+        "InconsistentSignedPayload": "UNIT"
+      },
+      "24": {
+        "HeightOverflow": "UNIT"
+      },
+      "25": {
+        "InvalidMultisig": {
+          "NEWTYPE": {
+            "TYPENAME": "MultisigError"
+          }
+        }
+      }
+    }
+  },
+  "ProofVerificationError": {
+    "ENUM": {
+      "0": {
+        "VersionMismatch": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "1": {
+        "Core": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "2": {
+        "Recursion": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "3": {
+        "Plonk": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "4": {
+        "Groth16": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "5": {
+        "InvalidPublicValues": "UNIT"
+      },
+      "6": {
+        "Other": {
+          "NEWTYPE": "STR"
+        }
+      }
+    }
+  },
+  "SmtError": {
+    "ENUM": {
+      "0": {
+        "KeyAlreadyPresent": "UNIT"
+      },
+      "1": {
+        "KeyNotPresent": "UNIT"
+      },
+      "2": {
+        "KeyPresent": "UNIT"
+      },
+      "3": {
+        "DepthOutOfBounds": "UNIT"
+      }
+    }
+  },
+  "TokenInfo": {
+    "STRUCT": [
+      {
+        "origin_network": {
+          "TYPENAME": "NetworkId"
+        }
+      },
+      {
+        "origin_token_address": {
+          "TYPENAME": "agglayer_primitives::Address"
+        }
+      }
+    ]
+  },
+  "agglayer_primitives::Address": {
+    "NEWTYPESTRUCT": "BYTES"
+  },
+  "agglayer_primitives::Digest": {
+    "NEWTYPESTRUCT": {
+      "TUPLEARRAY": {
+        "CONTENT": "U8",
+        "SIZE": 32
+      }
+    }
+  },
+  "agglayer_types::Error": {
+    "ENUM": {
+      "0": {
+        "MultipleL1InfoRoot": "UNIT"
+      },
+      "1": {
+        "MismatchNewLocalExitRoot": {
+          "STRUCT": [
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "2": {
+        "BalanceOverflow": {
+          "NEWTYPE": {
+            "TYPENAME": "TokenInfo"
+          }
+        }
+      },
+      "3": {
+        "BalanceUnderflow": {
+          "NEWTYPE": {
+            "TYPENAME": "TokenInfo"
+          }
+        }
+      },
+      "4": {
+        "BalanceProofGenerationFailed": {
+          "STRUCT": [
+            {
+              "source": {
+                "TYPENAME": "SmtError"
+              }
+            },
+            {
+              "token": {
+                "TYPENAME": "TokenInfo"
+              }
+            }
+          ]
+        }
+      },
+      "5": {
+        "NullifierPathGenerationFailed": {
+          "STRUCT": [
+            {
+              "source": {
+                "TYPENAME": "SmtError"
+              }
+            },
+            {
+              "global_index": {
+                "TYPENAME": "GlobalIndex"
+              }
+            }
+          ]
+        }
+      },
+      "6": {
+        "InvalidLocalExitTreeOperation": {
+          "NEWTYPE": {
+            "TYPENAME": "LocalExitTreeError"
+          }
+        }
+      },
+      "7": {
+        "L1InfoRootIncorrect": {
+          "STRUCT": [
+            {
+              "leaf_count": "U32"
+            },
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "retrieved": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "8": {
+        "InconsistentL1InfoTreeInformation": {
+          "STRUCT": [
+            {
+              "l1_leaf": {
+                "OPTION": "U32"
+              }
+            },
+            {
+              "l1_info_root": {
+                "OPTION": {
+                  "TYPENAME": "agglayer_primitives::Digest"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "9": {
+        "InvalidSmtOperation": {
+          "NEWTYPE": {
+            "TYPENAME": "SmtError"
+          }
+        }
+      },
+      "10": {
+        "InconsistentGlobalExitRoot": "UNIT"
+      },
+      "11": {
+        "MissingAggchainVkey": "UNIT"
+      },
+      "12": {
+        "InvalidCustomChainDataLength": {
+          "STRUCT": [
+            {
+              "expected_at_least": "U64"
+            },
+            {
+              "actual": "U64"
+            }
+          ]
+        }
+      },
+      "13": {
+        "MismatchPrevLocalExitRoot": {
+          "STRUCT": [
+            {
+              "computed": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            },
+            {
+              "declared": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
+      },
+      "14": {
+        "InvalidChainData": {
+          "NEWTYPE": {
+            "TYPENAME": "AggchainDataError"
+          }
+        }
+      }
+    }
+  },
+  "unified_bridge::Error": {
+    "ENUM": {
+      "0": {
+        "MismatchGlobalIndexInclusionProof": "UNIT"
+      },
+      "1": {
+        "MismatchL1Root": "UNIT"
+      },
+      "2": {
+        "MismatchMER": "UNIT"
+      },
+      "3": {
+        "MismatchRER": "UNIT"
+      },
+      "4": {
+        "InvalidMerklePathLeafToLER": "UNIT"
+      },
+      "5": {
+        "InvalidMerklePathLERToRER": "UNIT"
+      },
+      "6": {
+        "InvalidMerklePathGERToL1Root": "UNIT"
+      },
+      "7": {
+        "InvalidExitNetwork": "UNIT"
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 use agglayer_config::log::LogFormat;
 use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter};
 
-pub(crate) fn tracing(config: &agglayer_config::Log) {
+pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<()> {
     // TODO: Support multiple outputs.
     let writer = config.outputs.first().cloned().unwrap_or_default();
 
@@ -25,7 +25,9 @@ pub(crate) fn tracing(config: &agglayer_config::Log) {
 
     // We are using try_init because integration test may try to initialize this
     // multiple times.
-    _ = tracing_subscriber::Registry::default()
+    tracing_subscriber::Registry::default()
         .with(layer)
-        .try_init();
+        .try_init()?;
+
+    Ok(())
 }

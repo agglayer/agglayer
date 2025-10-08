@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package agglayer.node.types.v1;
+
+import "agglayer/interop/types/v1/bytes.proto";
+
+// Certificate identifier.
+message CertificateId {
+  // bytes representation of the certificate id.
+  agglayer.interop.types.v1.FixedBytes32 value = 1;
+}

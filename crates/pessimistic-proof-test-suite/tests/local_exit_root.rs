@@ -1,13 +1,12 @@
-use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
-use pessimistic_proof::local_exit_tree::LocalExitTree;
-use pessimistic_proof::{bridge_exit::BridgeExit, utils::Hashable as _};
+use agglayer_types::primitives::Hashable;
+use pessimistic_proof::{local_exit_tree::LocalExitTree, unified_bridge::BridgeExit};
 use pessimistic_proof_test_suite::event_data::{load_json_data_file, BridgeEvent, EventData};
 
 const JSON_FILE_NAME: &str = "bridge_events_10k.json";
 
 #[test]
 fn test_local_exit_root() {
-    let mut local_exit_tree: LocalExitTree<Keccak256Hasher> = LocalExitTree::new();
+    let mut local_exit_tree: LocalExitTree = LocalExitTree::new();
 
     let bridge_events: Vec<BridgeEvent> = read_sorted_bridge_events();
 

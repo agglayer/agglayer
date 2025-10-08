@@ -1,30 +1,51 @@
-use std::{net::Ipv4Addr, str::FromStr, time::Duration};
+use std::{net::Ipv4Addr, time::Duration};
 
 use jsonrpsee::core::TEN_MB_SIZE_BYTES;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-/// The default port for the local RPC server.
-const DEFAULT_PORT: u16 = 9090;
-/// The default port for the local admin RPC server.
-const DEFAULT_ADMIN_PORT: u16 = 9091;
+use crate::{Port, PortDefaults};
+
+pub enum GrpcService {}
+impl PortDefaults for GrpcService {
+    const DEFAULT: u16 = 9089;
+    const ENV_VAR: Option<&str> = Some("AGGLAYER_GRPC_PORT");
+}
+
+pub enum ReadRpcService {}
+impl PortDefaults for ReadRpcService {
+    const DEFAULT: u16 = 9090;
+    const ENV_VAR: Option<&str> = Some("AGGLAYER_READRPC_PORT");
+}
+
+pub enum AdminService {}
+impl PortDefaults for AdminService {
+    const DEFAULT: u16 = 9091;
+    const ENV_VAR: Option<&str> = Some("AGGLAYER_ADMIN_PORT");
+}
 
 /// The local RPC server configuration.
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct RpcConfig {
-    /// If the `PORT` environment variable is set, it will take precedence over
-    /// the configuration file.
-    #[serde(default = "default_port", deserialize_with = "deserialize_port")]
-    pub port: u16,
+    /// The default port for the local gRPC server.
+    /// Overridden by `AGGLAYER_GRPC_PORT` environment variable, defaults to
+    /// 9089.
+    #[serde(default)]
+    pub grpc_port: Port<GrpcService>,
 
-    /// The port for `admin` RPC
-    #[serde(
-        default = "default_admin_port",
-        deserialize_with = "deserialize_admin_port"
-    )]
-    pub admin_port: u16,
+    /// The default port for the local ReadRPC server.
+    /// Overridden by `AGGLAYER_READRPC_PORT` environment variable, defaults to
+    /// 9090.
+    #[serde(default)]
+    pub readrpc_port: Port<ReadRpcService>,
+
+    /// The default port for the local AdminRPC server.
+    /// Overridden by `AGGLAYER_ADMIN_PORT` environment variable, defaults to
+    /// 9091.
+    #[serde(default)]
+    pub admin_port: Port<AdminService>,
 
     #[serde(default = "default_host")]
     pub host: Ipv4Addr,
@@ -35,26 +56,31 @@ pub struct RpcConfig {
         default = "default_body_size"
     )]
     pub max_request_body_size: u32,
+
     /// The maximum size of the response body in bytes.
     #[serde(
         skip_serializing_if = "same_as_default_body_size",
         default = "default_body_size"
     )]
     pub max_response_body_size: u32,
+
     /// The maximum number of connections.
     #[serde(
         skip_serializing_if = "same_as_default_max_connections",
         default = "default_max_connections"
     )]
     pub max_connections: u32,
+
     /// The maximum number of requests in a batch request. If `None`, the
     /// batch request limit is unlimited.
     #[serde(skip_serializing_if = "crate::is_default")]
     pub batch_request_limit: Option<u32>,
+
     /// The interval at which to send ping messages
     #[serde(skip)]
     #[serde_as(as = "Option<crate::with::HumanDuration>")]
     pub ping_interval: Option<Duration>,
+
     /// Timeout for completion of an RPC request to the AggLayer node.
     #[serde_as(as = "crate::with::HumanDuration")]
     #[serde(default = "default_request_timeout")]
@@ -64,8 +90,9 @@ pub struct RpcConfig {
 impl Default for RpcConfig {
     fn default() -> Self {
         Self {
-            port: default_port(),
-            admin_port: default_admin_port(),
+            grpc_port: Default::default(),
+            readrpc_port: Default::default(),
+            admin_port: Default::default(),
             host: default_host(),
             max_request_body_size: default_body_size(),
             max_response_body_size: default_body_size(),
@@ -87,19 +114,6 @@ fn default_body_size() -> u32 {
     TEN_MB_SIZE_BYTES
 }
 
-/// The default port for the local RPC server.
-/// If the `AGGLAYER_PORT` environment variable is set, it will take precedence
-/// over
-fn default_port() -> u16 {
-    from_env_or_default("AGGLAYER_PORT", DEFAULT_PORT)
-}
-
-/// The default port for the local admin RPC server.
-/// If the `AGGLAYER_ADMIN_PORT` environment variable is set, it will take
-/// precedence over
-fn default_admin_port() -> u16 {
-    from_env_or_default("AGGLAYER_ADMIN_PORT", DEFAULT_ADMIN_PORT)
-}
 /// The default host for the local RPC server.
 const fn default_host() -> Ipv4Addr {
     Ipv4Addr::new(0, 0, 0, 0)
@@ -108,32 +122,6 @@ const fn default_host() -> Ipv4Addr {
 /// Default timeout for completion of an RPC request to the AggLayer node.
 const fn default_request_timeout() -> Duration {
     Duration::from_secs(180)
-}
-
-fn deserialize_port<'de, D>(deserializer: D) -> Result<u16, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let port = u16::deserialize(deserializer)?;
-
-    Ok(from_env_or_default("AGGLAYER_PORT", port))
-}
-
-fn deserialize_admin_port<'de, D>(deserializer: D) -> Result<u16, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let port = u16::deserialize(deserializer)?;
-
-    Ok(from_env_or_default("AGGLAYER_ADMIN_PORT", port))
-}
-
-/// Get an environment variable or a default value if it is not set.
-fn from_env_or_default<T: FromStr>(key: &str, default: T) -> T {
-    std::env::var(key)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(default)
 }
 
 fn same_as_default_body_size(size: &u32) -> bool {

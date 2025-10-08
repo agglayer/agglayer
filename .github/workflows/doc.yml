@@ -1,42 +1,51 @@
-name: Build and host documentation on GH pages
+name: Build and host documentation
 
 on:
   merge_group:
   pull_request:
     branches:
       - main
+    types: [opened, synchronize, reopened, closed]
   push:
     branches:
       - main
+
+# Default permissions (individual jobs can override as needed)
+permissions:
+  contents: read
 
 jobs:
   build:
     name: Build documentation
     runs-on: ubuntu-latest-16-cores
+    if: github.event.action != 'closed'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
 
       - uses: taiki-e/install-action@protoc
 
       - name: Build Documentation
-        run: cargo +nightly doc --no-deps --all --all-features
+        run: cargo doc --no-deps --all --all-features
 
       - name: Add index file
         run: |
           mkdir host-docs
           echo "<meta http-equiv=\"refresh\" content=\"0; url=agglayer\">" > target/doc/index.html
           cp -r target/doc/* ./host-docs
-      - name: Upload documentation
-        uses: actions/upload-pages-artifact@v3.0.0
-        with:
-          path: "host-docs/"
 
-  deploy:
-    name: Deploy documentation
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-docs
+          path: "host-docs/"
+          retention-days: 7
+
+  deploy-gh-pages:
+    name: Deploy to GitHub Pages
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -48,6 +57,111 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      - name: Download documentation artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: rust-docs
+          path: host-docs
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v4.0.0
+        with:
+          path: "host-docs/"
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Workers
+    needs: build
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download documentation artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: rust-docs
+          path: docs
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Update wrangler.toml for PR
+        run: |
+          sed -e "s/{{REPOSITORY_NAME}}/${{ github.event.repository.name }}/g" -e "s/{{PR_NUMBER}}/${{ github.event.number }}/g" wrangler.toml.template > wrangler.toml
+
+      - name: Deploy to Cloudflare Workers
+        run: wrangler deploy --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_WORKER_ACCOUNT_ID }}
+
+      - name: Comment PR with deployment URL
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deploymentComment = `📖 Documentation deployed to: https://${{ github.event.repository.name }}-pr-${{ github.event.number }}-rust-docs.agglayer.dev`;
+
+            // Check if we already have a deployment comment
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const existingComment = comments.data.find(comment =>
+              comment.body.includes('📖 Documentation deployed to:')
+            );
+
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                comment_id: existingComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: deploymentComment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: deploymentComment
+              });
+            }
+
+  cleanup-cloudflare:
+    name: Cleanup Cloudflare deployment
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Delete worker
+        run: |
+          wrangler delete --name ${{ github.event.repository.name }}-rust-docs-pr-${{ github.event.number }}-staging --force || echo "Worker may not exist"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_WORKER_ACCOUNT_ID }}

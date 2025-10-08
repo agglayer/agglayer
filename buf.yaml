@@ -9,6 +9,13 @@ lint:
     - STANDARD
     - COMMENTS
 
+  ignore_only:
+    PACKAGE_VERSION_SUFFIX:
+      - proto/agglayer/storage
+
 breaking:
   use:
     - FILE
+
+deps:
+  - buf.build/agglayer/interop:v0.10.0

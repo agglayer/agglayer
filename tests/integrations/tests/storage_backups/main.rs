@@ -5,19 +5,22 @@ use agglayer_storage::{storage::backup::BackupEngine, tests::TempDBDir};
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
 use integrations::{
-    agglayer_setup::{get_signer, setup_network, start_agglayer},
+    agglayer_setup::{setup_network, start_agglayer},
     wait_for_settlement_or_error,
 };
-use jsonrpsee::core::client::ClientT as _;
-use jsonrpsee::rpc_params;
+use jsonrpsee::{core::client::ClientT as _, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 use tokio_util::sync::CancellationToken;
 
+#[path = "../common/mod.rs"]
+mod common;
+
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-async fn recover_with_backup() {
+#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+async fn recover_with_backup(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -32,9 +35,6 @@ async fn recover_with_backup() {
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
@@ -48,6 +48,10 @@ async fn recover_with_backup() {
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
 
     assert_eq!(result.status, CertificateStatus::Settled);
+
+    // Awaiting for the backup to be created in the background
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
     handle.cancel();
     _ = agglayer_shutdowned.await;
 
@@ -81,7 +85,10 @@ async fn recover_with_backup() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(360))]
-async fn purge_after_n_backup() {
+#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+async fn purge_after_n_backup(#[case] state: Forest) {
+    use agglayer_types::Height;
+
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -100,15 +107,12 @@ async fn purge_after_n_backup() {
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
     let mut certificate2 = state.clone().apply_events(&[], &[]);
-    certificate2.height = 1;
+    certificate2.height = Height::new(1);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -127,6 +131,9 @@ async fn purge_after_n_backup() {
     let result = wait_for_settlement_or_error!(client, certificate_id2).await;
 
     assert_eq!(result.status, CertificateStatus::Settled);
+
+    // Awaiting for the backup to be created in the background
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -173,7 +180,10 @@ async fn purge_after_n_backup() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(360))]
-async fn report_contains_all_backups() {
+#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+async fn report_contains_all_backups(#[case] state: Forest) {
+    use agglayer_types::Height;
+
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -188,15 +198,12 @@ async fn report_contains_all_backups() {
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
     let mut certificate2 = state.clone().apply_events(&[], &[]);
-    certificate2.height = 1;
+    certificate2.height = Height::new(1);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -215,6 +222,9 @@ async fn report_contains_all_backups() {
     let result = wait_for_settlement_or_error!(client, certificate_id2).await;
 
     assert_eq!(result.status, CertificateStatus::Settled);
+
+    // Awaiting for the backup to be created in the background
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -264,7 +274,10 @@ async fn report_contains_all_backups() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(360))]
-async fn restore_at_particular_level() {
+#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+async fn restore_at_particular_level(#[case] state: Forest) {
+    use agglayer_types::Height;
+
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
 
@@ -279,15 +292,12 @@ async fn restore_at_particular_level() {
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
-    let signer = get_signer(0);
-
-    let state = Forest::default().with_signer(signer);
 
     let withdrawals = vec![];
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
     let mut certificate2 = state.clone().apply_events(&[], &[]);
-    certificate2.height = 1;
+    certificate2.height = Height::new(1);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -306,6 +316,9 @@ async fn restore_at_particular_level() {
     let result = wait_for_settlement_or_error!(client, certificate_id2).await;
 
     assert_eq!(result.status, CertificateStatus::Settled);
+
+    // Awaiting for the backup to be created in the background
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -341,7 +354,7 @@ async fn restore_at_particular_level() {
         .request("interop_getCertificateHeader", rpc_params![certificate_id2])
         .await;
 
-    let expected_message = format!("Resource not found: Certificate({:#})", certificate_id2);
+    let expected_message = format!("Resource not found: Certificate({certificate_id2:#})");
 
     assert!(
         matches!(error.unwrap_err(), jsonrpsee::core::ClientError::Call(obj) if obj.message() == expected_message)

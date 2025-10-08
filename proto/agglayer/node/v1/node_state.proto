@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package agglayer.node.v1;
+
+import "agglayer/node/types/v1/certificate.proto";
+import "agglayer/node/types/v1/certificate_header.proto";
+import "agglayer/node/types/v1/certificate_id.proto";
+import "agglayer/node/types/v1/network_info.proto";
+
+// Service for querying node state.
+service NodeStateService {
+  // Method used to get a CertificateHeader for a particular CertificateId.
+  rpc GetCertificateHeader(GetCertificateHeaderRequest) returns (GetCertificateHeaderResponse);
+
+  // Method used to get the latest known certificate header for a network.
+  rpc GetLatestCertificateHeader(GetLatestCertificateHeaderRequest) returns (GetLatestCertificateHeaderResponse);
+
+  // Method used to get current network info as seen by this node.
+  rpc GetNetworkInfo(GetNetworkInfoRequest) returns (GetNetworkInfoResponse);
+}
+
+// Error kind for GetCertificateHeader RPC.
+enum GetCertificateHeaderErrorKind {
+  // Unspecified error.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED = 0;
+
+  // Missing field.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_FIELD = 1;
+
+  // Invalid data.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_INVALID_DATA = 2;
+
+  // Certificate not found.
+  GET_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND = 3;
+}
+
+// Error kind for GetLatestCertificateHeader RPC.
+enum GetLatestCertificateHeaderErrorKind {
+  // Unspecified error.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED = 0;
+
+  // Missing field.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MISSING_FIELD = 1;
+
+  // Invalid data.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INVALID_DATA = 2;
+
+  // Certificate not found.
+  GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND = 3;
+}
+
+// Error kind for GetNetworkInfo RPC.
+enum GetNetworkInfoErrorKind {
+  // Unspecified error.
+  GET_NETWORK_INFO_ERROR_KIND_UNSPECIFIED = 0;
+
+  // Invalid network ID/network not found.
+  GET_NETWORK_INFO_ERROR_KIND_INVALID_NETWORK_ID = 1;
+
+  // Invalid network state.
+  GET_NETWORK_INFO_ERROR_KIND_NETWORK_INFO_ERROR = 2;
+
+  // Could not determine network type
+  GET_NETWORK_INFO_ERROR_KIND_UNKNOWN_NETWORK_TYPE = 3;
+
+  // Internal service error.
+  GET_NETWORK_INFO_ERROR_KIND_INTERNAL_ERROR = 4;
+}
+
+// Request to get a CertificateHeader for a particular CertificateId.
+message GetCertificateHeaderRequest {
+  // The certificate identifier.
+  types.v1.CertificateId certificate_id = 1;
+}
+
+// Response to the CertificateHeader request.
+message GetCertificateHeaderResponse {
+  // The certificate header.
+  types.v1.CertificateHeader certificate_header = 1;
+}
+
+// Request to get the latest known/pending/settled certificate header for a network.
+message GetLatestCertificateHeaderRequest {
+  // Which type of latest certificate we want to get.
+  LatestCertificateRequestType type = 1;
+
+  // The network identifier.
+  uint32 network_id = 2;
+}
+
+// The type of latest certificate we want to get.
+enum LatestCertificateRequestType {
+  // Default value
+  LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED = 0;
+
+  // Pending certificate.
+  LATEST_CERTIFICATE_REQUEST_TYPE_PENDING = 1;
+
+  // Settled certificate.
+  LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED = 2;
+}
+
+// Response to the latest known/pending/settled certificate header request.
+message GetLatestCertificateHeaderResponse {
+  // The latest certificate header.
+  types.v1.CertificateHeader certificate_header = 1;
+}
+
+// Request to get the current info of the network, as seen by this node.
+message GetNetworkInfoRequest {
+  // The network identifier.
+  uint32 network_id = 1;
+}
+
+// GetNetworkInfoResponse contains the current information for a network.
+message GetNetworkInfoResponse {
+  // The current information of the network.
+  types.v1.NetworkInfo network_info = 1;
+}

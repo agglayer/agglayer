@@ -4,16 +4,14 @@ use std::{
     sync::Arc,
 };
 
+use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId,
+    primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
+    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use pessimistic_proof::{
-    keccak::digest::Digest,
-    local_balance_tree::LOCAL_BALANCE_TREE_DEPTH,
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    nullifier_tree::NULLIFIER_TREE_DEPTH,
-    utils::smt::{Node, Smt},
+    local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
+    unified_bridge::LocalExitTree,
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
 use tracing::{info, warn};
@@ -50,6 +48,8 @@ pub struct StateStore {
     backup_client: BackupClient,
 }
 
+mod network_info;
+
 impl StateStore {
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
         Self { db, backup_client }
@@ -69,7 +69,7 @@ impl StateWriter for StateStore {
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
-        tx_hash: Digest,
+        tx_hash: SettlementTxHash,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
@@ -92,6 +92,52 @@ impl StateWriter for StateStore {
 
             certificate_header.settlement_tx_hash = Some(tx_hash);
             certificate_header.status = CertificateStatus::Candidate;
+
+            self.db
+                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+
+            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+                warn!(
+                    hash = certificate_id.to_string(),
+                    "Unable to trigger backup for the state database: {}", error
+                );
+            }
+        } else {
+            info!(
+                hash = %certificate_id,
+                "Certificate header not found for certificate_id: {}",
+                certificate_id
+            )
+        }
+
+        Ok(())
+    }
+
+    fn remove_settlement_tx_hash(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<(), Error> {
+        // TODO: make lockguard for certificate_id
+        let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
+
+        if let Some(mut certificate_header) = certificate_header {
+            if certificate_header.settlement_tx_hash.is_none() {
+                return Err(Error::UnprocessedAction(
+                    "Tried to remove settlement tx hash for a certificate that does not have a \
+                     settlement tx hash"
+                        .to_string(),
+                ));
+            }
+
+            if certificate_header.status == CertificateStatus::Settled {
+                return Err(Error::UnprocessedAction(
+                    "Tried to remove settlement tx hash for a certificate that is already settled"
+                        .to_string(),
+                ));
+            }
+
+            certificate_header.settlement_tx_hash = None;
+            certificate_header.status = CertificateStatus::Proven;
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
@@ -169,7 +215,7 @@ impl StateWriter for StateStore {
             // TODO: Check certificate conflict during insert (if conflict it's too late)
             self.db.put::<CertificatePerNetworkColumn>(
                 &certificate_per_network::Key {
-                    network_id: *certificate.network_id,
+                    network_id: certificate.network_id.to_u32(),
                     height: certificate.height,
                 },
                 &certificate.hash(),
@@ -195,7 +241,7 @@ impl StateWriter for StateStore {
             if let CertificateStatus::Settled = status {
                 self.db.put::<CertificatePerNetworkColumn>(
                     &certificate_per_network::Key {
-                        network_id: *certificate_header.network_id,
+                        network_id: certificate_header.network_id.to_u32(),
                         height: certificate_header.height,
                     },
                     &certificate_header.certificate_id,
@@ -318,7 +364,7 @@ impl StateStore {
     fn write_smt<C, const DEPTH: usize>(
         &self,
         network_id: u32,
-        smt: &Smt<Keccak256Hasher, DEPTH>,
+        smt: &Smt<DEPTH>,
         batch: &mut WriteBatch,
     ) -> Result<(), Error>
     where
@@ -359,10 +405,7 @@ impl StateStore {
         Ok(())
     }
 
-    fn read_local_exit_tree(
-        &self,
-        network_id: NetworkId,
-    ) -> Result<Option<LocalExitTree<Keccak256Hasher>>, Error> {
+    fn read_local_exit_tree(&self, network_id: NetworkId) -> Result<Option<LocalExitTree>, Error> {
         let leaf_count = if let Some(leaf_count_value) =
             self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
                 network_id: network_id.into(),
@@ -394,23 +437,20 @@ impl StateStore {
             frontier[i] = Digest(*l);
         }
 
-        Ok(Some(LocalExitTree::<Keccak256Hasher>::from_parts(
-            leaf_count, frontier,
-        )))
+        Ok(Some(LocalExitTree::from_parts(leaf_count, frontier)))
     }
 
     fn read_smt<C, const DEPTH: usize>(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<Smt<Keccak256Hasher, DEPTH>>, Error>
+    ) -> Result<Option<Smt<DEPTH>>, Error>
     where
         C: ColumnSchema<Key = SmtKey, Value = SmtValue>,
     {
-        let root_node: Node<Keccak256Hasher> = if let Some(root_node_value) =
-            self.db.get::<C>(&SmtKey {
-                network_id: network_id.into(),
-                key_type: SmtKeyType::Root,
-            })? {
+        let root_node: Node = if let Some(root_node_value) = self.db.get::<C>(&SmtKey {
+            network_id: network_id.into(),
+            key_type: SmtKeyType::Root,
+        })? {
             match root_node_value {
                 SmtValue::Node(left, right) => Node {
                     left: Digest(*left.as_bytes()),
@@ -426,7 +466,7 @@ impl StateStore {
         keys.push_back(SmtKeyType::Node(root_node.left));
         keys.push_back(SmtKeyType::Node(root_node.right));
 
-        let mut nodes: Vec<Node<Keccak256Hasher>> = Vec::new();
+        let mut nodes: Vec<Node> = Vec::new();
         nodes.push(root_node);
 
         let mut queued = BTreeSet::new();
@@ -456,7 +496,7 @@ impl StateStore {
             }
         }
 
-        Ok(Some(Smt::<Keccak256Hasher, DEPTH>::new_with_nodes(
+        Ok(Some(Smt::<DEPTH>::new_with_nodes(
             root_node.hash(),
             nodes.as_slice(),
         )))
@@ -495,7 +535,7 @@ impl StateReader for StateStore {
     ) -> Result<Option<CertificateHeader>, Error> {
         self.db
             .get::<CertificatePerNetworkColumn>(&certificate_per_network::Key {
-                network_id: *network_id,
+                network_id: network_id.to_u32(),
                 height,
             })?
             .map_or(Ok(None), |certificate_id| {
@@ -559,7 +599,7 @@ impl StateReader for StateStore {
 }
 
 impl MetadataWriter for StateStore {
-    fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error> {
+    fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error> {
         if let Some(current_latest_settled_epoch) = self.get_latest_settled_epoch()? {
             if current_latest_settled_epoch >= value {
                 return Err(Error::UnprocessedAction(
@@ -576,7 +616,7 @@ impl MetadataWriter for StateStore {
 }
 
 impl MetadataReader for StateStore {
-    fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error> {
+    fn get_latest_settled_epoch(&self) -> Result<Option<EpochNumber>, Error> {
         self.db
             .get::<MetadataColumn>(&MetadataKey::LatestSettledEpoch)
             .map_err(Into::into)

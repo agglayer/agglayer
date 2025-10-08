@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package agglayer.node.v1;
+
+import "agglayer/node/types/v1/epoch_configuration.proto";
+
+// Service for querying the current epoch configuration.
+service ConfigurationService {
+  // Method used to get the current epoch configuration.
+  rpc GetEpochConfiguration(GetEpochConfigurationRequest) returns (GetEpochConfigurationResponse);
+}
+
+// The kind of error that occurred and that are reported by the configuration
+// service.
+enum GetEpochConfigurationErrorKind {
+  // Unspecified error.
+  GET_EPOCH_CONFIGURATION_ERROR_KIND_UNSPECIFIED = 0;
+
+  // The AggLayer isn't configured with a BlockClock configuration, thus no
+  // EpochConfiguration is available.
+  GET_EPOCH_CONFIGURATION_ERROR_KIND_UNEXPECTED_CLOCK_CONFIGURATION = 1;
+}
+
+// Request to get the current epoch configuration.
+message GetEpochConfigurationRequest {}
+
+// Response to the current epoch configuration request.
+message GetEpochConfigurationResponse {
+  // The epoch configuration.
+  types.v1.EpochConfiguration epoch_configuration = 1;
+}

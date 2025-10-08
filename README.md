@@ -51,7 +51,7 @@ Agglayer is the Rust-based service designed to:
 2. Verify their validity 
 3. Send them to the L1 for final settlement. 
 
-To find out more about Agglayer, please visit [the more detailed documentation.](https://docs.polygon.technology/agglayer/overview/)
+To find out more about Agglayer, please visit [the more detailed documentation.](https://docs.agglayer.dev/)
 
 > [!WARNING]
 >    - Some of the content in this section discusses technology in development and not ready for release. As such, all APIs and configuration are subject to change. The code is still being audited, so please contact the Polygon team if you would like to use it in production.
@@ -126,6 +126,53 @@ cargo test --package pessimistic-proof-test-suite
 
 You can find the test inputs here: [`./agglayer/crates/pessimistic-proof-test-suite`](./crates/pessimistic-proof-test-suite/data/)
 
+## Modifying and building the Pessimistic Proof
+
+By default, the committed pre-compiled ELF binary is used.
+Modifications in PP code will not be automatically reflected in the binary.
+We use docker-based deterministic build to compile the proof.
+Therefore, `docker` has to be present on the system for the build to work if PP rebuild is enabled.
+
+### Building PP one-off
+
+The following command rebuilds the PP and updates some snapshot tests that depend on it.
+It requires `cargo-make` to be installed:
+
+```sh
+cargo make pp-elf
+```
+
+### Turning on automatic PP rebuild
+
+This option makes the standard commands like `cargo build`, `cargo run` etc. rebuild the PP automatically any time it changes as if it were a normal part of the build.
+It is enabled by setting the `AGGLAYER_ELF_BUILD` environment variable to `update`.
+
+```sh
+export AGGLAYER_ELF_BUILD=update
+```
+
+Note: Rust suppresses the output of build scripts by default.
+As a result, the build may appear stuck on the `pessimistic-proof` crate while the PP is being rebuilt.
+
+In the `update` mode, the proof will be rebuilt and the cached ELF will be updated.
+There is also the `build` mode which leaves the cached ELF intact.
+It is mostly useful for debugging, the `update` is more suitable for regular development.
+
+To get automatic rebuilds by default, set the variable in the shell init script.
+
+### Proof versioning policy
+
+The proof binary to use is uniquely identified by a vkey selector on the L1.
+The selector is derived from the major version of the `pessimistic-proof-program` package.
+This version must be bumped between releases / deployments.
+
+There is a snapshot test that will fail once the proof vkey changes to prompt the developers to consider whether a version bump is needed.
+Once that is determined and the package version is updated (or not updated, as appropriate), the new vkey is accepted by running:
+
+```sh
+cargo make pp-accept-vkey-change
+```
+
 ## Running SP1 Proof Generation Locally (Not Recommended)
 
 The [Succinct Prover Network](#succinct-prover-network) is the best way to generate Pessimistic Proofs for Agglayer. 
@@ -135,6 +182,42 @@ For those with the hardware and know-how, however, you can run the Pessimistic P
 ```bash
 cargo run --package pessimistic-proof-test-suite --bin ppgen
 ```
+
+
+## Running Integration Tests
+
+### Prerequisites
+
+To run the integration tests, you'll need to build the contracts image first, and then run the tests with the integration profile:
+
+1. Clone the contracts repository:
+   ```bash
+   git clone https://github.com/agglayer/agglayer-contracts
+   ```
+
+2. Build the contracts Docker image:
+   ```bash
+   cd agglayer-contracts
+   npm install
+   npm run dockerv2:contracts:all
+   ```
+
+### Running the tests
+
+Once the prerequisites are ready, you can now return to the main agglayer directory and run the integration tests:
+```bash
+cargo nextest run --workspace -P integrations --no-fail-fast --retries 2
+```
+
+### Potential issues
+
+Note that, due to the use of docker, sometimes there are leftover containers that cause issues with the integration tests.
+In this case, just delete any container you might have, and rerun the integration tests.
+You may also need to rebuild the contracts Docker image, if there have been updates there.
+
+Also, there are quite a few intermittent failures in the tests, that can be helped thanks to the suggested `--retries 2`.
+
+Finally, `--no-fail-fast` is useful to start the integration tests and then come back after a coffee to see all the failing tests: a full run of integration test takes around ten minutes on a Macbook M4 Pro.
 
 ## Development
 

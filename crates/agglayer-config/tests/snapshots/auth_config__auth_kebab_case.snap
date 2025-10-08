@@ -1,6 +1,7 @@
 ---
 source: crates/agglayer-config/tests/auth_config.rs
 expression: config
+snapshot_kind: text
 ---
 prover-entrypoint = "http://127.0.0.1:8080"
 
@@ -17,7 +18,8 @@ outputs = []
 format = "pretty"
 
 [rpc]
-port = 9090
+grpc-port = 9089
+readrpc-port = 9090
 admin-port = 9091
 host = "0.0.0.0"
 request-timeout = "3m"
@@ -37,10 +39,9 @@ settlement-timeout = "20m"
 chain-id = 1337
 node-url = "http://zkevm-mock-l1-network:8545/"
 ws-node-url = "ws://zkevm-mock-l1-network:8546/"
-max-reconnection-elapsed-time = "10s"
+connect-attempt-timeout = "3s"
 rollup-manager-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
 polygon-zkevm-global-exit-root-v2-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
-aggchain-base-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
 rpc-timeout = "45s"
 
 [auth.gcp-kms]

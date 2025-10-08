@@ -9,7 +9,7 @@ use crate::columns::{
 
 #[test]
 fn can_parse_key() {
-    let key: CertificateId = [1; 32].into();
+    let key = CertificateId::new([1; 32].into());
 
     let encoded = key.encode().expect("Unable to encode key");
 
@@ -47,8 +47,9 @@ struct SP1ProofWithPublicValuesV3 {
 }
 
 impl SP1ProofWithPublicValuesV3 {
-    fn load(path: impl AsRef<std::path::Path>) -> Result<Self, Box<dyn std::error::Error>> {
-        bincode::deserialize_from(std::fs::File::open(path).expect("failed to open file"))
+    fn load(path: impl AsRef<std::path::Path>) -> eyre::Result<Self> {
+        agglayer_types::bincode::sp1v4()
+            .deserialize_from(std::fs::File::open(path).expect("failed to open file"))
             .map_err(Into::into)
     }
 }
@@ -59,6 +60,7 @@ impl From<SP1ProofWithPublicValuesV3> for SP1ProofWithPublicValues {
             proof: v3.proof,
             public_values: v3.public_values,
             sp1_version: v3.sp1_version,
+            tee_proof: None, // We do not care about TEE in tests
         }
     }
 }

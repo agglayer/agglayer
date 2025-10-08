@@ -1,5 +1,12 @@
-use agglayer_types::{CertificateId, CertificateStatusError, Height, NetworkId};
-use pessimistic_proof::{error::ProofVerificationError, ProofError};
+use agglayer_contracts::L1RpcError;
+use agglayer_types::{
+    aggchain_proof::AggchainProofPublicValues, bincode, CertificateId, CertificateStatusError,
+    Digest, Height, NetworkId,
+};
+use pessimistic_proof::{
+    core::commitment::StateCommitment, error::ProofVerificationError, PessimisticProofOutput,
+    ProofError,
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PreCertificationError {
@@ -12,30 +19,158 @@ pub enum PreCertificationError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertificationError {
-    #[error("certificate not found for network {0} at height {1}")]
+    #[error("Certificate not found for network {0} at height {1}")]
     CertificateNotFound(NetworkId, Height),
+
     #[error(
         "Failed to retrieve the trusted sequencer address for network {0} during proving phase"
     )]
     TrustedSequencerNotFound(NetworkId),
+
+    #[error("Failed to retrieve the last pessimistic root for network {0}")]
+    LastPessimisticRootNotFound(NetworkId),
+
     #[error("Failed to retrieve the l1 info root for the l1 leaf count: {1} for certificate {0}")]
     L1InfoRootNotFound(CertificateId, u32),
-    #[error("proof verification failed")]
+
+    #[error("Proof verification failed")]
     ProofVerificationFailed { source: ProofVerificationError },
-    #[error("prover execution failed: {source}")]
-    ProverExecutionFailed { source: ProofError },
-    #[error("native execution failed: {source:?}")]
+
+    /// Rust native execution without aggchain proof stark verification failed
+    /// on the given error.
+    #[error("Rust-native execution failed: {source:?}")]
     NativeExecutionFailed { source: ProofError },
+
+    /// SP1 native execute call which includes the aggchain proof stark
+    /// verification failed.
+    #[error("Sp1-native execution failed.")]
+    Sp1ExecuteFailed(#[source] eyre::Error),
+
+    /// The PP public values differ between the ones computed during the
+    /// rust native execution, and the ones computed by the sp1 zkvm execution.
+    #[error(
+        "Mismatch on the PP public values between rust native execution and sp1 zkvm execution. \
+         {native_execution:?}. sp1 zkvm execution: {sp1_zkvm_execution:?}"
+    )]
+    MismatchPessimisticProofPublicValues {
+        native_execution: Box<PessimisticProofOutput>,
+        sp1_zkvm_execution: Box<PessimisticProofOutput>,
+    },
+
     #[error("Type error: {source}")]
     Types { source: agglayer_types::Error },
+
     #[error("Serialize error")]
     Serialize { source: bincode::Error },
+
     #[error("Deserialize error")]
     Deserialize { source: bincode::Error },
-    #[error("internal error: {0}")]
+
+    #[error("Internal error: {0}")]
     InternalError(String),
+
+    #[error("Prover failed")]
+    ProverFailed(String),
+
+    #[error("Prover returned unspecified error")]
+    ProverReturnedUnspecifiedError,
+
+    #[error("Prover execution failed")]
+    ProverExecutionFailed { source: ProofError },
+
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
+
+    #[error("Rollup contract address not found")]
+    RollupContractAddressNotFound(#[source] L1RpcError),
+
+    #[error("Unable to find aggchain vkey")]
+    UnableToFindAggchainVkey { source: L1RpcError },
+
+    #[error("Aggchain proof vkey mismatch: expected {expected}, actual {actual}")]
+    AggchainProofVkeyMismatch { expected: String, actual: String },
+
+    #[error("Missing L1 info tree leaf count for generic aggchain data")]
+    MissingL1InfoTreeLeafCountForGenericAggchainData,
+
+    #[error("Unable to find aggchain hash")]
+    UnableToFindAggchainHash(#[source] L1RpcError),
+
+    /// Mismatch on the aggchain hash between the one fetched from the L1, and
+    /// the one computed from the received Certificate.
+    #[error("Aggchain hash mismatch. from l1: {from_l1}, from certificate: {from_certificate}.")]
+    AggchainHashMismatch {
+        from_l1: Digest,
+        from_certificate: Digest,
+    },
+
+    /// Target state commitment mismatch between witness generation and native
+    /// execution.
+    #[error(
+        "Target state commitment mismatch. after witness generation: {witness_generation:?}, \
+         after native execution: {native_execution:?}"
+    )]
+    StateCommitmentMismatch {
+        witness_generation: Box<StateCommitment>,
+        native_execution: Box<StateCommitment>,
+    },
+
+    /// Aggchain proof public values mismatch between PP witness and the ones
+    /// expected by the received aggchain proof.
+    #[error(
+        "Aggchain proof public values mismatch. expected by the PP: {from_witness:?}, expected by \
+         the aggchain proof: {from_proof:?}"
+    )]
+    AggchainProofPublicValuesMismatch {
+        from_proof: Box<AggchainProofPublicValues>,
+        from_witness: Box<AggchainProofPublicValues>,
+    },
+
+    #[error(transparent)]
+    Other(eyre::Error),
+
+    /// Multisig context (e.g., signers and threshold) fail to be fetched from
+    /// the L1.
+    #[error("Unable to fetch the multisig context: {0}")]
+    MultisigContextFetchFailed(#[source] L1RpcError),
+}
+
+impl From<CertificationError> for CertificateStatusError {
+    fn from(value: CertificationError) -> Self {
+        match value {
+            CertificationError::TrustedSequencerNotFound(network) => {
+                CertificateStatusError::TrustedSequencerNotFound(network)
+            }
+            CertificationError::LastPessimisticRootNotFound(network_id) => {
+                CertificateStatusError::LastPessimisticRootNotFound(network_id)
+            }
+            CertificationError::ProofVerificationFailed { source } => {
+                CertificateStatusError::ProofVerificationFailed(source)
+            }
+            CertificationError::L1InfoRootNotFound(_certificate_id, l1_leaf_count) => {
+                CertificateStatusError::L1InfoRootNotFound(l1_leaf_count)
+            }
+            CertificationError::ProverExecutionFailed { source } => {
+                CertificateStatusError::ProofGenerationError {
+                    generation_type: agglayer_types::GenerationType::Prover,
+                    source,
+                }
+            }
+            CertificationError::NativeExecutionFailed { source } => {
+                CertificateStatusError::ProofGenerationError {
+                    generation_type: agglayer_types::GenerationType::Native,
+                    source,
+                }
+            }
+            CertificationError::Types { source } => {
+                CertificateStatusError::TypeConversionError(source)
+            }
+            error => {
+                let error = eyre::Error::from(error);
+                CertificateStatusError::InternalError(format!("{error:?}"))
+            }
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -45,12 +180,14 @@ pub enum Error {
 
     #[error(transparent)]
     PreCertification(#[from] PreCertificationError),
+
     #[error(transparent)]
     Certification(#[from] CertificationError),
 
     #[error("Storage error: {0}")]
     Storage(#[from] agglayer_storage::error::Error),
-    #[error("internal error: {0}")]
+
+    #[error("Internal error: {0}")]
     InternalError(String),
 
     #[error("The status of the certificate is invalid")]
@@ -58,6 +195,12 @@ pub enum Error {
 
     #[error("The certificate header is not found")]
     NotFoundCertificateHeader,
+
+    #[error("Unable to get verifier type for network")]
+    UnableToGetVerifierType {
+        certificate_id: CertificateId,
+        network_id: NetworkId,
+    },
 
     #[error("Failed to settle the certificate {certificate_id}: {error}")]
     SettlementError {
@@ -70,6 +213,7 @@ pub enum Error {
         certificate_id: CertificateId,
         error: String,
     },
+
     #[error("Failed to communicate with L1: {0}")]
     L1CommunicationError(#[source] agglayer_contracts::L1RpcError),
 }
@@ -89,6 +233,11 @@ impl From<Error> for CertificateStatusError {
             }
             Error::Storage(error) => CertificateStatusError::InternalError(error.to_string()),
             Error::InternalError(error) => CertificateStatusError::InternalError(error),
+            Error::UnableToGetVerifierType { network_id, .. } => {
+                CertificateStatusError::InternalError(format!(
+                    "Unable to get verifier type for NetworkId {network_id}"
+                ))
+            }
             Error::InvalidCertificateStatus => {
                 CertificateStatusError::InternalError("InvalidCertificateStatus".to_string())
             }

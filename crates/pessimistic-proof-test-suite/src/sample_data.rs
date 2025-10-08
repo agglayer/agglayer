@@ -5,29 +5,27 @@ use agglayer_types::{
     Certificate, NetworkId,
 };
 use hex_literal::hex;
-use pessimistic_proof::bridge_exit::BridgeExit;
-use pessimistic_proof::bridge_exit::TokenInfo;
-use pessimistic_proof::local_balance_tree::LocalBalanceTree;
-use pessimistic_proof::local_exit_tree;
-use pessimistic_proof::local_state::LocalNetworkState;
-use pessimistic_proof::nullifier_tree::NullifierTree;
+use pessimistic_proof::{
+    local_balance_tree::LocalBalanceTree,
+    local_exit_tree::LocalExitTree,
+    local_state::LocalNetworkState,
+    nullifier_tree::NullifierTree,
+    unified_bridge::{BridgeExit, TokenInfo},
+};
 
 use crate::{
     event_data::{load_json_data_file, parse_json_file, DepositEventData},
     forest::Forest,
 };
 
-type TreeHasher = pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
-type LocalExitTree = local_exit_tree::LocalExitTree<TreeHasher>;
-
 pub const NETWORK_A: NetworkId = NetworkId::new(0);
 pub const NETWORK_B: NetworkId = NetworkId::new(1);
 pub const USDC: TokenInfo = TokenInfo {
-    origin_network: NETWORK_A.to_u32(),
+    origin_network: NETWORK_A,
     origin_token_address: address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
 };
 pub const ETH: TokenInfo = TokenInfo {
-    origin_network: NETWORK_A.to_u32(),
+    origin_network: NETWORK_A,
     origin_token_address: address!("0000000000000000000000000000000000000000"),
 };
 

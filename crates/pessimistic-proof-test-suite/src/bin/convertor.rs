@@ -1,14 +1,15 @@
-use std::env;
-use std::fs::{File, OpenOptions};
-use std::io::{self, Write};
+use std::{
+    env,
+    fs::{File, OpenOptions},
+    io::{self, Write},
+};
 
 use agglayer_types::{Address, Height, Metadata, NetworkId, Signature, U256};
-use pessimistic_proof::bridge_exit::LeafType;
-use pessimistic_proof::bridge_exit::TokenInfo;
-use pessimistic_proof::global_index::GlobalIndex;
-use pessimistic_proof::keccak::keccak256;
-use serde::ser::SerializeSeq as _;
-use serde::{Deserialize, Serialize};
+use pessimistic_proof::{
+    keccak::keccak256,
+    unified_bridge::{GlobalIndex, LeafType, TokenInfo},
+};
+use serde::{ser::SerializeSeq as _, Deserialize, Serialize};
 
 fn digest<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -187,10 +188,10 @@ fn main() -> io::Result<()> {
 
     // Process the file
     if let Err(e) = process_file(input_path, output_path) {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
         std::process::exit(1);
     }
 
-    println!("Processing complete. Output written to {}", output_path);
+    println!("Processing complete. Output written to {output_path}");
     Ok(())
 }
