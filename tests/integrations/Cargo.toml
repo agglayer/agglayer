@@ -8,7 +8,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-alloy.workspace = true
+alloy = { workspace = true, features = ["rpc", "rpc-types"] }
 arc-swap.workspace = true
 buildstructor.workspace = true
 eyre.workspace = true
@@ -53,3 +53,5 @@ agglayer-types.workspace = true
 agglayer-prover-config.workspace = true
 pessimistic-proof-test-suite.workspace = true
 pessimistic-proof.workspace = true
+
+test-log.workspace = true

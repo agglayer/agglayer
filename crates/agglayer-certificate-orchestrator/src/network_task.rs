@@ -10,7 +10,9 @@ use agglayer_types::{
     CertificateId, CertificateIndex, CertificateStatusError, EpochNumber, Height,
     LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
-use pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion;
+use pessimistic_proof::{
+    core::commitment::PessimisticRootCommitmentVersion, local_state::StateCommitment,
+};
 use regex::Regex;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -408,7 +410,8 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, height, .. }) => {
-                        let computed_v3 = self.pending_pessimistic_root(height, pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion::V3);
+                        let roots = pending_state.as_ref().map(|s| s.get_roots()).unwrap_or_else(||self.local_state.get_roots());
+                        let computed_v3 = self.pending_pessimistic_root(height, pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion::V3, &roots);
                         println!(">>>>>>>>>>>>>> CertificateReadyForSettlement for certificate_id={certificate_id} at height={height} computed_v3={computed_v3}");
                         let height = height.as_u64();
 
@@ -428,7 +431,9 @@ where
                                 println!(">>>>>>>>>>>> SUCCESSO found it");
                                 if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) =
                                     self.fetch_latest_pp_root_from_l1(certificate_id).await {
-                                        if self.is_pending_pessimistic_root(latest_pp_root, height+1) {
+
+                                        let roots = pending_state.as_ref().map(|s| s.get_roots()).unwrap_or_else(||self.local_state.get_roots());
+                                        if self.is_pending_pessimistic_root(latest_pp_root, height, roots) {
                                             // Certificate has been settled through some other transaction
                                             info!(%certificate_id,
                                                 "Certificate for new height: {} has been settled on L1 through other transaction {latest_pp_root_tx_hash}", height+1);
@@ -463,7 +468,8 @@ where
                                 // On timeout, check if the certificate has been settled through some other transaction
                                 match self.fetch_latest_pp_root_from_l1(certificate_id).await {
                                     Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) => {
-                                        if self.is_pending_pessimistic_root(latest_pp_root, height+1) {
+                                        let roots = pending_state.as_ref().map(|s| s.get_roots()).unwrap_or_else(||self.local_state.get_roots());
+                                        if self.is_pending_pessimistic_root(latest_pp_root, height, roots) {
                                             // Certificate has been settled through some other transaction
                                             info!(%certificate_id,
                                                 "Certificate for new height: {} has been settled on L1 through other transaction {latest_pp_root_tx_hash}", height+1);
@@ -548,8 +554,8 @@ where
         &self,
         height: Height,
         version: PessimisticRootCommitmentVersion,
+        state_commitment: &StateCommitment,
     ) -> Digest {
-        let state_commitment = self.local_state.get_roots();
         let pp_commitment_values =
             pessimistic_proof::core::commitment::PessimisticRootCommitmentValues {
                 height: height.as_u64(),
@@ -562,11 +568,22 @@ where
         pp_commitment_values.compute_pp_root(version)
     }
 
-    fn is_pending_pessimistic_root(&self, settled_pp_root: Digest, height: u64) -> bool {
-        let computed_v2 =
-            self.pending_pessimistic_root(height.into(), PessimisticRootCommitmentVersion::V2);
-        let computed_v3 =
-            self.pending_pessimistic_root(height.into(), PessimisticRootCommitmentVersion::V3);
+    fn is_pending_pessimistic_root(
+        &self,
+        settled_pp_root: Digest,
+        height: u64,
+        commitment: StateCommitment,
+    ) -> bool {
+        let computed_v2 = self.pending_pessimistic_root(
+            height.into(),
+            PessimisticRootCommitmentVersion::V2,
+            &commitment,
+        );
+        let computed_v3 = self.pending_pessimistic_root(
+            height.into(),
+            PessimisticRootCommitmentVersion::V3,
+            &commitment,
+        );
         println!(
             ">>>>>>>> COMPUTED PP ROOTS: height={height} V2={computed_v2}, V3={computed_v3}, \
              SETTLED={settled_pp_root}"

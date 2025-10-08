@@ -164,7 +164,7 @@ where
         }
     }
 
-    async fn recompute_state(&self) -> Result<(), CertificateStatusError> {
+    async fn recompute_state(&mut self) -> Result<(), CertificateStatusError> {
         // TODO: once we store network_id -> height -> state and not just network_id ->
         // state, we should not need this any longer, because the state will
         // already be recorded.

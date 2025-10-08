@@ -20,7 +20,7 @@ use agglayer_types::{
 };
 use alloy::{
     providers::{PendingTransactionConfig, PendingTransactionError, Provider},
-    rpc::types::TransactionReceipt,
+    rpc::types::{FilterBlockOption, TransactionReceipt},
 };
 use arc_swap::ArcSwap;
 use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
@@ -511,7 +511,10 @@ where
             .address(rollup_address.into_alloy())
             .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
             .topic1(U256::from(network_id.to_u32()))
-            .from_block(alloy::eips::BlockNumberOrTag::Earliest);
+            .select(FilterBlockOption::Range {
+                from_block: Some(alloy::eips::BlockNumberOrTag::Earliest),
+                to_block: None,
+            });
 
         // Fetch the logs through settlement client
         let events = self
@@ -527,23 +530,19 @@ where
 
         // Get the most recent event (last in the list) and extract its new pessimistic
         // root
-        let result = events
-            .iter()
-            .rev() // Iterate in reverse to get the most recent first
-            .find_map(|log| {
-                let latest_pp_root =
-                    VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok();
-                let tx_hash = log.transaction_hash.map(Digest::from);
-                match (
-                    latest_pp_root.map(|val| <[u8; 32]>::from(val.newPessimisticRoot)),
-                    tx_hash,
-                ) {
-                    (Some(pp_root), Some(tx_hash)) => {
-                        Some((pp_root, SettlementTxHash::new(tx_hash)))
-                    }
-                    _ => None,
-                }
-            });
+        let result = events.iter().rev().find_map(|log| {
+            info!("Found VerifyPessimisticStateTransition event: {:?}", log);
+            let latest_pp_root =
+                VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok();
+            let tx_hash = log.transaction_hash.map(Digest::from);
+            match (
+                latest_pp_root.map(|val| <[u8; 32]>::from(val.newPessimisticRoot)),
+                tx_hash,
+            ) {
+                (Some(pp_root), Some(tx_hash)) => Some((pp_root, SettlementTxHash::new(tx_hash))),
+                _ => None,
+            }
+        });
 
         let (pp_root, tx_hash) = match result {
             Some((pp_root, tx_hash)) => {
