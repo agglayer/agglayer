@@ -1,6 +1,12 @@
 //! Helper (de)serializers to be used with `#[serde(with)]` and `#[serde_as]`.
 
+mod eth_amount;
 mod human_duration;
+
+/// A config-friendly Ethereum amount ([u128] in wei).
+///
+/// Specified as a string with unit suffix such as `"1eth"`, `"100gwei"`, or `"1000wei"`.
+pub use eth_amount::EthAmount;
 
 /// A config-friendly [std::time::Duration].
 ///

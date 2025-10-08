@@ -12,5 +12,5 @@ gas-multiplier-factor = 120
 
 [rpc.settle.gas-price]
 multiplier = "1.5"
-floor = "1000000000"
-ceiling = "100000000000"
+floor = "1000000000wei"
+ceiling = "100000000000wei"

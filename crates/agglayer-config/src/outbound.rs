@@ -35,16 +35,18 @@ pub struct GasPriceConfig {
     pub multiplier: Decimal,
 
     /// Minimum gas price floor (in wei) for the transaction.
+    /// Can be specified with units: "1gwei", "0.1eth", "1000000000wei"
     #[serde(default, skip_serializing_if = "crate::is_default")]
-    #[serde_as(as = "serde_with::DisplayFromStr")]
+    #[serde_as(as = "crate::with::EthAmount")]
     pub floor: u128,
 
     /// Maximum gas price ceiling (in wei) for the transaction.
+    /// Can be specified with units: "100gwei", "0.01eth", "10000000000wei"
     #[serde(
         default = "default_gas_price_ceiling",
         skip_serializing_if = "same_as_default_gas_price_ceiling"
     )]
-    #[serde_as(as = "serde_with::DisplayFromStr")]
+    #[serde_as(as = "crate::with::EthAmount")]
     pub ceiling: u128,
 }
 
