@@ -426,7 +426,7 @@ where
                             if detect_l1_error(&format!("{err:?}"), ERR_SELECTOR_L2_BLOCK_NUMBER_LESS_THAN_NEXT_BLOCK_NUMBER) {
                                 println!(">>>>>>>>>>>> SUCCESSO found it");
                                 if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) =
-                                    self.check_alternative_settlement(certificate_id, height).await {
+                                    self.fetch_latest_pp_root_from_l1(certificate_id, height).await {
                                         if self.is_pending_pessimistic_root(latest_pp_root, height) {
                                             // Certificate has been settled through some other transaction
                                             info!(%certificate_id,
@@ -459,7 +459,7 @@ where
                             }
                             Err(Error::PendingTransactionTimeout { ..}) => {
                                 // On timeout, check if the certificate has been settled through some other transaction
-                                match self.check_alternative_settlement(certificate_id, height).await {
+                                match self.fetch_latest_pp_root_from_l1(certificate_id, height).await {
                                     Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) => {
                                         if self.is_pending_pessimistic_root(latest_pp_root, height) {
                                             // Certificate has been settled through some other transaction
@@ -577,7 +577,7 @@ where
     ///
     /// Returns the latest pessimistic root and transaction hash if both are
     /// found, otherwise returns None.
-    async fn check_alternative_settlement(
+    async fn fetch_latest_pp_root_from_l1(
         &self,
         certificate_id: CertificateId,
         height: Height,

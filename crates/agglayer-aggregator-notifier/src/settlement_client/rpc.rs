@@ -343,17 +343,18 @@ where
         certificate_id: CertificateId,
     ) -> Result<TransactionReceipt, Error> {
         // Increment counter for each call
-        // let counter_value = self.counter.fetch_add(1, Ordering::SeqCst);
+        let counter_value = self.counter.fetch_add(1, Ordering::SeqCst);
 
         let tx_hash = settlement_tx_hash.into();
-        let timeout = self
+        let mut timeout = self
             .config
             .retry_interval
             .mul_f64(self.config.max_retries as f64);
 
-        // println!(">>>>>>>>>>>>>>>>>> COUNT {} <<<<<<<<<<<<<<<<", counter_value);
-        // if counter_value % 3 == 0 &&  counter_value > 0 {
-        //     timeout = Duration::from_secs(1);
+        println!(">>>>>>>>>>>>>>>>>> COUNT {} <<<<<<<<<<<<<<<<", counter_value);
+        //if counter_value % 3 == 0 &&  counter_value > 0 {
+        // if counter_value > 3 {
+        //     timeout = Duration::from_secs(3);
         //     println!(">>>>>>>>>>>>>>>>>> SHORT TIMEOUT <<<<<<<<<<<<<<<<");
         // }
 
