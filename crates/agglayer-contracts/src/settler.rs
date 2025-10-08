@@ -106,11 +106,11 @@ where
             ">>>>>>>>>>>>>>>>>> COUNT GAS {} <<<<<<<<<<<<<<<<",
             counter_value
         );
-        if counter_value % 3 == 0 && counter_value > 0 {
-            tx_call = tx_call.gas_price(0);
-            println!(">>>>>>>>>>>>>>>>>> SMALL GAS <<<<<<<<<<<<<<<<");
-            self.counter.store(0, Ordering::Relaxed);
-        }
+        // if counter_value % 3 == 0 && counter_value > 0 {
+        //     tx_call = tx_call.gas_price(0);
+        //     println!(">>>>>>>>>>>>>>>>>> SMALL GAS <<<<<<<<<<<<<<<<");
+        //     self.counter.store(0, Ordering::Relaxed);
+        // }
 
         tx_call.send().await
     }

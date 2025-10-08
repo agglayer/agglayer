@@ -361,6 +361,8 @@ where
         //     println!(">>>>>>>>>>>>>>>>>> SHORT TIMEOUT <<<<<<<<<<<<<<<<");
         // }
 
+        timeout = Duration::from_secs(2);
+
         let pending_tx_config = PendingTransactionConfig::new(tx_hash)
             .with_required_confirmations(self.config.confirmations as u64)
             .with_timeout(Some(timeout.clone()));
