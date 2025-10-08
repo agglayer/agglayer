@@ -132,7 +132,7 @@ where
         // issue When we finally make the storage refactoring, we should remove
         // this
         if self.header.status == CertificateStatus::Proven {
-            warn!(
+            warn!(%certificate_id,
                 "Certificate is already proven but we do not have the  new_state anymore... \
                  reproving"
             );
@@ -339,15 +339,14 @@ where
                 self.set_status(CertificateStatus::Proven)?;
                 return Box::pin(self.process_from_proven()).await;
             }
-            CertificateSettlementResult::SettledThroughOtherTx(settlement_tx_hash) => {
+            CertificateSettlementResult::SettledThroughOtherTx(alternative_settlement_tx_hash) => {
                 info!(
-                    "Process alternative settlement transaction {settlement_tx_hash} for \
-                     certificate {certificate_id}"
+                    "Process alternative settlement transaction {alternative_settlement_tx_hash}"
                 );
-                self.header.settlement_tx_hash = Some(settlement_tx_hash);
+                self.header.settlement_tx_hash = Some(alternative_settlement_tx_hash);
                 self.state_store.update_settlement_tx_hash(
                     &certificate_id,
-                    settlement_tx_hash,
+                    alternative_settlement_tx_hash,
                     true,
                 )?;
                 // No set_status: update_settlement_tx_hash already updates the status in the
