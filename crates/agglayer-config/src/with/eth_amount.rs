@@ -9,7 +9,7 @@ enum Error {
     MissingUnit,
 
     #[error(transparent)]
-    ParseError(UnitsError),
+    UnitParsing(UnitsError),
 
     #[error("Amount exceeds u128::MAX")]
     Overflow,
@@ -36,7 +36,7 @@ impl EthAmountImpl {
         let number_part = number_part.trim_end();
 
         // Parse using alloy's parse_units
-        let parsed = parse_units(number_part, unit).map_err(Error::ParseError)?;
+        let parsed = parse_units(number_part, unit).map_err(Error::UnitParsing)?;
 
         // Convert ParseUnits to u128
         match parsed {

@@ -5,9 +5,8 @@ mod human_duration;
 
 /// A config-friendly Ethereum amount ([u128] in wei).
 ///
-/// Specified as a string with unit suffix such as `"1eth"`, `"100gwei"`, or `"1000wei"`.
+/// Specified as a string with unit suffix such as `"1eth"`, `"100gwei"`, etc.
 pub use eth_amount::EthAmount;
-
 /// A config-friendly [std::time::Duration].
 ///
 /// Can be specified as either human-readable string, such as `"1h"` or
