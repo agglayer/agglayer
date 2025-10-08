@@ -9,6 +9,7 @@ use alloy::{
     providers::Provider,
     rpc::types::{Filter, TransactionReceipt},
 };
+use rust_decimal::Decimal;
 use tracing::{debug, error};
 
 pub mod aggchain;
@@ -45,6 +46,12 @@ pub struct L1RpcClient<RpcProvider> {
     default_l1_info_tree_entry: (u32, [u8; 32]),
     /// Gas multiplier factor for transactions.
     gas_multiplier_factor: u32,
+    /// Gas price multiplier for transactions.
+    gas_price_multiplier: Decimal,
+    /// Minimum gas price floor (in wei) for transactions.
+    gas_price_floor: u128,
+    /// Maximum gas price ceiling (in wei) for transactions.
+    gas_price_ceiling: u128,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -112,6 +119,9 @@ where
         l1_info_tree: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
         gas_multiplier_factor: u32,
+        gas_price_multiplier: Decimal,
+        gas_price_floor: u128,
+        gas_price_ceiling: u128,
     ) -> Self {
         Self {
             rpc,
@@ -119,6 +129,9 @@ where
             l1_info_tree,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
+            gas_price_multiplier,
+            gas_price_floor,
+            gas_price_ceiling,
         }
     }
 
@@ -127,6 +140,9 @@ where
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         l1_info_tree: Address,
         gas_multiplier_factor: u32,
+        gas_price_multiplier: Decimal,
+        gas_price_floor: u128,
+        gas_price_ceiling: u128,
     ) -> Result<Self, L1RpcInitializationError>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
@@ -188,6 +204,9 @@ where
             l1_info_tree,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
+            gas_price_multiplier,
+            gas_price_floor,
+            gas_price_ceiling,
         ))
     }
 }
@@ -265,6 +284,9 @@ mod tests {
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
                 100,
+                Decimal::ONE,
+                0,
+                u128::MAX,
             )
             .await
             .unwrap(),
@@ -309,6 +331,9 @@ mod tests {
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
                 100,
+                Decimal::ONE,
+                0,
+                u128::MAX,
             )
             .await
             .unwrap(),

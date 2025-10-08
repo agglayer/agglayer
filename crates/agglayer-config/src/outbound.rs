@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -17,6 +18,44 @@ pub struct OutboundConfig {
 pub struct OutboundRpcConfig {
     /// Outbound configuration of the RPC settle function call.
     pub settle: OutboundRpcSettleConfig,
+}
+
+/// Gas price configuration for settlement transactions.
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct GasPriceConfig {
+    /// Gas price multiplier for the transaction.
+    /// The gas price is calculated as follows:
+    /// `gas_price = estimate_gas_price * multiplier`
+    #[serde(
+        default = "default_gas_price_multiplier",
+        skip_serializing_if = "same_as_default_gas_price_multiplier"
+    )]
+    pub multiplier: Decimal,
+
+    /// Minimum gas price floor (in wei) for the transaction.
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub floor: u128,
+
+    /// Maximum gas price ceiling (in wei) for the transaction.
+    #[serde(
+        default = "default_gas_price_ceiling",
+        skip_serializing_if = "same_as_default_gas_price_ceiling"
+    )]
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub ceiling: u128,
+}
+
+impl Default for GasPriceConfig {
+    fn default() -> Self {
+        GasPriceConfig {
+            multiplier: default_gas_price_multiplier(),
+            floor: 0,
+            ceiling: default_gas_price_ceiling(),
+        }
+    }
 }
 
 /// Outbound RPC settle configuration that is used to configure the outbound
@@ -53,6 +92,10 @@ pub struct OutboundRpcSettleConfig {
         skip_serializing_if = "same_as_default_gas_multiplier_factor"
     )]
     pub gas_multiplier_factor: u32,
+
+    /// Gas price configuration.
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    pub gas_price: GasPriceConfig,
 }
 
 impl Default for OutboundRpcSettleConfig {
@@ -63,6 +106,7 @@ impl Default for OutboundRpcSettleConfig {
             confirmations: default_rpc_confirmations(),
             settlement_timeout: default_settlement_timeout(),
             gas_multiplier_factor: default_gas_multiplier_factor(),
+            gas_price: GasPriceConfig::default(),
         }
     }
 }
@@ -95,6 +139,24 @@ const fn default_rpc_confirmations() -> usize {
 /// Default timeout for settlement transaction submission and confirmation.
 const fn default_settlement_timeout() -> Duration {
     Duration::from_secs(20 * 60)
+}
+
+/// Default gas price multiplier for the transaction.
+fn default_gas_price_multiplier() -> Decimal {
+    Decimal::ONE
+}
+
+fn same_as_default_gas_price_multiplier(v: &Decimal) -> bool {
+    *v == default_gas_price_multiplier()
+}
+
+/// Default gas price ceiling for the transaction.
+const fn default_gas_price_ceiling() -> u128 {
+    u128::MAX
+}
+
+const fn same_as_default_gas_price_ceiling(v: &u128) -> bool {
+    *v == default_gas_price_ceiling()
 }
 
 #[cfg(test)]

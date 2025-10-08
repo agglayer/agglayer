@@ -3,6 +3,8 @@ use alloy::{
     primitives::Bytes,
     providers::{PendingTransactionBuilder, Provider},
 };
+use num_traits::ToPrimitive;
+use rust_decimal::Decimal;
 use tracing::debug;
 
 use crate::L1RpcClient;
@@ -67,6 +69,7 @@ where
             "Building the L1 settlement tx with calldata: {:?}",
             tx_call.calldata()
         );
+
         // This is a fail point for testing purposes, it simulates low gas conditions.
         // Check if the low gas fail point is active and set the low gas if it is.
         #[cfg(feature = "testutils")]
@@ -96,6 +99,33 @@ where
                 self.gas_multiplier_factor, rollup_id, gas_estimate, adjusted_gas
             );
             tx_call = tx_call.gas(adjusted_gas);
+        }
+
+        {
+            // Apply gas price multiplier and floor/ceiling constraints
+            let estimate = self.rpc.estimate_eip1559_fees().await?;
+            let adjust = |fee: u128| -> u128 {
+                let fee = Decimal::from(fee).saturating_mul(self.gas_price_multiplier);
+                fee.to_u128().unwrap_or(u128::MAX)
+            };
+            let max_fee_per_gas = adjust(estimate.max_fee_per_gas)
+                .clamp(self.gas_price_floor, self.gas_price_ceiling);
+            let max_priority_fee_per_gas =
+                adjust(estimate.max_priority_fee_per_gas).max(max_fee_per_gas);
+
+            debug!(
+                "Applying gas price adjustment for rollup_id: {}. Estimated {}, {} priority. \
+                 Adjusted to {}, {} priority.",
+                rollup_id,
+                estimate.max_fee_per_gas,
+                estimate.max_priority_fee_per_gas,
+                max_fee_per_gas,
+                max_priority_fee_per_gas
+            );
+
+            tx_call = tx_call
+                .max_priority_fee_per_gas(max_priority_fee_per_gas)
+                .max_fee_per_gas(max_fee_per_gas);
         }
 
         tx_call.send().await
