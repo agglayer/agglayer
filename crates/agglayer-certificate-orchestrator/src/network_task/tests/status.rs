@@ -75,11 +75,24 @@ async fn from_pending_to_settle() {
                 .apply_certificate(&certificate, ctx_from_l1)
                 .expect("Failed to apply certificate");
 
+            let state_commitment = new_state.get_roots();
+            let pp_commitment_values =
+                pessimistic_proof::core::commitment::PessimisticRootCommitmentValues {
+                    height: height.as_u64(),
+                    origin_network: network_id,
+                    ler_leaf_count: state_commitment.ler_leaf_count,
+                    balance_root: state_commitment.balance_root.into(),
+                    nullifier_root: state_commitment.nullifier_root.into(),
+                };
+            let pp_root =
+                pp_commitment_values.compute_pp_root(PessimisticRootCommitmentVersion::V3);
+
             Ok(CertifierOutput {
                 certificate,
                 height,
                 new_state,
                 network,
+                pp_root,
             })
         });
 
@@ -184,12 +197,24 @@ async fn from_proven_to_settled() {
             let _ = new_state
                 .apply_certificate(&certificate, ctx_from_l1)
                 .expect("Failed to apply certificate");
+            let state_commitment = new_state.get_roots();
+            let pp_commitment_values =
+                pessimistic_proof::core::commitment::PessimisticRootCommitmentValues {
+                    height: height.as_u64(),
+                    origin_network: network_id,
+                    ler_leaf_count: state_commitment.ler_leaf_count,
+                    balance_root: state_commitment.balance_root.into(),
+                    nullifier_root: state_commitment.nullifier_root.into(),
+                };
+            let pp_root =
+                pp_commitment_values.compute_pp_root(PessimisticRootCommitmentVersion::V3);
 
             Ok(CertifierOutput {
                 certificate,
                 height,
                 new_state,
                 network,
+                pp_root,
             })
         });
 

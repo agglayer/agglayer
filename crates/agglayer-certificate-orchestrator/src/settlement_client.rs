@@ -42,4 +42,10 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
         &self,
         network_id: NetworkId,
     ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error>;
+
+    /// Returns the receipt status for a settlement tx
+    async fn get_settlement_receipt_status(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<bool, Error>;
 }

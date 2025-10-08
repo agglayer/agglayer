@@ -4,7 +4,12 @@ use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
-use agglayer_types::{Certificate, CertificateHeader, CertificateStatus, CertificateStatusError};
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, Digest,
+};
+use pessimistic_proof::{
+    core::commitment::PessimisticRootCommitmentValues, local_state::StateCommitment,
+};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, trace, warn};
@@ -12,6 +17,7 @@ use tracing::{debug, error, info, trace, warn};
 use crate::{
     network_task::{CertificateSettlementResult, NetworkTaskMessage},
     Certifier, Error,
+    __certificateorchestrator_start_builder::new,
 };
 
 /// A task that processes a certificate, including certifying it and settling
@@ -30,6 +36,8 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     pending_store: Arc<PendingStore>,
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
+
+    pp_root: Option<Digest>,
 }
 
 impl<StateStore, PendingStore, CertifierClient>
@@ -64,6 +72,7 @@ where
             pending_store,
             certifier_client,
             cancellation_token,
+            pp_root: None,
         })
     }
 
@@ -184,7 +193,7 @@ where
 
         // Execute the witness generation to retrieve the new local network state
         debug!("Recomputing new state for already-proven certificate");
-        let _ = self
+        let (_, _, output) = self
                 .certifier_client
                 .witness_generation(&self.certificate, &mut state, self.header.settlement_tx_hash.map(|h| h.into()))
                 .await
@@ -194,6 +203,7 @@ where
                 })?;
         debug!("Recomputing new state completed");
 
+        self.pp_root = Some(output.new_pessimistic_root);
         // Send the new state to the network task
         // TODO: Once we update the storage we'll have to remove this! It wouldn't be
         // valid if we had multiple certificates inflight. Thankfully, until
@@ -241,6 +251,7 @@ where
 
         // Record the certification success
         self.set_status(CertificateStatus::Proven)?;
+        self.pp_root = Some(certifier_output.pp_root);
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
             certificate_id,
@@ -301,8 +312,15 @@ where
             )));
         }
 
+        if self.pp_root.is_none() {
+            return Err(CertificateStatusError::InternalError(
+                "CertificateTask::process_from_candidate called without a pp_root".into(),
+            ));
+        }
+
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
+        let pp_root = self.pp_root.unwrap();
 
         debug!(
             settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
@@ -319,6 +337,7 @@ where
             certificate_id,
             settlement_tx_hash,
             settlement_complete_notifier,
+            pp_root,
         })
         .await?;
 

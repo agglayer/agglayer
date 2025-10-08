@@ -387,6 +387,7 @@ where
                              error: {}",
                             timeout, error
                         ),
+                        settlement_tx_hash,
                     }
                 } else {
                     error!(
@@ -441,6 +442,8 @@ where
                             "Settlement pending transaction timeout after {:?}, error: {}",
                             timeout, error
                         ),
+
+                        settlement_tx_hash,
                     })
                 } else {
                     error!(
@@ -548,8 +551,9 @@ where
             Some((pp_root, tx_hash)) => {
                 debug!(
                     "Retrieved latest VerifyPessimisticStateTransition event for network {} \
-                     latest pp_root: {:?}, tx_hash: {tx_hash}",
-                    network_id, pp_root
+                     latest pp_root: {}, tx_hash: {tx_hash}",
+                    network_id,
+                    Digest(pp_root)
                 );
                 (Some(pp_root), Some(tx_hash))
             }
@@ -563,6 +567,40 @@ where
         };
 
         Ok((pp_root, tx_hash))
+    }
+
+    async fn get_settlement_receipt_status(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<bool, Error> {
+        let tx_hash = settlement_tx_hash.into();
+        match self
+            .l1_rpc
+            .get_provider()
+            .get_transaction_by_hash(tx_hash)
+            .await
+            .map_err(|e| {
+                Error::L1CommunicationError(
+                    agglayer_contracts::L1RpcError::TransactionReceiptNotFound(e.to_string()),
+                )
+            })? {
+            Some(tx) => info!("Found settlement tx on L1: {:?}", tx),
+            None => {
+                warn!("Settlement tx not found on L1: {}", tx_hash);
+            }
+        }
+        match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
+            Ok(receipt) => {
+                info!(
+                    "Fetched receipt for settlement tx {}: {:?}",
+                    tx_hash, receipt
+                );
+                Ok(receipt.status())
+            }
+            Err(e) => Err(Error::L1CommunicationError(
+                agglayer_contracts::L1RpcError::TransactionReceiptNotFound(e.to_string()),
+            )),
+        }
     }
 }
 

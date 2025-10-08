@@ -925,6 +925,12 @@ impl SettlementClient for Check {
     ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error> {
         Ok((None, None))
     }
+    async fn get_settlement_receipt_status(
+        &self,
+        _settlement_tx_hash: SettlementTxHash,
+    ) -> Result<bool, Error> {
+        Ok(true)
+    }
 }
 
 impl CertificateInput for () {
@@ -962,6 +968,7 @@ impl Certifier for Check {
             height,
             new_state: local_state,
             network: network_id,
+            pp_root: Digest::ZERO,
         };
         _ = self.executed.try_send(result.clone());
         Ok(result)
