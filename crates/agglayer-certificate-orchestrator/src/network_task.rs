@@ -11,6 +11,7 @@ use agglayer_types::{
     LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion;
+use regex::Regex;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -20,6 +21,9 @@ use crate::{
     network_task::CertificateSettlementResult::SettledThroughOtherTx, Certifier, Error,
     SettlementClient,
 };
+
+// Smart contract error selectors from the https://raw.githubusercontent.com/agglayer/agglayer-contracts/refs/heads/feature/v12/docs/selectors.txt
+const ERR_SELECTOR_L2_BLOCK_NUMBER_LESS_THAN_NEXT_BLOCK_NUMBER: &str = "0x541d595b";
 
 #[cfg(test)]
 mod tests;
@@ -104,6 +108,25 @@ pub enum CertificateSettlementResult {
     TimeoutError,
     Error(CertificateStatusError),
     SettledThroughOtherTx(SettlementTxHash),
+}
+
+fn detect_l1_error(line: &str, selector: &str) -> bool {
+    // Matches: data: \"0x541d595b\"   or   data: "0x541d595b...."
+    let pattern = r#"data:\s*\\?"(?P<sel>0x[0-9a-fA-F]{8})[0-9a-fA-F]*""#;
+
+    let re = match Regex::new(pattern) {
+        Ok(r) => r,
+        Err(_) => return line.to_ascii_lowercase().contains(selector), // very safe fallback
+    };
+
+    if let Some(caps) = re.captures(line) {
+        if let Some(m) = caps.name("sel") {
+            return m.as_str().eq_ignore_ascii_case(selector);
+        }
+    }
+
+    // Fallback in case the log format shifts and the regex misses it
+    line.to_ascii_lowercase().contains(selector)
 }
 
 /// Network task that is responsible to certify the certificates for a network.
@@ -384,17 +407,34 @@ where
                         }
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, .. }) => {
+                    Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, height, .. }) => {
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
-                        let result = self
+                        let mut result = self
                             .settlement_client
                             .submit_certificate_settlement(certificate_id)
-                            .await
-                            .map_err(Into::into);
+                            .await;
+
+                        if let Err(ref err) = result {
+                            println!(">>>>>>>>>> Error submitting settlement for certificate_id={certificate_id} at height={height}: {err}");
+                            // Check for contract revert error "L2BlockNumberLessThanNextBlockNumber" meaning that
+                            // some alternative transaction may have already settled the certificate so our submit reverted
+                            if detect_l1_error(&err.to_string(), ERR_SELECTOR_L2_BLOCK_NUMBER_LESS_THAN_NEXT_BLOCK_NUMBER) {
+                                if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) =
+                                    self.check_alternative_settlement(certificate_id, height).await {
+                                        if self.is_pending_pessimistic_root(latest_pp_root, height) {
+                                            // Certificate has been settled through some other transaction
+                                            info!(%certificate_id,
+                                                "Certificate for height: {height} has been settled on L1 through other transaction {latest_pp_root_tx_hash}");
+                                            result = Ok(SettlementTxHash::from(latest_pp_root_tx_hash));
+                                        }
+                                }
+                            }
+                        }
+
                         settlement_submitted_notifier
-                            .send(result)
+                            .send(result.map_err(Into::into))
                             .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
                         #[cfg(feature = "testutils")]
                         fail::fail_point!("network_task::make_progress::settlement_submitted");
@@ -415,28 +455,20 @@ where
                             }
                             Err(Error::PendingTransactionTimeout { ..}) => {
                                 // On timeout, check if the certificate has been settled through some other transaction
-                                 warn!(%certificate_id, "Settlement tx timeout, checking if the certificate {certificate_id} \
-                                    for height: {height} has been settled on L1 through some other transaction");
-                                let latest_pp_root =
-                                    self.settlement_client.get_last_settled_pp_root(self.network_id).await
-                                        .inspect_err(|err| {
-                                            error!(%certificate_id,"Error retrieving latest pessimistic root from L1: {}", err)
-                                        });
-
-                                match latest_pp_root {
-                                    Ok((Some(latest_pp_root), Some(latest_pp_root_tx_hash))) => {
-                                            if self.is_pending_pessimistic_root(Digest::from(latest_pp_root), height) {
-                                                // Certificate has been settled through some other transaction
-                                                info!(%certificate_id, "Certificate {certificate_id} for height: {height} has been settled on L1 through some other transaction");
-                                                SettledThroughOtherTx(latest_pp_root_tx_hash)
-                                            }
-                                            else {
-                                                warn!(%certificate_id, "Certificate {certificate_id} for height: {height} has NOT been settled on L1 through some other transaction,\
-                                                    will retry settlement in the next epoch");
-                                                CertificateSettlementResult::TimeoutError
-                                            }
+                                match self.check_alternative_settlement(certificate_id, height).await {
+                                    Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) => {
+                                        if self.is_pending_pessimistic_root(latest_pp_root, height) {
+                                            // Certificate has been settled through some other transaction
+                                            info!(%certificate_id,
+                                                "Certificate for height: {height} has been settled on L1 through other transaction {latest_pp_root_tx_hash}");
+                                            SettledThroughOtherTx(latest_pp_root_tx_hash)
+                                        } else {
+                                            warn!(%certificate_id,
+                                                "Certificate for height: {height} has NOT been settled, will retry settlement in the next epoch");
+                                            CertificateSettlementResult::TimeoutError
+                                        }
                                     }
-                                    _ => {
+                                    Ok(None) | Err(_) => {
                                         CertificateSettlementResult::TimeoutError
                                     }
                                 }
@@ -534,5 +566,33 @@ where
              SETTLED={settled_pp_root}"
         );
         settled_pp_root == computed_v2 || settled_pp_root == computed_v3
+    }
+
+    /// Checks if the certificate has been settled through an alternative
+    /// transaction on L1.
+    ///
+    /// Returns the latest pessimistic root and transaction hash if both are
+    /// found, otherwise returns None.
+    async fn check_alternative_settlement(
+        &self,
+        certificate_id: CertificateId,
+        height: Height,
+    ) -> Result<Option<(Digest, SettlementTxHash)>, Error> {
+        warn!(%certificate_id, "Settlement tx timeout, checking if the certificate for height: {height} has been already settled");
+
+        let latest_pp_root = self
+            .settlement_client
+            .get_last_settled_pp_root(self.network_id)
+            .await
+            .inspect_err(|err| {
+                error!(%certificate_id, "Error retrieving latest pessimistic root from L1: {}", err)
+            })?;
+
+        match latest_pp_root {
+            (Some(latest_pp_root), Some(latest_pp_root_tx_hash)) => {
+                Ok(Some((Digest::from(latest_pp_root), latest_pp_root_tx_hash)))
+            }
+            _ => Ok(None),
+        }
     }
 }

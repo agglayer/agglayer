@@ -320,7 +320,7 @@ where
             .mul_f64(self.config.max_retries as f64);
         let pending_tx_config = PendingTransactionConfig::new(tx_hash)
             .with_required_confirmations(self.config.confirmations as u64)
-            .with_timeout(Some(timeout));
+            .with_timeout(Some(timeout.clone()));
 
         let pending_tx = self
             .l1_rpc
@@ -334,6 +334,7 @@ where
                     error!(
                         %settlement_tx_hash,
                         ?error,
+                        ?timeout,
                         "Timeout while watching the pending settlement transaction"
                     );
                     PendingTransactionTimeout {
@@ -388,6 +389,7 @@ where
                     error!(
                         %settlement_tx_hash,
                         ?error,
+                        ?timeout,
                         "Timeout while waiting for the pending settlement transaction"
                     );
                     Err(PendingTransactionTimeout {
