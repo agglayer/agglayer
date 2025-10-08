@@ -105,11 +105,11 @@ where
             // Apply gas price multiplier and floor/ceiling constraints
             let estimate = self.rpc.estimate_eip1559_fees().await?;
             let adjust = |fee: u128| -> u128 {
-                let fee = Decimal::from(fee).saturating_mul(self.gas_price_multiplier);
+                let fee = Decimal::from(fee).saturating_mul(self.gas_price_params.multiplier);
                 fee.to_u128().unwrap_or(u128::MAX)
             };
             let max_fee_per_gas = adjust(estimate.max_fee_per_gas)
-                .clamp(self.gas_price_floor, self.gas_price_ceiling);
+                .clamp(self.gas_price_params.floor, self.gas_price_params.ceiling);
             let max_priority_fee_per_gas =
                 adjust(estimate.max_priority_fee_per_gas).max(max_fee_per_gas);
 

@@ -12,6 +12,27 @@ use alloy::{
 use rust_decimal::Decimal;
 use tracing::{debug, error};
 
+/// Gas price parameters for L1 transactions.
+#[derive(Debug, Clone)]
+pub struct GasPriceParams {
+    /// Gas price multiplier for transactions.
+    pub multiplier: Decimal,
+    /// Minimum gas price floor (in wei) for transactions.
+    pub floor: u128,
+    /// Maximum gas price ceiling (in wei) for transactions.
+    pub ceiling: u128,
+}
+
+impl Default for GasPriceParams {
+    fn default() -> Self {
+        GasPriceParams {
+            multiplier: Decimal::ONE,
+            floor: 0,
+            ceiling: u128::MAX,
+        }
+    }
+}
+
 pub mod aggchain;
 pub mod contracts;
 pub mod rollup;
@@ -46,12 +67,8 @@ pub struct L1RpcClient<RpcProvider> {
     default_l1_info_tree_entry: (u32, [u8; 32]),
     /// Gas multiplier factor for transactions.
     gas_multiplier_factor: u32,
-    /// Gas price multiplier for transactions.
-    gas_price_multiplier: Decimal,
-    /// Minimum gas price floor (in wei) for transactions.
-    gas_price_floor: u128,
-    /// Maximum gas price ceiling (in wei) for transactions.
-    gas_price_ceiling: u128,
+    /// Gas price parameters for transactions.
+    gas_price_params: GasPriceParams,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -119,9 +136,7 @@ where
         l1_info_tree: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
         gas_multiplier_factor: u32,
-        gas_price_multiplier: Decimal,
-        gas_price_floor: u128,
-        gas_price_ceiling: u128,
+        gas_price_params: GasPriceParams,
     ) -> Self {
         Self {
             rpc,
@@ -129,9 +144,7 @@ where
             l1_info_tree,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
-            gas_price_multiplier,
-            gas_price_floor,
-            gas_price_ceiling,
+            gas_price_params,
         }
     }
 
@@ -140,9 +153,7 @@ where
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         l1_info_tree: Address,
         gas_multiplier_factor: u32,
-        gas_price_multiplier: Decimal,
-        gas_price_floor: u128,
-        gas_price_ceiling: u128,
+        gas_price_params: GasPriceParams,
     ) -> Result<Self, L1RpcInitializationError>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
@@ -204,9 +215,7 @@ where
             l1_info_tree,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
-            gas_price_multiplier,
-            gas_price_floor,
-            gas_price_ceiling,
+            gas_price_params,
         ))
     }
 }
@@ -284,9 +293,7 @@ mod tests {
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
                 100,
-                Decimal::ONE,
-                0,
-                u128::MAX,
+                GasPriceParams::default(),
             )
             .await
             .unwrap(),
@@ -331,9 +338,7 @@ mod tests {
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
                 100,
-                Decimal::ONE,
-                0,
-                u128::MAX,
+                GasPriceParams::default(),
             )
             .await
             .unwrap(),
