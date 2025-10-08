@@ -351,7 +351,10 @@ where
             .retry_interval
             .mul_f64(self.config.max_retries as f64);
 
-        println!(">>>>>>>>>>>>>>>>>> COUNT {} <<<<<<<<<<<<<<<<", counter_value);
+        println!(
+            ">>>>>>>>>>>>>>>>>> COUNT {} <<<<<<<<<<<<<<<<",
+            counter_value
+        );
         //if counter_value % 3 == 0 &&  counter_value > 0 {
         // if counter_value > 3 {
         //     timeout = Duration::from_secs(3);
@@ -503,7 +506,7 @@ where
         // this network_id Using from_block Latest ensures we only get recent
         // events
         let rollup_address = self.l1_rpc.get_rollup_manager_address();
-        // TODO: Set Latest instead of earliest after testing
+        // TODO: Set Latest instead of Earliest after testing
         let filter = alloy::rpc::types::Filter::new()
             .address(rollup_address.into_alloy())
             .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
