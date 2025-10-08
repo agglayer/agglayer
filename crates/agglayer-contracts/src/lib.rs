@@ -9,14 +9,13 @@ use alloy::{
     providers::Provider,
     rpc::types::{Filter, TransactionReceipt},
 };
-use rust_decimal::Decimal;
 use tracing::{debug, error};
 
 /// Gas price parameters for L1 transactions.
 #[derive(Debug, Clone)]
 pub struct GasPriceParams {
-    /// Gas price multiplier for transactions.
-    pub multiplier: Decimal,
+    /// Gas price multiplier for transactions (scaled by 1000).
+    pub multiplier_per_1000: u64,
     /// Minimum gas price floor (in wei) for transactions.
     pub floor: u128,
     /// Maximum gas price ceiling (in wei) for transactions.
@@ -26,7 +25,7 @@ pub struct GasPriceParams {
 impl Default for GasPriceParams {
     fn default() -> Self {
         GasPriceParams {
-            multiplier: Decimal::ONE,
+            multiplier_per_1000: 1000, // 1.0 scaled by 1000
             floor: 0,
             ceiling: u128::MAX,
         }

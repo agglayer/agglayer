@@ -3,8 +3,6 @@ use alloy::{
     primitives::Bytes,
     providers::{PendingTransactionBuilder, Provider},
 };
-use num_traits::ToPrimitive;
-use rust_decimal::Decimal;
 use tracing::debug;
 
 use crate::L1RpcClient;
@@ -105,14 +103,14 @@ where
             let crate::GasPriceParams {
                 floor,
                 ceiling,
-                multiplier,
+                multiplier_per_1000,
             } = self.gas_price_params;
 
             // Apply gas price multiplier and floor/ceiling constraints
             let estimate = self.rpc.estimate_eip1559_fees().await?;
             let adjust = |fee: u128| -> u128 {
-                let fee = Decimal::from(fee).saturating_mul(multiplier);
-                fee.to_u128().unwrap_or(u128::MAX)
+                // Multiply by multiplier_per_1000 and divide by 1000
+                fee.saturating_mul(multiplier_per_1000 as u128) / 1000
             };
 
             let mut max_fee_per_gas = adjust(estimate.max_fee_per_gas).max(floor);

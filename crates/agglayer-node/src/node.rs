@@ -201,10 +201,13 @@ impl Node {
                 PolygonRollupManager::new(config.l1.rollup_manager_contract.into(), (*rpc).clone()),
                 config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
                 config.outbound.rpc.settle.gas_multiplier_factor,
-                agglayer_contracts::GasPriceParams {
-                    multiplier: config.outbound.rpc.settle.gas_price.multiplier,
-                    floor: config.outbound.rpc.settle.gas_price.floor,
-                    ceiling: config.outbound.rpc.settle.gas_price.ceiling,
+                {
+                    let gas_config = &config.outbound.rpc.settle.gas_price;
+                    agglayer_contracts::GasPriceParams {
+                        multiplier_per_1000: gas_config.multiplier.as_u64_per_1000(),
+                        floor: gas_config.floor,
+                        ceiling: gas_config.ceiling,
+                    }
                 },
             )
             .await?,

@@ -1,8 +1,7 @@
 use std::time::Duration;
 
-use agglayer_config::outbound::OutboundConfig;
+use agglayer_config::{outbound::OutboundConfig, Multiplier};
 use insta::assert_toml_snapshot;
-use rust_decimal::Decimal;
 
 #[test]
 fn deserialize_default_outbound_config() {
@@ -33,10 +32,10 @@ fn deserialize_custom_outbound_config() {
     assert_eq!(config.rpc.settle.gas_multiplier_factor, 120);
     assert_eq!(
         config.rpc.settle.gas_price.multiplier,
-        Decimal::from_str_exact("1.5").unwrap()
+        Multiplier::try_from(1.5).unwrap()
     );
-    assert_eq!(config.rpc.settle.gas_price.floor, 1000000000);
-    assert_eq!(config.rpc.settle.gas_price.ceiling, 100000000000);
+    assert_eq!(config.rpc.settle.gas_price.floor, 1_000_000_000);
+    assert_eq!(config.rpc.settle.gas_price.ceiling, 100_000_000_000);
 
     assert_toml_snapshot!(config);
 }

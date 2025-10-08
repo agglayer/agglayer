@@ -9,7 +9,6 @@ alloy-primitives.workspace = true
 educe.workspace = true
 humantime-serde = "1.1.1"
 jsonrpsee.workspace = true
-rust_decimal.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
 thiserror.workspace = true
