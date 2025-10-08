@@ -11,6 +11,15 @@ use alloy::{
 };
 use tracing::{debug, error};
 
+pub mod aggchain;
+pub mod contracts;
+pub mod rollup;
+pub mod settler;
+
+pub use aggchain::AggchainContract;
+pub use rollup::RollupContract;
+pub use settler::Settler;
+
 /// Gas price parameters for L1 transactions.
 #[derive(Debug, Clone)]
 pub struct GasPriceParams {
@@ -31,15 +40,6 @@ impl Default for GasPriceParams {
         }
     }
 }
-
-pub mod aggchain;
-pub mod contracts;
-pub mod rollup;
-pub mod settler;
-
-pub use aggchain::AggchainContract;
-pub use rollup::RollupContract;
-pub use settler::Settler;
 
 #[async_trait::async_trait]
 pub trait L1TransactionFetcher {
