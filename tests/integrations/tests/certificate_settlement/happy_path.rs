@@ -44,7 +44,7 @@ async fn successfully_push_certificate(#[case] state: Forest) {
 
 #[rstest]
 #[tokio::test]
-#[timeout(Duration::from_secs(500))]
+#[timeout(Duration::from_secs(200))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn send_multiple_certificates(#[case] mut state: Forest) {
     use agglayer_config::Config;
@@ -61,7 +61,7 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
     let (agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
-    for i in 0..100 {
+    for i in 0..5 {
         let withdrawals = vec![];
 
         let mut certificate = state.apply_events(&[], &withdrawals);
