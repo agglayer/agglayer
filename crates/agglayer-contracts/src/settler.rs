@@ -102,14 +102,31 @@ where
         }
 
         {
+            let crate::GasPriceParams {
+                floor,
+                ceiling,
+                multiplier,
+            } = self.gas_price_params;
+
             // Apply gas price multiplier and floor/ceiling constraints
             let estimate = self.rpc.estimate_eip1559_fees().await?;
             let adjust = |fee: u128| -> u128 {
-                let fee = Decimal::from(fee).saturating_mul(self.gas_price_params.multiplier);
+                let fee = Decimal::from(fee).saturating_mul(multiplier);
                 fee.to_u128().unwrap_or(u128::MAX)
             };
-            let max_fee_per_gas = adjust(estimate.max_fee_per_gas)
-                .clamp(self.gas_price_params.floor, self.gas_price_params.ceiling);
+
+            let mut max_fee_per_gas = adjust(estimate.max_fee_per_gas).max(floor);
+            if max_fee_per_gas > ceiling {
+                tracing::warn!(
+                    rollup_id,
+                    max_fee_per_gas_estimated = estimate.max_fee_per_gas,
+                    max_fee_per_gas_adjusted = max_fee_per_gas,
+                    max_fee_per_gas_ceiling = ceiling,
+                    "Exceeded configured gas ceiling, clamping",
+                );
+                max_fee_per_gas = ceiling;
+            }
+
             let max_priority_fee_per_gas =
                 adjust(estimate.max_priority_fee_per_gas).max(max_fee_per_gas);
 

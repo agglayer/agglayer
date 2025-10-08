@@ -20,46 +20,6 @@ pub struct OutboundRpcConfig {
     pub settle: OutboundRpcSettleConfig,
 }
 
-/// Gas price configuration for settlement transactions.
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub struct GasPriceConfig {
-    /// Gas price multiplier for the transaction.
-    /// The gas price is calculated as follows:
-    /// `gas_price = estimate_gas_price * multiplier`
-    #[serde(
-        default = "default_gas_price_multiplier",
-        skip_serializing_if = "same_as_default_gas_price_multiplier"
-    )]
-    pub multiplier: Decimal,
-
-    /// Minimum gas price floor (in wei) for the transaction.
-    /// Can be specified with units: "1gwei", "0.1eth", "1000000000wei"
-    #[serde(default, skip_serializing_if = "crate::is_default")]
-    #[serde_as(as = "crate::with::EthAmount")]
-    pub floor: u128,
-
-    /// Maximum gas price ceiling (in wei) for the transaction.
-    /// Can be specified with units: "100gwei", "0.01eth", "10000000000wei"
-    #[serde(
-        default = "default_gas_price_ceiling",
-        skip_serializing_if = "same_as_default_gas_price_ceiling"
-    )]
-    #[serde_as(as = "crate::with::EthAmount")]
-    pub ceiling: u128,
-}
-
-impl Default for GasPriceConfig {
-    fn default() -> Self {
-        GasPriceConfig {
-            multiplier: default_gas_price_multiplier(),
-            floor: 0,
-            ceiling: default_gas_price_ceiling(),
-        }
-    }
-}
-
 /// Outbound RPC settle configuration that is used to configure the outbound
 /// RPC settle function call.
 #[serde_as]
@@ -113,6 +73,46 @@ impl Default for OutboundRpcSettleConfig {
     }
 }
 
+/// Gas price configuration for settlement transactions.
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct GasPriceConfig {
+    /// Gas price multiplier for the transaction.
+    /// The gas price is calculated as follows:
+    /// `gas_price = estimate_gas_price * multiplier`
+    #[serde(
+        default = "default_gas_price_multiplier",
+        skip_serializing_if = "same_as_default_gas_price_multiplier"
+    )]
+    pub multiplier: Decimal,
+
+    /// Minimum gas price floor (in wei) for the transaction.
+    /// Can be specified with units: "1gwei", "0.1eth", "1000000000wei"
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    #[serde_as(as = "crate::with::EthAmount")]
+    pub floor: u128,
+
+    /// Maximum gas price ceiling (in wei) for the transaction.
+    /// Can be specified with units: "100gwei", "0.01eth", "10000000000wei"
+    #[serde(
+        default = "default_gas_price_ceiling",
+        skip_serializing_if = "same_as_default_gas_price_ceiling"
+    )]
+    #[serde_as(as = "crate::with::EthAmount")]
+    pub ceiling: u128,
+}
+
+impl Default for GasPriceConfig {
+    fn default() -> Self {
+        GasPriceConfig {
+            multiplier: default_gas_price_multiplier(),
+            floor: 0,
+            ceiling: default_gas_price_ceiling(),
+        }
+    }
+}
+
 /// Default gas price multiplier for the transaction.
 const fn default_gas_multiplier_factor() -> u32 {
     100
@@ -154,7 +154,8 @@ fn same_as_default_gas_price_multiplier(v: &Decimal) -> bool {
 
 /// Default gas price ceiling for the transaction.
 const fn default_gas_price_ceiling() -> u128 {
-    u128::MAX
+    // 400 gwei
+    400_000_000_000_u128
 }
 
 const fn same_as_default_gas_price_ceiling(v: &u128) -> bool {
