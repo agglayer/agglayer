@@ -408,6 +408,9 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, height, .. }) => {
+                        let computed_v3 = self.pending_pessimistic_root(height, pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion::V3);
+                        println!(">>>>>>>>>>>>>> CertificateReadyForSettlement for certificate_id={certificate_id} at height={height} computed_v3={computed_v3}");
+
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
@@ -417,10 +420,11 @@ where
                             .await;
 
                         if let Err(ref err) = result {
-                            println!(">>>>>>>>>> Error submitting settlement for certificate_id={certificate_id} at height={height}: {err}");
+                            println!(">>>>>>>>>> Error submitting settlement for certificate_id={certificate_id} at height={height}: {err:?}");
                             // Check for contract revert error "L2BlockNumberLessThanNextBlockNumber" meaning that
                             // some alternative transaction may have already settled the certificate so our submit reverted
-                            if detect_l1_error(&err.to_string(), ERR_SELECTOR_L2_BLOCK_NUMBER_LESS_THAN_NEXT_BLOCK_NUMBER) {
+                            if detect_l1_error(&format!("{err:?}"), ERR_SELECTOR_L2_BLOCK_NUMBER_LESS_THAN_NEXT_BLOCK_NUMBER) {
+                                println!(">>>>>>>>>>>> SUCCESSO found it");
                                 if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) =
                                     self.check_alternative_settlement(certificate_id, height).await {
                                         if self.is_pending_pessimistic_root(latest_pp_root, height) {

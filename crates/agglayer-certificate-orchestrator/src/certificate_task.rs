@@ -337,6 +337,7 @@ where
                      {certificate_id}"
                 );
                 self.set_status(CertificateStatus::Proven)?;
+                self.recompute_state().await?;
                 return Box::pin(self.process_from_proven()).await;
             }
             CertificateSettlementResult::SettledThroughOtherTx(alternative_settlement_tx_hash) => {

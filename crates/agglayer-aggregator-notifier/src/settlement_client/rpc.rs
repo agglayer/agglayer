@@ -230,18 +230,19 @@ where
                 pending_tx
             }
             Err(error) => {
-                let error_str = RollupManagerRpc::decode_contract_revert(&error)
+                let error_decoded = RollupManagerRpc::decode_contract_revert(&error)
                     .unwrap_or_else(|| error.to_string());
+                let error_message = error.to_string();
 
                 error!(
-                    error_code = %error,
-                    error = error_str,
+                    error_message = %error,
+                    error_decoded = error_decoded,
                     "Failed to settle certificate"
                 );
 
                 return Err(Error::SettlementError {
                     certificate_id,
-                    error: error_str,
+                    error: error_message,
                 });
             }
         };
