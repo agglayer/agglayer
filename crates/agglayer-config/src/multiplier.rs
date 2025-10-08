@@ -26,7 +26,7 @@ impl Multiplier {
         let x = (x * Self::SCALE as f32).round();
         (0.0..=(u64::MAX as f32))
             .contains(&x)
-            .then(|| Self(x as u64))
+            .then_some(Self(x as u64))
             .ok_or(FromF32Error::OutOfRange)
     }
 
