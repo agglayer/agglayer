@@ -410,6 +410,7 @@ where
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, height, .. }) => {
                         let computed_v3 = self.pending_pessimistic_root(height, pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion::V3);
                         println!(">>>>>>>>>>>>>> CertificateReadyForSettlement for certificate_id={certificate_id} at height={height} computed_v3={computed_v3}");
+                        let height = height.as_u64();
 
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
@@ -426,11 +427,11 @@ where
                             if detect_l1_error(&format!("{err:?}"), ERR_SELECTOR_L2_BLOCK_NUMBER_LESS_THAN_NEXT_BLOCK_NUMBER) {
                                 println!(">>>>>>>>>>>> SUCCESSO found it");
                                 if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) =
-                                    self.fetch_latest_pp_root_from_l1(certificate_id, height).await {
-                                        if self.is_pending_pessimistic_root(latest_pp_root, height) {
+                                    self.fetch_latest_pp_root_from_l1(certificate_id).await {
+                                        if self.is_pending_pessimistic_root(latest_pp_root, height+1) {
                                             // Certificate has been settled through some other transaction
                                             info!(%certificate_id,
-                                                "Certificate for height: {height} has been settled on L1 through other transaction {latest_pp_root_tx_hash}");
+                                                "Certificate for new height: {} has been settled on L1 through other transaction {latest_pp_root_tx_hash}", height+1);
                                             result = Ok(SettlementTxHash::from(latest_pp_root_tx_hash));
                                         }
                                 }
@@ -446,6 +447,7 @@ where
                     }
                     Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier, height, ..}) => {
                         println!(">>>>>>>>>>>>>> CertificateWaitingForSettlement for certificate_id={certificate_id} at height={height}");
+                        let height = height.as_u64();
                         // See comment on CertificateReadyForSettlement.
                         let result = self
                             .settlement_client
@@ -459,16 +461,16 @@ where
                             }
                             Err(Error::PendingTransactionTimeout { ..}) => {
                                 // On timeout, check if the certificate has been settled through some other transaction
-                                match self.fetch_latest_pp_root_from_l1(certificate_id, height).await {
+                                match self.fetch_latest_pp_root_from_l1(certificate_id).await {
                                     Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) => {
-                                        if self.is_pending_pessimistic_root(latest_pp_root, height) {
+                                        if self.is_pending_pessimistic_root(latest_pp_root, height+1) {
                                             // Certificate has been settled through some other transaction
                                             info!(%certificate_id,
-                                                "Certificate for height: {height} has been settled on L1 through other transaction {latest_pp_root_tx_hash}");
+                                                "Certificate for new height: {} has been settled on L1 through other transaction {latest_pp_root_tx_hash}", height+1);
                                             SettledThroughOtherTx(latest_pp_root_tx_hash)
                                         } else {
                                             warn!(%certificate_id,
-                                                "Certificate for height: {height} has NOT been settled, will retry settlement in the next epoch");
+                                                "Certificate for new height: {} has NOT been settled, will retry settlement in the next epoch", height+1);
                                             CertificateSettlementResult::TimeoutError
                                         }
                                     }
@@ -560,11 +562,11 @@ where
         pp_commitment_values.compute_pp_root(version)
     }
 
-    fn is_pending_pessimistic_root(&self, settled_pp_root: Digest, height: Height) -> bool {
+    fn is_pending_pessimistic_root(&self, settled_pp_root: Digest, height: u64) -> bool {
         let computed_v2 =
-            self.pending_pessimistic_root(height, PessimisticRootCommitmentVersion::V2);
+            self.pending_pessimistic_root(height.into(), PessimisticRootCommitmentVersion::V2);
         let computed_v3 =
-            self.pending_pessimistic_root(height, PessimisticRootCommitmentVersion::V3);
+            self.pending_pessimistic_root(height.into(), PessimisticRootCommitmentVersion::V3);
         println!(
             ">>>>>>>> COMPUTED PP ROOTS: height={height} V2={computed_v2}, V3={computed_v3}, \
              SETTLED={settled_pp_root}"
@@ -580,10 +582,7 @@ where
     async fn fetch_latest_pp_root_from_l1(
         &self,
         certificate_id: CertificateId,
-        height: Height,
     ) -> Result<Option<(Digest, SettlementTxHash)>, Error> {
-        warn!(%certificate_id, "Settlement tx timeout, checking if the certificate for height: {height} has been already settled");
-
         let latest_pp_root = self
             .settlement_client
             .get_last_settled_pp_root(self.network_id)

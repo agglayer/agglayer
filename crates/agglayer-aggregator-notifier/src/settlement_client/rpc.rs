@@ -503,6 +503,7 @@ where
         // this network_id Using from_block Latest ensures we only get recent
         // events
         let rollup_address = self.l1_rpc.get_rollup_manager_address();
+        // TODO: Set Latest instead of earliest after testing
         let filter = alloy::rpc::types::Filter::new()
             .address(rollup_address.into_alloy())
             .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
