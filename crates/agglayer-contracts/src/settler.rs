@@ -161,17 +161,16 @@ fn adjust_gas_estimate(estimate: &Eip1559Estimation, params: &GasPriceParams) ->
 #[cfg(test)]
 mod test {
     use alloy::eips::eip1559::Eip1559Estimation;
-    use rstest::rstest;
 
     use super::{adjust_gas_estimate, GasPriceParams};
 
-    #[rstest]
+    #[rstest::rstest]
     fn test_adjust_gas_estimate_respects_floor_and_ceiling(
-        #[values(10_000_000_000, 100_000_000_000, 200_000_000_000)] max_fee_per_gas: u128,
-        #[values(5_000_000_000, 50_000_000_000, 100_000_000_000)] max_priority_fee_per_gas: u128,
         #[values(500, 1000, 1500, 2000)] multiplier_per_1000: u64,
-        #[values(10_000_000_000, 50_000_000_000)] floor: u128,
-        #[values(100_000_000_000, 200_000_000_000)] ceiling: u128,
+        #[values(10_000_000, 50_000_000)] floor: u128,
+        #[values(100_000_000, 200_000_000)] ceiling: u128,
+        #[values(10_000_000, 100_000_000, 200_000_000)] max_fee_per_gas: u128,
+        #[values(5_000_000, 50_000_000, 100_000_000)] max_priority_fee_per_gas: u128,
     ) {
         let estimate = Eip1559Estimation {
             max_fee_per_gas,
