@@ -401,7 +401,8 @@ where
                         pending_state = Some(new_state);
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateProven { height, .. }) => {
+                    Some(NetworkTaskMessage::CertificateProven { height, certificate_id }) => {
+                         debug!(">>>>>>>>>>>>>> CertificateProven for certificate_id={certificate_id} at height={height}");
                         if let Err(error) = self
                             .pending_store
                             .set_latest_proven_certificate_per_network(&self.network_id, &height, &certificate_id)
@@ -414,6 +415,7 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, nonce, previous_tx_hashes, height, .. }) => {
+                         debug!(">>>>>>>>>>>>>> CertificateReadyForSettlement for certificate_id={certificate_id} at height={height} previous tx hashes: {:?}", previous_tx_hashes);
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
@@ -421,6 +423,8 @@ where
                             .settlement_client
                             .submit_certificate_settlement(certificate_id, nonce)
                             .await;
+
+                        println!(">>>>>>>>>>>>> CertificateReadyForSettlement RESULT: {result:?}");
 
                         // Get the nonce of the tx
                         let mut result: Result<(SettlementTxHash, Option<u64>), Error> = match result {

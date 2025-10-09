@@ -116,11 +116,13 @@ where
                 );
                 // If nonce is provided, increase the max fee by 10% to avoid
                 // transaction getting stuck due to nonce gaps.
-                adjusted.max_fee_per_gas = (adjusted.max_fee_per_gas * 110) / 100;
-                adjusted.max_priority_fee_per_gas = (adjusted.max_priority_fee_per_gas * 110) / 100;
+                adjusted.max_fee_per_gas = adjusted.max_fee_per_gas * 2;
+                adjusted.max_priority_fee_per_gas = adjusted.max_priority_fee_per_gas * 2;
 
                 tx_call = tx_call.nonce(nonce);
             }
+
+            println!(">>>>>>>>>>>>>>>> FEE SET TO:{adjusted:?}");
 
             tx_call
                 .max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)

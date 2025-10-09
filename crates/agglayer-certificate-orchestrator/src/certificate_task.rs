@@ -297,7 +297,7 @@ where
         if self.previous_tx_hashes.contains(&settlement_tx_hash) {
             warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
         } else {
-            println!(">>>>>>>>>>>>>>>>>>> NONCE: {:?}", nonce);
+            println!(">>>>>>>>>>>>>>>>>>> CERTIFICATE TASK NONCE: {:?}", nonce);
             self.previous_tx_hashes.insert(settlement_tx_hash);
         }
 
