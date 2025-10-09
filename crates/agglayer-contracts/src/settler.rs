@@ -40,7 +40,6 @@ where
             // Fall back to hex representation of revert data
             return Some(format!("0x{}", hex::encode(revert_data)));
         }
-
         // For non-revert errors, return the debug representation
         Some(format!("{error:?}"))
     }
