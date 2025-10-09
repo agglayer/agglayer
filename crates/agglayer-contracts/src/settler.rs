@@ -126,7 +126,7 @@ where
             }
 
             let max_priority_fee_per_gas =
-                adjust(estimate.max_priority_fee_per_gas).max(max_fee_per_gas);
+                adjust(estimate.max_priority_fee_per_gas).min(max_fee_per_gas);
 
             debug!(
                 "Applying gas price adjustment for rollup_id: {}. Estimated {}, {} priority. \
