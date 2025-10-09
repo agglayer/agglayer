@@ -335,7 +335,7 @@ where
 
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
-        let pp_root = self
+        let new_pp_root = self
             .new_pp_root
             .ok_or(CertificateStatusError::InternalError(
                 "CertificateTask::process_from_candidate called without a pp_root".into(),
@@ -356,7 +356,7 @@ where
             certificate_id,
             settlement_tx_hash,
             settlement_complete_notifier,
-            pp_root,
+            pp_root: new_pp_root,
         })
         .await?;
 
