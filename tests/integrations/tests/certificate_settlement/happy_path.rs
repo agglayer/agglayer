@@ -102,5 +102,5 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
     for log in &events {
         println!("event: {log:?}");
     }
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 5);
 }
