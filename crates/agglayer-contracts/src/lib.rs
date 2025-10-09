@@ -1,6 +1,7 @@
 //! Agglayer smart-contract bindings.
 
 use std::sync::Arc;
+
 use agglayer_primitives::U256;
 use alloy::{
     eips::BlockNumberOrTag,

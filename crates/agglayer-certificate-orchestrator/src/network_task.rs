@@ -424,10 +424,10 @@ where
                         // Get the nonce of the tx
                         let result: Result<(SettlementTxHash, Option<u64>), Error> = match result {
                             Ok(settlement_tx_hash) => {
-                                match self.settlement_client.get_settlement_receipt_status(settlement_tx_hash).await {
-                                    Ok((_, nonce)) => {
+                                match self.settlement_client.get_settlement_nonce(settlement_tx_hash).await {
+                                    Ok(nonce) => {
                                         println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 1 NONCE: {:?}", nonce);
-                                        Ok((settlement_tx_hash, Some(nonce)))
+                                        Ok((settlement_tx_hash, nonce))
                                     }
                                     Err(err) => {
                                         println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 2 NONCE: {err:?}");
@@ -464,15 +464,17 @@ where
                             }
                             Err(Error::PendingTransactionTimeout { settlement_tx_hash, .. }) => {
                                 match self.settlement_client.get_settlement_receipt_status(settlement_tx_hash).await {
-                                    Ok((true, nonce)) => {
+                                    Ok(true) => {
                                         // Transaction is mined but we did not get the event, consider it settled
-                                        info!(%certificate_id, %nonce,
-                                            "Certificate for new height: {} has been settled on L1 through transaction {settlement_tx_hash} with nonce {nonce} (timeout but tx mined)", height);
+                                        info!(%certificate_id,
+                                            "Certificate for new height: {} has been settled on L1 through transaction {settlement_tx_hash} \
+                                             (timeout but tx mined)", height);
                                     }
-                                    Ok((false, nonce)) => {
+                                    Ok(false) => {
                                         // Transaction is not mined yet, will retry later
-                                        debug!(%certificate_id, %nonce,
-                                            "Certificate for new height: {} is still pending settlement on L1 through transaction {settlement_tx_hash} with nonce {nonce} (timeout and tx not mined)", height);
+                                        debug!(%certificate_id,
+                                            "Certificate for new height: {} is still pending settlement on L1 through transaction {settlement_tx_hash} \
+                                            (timeout and tx not mined)", height);
                                     }
                                     Err(err) => {
                                         error!(%certificate_id,

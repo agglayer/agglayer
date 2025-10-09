@@ -926,11 +926,19 @@ impl SettlementClient for Check {
     ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error> {
         Ok((None, None))
     }
+
+    async fn get_settlement_nonce(
+        &self,
+        _settlement_tx_hash: SettlementTxHash,
+    ) -> Result<Option<u64>, Error> {
+        Ok(None)
+    }
+
     async fn get_settlement_receipt_status(
         &self,
         _settlement_tx_hash: SettlementTxHash,
-    ) -> Result<(bool, u64), Error> {
-        Ok((true, 0))
+    ) -> Result<bool, Error> {
+        Ok(true)
     }
 }
 

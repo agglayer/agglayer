@@ -578,7 +578,29 @@ where
     async fn get_settlement_receipt_status(
         &self,
         settlement_tx_hash: SettlementTxHash,
-    ) -> Result<(bool, u64), Error> {
+    ) -> Result<bool, Error> {
+        let tx_hash = settlement_tx_hash.into();
+
+        // Then, get the receipt to check the status
+        match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
+            Ok(receipt) => {
+                debug!(
+                    "Fetched receipt for settlement tx {}: {:?}",
+                    tx_hash, receipt
+                );
+                Ok(receipt.status())
+            }
+            Err(e) => Err(Error::L1CommunicationError(
+                agglayer_contracts::L1RpcError::TransactionReceiptNotFound(e.to_string()),
+            )),
+        }
+    }
+
+    /// Returns the receipt status and nonce for a settlement tx
+    async fn get_settlement_nonce(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<Option<u64>, Error> {
         let tx_hash = settlement_tx_hash.into();
 
         // First, get the transaction to extract the nonce
@@ -610,19 +632,7 @@ where
             }
         };
 
-        // Then, get the receipt to check the status
-        match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
-            Ok(receipt) => {
-                debug!(
-                    "Fetched receipt for settlement tx {}: {:?}",
-                    tx_hash, receipt
-                );
-                Ok((receipt.status(), nonce))
-            }
-            Err(e) => Err(Error::L1CommunicationError(
-                agglayer_contracts::L1RpcError::TransactionReceiptNotFound(e.to_string()),
-            )),
-        }
+        Ok(Some(nonce))
     }
 }
 
