@@ -24,7 +24,7 @@ const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
 
 /// Rpc-based settlement client for L1 certificate settlement.
 /// Using alloy client to interact with the L1 rollup manager contract.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
     state_store: Arc<StateStore>,
     pending_store: Arc<PendingStore>,
@@ -50,25 +50,6 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
             state_store,
             pending_store,
             current_epoch,
-        }
-    }
-}
-
-impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> Default
-    for RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
-where
-    StateStore: Default,
-    PendingStore: Default,
-    PerEpochStore: Default,
-    RollupManagerRpc: Default,
-{
-    fn default() -> Self {
-        Self {
-            state_store: Arc::new(StateStore::default()),
-            pending_store: Arc::new(PendingStore::default()),
-            config: Arc::new(OutboundRpcSettleConfig::default()),
-            l1_rpc: Arc::new(RollupManagerRpc::default()),
-            current_epoch: Arc::new(ArcSwap::new(Arc::new(PerEpochStore::default()))),
         }
     }
 }
@@ -223,12 +204,14 @@ where
                 pending_tx
             }
             Err(error) => {
+                // TODO: Differentiate between different error types, check if decoding works properly
+                // for custom errors as well.
                 let error_decoded = RollupManagerRpc::decode_contract_revert(&error)
                     .unwrap_or_else(|| error.to_string());
                 let error_message = error.to_string();
 
                 error!(
-                    error_message = %error,
+                    error_message,
                     error_decoded = error_decoded,
                     "Failed to settle certificate"
                 );
@@ -481,8 +464,8 @@ where
         self.l1_rpc.get_provider()
     }
 
-    /// Queries the L1 for the latest VerifyPessimisticStateTransition event for
-    /// the given network_id and returns its newPessimisticRoot along with the
+    /// Queries the L1 for the latest `VerifyPessimisticStateTransition` event for
+    /// the given `network_id` and returns its `newPessimisticRoot` along with the
     /// transaction receipt of the transaction that has caused it.
     async fn get_last_settled_pp_root(
         &self,
