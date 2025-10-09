@@ -26,6 +26,8 @@ pin-project.workspace = true
 rand.workspace = true
 reqwest = "0.12.23"
 rstest.workspace = true
+rustls.workspace = true
+rustls-pemfile = "2.2"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with.workspace = true
@@ -53,3 +55,4 @@ agglayer-types.workspace = true
 agglayer-prover-config.workspace = true
 pessimistic-proof-test-suite.workspace = true
 pessimistic-proof.workspace = true
+dev-tls-certs = { path = "../dev-tls-certs" }
