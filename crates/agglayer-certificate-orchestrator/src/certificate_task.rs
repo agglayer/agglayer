@@ -288,6 +288,7 @@ where
             height,
             certificate_id,
             nonce: self.nonce,
+            previous_tx_hashes: self.previous_tx_hashes.clone(),
             settlement_submitted_notifier,
         })
         .await?;

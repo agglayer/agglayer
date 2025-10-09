@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use agglayer_clock::ClockRef;
 use agglayer_storage::{
@@ -70,6 +70,7 @@ pub enum NetworkTaskMessage {
         height: Height,
         certificate_id: CertificateId,
         nonce: Option<u64>,
+        previous_tx_hashes: HashSet<SettlementTxHash>,
         settlement_submitted_notifier:
             oneshot::Sender<Result<(SettlementTxHash, Option<u64>), CertificateStatusError>>,
     },
@@ -412,7 +413,7 @@ where
                         }
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, nonce, .. }) => {
+                    Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, nonce, previous_tx_hashes, height, .. }) => {
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
@@ -422,7 +423,7 @@ where
                             .await;
 
                         // Get the nonce of the tx
-                        let result: Result<(SettlementTxHash, Option<u64>), Error> = match result {
+                        let mut result: Result<(SettlementTxHash, Option<u64>), Error> = match result {
                             Ok(settlement_tx_hash) => {
                                 match self.settlement_client.get_settlement_nonce(settlement_tx_hash).await {
                                     Ok(nonce) => {
@@ -439,6 +440,34 @@ where
                             }
                             Err(err) => Err(err),
                         };
+
+                        // If the error in the sending transaction happened for whatever reason,
+                        // check if maybe the certificate has been settled through some other previous transaction
+                        if let Err(_err) = &result {
+                            for previos_tx_hash in previous_tx_hashes {
+                                match self.settlement_client.get_settlement_receipt_status(previos_tx_hash).await {
+                                    Ok(true) => {
+                                         println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 5 CHECK");
+                                        // Transaction is mined but we haven't known that, return it for further processing
+                                        info!(%certificate_id,
+                                            "Certificate for new height: {height} has been settled on L1 through previous transaction {previos_tx_hash}");
+                                        result = Ok((previos_tx_hash, None));
+                                        break;
+                                    }
+                                    Ok(false) => {
+                                        println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 6 CHECK");
+                                        // Transaction is not mined yet, will retry later
+                                        debug!(%certificate_id,
+                                            "Certificate for new height: {height} is still pending settlement on L1 through previous transaction {previos_tx_hash}");
+                                    }
+                                    Err(err) => {
+                                        println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 7 CHECK err {err:?}");
+                                        debug!(%certificate_id,
+                                            "Error checking receipt status for previous settlement tx {previos_tx_hash}: {err}");
+                                    }
+                                }
+                            }
+                        }
 
                         settlement_submitted_notifier
                             .send(result.map_err(Into::into))
