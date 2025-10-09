@@ -106,7 +106,21 @@ where
 
         let tx_call = {
             let estimate = self.rpc.estimate_eip1559_fees().await?;
-            let adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
+            let mut adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
+
+            if let Some(nonce) = nonce {
+                println!(">>>>>>>>>>>>>>>> NONCE SET TO:{nonce}");
+                debug!(
+                    "Nonce provided, increasing max_fee_per_gas by 10% to {}",
+                    adjusted.max_fee_per_gas
+                );
+                // If nonce is provided, increase the max fee by 10% to avoid
+                // transaction getting stuck due to nonce gaps.
+                adjusted.max_fee_per_gas = (adjusted.max_fee_per_gas * 110) / 100;
+                adjusted.max_priority_fee_per_gas = (adjusted.max_priority_fee_per_gas * 110) / 100;
+
+                tx_call = tx_call.nonce(nonce);
+            }
 
             tx_call
                 .max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)
