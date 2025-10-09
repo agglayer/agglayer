@@ -276,6 +276,10 @@ where
             .wait_for_transaction_receipt(settlement_tx_hash, certificate_id)
             .await?;
 
+        if !receipt.inner.tx_type().is_eip1559() {
+            warn!(tx = %settlement_tx_hash, "Settlement tx is not eip1559.");
+        }
+
         // Apply fail points if they are active for integration testing
         #[cfg(feature = "testutils")]
         testutils::inject_settle_certificate_fail_points(certificate_id)?;

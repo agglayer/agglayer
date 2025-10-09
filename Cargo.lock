@@ -208,6 +208,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "prover-alloy",
+ "rstest",
  "thiserror 2.0.16",
  "tokio",
  "tracing",

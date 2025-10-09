@@ -1,0 +1,11 @@
+[rpc.settle]
+max-retries = 3
+retry-interval = "7s"
+confirmations = 1
+settlement-timeout = "20m"
+gas-multiplier-factor = 100
+
+[rpc.settle.gas-price]
+multiplier = 1.0
+floor = "0gwei"
+ceiling = "400gwei"
