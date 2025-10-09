@@ -8,4 +8,4 @@ gas-multiplier-factor = 100
 [rpc.settle.gas-price]
 multiplier = 1.0
 floor = "0gwei"
-ceiling = "400gwei"
+ceiling = "100gwei"
