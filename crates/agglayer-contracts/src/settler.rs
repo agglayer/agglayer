@@ -8,6 +8,8 @@ use tracing::debug;
 
 use crate::{GasPriceParams, L1RpcClient};
 
+const DEFAULT_GAS_PRICE_NONCE_INCREASE_FACTOR: u64 = 2;
+
 #[async_trait::async_trait]
 pub trait Settler {
     fn decode_contract_revert(error: &ContractError) -> Option<String>;
@@ -109,20 +111,23 @@ where
             let mut adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
 
             if let Some(nonce) = nonce {
-                println!(">>>>>>>>>>>>>>>> NONCE SET TO:{nonce}");
                 debug!(
-                    "Nonce provided, increasing max_fee_per_gas by 10% to {}",
-                    adjusted.max_fee_per_gas
+                    "Nonce provided, increasing max_fee_per_gas \
+                     {DEFAULT_GAS_PRICE_NONCE_INCREASE_FACTOR} times"
                 );
                 // If nonce is provided, increase the max fee by 10% to avoid
                 // transaction getting stuck due to nonce gaps.
-                adjusted.max_fee_per_gas = adjusted.max_fee_per_gas * 2;
-                adjusted.max_priority_fee_per_gas = adjusted.max_priority_fee_per_gas * 2;
+                adjusted.max_fee_per_gas *= 2;
+                adjusted.max_priority_fee_per_gas *= 2;
 
                 tx_call = tx_call.nonce(nonce);
             }
 
-            println!(">>>>>>>>>>>>>>>> FEE SET TO:{adjusted:?}");
+            debug!(
+                "Calculated adjusted gas estimation for rollup_id: {rollup_id}: \
+                 max_priority_fee_per_gas: {}, max_fee_per_gas: {}. Original estimate: {:?}",
+                adjusted.max_priority_fee_per_gas, adjusted.max_fee_per_gas, estimate
+            );
 
             tx_call
                 .max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)

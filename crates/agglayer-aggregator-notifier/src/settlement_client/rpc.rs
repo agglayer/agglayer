@@ -1,10 +1,4 @@
-use std::{
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use agglayer_certificate_orchestrator::{
     Error, Error::PendingTransactionTimeout, SettlementClient,
@@ -37,7 +31,6 @@ pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupMa
     config: Arc<OutboundRpcSettleConfig>,
     l1_rpc: Arc<RollupManagerRpc>,
     current_epoch: Arc<ArcSwap<PerEpochStore>>,
-    counter: Arc<AtomicUsize>,
 }
 
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
@@ -57,7 +50,6 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
             state_store,
             pending_store,
             current_epoch,
-            counter: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -77,7 +69,6 @@ where
             config: Arc::new(OutboundRpcSettleConfig::default()),
             l1_rpc: Arc::new(RollupManagerRpc::default()),
             current_epoch: Arc::new(ArcSwap::new(Arc::new(PerEpochStore::default()))),
-            counter: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -348,26 +339,11 @@ where
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<TransactionReceipt, Error> {
-        // Increment counter for each call
-        let counter_value = self.counter.fetch_add(1, Ordering::SeqCst);
-
         let tx_hash = settlement_tx_hash.into();
-        let mut timeout = self
+        let timeout = self
             .config
             .retry_interval
             .mul_f64(self.config.max_retries as f64);
-
-        println!(
-            ">>>>>>>>>>>>>>>>>> COUNT {} <<<<<<<<<<<<<<<<",
-            counter_value
-        );
-        //if counter_value % 3 == 0 &&  counter_value > 0 {
-        // if counter_value > 3 {
-        //     timeout = Duration::from_secs(3);
-        //     println!(">>>>>>>>>>>>>>>>>> SHORT TIMEOUT <<<<<<<<<<<<<<<<");
-        // }
-
-        timeout = Duration::from_secs(2);
 
         let pending_tx_config = PendingTransactionConfig::new(tx_hash)
             .with_required_confirmations(self.config.confirmations as u64)

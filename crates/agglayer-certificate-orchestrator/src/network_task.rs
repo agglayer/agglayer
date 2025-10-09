@@ -396,13 +396,11 @@ where
                         })?;
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateExecuted { height, new_state, .. }) => {
-                        info!("CertificateExecuted for certificate_id={certificate_id} at height={height}");
+                    Some(NetworkTaskMessage::CertificateExecuted { new_state, .. }) => {
                         pending_state = Some(new_state);
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateProven { height, certificate_id }) => {
-                         debug!(">>>>>>>>>>>>>> CertificateProven for certificate_id={certificate_id} at height={height}");
                         if let Err(error) = self
                             .pending_store
                             .set_latest_proven_certificate_per_network(&self.network_id, &height, &certificate_id)
@@ -415,7 +413,6 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, nonce, previous_tx_hashes, height, .. }) => {
-                         debug!(">>>>>>>>>>>>>> CertificateReadyForSettlement for certificate_id={certificate_id} at height={height} previous tx hashes: {:?}", previous_tx_hashes);
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
@@ -424,18 +421,14 @@ where
                             .submit_certificate_settlement(certificate_id, nonce)
                             .await;
 
-                        println!(">>>>>>>>>>>>> CertificateReadyForSettlement RESULT: {result:?}");
-
                         // Get the nonce of the tx
                         let mut result: Result<(SettlementTxHash, Option<u64>), Error> = match result {
                             Ok(settlement_tx_hash) => {
                                 match self.settlement_client.get_settlement_nonce(settlement_tx_hash).await {
                                     Ok(nonce) => {
-                                        println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 1 NONCE: {:?}", nonce);
                                         Ok((settlement_tx_hash, nonce))
                                     }
                                     Err(err) => {
-                                        println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 2 NONCE: {err:?}");
                                         error!(%certificate_id,
                                             "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
                                          Ok((settlement_tx_hash, None))
@@ -451,7 +444,6 @@ where
                             for previos_tx_hash in previous_tx_hashes {
                                 match self.settlement_client.get_settlement_receipt_status(previos_tx_hash).await {
                                     Ok(true) => {
-                                         println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 5 CHECK");
                                         // Transaction is mined but we haven't known that, return it for further processing
                                         info!(%certificate_id,
                                             "Certificate for new height: {height} has been settled on L1 through previous transaction {previos_tx_hash}");
@@ -459,13 +451,11 @@ where
                                         break;
                                     }
                                     Ok(false) => {
-                                        println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 6 CHECK");
                                         // Transaction is not mined yet, will retry later
                                         debug!(%certificate_id,
                                             "Certificate for new height: {height} is still pending settlement on L1 through previous transaction {previos_tx_hash}");
                                     }
                                     Err(err) => {
-                                        println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 7 CHECK err {err:?}");
                                         debug!(%certificate_id,
                                             "Error checking receipt status for previous settlement tx {previos_tx_hash}: {err}");
                                     }
@@ -482,7 +472,6 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier, height, pp_root, ..}) => {
-                        debug!(">>>>>>>>>>>>>> CertificateWaitingForSettlement for certificate_id={certificate_id} at height={height}");
                         let height = height.as_u64();
                         // See comment on CertificateReadyForSettlement.
                         let result = self
@@ -630,10 +619,6 @@ where
             height.into(),
             PessimisticRootCommitmentVersion::V3,
             &commitment,
-        );
-        println!(
-            ">>>>>>>> COMPUTED PP ROOTS: height={height} V2={computed_v2}, V3={computed_v3}, \
-             SETTLED={settled_pp_root}"
         );
         settled_pp_root == computed_v2 || settled_pp_root == computed_v3
     }
