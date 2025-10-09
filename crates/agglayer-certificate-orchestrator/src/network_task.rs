@@ -412,13 +412,13 @@ where
                         }
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, .. }) => {
+                    Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier, nonce, .. }) => {
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
                         let result = self
                             .settlement_client
-                            .submit_certificate_settlement(certificate_id, None)
+                            .submit_certificate_settlement(certificate_id, nonce)
                             .await;
 
                         // Get the nonce of the tx
@@ -426,9 +426,11 @@ where
                             Ok(settlement_tx_hash) => {
                                 match self.settlement_client.get_settlement_receipt_status(settlement_tx_hash).await {
                                     Ok((_, nonce)) => {
+                                        println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 1 NONCE: {:?}", nonce);
                                         Ok((settlement_tx_hash, Some(nonce)))
                                     }
                                     Err(err) => {
+                                        println!(">>>>>>>>>>>>>>>>>>> CHECKPOINT 2 NONCE: {err:?}");
                                         error!(%certificate_id,
                                             "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
                                          Ok((settlement_tx_hash, None))
