@@ -140,8 +140,8 @@ const fn default_settlement_timeout() -> Duration {
 
 /// Default gas price ceiling for the transaction.
 const fn default_gas_price_ceiling() -> u128 {
-    // 400 gwei
-    400_000_000_000_u128
+    // 100 gwei
+    100_000_000_000_u128
 }
 
 #[cfg(test)]
