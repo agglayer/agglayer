@@ -506,7 +506,7 @@ where
                                             (timeout and tx not mined)", height);
                                     }
                                     Err(err) => {
-                                        error!(%certificate_id,
+                                        debug!(%certificate_id,
                                             "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
                                     }
                                 }

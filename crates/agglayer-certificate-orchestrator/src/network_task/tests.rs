@@ -819,6 +819,12 @@ async fn changing_epoch_triggers_certify() {
         .withf(move |i, _| *i == certificate_id)
         .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_1));
 
+    settlement_client
+        .expect_get_settlement_nonce()
+        .once()
+        .with(eq(SETTLEMENT_TX_HASH_1))
+        .returning(|_| Ok(Some(1)));
+
     state
         .expect_update_settlement_tx_hash()
         .once()
@@ -830,6 +836,12 @@ async fn changing_epoch_triggers_certify() {
         .once()
         .withf(move |i, _| *i == certificate_id2)
         .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_2));
+
+    settlement_client
+        .expect_get_settlement_nonce()
+        .once()
+        .with(eq(SETTLEMENT_TX_HASH_2))
+        .returning(|_| Ok(Some(2)));
 
     state
         .expect_update_settlement_tx_hash()
