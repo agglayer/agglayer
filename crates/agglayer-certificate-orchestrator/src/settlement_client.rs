@@ -33,24 +33,23 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
         certificate_id: CertificateId,
     ) -> Result<(EpochNumber, CertificateIndex), Error>;
 
-    /// Returns a reference to the provider for direct L1 queries
+    /// Returns a reference to the provider for direct L1 queries.
     fn get_provider(&self) -> &Self::Provider;
 
-    /// Returns the latest PP settlement root from the settlement logs
-    /// if any.
+    /// Returns the latest PP settlement root from the settlement logs if any.
     /// It queries the `VerifyPessimisticStateTransition` events from the l1.
     async fn get_last_settled_pp_root(
         &self,
         network_id: NetworkId,
     ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error>;
 
-    /// Returns the receipt status and nonce for a settlement tx
+    /// Returns the nonce for a settlement tx.
     async fn get_settlement_nonce(
         &self,
         settlement_tx_hash: SettlementTxHash,
     ) -> Result<Option<u64>, Error>;
 
-    /// Returns the receipt status and nonce for a settlement tx
+    /// Returns the receipt status for a settlement tx.
     async fn get_settlement_receipt_status(
         &self,
         settlement_tx_hash: SettlementTxHash,

@@ -8,7 +8,7 @@ use tracing::debug;
 
 use crate::{GasPriceParams, L1RpcClient};
 
-const DEFAULT_GAS_PRICE_NONCE_INCREASE_FACTOR: u64 = 2;
+const DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER: u128 = 2;
 
 #[async_trait::async_trait]
 pub trait Settler {
@@ -23,7 +23,7 @@ pub trait Settler {
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
-        _nonce: Option<u64>,
+        nonce: Option<u64>,
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
 }
 
@@ -113,12 +113,12 @@ where
             if let Some(nonce) = nonce {
                 debug!(
                     "Nonce provided, increasing max_fee_per_gas \
-                     {DEFAULT_GAS_PRICE_NONCE_INCREASE_FACTOR} times"
+                     {DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER} times"
                 );
                 // If nonce is provided, increase the max fee by 10% to avoid
                 // transaction getting stuck due to nonce gaps.
-                adjusted.max_fee_per_gas *= 2;
-                adjusted.max_priority_fee_per_gas *= 2;
+                adjusted.max_fee_per_gas *= DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER;
+                adjusted.max_priority_fee_per_gas *= DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER;
 
                 tx_call = tx_call.nonce(nonce);
             }

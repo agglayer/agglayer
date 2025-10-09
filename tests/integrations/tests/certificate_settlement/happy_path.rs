@@ -79,9 +79,9 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
             .await
             .unwrap();
 
-        let _result = wait_for_settlement_or_error!(client, certificate_id).await;
+        let result = wait_for_settlement_or_error!(client, certificate_id).await;
 
-        // assert!(matches!(result.status, CertificateStatus::Settled));
+        assert!(matches!(result.status, CertificateStatus::Settled));
     }
 
     let provider = RootProvider::<Ethereum>::new_http(reqwest::Url::parse(&l1.rpc).unwrap());

@@ -44,7 +44,6 @@ pessimistic-proof.workspace = true
 
 # Optional dependencies
 mockall = { workspace = true, optional = true }
-regex = "1.11.2"
 
 [dev-dependencies]
 agglayer-certificate-orchestrator = { workspace = true, features = [

@@ -33,7 +33,6 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     pending_store: Arc<PendingStore>,
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
-
     pp_root: Option<Digest>,
     nonce: Option<u64>,
     previous_tx_hashes: HashSet<SettlementTxHash>,
@@ -143,7 +142,7 @@ where
         // this
         if self.header.status == CertificateStatus::Proven {
             warn!(%certificate_id,
-                "Certificate is already proven but we do not have the  new_state anymore... \
+                "Certificate is already proven but we do not have the new_state anymore... \
                  reproving"
             );
 
@@ -298,6 +297,10 @@ where
             warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
         } else {
             self.previous_tx_hashes.insert(settlement_tx_hash);
+            debug!(
+                "Certificate settlement transactions list: {:?}",
+                self.previous_tx_hashes
+            );
         }
 
         // Keep the nonce for future use (e.g., retries)

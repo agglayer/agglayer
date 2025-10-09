@@ -24,7 +24,7 @@ const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
 
 /// Rpc-based settlement client for L1 certificate settlement.
 /// Using alloy client to interact with the L1 rollup manager contract.
-#[derive(Clone, Default)]
+#[derive(Default, Clone)]
 pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
     state_store: Arc<StateStore>,
     pending_store: Arc<PendingStore>,
@@ -204,8 +204,8 @@ where
                 pending_tx
             }
             Err(error) => {
-                // TODO: Differentiate between different error types, check if decoding works properly
-                // for custom errors as well.
+                // TODO: Differentiate between different error types, check if decoding works
+                // properly for custom errors as well.
                 let error_decoded = RollupManagerRpc::decode_contract_revert(&error)
                     .unwrap_or_else(|| error.to_string());
                 let error_message = error.to_string();
@@ -464,9 +464,10 @@ where
         self.l1_rpc.get_provider()
     }
 
-    /// Queries the L1 for the latest `VerifyPessimisticStateTransition` event for
-    /// the given `network_id` and returns its `newPessimisticRoot` along with the
-    /// transaction receipt of the transaction that has caused it.
+    /// Queries the L1 for the latest `VerifyPessimisticStateTransition` event
+    /// for the given `network_id` and returns its `newPessimisticRoot`
+    /// along with the transaction receipt of the transaction that has
+    /// caused it.
     async fn get_last_settled_pp_root(
         &self,
         network_id: agglayer_types::NetworkId,
@@ -488,7 +489,7 @@ where
                 to_block: None,
             });
 
-        // Fetch the logs through settlement client
+        // Fetch the logs through from the network.
         let events = self
             .l1_rpc
             .get_provider()
@@ -501,7 +502,7 @@ where
             })?;
 
         // Get the most recent event (last in the list) and extract its new pessimistic
-        // root
+        // root.
         let result = events.iter().rev().find_map(|log| {
             info!("Found VerifyPessimisticStateTransition event: {:?}", log);
             let latest_pp_root =
@@ -544,7 +545,6 @@ where
     ) -> Result<bool, Error> {
         let tx_hash = settlement_tx_hash.into();
 
-        // Then, get the receipt to check the status
         match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
             Ok(receipt) => {
                 debug!(
@@ -559,14 +559,14 @@ where
         }
     }
 
-    /// Returns the receipt status and nonce for a settlement tx
+    /// Returns the nonce for a settlement tx.
     async fn get_settlement_nonce(
         &self,
         settlement_tx_hash: SettlementTxHash,
     ) -> Result<Option<u64>, Error> {
         let tx_hash = settlement_tx_hash.into();
 
-        // First, get the transaction to extract the nonce
+        // First, get the transaction to extract the nonce.
         let nonce = match self
             .l1_rpc
             .get_provider()
@@ -578,14 +578,14 @@ where
                 )
             })? {
             Some(tx) => {
-                // Extract nonce from the inner transaction envelope
+                // Extract nonce from the inner transaction envelope.
                 // The inner field derefs to the transaction type which implements the
-                // Transaction trait
+                // Transaction trait.
                 use alloy::consensus::Transaction as _;
                 (*tx.inner).nonce()
             }
             None => {
-                warn!("Settlement tx not found on L1: {}", tx_hash);
+                warn!("Settlement tx not found on L1 for tx: {}", tx_hash);
                 return Err(Error::L1CommunicationError(
                     agglayer_contracts::L1RpcError::TransactionReceiptNotFound(format!(
                         "Transaction not found: {}",

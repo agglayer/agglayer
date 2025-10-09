@@ -136,7 +136,6 @@ dependencies = [
  "mockall",
  "parking_lot",
  "pessimistic-proof",
- "regex",
  "reqwest",
  "rstest",
  "serde",
