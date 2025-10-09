@@ -1,7 +1,6 @@
 ---
 source: crates/agglayer-config/tests/validate_deserialize.rs
 expression: config
-snapshot_kind: text
 ---
 prover-entrypoint = "http://127.0.0.1:8080"
 
@@ -36,7 +35,7 @@ confirmations = 1
 settlement-timeout = "20m"
 
 [outbound.rpc.settle.gas-price]
-ceiling = "400gwei"
+ceiling = "100gwei"
 
 [l1]
 chain-id = 1337
