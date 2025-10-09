@@ -119,6 +119,12 @@ async fn start_from_zero() {
         .withf(move |i, _| *i == certificate_id)
         .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
 
+    settlement_client
+        .expect_get_settlement_nonce()
+        .once()
+        .with(eq(SettlementTxHash::for_tests()))
+        .returning(|_| Ok(Some(1)));
+
     state
         .expect_update_settlement_tx_hash()
         .once()
@@ -320,6 +326,12 @@ async fn one_per_epoch() {
         .once()
         .withf(move |i, _| *i == certificate_id)
         .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
+
+    settlement_client
+        .expect_get_settlement_nonce()
+        .once()
+        .with(eq(SettlementTxHash::for_tests()))
+        .returning(|_| Ok(Some(1)));
 
     state
         .expect_update_settlement_tx_hash()
@@ -591,6 +603,12 @@ async fn retries() {
         .once()
         .withf(move |i, _| *i == certificate_id2)
         .returning(|_, _| Ok(SettlementTxHash::for_tests()));
+
+    settlement_client
+        .expect_get_settlement_nonce()
+        .once()
+        .with(eq(SettlementTxHash::for_tests()))
+        .returning(|_| Ok(Some(1)));
 
     state
         .expect_update_settlement_tx_hash()
@@ -1172,10 +1190,22 @@ async fn process_next_certificate() {
         .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_1));
 
     settlement_client
+        .expect_get_settlement_nonce()
+        .once()
+        .with(eq(SETTLEMENT_TX_HASH_1))
+        .returning(|_| Ok(Some(1)));
+
+    settlement_client
         .expect_submit_certificate_settlement()
         .once()
         .withf(move |i, _| *i == certificate_id2)
         .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_2));
+
+    settlement_client
+        .expect_get_settlement_nonce()
+        .once()
+        .with(eq(SETTLEMENT_TX_HASH_2))
+        .returning(|_| Ok(Some(2)));
 
     settlement_client
         .expect_wait_for_settlement()

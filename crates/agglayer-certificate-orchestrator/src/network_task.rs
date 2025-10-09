@@ -439,7 +439,7 @@ where
                         };
 
                         // If the error in the sending transaction happened for whatever reason,
-                        // check if maybe the certificate has been settled through some other previous transaction
+                        // check if maybe the certificate has been settled through some other previous transaction.
                         if let Err(_err) = &result {
                             for previos_tx_hash in previous_tx_hashes {
                                 match self.settlement_client.get_settlement_receipt_status(previos_tx_hash).await {
