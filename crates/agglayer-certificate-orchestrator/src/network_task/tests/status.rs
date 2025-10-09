@@ -92,7 +92,7 @@ async fn from_pending_to_settle() {
                 height,
                 new_state,
                 network,
-                pp_root,
+                new_pp_root: pp_root,
             })
         });
 
@@ -103,7 +103,7 @@ async fn from_pending_to_settle() {
         .withf(move |i, _| *i == certificate_id)
         .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
     settlement_client
-        .expect_get_settlement_nonce()
+        .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SettlementTxHash::for_tests()))
         .returning(|_| Ok(Some(1)));
@@ -219,7 +219,7 @@ async fn from_proven_to_settled() {
                 height,
                 new_state,
                 network,
-                pp_root,
+                new_pp_root: pp_root,
             })
         });
 
@@ -230,7 +230,7 @@ async fn from_proven_to_settled() {
         .withf(move |i, _| *i == certificate_id)
         .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
     settlement_client
-        .expect_get_settlement_nonce()
+        .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SettlementTxHash::for_tests()))
         .returning(|_| Ok(Some(1)));

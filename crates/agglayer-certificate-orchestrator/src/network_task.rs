@@ -398,7 +398,7 @@ where
                         // Get the nonce of the tx.
                         let mut result: Result<(SettlementTxHash, Option<u64>), Error> = match result {
                             Ok(settlement_tx_hash) => {
-                                match self.settlement_client.get_settlement_nonce(settlement_tx_hash).await {
+                                match self.settlement_client.fetch_settlement_nonce(settlement_tx_hash).await {
                                     Ok(nonce) => {
                                         Ok((settlement_tx_hash, nonce))
                                     }
@@ -416,7 +416,7 @@ where
                         // check if maybe the certificate has been settled through some other previous transaction.
                         if let Err(_err) = &result {
                             for previos_tx_hash in previous_tx_hashes {
-                                match self.settlement_client.get_settlement_receipt_status(previos_tx_hash).await {
+                                match self.settlement_client.fetch_settlement_receipt_status(previos_tx_hash).await {
                                     Ok(true) => {
                                         // Transaction is mined, but we haven't known that, return it for further processing.
                                         info!(%certificate_id,
@@ -459,7 +459,7 @@ where
                                 CertificateSettlementResult::Settled(epoch, index)
                             }
                             Err(Error::PendingTransactionTimeout { settlement_tx_hash, .. }) => {
-                                match self.settlement_client.get_settlement_receipt_status(settlement_tx_hash).await {
+                                match self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await {
                                     Ok(true) => {
                                         // Transaction is mined, but we did not get the event, consider it settled.
                                         info!(%certificate_id,
@@ -604,7 +604,7 @@ where
     ) -> Result<Option<(Digest, SettlementTxHash)>, Error> {
         let latest_pp_root = self
             .settlement_client
-            .get_last_settled_pp_root(self.network_id)
+            .fetch_last_settled_pp_root(self.network_id)
             .await
             .inspect_err(|err| {
                 error!("Error retrieving latest pessimistic root from L1: {}", err)

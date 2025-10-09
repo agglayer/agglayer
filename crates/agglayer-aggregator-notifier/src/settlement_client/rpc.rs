@@ -468,7 +468,7 @@ where
     /// for the given `network_id` and returns its `newPessimisticRoot`
     /// along with the transaction receipt of the transaction that has
     /// caused it.
-    async fn get_last_settled_pp_root(
+    async fn fetch_last_settled_pp_root(
         &self,
         network_id: agglayer_types::NetworkId,
     ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error> {
@@ -504,7 +504,6 @@ where
         // Get the most recent event (last in the list) and extract its new pessimistic
         // root.
         let result = events.iter().rev().find_map(|log| {
-            info!("Found VerifyPessimisticStateTransition event: {:?}", log);
             let latest_pp_root =
                 VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok();
             let tx_hash = log.transaction_hash.map(Digest::from);
@@ -539,7 +538,7 @@ where
         Ok((pp_root, tx_hash))
     }
 
-    async fn get_settlement_receipt_status(
+    async fn fetch_settlement_receipt_status(
         &self,
         settlement_tx_hash: SettlementTxHash,
     ) -> Result<bool, Error> {
@@ -560,7 +559,7 @@ where
     }
 
     /// Returns the nonce for a settlement tx.
-    async fn get_settlement_nonce(
+    async fn fetch_settlement_nonce(
         &self,
         settlement_tx_hash: SettlementTxHash,
     ) -> Result<Option<u64>, Error> {

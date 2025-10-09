@@ -355,7 +355,7 @@ where
                 height,
                 new_state: state,
                 network: multi_batch_header.origin_network,
-                pp_root: new_pp_root,
+                new_pp_root,
             })
         }
     }

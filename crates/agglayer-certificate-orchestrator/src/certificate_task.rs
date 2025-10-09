@@ -33,7 +33,7 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     pending_store: Arc<PendingStore>,
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
-    pp_root: Option<Digest>,
+    new_pp_root: Option<Digest>,
     nonce: Option<u64>,
     previous_tx_hashes: HashSet<SettlementTxHash>,
 }
@@ -70,7 +70,7 @@ where
             pending_store,
             certifier_client,
             cancellation_token,
-            pp_root: None,
+            new_pp_root: None,
             nonce: None,
             previous_tx_hashes: HashSet::new(),
         })
@@ -203,7 +203,7 @@ where
                 })?;
         debug!("Recomputing new state completed");
 
-        self.pp_root = Some(output.new_pessimistic_root);
+        self.new_pp_root = Some(output.new_pessimistic_root);
         // Send the new state to the network task
         // TODO: Once we update the storage we'll have to remove this! It wouldn't be
         // valid if we had multiple certificates inflight. Thankfully, until
@@ -251,7 +251,7 @@ where
 
         // Record the certification success
         self.set_status(CertificateStatus::Proven)?;
-        self.pp_root = Some(certifier_output.pp_root);
+        self.new_pp_root = Some(certifier_output.new_pp_root);
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
             certificate_id,
@@ -333,15 +333,13 @@ where
             )));
         }
 
-        if self.pp_root.is_none() {
-            return Err(CertificateStatusError::InternalError(
-                "CertificateTask::process_from_candidate called without a pp_root".into(),
-            ));
-        }
-
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
-        let pp_root = self.pp_root.unwrap();
+        let pp_root = self
+            .new_pp_root
+            .ok_or(CertificateStatusError::InternalError(
+                "CertificateTask::process_from_candidate called without a pp_root".into(),
+            ))?;
 
         debug!(
             settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),

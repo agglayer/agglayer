@@ -21,7 +21,7 @@ pub struct CertifierOutput {
     pub height: Height,
     pub new_state: LocalNetworkStateData,
     pub network: NetworkId,
-    pub pp_root: Digest,
+    pub new_pp_root: Digest,
 }
 
 pub type CertifierResult = Result<CertifierOutput, CertificationError>;

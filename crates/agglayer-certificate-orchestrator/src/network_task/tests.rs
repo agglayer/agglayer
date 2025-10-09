@@ -87,7 +87,7 @@ async fn start_from_zero() {
                 height: Height::ZERO,
                 new_state,
                 network: network_id,
-                pp_root: Digest::ZERO,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -120,7 +120,7 @@ async fn start_from_zero() {
         .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
 
     settlement_client
-        .expect_get_settlement_nonce()
+        .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SettlementTxHash::for_tests()))
         .returning(|_| Ok(Some(1)));
@@ -279,7 +279,7 @@ async fn one_per_epoch() {
                 height: Height::ZERO,
                 new_state,
                 network: network_id,
-                pp_root: Digest::ZERO,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -303,7 +303,7 @@ async fn one_per_epoch() {
                 height: Height::new(1),
                 new_state,
                 network: network_id,
-                pp_root: Digest::ZERO,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -328,7 +328,7 @@ async fn one_per_epoch() {
         .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
 
     settlement_client
-        .expect_get_settlement_nonce()
+        .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SettlementTxHash::for_tests()))
         .returning(|_| Ok(Some(1)));
@@ -511,14 +511,14 @@ async fn retries() {
         height: Height::ZERO,
         new_state: LocalNetworkStateData::default(),
         network: network_id,
-        pp_root: Digest::ZERO,
+        new_pp_root: Digest::ZERO,
     });
     responses.push_back(crate::CertifierOutput {
         certificate: certificate2.clone(),
         height: Height::ZERO,
         new_state: LocalNetworkStateData::default(),
         network: network_id,
-        pp_root: Digest::ZERO,
+        new_pp_root: Digest::ZERO,
     });
     let response_certifier = Arc::new(Mutex::new(responses));
 
@@ -549,7 +549,7 @@ async fn retries() {
                 height: Height::new(1),
                 new_state,
                 network: network_id,
-                pp_root: Digest::ZERO,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -605,7 +605,7 @@ async fn retries() {
         .returning(|_, _| Ok(SettlementTxHash::for_tests()));
 
     settlement_client
-        .expect_get_settlement_nonce()
+        .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SettlementTxHash::for_tests()))
         .returning(|_| Ok(Some(1)));
@@ -785,7 +785,7 @@ async fn changing_epoch_triggers_certify() {
                 height: Height::ZERO,
                 new_state,
                 network: network_id,
-                pp_root: Digest::ZERO,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -801,7 +801,7 @@ async fn changing_epoch_triggers_certify() {
                 height: Height::new(1),
                 new_state,
                 network: network_id,
-                pp_root: Digest::ZERO,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -838,7 +838,7 @@ async fn changing_epoch_triggers_certify() {
         .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_1));
 
     settlement_client
-        .expect_get_settlement_nonce()
+        .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SETTLEMENT_TX_HASH_1))
         .returning(|_| Ok(Some(1)));
@@ -856,7 +856,7 @@ async fn changing_epoch_triggers_certify() {
         .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_2));
 
     settlement_client
-        .expect_get_settlement_nonce()
+        .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SETTLEMENT_TX_HASH_2))
         .returning(|_| Ok(Some(2)));
@@ -1179,7 +1179,7 @@ async fn process_next_certificate() {
                 height,
                 new_state,
                 network,
-                pp_root: Digest::ZERO,
+                new_pp_root: Digest::ZERO,
             })
         });
 
@@ -1190,7 +1190,7 @@ async fn process_next_certificate() {
         .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_1));
 
     settlement_client
-        .expect_get_settlement_nonce()
+        .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SETTLEMENT_TX_HASH_1))
         .returning(|_| Ok(Some(1)));
@@ -1202,7 +1202,7 @@ async fn process_next_certificate() {
         .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_2));
 
     settlement_client
-        .expect_get_settlement_nonce()
+        .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SETTLEMENT_TX_HASH_2))
         .returning(|_| Ok(Some(2)));

@@ -920,21 +920,21 @@ impl SettlementClient for Check {
         unimplemented!("get_provider not needed in tests")
     }
 
-    async fn get_last_settled_pp_root(
+    async fn fetch_last_settled_pp_root(
         &self,
         _network_id: NetworkId,
     ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error> {
         Ok((None, None))
     }
 
-    async fn get_settlement_nonce(
+    async fn fetch_settlement_nonce(
         &self,
         _settlement_tx_hash: SettlementTxHash,
     ) -> Result<Option<u64>, Error> {
         Ok(None)
     }
 
-    async fn get_settlement_receipt_status(
+    async fn fetch_settlement_receipt_status(
         &self,
         _settlement_tx_hash: SettlementTxHash,
     ) -> Result<bool, Error> {
@@ -977,7 +977,7 @@ impl Certifier for Check {
             height,
             new_state: local_state,
             network: network_id,
-            pp_root: Digest::ZERO,
+            new_pp_root: Digest::ZERO,
         };
         _ = self.executed.try_send(result.clone());
         Ok(result)
