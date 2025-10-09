@@ -93,6 +93,7 @@ where
 
         // Check if a gas multiplier factor is provided
         if self.gas_multiplier_factor != 100 {
+            // Adjust the gas limit based on the configuration.
             // Apply gas multiplier if it's not the default (100).
             // First estimate gas, then multiply by the factor.
             let gas_estimate = tx_call.estimate_gas().await?;
@@ -107,6 +108,7 @@ where
         }
 
         let tx_call = {
+            // Adjust the gas fees based on the configuration.
             let estimate = self.rpc.estimate_eip1559_fees().await?;
             let mut adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
 
