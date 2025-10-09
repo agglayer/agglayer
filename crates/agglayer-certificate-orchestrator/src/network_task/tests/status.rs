@@ -100,8 +100,8 @@ async fn from_pending_to_settle() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
     settlement_client
         .expect_wait_for_settlement()
         .once()
@@ -222,8 +222,8 @@ async fn from_proven_to_settled() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
     settlement_client
         .expect_wait_for_settlement()
         .once()

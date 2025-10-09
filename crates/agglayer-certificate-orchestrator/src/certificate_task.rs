@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -6,9 +6,7 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, Digest,
-};
-use pessimistic_proof::{
-    core::commitment::PessimisticRootCommitmentValues, local_state::StateCommitment,
+    SettlementTxHash,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -17,7 +15,6 @@ use tracing::{debug, error, info, trace, warn};
 use crate::{
     network_task::{CertificateSettlementResult, NetworkTaskMessage},
     Certifier, Error,
-    __certificateorchestrator_start_builder::new,
 };
 
 /// A task that processes a certificate, including certifying it and settling
@@ -38,6 +35,8 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     cancellation_token: CancellationToken,
 
     pp_root: Option<Digest>,
+    nonce: Option<u64>,
+    previous_tx_hashes: HashSet<SettlementTxHash>,
 }
 
 impl<StateStore, PendingStore, CertifierClient>
@@ -73,6 +72,8 @@ where
             certifier_client,
             cancellation_token,
             pp_root: None,
+            nonce: None,
+            previous_tx_hashes: HashSet::new(),
         })
     }
 
@@ -278,16 +279,32 @@ where
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
 
-        debug!("Submitting certificate for settlement");
+        debug!(
+            "Submitting certificate for settlement, previous nonce is {:?}",
+            self.nonce
+        );
         let (settlement_submitted_notifier, settlement_submitted) = oneshot::channel();
         self.send_to_network_task(NetworkTaskMessage::CertificateReadyForSettlement {
             height,
             certificate_id,
+            nonce: self.nonce,
             settlement_submitted_notifier,
         })
         .await?;
 
-        let settlement_tx_hash = settlement_submitted.await.map_err(recv_err)??;
+        let (settlement_tx_hash, nonce) = settlement_submitted.await.map_err(recv_err)??;
+        if self.previous_tx_hashes.contains(&settlement_tx_hash) {
+            warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
+        } else {
+            self.previous_tx_hashes.insert(settlement_tx_hash);
+        }
+
+        // Keep the nonce for future use (e.g., retries)
+        if let Some(nonce) = nonce {
+            debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce}");
+            self.nonce = Some(nonce);
+        }
+
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
         self.header.settlement_tx_hash = Some(settlement_tx_hash);

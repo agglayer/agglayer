@@ -1,7 +1,6 @@
 //! Agglayer smart-contract bindings.
 
-use std::sync::{atomic::AtomicUsize, Arc};
-
+use std::sync::Arc;
 use agglayer_primitives::U256;
 use alloy::{
     eips::BlockNumberOrTag,
@@ -45,8 +44,6 @@ pub struct L1RpcClient<RpcProvider> {
     default_l1_info_tree_entry: (u32, [u8; 32]),
     /// Gas multiplier factor for transactions.
     gas_multiplier_factor: u32,
-    /// Debug counter for tracking operations.
-    counter: Arc<AtomicUsize>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -123,7 +120,6 @@ where
             l1_info_tree,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
-            counter: Arc::new(AtomicUsize::new(0)),
         }
     }
 

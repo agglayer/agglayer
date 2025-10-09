@@ -1,5 +1,3 @@
-use std::sync::atomic::Ordering;
-
 use alloy::{
     contract::Error as ContractError,
     primitives::Bytes,
@@ -13,6 +11,7 @@ use crate::L1RpcClient;
 pub trait Settler {
     fn decode_contract_revert(error: &ContractError) -> Option<String>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
@@ -21,6 +20,7 @@ pub trait Settler {
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
+        _nonce: Option<u64>,
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
 }
 
@@ -54,6 +54,7 @@ where
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
+        nonce: Option<u64>,
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
         // Build the transaction call
         let mut tx_call = self.inner.verifyPessimisticTrustedAggregator(
@@ -100,17 +101,10 @@ where
             tx_call = tx_call.gas(adjusted_gas);
         }
 
-        // Increment counter for each call
-        let counter_value = self.counter.fetch_add(1, Ordering::SeqCst);
-        println!(
-            ">>>>>>>>>>>>>>>>>> COUNT GAS {} <<<<<<<<<<<<<<<<",
-            counter_value
-        );
-        // if counter_value % 3 == 0 && counter_value > 0 {
-        //     tx_call = tx_call.gas_price(0);
-        //     println!(">>>>>>>>>>>>>>>>>> SMALL GAS <<<<<<<<<<<<<<<<");
-        //     self.counter.store(0, Ordering::Relaxed);
-        // }
+        if let Some(nonce) = nonce {
+            println!(">>>>>>>>>>>>>>>> NONCE SET TO:{nonce}");
+            tx_call = tx_call.nonce(nonce);
+        }
 
         tx_call.send().await
     }

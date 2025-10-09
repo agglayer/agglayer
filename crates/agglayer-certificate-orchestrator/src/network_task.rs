@@ -13,7 +13,6 @@ use agglayer_types::{
 use pessimistic_proof::{
     core::commitment::PessimisticRootCommitmentVersion, local_state::StateCommitment,
 };
-use regex::Regex;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -21,7 +20,9 @@ use tracing::{debug, error, info, warn};
 use crate::{certificate_task::CertificateTask, Certifier, Error, SettlementClient};
 
 // Smart contract error selectors from the https://raw.githubusercontent.com/agglayer/agglayer-contracts/refs/heads/feature/v12/docs/selectors.txt
-const ERR_SELECTOR_L2_BLOCK_NUMBER_LESS_THAN_NEXT_BLOCK_NUMBER: &str = "0x541d595b";
+// #[allow(dead_code)]
+// const ERR_SELECTOR_L2_BLOCK_NUMBER_LESS_THAN_NEXT_BLOCK_NUMBER: &str =
+// "0x541d595b";
 
 #[cfg(test)]
 mod tests;
@@ -68,8 +69,9 @@ pub enum NetworkTaskMessage {
     CertificateReadyForSettlement {
         height: Height,
         certificate_id: CertificateId,
+        nonce: Option<u64>,
         settlement_submitted_notifier:
-            oneshot::Sender<Result<SettlementTxHash, CertificateStatusError>>,
+            oneshot::Sender<Result<(SettlementTxHash, Option<u64>), CertificateStatusError>>,
     },
 
     /// Notify the network task that a certificate is waiting for settlement to
@@ -109,24 +111,25 @@ pub enum CertificateSettlementResult {
     SettledThroughOtherTx(SettlementTxHash),
 }
 
-fn detect_l1_error(line: &str, selector: &str) -> bool {
-    // Matches: data: \"0x541d595b\"   or   data: "0x541d595b...."
-    let pattern = r#"data:\s*\\?"(?P<sel>0x[0-9a-fA-F]{8})[0-9a-fA-F]*""#;
+// #[allow(dead_code)]
+// fn detect_l1_error(line: &str, selector: &str) -> bool {
+//     // Matches: data: \"0x541d595b\"   or   data: "0x541d595b...."
+//     let pattern = r#"data:\s*\\?"(?P<sel>0x[0-9a-fA-F]{8})[0-9a-fA-F]*""#;
 
-    let re = match Regex::new(pattern) {
-        Ok(r) => r,
-        Err(_) => return line.to_ascii_lowercase().contains(selector), // very safe fallback
-    };
+//     let re = match Regex::new(pattern) {
+//         Ok(r) => r,
+//         Err(_) => return line.to_ascii_lowercase().contains(selector), //
+// very safe fallback     };
 
-    if let Some(caps) = re.captures(line) {
-        if let Some(m) = caps.name("sel") {
-            return m.as_str().eq_ignore_ascii_case(selector);
-        }
-    }
+//     if let Some(caps) = re.captures(line) {
+//         if let Some(m) = caps.name("sel") {
+//             return m.as_str().eq_ignore_ascii_case(selector);
+//         }
+//     }
 
-    // Fallback in case the log format shifts and the regex misses it
-    line.to_ascii_lowercase().contains(selector)
-}
+//     // Fallback in case the log format shifts and the regex misses it
+//     line.to_ascii_lowercase().contains(selector)
+// }
 
 /// Network task that is responsible to certify the certificates for a network.
 pub(crate) struct NetworkTask<CertifierClient, SettlementClient, PendingStore, StateStore> {
@@ -415,26 +418,25 @@ where
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
                         let result = self
                             .settlement_client
-                            .submit_certificate_settlement(certificate_id)
+                            .submit_certificate_settlement(certificate_id, None)
                             .await;
 
-                        // if let Err(ref err) = result {
-                        //     debug!(">>>>>>>>>> Error submitting settlement for certificate_id={certificate_id} at height={height}: {err:?}");
-                        //     // Check for contract revert error "L2BlockNumberLessThanNextBlockNumber" meaning that
-                        //     // some alternative transaction may have already settled the certificate so our submit reverted
-                        //     if detect_l1_error(&format!("{err:?}"), ERR_SELECTOR_L2_BLOCK_NUMBER_LESS_THAN_NEXT_BLOCK_NUMBER) {
-                        //         debug!(">>>>>>>>>>>> SUCCESSO found it");
-                        //         if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) =
-                        //             self.fetch_latest_pp_root_from_l1().await {
-                        //                 if self.is_pending_pessimistic_root(latest_pp_root, height, roots) {
-                        //                     // Certificate has been settled through some other transaction
-                        //                     info!(%certificate_id,
-                        //                         "Certificate for new height: {} has been settled on L1 through other transaction {latest_pp_root_tx_hash}", height);
-                        //                     result = Ok(SettlementTxHash::from(latest_pp_root_tx_hash));
-                        //                 }
-                        //         }
-                        //     }
-                        // }
+                        // Get the nonce of the tx
+                        let result: Result<(SettlementTxHash, Option<u64>), Error> = match result {
+                            Ok(settlement_tx_hash) => {
+                                match self.settlement_client.get_settlement_receipt_status(settlement_tx_hash).await {
+                                    Ok((_, nonce)) => {
+                                        Ok((settlement_tx_hash, Some(nonce)))
+                                    }
+                                    Err(err) => {
+                                        error!(%certificate_id,
+                                            "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
+                                         Ok((settlement_tx_hash, None))
+                                    }
+                                }
+                            }
+                            Err(err) => Err(err),
+                        };
 
                         settlement_submitted_notifier
                             .send(result.map_err(Into::into))
@@ -460,15 +462,15 @@ where
                             }
                             Err(Error::PendingTransactionTimeout { settlement_tx_hash, .. }) => {
                                 match self.settlement_client.get_settlement_receipt_status(settlement_tx_hash).await {
-                                    Ok(true) => {
+                                    Ok((true, nonce)) => {
                                         // Transaction is mined but we did not get the event, consider it settled
-                                        info!(%certificate_id,
-                                            "Certificate for new height: {} has been settled on L1 through transaction {settlement_tx_hash} (timeout but tx mined)", height);
+                                        info!(%certificate_id, %nonce,
+                                            "Certificate for new height: {} has been settled on L1 through transaction {settlement_tx_hash} with nonce {nonce} (timeout but tx mined)", height);
                                     }
-                                    Ok(false) => {
+                                    Ok((false, nonce)) => {
                                         // Transaction is not mined yet, will retry later
-                                        debug!(%certificate_id,
-                                            "Certificate for new height: {} is still pending settlement on L1 through transaction {settlement_tx_hash} (timeout and tx not mined)", height);
+                                        debug!(%certificate_id, %nonce,
+                                            "Certificate for new height: {} is still pending settlement on L1 through transaction {settlement_tx_hash} with nonce {nonce} (timeout and tx not mined)", height);
                                     }
                                     Err(err) => {
                                         error!(%certificate_id,
@@ -575,6 +577,7 @@ where
         pp_commitment_values.compute_pp_root(version)
     }
 
+    #[allow(dead_code)]
     fn is_pending_pessimistic_root(
         &self,
         settled_pp_root: Digest,

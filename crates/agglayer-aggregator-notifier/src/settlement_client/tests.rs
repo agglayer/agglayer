@@ -63,6 +63,7 @@ mockall::mock! {
             new_pessimistic_root: [u8; 32],
             proof: Bytes,
             custom_chain_data: Bytes,
+            nonce: Option<u64>,
         ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, alloy::contract::Error>;
 
     }
@@ -161,7 +162,7 @@ async fn epoch_packer_can_settle_one_certificate() {
     );
 
     let settlement_tx_hash = epoch_packer
-        .submit_certificate_settlement(certificate_id)
+        .submit_certificate_settlement(certificate_id, None)
         .await
         .unwrap();
 

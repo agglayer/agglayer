@@ -22,6 +22,7 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
+        nonce: Option<u64>,
     ) -> Result<SettlementTxHash, Error>;
 
     /// Watch for the transaction to be mined and update the certificate
@@ -43,9 +44,9 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
         network_id: NetworkId,
     ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error>;
 
-    /// Returns the receipt status for a settlement tx
+    /// Returns the receipt status and nonce for a settlement tx
     async fn get_settlement_receipt_status(
         &self,
         settlement_tx_hash: SettlementTxHash,
-    ) -> Result<bool, Error>;
+    ) -> Result<(bool, u64), Error>;
 }

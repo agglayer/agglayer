@@ -901,6 +901,7 @@ impl SettlementClient for Check {
     async fn submit_certificate_settlement(
         &self,
         _certificate_id: CertificateId,
+        _nonce: Option<u64>,
     ) -> Result<SettlementTxHash, Error> {
         Ok(SettlementTxHash::for_tests())
     }
@@ -928,8 +929,8 @@ impl SettlementClient for Check {
     async fn get_settlement_receipt_status(
         &self,
         _settlement_tx_hash: SettlementTxHash,
-    ) -> Result<bool, Error> {
-        Ok(true)
+    ) -> Result<(bool, u64), Error> {
+        Ok((true, 0))
     }
 }
 

@@ -3,10 +3,10 @@ use std::{str::FromStr, time::Duration};
 use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{CertificateId, CertificateStatus};
 use alloy::{
-    network::{self, Ethereum},
+    network::Ethereum,
     primitives::{Address, U256},
-    providers::{ProviderBuilder, RootProvider, WsConnect},
-    rpc::types::{Filter, FilterBlockOption},
+    providers::RootProvider,
+    rpc::types::FilterBlockOption,
     sol_types::SolEvent,
 };
 use fail::FailScenario;
@@ -47,7 +47,6 @@ async fn successfully_push_certificate(#[case] state: Forest) {
 #[timeout(Duration::from_secs(200))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn send_multiple_certificates(#[case] mut state: Forest) {
-    use agglayer_config::Config;
     use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
     use agglayer_types::{aggchain_proof::AggchainData, compute_signature_info};
     use alloy::providers::Provider as _;
@@ -58,7 +57,7 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
     let cancellation_token = CancellationToken::new();
 
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) =
+    let (_agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     for i in 0..5 {
@@ -80,12 +79,10 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
             .await
             .unwrap();
 
-        let result = wait_for_settlement_or_error!(client, certificate_id).await;
+        let _result = wait_for_settlement_or_error!(client, certificate_id).await;
 
         // assert!(matches!(result.status, CertificateStatus::Settled));
     }
-
-    // let config = Config::default();
 
     let provider = RootProvider::<Ethereum>::new_http(reqwest::Url::parse(&l1.rpc).unwrap());
     let last_block = provider.get_block_number().await.unwrap();

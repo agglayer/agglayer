@@ -94,6 +94,7 @@ where
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
+        nonce: Option<u64>,
     ) -> Result<SettlementTxHash, Error> {
         // Step 1: Get certificate header and validate
         let (network_id, height) = if let Some(CertificateHeader {
@@ -222,6 +223,7 @@ where
                 *output.new_pessimistic_root,
                 proof_with_selector.into(),
                 certificate.custom_chain_data.into(),
+                nonce,
             )
             .await
         {
@@ -365,7 +367,7 @@ where
 
         let pending_tx_config = PendingTransactionConfig::new(tx_hash)
             .with_required_confirmations(self.config.confirmations as u64)
-            .with_timeout(Some(timeout.clone()));
+            .with_timeout(Some(timeout));
 
         let pending_tx = self
             .l1_rpc
@@ -480,8 +482,10 @@ where
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
+        nonce: Option<u64>,
     ) -> Result<SettlementTxHash, Error> {
-        self.submit_certificate_settlement(certificate_id).await
+        self.submit_certificate_settlement(certificate_id, nonce)
+            .await
     }
 
     async fn wait_for_settlement(
@@ -574,9 +578,11 @@ where
     async fn get_settlement_receipt_status(
         &self,
         settlement_tx_hash: SettlementTxHash,
-    ) -> Result<bool, Error> {
+    ) -> Result<(bool, u64), Error> {
         let tx_hash = settlement_tx_hash.into();
-        match self
+
+        // First, get the transaction to extract the nonce
+        let nonce = match self
             .l1_rpc
             .get_provider()
             .get_transaction_by_hash(tx_hash)
@@ -586,18 +592,32 @@ where
                     agglayer_contracts::L1RpcError::TransactionReceiptNotFound(e.to_string()),
                 )
             })? {
-            Some(tx) => info!("Found settlement tx on L1: {:?}", tx),
+            Some(tx) => {
+                // Extract nonce from the inner transaction envelope
+                // The inner field derefs to the transaction type which implements the
+                // Transaction trait
+                use alloy::consensus::Transaction as _;
+                (*tx.inner).nonce()
+            }
             None => {
                 warn!("Settlement tx not found on L1: {}", tx_hash);
+                return Err(Error::L1CommunicationError(
+                    agglayer_contracts::L1RpcError::TransactionReceiptNotFound(format!(
+                        "Transaction not found: {}",
+                        tx_hash
+                    )),
+                ));
             }
-        }
+        };
+
+        // Then, get the receipt to check the status
         match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
             Ok(receipt) => {
-                info!(
+                debug!(
                     "Fetched receipt for settlement tx {}: {:?}",
                     tx_hash, receipt
                 );
-                Ok(receipt.status())
+                Ok((receipt.status(), nonce))
             }
             Err(e) => Err(Error::L1CommunicationError(
                 agglayer_contracts::L1RpcError::TransactionReceiptNotFound(e.to_string()),
