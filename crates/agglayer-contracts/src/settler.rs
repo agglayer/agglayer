@@ -147,8 +147,7 @@ fn adjust_gas_estimate(estimate: &Eip1559Estimation, params: &GasPriceParams) ->
 
     if &adjusted != estimate {
         debug!(
-            "Applying gas price adjustment. Estimated {}, {} priority. \
-                 Adjusted to {}, {} priority.",
+            "Applied gas price adjustment. Estimated {}, {} priority. Adjusted to {}, {} priority.",
             estimate.max_fee_per_gas,
             estimate.max_priority_fee_per_gas,
             max_fee_per_gas,
