@@ -1,4 +1,4 @@
-use alloy_primitives::utils::{parse_units, ParseUnits, UnitsError};
+use alloy_primitives::utils::{parse_units, ParseUnits, Unit, UnitsError};
 use serde_with::serde_conv;
 
 serde_conv!(pub EthAmount, u128, EthAmountImpl::new, EthAmountImpl::get);
@@ -23,7 +23,13 @@ struct EthAmountImpl(String);
 
 impl EthAmountImpl {
     fn new(amount: &u128) -> Self {
-        Self(format!("{amount}wei"))
+        const GWEI: u128 = 10_u128.pow(Unit::GWEI.get() as u32);
+        let gwei_amount = amount / GWEI;
+        if gwei_amount * GWEI == *amount {
+            Self(format!("{gwei_amount}gwei"))
+        } else {
+            Self(format!("{amount}wei"))
+        }
     }
 
     fn get(self) -> Result<u128, Error> {
@@ -70,14 +76,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn serialize() {
-        assert_eq!(
-            TestConfig::from_wei(1_000_000_000).to_toml(),
-            toml!(amount = "1000000000wei").into(),
-        );
-    }
-
     #[rstest::rstest]
     #[case("1000000000wei", Ok(1_000_000_000))]
     #[case("1000000000 wei", Ok(1_000_000_000))]
@@ -93,8 +91,15 @@ mod tests {
     #[case("1000WEI", Ok(1_000))]
     fn deserialize(#[case] amount_str: &str, #[case] amount: Result<u128, ()>) {
         let toml_val: toml::Value = toml!(amount = amount_str).into();
-        let from_toml = TestConfig::from_toml(toml_val).map_err(|_| ());
+        let config = TestConfig::from_toml(toml_val);
         let expected = amount.map(TestConfig::from_wei);
-        assert_eq!(from_toml, expected);
+        assert_eq!(config.as_ref().ok(), expected.as_ref().ok());
+
+        if let Ok(config) = config {
+            // One more roundtrip and check it is still the same value
+            let toml_val: toml::Value = config.to_toml();
+            let config_roundtrip = TestConfig::from_toml(toml_val).unwrap();
+            assert_eq!(config_roundtrip, config);
+        }
     }
 }

@@ -57,7 +57,7 @@ pub struct OutboundRpcSettleConfig {
     pub gas_multiplier_factor: u32,
 
     /// Gas price configuration.
-    #[serde(default, skip_serializing_if = "crate::is_default")]
+    #[serde(default)]
     pub gas_price: GasPriceConfig,
 }
 
@@ -93,10 +93,7 @@ pub struct GasPriceConfig {
 
     /// Maximum gas price ceiling (in wei) for the transaction.
     /// Can be specified with units: "100gwei", "0.01eth", "10000000000wei"
-    #[serde(
-        default = "default_gas_price_ceiling",
-        skip_serializing_if = "same_as_default_gas_price_ceiling"
-    )]
+    #[serde(default = "default_gas_price_ceiling")]
     #[serde_as(as = "crate::with::EthAmount")]
     pub ceiling: u128,
 }
@@ -145,10 +142,6 @@ const fn default_settlement_timeout() -> Duration {
 const fn default_gas_price_ceiling() -> u128 {
     // 400 gwei
     400_000_000_000_u128
-}
-
-const fn same_as_default_gas_price_ceiling(v: &u128) -> bool {
-    *v == default_gas_price_ceiling()
 }
 
 #[cfg(test)]

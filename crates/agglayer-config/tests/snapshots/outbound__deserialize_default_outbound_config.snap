@@ -8,3 +8,6 @@ max-retries = 3
 retry-interval = "7s"
 confirmations = 1
 settlement-timeout = "20m"
+
+[rpc.settle.gas-price]
+ceiling = "400gwei"
