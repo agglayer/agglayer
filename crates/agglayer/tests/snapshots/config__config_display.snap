@@ -1,7 +1,6 @@
 ---
 source: crates/agglayer/tests/config.rs
 expression: sanitize_config_folder_path(result)
-snapshot_kind: text
 ---
 prover-entrypoint = "http://127.0.0.1:8080"
 
@@ -34,6 +33,9 @@ max-retries = 3
 retry-interval = "7s"
 confirmations = 1
 settlement-timeout = "20m"
+
+[outbound.rpc.settle.gas-price]
+ceiling = "100gwei"
 
 [l1]
 chain-id = 1337
