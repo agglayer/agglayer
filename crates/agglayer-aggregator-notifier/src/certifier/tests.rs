@@ -11,7 +11,7 @@ use alloy::{
     contract::Error as ContractError,
     network::Ethereum,
     primitives::{Bytes, FixedBytes, TxHash},
-    rpc::types::TransactionReceipt,
+    rpc::types::{TransactionReceipt, TransactionRequest},
 };
 use fail::FailScenario;
 use mockall::predicate::{always, eq};
@@ -268,7 +268,15 @@ mockall::mock! {
     #[async_trait::async_trait]
     impl Settler for L1Rpc {
         fn decode_contract_revert(error: &ContractError) -> Option<String>;
-
+        async fn build_verify_pessimistic_trusted_aggregator(
+            &self,
+            rollup_id: u32,
+            l_1_info_tree_leaf_count: u32,
+            new_local_exit_root: [u8; 32],
+            new_pessimistic_root: [u8; 32],
+            proof: Bytes,
+            custom_chain_data: Bytes,
+        ) -> Result<TransactionRequest, ContractError>;
         async fn verify_pessimistic_trusted_aggregator(
             &self,
             rollup_id: u32,
@@ -277,7 +285,6 @@ mockall::mock! {
             new_pessimistic_root: [u8; 32],
             proof: Bytes,
             custom_chain_data: Bytes,
-            nonce: Option<(u64, u128, Option<u128>)>
         ) -> Result<alloy::providers::PendingTransactionBuilder<Ethereum>, ContractError>;
     }
 }

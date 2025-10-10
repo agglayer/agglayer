@@ -6,6 +6,7 @@ use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContr
 use agglayer_storage::stores::{
     PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
 };
+use agglayer_transaction_monitor::{TransactionMonitor, TransactionMonitorTaskHandle};
 use agglayer_types::{
     CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
     ExecutionMode, Proof, SettlementTxHash, U256,
@@ -57,15 +58,14 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 where
     StateStore: StateReader,
     PendingStore: PendingCertificateReader,
-    RollupManagerRpc: RollupContract + Settler,
+    RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher,
     PerEpochStore: PerEpochWriter,
 {
     #[instrument(skip(self), fields(network_id, settlement_params), level = "debug")]
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
-        nonce_info: Option<NonceInfo>,
-    ) -> Result<SettlementTxHash, Error> {
+    ) -> Result<TransactionMonitorTaskHandle, Error> {
         // Step 1: Get certificate header and validate
         let (network_id, height) = if let Some(CertificateHeader {
             status,
@@ -184,28 +184,21 @@ where
         tracing::Span::current().record("settlement_params", &settlement_params);
 
         // Step 6: Call the contract settlement function and get the pending transaction
-        let pending_tx = match self
+        let transaction = match self
             .l1_rpc
-            .verify_pessimistic_trusted_aggregator(
+            .build_verify_pessimistic_trusted_aggregator(
                 output.origin_network.to_u32(),
                 l1_info_tree_leaf_count,
                 *output.new_local_exit_root.as_ref(),
                 *output.new_pessimistic_root,
                 proof_with_selector.into(),
                 certificate.custom_chain_data.into(),
-                nonce_info.map(|n| {
-                    (
-                        n.nonce,
-                        n.previous_max_fee_per_gas,
-                        n.previous_max_priority_fee_per_gas,
-                    )
-                }),
             )
             .await
         {
-            Ok(pending_tx) => {
-                info!("Certificate settlement transaction submitted");
-                pending_tx
+            Ok(request) => {
+                info!("Certificate settlement transaction built successfully");
+                request
             }
             Err(error) => {
                 // TODO: Differentiate between different error types, check if decoding works
@@ -217,7 +210,7 @@ where
                 error!(
                     error_message,
                     error_decoded = error_decoded,
-                    "Failed to settle certificate"
+                    "Failed to build the settlement transaction"
                 );
 
                 return Err(Error::SettlementError {
@@ -227,11 +220,18 @@ where
             }
         };
 
-        // Get the transaction hash from the pending transaction
-        let tx_hash = *pending_tx.tx_hash();
-        info!("Settlement transaction hash: {}", tx_hash);
+        let provider = (*self.l1_rpc.get_provider()).clone();
+        let monitor = TransactionMonitor::new(provider);
+        let monitoring =
+            monitor
+                .send_transaction(transaction)
+                .await
+                .map_err(|e| Error::SettlementError {
+                    certificate_id,
+                    error: e.to_string(),
+                })?;
 
-        Ok(SettlementTxHash::from(tx_hash))
+        Ok(monitoring)
     }
 }
 
@@ -511,10 +511,8 @@ where
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
-        nonce_info: Option<NonceInfo>,
-    ) -> Result<SettlementTxHash, Error> {
-        self.submit_certificate_settlement(certificate_id, nonce_info)
-            .await
+    ) -> Result<TransactionMonitorTaskHandle, Error> {
+        self.submit_certificate_settlement(certificate_id).await
     }
 
     async fn wait_for_settlement(

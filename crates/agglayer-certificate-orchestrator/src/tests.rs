@@ -25,11 +25,13 @@ use agglayer_storage::{
         TempDBDir,
     },
 };
+use agglayer_transaction_monitor::TransactionMonitorTaskHandle;
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 use arc_swap::ArcSwap;
+use eyre::bail;
 use futures_util::poll;
 use mocks::MockCertifier;
 use pessimistic_proof::{
@@ -901,9 +903,19 @@ impl SettlementClient for Check {
     async fn submit_certificate_settlement(
         &self,
         _certificate_id: CertificateId,
-        _nonce_info: Option<NonceInfo>,
-    ) -> Result<SettlementTxHash, Error> {
-        Ok(SettlementTxHash::for_tests())
+    ) -> Result<TransactionMonitorTaskHandle, Error> {
+        let (sender, tx_hash_receiver) = mpsc::channel(1);
+        sender
+            .send(SettlementTxHash::for_tests())
+            .await
+            .expect("Unable to send tx hash");
+
+        let task_handle = tokio::spawn(async { bail!("Not implemented") });
+        let handle = TransactionMonitorTaskHandle {
+            tx_hash_receiver,
+            task_handle,
+        };
+        Ok(handle)
     }
 
     /// Watch for the transaction to be mined and update the certificate

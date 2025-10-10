@@ -55,7 +55,15 @@ mockall::mock! {
     #[async_trait::async_trait]
     impl Settler for L1Rpc {
         fn decode_contract_revert(error: &alloy::contract::Error) -> Option<String>;
-
+        async fn build_verify_pessimistic_trusted_aggregator(
+            &self,
+            rollup_id: u32,
+            l_1_info_tree_leaf_count: u32,
+            new_local_exit_root: [u8; 32],
+            new_pessimistic_root: [u8; 32],
+            proof: Bytes,
+            custom_chain_data: Bytes,
+        ) -> Result<alloy::rpc::types::TransactionRequest, alloy::contract::Error>;
         async fn verify_pessimistic_trusted_aggregator(
             &self,
             rollup_id: u32,
@@ -64,7 +72,6 @@ mockall::mock! {
             new_pessimistic_root: [u8; 32],
             proof: Bytes,
             custom_chain_data: Bytes,
-            nonce: Option<(u64, u128, Option<u128>)>
         ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, alloy::contract::Error>;
 
     }
@@ -162,11 +169,12 @@ async fn epoch_packer_can_settle_one_certificate() {
         Arc::new(ArcSwap::new(Arc::new(per_epoch_store))),
     );
 
-    let settlement_tx_hash = epoch_packer
-        .submit_certificate_settlement(certificate_id, None)
+    let mut settlement_tx_hash = epoch_packer
+        .submit_certificate_settlement(certificate_id)
         .await
         .unwrap();
 
+    let settlement_tx_hash = settlement_tx_hash.tx_hash_receiver.recv().await.unwrap();
     epoch_packer
         .wait_for_settlement(settlement_tx_hash, certificate_id)
         .await

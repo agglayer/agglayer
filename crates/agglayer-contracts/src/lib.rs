@@ -46,7 +46,7 @@ impl Default for GasPriceParams {
 
 #[async_trait::async_trait]
 pub trait L1TransactionFetcher {
-    type Provider: Provider;
+    type Provider: Provider + Clone + 'static;
 
     /// Fetches the transaction receipt for a given transaction hash.
     async fn fetch_transaction_receipt(

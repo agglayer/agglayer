@@ -3,6 +3,7 @@ use alloy::{
     eips::eip1559::Eip1559Estimation,
     primitives::Bytes,
     providers::{PendingTransactionBuilder, Provider},
+    rpc::types::TransactionRequest,
 };
 use tracing::debug;
 
@@ -14,7 +15,16 @@ const DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR: u128 = 150; //1.5X
 pub trait Settler {
     fn decode_contract_revert(error: &ContractError) -> Option<String>;
 
-    #[allow(clippy::too_many_arguments)]
+    async fn build_verify_pessimistic_trusted_aggregator(
+        &self,
+        rollup_id: u32,
+        l_1_info_tree_leaf_count: u32,
+        new_local_exit_root: [u8; 32],
+        new_pessimistic_root: [u8; 32],
+        proof: Bytes,
+        custom_chain_data: Bytes,
+    ) -> Result<TransactionRequest, ContractError>;
+
     async fn verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
@@ -23,8 +33,6 @@ pub trait Settler {
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
-        nonce_info: Option<(u64, u128, Option<u128>)>, /* nonce, previous_max_fee_per_gas,
-                                                        * optional previous_max_priority_fee_per_gas */
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
 }
 
@@ -50,8 +58,7 @@ where
         Some(format!("{error:?}"))
     }
 
-    #[tracing::instrument(skip(self, proof))]
-    async fn verify_pessimistic_trusted_aggregator(
+    async fn build_verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
         l_1_info_tree_leaf_count: u32,
@@ -59,10 +66,7 @@ where
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
-        nonce_info: Option<(u64, u128, Option<u128>)>, /* nonce, previous_max_fee_per_gas,
-                                                        * optional previous_max_priority_fee_per_gas */
-    ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
-        // Build the transaction call
+    ) -> Result<TransactionRequest, ContractError> {
         let mut tx_call = self.inner.verifyPessimisticTrustedAggregator(
             rollup_id,
             l_1_info_tree_leaf_count,
@@ -109,67 +113,46 @@ where
             tx_call = tx_call.gas(adjusted_gas);
         }
 
-        let tx_call = {
-            let estimate = self.rpc.estimate_eip1559_fees().await?;
+        #[cfg(feature = "testutils")]
+        if fail::eval(
+            "notifier::packer::settle_certificate::gas_estimate::zero_gas",
+            |_| true,
+        )
+        .unwrap_or(false)
+        {
+            tracing::warn!(
+                "FAIL POINT ACTIVE: zero gas fail point active for rollup_id: {}",
+                rollup_id
+            );
+            tx_call = tx_call.gas(0);
+        }
 
-            let adjusted_fees =
-                if let Some((nonce, previous_max_fee_per_gas, previous_max_priority_fee_per_gas)) =
-                    nonce_info
-                {
-                    // This is repeated transaction, increase the previous max_fee_per_gas and
-                    // max_priority_fee_per_gas by a factor
-                    // If previous_max_priority_fee_per_gas is None, set it to estimated.
-                    let adjust: Eip1559Estimation = Eip1559Estimation {
-                        max_fee_per_gas: {
-                            let mut new_max_fee_per_gas = previous_max_fee_per_gas
-                                .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
-                                .div_ceil(100)
-                                .max(self.gas_price_params.floor)
-                                .min(self.gas_price_params.ceiling);
-                            // In the corner case that the previous fee is the same as the new fee
-                            // due to rounding, multiply it by 2 to
-                            // ensure progress
-                            if new_max_fee_per_gas == previous_max_fee_per_gas {
-                                new_max_fee_per_gas =
-                                    (new_max_fee_per_gas * 2).min(self.gas_price_params.ceiling);
-                            }
-                            new_max_fee_per_gas
-                        },
-                        max_priority_fee_per_gas: previous_max_priority_fee_per_gas
-                            .map(|previous| {
-                                let mut new_max_priority_fee_per_gas = previous
-                                    .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
-                                    .div_ceil(100);
-                                // In the corner case that the previous priority fee is the same as
-                                // the new fee due to rounding,
-                                // multiply it by 2 to ensure progress
-                                if new_max_priority_fee_per_gas == previous {
-                                    new_max_priority_fee_per_gas *= 2;
-                                }
-                                new_max_priority_fee_per_gas
-                            })
-                            .unwrap_or(estimate.max_priority_fee_per_gas)
-                            .max(self.gas_price_params.floor)
-                            .min(self.gas_price_params.ceiling),
-                    };
-                    debug!(
-                        "Nonce provided: {nonce_info:?}, increasing  previous max_fee_per_gas and \
-                         max_priority_fee_per_gas to {adjust:?} for rollup_id: {rollup_id}"
-                    );
-                    // Set the nonce for the transaction
-                    tx_call = tx_call.nonce(nonce);
-                    adjust
-                } else {
-                    // Adjust the gas fees based on the configuration.
-                    adjust_gas_estimate(&estimate, &self.gas_price_params)
-                };
+        Ok(tx_call.into_transaction_request())
+    }
 
-            tx_call
-                .max_priority_fee_per_gas(adjusted_fees.max_priority_fee_per_gas)
-                .max_fee_per_gas(adjusted_fees.max_fee_per_gas)
-        };
+    #[tracing::instrument(skip(self, proof))]
+    async fn verify_pessimistic_trusted_aggregator(
+        &self,
+        rollup_id: u32,
+        l_1_info_tree_leaf_count: u32,
+        new_local_exit_root: [u8; 32],
+        new_pessimistic_root: [u8; 32],
+        proof: Bytes,
+        custom_chain_data: Bytes,
+    ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
+        // Build the transaction call
+        let tx = self
+            .build_verify_pessimistic_trusted_aggregator(
+                rollup_id,
+                l_1_info_tree_leaf_count,
+                new_local_exit_root,
+                new_pessimistic_root,
+                proof,
+                custom_chain_data,
+            )
+            .await?;
 
-        tx_call.send().await
+        Ok(self.rpc.send_transaction(tx).await?)
     }
 }
 

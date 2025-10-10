@@ -1,4 +1,5 @@
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, NetworkId, SettlementTxHash};
+use agglayer_transaction_monitor::TransactionMonitorTaskHandle;
+use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, SettlementTxHash};
 
 use crate::Error;
 
@@ -22,8 +23,7 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
-        nonce: Option<NonceInfo>,
-    ) -> Result<SettlementTxHash, Error>;
+    ) -> Result<TransactionMonitorTaskHandle, Error>;
 
     /// Watch for the transaction to be mined and update the certificate
     /// accordingly.
@@ -40,7 +40,7 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     /// It queries the `VerifyPessimisticStateTransition` events from the l1.
     async fn fetch_last_settled_pp_root(
         &self,
-        network_id: NetworkId,
+        network_id: agglayer_types::NetworkId,
     ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error>;
 
     /// Returns the nonce for a settlement tx.
