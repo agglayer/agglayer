@@ -123,6 +123,8 @@ pub enum L1RpcError {
     ThresholdTypeOverflow { fetched: U256 },
     #[error("Transaction receipt for tx {0} failed on L1")]
     TransactionReceiptFailedOnL1(TxHash),
+    #[error("Failed to get the events: {0}")]
+    FailedToQueryEvents(String),
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>

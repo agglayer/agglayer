@@ -1,15 +1,21 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
-use agglayer_types::{Certificate, CertificateHeader, CertificateStatus, CertificateStatusError};
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, Digest,
+    SettlementTxHash,
+};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
-use crate::{network_task::NetworkTaskMessage, Certifier, Error};
+use crate::{
+    network_task::{CertificateSettlementResult, NetworkTaskMessage},
+    Certifier, Error,
+};
 
 /// A task that processes a certificate, including certifying it and settling
 /// it.
@@ -27,6 +33,9 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     pending_store: Arc<PendingStore>,
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
+    new_pp_root: Option<Digest>,
+    nonce: Option<u64>,
+    previous_tx_hashes: HashSet<SettlementTxHash>,
 }
 
 impl<StateStore, PendingStore, CertifierClient>
@@ -61,6 +70,9 @@ where
             pending_store,
             certifier_client,
             cancellation_token,
+            new_pp_root: None,
+            nonce: None,
+            previous_tx_hashes: HashSet::new(),
         })
     }
 
@@ -129,8 +141,8 @@ where
         // issue When we finally make the storage refactoring, we should remove
         // this
         if self.header.status == CertificateStatus::Proven {
-            warn!(
-                "Certificate is already proven but we do not have the  new_state anymore... \
+            warn!(%certificate_id,
+                "Certificate is already proven but we do not have the new_state anymore... \
                  reproving"
             );
 
@@ -161,7 +173,7 @@ where
         }
     }
 
-    async fn recompute_state(&self) -> Result<(), CertificateStatusError> {
+    async fn recompute_state(&mut self) -> Result<(), CertificateStatusError> {
         // TODO: once we store network_id -> height -> state and not just network_id ->
         // state, we should not need this any longer, because the state will
         // already be recorded.
@@ -181,7 +193,7 @@ where
 
         // Execute the witness generation to retrieve the new local network state
         debug!("Recomputing new state for already-proven certificate");
-        let _ = self
+        let (_, _, output) = self
                 .certifier_client
                 .witness_generation(&self.certificate, &mut state, self.header.settlement_tx_hash.map(|h| h.into()))
                 .await
@@ -191,6 +203,7 @@ where
                 })?;
         debug!("Recomputing new state completed");
 
+        self.new_pp_root = Some(output.new_pessimistic_root);
         // Send the new state to the network task
         // TODO: Once we update the storage we'll have to remove this! It wouldn't be
         // valid if we had multiple certificates inflight. Thankfully, until
@@ -238,6 +251,7 @@ where
 
         // Record the certification success
         self.set_status(CertificateStatus::Proven)?;
+        self.new_pp_root = Some(certifier_output.new_pp_root);
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
             certificate_id,
@@ -264,21 +278,42 @@ where
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
 
-        debug!("Submitting certificate for settlement");
+        debug!(
+            "Submitting certificate for settlement, previous nonce is {:?}",
+            self.nonce
+        );
         let (settlement_submitted_notifier, settlement_submitted) = oneshot::channel();
         self.send_to_network_task(NetworkTaskMessage::CertificateReadyForSettlement {
             height,
             certificate_id,
+            nonce: self.nonce,
+            previous_tx_hashes: self.previous_tx_hashes.clone(),
             settlement_submitted_notifier,
         })
         .await?;
 
-        let settlement_tx_hash = settlement_submitted.await.map_err(recv_err)??;
+        let (settlement_tx_hash, nonce) = settlement_submitted.await.map_err(recv_err)??;
+
+        if self.previous_tx_hashes.insert(settlement_tx_hash) {
+            debug!(
+                "Certificate settlement transactions list: {:?}",
+                self.previous_tx_hashes
+            );
+        } else {
+            warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
+        }
+
+        // Keep the nonce for future use (e.g., retries)
+        if let Some(nonce) = nonce {
+            debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce}");
+            self.nonce = Some(nonce);
+        }
+
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
         self.header.settlement_tx_hash = Some(settlement_tx_hash);
         self.state_store
-            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
+            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash, true)?;
         // No set_status: update_settlement_tx_hash already updates the status in the
         // database
         self.header.status = CertificateStatus::Candidate;
@@ -300,6 +335,11 @@ where
 
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
+        let new_pp_root = self
+            .new_pp_root
+            .ok_or(CertificateStatusError::InternalError(
+                "CertificateTask::process_from_candidate called without a pp_root".into(),
+            ))?;
 
         debug!(
             settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
@@ -316,10 +356,44 @@ where
             certificate_id,
             settlement_tx_hash,
             settlement_complete_notifier,
+            pp_root: new_pp_root,
         })
         .await?;
 
-        let (epoch_number, certificate_index) = settlement_complete.await.map_err(recv_err)??;
+        let settlement_complete_result = settlement_complete.await.map_err(recv_err)?;
+        let (epoch_number, certificate_index) = match settlement_complete_result {
+            CertificateSettlementResult::Settled(epoch_number, certificate_index) => {
+                (epoch_number, certificate_index)
+            }
+            CertificateSettlementResult::Error(error) => {
+                return Err(error);
+            }
+            CertificateSettlementResult::TimeoutError => {
+                // Retry the settlement transaction
+                info!(
+                    "Retrying the settlement transaction after a timeout for certificate \
+                     {certificate_id}"
+                );
+                self.set_status(CertificateStatus::Proven)?;
+                return Box::pin(self.process_from_proven()).await;
+            }
+            CertificateSettlementResult::SettledThroughOtherTx(alternative_settlement_tx_hash) => {
+                info!(
+                    "Process alternative settlement transaction {alternative_settlement_tx_hash}"
+                );
+                self.header.settlement_tx_hash = Some(alternative_settlement_tx_hash);
+                self.state_store.update_settlement_tx_hash(
+                    &certificate_id,
+                    alternative_settlement_tx_hash,
+                    true,
+                )?;
+                // No set_status: update_settlement_tx_hash already updates the status in the
+                // database
+                self.header.status = CertificateStatus::Candidate;
+                return Box::pin(self.process_from_candidate()).await;
+            }
+        };
+
         let settled_certificate =
             SettledCertificate(certificate_id, height, epoch_number, certificate_index);
         self.set_status(CertificateStatus::Settled)?;

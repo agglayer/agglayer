@@ -8,10 +8,13 @@ use tracing::debug;
 
 use crate::{GasPriceParams, L1RpcClient};
 
+const DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER: u128 = 2;
+
 #[async_trait::async_trait]
 pub trait Settler {
     fn decode_contract_revert(error: &ContractError) -> Option<String>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
@@ -20,6 +23,7 @@ pub trait Settler {
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
+        nonce: Option<u64>,
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
 }
 
@@ -40,6 +44,7 @@ where
             // Fall back to hex representation of revert data
             return Some(format!("0x{}", hex::encode(revert_data)));
         }
+
         // For non-revert errors, return the debug representation
         Some(format!("{error:?}"))
     }
@@ -53,6 +58,7 @@ where
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
+        nonce: Option<u64>,
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
         // Build the transaction call
         let mut tx_call = self.inner.verifyPessimisticTrustedAggregator(
@@ -104,7 +110,26 @@ where
         let tx_call = {
             // Adjust the gas fees based on the configuration.
             let estimate = self.rpc.estimate_eip1559_fees().await?;
-            let adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
+            let mut adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
+
+            if let Some(nonce) = nonce {
+                debug!(
+                    "Nonce provided, increasing max_fee_per_gas \
+                     {DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER} times"
+                );
+                // If nonce is provided, increase the max fee by 10% to avoid
+                // transaction getting stuck due to nonce gaps.
+                adjusted.max_fee_per_gas *= DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER;
+                adjusted.max_priority_fee_per_gas *= DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER;
+
+                tx_call = tx_call.nonce(nonce);
+            }
+
+            debug!(
+                "Calculated adjusted gas estimation for rollup_id: {rollup_id}: \
+                 max_priority_fee_per_gas: {}, max_fee_per_gas: {}. Original estimate: {:?}",
+                adjusted.max_priority_fee_per_gas, adjusted.max_fee_per_gas, estimate
+            );
 
             tx_call
                 .max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)
