@@ -415,23 +415,23 @@ where
                         // If the error in the sending transaction happened for whatever reason,
                         // check if maybe the certificate has been settled through some other previous transaction.
                         if let Err(_err) = &result {
-                            for previos_tx_hash in previous_tx_hashes {
-                                match self.settlement_client.fetch_settlement_receipt_status(previos_tx_hash).await {
+                            for previous_tx_hash in previous_tx_hashes {
+                                match self.settlement_client.fetch_settlement_receipt_status(previous_tx_hash).await {
                                     Ok(true) => {
                                         // Transaction is mined, but we haven't known that, return it for further processing.
                                         info!(%certificate_id,
-                                            "Certificate for new height: {height} has been settled on L1 through previous transaction {previos_tx_hash}");
-                                        result = Ok((previos_tx_hash, None));
+                                            "Certificate for new height: {height} has been settled on L1 through previous transaction {previous_tx_hash}");
+                                        result = Ok((previous_tx_hash, None));
                                         break;
                                     }
                                     Ok(false) => {
                                         // Transaction is not mined yet, will retry later.
                                         debug!(%certificate_id,
-                                            "Certificate for new height: {height} is still pending settlement on L1 through previous transaction {previos_tx_hash}");
+                                            "Certificate for new height: {height} is still pending settlement on L1 through previous transaction {previous_tx_hash}");
                                     }
                                     Err(err) => {
                                         debug!(%certificate_id,
-                                            "Error checking receipt status for previous settlement tx {previos_tx_hash}: {err}");
+                                            "Error checking receipt status for previous settlement tx {previous_tx_hash}: {err}");
                                     }
                                 }
                             }
@@ -575,26 +575,6 @@ where
                 nullifier_root: state_commitment.nullifier_root.into(),
             };
         pp_commitment_values.compute_pp_root(version)
-    }
-
-    #[allow(dead_code)]
-    fn is_pending_pessimistic_root(
-        &self,
-        settled_pp_root: Digest,
-        height: u64,
-        commitment: StateCommitment,
-    ) -> bool {
-        let computed_v2 = self.pending_pessimistic_root(
-            height.into(),
-            PessimisticRootCommitmentVersion::V2,
-            &commitment,
-        );
-        let computed_v3 = self.pending_pessimistic_root(
-            height.into(),
-            PessimisticRootCommitmentVersion::V3,
-            &commitment,
-        );
-        settled_pp_root == computed_v2 || settled_pp_root == computed_v3
     }
 
     /// Fetches the latest pessimistic root and transaction hash if both are

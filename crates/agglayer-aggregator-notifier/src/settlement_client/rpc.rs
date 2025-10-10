@@ -1,8 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use agglayer_certificate_orchestrator::{
-    Error, Error::PendingTransactionTimeout, SettlementClient,
-};
+use agglayer_certificate_orchestrator::{Error, SettlementClient};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
 use agglayer_storage::stores::{
@@ -347,7 +345,7 @@ where
                         ?timeout,
                         "Timeout while watching the pending settlement transaction"
                     );
-                    PendingTransactionTimeout {
+                    Error::PendingTransactionTimeout {
                         certificate_id,
                         error: format!(
                             "Timeout while watching the pending settlement transaction {:?}, \
@@ -403,7 +401,7 @@ where
                         ?timeout,
                         "Timeout while waiting for the pending settlement transaction"
                     );
-                    Err(PendingTransactionTimeout {
+                    Err(Error::PendingTransactionTimeout {
                         certificate_id,
                         error: format!(
                             "Settlement pending transaction timeout after {:?}, error: {}",
@@ -581,7 +579,7 @@ where
                 // The inner field derefs to the transaction type which implements the
                 // Transaction trait.
                 use alloy::consensus::Transaction as _;
-                (*tx.inner).nonce()
+                tx.inner.nonce()
             }
             None => {
                 warn!("Settlement tx not found on L1 for tx: {}", tx_hash);
