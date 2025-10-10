@@ -275,6 +275,17 @@ where
             )));
         }
 
+        if self.previous_tx_hashes.len() > 5 {
+            error!(previous_tx_hashes=?self.previous_tx_hashes,
+                "More than 5 different settlement transactions submitted for the same certificate, something is wrong"
+            );
+            return Err(CertificateStatusError::SettlementError(
+                "Too many different settlement transactions submitted for the same certificate: \
+                 {previous_tx_hashes:?}"
+                    .into(),
+            ));
+        }
+
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
 
@@ -299,18 +310,6 @@ where
                 "Certificate settlement transactions list: {:?}",
                 self.previous_tx_hashes
             );
-            if self.previous_tx_hashes.len() > 5 {
-                error!(
-                    %certificate_id,
-                    previous_tx_hashes=?self.previous_tx_hashes,
-                    "More than 5 different settlement transactions submitted for the same certificate, something is wrong"
-                );
-                return Err(CertificateStatusError::SettlementError(
-                    "Too many different settlement transactions submitted for the same \
-                     certificate: {previous_tx_hashes:?}"
-                        .into(),
-                ));
-            }
         } else {
             warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
         }
