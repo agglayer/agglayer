@@ -124,8 +124,8 @@ where
                             let mut new_max_fee_per_gas = previous_max_fee_per_gas
                                 .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
                                 .div_ceil(100)
-                                .min(self.gas_price_params.ceiling)
-                                .max(self.gas_price_params.floor);
+                                .max(self.gas_price_params.floor)
+                                .min(self.gas_price_params.ceiling);
                             // In the corner case that the previous fee is the same as the new fee
                             // due to rounding, multiply it by 2 to
                             // ensure progress
