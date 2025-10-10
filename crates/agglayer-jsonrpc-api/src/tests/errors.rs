@@ -113,7 +113,7 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 )]
 #[case(
     "rate_disallowed",
-    SendTxError::RateLimited(agglayer_rate_limiting::RateLimited::SendTxDiabled {})
+    SendTxError::RateLimited(agglayer_rate_limiting::RateLimited::SendTxDisabled {})
 )]
 #[case(
     "rate_sendtx",
