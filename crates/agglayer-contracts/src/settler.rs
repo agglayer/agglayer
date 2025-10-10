@@ -149,8 +149,9 @@ where
                                 new_max_priority_fee_per_gas
                             })
                             .unwrap_or(estimate.max_priority_fee_per_gas)
-                            .min(self.gas_price_params.ceiling)
-                            .max(self.gas_price_params.floor),
+                            .max(self.gas_price_params.floor)
+                            .min(self.gas_price_params.ceiling),
+
                     };
                     debug!(
                         "Nonce provided: {nonce_info:?}, increasing  previous max_fee_per_gas and \
