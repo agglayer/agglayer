@@ -151,7 +151,6 @@ where
                             .unwrap_or(estimate.max_priority_fee_per_gas)
                             .max(self.gas_price_params.floor)
                             .min(self.gas_price_params.ceiling),
-
                     };
                     debug!(
                         "Nonce provided: {nonce_info:?}, increasing  previous max_fee_per_gas and \
