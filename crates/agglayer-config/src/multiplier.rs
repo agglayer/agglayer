@@ -21,6 +21,7 @@ impl Multiplier {
     pub const ONE: Self = Self(Self::SCALE);
     pub const ZERO: Self = Self(0);
     pub const MAX: Self = Self(u64::MAX);
+    pub const DECIMALS: usize = 3;
 
     const FROM_F64_TOLERANCE: f64 = 1e-6;
     const FROM_F64_MAX: u64 = ((1_u64 << f64::MANTISSA_DIGITS) as f64).next_down() as u64;
@@ -74,6 +75,23 @@ impl Default for Multiplier {
     }
 }
 
+impl std::fmt::Display for Multiplier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // A quick, dirty and inefficient implementation that does not use f64
+        // to print the decimal number since it could result in imprecision.
+        let width = Self::DECIMALS + 1;
+        let s = format!("{:0width$}", self.0);
+
+        // Split the integral and the decimal part.
+        // Not worth panicking over a printout (should never happen anyway).
+        let (n, d) = s
+            .split_at_checked(s.len() - Self::DECIMALS)
+            .unwrap_or(("?", "???"));
+
+        write!(f, "{n}.{d}")
+    }
+}
+
 impl TryFrom<f64> for Multiplier {
     type Error = FromF64Error;
 
@@ -102,7 +120,7 @@ mod test {
     #[case(0.001, 1)]
     #[case(0.123, 123)]
     #[case(10.5, 10500)]
-    fn test_try_from_f64_check_valid_values(#[case] input: f64, #[case] expected: u64) {
+    fn try_from_f64_check_valid_values(#[case] input: f64, #[case] expected: u64) {
         let result = Multiplier::try_from_f64_check(input).unwrap();
         assert_eq!(result, Multiplier::from_u64_per_1000(expected));
     }
@@ -112,7 +130,7 @@ mod test {
     #[case(-0.001)]
     #[case(-100.0)]
     #[case(1.001 * u64::MAX as f64)]
-    fn test_try_from_f64_check_out_of_range(#[case] input: f64) {
+    fn try_from_f64_check_out_of_range(#[case] input: f64) {
         assert_eq!(
             Multiplier::try_from_f64_check(input).unwrap_err(),
             FromF64Error::OutOfRange
@@ -123,7 +141,7 @@ mod test {
     #[case(1.2345)]
     #[case(0.0001)]
     #[case(2.12345)]
-    fn test_try_from_f64_check_imprecise(#[case] input: f64) {
+    fn try_from_f64_check_imprecise(#[case] input: f64) {
         assert_eq!(
             Multiplier::try_from_f64_check(input).unwrap_err(),
             FromF64Error::Imprecise
@@ -139,7 +157,7 @@ mod test {
     #[case(1.2344, 1234)]
     #[case(0.0001, 0)]
     #[case(0.0006, 1)]
-    fn test_try_from_f64_round_valid_values(#[case] input: f64, #[case] expected: u64) {
+    fn try_from_f64_round_valid_values(#[case] input: f64, #[case] expected: u64) {
         let result = Multiplier::try_from_f64_round(input).unwrap();
         assert_eq!(result, Multiplier::from_u64_per_1000(expected));
     }
@@ -148,7 +166,7 @@ mod test {
     #[case(-1.0)]
     #[case(-0.001)]
     #[case(-100.0)]
-    fn test_try_from_f64_round_out_of_range(#[case] input: f64) {
+    fn try_from_f64_round_out_of_range(#[case] input: f64) {
         assert_eq!(
             Multiplier::try_from_f64_round(input).unwrap_err(),
             FromF64Error::OutOfRange
@@ -160,10 +178,24 @@ mod test {
     #[case(1500)]
     #[case(2000)]
     #[case(123)]
-    fn test_roundtrip(#[case] value: u64) {
+    fn roundtrip(#[case] value: u64) {
         let original = Multiplier::from_u64_per_1000(value);
         let as_f64 = original.as_f64();
         let back = Multiplier::try_from_f64_check(as_f64).unwrap();
         assert_eq!(original, back);
+    }
+
+    #[rstest]
+    #[case(0, "0.000")]
+    #[case(1, "0.001")]
+    #[case(50, "0.050")]
+    #[case(700, "0.700")]
+    #[case(1000, "1.000")]
+    #[case(1001, "1.001")]
+    #[case(10000, "10.000")]
+    #[case(12345, "12.345")]
+    #[case(u64::MAX, "18446744073709551.615")]
+    fn display(#[case] value: u64, #[case] expected: &str) {
+        assert_eq!(Multiplier(value).to_string(), expected);
     }
 }
