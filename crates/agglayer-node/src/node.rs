@@ -203,11 +203,11 @@ impl Node {
                 config.outbound.rpc.settle.gas_multiplier_factor,
                 {
                     let gas_config = &config.outbound.rpc.settle.gas_price;
-                    agglayer_contracts::GasPriceParams {
-                        multiplier_per_1000: gas_config.multiplier.as_u64_per_1000(),
-                        floor: gas_config.floor,
-                        ceiling: gas_config.ceiling,
-                    }
+                    agglayer_contracts::GasPriceParams::new(
+                        gas_config.multiplier.as_u64_per_1000(),
+                        gas_config.floor,
+                        gas_config.ceiling,
+                    )?
                 },
             )
             .await?,
