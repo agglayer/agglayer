@@ -17,6 +17,8 @@ use crate::{
     Certifier, Error, NonceInfo,
 };
 
+const MAX_TX_RETRY: usize = 5;
+
 /// A task that processes a certificate, including certifying it and settling
 /// it.
 ///
@@ -275,7 +277,7 @@ where
             )));
         }
 
-        if self.previous_tx_hashes.len() > 5 {
+        if self.previous_tx_hashes.len() > MAX_TX_RETRY {
             error!(previous_tx_hashes=?self.previous_tx_hashes,
                 "More than 5 different settlement transactions submitted for the same certificate, something is wrong"
             );
