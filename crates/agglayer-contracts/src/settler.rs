@@ -130,7 +130,8 @@ where
                             // due to rounding, multiply it by 2 to
                             // ensure progress
                             if new_max_fee_per_gas == previous_max_fee_per_gas {
-                                new_max_fee_per_gas *= 2;
+                                new_max_fee_per_gas =
+                                    (new_max_fee_per_gas * 2).min(self.gas_price_params.ceiling);
                             }
                             new_max_fee_per_gas
                         },
