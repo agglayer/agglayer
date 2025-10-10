@@ -3,6 +3,7 @@ use alloy::{
     eips::eip1559::Eip1559Estimation,
     primitives::Bytes,
     providers::{PendingTransactionBuilder, Provider},
+    rpc::types::TransactionRequest,
 };
 use tracing::debug;
 
@@ -11,6 +12,16 @@ use crate::{GasPriceParams, L1RpcClient};
 #[async_trait::async_trait]
 pub trait Settler {
     fn decode_contract_revert(error: &ContractError) -> Option<String>;
+
+    async fn build_verify_pessimistic_trusted_aggregator(
+        &self,
+        rollup_id: u32,
+        l_1_info_tree_leaf_count: u32,
+        new_local_exit_root: [u8; 32],
+        new_pessimistic_root: [u8; 32],
+        proof: Bytes,
+        custom_chain_data: Bytes,
+    ) -> Result<TransactionRequest, ContractError>;
 
     async fn verify_pessimistic_trusted_aggregator(
         &self,
@@ -43,9 +54,7 @@ where
         // For non-revert errors, return the debug representation
         Some(format!("{error:?}"))
     }
-
-    #[tracing::instrument(skip(self, proof))]
-    async fn verify_pessimistic_trusted_aggregator(
+    async fn build_verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
         l_1_info_tree_leaf_count: u32,
@@ -53,8 +62,7 @@ where
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
-    ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
-        // Build the transaction call
+    ) -> Result<TransactionRequest, ContractError> {
         let mut tx_call = self.inner.verifyPessimisticTrustedAggregator(
             rollup_id,
             l_1_info_tree_leaf_count,
@@ -101,8 +109,7 @@ where
             tx_call = tx_call.gas(adjusted_gas);
         }
 
-        let tx_call = {
-            // Adjust the gas fees based on the configuration.
+        tx_call = {
             let estimate = self.rpc.estimate_eip1559_fees().await?;
             let adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
 
@@ -110,8 +117,46 @@ where
                 .max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)
                 .max_fee_per_gas(adjusted.max_fee_per_gas)
         };
+        #[cfg(feature = "testutils")]
+        if fail::eval(
+            "notifier::packer::settle_certificate::gas_estimate::zero_gas",
+            |_| true,
+        )
+        .unwrap_or(false)
+        {
+            tracing::warn!(
+                "FAIL POINT ACTIVE: zero gas fail point active for rollup_id: {}",
+                rollup_id
+            );
+            tx_call = tx_call.gas(0);
+        }
 
-        tx_call.send().await
+        Ok(tx_call.into_transaction_request())
+    }
+
+    #[tracing::instrument(skip(self, proof))]
+    async fn verify_pessimistic_trusted_aggregator(
+        &self,
+        rollup_id: u32,
+        l_1_info_tree_leaf_count: u32,
+        new_local_exit_root: [u8; 32],
+        new_pessimistic_root: [u8; 32],
+        proof: Bytes,
+        custom_chain_data: Bytes,
+    ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
+        // Build the transaction call
+        let tx = self
+            .build_verify_pessimistic_trusted_aggregator(
+                rollup_id,
+                l_1_info_tree_leaf_count,
+                new_local_exit_root,
+                new_pessimistic_root,
+                proof,
+                custom_chain_data,
+            )
+            .await?;
+
+        Ok(self.rpc.send_transaction(tx).await?)
     }
 }
 

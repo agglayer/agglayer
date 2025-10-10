@@ -5,6 +5,7 @@ use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
+use agglayer_transaction_monitor::TransactionMonitorTaskHandle;
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
     CertificateId, CertificateIndex, CertificateStatusError, EpochNumber, Height,
@@ -62,7 +63,7 @@ pub enum NetworkTaskMessage {
         height: Height,
         certificate_id: CertificateId,
         settlement_submitted_notifier:
-            oneshot::Sender<Result<SettlementTxHash, CertificateStatusError>>,
+            oneshot::Sender<Result<TransactionMonitorTaskHandle, CertificateStatusError>>,
     },
 
     /// Notify the network task that a certificate is waiting for settlement to

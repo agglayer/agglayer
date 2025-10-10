@@ -1,3 +1,4 @@
+use agglayer_transaction_monitor::TransactionMonitorTaskHandle;
 use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, SettlementTxHash};
 
 use crate::Error;
@@ -22,7 +23,7 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
-    ) -> Result<SettlementTxHash, Error>;
+    ) -> Result<TransactionMonitorTaskHandle, Error>;
 
     /// Watch for the transaction to be mined and update the certificate
     /// accordingly.

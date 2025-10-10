@@ -273,12 +273,20 @@ where
         })
         .await?;
 
-        let settlement_tx_hash = settlement_submitted.await.map_err(recv_err)??;
+        let mut settlement_tx_hash = settlement_submitted.await.map_err(recv_err)??;
+
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
-        self.header.settlement_tx_hash = Some(settlement_tx_hash);
-        self.state_store
-            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
+
+        // Record tx hash as they come in, there might be multiple if we
+        // retry sending the transaction, when the sender is dropped
+        // it means no more retries will be done, so we can move on.
+        while let Some(tx_hash) = settlement_tx_hash.tx_hash_receiver.recv().await {
+            self.header.settlement_tx_hash = Some(tx_hash);
+            self.state_store
+                .update_settlement_tx_hash(&certificate_id, tx_hash)?;
+        }
+
         // No set_status: update_settlement_tx_hash already updates the status in the
         // database
         self.header.status = CertificateStatus::Candidate;
