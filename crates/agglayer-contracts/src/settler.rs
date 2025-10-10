@@ -214,7 +214,7 @@ mod test {
     use super::{adjust_gas_price_estimate, GasPriceParams};
 
     #[rstest::rstest]
-    fn test_adjust_gas_estimate_respects_floor_and_ceiling(
+    fn test_adjust_gas_price_estimate_respects_floor_and_ceiling(
         #[values(500, 1000, 1500, 2000)] multiplier_per_1000: u64,
         #[values(10_000_000, 50_000_000)] floor: u128,
         #[values(100_000_000, 200_000_000)] ceiling: u128,
@@ -258,7 +258,7 @@ mod test {
     }
 
     #[rstest::rstest]
-    fn test_adjust_gas_estimate_with_retries(
+    fn test_adjust_gas_price_estimate_with_retries(
         #[values(1, 2, 3, 5)] number_of_retries: u64,
         #[values(1000)] multiplier_per_1000: u64,
         #[values(10_000_000)] floor: u128,
@@ -326,7 +326,7 @@ mod test {
     }
 
     #[test]
-    fn test_adjust_gas_estimate_with_zero_retries() {
+    fn test_adjust_gas_price_estimate_with_zero_retries() {
         let estimate = Eip1559Estimation {
             max_fee_per_gas: 50_000_000,
             max_priority_fee_per_gas: 25_000_000,
@@ -353,7 +353,7 @@ mod test {
     }
 
     #[test]
-    fn test_adjust_gas_estimate_retries_hit_ceiling() {
+    fn test_adjust_gas_price_estimate_retries_hit_ceiling() {
         let estimate = Eip1559Estimation {
             max_fee_per_gas: 50_000_000,
             max_priority_fee_per_gas: 25_000_000,
