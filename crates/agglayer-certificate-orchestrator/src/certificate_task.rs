@@ -292,7 +292,7 @@ where
         })
         .await?;
 
-        let (settlement_tx_hash, nonce) = settlement_submitted.await.map_err(recv_err)??;
+        let (settlement_tx_hash, nonce_info) = settlement_submitted.await.map_err(recv_err)??;
 
         if self.previous_tx_hashes.insert(settlement_tx_hash) {
             debug!(
@@ -303,10 +303,10 @@ where
             warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
         }
 
-        // Keep the nonce for future use (e.g., retries)
-        if let Some(nonce) = nonce {
-            debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce:?}");
-            self.nonce_info = Some(nonce);
+        // Keep the nonce and previous fees for future use (e.g., retries)
+        if let Some(nonce_info) = nonce_info {
+            debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce_info:?}");
+            self.nonce_info = Some(nonce_info);
         }
 
         #[cfg(feature = "testutils")]
