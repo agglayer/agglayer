@@ -35,7 +35,7 @@ fn deserialize_custom_outbound_config() {
         Multiplier::try_from(1.5).unwrap()
     );
     assert_eq!(config.rpc.settle.gas_price.floor, 1_000_000_000);
-    assert_eq!(config.rpc.settle.gas_price.ceiling, 100_000_000_000);
+    assert_eq!(config.rpc.settle.gas_price.ceiling, 123_000_000_000);
 
     assert_toml_snapshot!(config);
 }
