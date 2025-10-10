@@ -130,8 +130,9 @@ where
 
             debug!(
                 "Calculated adjusted gas estimation for rollup_id: {rollup_id}: \
-                 max_priority_fee_per_gas: {}, max_fee_per_gas: {}. Original estimate: {:?}",
-                adjusted.max_priority_fee_per_gas, adjusted.max_fee_per_gas, estimate
+                 max_priority_fee_per_gas: {}, max_fee_per_gas: {}. Nonce info: {:?} Original \
+                 estimate: {:?} ",
+                adjusted.max_priority_fee_per_gas, adjusted.max_fee_per_gas, nonce_info, estimate
             );
 
             tx_call
@@ -254,5 +255,164 @@ mod test {
             let acceptable_priority_fee = [max_priority_fee_per_gas, ceiling];
             assert!(acceptable_priority_fee.contains(&adjusted.max_priority_fee_per_gas));
         }
+    }
+
+    #[rstest::rstest]
+    fn test_adjust_gas_estimate_with_retries(
+        #[values(1, 2, 3, 5)] number_of_retries: u64,
+        #[values(1000)] multiplier_per_1000: u64,
+        #[values(10_000_000)] floor: u128,
+        #[values(500_000_000)] ceiling: u128,
+        #[values(50_000_000)] max_fee_per_gas: u128,
+        #[values(25_000_000)] max_priority_fee_per_gas: u128,
+    ) {
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+        };
+        let params = GasPriceParams {
+            multiplier_per_1000,
+            floor,
+            ceiling,
+        };
+
+        let adjusted = adjust_gas_price_estimate(&estimate, &params, Some(number_of_retries));
+
+        // Expected values after retry adjustment:
+        // max_fee_per_gas should be multiplied by (retries * 1.2)
+        // DEFAULT_GAS_PRICE_RETRY_INCREASE_FACTOR = 120
+        let expected_max_fee = (max_fee_per_gas
+            .saturating_mul(number_of_retries as u128 * 120)
+            .saturating_div(100))
+        .min(ceiling)
+        .max(floor);
+
+        let expected_priority_fee = (max_priority_fee_per_gas
+            .saturating_mul(number_of_retries as u128 * 120)
+            .saturating_div(100))
+        .min(ceiling);
+
+        assert_eq!(
+            adjusted.max_fee_per_gas, expected_max_fee,
+            "max_fee_per_gas mismatch for {} retries. Expected: {}, Got: {}",
+            number_of_retries, expected_max_fee, adjusted.max_fee_per_gas
+        );
+
+        assert_eq!(
+            adjusted.max_priority_fee_per_gas, expected_priority_fee,
+            "max_priority_fee_per_gas mismatch for {} retries. Expected: {}, Got: {}",
+            number_of_retries, expected_priority_fee, adjusted.max_priority_fee_per_gas
+        );
+
+        // Verify it still respects floor and ceiling
+        assert!(
+            adjusted.max_fee_per_gas >= floor,
+            "max_fee_per_gas {} below floor {}",
+            adjusted.max_fee_per_gas,
+            floor
+        );
+        assert!(
+            adjusted.max_fee_per_gas <= ceiling,
+            "max_fee_per_gas {} exceeds ceiling {}",
+            adjusted.max_fee_per_gas,
+            ceiling
+        );
+        assert!(
+            adjusted.max_priority_fee_per_gas <= ceiling,
+            "max_priority_fee_per_gas {} exceeds ceiling {}",
+            adjusted.max_priority_fee_per_gas,
+            ceiling
+        );
+    }
+
+    #[test]
+    fn test_adjust_gas_estimate_with_zero_retries() {
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 50_000_000,
+            max_priority_fee_per_gas: 25_000_000,
+        };
+        let params = GasPriceParams {
+            multiplier_per_1000: 1000,
+            floor: 10_000_000,
+            ceiling: 500_000_000,
+        };
+
+        // Zero retries should behave the same as None
+        let adjusted_with_zero = adjust_gas_price_estimate(&estimate, &params, Some(0));
+        let adjusted_with_none = adjust_gas_price_estimate(&estimate, &params, None);
+
+        assert_eq!(
+            adjusted_with_zero.max_fee_per_gas, adjusted_with_none.max_fee_per_gas,
+            "Zero retries should produce same result as None for max_fee_per_gas"
+        );
+        assert_eq!(
+            adjusted_with_zero.max_priority_fee_per_gas,
+            adjusted_with_none.max_priority_fee_per_gas,
+            "Zero retries should produce same result as None for max_priority_fee_per_gas"
+        );
+    }
+
+    #[test]
+    fn test_adjust_gas_estimate_retries_hit_ceiling() {
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 50_000_000,
+            max_priority_fee_per_gas: 25_000_000,
+        };
+        let params = GasPriceParams {
+            multiplier_per_1000: 1000,
+            floor: 10_000_000,
+            ceiling: 100_000_000, // Low ceiling to test clamping
+        };
+
+        // With 5 retries, the gas price would be 50M * (5 * 1.2) = 300M
+        // But it should be clamped to ceiling of 100M
+        let adjusted = adjust_gas_price_estimate(&estimate, &params, Some(5));
+
+        assert_eq!(
+            adjusted.max_fee_per_gas, params.ceiling,
+            "max_fee_per_gas should be clamped to ceiling"
+        );
+        assert_eq!(
+            adjusted.max_priority_fee_per_gas, params.ceiling,
+            "max_priority_fee_per_gas should be clamped to ceiling"
+        );
+    }
+
+    #[test]
+    fn test_adjust_gas_estimate_retries_with_multiplier() {
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 50_000_000,
+            max_priority_fee_per_gas: 25_000_000,
+        };
+        let params = GasPriceParams {
+            multiplier_per_1000: 1500, // 1.5x multiplier
+            floor: 10_000_000,
+            ceiling: 500_000_000,
+        };
+
+        // With multiplier and 2 retries:
+        // max_fee_per_gas: 50M * 1.5 = 75M, then 75M * (2 * 1.2) / 100 = 1.8M (incorrect)
+        // Wait, the multiplier is applied first in adjust(), then retries are applied
+        // Actually looking at the code:
+        // 1. adjust() applies multiplier: 50M * 1500 / 1000 = 75M
+        // 2. max(floor): max(75M, 10M) = 75M
+        // 3. Then retries: 75M * (2 * 120) / 100 = 75M * 240 / 100 = 180M
+        let adjusted = adjust_gas_price_estimate(&estimate, &params, Some(2));
+
+        let base_adjusted = 50_000_000_u128 * 1500 / 1000; // 75M
+        let with_retries = base_adjusted * (2 * 120) / 100; // 180M
+        assert_eq!(
+            adjusted.max_fee_per_gas,
+            with_retries.max(params.floor).min(params.ceiling),
+            "Should apply both multiplier and retry factor"
+        );
+
+        let priority_base = 25_000_000_u128 * 1500 / 1000; // 37.5M
+        let priority_with_retries = priority_base * (2 * 120) / 100; // 90M
+        assert_eq!(
+            adjusted.max_priority_fee_per_gas,
+            priority_with_retries.min(params.ceiling),
+            "Priority fee should apply both multiplier and retry factor"
+        );
     }
 }
