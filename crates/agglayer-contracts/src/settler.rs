@@ -24,8 +24,7 @@ pub trait Settler {
         proof: Bytes,
         custom_chain_data: Bytes,
         nonce_info: Option<(u64, u128, Option<u128>)>, /* nonce, previous_max_fee_per_gas,
-                                                        * optional
-                                                        * previous_max_priority_fee_per_gas */
+                                                        * optional previous_max_priority_fee_per_gas */
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
 }
 
@@ -61,8 +60,7 @@ where
         proof: Bytes,
         custom_chain_data: Bytes,
         nonce_info: Option<(u64, u128, Option<u128>)>, /* nonce, previous_max_fee_per_gas,
-                                                        * optional
-                                                        * previous_max_priority_fee_per_gas */
+                                                        * optional previous_max_priority_fee_per_gas */
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
         // Build the transaction call
         let mut tx_call = self.inner.verifyPessimisticTrustedAggregator(
@@ -144,8 +142,8 @@ where
                     let adjust = adjust_gas_estimate(&estimate, &self.gas_price_params);
                     debug!(
                         "Calculated adjusted gas estimation for rollup_id: {rollup_id}: \
-                         max_priority_fee_per_gas: {}, max_fee_per_gas: {}. Nonce_info: \
-                         {nonce_info:?} Original estimate: {:?}",
+                         max_priority_fee_per_gas: {}, max_fee_per_gas: {}. Original estimate: \
+                         {:?}",
                         adjust.max_priority_fee_per_gas, adjust.max_fee_per_gas, estimate
                     );
                     adjust
