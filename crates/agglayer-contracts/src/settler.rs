@@ -141,8 +141,7 @@ where
                     adjust
                 } else {
                     // Adjust the gas fees based on the configuration.
-                    let adjust = adjust_gas_estimate(&estimate, &self.gas_price_params);
-                    adjust
+                    adjust_gas_estimate(&estimate, &self.gas_price_params)
                 };
 
             tx_call
