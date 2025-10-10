@@ -24,16 +24,43 @@ pub use settler::Settler;
 #[derive(Debug, Clone)]
 pub struct GasPriceParams {
     /// Gas price multiplier for transactions (scaled by 1000).
-    pub multiplier_per_1000: u64,
+    multiplier_per_1000: u64,
     /// Minimum gas price floor (in wei) for transactions.
-    pub floor: u128,
+    floor: u128,
     /// Maximum gas price ceiling (in wei) for transactions.
-    pub ceiling: u128,
+    ceiling: u128,
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("Gas price floor ({floor}) must be <= to ceiling ({ceiling})")]
+pub struct GasPriceParamsError {
+    floor: u128,
+    ceiling: u128,
+}
+
+impl GasPriceParams {
+    /// Create new gas price parameters.
+    ///
+    /// Returns an error if ceiling < floor.
+    pub fn new(
+        multiplier_per_1000: u64,
+        floor: u128,
+        ceiling: u128,
+    ) -> Result<Self, GasPriceParamsError> {
+        if ceiling < floor {
+            return Err(GasPriceParamsError { floor, ceiling });
+        }
+        Ok(Self {
+            multiplier_per_1000,
+            floor,
+            ceiling,
+        })
+    }
 }
 
 impl Default for GasPriceParams {
     fn default() -> Self {
-        GasPriceParams {
+        Self {
             multiplier_per_1000: 1000, // 1.0 scaled by 1000
             floor: 0,
             ceiling: u128::MAX,

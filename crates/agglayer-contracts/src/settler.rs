@@ -177,11 +177,7 @@ mod test {
             max_fee_per_gas,
             max_priority_fee_per_gas,
         };
-        let params = GasPriceParams {
-            multiplier_per_1000,
-            floor,
-            ceiling,
-        };
+        let params = GasPriceParams::new(multiplier_per_1000, floor, ceiling).unwrap();
 
         let adjusted = adjust_gas_estimate(&estimate, &params);
 
