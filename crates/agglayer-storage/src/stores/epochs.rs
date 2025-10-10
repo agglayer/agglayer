@@ -81,8 +81,8 @@ where
 
 impl<PendingStore, StateStore> EpochStoreReader for EpochsStore<PendingStore, StateStore>
 where
-    PendingStore: PendingCertificateReader + PendingCertificateWriter,
-    StateStore: StateWriter + MetadataWriter + StateReader,
+    PendingStore: PendingCertificateReader,
+    StateStore: StateReader,
 {
     fn get_certificate(
         &self,
