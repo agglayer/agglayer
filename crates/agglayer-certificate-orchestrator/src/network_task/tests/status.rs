@@ -106,7 +106,13 @@ async fn from_pending_to_settle() {
         .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| Ok(Some(1)));
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
     settlement_client
         .expect_wait_for_settlement()
         .once()
@@ -233,7 +239,13 @@ async fn from_proven_to_settled() {
         .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| Ok(Some(1)));
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
     settlement_client
         .expect_wait_for_settlement()
         .once()

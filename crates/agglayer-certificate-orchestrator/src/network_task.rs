@@ -17,7 +17,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::{certificate_task::CertificateTask, Certifier, Error, SettlementClient};
+use crate::{certificate_task::CertificateTask, Certifier, Error, NonceInfo, SettlementClient};
 
 #[cfg(test)]
 mod tests;
@@ -64,10 +64,10 @@ pub enum NetworkTaskMessage {
     CertificateReadyForSettlement {
         height: Height,
         certificate_id: CertificateId,
-        nonce: Option<u64>,
+        nonce_info: Option<NonceInfo>,
         previous_tx_hashes: HashSet<SettlementTxHash>,
         settlement_submitted_notifier:
-            oneshot::Sender<Result<(SettlementTxHash, Option<u64>), CertificateStatusError>>,
+            oneshot::Sender<Result<(SettlementTxHash, Option<NonceInfo>), CertificateStatusError>>,
     },
 
     /// Notify the network task that a certificate is waiting for settlement to
@@ -386,17 +386,17 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier,
-                        nonce, previous_tx_hashes, height, .. }) => {
+                        nonce_info, previous_tx_hashes, height, .. }) => {
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
                         let result = self
                             .settlement_client
-                            .submit_certificate_settlement(certificate_id, nonce)
+                            .submit_certificate_settlement(certificate_id, nonce_info)
                             .await;
 
                         // Get the nonce of the tx.
-                        let mut result: Result<(SettlementTxHash, Option<u64>), Error> = match result {
+                        let mut result: Result<(SettlementTxHash, Option<NonceInfo>), Error> = match result {
                             Ok(settlement_tx_hash) => {
                                 match self.settlement_client.fetch_settlement_nonce(settlement_tx_hash).await {
                                     Ok(nonce) => {
