@@ -8,7 +8,7 @@ use tracing::debug;
 
 use crate::{GasPriceParams, L1RpcClient};
 
-const DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER: u128 = 2;
+const DEFAULT_GAS_PRICE_RETRY_INCREASE_FACTOR: u128 = 120; // 1.2x
 
 #[async_trait::async_trait]
 pub trait Settler {
@@ -23,7 +23,7 @@ pub trait Settler {
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
-        nonce: Option<u64>,
+        nonce_info: Option<(u64, u64)>, // (previous nonce, number_of_retries)
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
 }
 
@@ -58,7 +58,7 @@ where
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
-        nonce: Option<u64>,
+        nonce_info: Option<(u64, u64)>, // (nonce, number_of_retries)
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
         // Build the transaction call
         let mut tx_call = self.inner.verifyPessimisticTrustedAggregator(
@@ -110,18 +110,21 @@ where
         let tx_call = {
             // Adjust the gas fees based on the configuration.
             let estimate = self.rpc.estimate_eip1559_fees().await?;
-            let mut adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
+            // If nonce info is provided, pass the number of retries to adjust the gas price
+            // accordingly (increase it
+            // DEFAULT_GAS_PRICE_RETRY_INCREASE_FACTOR/100 per retry)
+            let adjusted = adjust_gas_price_estimate(
+                &estimate,
+                &self.gas_price_params,
+                nonce_info.map(|(_, retries)| retries),
+            );
 
-            if let Some(nonce) = nonce {
+            // Set the nonce if provided
+            if let Some((nonce, _number_of_retries)) = nonce_info {
                 debug!(
-                    "Nonce provided, increasing max_fee_per_gas \
-                     {DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER} times"
+                    "Nonce provided, increasing max_fee_per_gas and max_priority_fee_per_gas \
+                     {DEFAULT_GAS_PRICE_RETRY_INCREASE_FACTOR} % for rollup_id: {rollup_id}"
                 );
-                // If nonce is provided, increase the max fee by 10% to avoid
-                // transaction getting stuck due to nonce gaps.
-                adjusted.max_fee_per_gas *= DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER;
-                adjusted.max_priority_fee_per_gas *= DEFAULT_GAS_PRICE_INCREASE_MULTIPLIER;
-
                 tx_call = tx_call.nonce(nonce);
             }
 
@@ -140,7 +143,11 @@ where
     }
 }
 
-fn adjust_gas_estimate(estimate: &Eip1559Estimation, params: &GasPriceParams) -> Eip1559Estimation {
+fn adjust_gas_price_estimate(
+    estimate: &Eip1559Estimation,
+    params: &GasPriceParams,
+    number_of_retries: Option<u64>,
+) -> Eip1559Estimation {
     let GasPriceParams {
         floor,
         ceiling,
@@ -154,6 +161,13 @@ fn adjust_gas_estimate(estimate: &Eip1559Estimation, params: &GasPriceParams) ->
     };
 
     let mut max_fee_per_gas = adjust(estimate.max_fee_per_gas).max(*floor);
+    if let Some(retries) = number_of_retries {
+        if retries > 0 {
+            max_fee_per_gas = max_fee_per_gas
+                .saturating_mul(retries as u128 * DEFAULT_GAS_PRICE_RETRY_INCREASE_FACTOR)
+                .saturating_div(100);
+        }
+    }
     if max_fee_per_gas > *ceiling {
         tracing::warn!(
             max_fee_per_gas_estimated = estimate.max_fee_per_gas,
@@ -164,7 +178,15 @@ fn adjust_gas_estimate(estimate: &Eip1559Estimation, params: &GasPriceParams) ->
         max_fee_per_gas = *ceiling;
     }
 
-    let max_priority_fee_per_gas = adjust(estimate.max_priority_fee_per_gas).min(*ceiling);
+    let mut max_priority_fee_per_gas = adjust(estimate.max_priority_fee_per_gas);
+    if let Some(retries) = number_of_retries {
+        if retries > 0 {
+            max_priority_fee_per_gas = max_priority_fee_per_gas
+                .saturating_mul(retries as u128 * DEFAULT_GAS_PRICE_RETRY_INCREASE_FACTOR)
+                .saturating_div(100);
+        }
+    }
+    max_priority_fee_per_gas = max_priority_fee_per_gas.min(*ceiling);
 
     let adjusted = Eip1559Estimation {
         max_fee_per_gas,
@@ -188,7 +210,7 @@ fn adjust_gas_estimate(estimate: &Eip1559Estimation, params: &GasPriceParams) ->
 mod test {
     use alloy::eips::eip1559::Eip1559Estimation;
 
-    use super::{adjust_gas_estimate, GasPriceParams};
+    use super::{adjust_gas_price_estimate, GasPriceParams};
 
     #[rstest::rstest]
     fn test_adjust_gas_estimate_respects_floor_and_ceiling(
@@ -208,7 +230,7 @@ mod test {
             ceiling,
         };
 
-        let adjusted = adjust_gas_estimate(&estimate, &params);
+        let adjusted = adjust_gas_price_estimate(&estimate, &params, None);
 
         let acceptable_fee = floor..=ceiling;
         assert!(

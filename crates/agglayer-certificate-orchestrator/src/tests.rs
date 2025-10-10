@@ -40,7 +40,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    settlement_client::{MockProvider, MockSettlementClient, SettlementClient},
+    settlement_client::{MockProvider, MockSettlementClient, NonceInfo, SettlementClient},
     CertificateInput, CertificateOrchestrator, CertificationError, Certifier, CertifierOutput,
     CertifierResult, Error,
 };
@@ -901,7 +901,7 @@ impl SettlementClient for Check {
     async fn submit_certificate_settlement(
         &self,
         _certificate_id: CertificateId,
-        _nonce: Option<u64>,
+        _nonce: Option<NonceInfo>,
     ) -> Result<SettlementTxHash, Error> {
         Ok(SettlementTxHash::for_tests())
     }

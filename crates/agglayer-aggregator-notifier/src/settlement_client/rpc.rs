@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use agglayer_certificate_orchestrator::{Error, SettlementClient};
+use agglayer_certificate_orchestrator::{Error, NonceInfo, SettlementClient};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
 use agglayer_storage::stores::{
@@ -64,7 +64,7 @@ where
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
-        nonce: Option<u64>,
+        nonce_info: Option<NonceInfo>,
     ) -> Result<SettlementTxHash, Error> {
         // Step 1: Get certificate header and validate
         let (network_id, height) = if let Some(CertificateHeader {
@@ -193,7 +193,7 @@ where
                 *output.new_pessimistic_root,
                 proof_with_selector.into(),
                 certificate.custom_chain_data.into(),
-                nonce,
+                nonce_info.map(|info| (info.last_used, info.number_of_retries)),
             )
             .await
         {
@@ -443,9 +443,9 @@ where
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
-        nonce: Option<u64>,
+        nonce_info: Option<NonceInfo>,
     ) -> Result<SettlementTxHash, Error> {
-        self.submit_certificate_settlement(certificate_id, nonce)
+        self.submit_certificate_settlement(certificate_id, nonce_info)
             .await
     }
 
@@ -510,6 +510,14 @@ where
                 tx_hash,
             ) {
                 (Some(pp_root), Some(tx_hash)) => Some((pp_root, SettlementTxHash::new(tx_hash))),
+                (Some(pp_root), None) => {
+                    warn!("Retrieved the pp_root {pp_root:?} without a transaction hash");
+                    None
+                }
+                (None, Some(tx_hash)) => {
+                    warn!("Retrieved the tx_hash {tx_hash} without a pp root");
+                    None
+                }
                 _ => None,
             }
         });

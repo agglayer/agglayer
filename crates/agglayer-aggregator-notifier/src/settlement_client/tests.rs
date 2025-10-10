@@ -63,7 +63,7 @@ mockall::mock! {
             new_pessimistic_root: [u8; 32],
             proof: Bytes,
             custom_chain_data: Bytes,
-            nonce: Option<u64>,
+            nonce: Option<(u64, u64)>,
         ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, alloy::contract::Error>;
 
     }

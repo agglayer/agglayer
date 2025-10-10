@@ -17,7 +17,10 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::{certificate_task::CertificateTask, Certifier, Error, SettlementClient};
+use crate::{
+    certificate_task::CertificateTask, settlement_client::NonceInfo, Certifier, Error,
+    SettlementClient,
+};
 
 #[cfg(test)]
 mod tests;
@@ -390,9 +393,13 @@ where
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
+                        let nonce_info = nonce.map(|nonce| NonceInfo {
+                            last_used: nonce,
+                            number_of_retries: previous_tx_hashes.len() as u64,
+                        });
                         let result = self
                             .settlement_client
-                            .submit_certificate_settlement(certificate_id, nonce)
+                            .submit_certificate_settlement(certificate_id, nonce_info)
                             .await;
 
                         // Get the nonce of the tx.
