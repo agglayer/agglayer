@@ -14,7 +14,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     network_task::{CertificateSettlementResult, NetworkTaskMessage},
-    Certifier, Error,
+    Certifier, Error, NonceInfo,
 };
 
 /// A task that processes a certificate, including certifying it and settling
@@ -34,7 +34,7 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
     new_pp_root: Option<Digest>,
-    nonce: Option<u64>,
+    nonce_info: Option<NonceInfo>,
     previous_tx_hashes: HashSet<SettlementTxHash>,
 }
 
@@ -71,7 +71,7 @@ where
             certifier_client,
             cancellation_token,
             new_pp_root: None,
-            nonce: None,
+            nonce_info: None,
             previous_tx_hashes: HashSet::new(),
         })
     }
@@ -280,13 +280,13 @@ where
 
         debug!(
             "Submitting certificate for settlement, previous nonce is {:?}",
-            self.nonce
+            self.nonce_info
         );
         let (settlement_submitted_notifier, settlement_submitted) = oneshot::channel();
         self.send_to_network_task(NetworkTaskMessage::CertificateReadyForSettlement {
             height,
             certificate_id,
-            nonce: self.nonce,
+            nonce_info: self.nonce_info.clone(),
             previous_tx_hashes: self.previous_tx_hashes.clone(),
             settlement_submitted_notifier,
         })
@@ -305,8 +305,8 @@ where
 
         // Keep the nonce for future use (e.g., retries)
         if let Some(nonce) = nonce {
-            debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce}");
-            self.nonce = Some(nonce);
+            debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce:?}");
+            self.nonce_info = Some(nonce);
         }
 
         #[cfg(feature = "testutils")]

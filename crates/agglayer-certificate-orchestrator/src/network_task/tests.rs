@@ -123,7 +123,13 @@ async fn start_from_zero() {
         .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| Ok(Some(1)));
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     state
         .expect_update_settlement_tx_hash()
@@ -331,7 +337,13 @@ async fn one_per_epoch() {
         .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| Ok(Some(1)));
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     state
         .expect_update_settlement_tx_hash()
@@ -608,7 +620,13 @@ async fn retries() {
         .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| Ok(Some(1)));
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     state
         .expect_update_settlement_tx_hash()
@@ -841,7 +859,13 @@ async fn changing_epoch_triggers_certify() {
         .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SETTLEMENT_TX_HASH_1))
-        .returning(|_| Ok(Some(1)));
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     state
         .expect_update_settlement_tx_hash()
@@ -859,7 +883,13 @@ async fn changing_epoch_triggers_certify() {
         .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SETTLEMENT_TX_HASH_2))
-        .returning(|_| Ok(Some(2)));
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 2,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     state
         .expect_update_settlement_tx_hash()
@@ -1193,7 +1223,13 @@ async fn process_next_certificate() {
         .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SETTLEMENT_TX_HASH_1))
-        .returning(|_| Ok(Some(1)));
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     settlement_client
         .expect_submit_certificate_settlement()
@@ -1205,7 +1241,13 @@ async fn process_next_certificate() {
         .expect_fetch_settlement_nonce()
         .once()
         .with(eq(SETTLEMENT_TX_HASH_2))
-        .returning(|_| Ok(Some(2)));
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 2,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     settlement_client
         .expect_wait_for_settlement()

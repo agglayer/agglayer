@@ -22,7 +22,7 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
-        nonce: Option<u64>,
+        nonce: Option<NonceInfo>,
     ) -> Result<SettlementTxHash, Error>;
 
     /// Watch for the transaction to be mined and update the certificate
@@ -47,11 +47,18 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     async fn fetch_settlement_nonce(
         &self,
         settlement_tx_hash: SettlementTxHash,
-    ) -> Result<Option<u64>, Error>;
+    ) -> Result<Option<NonceInfo>, Error>;
 
     /// Returns the receipt status for a settlement tx.
     async fn fetch_settlement_receipt_status(
         &self,
         settlement_tx_hash: SettlementTxHash,
     ) -> Result<bool, Error>;
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NonceInfo {
+    pub nonce: u64,
+    pub previous_max_fee_per_gas: u128,
+    pub previous_max_priority_fee_per_gas: Option<u128>,
 }

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use agglayer_certificate_orchestrator::{Error, SettlementClient};
+use agglayer_certificate_orchestrator::{Error, NonceInfo, SettlementClient};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
 use agglayer_storage::stores::{
@@ -64,7 +64,7 @@ where
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
-        nonce: Option<u64>,
+        nonce_info: Option<NonceInfo>,
     ) -> Result<SettlementTxHash, Error> {
         // Step 1: Get certificate header and validate
         let (network_id, height) = if let Some(CertificateHeader {
@@ -193,7 +193,13 @@ where
                 *output.new_pessimistic_root,
                 proof_with_selector.into(),
                 certificate.custom_chain_data.into(),
-                nonce,
+                nonce_info.map(|n| {
+                    (
+                        n.nonce,
+                        n.previous_max_fee_per_gas,
+                        n.previous_max_priority_fee_per_gas,
+                    )
+                }),
             )
             .await
         {
@@ -443,9 +449,9 @@ where
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
-        nonce: Option<u64>,
+        nonce_info: Option<NonceInfo>,
     ) -> Result<SettlementTxHash, Error> {
-        self.submit_certificate_settlement(certificate_id, nonce)
+        self.submit_certificate_settlement(certificate_id, nonce_info)
             .await
     }
 
@@ -560,11 +566,11 @@ where
     async fn fetch_settlement_nonce(
         &self,
         settlement_tx_hash: SettlementTxHash,
-    ) -> Result<Option<u64>, Error> {
+    ) -> Result<Option<NonceInfo>, Error> {
         let tx_hash = settlement_tx_hash.into();
 
         // First, get the transaction to extract the nonce.
-        let nonce = match self
+        let nonce_info = match self
             .l1_rpc
             .get_provider()
             .get_transaction_by_hash(tx_hash)
@@ -579,7 +585,11 @@ where
                 // The inner field derefs to the transaction type which implements the
                 // Transaction trait.
                 use alloy::consensus::Transaction as _;
-                tx.inner.nonce()
+                NonceInfo {
+                    nonce: tx.inner.nonce(),
+                    previous_max_fee_per_gas: tx.inner.max_fee_per_gas(),
+                    previous_max_priority_fee_per_gas: tx.inner.max_priority_fee_per_gas(),
+                }
             }
             None => {
                 warn!("Settlement tx not found on L1 for tx: {}", tx_hash);
@@ -592,7 +602,7 @@ where
             }
         };
 
-        Ok(Some(nonce))
+        Ok(Some(nonce_info))
     }
 }
 
