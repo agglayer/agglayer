@@ -122,13 +122,15 @@ where
                     let adjust: Eip1559Estimation = Eip1559Estimation {
                         max_fee_per_gas: previous_max_fee_per_gas
                             .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
-                            .saturating_div(100),
+                            .saturating_div(100)
+                            .min(self.gas_price_params.ceiling),
                         max_priority_fee_per_gas: previous_max_priority_fee_per_gas
                             .map(|val| {
                                 val.saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
                                     .saturating_div(100)
                             })
-                            .unwrap_or(estimate.max_priority_fee_per_gas),
+                            .unwrap_or(estimate.max_priority_fee_per_gas)
+                            .min(self.gas_price_params.ceiling),
                     };
                     debug!(
                         "Nonce provided: {nonce_info:?}, increasing  previous max_fee_per_gas and \
@@ -140,12 +142,6 @@ where
                 } else {
                     // Adjust the gas fees based on the configuration.
                     let adjust = adjust_gas_estimate(&estimate, &self.gas_price_params);
-                    debug!(
-                        "Calculated adjusted gas estimation for rollup_id: {rollup_id}: \
-                         max_priority_fee_per_gas: {}, max_fee_per_gas: {}. Original estimate: \
-                         {:?}",
-                        adjust.max_priority_fee_per_gas, adjust.max_fee_per_gas, estimate
-                    );
                     adjust
                 };
 
