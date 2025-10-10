@@ -23,6 +23,7 @@ impl Multiplier {
     pub const MAX: Self = Self(u64::MAX);
 
     const FROM_F64_TOLERANCE: f64 = 1e-6;
+    const FROM_F64_MAX: u64 = ((1_u64 << f64::MANTISSA_DIGITS) as f64).next_down() as u64;
     const SCALE: u64 = 1000;
 
     pub const fn from_u64_per_1000(x: u64) -> Self {
@@ -36,11 +37,11 @@ impl Multiplier {
         // value and fail if there is too much precision loss, indicating there were
         // too many decimals in the original floating point number.
         let r = Self::try_from_f64_round(x)?;
-        let delta = (r.as_u64_per_1000() as f64 - Self::scale_f64(x)).abs();
+        let delta = r.as_u64_per_1000() as f64 - Self::scale_f64(x);
 
         // We still allow some tolerance to account for the fact that floating point
-        // cannot represent base-10 decimals (such as 1.2_f64) exactly.
-        (delta <= Self::FROM_F64_TOLERANCE)
+        // cannot represent base-10 decimals (such as 1.2) exactly.
+        (delta.abs() <= Self::FROM_F64_TOLERANCE)
             .then_some(r)
             .ok_or(FromF64Error::Imprecise)
     }
@@ -48,7 +49,7 @@ impl Multiplier {
     /// Get a multiplier from `f64`, failing if we are out of range.
     pub fn try_from_f64_round(x: f64) -> Result<Self, FromF64Error> {
         let x = Self::scale_f64(x).round();
-        (0.0..=(u64::MAX as f64))
+        (0.0..=Self::FROM_F64_MAX as f64)
             .contains(&x)
             .then_some(Self(x as u64))
             .ok_or(FromF64Error::OutOfRange)
