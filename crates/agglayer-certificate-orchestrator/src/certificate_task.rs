@@ -360,7 +360,7 @@ where
             )
         })?;
         debug!(
-            settlement_tx_hash = %settlement_tx_hash,
+            %settlement_tx_hash,
             "Waiting for certificate settlement to complete"
         );
         let (settlement_complete_notifier, settlement_complete) = oneshot::channel();

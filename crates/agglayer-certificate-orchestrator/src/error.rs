@@ -205,8 +205,8 @@ pub enum Error {
     #[error("Pending transaction timeout {certificate_id}: {error}")]
     PendingTransactionTimeout {
         certificate_id: CertificateId,
-        error: String,
         settlement_tx_hash: SettlementTxHash,
+        error: String,
     },
 
     #[error("Failed to settle the certificate {certificate_id}: {error}")]

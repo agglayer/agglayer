@@ -182,8 +182,8 @@ mod tests {
                     let config = toml::from_str::<OutboundRpcSettleConfig>(toml).unwrap();
 
                     assert_eq!(config.max_retries, 3);
-                    assert_eq!(config.retry_interval, Duration::from_secs(7));
-                    assert_eq!(config.confirmations, 1);
+                    assert_eq!(config.retry_interval, Duration::from_secs(60));
+                    assert_eq!(config.confirmations, 3);
                 }
 
                 #[test]

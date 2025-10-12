@@ -341,11 +341,7 @@ where
         for attempt in 0..=self.config.max_retries {
             match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
                 Ok(receipt) => {
-                    info!(
-                        %settlement_tx_hash,
-                        attempt,
-                        "Successfully fetched transaction receipt"
-                    );
+                    info!(attempt, "Successfully fetched transaction receipt");
 
                     // Wait for the required number of confirmations
                     if self.config.confirmations > 0 {
@@ -358,7 +354,6 @@ where
                         })?;
 
                         debug!(
-                            %settlement_tx_hash,
                             receipt_block,
                             required_confirmations = self.config.confirmations,
                             "Waiting for block confirmations"
@@ -369,18 +364,16 @@ where
                             match self.l1_rpc.get_provider().get_block_number().await {
                                 Ok(current_block) => {
                                     let confirmations = current_block.saturating_sub(receipt_block);
-
                                     if confirmations >= self.config.confirmations as u64 {
                                         info!(
-                                            %settlement_tx_hash,
                                             confirmations,
                                             required_confirmations = self.config.confirmations,
+                                            current_block,
                                             "Transaction confirmed with required confirmations"
                                         );
                                         return Ok(receipt);
                                     } else {
                                         debug!(
-                                            %settlement_tx_hash,
                                             confirmations,
                                             required_confirmations = self.config.confirmations,
                                             "Waiting for more confirmations, sleeping"
@@ -389,9 +382,8 @@ where
                                     }
                                 }
                                 Err(error) => {
-                                    if confirmation_attempt + 1 < self.config.max_retries {
+                                    if confirmation_attempt <= self.config.max_retries {
                                         warn!(
-                                            %settlement_tx_hash,
                                             ?error,
                                             "Failed to get current block number, retrying"
                                         );
@@ -399,15 +391,15 @@ where
                                         continue;
                                     } else {
                                         error!(
-                                            %settlement_tx_hash,
                                             ?error,
-                                            "Failed to get current block number after retries"
+                                            "Failed to get current block number after maximum \
+                                             retries"
                                         );
                                         return Err(Error::SettlementError {
                                             certificate_id,
                                             error: format!(
                                                 "Failed to get current block number while waiting \
-                                                 for confirmations: {error}"
+                                                 for confirmations of tx {tx_hash}: {error}"
                                             ),
                                         });
                                     }
@@ -417,17 +409,17 @@ where
 
                         // Timeout waiting for confirmations
                         error!(
-                            %settlement_tx_hash,
                             ?timeout,
                             "Timeout while waiting for transaction confirmations"
                         );
                         return Err(Error::PendingTransactionTimeout {
                             certificate_id,
+                            settlement_tx_hash,
                             error: format!(
-                                "Timeout while waiting for transaction confirmations after {:?}",
+                                "Timeout while waiting for transaction confirmations for tx \
+                                 {tx_hash} after {:?}",
                                 timeout
                             ),
-                            settlement_tx_hash,
                         });
                     } else {
                         // No confirmations required, return immediately
@@ -442,7 +434,6 @@ where
                     ) {
                         // Transaction not yet included in a block, continue retrying
                         if attempt <= self.config.max_retries {
-                            println!(">>>>>>>>>>>>>> CHECKPOINT 1 <<<<<<<<<<<<");
                             // Log at 25%, 50%, 75% progress milestones
                             let progress_percent = ((attempt + 1) * 100) / self.config.max_retries;
                             if progress_percent == 25
@@ -461,7 +452,6 @@ where
                             tokio::time::sleep(self.config.retry_interval).await;
                             continue;
                         } else {
-                            println!(">>>>>>>>>>>>>> CHECKPOINT 2 <<<<<<<<<<<<");
                             // Max retries reached
                             error!(
                                 %settlement_tx_hash,
@@ -471,27 +461,22 @@ where
                             );
                             return Err(Error::PendingTransactionTimeout {
                                 certificate_id,
+                                settlement_tx_hash,
                                 error: format!(
                                     "Timeout while waiting for the pending settlement transaction \
                                      {:?}, error: {}",
                                     timeout, error
                                 ),
-                                settlement_tx_hash,
                             });
                         }
                     } else {
-                        println!(">>>>>>>>>>>>>> CHECKPOINT 3 <<<<<<<<<<<<");
                         // Other error (e.g., network issue, RPC error)
-                        error!(
-                            %settlement_tx_hash,
-                            ?error,
-                            "Error watching the pending settlement transaction"
-                        );
+                        error!(?error, "Error watching the pending settlement transaction");
                         return Err(Error::SettlementError {
                             certificate_id,
                             error: format!(
-                                "Error while waiting for the pending settlement transaction: \
-                                 {error}"
+                                "Error while waiting for the pending settlement transaction tx \
+                                 {tx_hash}: {error}"
                             ),
                         });
                     }
@@ -501,17 +486,16 @@ where
 
         // This should not be reached, but added for completeness
         error!(
-            %settlement_tx_hash,
             ?timeout,
-            "Timeout while watching the pending settlement transaction"
+            "Unexpected timeout while watching the pending settlement transaction"
         );
         Err(Error::PendingTransactionTimeout {
             certificate_id,
+            settlement_tx_hash,
             error: format!(
-                "Timeout while watching the pending settlement transaction after {:?}",
+                "Unexpected timeout while watching the pending settlement transaction after {:?}",
                 timeout
             ),
-            settlement_tx_hash,
         })
     }
 }
