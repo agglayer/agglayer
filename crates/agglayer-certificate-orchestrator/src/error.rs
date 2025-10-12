@@ -222,7 +222,14 @@ pub enum Error {
     },
 
     #[error("Failed to communicate with L1: {0}")]
-    L1CommunicationError(#[source] agglayer_contracts::L1RpcError),
+    L1CommunicationError(#[source] Box<agglayer_contracts::L1RpcError>),
+
+    #[error("Failed to fetch the receipt for L1 transaction {tx_hash}: {error}")]
+    SettlementTransactionFetchReceiptError {
+        tx_hash: SettlementTxHash,
+        #[source]
+        error: Box<agglayer_contracts::L1RpcError>,
+    },
 }
 
 impl From<Error> for CertificateStatusError {
@@ -257,6 +264,11 @@ impl From<Error> for CertificateStatusError {
             }
             Error::PendingTransactionTimeout { error, .. } => {
                 CertificateStatusError::InternalError(error.to_string())
+            }
+            Error::SettlementTransactionFetchReceiptError { error, tx_hash } => {
+                CertificateStatusError::InternalError(format!(
+                    "Failed to fetch the receipt for L1 transaction {tx_hash}: {error}"
+                ))
             }
         }
     }

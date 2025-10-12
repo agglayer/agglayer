@@ -124,13 +124,13 @@ const fn default_rpc_retries() -> usize {
 
 /// Default interval for the polling of the transaction.
 const fn default_rpc_retry_interval() -> Duration {
-    Duration::from_secs(7)
+    Duration::from_secs(60)
 }
 
 /// Default number of confirmations required for the transaction to resolve a
 /// receipt.
 const fn default_rpc_confirmations() -> usize {
-    1
+    3
 }
 
 /// Default timeout for settlement transaction submission and confirmation.

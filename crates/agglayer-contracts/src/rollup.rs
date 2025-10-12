@@ -229,7 +229,7 @@ where
                     tx_hash: tx_hash.to_string(),
                     source: err.into(),
                 })?
-                .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))?;
+                .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash.to_string()))?;
 
             if receipt.status() {
                 receipt

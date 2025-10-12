@@ -98,8 +98,8 @@ pub enum L1RpcError {
         #[source]
         source: eyre::Error,
     },
-    #[error("No transaction receipt found for {0}")]
-    TransactionReceiptNotFound(String),
+    #[error("No transaction receipt found for tx {0}, not yet mined")]
+    TransactionNotYetMined(String),
     #[error("Failed to fetch aggchain vkey")]
     AggchainVkeyFetchFailed,
     #[error("Failed to retrieve trusted sequencer")]
@@ -108,6 +108,7 @@ pub enum L1RpcError {
     RollupDataRetrievalFailed,
     #[error("Unable to get transaction")]
     UnableToGetTransaction {
+        tx_hash: String,
         #[source]
         source: eyre::Error,
     },
@@ -243,7 +244,7 @@ where
                 tx_hash: tx_hash.to_string(),
                 source: err.into(),
             })?
-            .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))
+            .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash.to_string()))
     }
 
     fn get_provider(&self) -> &Self::Provider {
