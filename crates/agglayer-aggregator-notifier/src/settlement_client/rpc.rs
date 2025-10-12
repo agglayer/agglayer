@@ -442,6 +442,7 @@ where
                     ) {
                         // Transaction not yet included in a block, continue retrying
                         if attempt <= self.config.max_retries {
+                            println!(">>>>>>>>>>>>>> CHECKPOINT 1 <<<<<<<<<<<<");
                             // Log at 25%, 50%, 75% progress milestones
                             let progress_percent = ((attempt + 1) * 100) / self.config.max_retries;
                             if progress_percent == 25
@@ -460,6 +461,7 @@ where
                             tokio::time::sleep(self.config.retry_interval).await;
                             continue;
                         } else {
+                            println!(">>>>>>>>>>>>>> CHECKPOINT 2 <<<<<<<<<<<<");
                             // Max retries reached
                             error!(
                                 %settlement_tx_hash,
@@ -478,6 +480,7 @@ where
                             });
                         }
                     } else {
+                        println!(">>>>>>>>>>>>>> CHECKPOINT 3 <<<<<<<<<<<<");
                         // Other error (e.g., network issue, RPC error)
                         error!(
                             %settlement_tx_hash,
