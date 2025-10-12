@@ -29,9 +29,9 @@ send-tx = "unlimited"
 [rate-limiting.network]
 
 [outbound.rpc.settle]
-max-retries = 3
-retry-interval = "1m"
-confirmations = 3
+max-retries = 30
+retry-interval = "10s"
+confirmations = 1
 settlement-timeout = "20m"
 
 [outbound.rpc.settle.gas-price]
