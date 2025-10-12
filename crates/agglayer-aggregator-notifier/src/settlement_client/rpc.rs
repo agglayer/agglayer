@@ -354,9 +354,8 @@ where
                     Error::PendingTransactionTimeout {
                         certificate_id,
                         error: format!(
-                            "Timeout while watching the pending settlement transaction {:?}, \
-                             error: {}",
-                            timeout, error
+                            "Timeout while watching the pending settlement transaction \
+                             {timeout:?}, error: {error}"
                         ),
                         settlement_tx_hash,
                     }
@@ -410,10 +409,9 @@ where
                     Err(Error::PendingTransactionTimeout {
                         certificate_id,
                         error: format!(
-                            "Settlement pending transaction timeout after {:?}, error: {}",
-                            timeout, error
+                            "Settlement pending transaction timeout after {timeout:?}, error: \
+                             {error}"
                         ),
-
                         settlement_tx_hash,
                     })
                 } else {
@@ -595,8 +593,7 @@ where
                 warn!("Settlement tx not found on L1 for tx: {}", tx_hash);
                 return Err(Error::L1CommunicationError(
                     agglayer_contracts::L1RpcError::TransactionReceiptNotFound(format!(
-                        "Transaction not found: {}",
-                        tx_hash
+                        "Transaction not found: {tx_hash}"
                     )),
                 ));
             }
