@@ -437,7 +437,8 @@ where
                                 }
                             }
 
-                            // In the case we have lost the previos tx hashes (e.g. agglayer crashed), we can still check the latest pp root on L1.
+                            // In the case we have lost the previous tx hashes (e.g. agglayer crashed),
+                            // we can still check the latest pp root on L1.
                             if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) = self.fetch_latest_pp_root_from_l1().await {
                                if latest_pp_root == new_pp_root {
                                    // Certificate has been settled through some other previous transaction.
