@@ -417,8 +417,7 @@ where
                             settlement_tx_hash,
                             error: format!(
                                 "Timeout while waiting for transaction confirmations for tx \
-                                 {tx_hash} after {:?}",
-                                timeout
+                                 {tx_hash} after {timeout:?}"
                             ),
                         });
                     } else {
@@ -464,8 +463,7 @@ where
                                 settlement_tx_hash,
                                 error: format!(
                                     "Timeout while waiting for the pending settlement transaction \
-                                     {:?}, error: {}",
-                                    timeout, error
+                                     {timeout:?}, error: {error}"
                                 ),
                             });
                         }
@@ -493,8 +491,8 @@ where
             certificate_id,
             settlement_tx_hash,
             error: format!(
-                "Unexpected timeout while watching the pending settlement transaction after {:?}",
-                timeout
+                "Unexpected timeout while watching the pending settlement transaction after \
+                 {timeout:?}"
             ),
         })
     }

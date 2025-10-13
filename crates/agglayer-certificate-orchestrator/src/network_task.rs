@@ -66,6 +66,7 @@ pub enum NetworkTaskMessage {
         certificate_id: CertificateId,
         nonce_info: Option<NonceInfo>,
         previous_tx_hashes: HashSet<SettlementTxHash>,
+        new_pp_root: Digest,
         settlement_submitted_notifier:
             oneshot::Sender<Result<(SettlementTxHash, Option<NonceInfo>), CertificateStatusError>>,
     },
@@ -80,7 +81,7 @@ pub enum NetworkTaskMessage {
         certificate_id: CertificateId,
         settlement_tx_hash: SettlementTxHash,
         settlement_complete_notifier: oneshot::Sender<CertificateSettlementResult>,
-        pp_root: Digest,
+        new_pp_root: Digest,
     },
 
     /// Notify the network task that a certificate has been successfully
@@ -386,7 +387,7 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier,
-                        nonce_info, previous_tx_hashes, height, .. }) => {
+                        nonce_info, previous_tx_hashes, height, new_pp_root, .. }) => {
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
@@ -435,6 +436,18 @@ where
                                     }
                                 }
                             }
+
+                            // In the case we have lost the previos tx hashes (e.g. agglayer crashed), we can still check the latest pp root on L1.
+                            if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) = self.fetch_latest_pp_root_from_l1().await {
+                               if latest_pp_root == new_pp_root {
+                                   // Certificate has been settled through some other previous transaction.
+                                   info!(%certificate_id,
+                                       "Certificate for new height: {height} has been previously settled on \
+                                       L1 through other transaction {latest_pp_root_tx_hash}, \
+                                       hence unable to send settlement transaction");
+                                   result = Ok((latest_pp_root_tx_hash, None));
+                               }
+                            }
                         }
 
                         settlement_submitted_notifier
@@ -445,7 +458,8 @@ where
                         fail::fail_point!("network_task::make_progress::settlement_submitted");
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier, height, pp_root, ..}) => {
+                    Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier,
+                        height, new_pp_root, ..}) => {
                         let height = height.as_u64();
                         // See comment on CertificateReadyForSettlement.
                         let result = self
@@ -480,7 +494,7 @@ where
 
                                 // On timeout, check if the certificate has been settled through some other transaction.
                                 match self.fetch_latest_pp_root_from_l1().await {
-                                    Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) if latest_pp_root == pp_root => {
+                                    Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) if latest_pp_root == new_pp_root => {
                                         // Certificate has been settled through some other previous transaction.
                                         info!(%certificate_id,
                                             "Certificate for new height: {} has been settled on L1 through other transaction {latest_pp_root_tx_hash}", height);

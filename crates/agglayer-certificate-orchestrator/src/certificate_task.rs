@@ -301,6 +301,11 @@ where
             certificate_id,
             nonce_info: self.nonce_info.clone(),
             previous_tx_hashes: self.previous_tx_hashes.clone(),
+            new_pp_root: self
+                .new_pp_root
+                .ok_or(CertificateStatusError::InternalError(
+                    "CertificateTask::process_from_proven called without a pp_root".into(),
+                ))?,
             settlement_submitted_notifier,
         })
         .await?;
@@ -369,7 +374,7 @@ where
             certificate_id,
             settlement_tx_hash,
             settlement_complete_notifier,
-            pp_root: new_pp_root,
+            new_pp_root,
         })
         .await?;
 
