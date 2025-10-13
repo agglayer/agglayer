@@ -1,7 +1,7 @@
 use agglayer_contracts::L1RpcError;
 use agglayer_types::{
     aggchain_proof::AggchainProofPublicValues, bincode, CertificateId, CertificateStatusError,
-    Digest, Height, NetworkId,
+    Digest, Height, NetworkId, SettlementTxHash,
 };
 use pessimistic_proof::{
     core::commitment::StateCommitment, error::ProofVerificationError, PessimisticProofOutput,
@@ -202,6 +202,13 @@ pub enum Error {
         network_id: NetworkId,
     },
 
+    #[error("Pending transaction timeout {certificate_id}: {error}")]
+    PendingTransactionTimeout {
+        certificate_id: CertificateId,
+        settlement_tx_hash: SettlementTxHash,
+        error: String,
+    },
+
     #[error("Failed to settle the certificate {certificate_id}: {error}")]
     SettlementError {
         certificate_id: CertificateId,
@@ -215,7 +222,14 @@ pub enum Error {
     },
 
     #[error("Failed to communicate with L1: {0}")]
-    L1CommunicationError(#[source] agglayer_contracts::L1RpcError),
+    L1CommunicationError(#[source] Box<agglayer_contracts::L1RpcError>),
+
+    #[error("Failed to fetch the receipt for L1 transaction {tx_hash}: {error}")]
+    SettlementTransactionFetchReceiptError {
+        tx_hash: SettlementTxHash,
+        #[source]
+        error: Box<agglayer_contracts::L1RpcError>,
+    },
 }
 
 impl From<Error> for CertificateStatusError {
@@ -247,6 +261,14 @@ impl From<Error> for CertificateStatusError {
             Error::SettlementError { error, .. } => CertificateStatusError::SettlementError(error),
             Error::PersistenceError { error, .. } => {
                 CertificateStatusError::InternalError(error.to_string())
+            }
+            Error::PendingTransactionTimeout { error, .. } => {
+                CertificateStatusError::InternalError(error.to_string())
+            }
+            Error::SettlementTransactionFetchReceiptError { error, tx_hash } => {
+                CertificateStatusError::InternalError(format!(
+                    "Failed to fetch the receipt for L1 transaction {tx_hash}: {error}"
+                ))
             }
         }
     }

@@ -49,6 +49,8 @@ pub trait RollupContract {
     async fn get_verifier_type(&self, rollup_id: u32) -> Result<VerifierType, L1RpcError>;
 
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
+
+    fn get_rollup_manager_address(&self) -> Address;
 }
 
 #[async_trait::async_trait]
@@ -223,8 +225,11 @@ where
                 .rpc
                 .get_transaction_receipt(tx_hash)
                 .await
-                .map_err(|_| L1RpcError::UnableToFetchTransactionReceipt(tx_hash.to_string()))?
-                .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))?;
+                .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
+                    tx_hash: tx_hash.to_string(),
+                    source: err.into(),
+                })?
+                .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash.to_string()))?;
 
             if receipt.status() {
                 receipt
@@ -262,5 +267,9 @@ where
 
         Ok(VerifierType::from_u8(rollup_data.rollupVerifierType)
             .ok_or(L1RpcError::VerifierTypeRetrievalFailed)?)
+    }
+
+    fn get_rollup_manager_address(&self) -> Address {
+        (*self.inner.address()).into()
     }
 }

@@ -70,12 +70,13 @@ impl StateWriter for StateStore {
         &self,
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
+        force: bool,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
-            if certificate_header.settlement_tx_hash.is_some() {
+            if certificate_header.settlement_tx_hash.is_some() && !force  {
                 return Err(Error::UnprocessedAction(
                     "Tried to update settlement tx hash for a certificate that already has a \
                      settlement tx hash"
