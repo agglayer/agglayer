@@ -281,11 +281,11 @@ where
             error!(previous_tx_hashes=?self.previous_tx_hashes,
                 "More than 5 different settlement transactions submitted for the same certificate, something is wrong"
             );
-            return Err(CertificateStatusError::SettlementError(
+            return Err(CertificateStatusError::SettlementError(format!(
                 "Too many different settlement transactions submitted for the same certificate: \
-                 {previous_tx_hashes:?}"
-                    .into(),
-            ));
+                 {:?}",
+                self.previous_tx_hashes
+            )));
         }
 
         let height = self.header.height;
@@ -354,15 +354,15 @@ where
                 "CertificateTask::process_from_candidate called without a pp_root".into(),
             ))?;
 
-        debug!(
-            settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
-            "Waiting for certificate settlement to complete"
-        );
         let settlement_tx_hash = self.header.settlement_tx_hash.ok_or_else(|| {
             CertificateStatusError::SettlementError(
                 "Candidate certificate header has no settlement tx hash".into(),
             )
         })?;
+        debug!(
+            %settlement_tx_hash,
+            "Waiting for certificate settlement to complete"
+        );
         let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
         self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
             height,

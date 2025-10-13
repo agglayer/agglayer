@@ -1,6 +1,6 @@
 [rpc.settle]
-max-retries = 3
-retry-interval = "7s"
+max-retries = 30
+retry-interval = "10s"
 confirmations = 1
 settlement-timeout = "20m"
 gas-multiplier-factor = 100

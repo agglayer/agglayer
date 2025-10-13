@@ -225,8 +225,11 @@ where
                 .rpc
                 .get_transaction_receipt(tx_hash)
                 .await
-                .map_err(|_| L1RpcError::UnableToFetchTransactionReceipt(tx_hash.to_string()))?
-                .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))?;
+                .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
+                    tx_hash: tx_hash.to_string(),
+                    source: err.into(),
+                })?
+                .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash.to_string()))?;
 
             if receipt.status() {
                 receipt
