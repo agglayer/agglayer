@@ -49,6 +49,8 @@ pub trait RollupContract {
     async fn get_verifier_type(&self, rollup_id: u32) -> Result<VerifierType, L1RpcError>;
 
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
+
+    fn get_rollup_manager_address(&self) -> Address;
 }
 
 #[async_trait::async_trait]
@@ -262,5 +264,9 @@ where
 
         Ok(VerifierType::from_u8(rollup_data.rollupVerifierType)
             .ok_or(L1RpcError::VerifierTypeRetrievalFailed)?)
+    }
+
+    fn get_rollup_manager_address(&self) -> Address {
+        (*self.inner.address()).into()
     }
 }
