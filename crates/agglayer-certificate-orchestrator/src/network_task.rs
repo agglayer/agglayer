@@ -415,7 +415,8 @@ where
 
                         // If the error in the sending transaction happened for whatever reason,
                         // check if maybe the certificate has been settled through some other previous transaction.
-                        if let Err(_err) = &result {
+                        if let Err(err) = &result {
+                            error!(%certificate_id, "Error submitting settlement transaction for certificate at height {height}: {err:?}");
                             for previous_tx_hash in previous_tx_hashes {
                                 match self.settlement_client.fetch_settlement_receipt_status(previous_tx_hash).await {
                                     Ok(true) => {
