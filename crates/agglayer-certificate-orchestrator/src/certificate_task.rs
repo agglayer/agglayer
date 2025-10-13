@@ -14,8 +14,10 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     network_task::{CertificateSettlementResult, NetworkTaskMessage},
-    Certifier, Error,
+    Certifier, Error, NonceInfo,
 };
+
+const MAX_TX_RETRY: usize = 5;
 
 /// A task that processes a certificate, including certifying it and settling
 /// it.
@@ -34,7 +36,7 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
     new_pp_root: Option<Digest>,
-    nonce: Option<u64>,
+    nonce_info: Option<NonceInfo>,
     previous_tx_hashes: HashSet<SettlementTxHash>,
 }
 
@@ -71,7 +73,7 @@ where
             certifier_client,
             cancellation_token,
             new_pp_root: None,
-            nonce: None,
+            nonce_info: None,
             previous_tx_hashes: HashSet::new(),
         })
     }
@@ -275,24 +277,35 @@ where
             )));
         }
 
+        if self.previous_tx_hashes.len() > MAX_TX_RETRY {
+            error!(previous_tx_hashes=?self.previous_tx_hashes,
+                "More than 5 different settlement transactions submitted for the same certificate, something is wrong"
+            );
+            return Err(CertificateStatusError::SettlementError(format!(
+                "Too many different settlement transactions submitted for the same certificate: \
+                 {:?}",
+                self.previous_tx_hashes
+            )));
+        }
+
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
 
         debug!(
             "Submitting certificate for settlement, previous nonce is {:?}",
-            self.nonce
+            self.nonce_info
         );
         let (settlement_submitted_notifier, settlement_submitted) = oneshot::channel();
         self.send_to_network_task(NetworkTaskMessage::CertificateReadyForSettlement {
             height,
             certificate_id,
-            nonce: self.nonce,
+            nonce_info: self.nonce_info.clone(),
             previous_tx_hashes: self.previous_tx_hashes.clone(),
             settlement_submitted_notifier,
         })
         .await?;
 
-        let (settlement_tx_hash, nonce) = settlement_submitted.await.map_err(recv_err)??;
+        let (settlement_tx_hash, nonce_info) = settlement_submitted.await.map_err(recv_err)??;
 
         if self.previous_tx_hashes.insert(settlement_tx_hash) {
             debug!(
@@ -303,10 +316,10 @@ where
             warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
         }
 
-        // Keep the nonce for future use (e.g., retries)
-        if let Some(nonce) = nonce {
-            debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce}");
-            self.nonce = Some(nonce);
+        // Keep the nonce and previous fees for future use (e.g., retries)
+        if let Some(nonce_info) = nonce_info {
+            debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce_info:?}");
+            self.nonce_info = Some(nonce_info);
         }
 
         #[cfg(feature = "testutils")]
@@ -341,15 +354,15 @@ where
                 "CertificateTask::process_from_candidate called without a pp_root".into(),
             ))?;
 
-        debug!(
-            settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
-            "Waiting for certificate settlement to complete"
-        );
         let settlement_tx_hash = self.header.settlement_tx_hash.ok_or_else(|| {
             CertificateStatusError::SettlementError(
                 "Candidate certificate header has no settlement tx hash".into(),
             )
         })?;
+        debug!(
+            %settlement_tx_hash,
+            "Waiting for certificate settlement to complete"
+        );
         let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
         self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
             height,

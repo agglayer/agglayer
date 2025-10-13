@@ -119,10 +119,14 @@ pub enum L1RpcError {
     ReorgDetected(u64),
     #[error("Cannot get the block hash for the block number {0}")]
     BlockHashNotFound(u64),
-    #[error("Unable to fetch transaction receipt for {0}")]
-    UnableToFetchTransactionReceipt(String),
-    #[error("No transaction receipt found for {0}")]
-    TransactionReceiptNotFound(String),
+    #[error("Unable to fetch transaction receipt for {tx_hash}: {source}")]
+    UnableToFetchTransactionReceipt {
+        tx_hash: String,
+        #[source]
+        source: eyre::Error,
+    },
+    #[error("No transaction receipt found for tx {0}, not yet mined")]
+    TransactionNotYetMined(String),
     #[error("Failed to fetch aggchain vkey")]
     AggchainVkeyFetchFailed,
     #[error("Failed to retrieve trusted sequencer")]
@@ -131,6 +135,7 @@ pub enum L1RpcError {
     RollupDataRetrievalFailed,
     #[error("Unable to get transaction")]
     UnableToGetTransaction {
+        tx_hash: String,
         #[source]
         source: eyre::Error,
     },
@@ -262,8 +267,11 @@ where
         self.rpc
             .get_transaction_receipt(tx_hash)
             .await
-            .map_err(|_| L1RpcError::UnableToFetchTransactionReceipt(tx_hash.to_string()))?
-            .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))
+            .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
+                tx_hash: tx_hash.to_string(),
+                source: err.into(),
+            })?
+            .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash.to_string()))
     }
 
     fn get_provider(&self) -> &Self::Provider {
