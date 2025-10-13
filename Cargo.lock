@@ -6269,6 +6269,7 @@ dependencies = [
  "agglayer-prover",
  "agglayer-tries 0.10.0",
  "agglayer-types",
+ "aggregation-proof-core",
  "alloy",
  "base64 0.22.1",
  "clap",

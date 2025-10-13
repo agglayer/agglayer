@@ -1,96 +1,39 @@
-use std::collections::BTreeMap;
-
-use agglayer_types::NetworkId;
-use pessimistic_proof_test_suite::{
-    sample_data::{NETWORK_A, NETWORK_B},
-    scenario::{CertGraph, CertificateHandle},
-};
-use sp1_sdk::SP1Proof;
-
-/// Contiguous pessimistic proofs per network.
-#[derive(Default)]
-pub struct AggregationData {
-    pub proofs_per_network: BTreeMap<NetworkId, Vec<SP1Proof>>,
-    pub certificates_per_network: BTreeMap<NetworkId, Vec<CertificateHandle>>,
-    pub scenario: CertGraph,
-}
-
-fn insert_handle(
-    certificates_per_network: &mut BTreeMap<NetworkId, Vec<CertificateHandle>>,
-    network: NetworkId,
-    handle: CertificateHandle,
-) {
-    certificates_per_network
-        .entry(network)
-        .or_default()
-        .push(handle);
-}
-
-/// Generate a set of PP per network
-pub fn generate_aggregation_data() -> Result<AggregationData, ()> {
-    let mut scenario = CertGraph::new();
-    let mut certificates_per_network: BTreeMap<NetworkId, Vec<CertificateHandle>> = BTreeMap::new();
-    let mut proofs_per_network: BTreeMap<NetworkId, Vec<SP1Proof>> = BTreeMap::new();
-
-    let mut last_b = None;
-    for _ in 0..2 {
-        let handle = scenario.add_header_with_preconf(NETWORK_B, true).unwrap();
-        insert_handle(&mut certificates_per_network, NETWORK_B, handle);
-        if let Ok(proof) = common::execute_sp1_for_handle(&scenario, handle) {
-            proofs_per_network.entry(NETWORK_B).or_default().push(proof);
-        }
-        last_b = Some(handle);
-    }
-
-    if let Some(last_b) = last_b {
-        let handle_a = scenario
-            .claims_from_with_preconf(last_b, NETWORK_A, true)
-            .unwrap();
-        let certificate_a = scenario.certificate(handle_a);
-        assert!(certificate_a
-            .certificate
-            .imported_bridge_exits
-            .iter()
-            .all(|ib| ib.global_index.network_id() == NETWORK_B));
-        insert_handle(&mut certificates_per_network, NETWORK_A, handle_a);
-        if let Ok(proof) = common::execute_sp1_for_handle(&scenario, handle_a) {
-            proofs_per_network.entry(NETWORK_A).or_default().push(proof);
-        }
-    }
-
-    Ok(AggregationData {
-        proofs_per_network,
-        certificates_per_network,
-        scenario,
-    })
-}
+use aggregation_proof_core::AggregationPublicValues;
+use pessimistic_proof_test_suite::{cert_graph::CertGraphBuilder, AGGREGATION_PROOF_ELF};
+use sp1_sdk::{ProverClient, SP1Stdin};
 
 #[test]
-fn test_aggregation() {
-    let aggregation = generate_aggregation_data().unwrap();
-    assert!(aggregation.scenario.len() >= 3);
+fn simple_aggregation() {
+    let cert_graph = {
+        let mut dag = CertGraphBuilder::default();
+        let a1 = dag.add_cert('A');
+        let a2 = dag.add_cert('A');
+        let a3 = dag.add_cert('A');
+        let b1 = dag.add_cert('B');
+        let b2 = dag.add_cert('B');
 
-    let mut order = Vec::new();
-    let mut scenario = aggregation.scenario.clone();
-    while let Some(cert) = scenario.next_to_prove() {
-        order.push((cert.network, cert.id));
-    }
+        b1.claims_from(a1, &mut dag);
+        b2.claims_from(a3, &mut dag);
 
-    assert_eq!(order.len(), aggregation.scenario.len());
-}
+        dag.build()
+    };
 
-#[test]
-fn test_preconf() {
-    let mut aggregation = generate_aggregation_data().unwrap();
-    let last_b = aggregation
-        .certificates_per_network
-        .get(&NETWORK_B)
-        .and_then(|handles| handles.last().copied())
+    let aggregation_witness = cert_graph.aggregation_witness();
+    //println!("{:#?}", aggregation_witness);
+
+    let mut stdin = SP1Stdin::new();
+    stdin.write(&aggregation_witness);
+
+    let client = ProverClient::from_env();
+
+    let (pv, report) = client
+        .execute(AGGREGATION_PROOF_ELF, &stdin)
+        .deferred_proof_verification(false)
+        .run()
+        .unwrap();
+    let pv_sp1_execute: AggregationPublicValues = AggregationPublicValues::bincode_codec()
+        .deserialize(pv.as_slice())
         .unwrap();
 
-    let preconf = aggregation
-        .scenario
-        .contiguous_from_with_preconf(last_b, true);
-
-    assert!(preconf.is_ok());
+    println!("aggregation public values: {:?}", pv_sp1_execute);
 }

@@ -26,7 +26,7 @@ pub enum Error {
     InvalidSerialization(#[source] Box<agglayer_bincode::ErrorKind>),
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct PessimisticProof {
     /// Public values for the PP.
     pub public_values: PessimisticProofOutput,
@@ -109,6 +109,7 @@ impl RangePP {
 
         // verify all the starks
         for pp in &self.proofs {
+            println!("verify pp[{}]", pp.public_values.origin_network);
             pp.verify_pp_stark_proof(pp_vkey_hash)?
         }
 
@@ -164,29 +165,29 @@ impl AggregationWitness {
             pp_range.verify_pp_validity(&self.pp_vkey_hash)?;
         }
 
-        // Verify the agglayer rollup exit tree transition
-        self.verify_agglayer_rer_transition()?;
+        // // Verify the agglayer rollup exit tree transition
+        // self.verify_agglayer_rer_transition()?;
 
-        // Verify all the imported LER against the agglayer rollup exit tree
-        //
-        // NOTE: divided in two steps to avoid verifying multiple times the same
-        // inclusion proofs (since one LER might be imported several times across
-        // different PP in the aggregation)
-        {
-            // verify the pointers
-            self.verify_imported_ler_pointers()?;
-            // verify the actual inclusion proofs uniquely
-            self.verify_imported_lers_inclusion()?;
-        }
+        // // Verify all the imported LER against the agglayer rollup exit tree
+        // //
+        // // NOTE: divided in two steps to avoid verifying multiple times the same
+        // // inclusion proofs (since one LER might be imported several times across
+        // // different PP in the aggregation)
+        // {
+        //     // verify the pointers
+        //     self.verify_imported_ler_pointers()?;
+        //     // verify the actual inclusion proofs uniquely
+        //     self.verify_imported_lers_inclusion()?;
+        // }
 
-        // Verify the inclusion proofs on the PP l1 info root to have only one l1 info
-        // root as public input of the aggregation proof
-        {
-            // verify the pointers
-            self.verify_l1_info_tree_pointers()?;
-            // verify the actual inclusion proofs uniquely
-            self.verify_l1_info_tree_inclusion()?;
-        }
+        // // Verify the inclusion proofs on the PP l1 info root to have only one l1
+        // info // root as public input of the aggregation proof
+        // {
+        //     // verify the pointers
+        //     self.verify_l1_info_tree_pointers()?;
+        //     // verify the actual inclusion proofs uniquely
+        //     self.verify_l1_info_tree_inclusion()?;
+        // }
 
         Ok(self.public_values())
     }

@@ -17,6 +17,7 @@ agglayer-primitives.workspace = true
 agglayer-types = { workspace = true, features = ["testutils"] }
 unified-bridge.workspace = true
 pessimistic-proof = { path = "../pessimistic-proof" }
+aggregation-proof-core = { path = "../aggregation-proof-core" }
 ecdsa-proof-lib = { path = "./aggchain-proof-ecdsa-example/lib/" }
 
 alloy.workspace = true

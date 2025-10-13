@@ -6,7 +6,7 @@ sp1_zkvm::entrypoint!(main);
 pub fn main() {
     let agg_witness = sp1_zkvm::io::read::<AggregationWitness>();
 
-    let outputs = agg_witness.verify_aggregation().unwrap();
+    let outputs = agg_witness.verify().unwrap();
 
     let pub_values = AggregationPublicValues::bincode_codec()
         .serialize(&outputs)

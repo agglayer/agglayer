@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fmt,
     io::Write,
     process::{Command, Stdio},
@@ -11,6 +11,7 @@ use agglayer_types::{
     compute_signature_info, Certificate, Digest, Error as TypesError, Height, L1WitnessCtx,
     LocalNetworkStateData, PessimisticRootInput, U256,
 };
+use aggregation_proof_core::{AggregationWitness, PessimisticProof, RangePP};
 use pessimistic_proof::{
     core::commitment::{PessimisticRootCommitmentVersion, SignatureCommitmentVersion},
     local_exit_tree::data::LocalExitTreeData,
@@ -24,7 +25,7 @@ use petgraph::{
     visit::EdgeRef,
     Direction::{Incoming, Outgoing},
 };
-use sp1_sdk::{ProverClient, SP1Stdin};
+use sp1_sdk::{HashableKey, ProverClient, SP1Proof, SP1Stdin};
 use unified_bridge::{ImportedBridgeExit, NetworkId, RollupIndex};
 
 use crate::{sample_data::USDC, PESSIMISTIC_PROOF_ELF};
@@ -352,7 +353,8 @@ impl CertGraph {
         petgraph::algo::toposort(self.graph(), None).unwrap()
     }
 
-    pub fn execute_sp1(&self, idx: NodeIndex) {
+    /// Execute the PP program on SP1 for the given state transition.
+    pub fn execute_sp1(&self, idx: NodeIndex) -> ((), PessimisticProofOutput) {
         let record = &self.graph[idx];
 
         let mut stdin = SP1Stdin::new();
@@ -367,12 +369,101 @@ impl CertGraph {
             .deserialize(pv.as_slice())
             .unwrap();
 
-        println!(
-            "\n===== [{}{}] ({} gas) =====\n{pv_sp1_execute:?}\n",
-            network_label(record.network.into()),
-            record.multi_batch_header.height,
-            report.gas.unwrap(),
-        );
+        // print out the PP public values
+        // println!(
+        //     "\n===== [{}{}] ({} gas) =====\n{pv_sp1_execute:?}\n",
+        //     network_label(record.network.into()),
+        //     record.multi_batch_header.height,
+        //     report.gas.unwrap(),
+        // );
+
+        ((), pv_sp1_execute)
+    }
+
+    /// Returns the range pp per network
+    pub fn range_pp(&self) -> Vec<RangePPWithProof> {
+        let mut all_networks: BTreeMap<NetworkId, Vec<PessimisticProofWithProof>> = BTreeMap::new();
+
+        for idx in self.iter_topological_order() {
+            let record = &self.graph[idx];
+
+            let pvs = all_networks
+                .entry(record.multi_batch_header.origin_network)
+                .or_insert_with(Vec::new);
+
+            let (sp1_proof, pv) = self.execute_sp1(idx); // todo: generate actual stark
+
+            let pp = PessimisticProofWithProof {
+                pp_metadata: PessimisticProof {
+                    public_values: pv,
+                    lookup_imported_lers: Vec::new(), // todo
+                    config_number: 0,                 // todo
+                    sub_l1_info_tree_inclusion_proof_idx: 0u32,
+                },
+                sp1_proof,
+            };
+
+            pvs.push(pp);
+        }
+
+        let range_pps = all_networks
+            .into_iter()
+            .map(|(origin_network, proofs)| RangePPWithProof {
+                origin_network,
+                proofs,
+            })
+            .collect::<Vec<_>>();
+
+        range_pps
+    }
+
+    pub fn aggregation_witness(&self) -> AggregationWitness {
+        let client = ProverClient::from_env();
+        let (_pk, vk) = client.setup(PESSIMISTIC_PROOF_ELF);
+
+        let pp_with_proof = self.range_pp(); // todo write proofs in stdin
+
+        let pp_per_network: Vec<RangePP> = pp_with_proof.iter().map(Into::into).collect();
+
+        let witness = AggregationWitness {
+            pp_vkey_hash: vk.hash_u32(),
+            pp_per_network,
+            sub_let_inclusion_proofs: Default::default(), // todo
+            prev_agglayer_rer: Default::default(),        // todo
+            new_agglayer_rer: Default::default(),         // todo
+            target_l1_info_root: Default::default(),      // todo
+            sub_l1_info_tree_inclusion_proofs: Default::default(), // todo
+        };
+
+        witness
+    }
+}
+
+#[derive(Debug)]
+pub struct PessimisticProofWithProof {
+    pub pp_metadata: PessimisticProof,
+    pub sp1_proof: (), // todo: SP1Proof
+}
+
+/// Contiguous set of PP from one network
+#[derive(Debug)]
+pub struct RangePPWithProof {
+    /// Origin network of this range of PP
+    pub origin_network: NetworkId,
+    /// Contiguous range of PP for the given network
+    pub proofs: Vec<PessimisticProofWithProof>,
+}
+
+impl From<&RangePPWithProof> for RangePP {
+    fn from(value: &RangePPWithProof) -> Self {
+        Self {
+            origin_network: value.origin_network,
+            proofs: value
+                .proofs
+                .iter()
+                .map(|pp_with_proof| pp_with_proof.pp_metadata.clone())
+                .collect(),
+        }
     }
 }
 
@@ -766,7 +857,6 @@ mod tests {
             let mut dag = CertGraphBuilder::default();
 
             let a1 = dag.add_cert('A');
-
             let b1 = dag.add_cert('B');
             let c1 = dag.add_cert('C');
             b1.claims_from(a1, &mut dag);
