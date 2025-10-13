@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use agglayer_bincode as bincode;
-use agglayer_primitives::Digest;
+use agglayer_primitives::{keccak::keccak256_combine, Digest};
 use agglayer_tries::roots::LocalExitRoot;
 use pessimistic_proof_core::PessimisticProofOutput;
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,10 @@ pub enum Error {
     InvalidPP,
     #[error("invalid origin network")]
     InvalidOriginNetwork { intruder: NetworkId },
+    #[error("non-equal aggchain hash")]
+    HasDifferentAggchainHash,
+    #[error("missing entry in agglayer rer.")]
+    AgglayerRerMissEntry,
     #[error("wrong prev agglayer RER")]
     InvalidPrevAgglayerRer,
     #[error("wrong new agglayer RER")]
@@ -26,13 +30,17 @@ pub enum Error {
     InvalidSerialization(#[source] Box<agglayer_bincode::ErrorKind>),
 }
 
+/// Pointer to the right inclusion proofs.
+/// Enable verifying inclusion proofs uniquely.
+pub type Pointer = u32;
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct PessimisticProof {
     /// Public values for the PP.
     pub public_values: PessimisticProofOutput,
     /// Index points to the corresponding sub LET inclusion proof for each
     /// imported LER.
-    pub lookup_imported_lers: Vec<(u32, (NetworkId, LocalExitRoot))>,
+    pub lookup_imported_lers: Vec<(Pointer, (NetworkId, LocalExitRoot))>,
     /// Config number, pointing to a specific multisig set
     pub config_number: usize,
     /// Index of the sub-l1 info tree inclusion proof
@@ -73,7 +81,60 @@ pub struct RangePP {
     pub proofs: Vec<PessimisticProof>,
 }
 
+/// Components used to compute one leaf hash for the hash chain on the PP public
+/// values.
+///
+/// Represents the entire state transition of a range PP for a given network.
+///
+/// NOTE: Different from [`PessimisticProofOutput`] because we don't want the
+/// hash chain to be computed on all the PP public values. Some are promoted at
+/// the aggregation proof public values (namely, the l1 info root, and the
+/// imported LER).
+#[derive(Deserialize, Serialize, Debug)]
+pub struct HashChainLeafPubValues {
+    pub origin_network: NetworkId,
+    pub prev_ler: Digest,
+    pub new_ler: Digest,
+    pub prev_ppr: Digest,
+    pub new_ppr: Digest,
+    pub aggchain_hash: Digest,
+}
+
+impl HashChainLeafPubValues {
+    /// Returns one hash element which compose the hash chain on pp public
+    /// values.
+    pub fn hash(&self) -> Digest {
+        keccak256_combine([
+            &self.origin_network.to_be_bytes(),
+            self.prev_ler.as_slice(),
+            self.new_ler.as_slice(),
+            self.prev_ppr.as_slice(),
+            self.new_ppr.as_slice(),
+            self.aggchain_hash.as_slice(),
+        ])
+    }
+}
+
 impl RangePP {
+    /// Compute the commitment for the state transition of this [`RangePP`]
+    pub fn pp_state_transition_pv(&self) -> HashChainLeafPubValues {
+        let first_pp = &self.proofs.first().unwrap().public_values;
+        let last_pp = &self.proofs.last().unwrap().public_values;
+
+        // already checked that they are all equal in `verify_pp_validity`
+        let origin_network = first_pp.origin_network;
+        let aggchain_hash = first_pp.aggchain_hash;
+
+        HashChainLeafPubValues {
+            origin_network,
+            prev_ler: first_pp.prev_local_exit_root.into(),
+            new_ler: last_pp.new_local_exit_root.into(),
+            prev_ppr: first_pp.prev_pessimistic_root,
+            new_ppr: last_pp.new_pessimistic_root,
+            aggchain_hash,
+        }
+    }
+
     /// Ensures that the PPs from one chain are contiguous
     pub fn verify_pp_contiguity(&self) -> Result<(), Error> {
         // NOTE: the height is enforced to be increased within the pp root computation
@@ -107,6 +168,20 @@ impl RangePP {
             });
         }
 
+        // verify that all PP have the exact same aggchain hash
+        let Some(first_pp) = self.proofs.first() else {
+            return Ok(()); // no proofs
+        };
+
+        let has_different_aggchain_hash = self
+            .proofs
+            .iter()
+            .find(|&pp| pp.public_values.aggchain_hash != first_pp.public_values.aggchain_hash);
+
+        if let Some(_) = has_different_aggchain_hash {
+            return Err(Error::HasDifferentAggchainHash);
+        }
+
         // verify all the starks
         for pp in &self.proofs {
             println!("verify pp[{}]", pp.public_values.origin_network);
@@ -132,12 +207,12 @@ pub struct AggregationWitness {
     /// LER in the new agglayer RER
     /// todo: define an SMT for it, and put the read values as LUT to avoid
     /// multiple read of the same value from the smt
-    pub prev_agglayer_rer: BTreeMap<NetworkId, LocalExitRoot>,
+    pub prev_agglayer_rer: AgglayerRer,
 
     /// LER in the new agglayer RER
     /// todo: define an SMT for it, and put the read values as LUT to avoid
     /// multiple read of the same value from the smt
-    pub new_agglayer_rer: BTreeMap<NetworkId, LocalExitRoot>,
+    pub new_agglayer_rer: AgglayerRer,
 
     /// Target L1 info root against which we prove the inclusion of all the PP's
     /// l1 info root.
@@ -150,6 +225,23 @@ pub struct AggregationWitness {
     /// NOTE: Computed by the agglayer-node, needs synchronization of the l1
     /// info tree.
     pub sub_l1_info_tree_inclusion_proofs: Vec<SubLetInclusionProof>,
+}
+
+/// Represents the rollup exit tree maintained by the agglayer.
+/// TODO: Replace/add an SMT with proper inclusion proofs for the read values
+#[derive(Deserialize, Serialize, Default, Debug)]
+pub struct AgglayerRer {
+    pub cache: BTreeMap<NetworkId, LocalExitRoot>,
+    /// Read values must come with inclusion proofs against this root.
+    pub root: Digest,
+}
+
+impl AgglayerRer {
+    pub fn get(&self, origin_network: NetworkId) -> Result<&LocalExitRoot, Error> {
+        self.cache
+            .get(&origin_network)
+            .ok_or(Error::AgglayerRerMissEntry)
+    }
 }
 
 impl AggregationWitness {
@@ -195,22 +287,21 @@ impl AggregationWitness {
     /// Verify the transition of the agglayer rollup exit tree wrt to the PP
     /// which compose this aggregation.
     pub fn verify_agglayer_rer_transition(&self) -> Result<(), Error> {
-        for pp_range in &self.pp_per_network {
-            let RangePP {
+        for range in &self.pp_per_network {
+            let HashChainLeafPubValues {
                 origin_network,
-                proofs,
-            } = pp_range;
-
-            let first_prev_ler = proofs.first().unwrap().public_values.prev_local_exit_root;
-            let last_new_ler = proofs.last().unwrap().public_values.new_local_exit_root;
+                prev_ler: first_prev_ler,
+                new_ler: last_new_ler,
+                ..
+            } = range.pp_state_transition_pv();
 
             // starting LER corresponds to the prev LER of the first PP
-            if first_prev_ler != *self.prev_agglayer_rer.get(&origin_network).unwrap() {
+            if first_prev_ler != (*self.prev_agglayer_rer.get(origin_network)?).into() {
                 return Err(Error::InvalidPrevAgglayerRer);
             }
 
             // ending LER corresponds to the new LER of the last PP
-            if last_new_ler != *self.new_agglayer_rer.get(&origin_network).unwrap() {
+            if last_new_ler != (*self.new_agglayer_rer.get(origin_network)?).into() {
                 return Err(Error::InvalidNewAgglayerRer);
             }
         }
@@ -235,12 +326,12 @@ impl AggregationWitness {
     }
 
     /// Verify that all sub LET inclusion proofs are valid and against the same
-    /// and corresponds to agglayerRER
+    /// and corresponds to the one in new_agglayer_rer
     pub fn verify_imported_lers_inclusion(&self) -> Result<bool, Error> {
         Ok(self.sub_let_inclusion_proofs.iter().all(|p| {
             let valid_inclusion_proof = p.verify_sub_inclusion();
             let valid_target_root =
-                p.target_ler == *self.new_agglayer_rer.get(&p.origin_network).unwrap();
+                p.target_ler == *self.new_agglayer_rer.get(p.origin_network).unwrap();
 
             valid_target_root && valid_inclusion_proof
         }))
@@ -282,6 +373,10 @@ pub struct AggregationPublicValues {
     pub pp_vkey: [u32; 8],
     /// L1 info root
     pub l1_info_root: Digest,
+    /// Prev agglayer RER
+    pub prev_arer: Digest,
+    /// New agglayer RER
+    pub new_arer: Digest,
 }
 
 impl AggregationPublicValues {
@@ -297,12 +392,18 @@ impl AggregationWitness {
             hash_chain_pp_inputs: self.hash_chain_pub_values(),
             pp_vkey: self.pp_vkey_hash,
             l1_info_root: self.target_l1_info_root,
+            prev_arer: self.prev_agglayer_rer.root,
+            new_arer: self.new_agglayer_rer.root,
         }
     }
 
-    /// Hash chain on the PP public values.
+    /// Hash chain on the PP public values per range PP.
     pub fn hash_chain_pub_values(&self) -> Digest {
-        Digest::default() // todo
+        self.pp_per_network
+            .iter()
+            .fold(Digest::default(), |acc, range_pp| {
+                keccak256_combine([acc, range_pp.pp_state_transition_pv().hash()])
+            })
     }
 }
 
