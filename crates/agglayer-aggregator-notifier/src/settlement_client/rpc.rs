@@ -417,8 +417,7 @@ where
                             settlement_tx_hash,
                             error: format!(
                                 "Timeout while waiting for transaction confirmations for tx \
-                                 {tx_hash} after {:?}",
-                                timeout
+                                 {tx_hash} after {timeout:?}"
                             ),
                         });
                     } else {
@@ -434,16 +433,15 @@ where
                     ) {
                         // Transaction not yet included in a block, continue retrying
                         if attempt <= self.config.max_retries {
-                            // Log at 25%, 50%, 75% progress milestones
-                            let progress_percent = ((attempt + 1) * 100) / self.config.max_retries;
-                            if progress_percent == 25
-                                || progress_percent == 50
-                                || progress_percent == 75
-                                || progress_percent == 100
-                            {
+                            const N: usize = 4; // Split progress into 4 equal stages.
+                            let max_attempts = self.config.max_retries.max(1);
+                            let curr_stage = N * attempt / max_attempts;
+                            let next_stage = N * (attempt + 1) / max_attempts;
+                            // Report if we cross from one stage to the next.
+                            if curr_stage != next_stage {
                                 debug!(
                                     %settlement_tx_hash,
-                                    next_attempt = attempt+1,
+                                    next_attempt = attempt + 1,
                                     max_retries = self.config.max_retries,
                                     "Transaction receipt not found yet, retrying after {:?}",
                                     self.config.retry_interval
@@ -464,8 +462,7 @@ where
                                 settlement_tx_hash,
                                 error: format!(
                                     "Timeout while waiting for the pending settlement transaction \
-                                     {:?}, error: {}",
-                                    timeout, error
+                                     {timeout:?}, error: {error}"
                                 ),
                             });
                         }
@@ -493,8 +490,8 @@ where
             certificate_id,
             settlement_tx_hash,
             error: format!(
-                "Unexpected timeout while watching the pending settlement transaction after {:?}",
-                timeout
+                "Unexpected timeout while watching the pending settlement transaction after \
+                 {timeout:?}"
             ),
         })
     }

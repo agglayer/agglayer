@@ -193,11 +193,168 @@ where
         .await?;
         let mut state = state.await.map_err(recv_err)??;
 
-        // Execute the witness generation to retrieve the new local network state
         debug!("Recomputing new state for already-proven certificate");
+        // `settlement_tx_hash_missing_on_l1` is `true` if the settlement tx hash in
+        // certificate header is not found on L1.
+        let settlement_tx_hash_missing_on_l1: bool =
+            if let Some(previous_tx_hash) = self.header.settlement_tx_hash {
+                let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
+                    oneshot::channel();
+                self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
+                    settlement_tx_hash: previous_tx_hash,
+                    certificate_id,
+                    tx_mined_notifier: request_is_settlement_tx_mined,
+                })
+                .await?;
+                let result_is_settlement_tx_mined =
+                    response_is_settlement_tx_mined.await.map_err(recv_err)?;
+                debug!(
+                    "Settlement tx {previous_tx_hash} existence on L1: \
+                     {result_is_settlement_tx_mined:?}"
+                );
+                match result_is_settlement_tx_mined {
+                    Ok(true) => false,  // We have fetched the receipt, tx status 1, tx exist on L1
+                    Ok(false) => false, // Tx found on l1, but with status 0 (reverted)
+                    Err(error) => {
+                        if error.to_string().contains("No transaction receipt found") {
+                            true
+                        } else {
+                            // Some error happened while checking the tx receipt on L1
+                            warn!(
+                                "Failed to check settlement tx {previous_tx_hash} existence on \
+                                 L1: {error}"
+                            );
+                            false
+                        }
+                    }
+                }
+            } else {
+                // No settlement tx hash in the cert header, nothing to check
+                false
+            };
+
+        if settlement_tx_hash_missing_on_l1 {
+            warn!(
+                "Previous settlement tx hash is missing on L1, tx {:?}",
+                self.header.settlement_tx_hash
+            );
+
+            // If the settlement tx is not found on L1, we need to recover.
+            // With the latest pp root from the contract, check maybe if this
+            // certificate new pp root is the same as the latest pp root on the chain.
+            let (request_latest_contract_pp_root, response_latest_contract_pp_root) =
+                oneshot::channel();
+            self.send_to_network_task(NetworkTaskMessage::FetchLatestContractPPRoot {
+                contract_pp_root_notifier: request_latest_contract_pp_root,
+            })
+            .await?;
+            let result_latest_contract_pp_root =
+                response_latest_contract_pp_root.await.map_err(recv_err)?;
+            let recomputed_from_contract: Option<Digest> = match result_latest_contract_pp_root {
+                Ok(Some((contract_pp_root, contract_settlement_tx_hash))) => {
+                    // Try to recompute the state with the latest tx from contract.
+                    match self
+                        .certifier_client
+                        .witness_generation(
+                            &self.certificate,
+                            &mut state.clone(),
+                            Some(contract_settlement_tx_hash.into()),
+                        )
+                        .await
+                    {
+                        Ok((_, _, recomputed_output)) => {
+                            if contract_pp_root == recomputed_output.new_pessimistic_root {
+                                info!(
+                                    "Certificate new pp root matches the latest settled pp root \
+                                     on L1, updating certificate settlement tx hash to \
+                                     {contract_settlement_tx_hash:?}"
+                                );
+                                self.header.settlement_tx_hash = Some(contract_settlement_tx_hash);
+                                if let Err(error) = self.state_store.update_settlement_tx_hash(
+                                    &certificate_id,
+                                    contract_settlement_tx_hash,
+                                    true,
+                                ) {
+                                    error!(
+                                        ?error,
+                                        "Failed to update certificate settlement tx hash in \
+                                         database"
+                                    );
+                                };
+                                // TODO refactor this function to not calculate witness_generation
+                                // twice in this function.
+                                // As this would be very rare scenario, we can leave it like this
+                                // for now.
+                                Some(contract_settlement_tx_hash.into())
+                            } else {
+                                warn!(
+                                    "Certificate pp root with cert settlement tx {:?} does not \
+                                     match the latest settled pp root on L1 contract tx \
+                                     {contract_settlement_tx_hash}, moving certificate back to \
+                                     Proven",
+                                    self.header.settlement_tx_hash
+                                );
+                                None
+                            }
+                        }
+                        Err(error) => {
+                            warn!(
+                                "Failed to recompute the state with the latest contract tx \
+                                 {contract_settlement_tx_hash}: {error:?}, moving certificate \
+                                 back to Proven"
+                            );
+                            None
+                        }
+                    }
+                }
+                Ok(None) => {
+                    warn!("No pp root found on contract, moving certificate back to Proven");
+                    None
+                }
+                Err(error) => {
+                    error!("Failed to fetch latest pp root from contract: {error:?}");
+                    return Err(CertificateStatusError::SettlementError(format!(
+                        "Cert settlement tx is missing from the l1, but failed to fetch latest pp \
+                         root from contract: {error}"
+                    )));
+                }
+            };
+
+            if recomputed_from_contract.is_none() {
+                // Tx not found on L1, and pp root from contract not matching,
+                // clean tx from cert header and move back to Proven
+                let previous_tx_hash = self.header.settlement_tx_hash;
+                error!(
+                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
+                     to Proven"
+                );
+                self.header.settlement_tx_hash = None;
+                if let Err(error) = self.state_store.remove_settlement_tx_hash(&certificate_id) {
+                    error!(
+                        ?error,
+                        "Failed to remove tx_hash {previous_tx_hash:?} from database"
+                    );
+                };
+
+                self.header.status = CertificateStatus::Proven;
+                if let Err(error) = self.state_store.update_certificate_header_status(
+                    &self.header.certificate_id,
+                    &CertificateStatus::Proven,
+                ) {
+                    error!(?error, "Failed to update certificate status in database");
+                };
+
+                return Err(CertificateStatusError::SettlementError(format!(
+                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
+                     to Proven"
+                )));
+            }
+        };
+
+        // Execute the witness generation to retrieve the new local network state
         let (_, _, output) = self
                 .certifier_client
-                .witness_generation(&self.certificate, &mut state, self.header.settlement_tx_hash.map(|h| h.into()))
+                .witness_generation(&self.certificate, &mut state,  self.header.settlement_tx_hash.map(Into::into))
                 .await
                 .map_err(|error| {
                     error!(%certificate_id, ?error, "Failed recomputing the new state for already-proven certificate");
@@ -301,6 +458,11 @@ where
             certificate_id,
             nonce_info: self.nonce_info.clone(),
             previous_tx_hashes: self.previous_tx_hashes.clone(),
+            new_pp_root: self
+                .new_pp_root
+                .ok_or(CertificateStatusError::InternalError(
+                    "CertificateTask::process_from_proven called without a pp_root".into(),
+                ))?,
             settlement_submitted_notifier,
         })
         .await?;
@@ -369,7 +531,7 @@ where
             certificate_id,
             settlement_tx_hash,
             settlement_complete_notifier,
-            pp_root: new_pp_root,
+            new_pp_root,
         })
         .await?;
 

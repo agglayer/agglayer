@@ -609,6 +609,13 @@ async fn retries() {
         .withf(move |i, _| *i == certificate_id)
         .returning(move |_, _| Err(Error::InternalError(String::new())));
 
+    // Mock fetch_last_settled_pp_root for the first certificate (retry scenario)
+    settlement_client
+        .expect_fetch_last_settled_pp_root()
+        .once()
+        .with(eq(network_id))
+        .returning(|_| Ok((None, None)));
+
     // Second one (retry) is passing
     settlement_client
         .expect_submit_certificate_settlement()

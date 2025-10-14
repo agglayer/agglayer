@@ -34,7 +34,9 @@ where
                 certificate_tx_hash.map(|digest| digest.0.into()),
             )
             .await
-            .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
+            .map_err(|_| {
+                CertificationError::LastPessimisticRootNotFound(network_id, certificate_tx_hash)
+            })?;
 
         debug!(
             certificate_tx_hash = certificate_tx_hash.map(tracing::field::display),
