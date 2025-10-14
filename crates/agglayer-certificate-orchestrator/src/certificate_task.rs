@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc};
 
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,

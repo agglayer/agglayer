@@ -143,8 +143,8 @@ impl From<CertificationError> for CertificateStatusError {
             CertificationError::TrustedSequencerNotFound(network) => {
                 CertificateStatusError::TrustedSequencerNotFound(network)
             }
-            CertificationError::LastPessimisticRootNotFound(network_id, tx_hash) => {
-                CertificateStatusError::LastPessimisticRootNotFound(network_id, tx_hash)
+            CertificationError::LastPessimisticRootNotFound(network_id, _tx_hash) => {
+                CertificateStatusError::LastPessimisticRootNotFound(network_id)
             }
             CertificationError::ProofVerificationFailed { source } => {
                 CertificateStatusError::ProofVerificationFailed(source)

@@ -133,8 +133,8 @@ pub enum CertificateStatusError {
     #[error("L1 Info root not found for l1 leaf count: {0}")]
     L1InfoRootNotFound(u32),
 
-    #[error("Last pessimistic root not found for network: {0}, tx_hash: {1:?}")]
-    LastPessimisticRootNotFound(NetworkId, Option<Digest>),
+    #[error("Last pessimistic root not found for network: {0}")]
+    LastPessimisticRootNotFound(NetworkId),
 }
 
 #[derive(Debug, thiserror::Error)]

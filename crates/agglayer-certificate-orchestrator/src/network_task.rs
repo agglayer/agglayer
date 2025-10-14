@@ -597,7 +597,7 @@ where
                         };
                         tx_mined_notifier
                             .send(mined)
-                            .map_err(|err|Error::InternalError("Certificate notification channel closed".into()))?;
+                            .map_err(|_|Error::InternalError("Certificate notification channel closed".into()))?;
                         continue;
                     }
                     Some(NetworkTaskMessage::FetchLatestContractPPRoot { contract_pp_root_notifier }) => {
