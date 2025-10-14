@@ -218,9 +218,10 @@ where
                  {result_is_settlement_tx_mined:?}"
             );
             match result_is_settlement_tx_mined {
-                Ok(true) => false,
-                Ok(false) => true,
+                Ok(true) => false, // We have fetched the receipt, tx exist on L1
+                Ok(false) => true, // Tx not found on L1
                 Err(error) => {
+                    // Some error happened while checking the tx on L1
                     warn!(
                         "Failed to check settlement tx {previos_tx_hash} existence on L1: {error}"
                     );
@@ -228,6 +229,7 @@ where
                 }
             }
         } else {
+            // No settlement tx hash in the cert header, nothing to check
             false
         };
 
