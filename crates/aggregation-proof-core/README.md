@@ -26,13 +26,17 @@ https://github.com/agglayer/agglayer/blob/733d46e8a7755c6e517c0b35a6abd2fb682b68
 
 The prototype introduced the need and implementation of a certificate graph builder to generate test data.
 
-You can test one example with
+Example of a simple aggregation:
+
+https://github.com/agglayer/agglayer/blob/530d0621f177165477e71104e9f32db78a54add0/crates/pessimistic-proof-test-suite/tests/aggregation.rs#L5-L41
+
+Can be run with:
 
 ```
 cargo test --package pessimistic-proof-test-suite --test aggregation -- simple_aggregation --exact --show-output
 ```
 
-There is this graph described as follow:
+The aggregation test data is defined from one graph described as follow:
 
 ```rust
 let cert_graph = {
