@@ -217,8 +217,8 @@ where
                      {result_is_settlement_tx_mined:?}"
                 );
                 match result_is_settlement_tx_mined {
-                    Ok(true) => false, // We have fetched the receipt, tx exist on L1
-                    Ok(false) => false, // Tx found on l1, but reverted
+                    Ok(true) => false, // We have fetched the receipt, tx status 1, tx exist on L1
+                    Ok(false) => false, // Tx found on l1, but with status 0 (reverted)
                     Err(error) => {
                         if error.to_string().contains("No transaction receipt found") {
                             true
