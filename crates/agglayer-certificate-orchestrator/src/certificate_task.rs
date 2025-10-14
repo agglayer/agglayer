@@ -256,7 +256,7 @@ where
                         .certifier_client
                         .witness_generation(
                             &self.certificate,
-                            &mut state,
+                            &mut state.clone(),
                             Some(contract_settlement_tx_hash.into()),
                         )
                         .await
