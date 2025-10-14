@@ -250,43 +250,74 @@ where
             .await?;
             let result_latest_contract_pp_root =
                 response_latest_contract_pp_root.await.map_err(recv_err)?;
-            let recomputed_from_contract: Option<Digest> = if let Ok(Some((
-                contract_pp_root,
-                contract_settlement_tx_hash,
-            ))) = result_latest_contract_pp_root
-            {
-                // Try to recompute the state with the latest tx from contract.
-                if let Ok((_, _, recomputed_output)) = self
-                    .certifier_client
-                    .witness_generation(&self.certificate, &mut state, Some(contract_settlement_tx_hash.into()))
-                    .await
-                    .inspect_err(|error| {
-                        error!(%certificate_id, ?error, "Failed recomputing the new state for already-proven \
-                            certificate with the contract latest tx {contract_settlement_tx_hash}");
-                    }) {
-                    if contract_pp_root == recomputed_output.new_pessimistic_root {
-                        info!("Certificate new pp root matches the latest settled pp root on L1, \
-                            updating certificate settlement tx hash to {contract_settlement_tx_hash:?}");
-                        self.header.settlement_tx_hash =Some(contract_settlement_tx_hash);
-                        if let Err(error) = self.state_store.update_settlement_tx_hash(&certificate_id, contract_settlement_tx_hash, true) {
-                            error!(?error, "Failed to update certificate settlement tx hash in database");
-                        };
-                        // TODO refactor this function to not calculate witness_generation twice in this function.
-                        // As this would be very rare scenario, we can leave it like this for now.
-                        Some(contract_settlement_tx_hash.into())
-                    } else {
-                        warn!(
-                                "Certificate pp root with cert settlement tx {:?} does not match the latest settled pp root on L1 \
-                                 (contract tx {contract_settlement_tx_hash:?}), moving certificate back to Proven",
-                            self.header.settlement_tx_hash
+            let recomputed_from_contract: Option<Digest> = match result_latest_contract_pp_root {
+                Ok(Some((contract_pp_root, contract_settlement_tx_hash))) => {
+                    // Try to recompute the state with the latest tx from contract.
+                    match self
+                        .certifier_client
+                        .witness_generation(
+                            &self.certificate,
+                            &mut state,
+                            Some(contract_settlement_tx_hash.into()),
+                        )
+                        .await
+                    {
+                        Ok((_, _, recomputed_output)) => {
+                            if contract_pp_root == recomputed_output.new_pessimistic_root {
+                                info!(
+                                    "Certificate new pp root matches the latest settled pp root \
+                                     on L1, updating certificate settlement tx hash to \
+                                     {contract_settlement_tx_hash:?}"
+                                );
+                                self.header.settlement_tx_hash = Some(contract_settlement_tx_hash);
+                                if let Err(error) = self.state_store.update_settlement_tx_hash(
+                                    &certificate_id,
+                                    contract_settlement_tx_hash,
+                                    true,
+                                ) {
+                                    error!(
+                                        ?error,
+                                        "Failed to update certificate settlement tx hash in \
+                                         database"
+                                    );
+                                };
+                                // TODO refactor this function to not calculate witness_generation
+                                // twice in this function.
+                                // As this would be very rare scenario, we can leave it like this
+                                // for now.
+                                Some(contract_settlement_tx_hash.into())
+                            } else {
+                                warn!(
+                                    "Certificate pp root with cert settlement tx {:?} does not \
+                                     match the latest settled pp root on L1 (contract tx \
+                                     {contract_settlement_tx_hash:?}), moving certificate back to \
+                                     Proven",
+                                    self.header.settlement_tx_hash
+                                );
+                                None
+                            }
+                        }
+                        Err(error) => {
+                            warn!(
+                                "Failed to recompute the state with the latest contract tx \
+                                 {contract_settlement_tx_hash:?}: {error:?}, moving certificate \
+                                 back to Pending"
                             );
-                        None
+                            None
+                        }
                     }
-                } else {
+                }
+                Ok(None) => {
+                    warn!("No pp root found on contract, moving certificate back to Pending");
                     None
                 }
-            } else {
-                None
+                Err(error) => {
+                    warn!(
+                        "Failed to fetch latest pp root from contract: {error:?}, moving \
+                         certificate back to Pending"
+                    );
+                    None
+                }
             };
 
             if recomputed_from_contract.is_none() {
