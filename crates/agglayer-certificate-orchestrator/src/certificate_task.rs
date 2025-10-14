@@ -301,14 +301,14 @@ where
                             warn!(
                                 "Failed to recompute the state with the latest contract tx \
                                  {contract_settlement_tx_hash}: {error:?}, moving certificate \
-                                 back to Pending"
+                                 back to Proven"
                             );
                             None
                         }
                     }
                 }
                 Ok(None) => {
-                    warn!("No pp root found on contract, moving certificate back to Pending");
+                    warn!("No pp root found on contract, moving certificate back to Proven");
                     None
                 }
                 Err(error) => {
@@ -322,11 +322,11 @@ where
 
             if recomputed_from_contract.is_none() {
                 // Tx not found on L1, and pp root from contract not matching,
-                // clean tx from cert header and move back to Pending
+                // clean tx from cert header and move back to Proven
                 let previous_tx_hash = self.header.settlement_tx_hash;
                 error!(
                     "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
-                     to Pending"
+                     to Proven"
                 );
                 self.header.settlement_tx_hash = None;
                 if let Err(error) = self.state_store.remove_settlement_tx_hash(&certificate_id) {
@@ -336,17 +336,17 @@ where
                     );
                 };
 
-                self.header.status = CertificateStatus::Pending;
+                self.header.status = CertificateStatus::Proven;
                 if let Err(error) = self.state_store.update_certificate_header_status(
                     &self.header.certificate_id,
-                    &CertificateStatus::Pending,
+                    &CertificateStatus::Proven,
                 ) {
                     error!(?error, "Failed to update certificate status in database");
                 };
 
                 return Err(CertificateStatusError::SettlementError(format!(
                     "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
-                     to Pending"
+                     to Proven"
                 )));
             }
         };
