@@ -31,13 +31,14 @@ impl Multiplier {
         Self(x)
     }
 
-    /// Get a multiplier from `f64`, failing if we are out of range
-    /// or if excessive decimals are supplied.
-    pub fn try_from_f64_check(x: f64) -> Result<Self, FromF64Error> {
+    /// Creates a multiplier from `f64`, requiring max 3 decimals.
+    ///
+    /// Fails if the value has more than 3 decimal places or is out of range.
+    pub fn try_from_f64_strict(x: f64) -> Result<Self, FromF64Error> {
         // We first get the rounded conversion, check the delta against the original
         // value and fail if there is too much precision loss, indicating there were
         // too many decimals in the original floating point number.
-        let r = Self::try_from_f64_round(x)?;
+        let r = Self::try_from_f64_lossy(x)?;
         let delta = r.as_u64_per_1000() as f64 - Self::scale_f64(x);
 
         // We still allow some tolerance to account for the fact that floating point
@@ -47,8 +48,10 @@ impl Multiplier {
             .ok_or(FromF64Error::Imprecise)
     }
 
-    /// Get a multiplier from `f64`, failing if we are out of range.
-    pub fn try_from_f64_round(x: f64) -> Result<Self, FromF64Error> {
+    /// Creates a multiplier from `f64`, rounding to 3 decimal places if needed.
+    ///
+    /// Fails only if the value is out of range.
+    pub fn try_from_f64_lossy(x: f64) -> Result<Self, FromF64Error> {
         let x = Self::scale_f64(x).round();
         (0.0..=Self::FROM_F64_MAX as f64)
             .contains(&x)
@@ -96,7 +99,7 @@ impl TryFrom<f64> for Multiplier {
     type Error = FromF64Error;
 
     fn try_from(value: f64) -> Result<Self, Self::Error> {
-        Self::try_from_f64_check(value)
+        Self::try_from_f64_strict(value)
     }
 }
 
@@ -120,8 +123,8 @@ mod test {
     #[case(0.001, 1)]
     #[case(0.123, 123)]
     #[case(10.5, 10500)]
-    fn try_from_f64_check_valid_values(#[case] input: f64, #[case] expected: u64) {
-        let result = Multiplier::try_from_f64_check(input).unwrap();
+    fn try_from_f64_strict_valid_values(#[case] input: f64, #[case] expected: u64) {
+        let result = Multiplier::try_from_f64_strict(input).unwrap();
         assert_eq!(result, Multiplier::from_u64_per_1000(expected));
     }
 
@@ -130,9 +133,9 @@ mod test {
     #[case(-0.001)]
     #[case(-100.0)]
     #[case(1.001 * u64::MAX as f64)]
-    fn try_from_f64_check_out_of_range(#[case] input: f64) {
+    fn try_from_f64_strict_out_of_range(#[case] input: f64) {
         assert_eq!(
-            Multiplier::try_from_f64_check(input).unwrap_err(),
+            Multiplier::try_from_f64_strict(input).unwrap_err(),
             FromF64Error::OutOfRange
         );
     }
@@ -141,9 +144,9 @@ mod test {
     #[case(1.2345)]
     #[case(0.0001)]
     #[case(2.12345)]
-    fn try_from_f64_check_imprecise(#[case] input: f64) {
+    fn try_from_f64_strict_imprecise(#[case] input: f64) {
         assert_eq!(
-            Multiplier::try_from_f64_check(input).unwrap_err(),
+            Multiplier::try_from_f64_strict(input).unwrap_err(),
             FromF64Error::Imprecise
         );
     }
@@ -157,8 +160,8 @@ mod test {
     #[case(1.2344, 1234)]
     #[case(0.0001, 0)]
     #[case(0.0006, 1)]
-    fn try_from_f64_round_valid_values(#[case] input: f64, #[case] expected: u64) {
-        let result = Multiplier::try_from_f64_round(input).unwrap();
+    fn try_from_f64_lossy_valid_values(#[case] input: f64, #[case] expected: u64) {
+        let result = Multiplier::try_from_f64_lossy(input).unwrap();
         assert_eq!(result, Multiplier::from_u64_per_1000(expected));
     }
 
@@ -166,9 +169,9 @@ mod test {
     #[case(-1.0)]
     #[case(-0.001)]
     #[case(-100.0)]
-    fn try_from_f64_round_out_of_range(#[case] input: f64) {
+    fn try_from_f64_lossy_out_of_range(#[case] input: f64) {
         assert_eq!(
-            Multiplier::try_from_f64_round(input).unwrap_err(),
+            Multiplier::try_from_f64_lossy(input).unwrap_err(),
             FromF64Error::OutOfRange
         );
     }
@@ -181,7 +184,7 @@ mod test {
     fn roundtrip(#[case] value: u64) {
         let original = Multiplier::from_u64_per_1000(value);
         let as_f64 = original.as_f64();
-        let back = Multiplier::try_from_f64_check(as_f64).unwrap();
+        let back = Multiplier::try_from_f64_strict(as_f64).unwrap();
         assert_eq!(original, back);
     }
 
