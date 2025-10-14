@@ -194,13 +194,14 @@ where
         let mut state = state.await.map_err(recv_err)??;
 
         debug!("Recomputing new state for already-proven certificate");
-        // Check if cert `settlement_tx_hash` exist on the l1
+        // settlement_tx_hash_missing_on_l1 is true if the settlement tx hash in
+        // certificate header is not found on L1.
         let settlement_tx_hash_missing_on_l1: bool =
-            if let Some(previos_tx_hash) = self.header.settlement_tx_hash {
+            if let Some(previous_tx_hash) = self.header.settlement_tx_hash {
                 let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
                     oneshot::channel();
                 self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
-                    settlement_tx_hash: previos_tx_hash,
+                    settlement_tx_hash: previous_tx_hash,
                     certificate_id,
                     tx_mined_notifier: request_is_settlement_tx_mined,
                 })
@@ -208,7 +209,7 @@ where
                 let result_is_settlement_tx_mined =
                     response_is_settlement_tx_mined.await.map_err(recv_err)?;
                 debug!(
-                    "Settlement tx {previos_tx_hash} existence on L1: \
+                    "Settlement tx {previous_tx_hash} existence on L1: \
                      {result_is_settlement_tx_mined:?}"
                 );
                 match result_is_settlement_tx_mined {
@@ -220,8 +221,8 @@ where
                         } else {
                             // Some error happened while checking the tx receipt on L1
                             warn!(
-                                "Failed to check settlement tx {previos_tx_hash} existence on L1: \
-                                 {error}"
+                                "Failed to check settlement tx {previous_tx_hash} existence on \
+                                 L1: {error}"
                             );
                             false
                         }
@@ -322,16 +323,16 @@ where
             if recomputed_from_contract.is_none() {
                 // Tx not found on L1, and pp root from contract not matching,
                 // clean tx from cert header and move back to Pending
-                let previos_tx_hash = self.header.settlement_tx_hash;
+                let previous_tx_hash = self.header.settlement_tx_hash;
                 error!(
-                    "Settlement tx {previos_tx_hash:?} not found on L1, moving certificate back \
+                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
                      to Pending"
                 );
                 self.header.settlement_tx_hash = None;
                 if let Err(error) = self.state_store.remove_settlement_tx_hash(&certificate_id) {
                     error!(
                         ?error,
-                        "Failed to remove tx_hash {previos_tx_hash:?} from database"
+                        "Failed to remove tx_hash {previous_tx_hash:?} from database"
                     );
                 };
 
@@ -344,7 +345,7 @@ where
                 };
 
                 return Err(CertificateStatusError::SettlementError(format!(
-                    "Settlement tx {previos_tx_hash:?} not found on L1, moving certificate back \
+                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
                      to Pending"
                 )));
             }
