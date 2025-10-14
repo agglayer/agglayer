@@ -155,12 +155,17 @@ where
         }
 
         match &self.header.status {
-            CertificateStatus::Pending => self.process_from_pending().await,
+            CertificateStatus::Pending => {
+                println!(">>>>>>>>>>>>>>> CertificateStatus::Pending");
+                self.process_from_pending().await
+            }
             CertificateStatus::Proven => {
+                println!(">>>>>>>>>>>>>>> CertificateStatus::Proven");
                 self.recompute_state().await?;
                 self.process_from_proven().await
             }
             CertificateStatus::Candidate => {
+                println!(">>>>>>>>>>>>>>> CertificateStatus::Candidate");
                 self.recompute_state().await?;
                 self.process_from_candidate().await
             }
@@ -193,12 +198,12 @@ where
         .await?;
         let mut state = state.await.map_err(recv_err)??;
 
-        // Execute the witness generation to retrieve the new local network state
         debug!("Recomputing new state for already-proven certificate");
+        // Check if cert `settlement_tx_hash` exist on the l1
         let settlement_tx_hash: Option<Digest> =
             if let Some(previos_tx_hash) = self.header.settlement_tx_hash {
                 // Check if cert `settlement_tx_hash` exist on the l1. If not,
-                // remove it and recalculate.
+                // remove tx and move certificate back to provn.
                 let (request_tx_mined, response_tx_mined) = oneshot::channel();
                 self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
                     settlement_tx_hash: previos_tx_hash,
@@ -208,15 +213,40 @@ where
                 .await?;
                 let result_tx_mined = response_tx_mined.await.map_err(recv_err)?;
                 debug!("Settlement tx {previos_tx_hash} existence on L1: {result_tx_mined:?}");
-                match result_tx_mined {
+                let mined_settlement_tx_hash = match result_tx_mined {
                     Ok(true) => self.header.settlement_tx_hash.map(Into::into),
                     Ok(false) => None,
                     Err(_error) => None,
+                };
+                if mined_settlement_tx_hash.is_none() {
+                    // Tx not found on L1, clean tx from cert header and move back to Proven
+                    error!(
+                        "Settlement tx {previos_tx_hash} not found on L1, moving certificate back \
+                         to Proven"
+                    );
+                    self.header.settlement_tx_hash = None;
+                    self.state_store
+                        .remove_settlement_tx_hash(&certificate_id)?;
+                    self.header.status = CertificateStatus::Proven;
+                    if let Err(error) = self.state_store.update_certificate_header_status(
+                        &self.header.certificate_id,
+                        &CertificateStatus::Proven,
+                    ) {
+                        error!(?error, "Failed to update certificate status in database");
+                    };
+
+                    return Err(CertificateStatusError::SettlementError(format!(
+                        "Settlement tx {previos_tx_hash} not found on L1, moving certificate back \
+                         to Proven"
+                    )));
+                } else {
+                    mined_settlement_tx_hash
                 }
             } else {
                 None
             };
 
+        // Execute the witness generation to retrieve the new local network state
         let (_, _, output) = self
                 .certifier_client
                 .witness_generation(&self.certificate, &mut state, settlement_tx_hash)
