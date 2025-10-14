@@ -288,8 +288,8 @@ where
                             } else {
                                 warn!(
                                     "Certificate pp root with cert settlement tx {:?} does not \
-                                     match the latest settled pp root on L1 (contract tx \
-                                     {contract_settlement_tx_hash:?}), moving certificate back to \
+                                     match the latest settled pp root on L1 contract tx \
+                                     {contract_settlement_tx_hash}, moving certificate back to \
                                      Proven",
                                     self.header.settlement_tx_hash
                                 );
@@ -299,7 +299,7 @@ where
                         Err(error) => {
                             warn!(
                                 "Failed to recompute the state with the latest contract tx \
-                                 {contract_settlement_tx_hash:?}: {error:?}, moving certificate \
+                                 {contract_settlement_tx_hash}: {error:?}, moving certificate \
                                  back to Pending"
                             );
                             None
@@ -311,11 +311,11 @@ where
                     None
                 }
                 Err(error) => {
-                    warn!(
-                        "Failed to fetch latest pp root from contract: {error:?}, moving \
-                         certificate back to Pending"
-                    );
-                    None
+                    error!("Failed to fetch latest pp root from contract: {error:?}");
+                    return Err(CertificateStatusError::SettlementError(format!(
+                        "Cert settlement tx is missing from the l1, but failed to fetch latest pp \
+                         root from contract: {error}"
+                    )));
                 }
             };
 
