@@ -195,7 +195,6 @@ where
 
         // Execute the witness generation to retrieve the new local network state
         debug!("Recomputing new state for already-proven certificate");
-
         let settlement_tx_hash: Option<Digest> =
             if let Some(previos_tx_hash) = self.header.settlement_tx_hash {
                 // Check if cert `settlement_tx_hash` exist on the l1. If not,
@@ -208,10 +207,11 @@ where
                 })
                 .await?;
                 let result_tx_mined = response_tx_mined.await.map_err(recv_err)?;
+                debug!("Settlement tx {previos_tx_hash} existence on L1: {result_tx_mined:?}");
                 match result_tx_mined {
                     Ok(true) => self.header.settlement_tx_hash.map(Into::into),
                     Ok(false) => None,
-                    Err(error) => None,
+                    Err(_error) => None,
                 }
             } else {
                 None
@@ -362,10 +362,10 @@ where
             "Submitted certificate for settlement"
         );
 
-        // if height.as_u64() >= 1 && self.previous_tx_hashes.len() >= 3 {
-        //     println!(">>>>>>>>>>>>>>> Turn me off now <<<<<<<<<<<<<<<");
-        //     tokio::time::sleep(Duration::from_secs(300)).await;
-        // }
+        if height.as_u64() >= 1 && self.previous_tx_hashes.len() >= 3 {
+            println!(">>>>>>>>>>>>>>> Turn me off now <<<<<<<<<<<<<<<");
+            tokio::time::sleep(Duration::from_secs(300)).await;
+        }
 
         self.process_from_candidate().await
     }
