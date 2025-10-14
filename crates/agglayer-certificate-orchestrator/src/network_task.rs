@@ -442,9 +442,9 @@ where
                                         break;
                                     }
                                     Ok(false) => {
-                                        // Transaction is not mined yet, will retry later.
-                                        debug!(%certificate_id,
-                                            "Certificate for new height: {height} is still pending settlement on L1 through previous transaction {previous_tx_hash}");
+                                        // Transaction is mined with status 0.
+                                        warn!(%certificate_id,
+                                            "Certificate for new height: {height} transaction {previous_tx_hash} has status 0");
                                     }
                                     Err(err) => {
                                         debug!(%certificate_id,
@@ -498,10 +498,9 @@ where
                                              (timeout but tx mined)", height);
                                     }
                                     Ok(false) => {
-                                        // Transaction is not mined yet, will retry later.
-                                        debug!(%certificate_id,
-                                            "Certificate for new height: {} is still pending settlement on L1 through transaction {settlement_tx_hash} \
-                                            (timeout and tx not mined)", height);
+                                         // Transaction is mined with status 0.
+                                        warn!(%certificate_id,
+                                            "Certificate for new height: {height} settlement transaction {settlement_tx_hash} has status 0");
                                     }
                                     Err(err) => {
                                         debug!(%certificate_id,
@@ -588,8 +587,8 @@ where
                                     "Settlement tx {settlement_tx_hash} has been mined");
                             }
                             Ok(false) => {
-                                debug!(%certificate_id,
-                                    "Settlement tx {settlement_tx_hash} is still pending");
+                                warn!(%certificate_id,
+                                    "Settlement tx {settlement_tx_hash} is mined with the status 0 (failed)");
 
                             }
                             Err(err) => {
