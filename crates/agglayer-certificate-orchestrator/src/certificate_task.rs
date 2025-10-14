@@ -200,33 +200,42 @@ where
 
         debug!("Recomputing new state for already-proven certificate");
         // Check if cert `settlement_tx_hash` exist on the l1
-        let settlement_tx_hash_missing_on_l1: bool =
-            if let Some(previos_tx_hash) = self.header.settlement_tx_hash {
-                let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
-                    oneshot::channel();
-                self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
-                    settlement_tx_hash: previos_tx_hash,
-                    certificate_id,
-                    tx_mined_notifier: request_is_settlement_tx_mined,
-                })
-                .await?;
-                let result_is_settlement_tx_mined =
-                    response_is_settlement_tx_mined.await.map_err(recv_err)?;
-                debug!(
-                    "Settlement tx {previos_tx_hash} existence on L1: \
-                     {result_is_settlement_tx_mined:?}"
-                );
-                match result_is_settlement_tx_mined {
-                    Ok(true) => false,
-                    Ok(false) => true,
-                    Err(_error) => true,
+        let settlement_tx_hash_missing_on_l1: bool = if let Some(previos_tx_hash) =
+            self.header.settlement_tx_hash
+        {
+            let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
+                oneshot::channel();
+            self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
+                settlement_tx_hash: previos_tx_hash,
+                certificate_id,
+                tx_mined_notifier: request_is_settlement_tx_mined,
+            })
+            .await?;
+            let result_is_settlement_tx_mined =
+                response_is_settlement_tx_mined.await.map_err(recv_err)?;
+            debug!(
+                "Settlement tx {previos_tx_hash} existence on L1: \
+                 {result_is_settlement_tx_mined:?}"
+            );
+            match result_is_settlement_tx_mined {
+                Ok(true) => false,
+                Ok(false) => true,
+                Err(error) => {
+                    warn!(
+                        "Failed to check settlement tx {previos_tx_hash} existence on L1: {error}"
+                    );
+                    false
                 }
-            } else {
-                false
-            };
+            }
+        } else {
+            false
+        };
 
         if settlement_tx_hash_missing_on_l1 {
-            warn!(%certificate_id, "Previous settlement tx hash is missing on L1, tx {:?}", self.header.settlement_tx_hash);
+            warn!(
+                "Previous settlement tx hash is missing on L1, tx {:?}",
+                self.header.settlement_tx_hash
+            );
 
             // If the settlement tx is not found on L1, we need to recover.
             // With the latest pp root from the contract, check maybe if this
@@ -249,10 +258,9 @@ where
                     .certifier_client
                     .witness_generation(&self.certificate, &mut state, Some(contract_settlement_tx_hash.into()))
                     .await
-                    .map_err(|error| {
+                    .inspect_err(|error| {
                         error!(%certificate_id, ?error, "Failed recomputing the new state for already-proven \
                             certificate with the contract latest tx {contract_settlement_tx_hash}");
-                        error
                     }) {
                     if contract_pp_root == recomputed_output.new_pessimistic_root {
                         info!("Certificate new pp root matches the latest settled pp root on L1, \
@@ -261,7 +269,7 @@ where
                         if let Err(error) = self.state_store.update_settlement_tx_hash(&certificate_id, contract_settlement_tx_hash, true) {
                             error!(?error, "Failed to update certificate settlement tx hash in database");
                         };
-                        // TODO refactor this function to not calculate  witness_generation twice.
+                        // TODO refactor this function to not calculate witness_generation twice.
                         // As this would be very rare scenario, we can leave it like this for now.
                         Some(contract_settlement_tx_hash.into())
                     } else {
