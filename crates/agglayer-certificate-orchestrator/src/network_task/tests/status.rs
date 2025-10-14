@@ -352,6 +352,11 @@ async fn from_candidate_to_settle() {
         .expect_submit_certificate_settlement()
         .never();
     settlement_client
+        .expect_fetch_settlement_receipt_status()
+        .with(eq(SettlementTxHash::for_tests()))
+        .times(1)
+        .returning(|_| Ok(true));
+    settlement_client
         .expect_wait_for_settlement()
         .with(eq(SettlementTxHash::for_tests()), eq(certificate_id))
         .once()

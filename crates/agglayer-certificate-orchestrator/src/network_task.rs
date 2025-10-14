@@ -66,6 +66,7 @@ pub enum NetworkTaskMessage {
         certificate_id: CertificateId,
         nonce_info: Option<NonceInfo>,
         previous_tx_hashes: HashSet<SettlementTxHash>,
+        new_pp_root: Digest,
         settlement_submitted_notifier:
             oneshot::Sender<Result<(SettlementTxHash, Option<NonceInfo>), CertificateStatusError>>,
     },
@@ -80,7 +81,7 @@ pub enum NetworkTaskMessage {
         certificate_id: CertificateId,
         settlement_tx_hash: SettlementTxHash,
         settlement_complete_notifier: oneshot::Sender<CertificateSettlementResult>,
-        pp_root: Digest,
+        new_pp_root: Digest,
     },
 
     /// Notify the network task that a certificate has been successfully
@@ -96,6 +97,21 @@ pub enum NetworkTaskMessage {
         height: Height,
         certificate_id: CertificateId,
         error: CertificateStatusError,
+    },
+
+    /// Check if settlement tx has been mined.
+    CheckSettlementTx {
+        certificate_id: CertificateId,
+        settlement_tx_hash: SettlementTxHash,
+        // Notifier to send back the result of whether the tx has been mined or not.
+        tx_mined_notifier: oneshot::Sender<Result<bool, Error>>,
+    },
+
+    /// Check if settlement tx has been mined.
+    FetchLatestContractPPRoot {
+        // Notifier to send back the result of the latest pp root from L1.
+        contract_pp_root_notifier:
+            oneshot::Sender<Result<Option<(Digest, SettlementTxHash)>, Error>>,
     },
 }
 
@@ -386,7 +402,7 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier,
-                        nonce_info, previous_tx_hashes, height, .. }) => {
+                        nonce_info, previous_tx_hashes, height, new_pp_root, .. }) => {
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
@@ -414,7 +430,8 @@ where
 
                         // If the error in the sending transaction happened for whatever reason,
                         // check if maybe the certificate has been settled through some other previous transaction.
-                        if let Err(_err) = &result {
+                        if let Err(err) = &result {
+                            error!(%certificate_id, "Error submitting settlement transaction for certificate at height {height}: {err:?}");
                             for previous_tx_hash in previous_tx_hashes {
                                 match self.settlement_client.fetch_settlement_receipt_status(previous_tx_hash).await {
                                     Ok(true) => {
@@ -425,15 +442,30 @@ where
                                         break;
                                     }
                                     Ok(false) => {
-                                        // Transaction is not mined yet, will retry later.
-                                        debug!(%certificate_id,
-                                            "Certificate for new height: {height} is still pending settlement on L1 through previous transaction {previous_tx_hash}");
+                                        // Transaction is mined with status 0 (reverted). Return it for further processing.
+                                        warn!(%certificate_id,
+                                            "Certificate for new height: {height} transaction {previous_tx_hash} has status 0 (reverted)");
+                                        result = Ok((previous_tx_hash, None));
+                                        break;
                                     }
                                     Err(err) => {
                                         debug!(%certificate_id,
                                             "Error checking receipt status for previous settlement tx {previous_tx_hash}: {err}");
                                     }
                                 }
+                            }
+
+                            // In the case we have lost the previous tx hashes (e.g. agglayer crashed),
+                            // we can still check the latest pp root on L1.
+                            if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) = self.fetch_latest_pp_root_from_l1().await {
+                               if latest_pp_root == new_pp_root {
+                                   // Certificate has been settled through some other previous transaction.
+                                   info!(%certificate_id,
+                                       "Certificate for new height: {height} has been previously settled on \
+                                       L1 through other transaction {latest_pp_root_tx_hash}, \
+                                       hence unable to send settlement transaction");
+                                   result = Ok((latest_pp_root_tx_hash, None));
+                               }
                             }
                         }
 
@@ -445,7 +477,8 @@ where
                         fail::fail_point!("network_task::make_progress::settlement_submitted");
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier, height, pp_root, ..}) => {
+                    Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier,
+                        height, new_pp_root, ..}) => {
                         let height = height.as_u64();
                         // See comment on CertificateReadyForSettlement.
                         let result = self
@@ -467,10 +500,9 @@ where
                                              (timeout but tx mined)", height);
                                     }
                                     Ok(false) => {
-                                        // Transaction is not mined yet, will retry later.
-                                        debug!(%certificate_id,
-                                            "Certificate for new height: {} is still pending settlement on L1 through transaction {settlement_tx_hash} \
-                                            (timeout and tx not mined)", height);
+                                         // Transaction is mined with status 0 (reverted).
+                                        warn!(%certificate_id,
+                                            "Certificate for new height: {height} settlement transaction {settlement_tx_hash} has status 0 (reverted)");
                                     }
                                     Err(err) => {
                                         debug!(%certificate_id,
@@ -480,7 +512,7 @@ where
 
                                 // On timeout, check if the certificate has been settled through some other transaction.
                                 match self.fetch_latest_pp_root_from_l1().await {
-                                    Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) if latest_pp_root == pp_root => {
+                                    Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) if latest_pp_root == new_pp_root => {
                                         // Certificate has been settled through some other previous transaction.
                                         info!(%certificate_id,
                                             "Certificate for new height: {} has been settled on L1 through other transaction {latest_pp_root_tx_hash}", height);
@@ -548,6 +580,35 @@ where
                         // The certificate task already logged everything that should be logged.
                         self.at_capacity_for_epoch = false;
                         break;
+                    }
+                    Some(NetworkTaskMessage::CheckSettlementTx { certificate_id,settlement_tx_hash, tx_mined_notifier }) => {
+                        let mined = self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await;
+                        match &mined {
+                            Ok(true) => {
+                                info!(%certificate_id,
+                                    "Settlement tx {settlement_tx_hash} has been mined");
+                            }
+                            Ok(false) => {
+                                warn!(%certificate_id,
+                                    "Settlement tx {settlement_tx_hash} is mined with the status 0 (failed)");
+                            }
+                            Err(err) => {
+                                debug!(%certificate_id,
+                                    "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
+                            }
+                        };
+                        tx_mined_notifier
+                            .send(mined)
+                            .map_err(|_|Error::InternalError("Certificate notification channel closed".into()))?;
+                        continue;
+                    }
+                    Some(NetworkTaskMessage::FetchLatestContractPPRoot { contract_pp_root_notifier }) => {
+                        // Fetch the latest pp root from L1
+                        let latest_pp_root = self.fetch_latest_pp_root_from_l1().await;
+                        contract_pp_root_notifier
+                            .send(latest_pp_root)
+                            .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
+                        continue;
                     }
                 }
             }
