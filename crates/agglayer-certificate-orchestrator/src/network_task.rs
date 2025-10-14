@@ -581,22 +581,20 @@ where
                         break;
                     }
                     Some(NetworkTaskMessage::CheckSettlementTx { certificate_id,settlement_tx_hash, tx_mined_notifier }) => {
-                        let mined = match self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await {
+                        let mined = self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await;
+                        match &mined {
                             Ok(true) => {
                                 info!(%certificate_id,
                                     "Settlement tx {settlement_tx_hash} has been mined");
-                                Ok(true)
                             }
                             Ok(false) => {
                                 debug!(%certificate_id,
                                     "Settlement tx {settlement_tx_hash} is still pending");
-                                Ok(false)
 
                             }
                             Err(err) => {
                                 debug!(%certificate_id,
                                     "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
-                                Err(err)
                             }
                         };
 
