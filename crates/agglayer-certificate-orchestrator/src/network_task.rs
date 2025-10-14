@@ -442,9 +442,11 @@ where
                                         break;
                                     }
                                     Ok(false) => {
-                                        // Transaction is mined with status 0 (reverted).
+                                        // Transaction is mined with status 0 (reverted). Return it for further processing.
                                         warn!(%certificate_id,
                                             "Certificate for new height: {height} transaction {previous_tx_hash} has status 0 (reverted)");
+                                        result = Ok((previous_tx_hash, None));
+                                        break;
                                     }
                                     Err(err) => {
                                         debug!(%certificate_id,
