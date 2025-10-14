@@ -155,17 +155,12 @@ where
         }
 
         match &self.header.status {
-            CertificateStatus::Pending => {
-                println!(">>>>>>>>>>>>>>> CertificateStatus::Pending");
-                self.process_from_pending().await
-            }
+            CertificateStatus::Pending => self.process_from_pending().await,
             CertificateStatus::Proven => {
-                println!(">>>>>>>>>>>>>>> CertificateStatus::Proven");
                 self.recompute_state().await?;
                 self.process_from_proven().await
             }
             CertificateStatus::Candidate => {
-                println!(">>>>>>>>>>>>>>> CertificateStatus::Candidate");
                 self.recompute_state().await?;
                 self.process_from_candidate().await
             }
@@ -217,7 +212,7 @@ where
                      {result_is_settlement_tx_mined:?}"
                 );
                 match result_is_settlement_tx_mined {
-                    Ok(true) => false, // We have fetched the receipt, tx status 1, tx exist on L1
+                    Ok(true) => false,  // We have fetched the receipt, tx status 1, tx exist on L1
                     Ok(false) => false, // Tx found on l1, but with status 0 (reverted)
                     Err(error) => {
                         if error.to_string().contains("No transaction receipt found") {
@@ -339,6 +334,7 @@ where
                         "Failed to remove tx_hash {previos_tx_hash:?} from database"
                     );
                 };
+
                 self.header.status = CertificateStatus::Pending;
                 if let Err(error) = self.state_store.update_certificate_header_status(
                     &self.header.certificate_id,
@@ -499,11 +495,6 @@ where
             settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
             "Submitted certificate for settlement"
         );
-
-        if height.as_u64() >= 1 && self.previous_tx_hashes.len() >= 3 {
-            println!(">>>>>>>>>>>>>>> Turn me off now <<<<<<<<<<<<<<<");
-            tokio::time::sleep(Duration::from_secs(300)).await;
-        }
 
         self.process_from_candidate().await
     }

@@ -589,27 +589,24 @@ where
                             Ok(false) => {
                                 warn!(%certificate_id,
                                     "Settlement tx {settlement_tx_hash} is mined with the status 0 (failed)");
-
                             }
                             Err(err) => {
                                 debug!(%certificate_id,
                                     "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
                             }
                         };
-
                         tx_mined_notifier
                             .send(mined)
-                            .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
-                        break;
+                            .map_err(|err|Error::InternalError("Certificate notification channel closed".into()))?;
+                        continue;
                     }
                     Some(NetworkTaskMessage::FetchLatestContractPPRoot { contract_pp_root_notifier }) => {
                         // Fetch the latest pp root from L1
                         let latest_pp_root = self.fetch_latest_pp_root_from_l1().await;
-
                         contract_pp_root_notifier
                             .send(latest_pp_root)
                             .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
-                        break;
+                        continue;
                     }
                 }
             }

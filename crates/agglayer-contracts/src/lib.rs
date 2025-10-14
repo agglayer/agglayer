@@ -98,6 +98,8 @@ pub enum L1RpcError {
         #[source]
         source: eyre::Error,
     },
+    // WARNING: following error message is used in checks, do not change without updating the
+    // checks
     #[error("No transaction receipt found for tx {0}, not yet mined")]
     TransactionNotYetMined(String),
     #[error("Failed to fetch aggchain vkey")]
