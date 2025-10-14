@@ -135,6 +135,26 @@ impl RangePP {
         }
     }
 
+    /// Returns the first LER which starts this state transition.
+    /// Corresponds to the prev LER of the first PP.
+    pub fn first_ler(&self) -> LocalExitRoot {
+        self.proofs
+            .first()
+            .unwrap()
+            .public_values
+            .prev_local_exit_root
+    }
+
+    /// Returns the last LER which finishes this state transition.
+    /// Corresponds to the new LER of the last PP.
+    pub fn last_ler(&self) -> LocalExitRoot {
+        self.proofs
+            .last()
+            .unwrap()
+            .public_values
+            .new_local_exit_root
+    }
+
     /// Ensures that the PPs from one chain are contiguous
     pub fn verify_pp_contiguity(&self) -> Result<(), Error> {
         // NOTE: the height is enforced to be increased within the pp root computation
@@ -229,18 +249,26 @@ pub struct AggregationWitness {
 
 /// Represents the rollup exit tree maintained by the agglayer.
 /// TODO: Replace/add an SMT with proper inclusion proofs for the read values
+/// Should get only one root, with inclusion proofs for the read values.
 #[derive(Deserialize, Serialize, Default, Debug)]
-pub struct AgglayerRer {
-    pub cache: BTreeMap<NetworkId, LocalExitRoot>,
-    /// Read values must come with inclusion proofs against this root.
-    pub root: Digest,
-}
+pub struct AgglayerRer(pub BTreeMap<NetworkId, LocalExitRoot>);
 
 impl AgglayerRer {
     pub fn get(&self, origin_network: NetworkId) -> Result<&LocalExitRoot, Error> {
-        self.cache
+        self.0
             .get(&origin_network)
             .ok_or(Error::AgglayerRerMissEntry)
+    }
+
+    // TODO: replace with SMT, here just for prototyping, although exposing same
+    // interface
+    pub fn root(&self) -> Digest {
+        keccak256_combine(self.0.iter().map(|(network, ler)| {
+            keccak256_combine([
+                network.to_be_bytes().as_slice(),
+                <LocalExitRoot as AsRef<[u8]>>::as_ref(ler),
+            ])
+        }))
     }
 }
 
@@ -257,29 +285,29 @@ impl AggregationWitness {
             pp_range.verify_pp_validity(&self.pp_vkey_hash)?;
         }
 
-        // // Verify the agglayer rollup exit tree transition
-        // self.verify_agglayer_rer_transition()?;
+        // Verify the agglayer rollup exit tree transition
+        self.verify_agglayer_rer_transition()?;
 
-        // // Verify all the imported LER against the agglayer rollup exit tree
-        // //
-        // // NOTE: divided in two steps to avoid verifying multiple times the same
-        // // inclusion proofs (since one LER might be imported several times across
-        // // different PP in the aggregation)
-        // {
-        //     // verify the pointers
-        //     self.verify_imported_ler_pointers()?;
-        //     // verify the actual inclusion proofs uniquely
-        //     self.verify_imported_lers_inclusion()?;
-        // }
+        // Verify all the imported LER against the agglayer rollup exit tree
+        //
+        // NOTE: divided in two steps to avoid verifying multiple times the same
+        // inclusion proofs (since one LER might be imported several times across
+        // different PP in the aggregation)
+        {
+            // verify the pointers
+            self.verify_imported_ler_pointers()?;
+            // verify the actual inclusion proofs uniquely
+            self.verify_imported_lers_inclusion()?;
+        }
 
-        // // Verify the inclusion proofs on the PP l1 info root to have only one l1
-        // info // root as public input of the aggregation proof
-        // {
-        //     // verify the pointers
-        //     self.verify_l1_info_tree_pointers()?;
-        //     // verify the actual inclusion proofs uniquely
-        //     self.verify_l1_info_tree_inclusion()?;
-        // }
+        // Verify the inclusion proofs on the PP l1 info root to have only one l1
+        // root as public input of the aggregation proof
+        {
+            // verify the pointers
+            self.verify_l1_info_tree_pointers()?;
+            // verify the actual inclusion proofs uniquely
+            self.verify_l1_info_tree_inclusion()?;
+        }
 
         Ok(self.public_values())
     }
@@ -392,8 +420,8 @@ impl AggregationWitness {
             hash_chain_pp_inputs: self.hash_chain_pub_values(),
             pp_vkey: self.pp_vkey_hash,
             l1_info_root: self.target_l1_info_root,
-            prev_arer: self.prev_agglayer_rer.root,
-            new_arer: self.new_agglayer_rer.root,
+            prev_arer: self.prev_agglayer_rer.root(),
+            new_arer: self.new_agglayer_rer.root(),
         }
     }
 

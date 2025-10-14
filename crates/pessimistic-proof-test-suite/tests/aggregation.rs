@@ -31,9 +31,10 @@ fn simple_aggregation() {
         .deferred_proof_verification(false)
         .run()
         .unwrap();
+
     let pv_sp1_execute: AggregationPublicValues = AggregationPublicValues::bincode_codec()
         .deserialize(pv.as_slice())
         .unwrap();
 
-    println!("aggregation public values: {:?}", pv_sp1_execute);
+    println!("aggregation public values: {:#?}", pv_sp1_execute);
 }

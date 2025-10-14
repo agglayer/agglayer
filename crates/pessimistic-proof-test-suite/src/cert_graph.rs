@@ -11,7 +11,7 @@ use agglayer_types::{
     compute_signature_info, Certificate, Digest, Error as TypesError, Height, L1WitnessCtx,
     LocalNetworkStateData, PessimisticRootInput, U256,
 };
-use aggregation_proof_core::{AggregationWitness, PessimisticProof, RangePP};
+use aggregation_proof_core::{AgglayerRer, AggregationWitness, PessimisticProof, RangePP};
 use pessimistic_proof::{
     core::commitment::{PessimisticRootCommitmentVersion, SignatureCommitmentVersion},
     local_exit_tree::data::LocalExitTreeData,
@@ -425,13 +425,27 @@ impl CertGraph {
 
         let pp_per_network: Vec<RangePP> = pp_with_proof.iter().map(Into::into).collect();
 
+        let prev_agglayer_rer = AgglayerRer(
+            pp_per_network
+                .iter()
+                .map(|range| (range.origin_network, range.first_ler()))
+                .collect::<BTreeMap<_, _>>(),
+        );
+
+        let new_agglayer_rer = AgglayerRer(
+            pp_per_network
+                .iter()
+                .map(|range| (range.origin_network, range.last_ler()))
+                .collect::<BTreeMap<_, _>>(),
+        );
+
         let witness = AggregationWitness {
             pp_vkey_hash: vk.hash_u32(),
             pp_per_network,
             sub_let_inclusion_proofs: Default::default(), // todo
-            prev_agglayer_rer: Default::default(),        // todo
-            new_agglayer_rer: Default::default(),         // todo
-            target_l1_info_root: Default::default(),      // todo
+            prev_agglayer_rer,
+            new_agglayer_rer,
+            target_l1_info_root: Default::default(), // todo
             sub_l1_info_tree_inclusion_proofs: Default::default(), // todo
         };
 
