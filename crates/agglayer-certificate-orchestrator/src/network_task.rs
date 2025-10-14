@@ -103,7 +103,15 @@ pub enum NetworkTaskMessage {
     CheckSettlementTx {
         certificate_id: CertificateId,
         settlement_tx_hash: SettlementTxHash,
+        // Notifier to send back the result of whether the tx has been mined or not.
         tx_mined_notifier: oneshot::Sender<Result<bool, Error>>,
+    },
+
+    /// Check if settlement tx has been mined.
+    FetchLatestContractPPRoot {
+        // Notifier to send back the result of the latest pp root from L1.
+        contract_pp_root_notifier:
+            oneshot::Sender<Result<Option<(Digest, SettlementTxHash)>, Error>>,
     },
 }
 
@@ -594,6 +602,15 @@ where
 
                         tx_mined_notifier
                             .send(mined)
+                            .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
+                        break;
+                    }
+                    Some(NetworkTaskMessage::FetchLatestContractPPRoot { contract_pp_root_notifier }) => {
+                        // Fetch the latest pp root from L1
+                        let latest_pp_root = self.fetch_latest_pp_root_from_l1().await;
+
+                        contract_pp_root_notifier
+                            .send(latest_pp_root)
                             .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
                         break;
                     }
