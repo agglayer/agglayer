@@ -442,9 +442,9 @@ where
                                         break;
                                     }
                                     Ok(false) => {
-                                        // Transaction is mined with status 0.
+                                        // Transaction is mined with status 0 (reverted).
                                         warn!(%certificate_id,
-                                            "Certificate for new height: {height} transaction {previous_tx_hash} has status 0");
+                                            "Certificate for new height: {height} transaction {previous_tx_hash} has status 0 (reverted)");
                                     }
                                     Err(err) => {
                                         debug!(%certificate_id,
@@ -498,9 +498,9 @@ where
                                              (timeout but tx mined)", height);
                                     }
                                     Ok(false) => {
-                                         // Transaction is mined with status 0.
+                                         // Transaction is mined with status 0 (reverted).
                                         warn!(%certificate_id,
-                                            "Certificate for new height: {height} settlement transaction {settlement_tx_hash} has status 0");
+                                            "Certificate for new height: {height} settlement transaction {settlement_tx_hash} has status 0 (reverted)");
                                     }
                                     Err(err) => {
                                         debug!(%certificate_id,
