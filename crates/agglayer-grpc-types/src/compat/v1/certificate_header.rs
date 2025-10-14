@@ -23,6 +23,10 @@ impl From<CertificateHeader> for v1::CertificateHeader {
             }
             CertificateStatus::Settled => (v1::CertificateStatus::Settled, None),
         };
+        let settlement_tx_hashes = value.settlement_tx_hashes.into_iter().rev();
+        let settlement_tx_hash = settlement_tx_hashes
+            .map(|h| FixedBytes32::from(Digest::from(h)))
+            .next();
         v1::CertificateHeader {
             network_id: value.network_id.into(),
             height: value.height.as_u64(),
@@ -34,9 +38,7 @@ impl From<CertificateHeader> for v1::CertificateHeader {
             metadata: Some((*value.metadata).into()),
             status: status.into(),
             error,
-            settlement_tx_hash: value
-                .settlement_tx_hash
-                .map(|h| FixedBytes32::from(Digest::from(h))),
+            settlement_tx_hash,
         }
     }
 }

@@ -76,7 +76,7 @@ impl StateWriter for StateStore {
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
-            if certificate_header.settlement_tx_hash.is_some() && !force  {
+            if !certificate_header.settlement_tx_hashes.is_empty() && !force {
                 return Err(Error::UnprocessedAction(
                     "Tried to update settlement tx hash for a certificate that already has a \
                      settlement tx hash"
@@ -91,7 +91,7 @@ impl StateWriter for StateStore {
                 ));
             }
 
-            certificate_header.settlement_tx_hash = Some(tx_hash);
+            certificate_header.settlement_tx_hashes = vec![tx_hash];
             certificate_header.status = CertificateStatus::Candidate;
 
             self.db
@@ -122,7 +122,7 @@ impl StateWriter for StateStore {
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
-            if certificate_header.settlement_tx_hash.is_none() {
+            if certificate_header.settlement_tx_hashes.is_empty() {
                 return Err(Error::UnprocessedAction(
                     "Tried to remove settlement tx hash for a certificate that does not have a \
                      settlement tx hash"
@@ -137,7 +137,7 @@ impl StateWriter for StateStore {
                 ));
             }
 
-            certificate_header.settlement_tx_hash = None;
+            certificate_header.settlement_tx_hashes = Vec::new();
             certificate_header.status = CertificateStatus::Proven;
 
             self.db
@@ -208,7 +208,7 @@ impl StateWriter for StateStore {
                 new_local_exit_root: certificate.new_local_exit_root,
                 status: status.clone(),
                 metadata: certificate.metadata,
-                settlement_tx_hash: None,
+                settlement_tx_hashes: Vec::new(),
             },
         )?;
 

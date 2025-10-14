@@ -276,11 +276,11 @@ where
             ));
         }
         if let Some(remove_settlement_tx_hash) = remove_settlement_tx_hash {
-            if header.settlement_tx_hash != Some(remove_settlement_tx_hash) {
+            if header.settlement_tx_hashes.last() != Some(&remove_settlement_tx_hash) {
                 return Err(Error::InvalidArgument(format!(
                     "Provided settlement_tx_hash to remove ({remove_settlement_tx_hash:?}) does \
                      not match the existing one ({:?})",
-                    header.settlement_tx_hash
+                    header.settlement_tx_hashes.last()
                 )));
             }
             self.state

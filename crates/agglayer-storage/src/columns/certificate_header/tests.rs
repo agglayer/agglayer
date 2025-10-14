@@ -26,14 +26,10 @@ fn can_parse_value() {
         new_local_exit_root: [5; 32].into(),
         status: agglayer_types::CertificateStatus::Pending,
         metadata: Metadata::new([6; 32].into()),
-        settlement_tx_hash: None,
+        settlement_tx_hashes: Vec::new(),
     };
 
     let encoded = value.encode().expect("Unable to encode value");
-
-    let expected_value = Value::decode(&encoded[..]).expect("Unable to decode value");
-
-    assert_eq!(expected_value, value);
 
     // network_id
     assert_eq!(encoded[..4], [0, 0, 0, 1]);
@@ -80,4 +76,8 @@ fn can_parse_value() {
     assert_eq!(encoded[162..163], [0]);
     // end
     assert!(encoded[163..].is_empty());
+
+    let decoded_value = Value::decode(&encoded[..]).expect("Unable to decode value");
+
+    assert_eq!(decoded_value, value);
 }

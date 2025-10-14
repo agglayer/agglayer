@@ -1,6 +1,5 @@
 use agglayer_types::{
-    primitives::Digest, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
-    NetworkId, Proof,
+    primitives::Digest, CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, Proof,
 };
 use serde::{Deserialize, Serialize};
 
@@ -51,12 +50,8 @@ pub enum SmtValue {
 }
 
 crate::columns::impl_codec_using_bincode_for!(
-    u64,
-    u32,
     CertificateId,
     CertificateIndex,
-    CertificateHeader,
-    Digest,
     Height,
     MetadataKey,
     MetadataValue,
@@ -66,5 +61,5 @@ crate::columns::impl_codec_using_bincode_for!(
     Proof,
     SmtKey,
     SmtValue,
-    network_info::Key
+    network_info::Key,
 );

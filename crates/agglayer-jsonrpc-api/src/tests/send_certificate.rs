@@ -212,7 +212,7 @@ async fn pending_certificate_in_error_force_push() {
         .unwrap()
         .unwrap();
 
-    assert!(res.settlement_tx_hash.is_some());
+    assert!(!res.settlement_tx_hashes.is_empty());
     assert_eq!(res.status, CertificateStatus::Candidate);
 }
 
@@ -299,7 +299,7 @@ async fn pending_certificate_in_error_force_set_status() {
         .unwrap()
         .unwrap();
 
-    assert!(res.settlement_tx_hash.is_some());
+    assert!(!res.settlement_tx_hashes.is_empty());
     assert_eq!(res.status, CertificateStatus::Candidate);
 
     let res: Result<(), _> = context
@@ -326,7 +326,7 @@ async fn pending_certificate_in_error_force_set_status() {
         .unwrap()
         .unwrap();
 
-    assert!(res.settlement_tx_hash.is_some());
+    assert!(!res.settlement_tx_hashes.is_empty());
     assert_eq!(res.status, CertificateStatus::Candidate);
 }
 
@@ -360,7 +360,7 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status()
         .unwrap()
         .unwrap();
 
-    assert!(res.settlement_tx_hash.is_some());
+    assert!(!res.settlement_tx_hashes.is_empty());
     assert_eq!(res.status, CertificateStatus::Candidate);
 
     let res: Result<(), _> = context
@@ -385,6 +385,6 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status()
         .unwrap()
         .unwrap();
 
-    assert!(res.settlement_tx_hash.is_none());
+    assert!(res.settlement_tx_hashes.is_empty());
     assert_eq!(res.status, CertificateStatus::Proven);
 }

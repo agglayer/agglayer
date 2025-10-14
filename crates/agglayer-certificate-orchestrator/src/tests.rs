@@ -330,7 +330,7 @@ impl StateWriter for DummyPendingStore {
                 new_local_exit_root: certificate.new_local_exit_root,
                 status,
                 metadata: certificate.metadata,
-                settlement_tx_hash: None,
+                settlement_tx_hashes: Vec::new(),
             },
         );
 

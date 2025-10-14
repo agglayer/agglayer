@@ -50,7 +50,7 @@ fn transient_network_info() {
         new_local_exit_root: pending_certificate.new_local_exit_root,
         metadata: Metadata::DEFAULT,
         status: agglayer_types::CertificateStatus::Pending,
-        settlement_tx_hash: None,
+        settlement_tx_hashes: Vec::new(),
     };
 
     state_store
@@ -138,7 +138,7 @@ fn pending_certificate_defined() {
         new_local_exit_root: settled_certificate.new_local_exit_root,
         metadata: Metadata::DEFAULT,
         status: agglayer_types::CertificateStatus::Settled,
-        settlement_tx_hash: Some(Digest::ZERO.into()),
+        settlement_tx_hashes: vec![Digest::ZERO.into()],
     };
 
     let mut network_state = Forest::default();
@@ -174,7 +174,7 @@ fn pending_certificate_defined() {
         new_local_exit_root: pending_certificate.new_local_exit_root,
         metadata: Metadata::DEFAULT,
         status: agglayer_types::CertificateStatus::Pending,
-        settlement_tx_hash: None,
+        settlement_tx_hashes: Vec::new(),
     };
 
     state_store

@@ -19,5 +19,5 @@ pub struct CertificateHeader {
     pub new_local_exit_root: LocalExitRoot,
     pub metadata: Metadata,
     pub status: CertificateStatus,
-    pub settlement_tx_hash: Option<SettlementTxHash>,
+    pub settlement_tx_hashes: Vec<SettlementTxHash>,
 }
