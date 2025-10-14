@@ -434,7 +434,7 @@ where
                         // Transaction not yet included in a block, continue retrying
                         if attempt <= self.config.max_retries {
                             // Log at 25%, 50%, 75% progress milestones
-                            let progress_percent = ((attempt + 1) * 100) / self.config.max_retries;
+                            let progress_percent = ((attempt + 1) * 100) / self.config.max_retries.max(1);
                             if progress_percent == 25
                                 || progress_percent == 50
                                 || progress_percent == 75
