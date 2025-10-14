@@ -221,7 +221,7 @@ where
                 Ok(true) => false, // We have fetched the receipt, tx exist on L1
                 Ok(false) => true, // Tx not found on L1
                 Err(error) => {
-                    // Some error happened while checking the tx on L1
+                    // Some error happened while checking the tx receipt on L1
                     warn!(
                         "Failed to check settlement tx {previos_tx_hash} existence on L1: {error}"
                     );
@@ -255,7 +255,7 @@ where
                 contract_settlement_tx_hash,
             ))) = result_latest_contract_pp_root
             {
-                // Try to recompute the state with the latest settlement tx hash.
+                // Try to recompute the state with the latest tx from contract.
                 if let Ok((_, _, recomputed_output)) = self
                     .certifier_client
                     .witness_generation(&self.certificate, &mut state, Some(contract_settlement_tx_hash.into()))
@@ -271,7 +271,7 @@ where
                         if let Err(error) = self.state_store.update_settlement_tx_hash(&certificate_id, contract_settlement_tx_hash, true) {
                             error!(?error, "Failed to update certificate settlement tx hash in database");
                         };
-                        // TODO refactor this function to not calculate witness_generation twice.
+                        // TODO refactor this function to not calculate witness_generation twice in this function.
                         // As this would be very rare scenario, we can leave it like this for now.
                         Some(contract_settlement_tx_hash.into())
                     } else {
