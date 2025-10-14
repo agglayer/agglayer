@@ -276,7 +276,9 @@ where
                         Some(contract_settlement_tx_hash.into())
                     } else {
                         warn!(
-                                "Certificate pp root does not match the latest settled pp root on L1 (contract tx {contract_settlement_tx_hash:?}), moving certificate back to Proven"
+                                "Certificate pp root with cert settlement tx {:?} does not match the latest settled pp root on L1 \
+                                 (contract tx {contract_settlement_tx_hash:?}), moving certificate back to Proven",
+                            self.header.settlement_tx_hash
                             );
                         None
                     }
@@ -293,7 +295,7 @@ where
                 let previos_tx_hash = self.header.settlement_tx_hash;
                 error!(
                     "Settlement tx {previos_tx_hash:?} not found on L1, moving certificate back \
-                     to Proven"
+                     to Pending"
                 );
                 self.header.settlement_tx_hash = None;
                 if let Err(error) = self.state_store.remove_settlement_tx_hash(&certificate_id) {
@@ -302,10 +304,10 @@ where
                         "Failed to remove tx_hash {previos_tx_hash:?} from database"
                     );
                 };
-                self.header.status = CertificateStatus::Proven;
+                self.header.status = CertificateStatus::Pending;
                 if let Err(error) = self.state_store.update_certificate_header_status(
                     &self.header.certificate_id,
-                    &CertificateStatus::Proven,
+                    &CertificateStatus::Pending,
                 ) {
                     error!(?error, "Failed to update certificate status in database");
                 };
